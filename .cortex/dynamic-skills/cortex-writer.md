@@ -106,5 +106,8 @@ sentence.
 Docs-only captures need link checks and a short self-review against the
 checklist above.
 
+Also run the consistency GC in
+[cortex-consistency.md](cortex-consistency.md) for the touched topic.
+
 For implementation tasks that include `.cortex` edits, run `task format`,
 commit and push, then use the normal hosted validation path.

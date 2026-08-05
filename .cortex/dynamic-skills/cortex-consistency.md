@@ -1,0 +1,132 @@
+# Cortex Consistency — Garbage Collector
+
+## Priority
+
+This is a P1 documentation integrity rule.
+
+Stale `.cortex` guidance is a defect.
+
+Conflicting `.cortex` guidance is a defect.
+
+`.cortex` guidance that disagrees with the code is a defect.
+
+## Purpose
+
+Treat `.cortex` as a living knowledge base that must stay true.
+
+Agents act as a garbage collector for obsolete cortex facts.
+
+Verification happens in the same task that touches the topic.
+
+## Problem Pattern
+
+Docs drift after code changes.
+
+Common failures:
+
+- a workflow names a Task command that no longer exists;
+- two `.cortex` docs state opposite rules for the same topic;
+- a design doc describes an old architecture after the code moved;
+- an index still links a deleted or renamed file;
+- a skill card teaches a pattern the repo already rejected;
+- historical context is written as if it were current policy.
+
+## Preferred Pattern
+
+When a task touches durable behavior, verify the related cortex surface.
+
+1. Find the most specific `.cortex` docs for the topic.
+2. Compare those docs with each other.
+3. Compare those docs with the current code and Task entrypoints.
+4. Fix obsolete facts in the same PR.
+5. Mark historical context as historical when it must remain.
+6. Remove or rewrite guidance that conflicts.
+7. Update indexes and `AGENTS.md` links when paths change.
+
+Verification checklist:
+
+- [ ] Docs agree with each other on the active rule.
+- [ ] Docs agree with the current code paths.
+- [ ] Named commands, packages, and paths still exist.
+- [ ] Superseded designs are labeled historical.
+- [ ] Dead links and orphan index rows are gone.
+- [ ] New prose follows [cortex-writer.md](cortex-writer.md).
+
+Conflict resolution order:
+
+1. Current code and enforced checks win over prose.
+2. The most specific active `.cortex` doc wins over a general summary.
+3. `AGENTS.md` must point to the winning doc.
+4. Older conflicting prose must be updated, labeled historical, or removed.
+
+## Scope
+
+Applies to:
+
+- every `.cortex/**/*.md` edit
+- implementation tasks that change durable architecture, workflow, or product
+  behavior
+- skill-card capture and refactor work
+- explicit user requests to audit or clean `.cortex`
+
+Default task scope:
+
+- verify the docs that own the changed topic;
+- follow links one hop from those docs;
+- do not rewrite the entire `.cortex` tree unless the user asks for a full GC.
+
+Does not apply to:
+
+- chat-only scratch notes outside `.cortex`
+- Workbench task status records
+- intentional historical archives that are clearly labeled historical
+- secrets, credentials, or private runtime data
+
+## Examples
+
+Before:
+
+- `ARCHITECTURE.md` says PR jobs write SeaweedFS compiler objects.
+- A workflow says PR jobs are read-only for that cache.
+- The Docker/Task code matches the read-only rule.
+
+After:
+
+- Keep the read-only rule.
+- Fix `ARCHITECTURE.md` in the same PR.
+- Leave a short historical note only if old behavior still matters.
+
+Before:
+
+- A design doc describes scalar vault sync as current.
+- Event-log sync is the implemented path.
+
+After:
+
+- Label the scalar-sync doc historical, or point it to the event-log doc.
+- Make indexes and `AGENTS.md` point at the active design.
+
+## Application Checklist
+
+- [ ] Identify the durable topic touched by the task.
+- [ ] Open the owning `.cortex` docs and nearby index links.
+- [ ] Diff claims against code, Taskfiles, and CI workflows.
+- [ ] Resolve conflicts with the resolution order above.
+- [ ] Apply [cortex-writer.md](cortex-writer.md) to every edit.
+- [ ] Update indexes when files move, split, or become historical.
+
+## Validation
+
+Proof is a docs diff that restores agreement.
+
+Name the checked docs and the code or Task paths used as evidence.
+
+For implementation tasks, run `task format`, commit and push, then use the
+normal hosted validation path.
+
+For a full cortex GC request, report:
+
+- obsolete facts removed or rewritten;
+- cross-doc conflicts resolved;
+- code mismatches fixed;
+- remaining historical labels.

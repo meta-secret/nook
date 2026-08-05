@@ -24,6 +24,32 @@ Dense multi-clause prose is a P1 documentation finding.
 Full contract:
 [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md).
 
+## ⛔ P1 — most critical `.cortex` integrity rule: keep docs consistent
+
+`.cortex` is not write-only.
+
+Agents must garbage-collect obsolete cortex facts in the same task.
+
+Verify the docs that own the touched topic.
+
+Those docs must:
+
+- stay current;
+- agree with each other;
+- agree with the current code and Task entrypoints.
+
+Stale claims, cross-doc conflicts, and code mismatches are P1 documentation
+findings.
+
+Fix them in the same PR.
+
+Label historical context as historical.
+
+Do not leave conflicting guidance as if it were active policy.
+
+Full contract:
+[dynamic-skills/cortex-consistency.md](dynamic-skills/cortex-consistency.md).
+
 ## ⛔ P1 — most critical code-structure rule: oversized source is prohibited
 
 Every authored source file, including Rust, MUST stay at or below **1,000
@@ -431,6 +457,7 @@ build-performance PR. Full policy:
 - [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
 - [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
 - [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md) — **P1 `.cortex` writing rule:** short sentences, bullets, and lists over dense multi-clause prose.
+- [dynamic-skills/cortex-consistency.md](dynamic-skills/cortex-consistency.md) — **P1 `.cortex` GC rule:** docs must stay current, mutually consistent, and aligned with code.
 - [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
 - [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; run focused tasks and complete gates explicitly on GitHub-hosted workers**.
 - [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Load `design-taste-frontend` for user-visible UI work; Impeccable is explicit opt-in only**.
@@ -457,6 +484,7 @@ build-performance PR. Full policy:
 * When prompts, dialogues, test runs, or PRs reveal **durable** facts (invariants, tooling behavior, architectural decisions, coverage gaps), **write them into `.cortex` in the same task** — do not leave knowledge only in chat history.
 * Follow [design-docs/core-beliefs.md §10](design-docs/core-beliefs.md#10-grow-cortex-dynamically): update the most specific existing doc; keep entries concise and linked to code/tests.
 * Follow [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md) for every `.cortex` edit: short sentences, bullets, and lists over dense multi-clause prose.
+* Follow [dynamic-skills/cortex-consistency.md](dynamic-skills/cortex-consistency.md): garbage-collect obsolete facts, resolve cross-doc conflicts, and fix docs that disagree with code.
 * For recurring refactor, review, boundary, or code-organization feedback, use [workflows/dynamic-skills.md](workflows/dynamic-skills.md) and update [dynamic-skills/index.md](dynamic-skills/index.md).
 
 ### Keep the root README current
