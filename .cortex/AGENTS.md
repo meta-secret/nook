@@ -2,6 +2,28 @@
 
 This is the system of record and entry point for all AI agents working in this repository. Follow the links below for deep context on Nook's architecture, design, and standards.
 
+## ⛔ P1 — most critical `.cortex` writing rule: keep cognitive complexity low
+
+Every new or edited `.cortex` Markdown file must use simple sentence structure.
+
+Do not pack many facts into one long sentence or table cell.
+
+Split complex ideas into:
+
+- short sentences;
+- bullet points;
+- lists.
+
+One sentence should carry one idea.
+
+Actors, credentials, commands, and failure modes belong in separate bullets or
+sentences.
+
+Dense multi-clause prose is a P1 documentation finding.
+
+Full contract:
+[dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md).
+
 ## ⛔ P1 — most critical code-structure rule: oversized source is prohibited
 
 Every authored source file, including Rust, MUST stay at or below **1,000
@@ -408,6 +430,7 @@ build-performance PR. Full policy:
 - [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 - [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
 - [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
+- [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md) — **P1 `.cortex` writing rule:** short sentences, bullets, and lists over dense multi-clause prose.
 - [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
 - [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; run focused tasks and complete gates explicitly on GitHub-hosted workers**.
 - [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Load `design-taste-frontend` for user-visible UI work; Impeccable is explicit opt-in only**.
@@ -433,6 +456,7 @@ build-performance PR. Full policy:
 ### Grow `.cortex` dynamically
 * When prompts, dialogues, test runs, or PRs reveal **durable** facts (invariants, tooling behavior, architectural decisions, coverage gaps), **write them into `.cortex` in the same task** — do not leave knowledge only in chat history.
 * Follow [design-docs/core-beliefs.md §10](design-docs/core-beliefs.md#10-grow-cortex-dynamically): update the most specific existing doc; keep entries concise and linked to code/tests.
+* Follow [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md) for every `.cortex` edit: short sentences, bullets, and lists over dense multi-clause prose.
 * For recurring refactor, review, boundary, or code-organization feedback, use [workflows/dynamic-skills.md](workflows/dynamic-skills.md) and update [dynamic-skills/index.md](dynamic-skills/index.md).
 
 ### Keep the root README current

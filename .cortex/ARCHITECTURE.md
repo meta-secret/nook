@@ -524,7 +524,7 @@ arbitrary-ref delivery jobs bypass sccache.
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Rust/web/browser layers | Local commands reuse the selected builder's store. Hosted CI persists stable Rust dependencies, separate source-sensitive native/WASM snapshots, and separate web-dependency, browser-free-web, and e2e-web refs on `registry.dev.nokey.sh` via BuildKit `type=registry`. Every exporter uses `mode=max`. |
 | Rust crate dependencies | **cargo-chef** release WASM cooks plus a manifest-keyed release test warm-up, then a source-sensitive `cargo build --tests --release` sibling that matches `wasm-pack test`'s unit graph (dev-dependencies differ from `wasm-pack build --lib`). Dummy-root warm-ups cover native nextest/clippy/coverage. Hosted Main publishes the authoritative layers for read-only PR restores and may additionally reuse compiler objects from Main's SeaweedFS bucket; explicit Remote tasks publish new branch results only to their task-scoped Zot refs. |
-| SeaweedFS S3 compiler cache | `task sccache:ensure` requires readable `~/.nook/cache/sccache-access-key` + `sccache-secret-key` and a healthy SeaweedFS head-bucket; missing credentials or an unhealthy backend fail the build instead of silently cold-compiling. Set `SCCACHE_OPTIONAL=1` only for an intentional cold path. Local credentials, registry files, and trusted localhost HTTPS material live only under `~/.nook/` (shared across worktrees; never written into a checkout). Trusted Main uses the authoritative read/write identity; explicit Remote tasks use separate `NOOK_SCCACHE_REMOTE_*` read-only credentials for `nook-sccache`. PR and other arbitrary-ref jobs receive neither identity and set `SCCACHE_OPTIONAL=1` via `nook-cache-connect`. `task sccache:stats` reports the full object count and byte size. `task infra:sccache:check` verifies anonymous denial, Main read/write, and Remote read-only access. |
+| SeaweedFS S3 compiler cache | See the SeaweedFS compiler-cache rules below. |
 | OCI registry (`registry.dev.nokey.sh`) | Zot in k0s with retained `/var/lib/hive/zot`, ClusterIP `10.96.90.10:5000`, Traefik HTTPS + htpasswd under `*.dev.nokey.sh`. Hosted CI and Hive use it for BuildKit cache and image publish/pull. No host `:5000` mapping and no `kubectl port-forward`. |
 | Server mesh | `task infra:mesh:node:add` idempotently enrolls a distinct, non-HA Linux server as a Cloudflare Mesh node for direct private-IP connectivity. The silent Task obtains the one-time connector token from the existing Wrangler OAuth session and streams it only to a mode-`0700` root helper over SSH stdin. Enrollment refuses active kernel auditing, temporarily hides root process arguments from unprivileged users, restores `/proc`, removes the helper, and never persists or logs the token. Subnet routes and HA replicas remain explicit later changes. |
 | `nook-app/target/`      | Lives at `/meta-secret/nook/nook-app/target` in the Rust lineage only. Hosted CI persists its reachable BuildKit layers in private Zot refs; it remains absent from `nook-web:local`. |
@@ -533,6 +533,27 @@ arbitrary-ref delivery jobs bypass sccache.
 | Web dist                | Built at **nook-web image build time** (`bun run build`, channel URL args) so it is present in every container: PR previews deploy the combined internal harness plus three isolated native Pages aliases, main deploys isolated site/Simple/Sentinel artifacts to their stable development origins, and release publishes the extracted production artifacts. |
 | Playwright Chromium     | Pre-installed only in `web-e2e-base`; absent from the normal PR `web-base` and Rust lineage. `ci:full-e2e` PRs and Main use the e2e base; browser-only WASM tasks use the on-demand Rust browser image. |
 | CI Docker builds        | PR CI builds verified WASM once and uploads its small generated package for parallel preview and `ci:full-e2e` consumers. Independent web and extension e2e consumers each build only the Chromium web image from that artifact and run on separate hosted runners; the extension job owns the shared e2e cache export while web restores it without duplicating that upload. Changed PR demo specs and Main's complete demo project retain 90-day Actions artifacts; the 10 largest WebMs per run are best-effort published into one private Linear `nook-ui` issue per PR. Main serializes native → WASM → web cache-writing lanes: each verifies read-only and then exports its already-solved local graph, with isolated no-import WASM dependency publication. Parallel web e2e / extension e2e / UI demo consumers rebuild from the verified WASM handoff and remain read-only; deploy waits on web verify + web e2e only. Main also publishes commit-keyed Rust coverage; a dedicated PR reporting job reuses trusted exact-commit artifacts when available and never cold-builds the base revision. |
+
+SeaweedFS compiler-cache rules:
+
+- `task sccache:ensure` needs readable `~/.nook/cache/sccache-access-key` and
+  `sccache-secret-key`.
+- It also needs a healthy SeaweedFS head-bucket.
+- Missing credentials or an unhealthy backend fail the build.
+- The build must not silently cold-compile in those cases.
+- Set `SCCACHE_OPTIONAL=1` only for an intentional cold path.
+- Local credentials, registry files, and trusted localhost HTTPS material live
+  only under `~/.nook/`.
+- That home directory is shared across worktrees.
+- Never write those materials into a checkout.
+- Trusted Main uses the authoritative read/write identity.
+- Explicit Remote tasks use separate `NOOK_SCCACHE_REMOTE_*` read-only
+  credentials for `nook-sccache`.
+- PR and other arbitrary-ref jobs receive neither identity.
+- Those jobs set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`.
+- `task sccache:stats` reports full object count and byte size.
+- `task infra:sccache:check` verifies anonymous denial, Main read/write, and
+  Remote read-only access.
 
 Regenerate chef inputs after dependency changes: commit **`nook-app/Cargo.lock`** when dependencies change; `recipe.json` is produced during `docker build`.
 
