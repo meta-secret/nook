@@ -485,9 +485,9 @@ raise "k0s status task is missing" unless k0s_status_task
 unless infra_taskfile.include?("--exclude='agentic-ai/minds/target'")
   raise "Hive source synchronization does not exclude Rust build output"
 end
-unless infra_taskfile.include?('--build-context "nook-app=$remote_dir/nook-app"') &&
+unless infra_taskfile.include?('--build-context "nook-app=$remote_dir/nook-app/docker"') &&
        infra_taskfile.include?("nook-app/docker/sccache-wrapper.sh")
-  raise "Hive deployment build is missing its named nook-app context"
+  raise "Hive deployment build is missing its named nook-app/docker context"
 end
 unless infra_taskfile.include?("neo4j-secrets.yaml.hmac") &&
        infra_taskfile.include?("hmac.compare_digest") &&

@@ -1,0 +1,11 @@
+# Safety net if a build ever uses nook-app/ as a named context root.
+# Hive correctly points --build-context nook-app at nook-app/docker instead.
+target
+**/target
+**/node_modules
+**/dist
+**/test-results
+**/playwright-report
+**/ui-demo-results
+**/coverage
+.DS_Store

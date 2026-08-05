@@ -8,7 +8,9 @@ vars:
   HIVE_DEBIAN_RELEASE: trixie
   HIVE_RUST_DIGEST: sha256:1bcff4befb740599103a2c7cb51058e14479b2e35e3a34a3f0dc4ede09927488
   HIVE_TEST_RUNTIME_IMAGE: rust:{{.HIVE_RUST_VERSION}}-{{.HIVE_DEBIAN_RELEASE}}@{{.HIVE_RUST_DIGEST}}
-  NOOK_APP_CONTEXT: ../../nook-app
+  # Named context for the two shared sccache helper scripts only — never the full
+  # nook-app tree (host target/ + node_modules would otherwise transfer multi-GB).
+  NOOK_APP_CONTEXT: ../../nook-app/docker
   SCCACHE_S3_ACCESS_KEY_FILE:
     sh: >-
       if [ -n "${SCCACHE_S3_ACCESS_KEY_FILE:-}" ]; then

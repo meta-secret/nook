@@ -57,8 +57,8 @@ RUN curl -fsSL \
       "/tmp/sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl" \
     && sccache --version
 
-COPY --from=nook-app docker/sccache-wrapper.sh /usr/local/bin/nook-sccache
-COPY --from=nook-app docker/sccache-report.sh /usr/local/bin/nook-sccache-report
+COPY --from=nook-app sccache-wrapper.sh /usr/local/bin/nook-sccache
+COPY --from=nook-app sccache-report.sh /usr/local/bin/nook-sccache-report
 RUN chmod 0755 /usr/local/bin/nook-sccache /usr/local/bin/nook-sccache-report
 
 RUN curl -fsSL \

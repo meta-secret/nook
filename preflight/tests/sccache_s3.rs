@@ -40,6 +40,40 @@ fn hive_materializes_test_and_clippy_dependency_graphs_in_parallel() -> anyhow::
 }
 
 #[test]
+fn hive_named_nook_app_context_is_the_docker_helpers_dir_only() -> anyhow::Result<()> {
+    let hive_tasks = read("agentic-ai/minds/hive/Taskfile.yml");
+    let hive_dockerfile = read("agentic-ai/minds/hive/Dockerfile");
+    let infra_hive = read("infra/tasks/hive.yml");
+    assert!(
+        hive_tasks.contains("NOOK_APP_CONTEXT: ../../nook-app/docker"),
+        "Hive must point its named context at nook-app/docker, not the full nook-app tree"
+    );
+    assert!(
+        !hive_tasks.contains("NOOK_APP_CONTEXT: ../../nook-app\n")
+            && !hive_tasks.contains("NOOK_APP_CONTEXT: ../../nook-app\r"),
+        "Hive must not transfer the full nook-app checkout as a BuildKit context"
+    );
+    for required in [
+        "COPY --from=nook-app sccache-wrapper.sh",
+        "COPY --from=nook-app sccache-report.sh",
+    ] {
+        assert!(
+            hive_dockerfile.contains(required),
+            "Hive Dockerfile must copy sccache helpers from the narrowed docker context: {required}"
+        );
+    }
+    assert!(
+        !hive_dockerfile.contains("COPY --from=nook-app docker/"),
+        "Hive Dockerfile paths must be relative to nook-app/docker"
+    );
+    assert!(
+        infra_hive.contains("--build-context \"nook-app=$remote_dir/nook-app/docker\""),
+        "remote Hive image builds must use the narrowed nook-app/docker context"
+    );
+    Ok(())
+}
+
+#[test]
 fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyhow::Result<()> {
     let app_tasks = read("nook-app/Taskfile.yml");
     for required in [
