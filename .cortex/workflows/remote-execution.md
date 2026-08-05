@@ -147,6 +147,15 @@ Remote browser jobs preserve Playwright `test-results`, including traces,
 screenshots, videos, and attached `nook-app-logs.json`, as run artifacts even
 when the selected task fails.
 
+Before dispatching `web:e2e`, `extension:e2e`, `check`, `ci:pr`, or
+`ci:pr:e2e`, the Task command refreshes `origin/main` and fails closed unless
+the local exact head contains it. `task pr:validate` applies the same guard to
+the PR's declared base branch before toggling a validation label. Update,
+format, and push a stale branch before spending an expensive hosted cycle.
+Cheap focused tasks remain available for early iteration. The final readiness
+audit still detects the unavoidable case where the base advances after a run
+has already started.
+
 Any later push changes the PR head. Checks and deployment for the earlier SHA do
 not authorize the new head, and `task pr:ready` must reject it until the agent
 triggers validation again. Do not push while a complete validation is running;
