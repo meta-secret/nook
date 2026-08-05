@@ -282,11 +282,18 @@ fn broad_remote_tasks_export_native_layers_without_main_write_access() {
     assert!(!pr.contains("secrets.NOOK_REGISTRY_PASSWORD"));
     assert!(pr.contains("secrets.NOOK_REGISTRY_REMOTE_USERNAME"));
     assert!(pr.contains("secrets.NOOK_REGISTRY_REMOTE_PASSWORD"));
+    let pr_docker_setups = pr
+        .matches("uses: ./.github/actions/nook-docker-setup")
+        .count();
     assert_eq!(
         pr.matches("cache-write: \"false\"").count(),
-        pr.matches("uses: ./.github/actions/nook-docker-setup")
-            .count(),
-        "every PR registry login must keep Bake exporters disabled"
+        pr_docker_setups,
+        "every PR registry login must keep Main buildcache exporters disabled"
+    );
+    assert_eq!(
+        pr.matches("isolated-cache-write: \"true\"").count(),
+        pr_docker_setups,
+        "every PR Docker job must export only isolated remote-buildcache scopes"
     );
 }
 

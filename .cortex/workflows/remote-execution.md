@@ -60,8 +60,8 @@ Credentials enter compiler vertices only through fixed optional BuildKit secret
 IDs and target paths. Secret contents are never build arguments or image state
 and do not participate in the layer cache checksum. Local and credentialed
 hosted builds fail closed when SeaweedFS credentials or reachability are wrong.
-Only an explicit `SCCACHE_OPTIONAL=1` path (PR/secret-free hosted jobs) falls
-back to direct compilation.
+Only an explicit `SCCACHE_OPTIONAL=1` path (fork/release/secret-free hosted jobs)
+falls back to direct compilation.
 
 The most frequently used checks have remote-only narrow orchestration:
 `rust:test` loads a source-sealed native dependency image, and `web:check`,

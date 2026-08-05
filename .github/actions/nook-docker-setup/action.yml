@@ -11,7 +11,9 @@ inputs:
     required: false
     default: "false"
   isolated-cache-write:
-    description: Publish only a workflow-dispatch branch cache while retaining Main as fallback.
+    description: >-
+      Publish only an isolated remote-buildcache ref (Remote task or PR number)
+      while retaining Main as fallback. Never writes Main's nook/buildcache refs.
     required: false
     default: "false"
   require-e2e-cache:
@@ -115,16 +117,29 @@ runs:
         fi
         isolated_cache_write="${{ inputs.isolated-cache-write }}"
         if [ "$isolated_cache_write" = "true" ]; then
-          if [ "$event_name" != "workflow_dispatch" ] \
-            || [ "${{ inputs.main-cache-only }}" != "true" ] \
+          if [ "${{ inputs.main-cache-only }}" != "true" ] \
             || [ "${{ inputs.cache-write }}" != "false" ]; then
-            echo "isolated-cache-write requires workflow_dispatch, main-cache-only=true, and cache-write=false" >&2
+            echo "isolated-cache-write requires main-cache-only=true and cache-write=false" >&2
             exit 1
           fi
-          case "$git_ref" in
-            refs/heads/*) ;;
+          case "$event_name" in
+            workflow_dispatch)
+              case "$git_ref" in
+                refs/heads/*) ;;
+                *)
+                  echo "isolated-cache-write requires a repository branch ref" >&2
+                  exit 1
+                  ;;
+              esac
+              ;;
+            pull_request)
+              if [[ ! "$pr_number" =~ ^[0-9]+$ ]]; then
+                echo "isolated-cache-write on pull_request requires a PR number" >&2
+                exit 1
+              fi
+              ;;
             *)
-              echo "isolated-cache-write requires a repository branch ref" >&2
+              echo "isolated-cache-write requires workflow_dispatch or pull_request" >&2
               exit 1
               ;;
           esac
@@ -139,20 +154,25 @@ runs:
         scope_suffix=""
         fallback_enabled=""
         if [ "$isolated_cache_write" = "true" ]; then
-          branch_hash="$(printf '%s' "$GITHUB_REF_NAME" | sha256sum | cut -c1-20)"
-          task_name="${{ github.event.inputs.task }}"
-          if [ -z "$task_name" ]; then
-            echo "isolated-cache-write requires a dispatched task name" >&2
-            exit 1
-          fi
-          task_hash="$(printf '%s' "$task_name" | sha256sum | cut -c1-12)"
-          scope_suffix="-remote-$branch_hash-task-$task_hash"
           fallback_enabled=1
-          hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v1$scope_suffix:buildcache"
-          echo "HIVE_CACHE_FROM=$hive_remote_ref" >> "$GITHUB_ENV"
-          echo "HIVE_CACHE_SEED_FROM=type=registry,ref=${{ inputs.registry-host }}/nook/buildcache/nook-hive-linux-amd64-v1:buildcache" >> "$GITHUB_ENV"
-          echo "HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m" >> "$GITHUB_ENV"
-          echo "Remote cache writes are isolated to $scope_suffix with trusted Main fallback"
+          if [ "$event_name" = "pull_request" ]; then
+            scope_suffix="-pr-$pr_number"
+            echo "PR cache writes are isolated to $scope_suffix with trusted Main fallback"
+          else
+            branch_hash="$(printf '%s' "$GITHUB_REF_NAME" | sha256sum | cut -c1-20)"
+            task_name="${{ github.event.inputs.task }}"
+            if [ -z "$task_name" ]; then
+              echo "isolated-cache-write requires a dispatched task name" >&2
+              exit 1
+            fi
+            task_hash="$(printf '%s' "$task_name" | sha256sum | cut -c1-12)"
+            scope_suffix="-remote-$branch_hash-task-$task_hash"
+            hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v1$scope_suffix:buildcache"
+            echo "HIVE_CACHE_FROM=$hive_remote_ref" >> "$GITHUB_ENV"
+            echo "HIVE_CACHE_SEED_FROM=type=registry,ref=${{ inputs.registry-host }}/nook/buildcache/nook-hive-linux-amd64-v1:buildcache" >> "$GITHUB_ENV"
+            echo "HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m" >> "$GITHUB_ENV"
+            echo "Remote cache writes are isolated to $scope_suffix with trusted Main fallback"
+          fi
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
         echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"

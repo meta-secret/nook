@@ -480,15 +480,19 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && wasm_job.contains("Upload built WASM handoff")
             && wasm_job.contains("nook-run-attempt")
             && wasm_job.contains("cache-write: \"false\"")
-            && wasm_job.contains("main-cache-only: \"true\""),
+            && wasm_job.contains("main-cache-only: \"true\"")
+            && wasm_job.contains("isolated-cache-write: \"true\"")
+            && wasm_job.contains("NOOK_SCCACHE_ACCESS_KEY"),
         "PR CI must restore or build WASM once, publish the exact attempt, and finish Node tests"
     );
     assert!(
         native_job.contains("cache-write: \"false\"")
             && native_job.contains("main-cache-only: \"true\"")
+            && native_job.contains("isolated-cache-write: \"true\"")
+            && native_job.contains("NOOK_SCCACHE_ACCESS_KEY")
             && native_job.contains("if: steps.trusted-native.outputs.found == 'true'")
             && native_job.contains("task preflight"),
-        "native PR validation must read Main cache only and run explicit preflight only for an exact handoff"
+        "native PR validation must use sccache, isolate BuildKit writes, and run explicit preflight only for an exact handoff"
     );
     assert!(
         !pr.contains("actions/cache/"),
