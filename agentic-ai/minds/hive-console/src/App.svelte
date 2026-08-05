@@ -9,11 +9,14 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   import {
     Activity,
     AlertTriangle,
+    ArrowUpDown,
     CheckCircle2,
     CircleDashed,
     Clock3,
+    Filter,
     GitCommitHorizontal,
     Hexagon,
+    Layers,
     Search,
     Server,
     X,
@@ -45,11 +48,17 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     type TaskSelection,
   } from './app-state';
 
+  type TabFilter = 'all' | 'attention' | 'running' | 'failed' | 'completed';
+  type SortOption = 'newest' | 'oldest' | 'attempts';
+
   let snapshotState = $state<ObserverFeed>({
     kind: ObserverFeedKind.NotLoaded,
   });
   let selectedIdState = $state<TaskSelection>({ kind: TaskSelectionKind.None });
   let search = $state('');
+  let selectedTab = $state<TabFilter>('all');
+  let sortBy = $state<SortOption>('newest');
+  let groupByKind = $state<boolean>(false);
   let loading = $state(true);
   let unavailable = $state(false);
   let detailPanel = $state<DetailPanelMount>({
@@ -89,6 +98,54 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     }
     return { kind: SelectedTaskKind.Closed };
   });
+
+  const attentionEntries = $derived.by(() => {
+    if (snapshotState.kind !== ObserverFeedKind.Loaded) return [];
+    const snapshot = snapshotState.snapshot;
+    return snapshot.alerts
+      .flatMap((alert) => {
+        const task = snapshot.tasks.find(
+          (candidate) => candidate.id === alert.task_id,
+        );
+        return task ? [{ alert, task }] : [];
+      })
+      .sort(
+        (left, right) =>
+          right.task.updated_at - left.task.updated_at ||
+          right.alert.first_observed_at - left.alert.first_observed_at,
+      );
+  });
+  const attentionTaskIds = $derived(
+    new Set(attentionEntries.map(({ task }) => task.id)),
+  );
+
+  const executingTasks = $derived.by(() => {
+    if (snapshotState.kind !== ObserverFeedKind.Loaded) return [];
+    return snapshotState.snapshot.tasks
+      .filter((t) => t.status === ObservedExecutionStatus.Running)
+      .sort((left, right) => right.updated_at - left.updated_at);
+  });
+
+  const statusCounts = $derived.by(() => {
+    const all =
+      snapshotState.kind === ObserverFeedKind.Loaded
+        ? snapshotState.snapshot.tasks
+        : [];
+    const attention = attentionEntries.length;
+    const running = all.filter(
+      (t) => t.status === ObservedExecutionStatus.Running,
+    ).length;
+    const failed = all.filter(
+      (t) =>
+        t.status === ObservedExecutionStatus.Failed ||
+        t.status === ObservedExecutionStatus.Blocked,
+    ).length;
+    const completed = all.filter(
+      (t) => t.status === ObservedExecutionStatus.Completed,
+    ).length;
+    return { all: all.length, attention, running, failed, completed };
+  });
+
   const filteredTasks = $derived.by(() => {
     const snapshotTasks =
       snapshotState.kind === ObserverFeedKind.Loaded
@@ -101,30 +158,63 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         durableTasks.push(durableTask);
       }
     }
-    return [...durableTasks, ...snapshotTasks].filter((task) => {
-      const query = search.trim().toLocaleLowerCase();
-      return (
-        query.length === 0 ||
-        task.id.toLocaleLowerCase().includes(query) ||
-        task.kind.toLocaleLowerCase().includes(query) ||
-        task.status.toLocaleLowerCase().includes(query)
+    let tasks = [...durableTasks, ...snapshotTasks];
+
+    if (selectedTab === 'attention') {
+      tasks = tasks.filter((t) => attentionTaskIds.has(t.id));
+    } else if (selectedTab === 'running') {
+      tasks = tasks.filter((t) => t.status === ObservedExecutionStatus.Running);
+    } else if (selectedTab === 'failed') {
+      tasks = tasks.filter(
+        (t) =>
+          t.status === ObservedExecutionStatus.Failed ||
+          t.status === ObservedExecutionStatus.Blocked ||
+          attentionTaskIds.has(t.id),
       );
+    } else if (selectedTab === 'completed') {
+      tasks = tasks.filter(
+        (t) => t.status === ObservedExecutionStatus.Completed,
+      );
+    }
+
+    const query = search.trim().toLocaleLowerCase();
+    if (query.length > 0) {
+      tasks = tasks.filter(
+        (task) =>
+          task.id.toLocaleLowerCase().includes(query) ||
+          task.kind.toLocaleLowerCase().includes(query) ||
+          (task.kind_label &&
+            task.kind_label.toLocaleLowerCase().includes(query)) ||
+          task.status.toLocaleLowerCase().includes(query) ||
+          (task.trigger && task.trigger.toLocaleLowerCase().includes(query)),
+      );
+    }
+
+    return tasks.sort((left, right) => {
+      if (sortBy === 'newest') {
+        return right.updated_at - left.updated_at;
+      }
+      if (sortBy === 'oldest') {
+        return left.updated_at - right.updated_at;
+      }
+      if (sortBy === 'attempts') {
+        return right.attempt_count - left.attempt_count;
+      }
+      return 0;
     });
+  });
+
+  const groupedTasks = $derived.by(() => {
+    if (!groupByKind) return [];
+    const groups: Record<string, ObservedTask[]> = {};
+    for (const task of filteredTasks) {
+      const label = task.kind_label || task.kind || 'Other';
+      if (!groups[label]) groups[label] = [];
+      groups[label].push(task);
+    }
+    return Object.entries(groups);
   });
   const normalizedSearch = $derived(search.trim());
-  const attentionEntries = $derived.by(() => {
-    if (snapshotState.kind !== ObserverFeedKind.Loaded) return [];
-    const snapshot = snapshotState.snapshot;
-    return snapshot.alerts.flatMap((alert) => {
-      const task = snapshot.tasks.find(
-        (candidate) => candidate.id === alert.task_id,
-      );
-      return task ? [{ alert, task }] : [];
-    });
-  });
-  const attentionTaskIds = $derived(
-    new Set(attentionEntries.map(({ task }) => task.id)),
-  );
   const recentActivity = $derived(
     (snapshotState.kind === ObserverFeedKind.Loaded
       ? snapshotState.snapshot.tasks
@@ -475,7 +565,10 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           {#each recentActivity as item (item.entry.id)}
             <button class="digest-row" onclick={() => selectTask(item.taskId)}>
               <Activity size={14} />
-              <span>{item.entry.message}</span>
+              <div class="digest-info">
+                <span class="digest-msg">{item.entry.message}</span>
+                <code class="digest-task-id">{compactId(item.taskId, 18)}</code>
+              </div>
               <time>{relativeTime(item.entry.created_at)}</time>
             </button>
           {/each}
@@ -488,14 +581,108 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
             <h2 id="queue-heading">{copy.all_tasks}</h2>
             <span>{filteredTasks.length}</span>
           </div>
-          <label class="search-field">
-            <Search size={16} />
-            <span class="sr-only">{copy.search_tasks}</span>
-            <input bind:value={search} placeholder={copy.search_tasks} />
-          </label>
+
+          <div class="toolbar-controls">
+            <label class="search-field">
+              <Search size={16} />
+              <span class="sr-only">{copy.search_tasks}</span>
+              <input bind:value={search} placeholder={copy.search_tasks} />
+            </label>
+
+            <div class="control-group">
+              <label class="sort-control" title="Sort order">
+                <ArrowUpDown size={14} />
+                <select bind:value={sortBy} class="sort-select">
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="attempts">Attempts</option>
+                </select>
+              </label>
+
+              <button
+                class:active={groupByKind}
+                class="group-toggle"
+                onclick={() => (groupByKind = !groupByKind)}
+                title="Group by category"
+              >
+                <Layers size={14} />
+                <span>Group</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        {#if attentionEntries.length > 0 && normalizedSearch.length === 0}
+        <nav class="filter-tabs" aria-label="Task status filters">
+          <button
+            class:active={selectedTab === 'all'}
+            class="tab-button"
+            onclick={() => (selectedTab = 'all')}
+          >
+            <span>{copy.all_tasks}</span>
+            <span class="tab-badge">{statusCounts.all}</span>
+          </button>
+
+          <button
+            class:active={selectedTab === 'attention'}
+            class:has-count={statusCounts.attention > 0}
+            class="tab-button tab-attention"
+            onclick={() => (selectedTab = 'attention')}
+          >
+            <AlertTriangle size={13} />
+            <span>Attention</span>
+            <span class="tab-badge badge-attention"
+              >{statusCounts.attention}</span
+            >
+          </button>
+
+          <button
+            class:active={selectedTab === 'running'}
+            class="tab-button"
+            onclick={() => (selectedTab = 'running')}
+          >
+            <span>{copy.running}</span>
+            <span class="tab-badge">{statusCounts.running}</span>
+          </button>
+
+          <button
+            class:active={selectedTab === 'failed'}
+            class="tab-button"
+            onclick={() => (selectedTab = 'failed')}
+          >
+            <span>{copy.failed}</span>
+            <span class="tab-badge">{statusCounts.failed}</span>
+          </button>
+
+          <button
+            class:active={selectedTab === 'completed'}
+            class="tab-button"
+            onclick={() => (selectedTab = 'completed')}
+          >
+            <span>{copy.completed}</span>
+            <span class="tab-badge">{statusCounts.completed}</span>
+          </button>
+        </nav>
+
+        {#if selectedTab === 'all' && executingTasks.length > 0 && normalizedSearch.length === 0}
+          <div class="executing-lane">
+            <div class="executing-heading">
+              <Activity size={15} />
+              <span>Executing now ({executingTasks.length})</span>
+            </div>
+            {#each executingTasks as task (task.id)}
+              {@render TaskRow(
+                task,
+                isSelectedTaskId(task.id),
+                copy,
+                statusLabel,
+                relativeTime,
+                () => selectTask(task.id),
+              )}
+            {/each}
+          </div>
+        {/if}
+
+        {#if selectedTab === 'all' && attentionEntries.length > 0 && normalizedSearch.length === 0}
           <div class="attention-lane">
             <div class="attention-heading">
               <AlertTriangle size={15} />
@@ -515,32 +702,55 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         {/if}
 
         <div class="task-list">
-          {#each filteredTasks.filter((task) => normalizedSearch.length > 0 || !attentionTaskIds.has(task.id)) as task (task.id)}
-            {@render TaskRow(
-              task,
-              isSelectedTaskId(task.id),
-              copy,
-              statusLabel,
-              relativeTime,
-              () => selectTask(task.id),
-            )}
-          {:else}
-            {#if attentionEntries.length === 0 || normalizedSearch.length > 0}
-              <div class="empty-state">
-                <CircleDashed size={24} />
-                <strong>
-                  {normalizedSearch.length > 0
-                    ? copy.no_search_results
-                    : copy.no_tasks}
-                </strong>
-                <p>
-                  {normalizedSearch.length > 0
-                    ? copy.no_search_results_description
-                    : copy.no_tasks_description}
-                </p>
+          {#if groupByKind && groupedTasks.length > 0}
+            {#each groupedTasks as [groupLabel, groupItems] (groupLabel)}
+              <div class="group-section">
+                <div class="group-header">
+                  <strong>{groupLabel}</strong>
+                  <span class="group-count">{groupItems.length}</span>
+                </div>
+                <div class="group-items">
+                  {#each groupItems as task (task.id)}
+                    {@render TaskRow(
+                      task,
+                      isSelectedTaskId(task.id),
+                      copy,
+                      statusLabel,
+                      relativeTime,
+                      () => selectTask(task.id),
+                    )}
+                  {/each}
+                </div>
               </div>
-            {/if}
-          {/each}
+            {/each}
+          {:else}
+            {#each filteredTasks.filter((task) => selectedTab !== 'all' || normalizedSearch.length > 0 || !attentionTaskIds.has(task.id)) as task (task.id)}
+              {@render TaskRow(
+                task,
+                isSelectedTaskId(task.id),
+                copy,
+                statusLabel,
+                relativeTime,
+                () => selectTask(task.id),
+              )}
+            {:else}
+              {#if attentionEntries.length === 0 || normalizedSearch.length > 0 || selectedTab !== 'all'}
+                <div class="empty-state">
+                  <CircleDashed size={24} />
+                  <strong>
+                    {normalizedSearch.length > 0
+                      ? copy.no_search_results
+                      : copy.no_tasks}
+                  </strong>
+                  <p>
+                    {normalizedSearch.length > 0
+                      ? copy.no_search_results_description
+                      : copy.no_tasks_description}
+                  </p>
+                </div>
+              {/if}
+            {/each}
+          {/if}
         </div>
       </section>
 
