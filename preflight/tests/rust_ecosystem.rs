@@ -29,9 +29,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "Bake rust-ecosystem-deterministic",
         "Bake rust-fuzz-smoke",
         "Bake rust-dylint",
+        "task docker:ecosystem:dependency-policy",
+        "task docker:ecosystem:deterministic",
+        "task docker:ecosystem:fuzz",
+        "task docker:ecosystem:dylint",
         "nook-docker-setup",
         "NOOK_SCCACHE_ACCESS_KEY",
-        "docker-bake-sccache.sh",
         "kani-github-action",
         "FUZZ_SECONDS",
     ] {
@@ -46,16 +49,27 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         ),
         "Rust ecosystem PRs must export only isolated remote-buildcache scopes"
     );
-    let bake_helper = read(".github/scripts/docker-bake-sccache.sh")?;
+    assert!(
+        !workflow.contains("docker-bake-sccache.sh")
+            && !workflow.contains("NOOK_BAKE_FILES")
+            && !workflow.contains("docker buildx bake"),
+        "Rust ecosystem workflow must invoke Taskfile tasks instead of Bake helpers"
+    );
+    let docker_tasks = read("nook-app/docker/Taskfile.yml")?;
     for marker in [
-        "SCCACHE_S3_ACCESS_KEY_FILE",
-        "sccache_s3_access_key",
-        "sccache_s3_secret_key",
-        "docker buildx bake",
+        "docker:ecosystem:dependency-policy:",
+        "docker:ecosystem:deterministic:",
+        "docker:ecosystem:fuzz:",
+        "docker:ecosystem:dylint:",
+        "rust-dependency-policy",
+        "rust-ecosystem-deterministic",
+        "rust-fuzz-smoke",
+        "rust-dylint",
+        "sccache:ensure",
     ] {
         assert!(
-            bake_helper.contains(marker),
-            "ecosystem bake helper is missing {marker}"
+            docker_tasks.contains(marker),
+            "docker Taskfile is missing ecosystem marker {marker}"
         );
     }
     for forbidden in [
