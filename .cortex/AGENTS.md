@@ -52,28 +52,38 @@ Full contract:
 
 ## ⛔ P1 — most critical code-structure rule: oversized source is prohibited
 
-Every authored source file, including Rust, MUST stay at or below **1,000
-lines**. Crossing this uniform hard limit is a failed repository invariant and
-a P1 architecture finding. A Rust module that needs more than 1,000 lines
-signals an overcomplicated domain model or too many production
-responsibilities; the model must be decomposed rather than accommodated by a
-larger language-specific allowance.
+Every authored source file, including Rust, MUST stay at or below **1,000 lines**.
 
-For Rust, moving `#[cfg(test)]` code or unit tests into another file is **not**
-an acceptable fix. Separate Rust unit-test files under `src` are prohibited:
-unit tests MUST be colocated with the focused implementation module they test.
-Rust integration tests under a crate's `tests/` directory remain valid. An
-oversized production module proves that its production responsibilities need
-review. Split it along a real domain, capability, ownership, lifecycle, or
-dependency boundary; keep each resulting module cohesive, expose narrow
-interfaces, and colocate each abstraction's unit tests in that module.
+Crossing this uniform hard limit is a failed repository invariant and a P1 architecture finding.
 
-Mechanical line-count splitting is forbidden. Never cut a file in half or
-create meaningless `part1`, `part2`, `continued`, or similarly numbered
-modules. The refactor must improve the architecture, not merely satisfy the
-counter. Moving unit tests to a separate file to satisfy the counter is itself
-a failing invariant. Full critical contract:
-[dynamic-skills/source-file-size.md](dynamic-skills/source-file-size.md).
+A Rust module that needs more than 1,000 lines signals an overcomplicated domain model or too many production responsibilities.
+
+The model must be decomposed rather than accommodated by a larger language-specific allowance.
+
+For Rust:
+
+- Moving `#[cfg(test)]` code or unit tests into another file is **not** an acceptable fix.
+- Separate Rust unit-test files under `src` are prohibited.
+- Unit tests MUST be colocated with the focused implementation module they test.
+- Rust integration tests under a crate's `tests/` directory remain valid.
+- An oversized production module proves that its production responsibilities need review.
+
+Split guidance:
+
+- Split along a real domain, capability, ownership, lifecycle, or dependency boundary.
+- Keep each resulting module cohesive.
+- Expose narrow interfaces.
+- Colocate each abstraction's unit tests in that module.
+
+Mechanical line-count splitting is forbidden.
+
+Never cut a file in half or create meaningless `part1`, `part2`, `continued`, or similarly numbered modules.
+
+The refactor must improve the architecture, not merely satisfy the counter.
+
+Moving unit tests to a separate file to satisfy the counter is itself a failing invariant.
+
+Full critical contract: [dynamic-skills/source-file-size.md](dynamic-skills/source-file-size.md).
 
 ## ⛔ Non-negotiable: load Nook's design skill for every UI task
 
@@ -268,25 +278,35 @@ and procedural-macro entrypoints. Full contract:
 
 ## ⛔ Non-negotiable: implementation agents land their PRs
 
-Every task-owning implementation agent with GitHub write access must create or
-update a PR, monitor Nook's applicable repository-owned checks, fix failures,
-address and resolve actionable comments, update conflicts with `origin/main`,
-revalidate the exact head, and squash-merge when
-`task pr:ready PR=<number>` succeeds. Do not stop at a ready-PR handoff or ask
-for separate merge permission. Stop without a merge only for a concrete blocker
-or an explicitly read-only request. The bounded `agent-implement.yml` worker is
-not a continuing task owner: its harness owns git/push/PR creation and exits
-after opening the PR, so a continuing agent must take ownership of that PR and
-carry this lifecycle through merge. Full policy:
-[workflows/coding-bro.md](workflows/coding-bro.md).
+Every task-owning implementation agent with GitHub write access must:
 
-The successful squash merge is the implementation task's product delivery
-boundary.
-Do not wait for, monitor, or verify the post-merge `main.yml` run or development
-deployment unless the user explicitly requested deployment/live verification
-or assigned a Main failure. Publish the required Workbench issue update,
-worklog, and agent-statistics record immediately after merge without making Main
-completion a prerequisite.
+- Create or update a PR.
+- Monitor Nook's applicable repository-owned checks.
+- Fix failures.
+- Address and resolve actionable comments.
+- Update conflicts with `origin/main`.
+- Revalidate the exact head.
+- Squash-merge when `task pr:ready PR=<number>` succeeds.
+
+Do not stop at a ready-PR handoff or ask for separate merge permission.
+
+Stop without a merge only for a concrete blocker or an explicitly read-only request.
+
+The bounded `agent-implement.yml` worker is not a continuing task owner.
+
+Its harness owns git/push/PR creation and exits after opening the PR.
+
+A continuing agent must take ownership of that PR and carry this lifecycle through merge.
+
+Full policy: [workflows/coding-bro.md](workflows/coding-bro.md).
+
+The successful squash merge is the implementation task's product delivery boundary.
+
+Do not wait for, monitor, or verify the post-merge `main.yml` run or development deployment unless the user explicitly requested deployment/live verification or assigned a Main failure.
+
+Publish the required Workbench issue update, worklog, and agent-statistics record immediately after merge.
+
+Do not make Main completion a prerequisite.
 
 ## ⛔ Non-negotiable: never kill the Docker daemon
 
@@ -341,25 +361,40 @@ and [workflows/remote-execution.md](workflows/remote-execution.md).
 
 ## ⛔ Non-negotiable: heavy agent work runs remotely
 
-**The only required local action is `task format`** (plus the light UI demo
-contract when UI paths change). Every product check — lint, clippy, unit tests,
-coverage, web build, Knip, jscpd, e2e, and the full PR mirror — runs on
-**GitHub Actions**, not on the agent machine.
+**The only required local action is `task format`** (plus the light UI demo contract when UI paths change).
 
-The normal loop is **pre-push hygiene → commit → push → focused
-`task remote` runs as useful → explicit `task pr:validate` at the complete
-validation boundary**. Ordinary PR pushes do not start the full PR workflow.
-A later push makes prior checks stale, so the agent must explicitly validate
-the new exact head before readiness can succeed.
+Every product check runs on **GitHub Actions**, not on the agent machine.
+
+Product checks include lint, clippy, unit tests, coverage, web build, Knip, jscpd, e2e, and the full PR mirror.
+
+The normal loop:
+
+1. Pre-push hygiene
+2. Commit
+3. Push
+4. Focused `task remote` runs as useful
+5. Explicit `task pr:validate` at the complete validation boundary
+
+Ordinary PR pushes do not start the full PR workflow.
+
+A later push makes prior checks stale.
+
+The agent must explicitly validate the new exact head before readiness can succeed.
 
 Heavy focused debugging also runs through the allowlisted remote task catalog.
-Local execution is reserved for formatting, the UI demo contract, repository
-inspection, and interactive development sessions that require a persistent
-local server/browser. On a red remote run: read the failed logs (and app logs
-for web/e2e) → fix → `task format` → commit → push → dispatch focused remote
-work or complete validation again. Full policy:
-[workflows/remote-execution.md](workflows/remote-execution.md) and
-[dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
+
+Local execution is reserved for formatting, the UI demo contract, repository inspection, and interactive development sessions that require a persistent local server/browser.
+
+On a red remote run:
+
+1. Read the failed logs (and app logs for web/e2e)
+2. Fix
+3. `task format`
+4. Commit
+5. Push
+6. Dispatch focused remote work or complete validation again
+
+Full policy: [workflows/remote-execution.md](workflows/remote-execution.md) and [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
 
 ## ⛔ Non-negotiable: fix every failing check finding
 
@@ -488,13 +523,24 @@ build-performance PR. Full policy:
 * For recurring refactor, review, boundary, or code-organization feedback, use [workflows/dynamic-skills.md](workflows/dynamic-skills.md) and update [dynamic-skills/index.md](dynamic-skills/index.md).
 
 ### Keep the root README current
-* The root [`README.md`](../README.md) is the **public, human-facing** entry point. Agents must **update it in the same PR** when an architectural or product-surface change would make it wrong or incomplete.
-* **Triggers (non-exhaustive):** package layout or dependency flow changes; new/removed crates or web packages; sync/storage model changes (e.g. event log vs blob); vault unlock or enrollment model changes; public Task commands or local-dev prerequisites; user-visible item types or primary flows; links to `.cortex` docs that move or are superseded.
-* **Do not** dump full design specs into the README — keep it accurate and concise, and point to [ARCHITECTURE.md](ARCHITECTURE.md) / design docs for depth. Stale README after an architecture PR is a process defect, same as leaving durable facts only in chat.
+
+- The root [`README.md`](../README.md) is the **public, human-facing** entry point.
+- Agents must **update it in the same PR** when an architectural or product-surface change would make it wrong or incomplete.
+- **Triggers (non-exhaustive):** package layout or dependency flow changes; new/removed crates or web packages; sync/storage model changes; vault unlock or enrollment model changes; public Task commands or local-dev prerequisites; user-visible item types or primary flows; links to `.cortex` docs that move or are superseded.
+- **Do not** dump full design specs into the README.
+- Keep it accurate and concise.
+- Point to [ARCHITECTURE.md](ARCHITECTURE.md) / design docs for depth.
+- Stale README after an architecture PR is a process defect, same as leaving durable facts only in chat.
 
 ### Project skills
-* [dynamic-skills/index.md](dynamic-skills/index.md) is the canonical registry of repo-specific skills agents must consult for matching work. The directory name means the skills were captured dynamically from durable project feedback; it does **not** mean they are optional or ad hoc.
-* `.agents/skills/` is the canonical open agent skills directory natively discovered by Antigravity and open agent standards. `.cursor/skills/` and `.claude/skills/` entries are executable symlinks/mirrors so Cursor, Claude, Codex, and Antigravity all share the exact same skills source. They must point back to `.cortex/dynamic-skills/` cards; do not treat the skill wrappers as the source of truth.
+
+- [dynamic-skills/index.md](dynamic-skills/index.md) is the canonical registry of repo-specific skills agents must consult for matching work.
+- The directory name means the skills were captured dynamically from durable project feedback.
+- It does **not** mean they are optional or ad hoc.
+- `.agents/skills/` is the canonical open agent skills directory natively discovered by Antigravity and open agent standards.
+- `.cursor/skills/` and `.claude/skills/` entries are executable symlinks/mirrors so Cursor, Claude, Codex, and Antigravity all share the exact same skills source.
+- They must point back to `.cortex/dynamic-skills/` cards.
+- Do not treat the skill wrappers as the source of truth.
 
 ### Debugging and CI verification — always check app logs
 * Investigation order: **GitHub Actions / test output** → **static analysis findings
@@ -508,15 +554,26 @@ build-performance PR. Full policy:
   See [references/logging.md § Debugging…](references/logging.md#debugging-troubleshooting-and-ci-verification).
 
 ### PR review comments
-* When a PR has actionable review feedback from a human, Codex, or another automated reviewer, treat
-  every active, non-outdated item as required work. An agent must leave its own GitHub reply explaining the
-  fix, validation, or no-change rationale before resolving any PR comment or review conversation. Inspect
-  both inline review threads and top-level review bodies for actionable findings. Replies must target the
-  specific comment/item; a broad PR audit comment is not a substitute. Resolve a conversation only after
-  the targeted reply is visible and the finding is fixed or explicitly invalidated, then re-query the PR.
-  Inspect again before merge or handoff. Every active actionable item must be
-  handled; do not request or wait for external reviewers or services.
-  See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
+
+When a PR has actionable review feedback from a human, Codex, or another automated reviewer, treat every active, non-outdated item as required work.
+
+An agent must leave its own GitHub reply explaining the fix, validation, or no-change rationale before resolving any PR comment or review conversation.
+
+Inspect both inline review threads and top-level review bodies for actionable findings.
+
+Replies must target the specific comment/item.
+
+A broad PR audit comment is not a substitute.
+
+Resolve a conversation only after the targeted reply is visible and the finding is fixed or explicitly invalidated.
+
+Re-query the PR and inspect again before merge or handoff.
+
+Every active actionable item must be handled.
+
+Do not request or wait for external reviewers or services.
+
+See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
 
 ### Deferred or out-of-scope functionality
 * If an agent truly believes part of a requested feature is too large, too risky, blocked, or out of

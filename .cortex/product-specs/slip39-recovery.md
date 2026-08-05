@@ -80,11 +80,13 @@ MVP recovery root:
 - Split as one group, three shares, threshold two.
 - Created with an empty SLIP-0039 passphrase.
 
-The empty SLIP-0039 passphrase is intentional for the MVP. SLIP-0039
-passphrases are not self-validating; any passphrase yields a master secret.
+The empty SLIP-0039 passphrase is intentional for the MVP.
+SLIP-0039 passphrases are not self-validating.
+Any passphrase yields a master secret.
 Adding another user-entered recovery passphrase would complicate UX and failure
-modes. Nook should authenticate the recovered root by using it to open a
-versioned recovery envelope instead.
+modes.
+Nook authenticates the recovered root by using it to open a versioned recovery
+envelope.
 
 The recovered root derives an AEAD wrapping key:
 
@@ -222,13 +224,20 @@ pairing_phrase = short-human-code(request_fingerprint)
 ```
 
 The canonical request payload is built after parsing the typed request record.
-It uses the exact field order shown above, no extra fields, no insignificant
-whitespace, and string values exactly as they appear in the QR payload.
-`issued_at` and `expires_at` are UTC RFC3339 strings with a `Z` suffix and no
-fractional seconds. Binary values are unpadded base64url. Numeric fields are
-unsigned base-10 JSON numbers. Parsers reject duplicate fields, unknown fields,
-noncanonical time forms, and padded base64url before constructing the canonical
-payload for fingerprint verification.
+
+- It uses the exact field order shown above.
+- It has no extra fields.
+- It has no insignificant whitespace.
+- String values match exactly as they appear in the QR payload.
+- `issued_at` and `expires_at` are UTC RFC3339 strings with a `Z` suffix.
+- They have no fractional seconds.
+- Binary values are unpadded base64url.
+- Numeric fields are unsigned base-10 JSON numbers.
+
+Parsers reject duplicate fields, unknown fields, noncanonical time forms, and
+padded base64url.
+They do so before constructing the canonical payload for fingerprint
+verification.
 
 Device A displays the pairing phrase next to the request QR. After Device B
 scans the request, it displays the same phrase and must require the helper to
@@ -345,9 +354,9 @@ Apache-2.0 audit/reference source. Do not depend directly on the
 | `yeastplume/rust-sssmc39` | Use as secondary reference only | Apache-2.0 and closer to a library, but explicitly work-in-progress and uses older dependency choices. |
 
 Follow-up #261 should create a Nook-owned module rather than add a large
-external dependency. It should preserve license attribution for adapted
-Apache-2.0 source and replace old dependencies with current Nook-compatible
-ones:
+external dependency.
+It should preserve license attribution for adapted Apache-2.0 source.
+It should replace old dependencies with current Nook-compatible ones:
 
 - use existing `getrandom`, `sha2`, `pbkdf2`, `hkdf`, `aes-gcm`, and
   `zeroize` where possible

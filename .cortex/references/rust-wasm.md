@@ -6,19 +6,78 @@
 - Examples: `connect`, `add_secret`, `filter_secrets`, `generate_password`.
 
 ## 2. Compiling for the web
-- `task wasm:build` invokes wasm-pack from the **Rust workspace root** (`nook-app`) for two packages: the featureless `nook-wasm` vault bridge (Unified/Simple/Sentinel/extension background) and tiny `nook-companion-wasm` (content-script heuristics + host policy). Realm enforcement stays in Rust-owned application configuration for the vault package.
-- **Build mode:** `WASM_BUILD_MODE` defaults to `dev`, which runs release `wasm-pack` with `--no-opt` and stamps `.wasm-source-sha256` with `no-opt`. `WASM_BUILD_MODE=prod` runs the Binaryen `wasm-opt` pass and stamps `optimized`. Local `task check`, `task setup`, `task web:dev`, `task wasm:build`, PR CI, and main development delivery use dev mode; release CI passes `WASM_BUILD_MODE=prod`.
-- **Fast local iteration:** `task wasm:build:fast` regenerates the web pkg on the mounted worktree in dev/no-opt mode. It uses the existing `nook-web:local` image and bind-mounts the worktree; run `task setup` once first if that image does not exist. `task wasm:build:prod` is the explicit optimized local path.
-- **CI** does not rely on defaults: PR and main CI call Task with `WASM_BUILD_MODE=dev` to skip `wasm-opt`; release alone calls Task with `WASM_BUILD_MODE=prod` so stable artifacts are optimized exactly once.
-- **Tests:** PR/main verification runs `task wasm:test`, which executes default wasm-bindgen tests in Node via `wasm-pack test --node --release nook-wasm`. Keeping the Node tests in release mode reuses the release dependency lineage. The Docker graph compiles that release test unit graph as a sibling of `wasm-pack build` so the Node-test join does not rebuild workspace crates after the lib-only export path. Browser-only IndexedDB tests are feature-gated behind `browser-wasm-tests` and run manually with `task wasm:test:browser`.
-- **Rust quality capabilities:** the dedicated `Rust ecosystem checks` workflow
-  supplements Clippy, unit tests, and coverage with cargo-deny and RustSec
-  dependency policy, Proptest generated invariants, Insta snapshots, Loom
-  concurrency permutations, cargo-fuzz parser campaigns, Kani bounded proofs,
-  and pinned Dylint libraries. See
-  [quality.md](../workflows/quality.md#quality-and-release) for the selection
-  rules and cost tiers.
-- The Docker image installs `wasm-pack` via the [official init script](https://wasm-bindgen.github.io/wasm-pack/installer/) (pinned with `VERSION`). `wasm-pack build` installs the matching `wasm-bindgen-cli` itself — not `cargo install`. **Binaryen (`wasm-opt`) is baked into the base image** (pinned `BINARYEN_VERSION`, installed to `/usr/local/bin`) so wasm-pack runs post-link optimization with a correct, local `wasm-opt` and never downloads it at build time (a modern version is required — old Debian binaryen corrupts `externref` tables).
+
+- `task wasm:build` invokes wasm-pack from the **Rust workspace root**
+  (`nook-app`) for two packages:
+  - the featureless `nook-wasm` vault bridge (Unified/Simple/Sentinel/extension
+    background); and
+  - tiny `nook-companion-wasm` (content-script heuristics + host policy).
+- Realm enforcement stays in Rust-owned application configuration for the vault
+  package.
+
+**Build mode**
+
+- `WASM_BUILD_MODE` defaults to `dev`.
+- Dev mode runs release `wasm-pack` with `--no-opt` and stamps
+  `.wasm-source-sha256` with `no-opt`.
+- `WASM_BUILD_MODE=prod` runs the Binaryen `wasm-opt` pass and stamps
+  `optimized`.
+- Local `task check`, `task setup`, `task web:dev`, `task wasm:build`, PR CI,
+  and main development delivery use dev mode.
+- Release CI passes `WASM_BUILD_MODE=prod`.
+
+**Fast local iteration**
+
+- `task wasm:build:fast` regenerates the web pkg on the mounted worktree in
+  dev/no-opt mode.
+- It uses the existing `nook-web:local` image and bind-mounts the worktree.
+- Run `task setup` once first if that image does not exist.
+- `task wasm:build:prod` is the explicit optimized local path.
+
+**CI**
+
+PR and main CI call Task with `WASM_BUILD_MODE=dev` to skip `wasm-opt`. Release
+alone calls Task with `WASM_BUILD_MODE=prod` so stable artifacts are optimized
+exactly once.
+
+**Tests**
+
+PR/main verification runs `task wasm:test`. It executes default wasm-bindgen
+tests in Node via `wasm-pack test --node --release nook-wasm`. Keeping the Node
+tests in release mode reuses the release dependency lineage. The Docker graph
+compiles that release test unit graph as a sibling of `wasm-pack build`. The
+Node-test join does not rebuild workspace crates after the lib-only export path.
+
+Browser-only IndexedDB tests are feature-gated behind `browser-wasm-tests`. Run
+them manually with `task wasm:test:browser`.
+
+**Rust quality capabilities**
+
+The dedicated `Rust ecosystem checks` workflow supplements Clippy, unit tests,
+and coverage with:
+
+- cargo-deny and RustSec dependency policy;
+- Proptest generated invariants;
+- Insta snapshots;
+- Loom concurrency permutations;
+- cargo-fuzz parser campaigns;
+- Kani bounded proofs; and
+- pinned Dylint libraries.
+
+See [quality.md](../workflows/quality.md#quality-and-release) for the selection
+rules and cost tiers.
+
+**Toolchain**
+
+The Docker image installs `wasm-pack` via the
+[official init script](https://wasm-bindgen.github.io/wasm-pack/installer/)
+(pinned with `VERSION`). `wasm-pack build` installs the matching
+`wasm-bindgen-cli` itself — not `cargo install`.
+
+**Binaryen (`wasm-opt`) is baked into the base image** (pinned `BINARYEN_VERSION`,
+installed to `/usr/local/bin`). wasm-pack runs post-link optimization with a
+correct, local `wasm-opt` and never downloads it at build time. A modern
+version is required — old Debian binaryen corrupts `externref` tables.
 
 ## 3. Session state (`NookVaultManager`)
 - `meta.secrets` — per-key armored ciphertext for the unlocked vault; the
@@ -50,7 +109,13 @@
 
 ## 4. Typed WASM boundary (`nook-app/nook-wasm/src/types.rs`)
 
-**Use typed `#[wasm_bindgen]` structs instead of raw JavaScript values for every application data shape.** Errors surface as `JsError`. Browser adapters use the narrowest typed `web-sys` / `js-sys` object supported by the external API. Syntax-aware repository preflight rejects authored `JsValue` paths before wasm-bindgen macro expansion; Clippy's built-in `disallowed_types` cannot distinguish wasm-bindgen's generated ABI code from authored code.
+**Use typed `#[wasm_bindgen]` structs instead of raw JavaScript values for every
+application data shape.** Errors surface as `JsError`. Browser adapters use the
+narrowest typed `web-sys` / `js-sys` object supported by the external API.
+
+Syntax-aware repository preflight rejects authored `JsValue` paths before
+wasm-bindgen macro expansion. Clippy's built-in `disallowed_types` cannot
+distinguish wasm-bindgen's generated ABI code from authored code.
 
 | Export | Use |
 |--------|-----|
@@ -69,15 +134,19 @@
 
 Provider list scoping, locked-device visibility, staged connect arguments,
 remote-reference normalization, and sync metadata updates cross the boundary as
-Rust-owned functions over typed provider rows. Svelte may clone reactive values
-into plain boundary inputs, but must not reproduce those decisions.
+Rust-owned functions over typed provider rows.
 
-**Web layer:** import these types from `./nook-wasm/nook_wasm` (or re-export via `nook.ts`). Do **not** add TS mappers that rebuild plain objects from wasm output.
+Svelte may clone reactive values into plain boundary inputs. It must not
+reproduce those decisions.
+
+**Web layer:** import these types from `./nook-wasm/nook_wasm` (or re-export via
+`nook.ts`). Do **not** add TS mappers that rebuild plain objects from wasm
+output.
 
 **Generated wrapper ownership:** a generated wasm-bindgen class passed by value
 is consumed by the call (`__destroy_into_raw()` clears its JavaScript pointer).
 Do not call `.free()` on that wrapper afterward, including from a promise
-`finally`; doing so throws `null pointer passed to rust` and can turn a
+`finally`. Doing so throws `null pointer passed to rust` and can turn a
 successful async Rust operation into a rejected JavaScript promise. Continue to
 free wrappers returned to JavaScript after their data has been copied out.
 
@@ -85,29 +154,47 @@ free wrappers returned to JavaScript after their data has been copied out.
 
 **Canonical schema:** `nook-app/nook-core/src/secret_types.rs` (`SecretType`, payload structs, `SecretValue`, `SecretRecord`).
 
-**Typed domain strings:** Prefer newtypes over raw `String` / `u32` in `nook-core`. Primary modules: `vault_wire.rs` (crypto/wire blobs), `vault_ids.rs` (prefixed ids), `event_canonical.rs` (`EventId`, `Ed25519Signature`), `vault_event.rs` (event envelope + `VaultEventSchemaVersion`). Inventory and versioning rules: [design-docs/typed-newtypes.md](../design-docs/typed-newtypes.md).
+**Typed domain strings:** Prefer newtypes over raw `String` / `u32` in `nook-core`.
+
+Primary modules:
+
+- `vault_wire.rs` — crypto/wire blobs
+- `vault_ids.rs` — prefixed ids
+- `event_canonical.rs` — `EventId`, `Ed25519Signature`
+- `vault_event.rs` — event envelope + `VaultEventSchemaVersion`
+
+Inventory and versioning rules: [design-docs/typed-newtypes.md](../design-docs/typed-newtypes.md).
 
 WASM boundary getters may still return `String`; parse with `Foo::parse` / `Deserialize` before calling core. Use `.as_str()` / `.into_inner()` only at the JS edge.
 
-When a core policy enum selects a user-facing message, keep the exhaustive
-enum-to-translation-key mapping beside that enum in `nook-core`. A typed WASM
-adapter may translate the selected key from the active catalog and return the
-render-ready message. TypeScript/Svelte supplies reactive locale/catalog state
-and renders the result; it must not repeat the domain-enum switch.
+When a core policy enum selects a user-facing message:
+
+- keep the exhaustive enum-to-translation-key mapping beside that enum in
+  `nook-core`;
+- a typed WASM adapter may translate the selected key from the active catalog
+  and return the render-ready message; and
+- TypeScript/Svelte supplies reactive locale/catalog state and renders the
+  result.
+
+TypeScript/Svelte must not repeat the domain-enum switch.
 
 Apply the same test to every web-facade function, not only large helpers.
+
 Portable predicates, normalization, parsing, ordering, fallback selection,
 pagination, interpolation, and derived DTO fields belong in `nook-core`.
-`nook-wasm` exposes the typed result. A web `switch` over a Rust decision may
-remain only when its branches apply Svelte state or invoke browser lifecycle
-operations; a switch that merely returns data, labels, keys, or messages belongs
-in Rust. Browser time/API acquisition and conversion of Svelte proxies into
-plain typed boundary inputs remain web adapter responsibilities, while
-arithmetic and policy applied to those inputs remain Rust responsibilities.
+`nook-wasm` exposes the typed result.
+
+A web `switch` over a Rust decision may remain only when its branches apply
+Svelte state or invoke browser lifecycle operations. A switch that merely returns
+data, labels, keys, or messages belongs in Rust.
+
+Browser time/API acquisition and conversion of Svelte proxies into plain typed
+boundary inputs remain web adapter responsibilities. Arithmetic and policy
+applied to those inputs remain Rust responsibilities.
 
 Long-running portable workflows expose their canonical phase as a Rust-owned
 `#[wasm_bindgen]` enum. Keep request-in-flight flags such as loading,
-submitting, or browser-ceremony activity separate in the host; do not add those
+submitting, or browser-ceremony activity separate in the host. Do not add those
 transient UI states to the domain phase or mirror the phase with a TypeScript
 string union.
 

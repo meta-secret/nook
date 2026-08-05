@@ -9,10 +9,12 @@ workflows.
 ## Problem Pattern
 
 An `Option<T>` can mean one Rust shape is being reused across different worlds.
-The code says "maybe this field exists," but the real product model may be
-"this value is in one named state or another named state." Required persisted
-values are another failure mode: `Option<T>` permits an invalid record to enter
-the model and postpones rejection until unrelated domain logic runs.
+The code says "maybe this field exists." The real product model may be "this
+value is in one named state or another named state."
+
+Required persisted values are another failure mode. `Option<T>` permits an
+invalid record to enter the model. Rejection is postponed until unrelated domain
+logic runs.
 
 When you see `Option<T>`, ask:
 
@@ -28,28 +30,27 @@ When you see `Option<T>`, ask:
 - Model different workflow states as enum variants, not optional fields inside a
   reused struct.
 - Put fields only on the variant/sub-struct that actually owns them.
-- Required persisted or signed values use required validated newtypes, never
+- Required persisted or signed values use required validated newtypes. Never use
   `Option<T>`, empty strings, or a `Missing` enum variant.
 - Use `Option<T>` only when absence is the truthful structural contract, not a
   disguised product state. Legitimate examples include iterator/lookup results,
   an optional caller filter, an uninitialized cache, and external API fields.
-- When a missing value violates an invariant, add a precise `thiserror` variant,
-  return `Result<T, DomainError>`, and propagate it with `?`. Do not use either
+- When a missing value violates an invariant, add a precise `thiserror` variant.
+  Return `Result<T, DomainError>` and propagate it with `?`. Do not use either
   `Option<T>` or a decorative `Missing` enum variant for failure.
 - When absence means unauthenticated, unauthorized, pending, unsupported,
-  configured versus unconfigured, or another named state, use an enum and put
+  configured versus unconfigured, or another named state, use an enum. Put
   state-specific values on the owning variant.
 - Do not create a one-variant wrapper enum just to avoid `Option<T>`. If callers
   genuinely ask a lookup question, `Option<T>` is the precise Rust result.
 - Do not call `.unwrap()`, `.expect(...)`, or `.expect_err(...)` in authored
   Rust. Production code returns, propagates, or explicitly classifies failure.
-  Every fallible test
-  returns a concrete or `anyhow::Result` and propagates with `?`, including
-  locally constructed fixtures.
+  Every fallible test returns a concrete or `anyhow::Result` and propagates with
+  `?`, including locally constructed fixtures.
 - Keep `anyhow` test-only. Production libraries, binaries, examples, and build
   scripts use concrete `thiserror` enums with operation-specific variants and
   typed sources. Only `#[cfg(test)]` unit tests and integration tests under
-  `tests/` may use `anyhow`, and crates declare it under `[dev-dependencies]`.
+  `tests/` may use `anyhow`. Crates declare it under `[dev-dependencies]`.
 - Do not use `String` for typed domain values such as timestamps, YAML payloads,
   YAML payloads, storage/provider types, vault/store ids, event ids, or secret
   keys. Prefer existing core newtypes (`IsoTimestamp`, `StoredVaultYaml`,

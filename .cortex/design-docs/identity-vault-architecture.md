@@ -54,11 +54,18 @@ policy, not the meaning of identity.
 
 An identity may have zero active device keys only while a separately enrolled
 recovery authority remains able to authorize onboarding. A brand-new zero-key
-setup is an unpersisted local draft, not a replicable identity. The creation
-transaction atomically generates the first installation's X25519 encryption
-key, Ed25519 signing key, initial policy epoch key, and recipient envelope
-before the identity record may be persisted. No persisted control log is
-allowed to have neither an active device recipient nor a recovery recipient.
+setup is an unpersisted local draft, not a replicable identity.
+
+The creation transaction atomically generates, before the identity record may be
+persisted:
+
+- the first installation's X25519 encryption key;
+- Ed25519 signing key;
+- initial policy epoch key; and
+- recipient envelope.
+
+No persisted control log is allowed to have neither an active device recipient
+nor a recovery recipient.
 
 The encrypted identity record/control log owns:
 
@@ -77,7 +84,7 @@ The control log uses a random 32-byte content-encryption key for each identity
 policy epoch. Identity events are encrypted with domain-separated keys derived
 from that epoch key. The epoch key is carried only in recipient envelopes
 encrypted to the concrete X25519 public keys of active devices whose identity
-role permits control-log access; provider credentials and provider mounts are
+role permits control-log access. Provider credentials and provider mounts are
 never recipients.
 
 Every control event is signed by its author's installation-specific Ed25519
@@ -85,22 +92,32 @@ signing key over the identity id, policy epoch, causal parents, and ciphertext.
 That signing key is generated and enrolled beside, but is cryptographically
 distinct from, the installation's X25519 encryption key. The policy binds both
 public keys to the same installation, member, role, and status. Both private
-keys use the same local protection boundary; rotation atomically enrolls a new
-pair, and revocation invalidates both public keys. The current identity policy
-defines which author roles may issue ordinary events and which approval
-signatures or quorum are required for onboarding, role changes, recovery, and
-revocation. A collective identity therefore uses multiple verifiable Ed25519
-device signatures to satisfy its threshold; it does not use an undocumented
-shared signing secret.
+keys use the same local protection boundary. Rotation atomically enrolls a new
+pair. Revocation invalidates both public keys.
+
+The current identity policy defines:
+
+- which author roles may issue ordinary events; and
+- which approval signatures or quorum are required for onboarding, role changes,
+  recovery, and revocation.
+
+A collective identity therefore uses multiple verifiable Ed25519 device
+signatures to satisfy its threshold. It does not use an undocumented shared
+signing secret.
 
 A new installation bootstraps only through an invitation/onboarding ceremony
 approved under the current policy. That ceremony adds the new public key and an
 epoch-key envelope for it in one authorized transition. Downloading the
 provider replica alone yields ciphertext and cannot establish membership.
-Revocation advances the policy epoch, creates a fresh control-log key, and
-publishes envelopes only for the remaining authorized device keys. As with
-vault rotation, this provides forward revocation; historical ciphertext must
-be compacted or re-encrypted if the product promises removal of past access.
+
+Revocation:
+
+- advances the policy epoch;
+- creates a fresh control-log key; and
+- publishes envelopes only for the remaining authorized device keys.
+
+As with vault rotation, this provides forward revocation. Historical ciphertext
+must be compacted or re-encrypted if the product promises removal of past access.
 
 Only public key material, signed encrypted events, and recipient envelopes
 replicate. Private X25519 and Ed25519 device keys and plaintext control-log
@@ -143,11 +160,14 @@ WebAuthn defines two relevant credential classes:
 The authenticator determines backup eligibility when the credential is
 created. A relying party cannot make an ordinary browser/platform passkey
 local-only through `authenticatorAttachment`, `residentKey`, or discoverable
-credential options. Nook may observe `BE`/`BS` after a ceremony and may offer
-an explicit policy that rejects synced credentials, but it cannot promise that
-the browser will create a device-bound passkey. Hardware security keys and
-authenticators that report `BE=0` are the reliable user choice for a
-device-bound credential.
+credential options.
+
+Nook may observe `BE`/`BS` after a ceremony. It may offer an explicit policy
+that rejects synced credentials. It cannot promise that the browser will create
+a device-bound passkey.
+
+Hardware security keys and authenticators that report `BE=0` are the reliable
+user choice for a device-bound credential.
 
 A synced passkey has provider-level availability, not one truthful physical
 device location. Nook MUST NOT display it as “stored on this laptop.” It may
@@ -163,16 +183,17 @@ Provider identity remains unknown unless the user labels it. WebAuthn cannot
 enumerate a password manager's credential inventory.
 
 The architecture does not need local-only passkeys to preserve device
-boundaries. Every installation generates a different local device key; a
-synced passkey only unlocks that installation's wrapped key. Synchronizing the
-passkey does not synchronize the Nook device private key.
+boundaries. Every installation generates a different local device key. A synced
+passkey only unlocks that installation's wrapped key. Synchronizing the passkey
+does not synchronize the Nook device private key.
 
 Current `standard` protection deterministically derives the age/device identity
-from passkey PRF output. A synced passkey may reproduce that identity on
-another installation, so this mode is an existing compatibility/recovery
-boundary and MUST NOT define the target physical-device-key abstraction. The
-target architecture uses a fresh random locally wrapped device key for every
-installation, matching the current high-security/local-wrapped shape. Any
+from passkey PRF output. A synced passkey may reproduce that identity on another
+installation. This mode is an existing compatibility/recovery boundary. It MUST
+NOT define the target physical-device-key abstraction.
+
+The target architecture uses a fresh random locally wrapped device key for every
+installation. That matches the current high-security/local-wrapped shape. Any
 migration must be explicit, versioned, rollback-aware, and behavior-tested.
 
 Normative external references:
@@ -203,31 +224,46 @@ secret records, signed event log, projection, conflicts, and vault-specific
 grant policy. Passwords and other secret items remain vault content.
 
 Identity and vault meet through an explicit, vault-owned authorization grant.
-The grant contains the vault id and key epoch, identity id and policy epoch,
-role/capability, and one recipient envelope for each active device public key
-that the vault has authorized for that identity. Each envelope encrypts the
-vault epoch DEK to a concrete installation-specific X25519 device public key.
-The identity policy decides which device keys are eligible for a grant, but an
-abstract “identity key,” collective label, or sync-provider mount is never the
-cryptographic recipient.
+The grant contains:
+
+- the vault id and key epoch;
+- identity id and policy epoch;
+- role/capability; and
+- one recipient envelope for each active device public key that the vault has
+  authorized for that identity.
+
+Each envelope encrypts the vault epoch DEK to a concrete installation-specific
+X25519 device public key. The identity policy decides which device keys are
+eligible for a grant. An abstract “identity key,” collective label, or
+sync-provider mount is never the cryptographic recipient.
 
 A grant mutation is a signed vault event authorized by the vault's current
-owner/member policy. The identity control log may reference that event, but it
-cannot mint vault access. Adding a device to an identity does not automatically
-open existing vaults: an authorized vault actor must refresh each applicable
-grant and add an envelope for the new device key. Personal and collective
-identity policies may require different approval or quorum evidence before
-that refresh, while decryption still terminates at named device public keys.
+owner/member policy. The identity control log may reference that event. It
+cannot mint vault access.
 
-Revoking one device removes its recipient envelope and advances the vault key
-epoch before subsequent writes. Revoking the entire identity removes every
-recipient envelope for that identity and also advances the vault key epoch;
-remaining recipients receive new envelopes. Rotation prevents revoked keys
-from decrypting future records but cannot retract plaintext or old ciphertext
-already obtained. A vault that promises historical revocation must compact or
-re-encrypt retained records into the new epoch. One identity may receive many
-vault grants and one vault may authorize many identities; removing a grant
-does not delete or redefine the virtual identity.
+Adding a device to an identity does not automatically open existing vaults. An
+authorized vault actor must refresh each applicable grant and add an envelope
+for the new device key. Personal and collective identity policies may require
+different approval or quorum evidence before that refresh. Decryption still
+terminates at named device public keys.
+
+Revoking one device:
+
+- removes its recipient envelope; and
+- advances the vault key epoch before subsequent writes.
+
+Revoking the entire identity:
+
+- removes every recipient envelope for that identity; and
+- also advances the vault key epoch.
+
+Remaining recipients receive new envelopes. Rotation prevents revoked keys from
+decrypting future records. It cannot retract plaintext or old ciphertext already
+obtained. A vault that promises historical revocation must compact or re-encrypt
+retained records into the new epoch.
+
+One identity may receive many vault grants. One vault may authorize many
+identities. Removing a grant does not delete or redefine the virtual identity.
 
 Current Nook storage encodes much of this relationship as per-device `auth:`
 envelopes and vault member rows. That is the existing wire-compatibility

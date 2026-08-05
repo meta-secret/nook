@@ -45,18 +45,25 @@ how provider transports relate independently to identities and vaults.
 | Schema marker | `providers-schema` (`1`)                                        |
 
 The persisted object is a structured-clone JS object (not a JSON string). Rust
-owns both contracts: semantic enums are used in memory and exported through
-Tsify/`$app-wasm`, while `legacy_storage.rs` projects them to the schema-1
-string-or-absent wire shape. Keeping schema 1 on disk is intentional rollback
-compatibility: an older deployed build can still deserialize a row saved by a
-newer build. The web layer **re-exports** the semantic types; it does **not**
-hand-author mirror interfaces.
+owns both contracts:
 
-Any future incompatible persisted shape must increment `providers-schema`,
-ship an explicit forward migration, and retain either a backward projection or
-a separate rollback-readable key until the prior release is no longer a
-supported rollback target. A domain-type refactor alone never authorizes a wire
-format change.
+- semantic enums are used in memory and exported through Tsify/`$app-wasm`; and
+- `legacy_storage.rs` projects them to the schema-1 string-or-absent wire shape.
+
+Keeping schema 1 on disk is intentional rollback compatibility. An older deployed
+build can still deserialize a row saved by a newer build.
+
+The web layer **re-exports** the semantic types. It does **not** hand-author
+mirror interfaces.
+
+Any future incompatible persisted shape must:
+
+- increment `providers-schema`;
+- ship an explicit forward migration; and
+- retain either a backward projection or a separate rollback-readable key until
+  the prior release is no longer a supported rollback target.
+
+A domain-type refactor alone never authorizes a wire format change.
 
 ### Wire fields (`StorageProvider`, camelCase)
 
@@ -158,35 +165,47 @@ and never enter this grant path.
 
 ### Shared-provider onboarding
 
-This section documents the current vault-coupled enrollment wire. In the target
-architecture, device/member onboarding first extends an identity, and a
-separate authorization step grants that identity access to a vault. The same
-credential-free provider-target rule applies to both identity-control and vault
-event-log replication. Migration of the existing wire requires an explicit
-versioned design; this architecture decision does not silently reinterpret old
-enrollment payloads.
+This section documents the current vault-coupled enrollment wire.
 
-The selected provider target determines the handoff. A shared Google Drive row
-persists its stable `folderId`; enrollment codes carry that folder id and never
-the owner's OAuth access or refresh token, even when the vault's legacy/default
-`replication_type` is `personal`. The joining browser signs into its own Google
-account and saves its own token. The owner may grant that account access to the
-already-persisted folder, but onboarding must not create a replacement folder or
-transfer owner credentials.
+In the target architecture:
 
-The decrypted enrollment payload exposes the Rust-owned `OnboardingType`; the
+- device/member onboarding first extends an identity; and
+- a separate authorization step grants that identity access to a vault.
+
+The same credential-free provider-target rule applies to both identity-control
+and vault event-log replication. Migration of the existing wire requires an
+explicit versioned design. This architecture decision does not silently
+reinterpret old enrollment payloads.
+
+**Provider target handoff**
+
+- A shared Google Drive row persists its stable `folderId`.
+- Enrollment codes carry that folder id.
+- Enrollment codes never carry the owner's OAuth access or refresh token, even
+  when the vault's legacy/default `replication_type` is `personal`.
+- The joining browser signs into its own Google account and saves its own token.
+- The owner may grant that account access to the already-persisted folder.
+- Onboarding must not create a replacement folder or transfer owner credentials.
+
+**Rust typestates**
+
+The decrypted enrollment payload exposes the Rust-owned `OnboardingType`. The
 joiner dispatches on `PersonalCredentialTransfer` versus `SharedProviderGrant`.
+
 Rust models those as sealed typestates in `nook-auth2`:
-`TypedEnrollmentProvider<PersonalCredentialTransfer>` can contain local, GitHub,
-or credential-bearing OAuth data, while
-`TypedEnrollmentProvider<SharedProviderGrant>` can contain only a Google Drive
-folder grant or iCloud share target. The encrypted wire payload records the
-onboarding type beside its correspondingly typed provider data. A shared wire tag
-paired with the legacy OAuth shape fails deserialization, and legacy OAuth codes
-are classified as personal only. Shared-target types have no PAT, OAuth
-access-token, or refresh-token fields or constructors, so the credential-free
-rule is enforced by Rust construction and deserialization rather than a
-TypeScript convention or a late runtime branch.
+
+- `TypedEnrollmentProvider<PersonalCredentialTransfer>` can contain local,
+  GitHub, or credential-bearing OAuth data; and
+- `TypedEnrollmentProvider<SharedProviderGrant>` can contain only a Google Drive
+  folder grant or iCloud share target.
+
+The encrypted wire payload records the onboarding type beside its correspondingly
+typed provider data. A shared wire tag paired with the legacy OAuth shape fails
+deserialization. Legacy OAuth codes are classified as personal only.
+
+Shared-target types have no PAT, OAuth access-token, or refresh-token fields or
+constructors. The credential-free rule is enforced by Rust construction and
+deserialization rather than a TypeScript convention or a late runtime branch.
 
 ### iCloud modes
 
@@ -304,7 +323,7 @@ provider sync path.
 ## 6. Security notes
 
 - Provider credentials (GitHub PAT, OAuth access/refresh tokens) are **sealed with
-  the device's age X25519 key** (in Rust/WASM) before hitting IndexedDB —
+  the device's age X25519 key** (in Rust/WASM) before hitting IndexedDB. They are
   never stored as plaintext. A raw `nook_auth` dump exposes age-armored
   ciphertext, not tokens.
 - The device secret is itself wrapped at rest in `nook_db.device_identity_wrapped`
@@ -313,87 +332,137 @@ provider sync path.
   fallback uses PBKDF2-SHA256 parameters authenticated in the wrapped record.
   Neither PRF output, PIN, nor derived key is persisted.
 - This protects passive copies of both IndexedDB databases. Code already executing
-  in the page after authorization can use the in-memory identity; code before
+  in the page after authorization can use the in-memory identity. Code before
   authorization can request a user-verifying passkey ceremony. Passkey protection
   is therefore not a substitute for XSS prevention.
 - GitHub PAT in IndexedDB is **storage convenience**, not vault encryption.
-  Compromise exposes GitHub repo access, not plaintext vault secrets (still
-  independently encrypted in the vault file).
+  Compromise exposes GitHub repo access, not plaintext vault secrets. Vault
+  secrets remain independently encrypted in the vault file.
 - Reusing the existing local device key means no extra key material and no new
-  key-management surface; that key already gates current vault-key envelopes.
+  key-management surface. That key already gates current vault-key envelopes.
 - The local device key and encrypted vault blob remain in a separate IDB database
-  (`nook_db`); provider rows live in `nook_auth`. E2E tests clear both on reset.
+  (`nook_db`). Provider rows live in `nook_auth`. E2E tests clear both on reset.
 
 ## 7. OAuth origins and PR previews
 
-Browser OAuth providers are origin-bound. Nook's Google Drive flow uses Google
-Identity Services in the browser; the current Google web client is configured
-for `https://localhost:5173`, `https://localhost:5175`,
-`http://localhost:5173`, `https://simple.nokey.sh`,
-`https://sentinel.nokey.sh`, `https://simple.dev.nokey.sh`, and
-`https://sentinel.dev.nokey.sh`. Nook's CloudKit JS token must likewise
-register the two interactive localhost origins, the two production vault
-origins, and the two stable development vault origins. `https://nokey.sh` and
-`https://dev.nokey.sh` are public product sites, not vault or provider-callback
-origins.
+Browser OAuth providers are origin-bound.
+
+**Google Drive**
+
+Nook's Google Drive flow uses Google Identity Services in the browser. The
+current Google web client is configured for:
+
+- `https://localhost:5173`
+- `https://localhost:5175`
+- `http://localhost:5173`
+- `https://simple.nokey.sh`
+- `https://sentinel.nokey.sh`
+- `https://simple.dev.nokey.sh`
+- `https://sentinel.dev.nokey.sh`
+
+**CloudKit**
+
+Nook's CloudKit JS token must register:
+
+- the two interactive localhost origins;
+- the two production vault origins; and
+- the two stable development vault origins.
+
+`https://nokey.sh` and `https://dev.nokey.sh` are public product sites. They are
+not vault or provider-callback origins.
+
+**Local development**
 
 The interactive development origins are `https://localhost:5173` and the
-multi-worktree fallback `https://localhost:5175`; they must be registered
-explicitly in both provider consoles. `task web:dev` creates a trusted local
-certificate through the repository's pinned `mkcert` Docker image and stores it
-under `~/.nook/https/` so every worktree reuses the same CA. Loopback HTTP
-remains an internal Playwright transport only and does not represent the
-provider-enabled manual development environment.
+multi-worktree fallback `https://localhost:5175`. They must be registered
+explicitly in both provider consoles.
+
+`task web:dev` creates a trusted local certificate through the repository's pinned
+`mkcert` Docker image. It stores the certificate under `~/.nook/https/` so every
+worktree reuses the same CA.
+
+Loopback HTTP remains an internal Playwright transport only. It does not
+represent the provider-enabled manual development environment.
+
+**Branding and public pages**
 
 Google/Auth Platform branding should use `https://nokey.sh/` as the public app
-home page. The root path is the crawlable product and branding page; the vault
-applications live at `https://simple.nokey.sh` and
-`https://sentinel.nokey.sh`. Do not user-agent fork the root path for
-Googlebot; a bot-only version is cloaking-prone and makes OAuth review behavior
-differ from real user behavior. `/about.html` remains a compatibility alias
-whose canonical URL is the root page, so it should not be listed separately in
-the sitemap. Legal branding links should use the static
-`https://nokey.sh/privacy.html` and `https://nokey.sh/terms.html` documents so
-GitHub Pages can serve them directly without relying on the SPA router.
+home page. The root path is the crawlable product and branding page. The vault
+applications live at `https://simple.nokey.sh` and `https://sentinel.nokey.sh`.
+
+Do not user-agent fork the root path for Googlebot. A bot-only version is
+cloaking-prone and makes OAuth review behavior differ from real user behavior.
+
+`/about.html` remains a compatibility alias whose canonical URL is the root
+page. Do not list it separately in the sitemap.
+
+Legal branding links should use the static `https://nokey.sh/privacy.html` and
+`https://nokey.sh/terms.html` documents. GitHub Pages can serve them directly
+without relying on the SPA router.
+
 `robots.txt` should allow the public root/legal pages and assets while
 disallowing private utility routes. Both vault applications emit `robots.txt`
 with `Disallow: /`.
 
-PR previews deploy an internal unified harness plus isolated Cloudflare Pages
-branch aliases: `pr-191.nokey-sh.pages.dev`,
-`pr-191.nokey-simple.pages.dev`, and `pr-191.nokey-sentinel.pages.dev`. The
-browser origin is the exact scheme/host/port tuple.
-Google's Authorized JavaScript origins must be exact origins: they cannot
-include paths, query strings, fragments, or wildcard characters. A single PR
-origin can be added manually for a one-off test, but the PR pattern cannot be
-represented as `https://pr-*.nokey-simple.pages.dev`, and origin-sprawl should not be
-treated as a durable preview strategy. Apple CloudKit API tokens have the same
-practical constraint when allowed origins are restricted to specific domains.
+**PR previews**
 
-Current fallback: [`auth/oauth-origin.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/oauth-origin.ts)
-detects both the internal harness and isolated Nook PR aliases and disables
-Google Drive / iCloud sign-in with a clear message. Reviewers can still test
-local, local-folder, and GitHub providers on PR previews. Google Drive browser
-OAuth should be tested on `https://simple.nokey.sh`,
-`https://sentinel.nokey.sh`, the matching `*.dev.nokey.sh` vault origin, or
-local dev. Per-PR aliases intentionally never receive provider credentials.
+PR previews deploy:
 
-Vault CSP (`security-headers.ts` → Cloudflare `_headers`) must keep
-`script-src` allowances for `https://accounts.google.com/gsi/client` and
-`https://cdn.apple-cloudkit.com`, plus GIS `frame-src` /
-`https://accounts.google.com/gsi/`. A CSP that only allows `'self'` scripts
-surfaces as **Failed to load Google Identity Services** (or CloudKit JS) before
-any OAuth client-id / origin check runs — that is an app header bug, not a
-Google Cloud Console misconfiguration.
+- an internal unified harness; and
+- isolated Cloudflare Pages branch aliases such as `pr-191.nokey-sh.pages.dev`,
+  `pr-191.nokey-simple.pages.dev`, and `pr-191.nokey-sentinel.pages.dev`.
 
-For CloudKit JS diagnostics, a `421` response from `/public/users/caller`
-usually means CloudKit issued the unauthenticated web-auth challenge; it is not
-by itself proof that the API token or origin is wrong. The failure signal is
-whether the real Apple-controlled sign-in click produces a `ckWebAuthToken`
-through CloudKit's token store, cookie, or session storage. Nook logs the native
-click path, control shape, sanitized redirect metadata, and token-storage
-presence under the `icloud-oauth` scope; debug from those entries before
-rewriting the provider flow.
+The browser origin is the exact scheme/host/port tuple.
+
+Google's Authorized JavaScript origins must be exact origins. They cannot include
+paths, query strings, fragments, or wildcard characters. A single PR origin can
+be added manually for a one-off test. The PR pattern cannot be represented as
+`https://pr-*.nokey-simple.pages.dev`. Origin sprawl should not be treated as a
+durable preview strategy.
+
+Apple CloudKit API tokens have the same practical constraint when allowed
+origins are restricted to specific domains.
+
+**Current fallback**
+
+[`auth/oauth-origin.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/oauth-origin.ts)
+detects both the internal harness and isolated Nook PR aliases. It disables Google
+Drive / iCloud sign-in with a clear message.
+
+Reviewers can still test local, local-folder, and GitHub providers on PR
+previews. Google Drive browser OAuth should be tested on:
+
+- `https://simple.nokey.sh`
+- `https://sentinel.nokey.sh`
+- the matching `*.dev.nokey.sh` vault origin; or
+- local dev.
+
+Per-PR aliases intentionally never receive provider credentials.
+
+**CSP**
+
+Vault CSP (`security-headers.ts` → Cloudflare `_headers`) must keep `script-src`
+allowances for:
+
+- `https://accounts.google.com/gsi/client`
+- `https://cdn.apple-cloudkit.com`
+- GIS `frame-src` / `https://accounts.google.com/gsi/`
+
+A CSP that only allows `'self'` scripts surfaces as **Failed to load Google
+Identity Services** (or CloudKit JS) before any OAuth client-id / origin check
+runs. That is an app header bug, not a Google Cloud Console misconfiguration.
+
+**CloudKit diagnostics**
+
+A `421` response from `/public/users/caller` usually means CloudKit issued the
+unauthenticated web-auth challenge. It is not by itself proof that the API token
+or origin is wrong.
+
+The failure signal is whether the real Apple-controlled sign-in click produces a
+`ckWebAuthToken` through CloudKit's token store, cookie, or session storage.
+Nook logs the native click path, control shape, sanitized redirect metadata, and
+token-storage presence under the `icloud-oauth` scope. Debug from those entries
+before rewriting the provider flow.
 
 When reproducing production auth from the shell, include the browser origin:
 
@@ -404,17 +473,23 @@ curl -H 'Origin: https://simple.nokey.sh' \
 
 Without the `Origin` header, Apple may report `AUTHENTICATION_FAILED` even when
 the same token is valid for the registered web origin. With the registered
-origin, unauthenticated production requests should return
-`AUTHENTICATION_REQUIRED` plus a `redirectURL`. If CloudKit JS wraps that
-challenge as `UNKNOWN_ERROR` after the real Apple click, Nook falls back to the
-Web Services challenge, opens the returned Apple sign-in URL, and listens for
-the `ckWebAuthToken` postMessage. Brave can open CloudKit JS's Apple window and
-the direct fallback window at the same time; a second `window.open` is often
-blocked and surfaces as an immediate **iCloud sign-in failed** while the first
-Apple window is still open. After a native CloudKit button click, Nook waits for
-the token or postMessage from that existing window and does not open another
-popup. Brave's direct Web Services challenge remains the primary path only for
-programmatic clicks that have not already opened Apple's window.
+origin, unauthenticated production requests should return `AUTHENTICATION_REQUIRED`
+plus a `redirectURL`.
+
+If CloudKit JS wraps that challenge as `UNKNOWN_ERROR` after the real Apple
+click, Nook falls back to the Web Services challenge. It opens the returned
+Apple sign-in URL and listens for the `ckWebAuthToken` postMessage.
+
+**Brave popup behavior**
+
+Brave can open CloudKit JS's Apple window and the direct fallback window at the
+same time. A second `window.open` is often blocked and surfaces as an immediate
+**iCloud sign-in failed** while the first Apple window is still open.
+
+After a native CloudKit button click, Nook waits for the token or postMessage
+from that existing window. It does not open another popup. Brave's direct Web
+Services challenge remains the primary path only for programmatic clicks that
+have not already opened Apple's window.
 
 Alternative provider-preview options:
 
