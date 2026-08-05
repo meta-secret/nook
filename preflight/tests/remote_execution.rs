@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, fs, path::PathBuf};
+use std::{collections::BTreeSet, fs, path::PathBuf, process::Command};
 
 fn repository_root() -> PathBuf {
     std::env::var_os("NOOK_REPO_ROOT").map_or_else(
@@ -51,6 +51,26 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
         !remote_tasks.contains("--raw-field \"command="),
         "remote execution must dispatch an allowlisted name, not arbitrary shell"
     );
+}
+
+#[test]
+fn expensive_remote_validation_requires_the_current_base() -> std::io::Result<()> {
+    let remote_tasks = read(".task/remote-execution.yml");
+    assert!(remote_tasks.contains("web:e2e|extension:e2e|check|ci:pr|ci:pr:e2e)"));
+    assert_eq!(
+        remote_tasks
+            .matches(".github/scripts/require-current-base.sh")
+            .count(),
+        2,
+        "focused expensive dispatch and complete PR validation must share the freshness guard"
+    );
+    assert!(remote_tasks.contains("baseRefName"));
+
+    let status = Command::new("bash")
+        .arg(repository_root().join(".github/scripts/require-current-base.test.sh"))
+        .status()?;
+    assert!(status.success(), "base freshness behavior tests must pass");
+    Ok(())
 }
 
 #[test]

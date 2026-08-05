@@ -23,6 +23,11 @@ allowlisted focused jobs with `task remote TASK_NAME=<name>`.
 with `task pr:validate PR=<number>`. For a Main-fix PR, use
 `task pr:validate PR=<number> FULL_E2E=1`.
 
+Expensive remote tasks and complete PR validation refresh their base branch and
+refuse dispatch when the local head is stale. Merge the reported
+`origin/<base>`, run `task format`, push, and retry; do not bypass the guard or
+spend a long browser run against an obsolete base.
+
 ```bash
 task format
 git add -u
