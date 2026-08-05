@@ -517,7 +517,9 @@ export async function reloadUnlockLocalVaultWithSync(
   await ensureLoginLocalUnlockReady(page)
   await selectLoginUnlockMethod(page, UnlockMethod.Keys)
   await page.getByTestId('unlock-vault-btn').click()
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
+  await expect(
+    page.getByTestId('vault-panel').or(page.getByTestId('vault-admin-panel')),
+  ).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await disableVaultIdleLock(page)
