@@ -24,10 +24,12 @@ docker run --rm \
   --workdir /workspace \
   node:24-trixie-slim \
   sh -euc '
-    for spec in "simple:nokey-simple" "sentinel:nokey-sentinel"; do
-      artifact="${spec%%:*}"
+    for spec in \
+      "nook-app/nook-web/nook-vault-simple/dist:nokey-simple" \
+      "nook-app/nook-web/nook-vault-sentinel/dist:nokey-sentinel"
+    do
+      dist_dir="${spec%%:*}"
       project="${spec#*:}"
-      dist_dir="nook-app/nook-web/nook-vault-$artifact/dist"
       npx --yes wrangler@4 pages project create "$project" --production-branch=main >/dev/null 2>&1 || true
       npx --yes wrangler@4 pages deploy \
         "$dist_dir" \
