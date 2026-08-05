@@ -1,15 +1,20 @@
 # syntax=docker/dockerfile:1.4
 
+ARG RUST_VERSION=1.97
+ARG DEBIAN_RELEASE=trixie
+ARG RUST_DIGEST=sha256:1bcff4befb740599103a2c7cb51058e14479b2e35e3a34a3f0dc4ede09927488
+
 FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS bun
 FROM node:24-trixie-slim@sha256:ae91dcc111a68c9d2d81ff2a17bda61be126426176fde6fe7d08ab13b7f50573 AS node
-FROM lukemathwalker/cargo-chef:latest-rust-1.96-trixie@sha256:3a1dd6010466c1cf591607a75c6e144ba9f099e7f3790d595c6a611a9c78f387 AS cargo-chef
-FROM rust:1.96-trixie@sha256:1f0dbad1df66647807e6952d1db85d0b2bda7606cb2139d82517e4f009967376 AS toolchain
+FROM rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST} AS toolchain
 
 ARG SCCACHE_VERSION=0.16.0
 ARG SCCACHE_SHA256=aec995a83ad3dff3d14b6314e08858b7b73d35ca85a5bcf3d3a9ec07dee35588
 ARG SCCACHE_S3_MODE=external
 ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh
 ARG SCCACHE_BUCKET=nook-sccache
+ARG CARGO_CHEF_VERSION=0.1.77
+ARG CARGO_CHEF_SHA256=a3733ab416c3ffddd37914cd13919ca05fee1a1cf654f3016dcfe7f399d89cd1
 
 ENV CARGO_INCREMENTAL=0
 ENV RUSTC_WRAPPER=/usr/local/bin/nook-sccache
@@ -35,6 +40,7 @@ RUN apt-get update \
         python3 \
         ripgrep \
         rsync \
+        xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rustup component add clippy rustfmt
@@ -51,8 +57,8 @@ RUN curl -fsSL \
       "/tmp/sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl" \
     && sccache --version
 
-COPY --from=nook-app docker/sccache-wrapper.sh /usr/local/bin/nook-sccache
-COPY --from=nook-app docker/sccache-report.sh /usr/local/bin/nook-sccache-report
+COPY --from=nook-sccache-helpers sccache-wrapper.sh /usr/local/bin/nook-sccache
+COPY --from=nook-sccache-helpers sccache-report.sh /usr/local/bin/nook-sccache-report
 RUN chmod 0755 /usr/local/bin/nook-sccache /usr/local/bin/nook-sccache-report
 
 RUN curl -fsSL \
@@ -70,7 +76,16 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
-COPY --from=cargo-chef /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/cargo-chef
+RUN curl -fsSL \
+      "https://github.com/LukeMathWalker/cargo-chef/releases/download/v${CARGO_CHEF_VERSION}/cargo-chef-x86_64-unknown-linux-musl.tar.xz" \
+      -o /tmp/cargo-chef.tar.xz \
+    && echo "${CARGO_CHEF_SHA256}  /tmp/cargo-chef.tar.xz" | sha256sum -c - \
+    && tar -xJf /tmp/cargo-chef.tar.xz -C /tmp \
+    && install -m 0755 \
+      /tmp/cargo-chef-x86_64-unknown-linux-musl/cargo-chef \
+      /usr/local/cargo/bin/cargo-chef \
+    && rm -rf /tmp/cargo-chef.tar.xz /tmp/cargo-chef-x86_64-unknown-linux-musl \
+    && cargo chef --version
 
 WORKDIR /build
 

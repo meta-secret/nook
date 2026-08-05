@@ -116,12 +116,10 @@ tasks:
       - |
         bash <<'BASH'
         set -euo pipefail
-        repo_root="$(git rev-parse --show-toplevel)"
         host="{{.NOOK_SCCACHE_HOST}}"
         bucket="{{.NOOK_SCCACHE_BUCKET}}"
         home_cache="${HOME}/.nook/cache"
-        repo_cache="$repo_root/.nook/cache"
-        install -d -m 0700 "$home_cache" "$repo_cache"
+        install -d -m 0700 "$home_cache"
         umask 077
         ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
           "cat '{{.INFRA_REMOTE_DIR}}/secrets/sccache-access-key'" \
@@ -136,17 +134,6 @@ tasks:
           "$home_cache/sccache-secret-key" \
           "$home_cache/sccache-host" \
           "$home_cache/sccache-bucket"
-        cp -f \
-          "$home_cache/sccache-access-key" \
-          "$home_cache/sccache-secret-key" \
-          "$home_cache/sccache-host" \
-          "$home_cache/sccache-bucket" \
-          "$repo_cache/"
-        chmod 0600 \
-          "$repo_cache/sccache-access-key" \
-          "$repo_cache/sccache-secret-key" \
-          "$repo_cache/sccache-host" \
-          "$repo_cache/sccache-bucket"
         gh secret set NOOK_SCCACHE_ENDPOINT --body "$host"
         gh secret set NOOK_SCCACHE_ACCESS_KEY \
           --body "$(cat "$home_cache/sccache-access-key")"
@@ -160,7 +147,7 @@ tasks:
           --body "$(ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
             "cat '{{.INFRA_REMOTE_DIR}}/secrets/sccache-remote-secret-key'")"
         gh secret set NOOK_SCCACHE_REMOTE_BUCKET --body "$bucket"
-        echo "SeaweedFS sccache credentials synchronized to ~/.nook/cache and .nook/cache"
+        echo "SeaweedFS sccache credentials synchronized to ~/.nook/cache"
         BASH
 
   sccache:bucket:ensure:

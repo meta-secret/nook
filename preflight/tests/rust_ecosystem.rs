@@ -17,27 +17,94 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let workflow = read(".github/workflows/rust-ecosystem.yml")?;
     let quality = read(".cortex/workflows/quality.md")?;
     let workspace = read("nook-app/Cargo.toml")?;
+    let rust_dockerfile = read("nook-app/docker/rust.Dockerfile")?;
+    let rust_bake = read("nook-app/docker/rust.docker-bake.hcl")?;
     let replication = read("nook-app/nook-replication/src/replica_store.rs")?;
     let fuzz_target = read("fuzz/fuzz_targets/wire_parsers.rs")?;
     let fuzz_manifest = read("fuzz/Cargo.toml")?;
     let readiness = read("agentic-ai/ci-agent/src/main/github.ts")?;
 
     for marker in [
-        "cargo-deny-action",
-        "rustsec/audit-check",
-        "Property and snapshot tests",
-        "Concurrency permutation model",
-        "cargo fuzz run",
-        "Preserve fuzz corpus and crash inputs",
-        "FUZZ_SECONDS",
+        "Bake rust-dependency-policy",
+        "Bake rust-ecosystem-deterministic",
+        "Bake rust-fuzz-smoke",
+        "Bake rust-dylint",
+        "nook-docker-setup",
         "kani-github-action",
-        "cargo dylint --all",
-        "nightly-2026-04-16",
-        "checks: write",
+        "FUZZ_SECONDS",
     ] {
         assert!(
             workflow.contains(marker),
             "Rust ecosystem workflow is missing {marker}"
+        );
+    }
+    for forbidden in [
+        "rustsec/audit-check",
+        "cargo-deny-action",
+        "cargo install cargo-audit",
+        "cargo install cargo-dylint",
+        "dtolnay/rust-toolchain",
+        "Swatinem/rust-cache",
+        "taiki-e/install-action",
+    ] {
+        assert!(
+            !workflow.contains(forbidden),
+            "Rust ecosystem workflow must not use host-toolchain path: {forbidden}"
+        );
+    }
+
+    for marker in [
+        "AS rust-ecosystem-policy-tools",
+        "AS rust-dependency-policy",
+        "AS rust-ecosystem-nightly",
+        "AS rust-fuzz-smoke",
+        "AS rust-dylint",
+        "AS rust-ecosystem-deterministic",
+        "CARGO_DENY_SHA256=",
+        "CARGO_AUDIT_SHA256=",
+        "CARGO_FUZZ_SHA256=",
+        "DYLINT_NIGHTLY=nightly-2026-04-16",
+        "cargo install cargo-dylint dylint-link",
+        "cargo-deny --manifest-path",
+        "--hide-inclusion-graph",
+        "--log-level error",
+        "cargo-audit audit",
+        "cargo fuzz run",
+        "cargo dylint --all",
+    ] {
+        assert!(
+            rust_dockerfile.contains(marker),
+            "rust.Dockerfile is missing ecosystem marker {marker}"
+        );
+    }
+    // Ecosystem CLIs stay on separate stages so rust-base product builds stay lean.
+    let rust_base = rust_dockerfile
+        .split("FROM rust-base AS rust-ecosystem-policy-tools")
+        .next()
+        .expect("rust-base section");
+    for forbidden in [
+        "CARGO_DENY_SHA256=",
+        "CARGO_AUDIT_SHA256=",
+        "CARGO_FUZZ_SHA256=",
+        "cargo install cargo-dylint",
+    ] {
+        assert!(
+            !rust_base.contains(forbidden),
+            "rust-base must not install ecosystem CLI {forbidden}"
+        );
+    }
+
+    for target in [
+        "rust-ecosystem-policy-tools",
+        "rust-dependency-policy",
+        "rust-ecosystem-nightly",
+        "rust-fuzz-smoke",
+        "rust-dylint",
+        "rust-ecosystem-deterministic",
+    ] {
+        assert!(
+            rust_bake.contains(&format!("target \"{target}\"")),
+            "rust.docker-bake.hcl is missing target {target}"
         );
     }
 
@@ -67,6 +134,24 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     assert!(replication.contains("#[kani::proof]"));
     assert!(fuzz_target.contains("fuzz_target!"));
     assert!(fuzz_manifest.contains("[lints.clippy]"));
+    assert!(fuzz_manifest.contains("expect_used = \"deny\""));
+    assert!(fuzz_manifest.contains("unwrap_used = \"deny\""));
+    for relative in [
+        "nook-app/clippy.toml",
+        "preflight/clippy.toml",
+        "agentic-ai/minds/clippy.toml",
+        "fuzz/clippy.toml",
+    ] {
+        let clippy = read(relative)?;
+        assert!(
+            clippy.contains("allow-expect-in-tests = false"),
+            "{relative} must deny expect in tests"
+        );
+        assert!(
+            clippy.contains("allow-unwrap-in-tests = false"),
+            "{relative} must deny unwrap in tests"
+        );
+    }
     assert!(readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
     Ok(())
 }

@@ -1,0 +1,11 @@
+# Safety net if a build ever uses nook-app/ as a named context root.
+# Hive stages only the two sccache helper scripts into a temp context instead.
+target
+**/target
+**/node_modules
+**/dist
+**/test-results
+**/playwright-report
+**/ui-demo-results
+**/coverage
+.DS_Store

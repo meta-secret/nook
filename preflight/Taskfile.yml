@@ -1,5 +1,51 @@
 version: '3'
 
+vars:
+  REPO_ROOT:
+    sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
+  DOCKER: '{{default "docker" .DOCKER}}'
+  BUILDX_BUILDER:
+    sh: 'echo "${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"'
+  SCCACHE_S3_MODE: '{{default "external" .SCCACHE_S3_MODE}}'
+  SCCACHE_ENDPOINT: '{{default "https://sccache.dev.nokey.sh" .SCCACHE_ENDPOINT}}'
+  SCCACHE_BUCKET: '{{default "nook-sccache" .SCCACHE_BUCKET}}'
+  SCCACHE_S3_ACCESS_KEY_FILE:
+    sh: >-
+      if [ -n "${SCCACHE_S3_ACCESS_KEY_FILE:-}" ]; then
+        printf '%s' "$SCCACHE_S3_ACCESS_KEY_FILE";
+      else
+        printf '%s' "${HOME}/.nook/cache/sccache-access-key";
+      fi
+  SCCACHE_S3_SECRET_KEY_FILE:
+    sh: >-
+      if [ -n "${SCCACHE_S3_SECRET_KEY_FILE:-}" ]; then
+        printf '%s' "$SCCACHE_S3_SECRET_KEY_FILE";
+      else
+        printf '%s' "${HOME}/.nook/cache/sccache-secret-key";
+      fi
+  SCCACHE_S3_BUILD_SECRETS:
+    sh: >-
+      access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
+      secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
+      secrets="";
+      if [ -n "$access_file" ] && [ -r "$access_file" ] &&
+         [ -n "$secret_file" ] && [ -r "$secret_file" ]; then
+        secrets="--allow=fs.read=$access_file --allow=fs.read=$secret_file";
+        secrets="$secrets --set '*.secrets=id=sccache_s3_access_key,src=$access_file'";
+        secrets="$secrets --set '*.secrets+=id=sccache_s3_secret_key,src=$secret_file'";
+      fi;
+      printf '%s' "$secrets"
+  PREFLIGHT_BAKE_FILES: >-
+    --allow=fs.read={{.REPO_ROOT}}
+    {{.SCCACHE_S3_BUILD_SECRETS}}
+    -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/docker/rust.docker-bake.hcl
+    -f {{.REPO_ROOT}}/preflight/docker-bake.hcl
+    --set '*.context={{.REPO_ROOT}}'
+    --set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'
+    --set '*.args.SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}'
+    --set '*.args.SCCACHE_BUCKET={{.SCCACHE_BUCKET}}'
+
 tasks:
   preflight:
     desc: Run all repository-wide invariant tests.
@@ -8,28 +54,25 @@ tasks:
 
   preflight:test:
     desc: Run the Rust preflight test suite in Docker.
-    dir: '{{.ROOT_DIR}}'
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
     cmds:
       - >-
-        docker buildx build
-        --builder "${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"
-        --platform linux/amd64
-        --file preflight/Dockerfile
-        --target test
-        --output type=cacheonly
-        .
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.PREFLIGHT_BAKE_FILES}}
+        preflight-test
 
   preflight:export:
     desc: Export the static Rust preflight reporter for downstream CI jobs.
-    dir: '{{.ROOT_DIR}}'
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
     requires:
       vars: [PREFLIGHT_OUTPUT_DIR]
     cmds:
       - >-
-        docker buildx build
-        --builder "${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"
-        --platform linux/amd64
-        --file preflight/Dockerfile
-        --target cli-export
-        --output type=local,dest="{{.PREFLIGHT_OUTPUT_DIR}}"
-        .
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.PREFLIGHT_BAKE_FILES}}
+        --set "preflight-cli-export.output=type=local,dest={{.PREFLIGHT_OUTPUT_DIR}}"
+        preflight-cli-export

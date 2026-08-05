@@ -174,8 +174,8 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     let core_tasks = read("nook-app/.task/core.yml");
     let web_tasks = read("nook-app/nook-web/.task/web.yml");
     let extension_tasks = read("nook-app/nook-web/.task/extension.yml");
-    let base_dockerfile = read("nook-app/docker/base.Dockerfile");
-    let base_dockerignore = read("nook-app/docker/base.Dockerfile.dockerignore");
+    let base_dockerfile = read("nook-app/docker/rust.Dockerfile");
+    let base_dockerignore = read("nook-app/docker/rust.Dockerfile.dockerignore");
     let core_bake = read("nook-app/nook-core/docker-bake.hcl");
     let wasm_dockerfile = read("nook-app/nook-wasm/Dockerfile");
     let bake = read("nook-app/docker-bake.hcl");
@@ -198,7 +198,7 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     assert!(web_tasks.contains("remote:web:check:"));
     assert!(web_tasks.contains("remote:web:test:"));
     assert!(extension_tasks.contains("remote:extension:check:"));
-    assert!(base_dockerfile.contains("FROM builder-deps AS nook-rust-test"));
+    assert!(base_dockerfile.contains("FROM builder-core-deps AS nook-rust-test"));
     assert!(base_dockerfile.contains("-type f -name '*.rs' -exec touch {} +"));
     assert!(base_dockerfile.contains("focused-native-test-compile"));
     assert!(base_dockerfile.contains("focused-rust-lint-compile"));
@@ -256,8 +256,8 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
             .nth(1)
             .and_then(|remainder| remainder.split("\n}").next())
             .unwrap_or_else(|| panic!("focused Bake target must exist: {target}"));
-        assert!(stage.contains("dockerfile = \"nook-app/docker/base.Dockerfile\""));
-        assert!(!stage.contains("builder-deps = \"target:builder-deps\""));
+        assert!(stage.contains("dockerfile = \"nook-app/docker/rust.Dockerfile\""));
+        assert!(!stage.contains("builder-core-deps = \"target:builder-core-deps\""));
     }
     assert!(bake.contains("inherits = [\"_nook-web-focused-common\"]"));
     assert!(!bake.contains("target \"nook-rust-test\" {\n  inherits = [\"_nook-rust-common\"]"));

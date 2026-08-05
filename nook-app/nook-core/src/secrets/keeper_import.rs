@@ -83,10 +83,9 @@ fn parse_custom_field_pair_header(header: &str) -> Option<(usize, bool)> {
     let rest = rest.trim_start();
     let (number, kind) = if let Some(rest) = rest.strip_suffix(" name") {
         (rest.trim(), false)
-    } else if let Some(rest) = rest.strip_suffix(" value") {
-        (rest.trim(), true)
     } else {
-        return None;
+        let rest = rest.strip_suffix(" value")?;
+        (rest.trim(), true)
     };
     let index = number.parse::<usize>().ok()?;
     if index == 0 {

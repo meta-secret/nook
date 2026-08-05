@@ -283,10 +283,11 @@ whether a value exists.
   assertions. Keep raw values only where malformed/unknown JSON or exact
   property presence is the behavior under test.
 - Run Clippy for all targets with `clippy::expect_used` and
-  `clippy::unwrap_used` denied, and verify a repository search has no authored
-  `.expect(...)`, `.expect_err(...)`, or `.unwrap()` calls. Run the
-  syntax-aware preflight that rejects production `anyhow` paths and non-dev
-  Cargo dependencies.
+  `clippy::unwrap_used` denied and workspace `clippy.toml` keeping
+  `allow-expect-in-tests` / `allow-unwrap-in-tests` false. Clippy owns panic
+  shortcuts; do not add a duplicate syn scanner. Run the syntax-aware
+  preflight that rejects production `anyhow` paths and non-dev Cargo
+  dependencies.
 - Check that helper APIs accept typed variants/enums instead of strings or
   optional field bags.
 - Run targeted portable Rust tests plus `cd nook-app && cargo clippy -p

@@ -31,6 +31,15 @@ vars:
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
   DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
   DOCKER_MKCERT_IMAGE: '{{default "nook-mkcert:local" .DOCKER_MKCERT_IMAGE}}'
+  # Shared across git worktrees. Credentials and other machine-local config live under ~/.nook.
+  LOCAL_HTTPS_DIR:
+    sh: >-
+      if [ -n "${LOCAL_HTTPS_DIR:-}" ]; then
+        printf '%s' "$LOCAL_HTTPS_DIR";
+      else
+        printf '%s' "${HOME}/.nook/https";
+      fi
+  LOCAL_HTTPS_CONTAINER_DIR: '{{default "/run/nook/https" .LOCAL_HTTPS_CONTAINER_DIR}}'
   # Rust commands and cache-missed Docker compiler vertices use authenticated SeaweedFS S3
   # sccache. Stable BuildKit secret IDs keep credential values out of images and cache checksums.
   SCCACHE_S3_MODE: '{{default "external" .SCCACHE_S3_MODE}}'
@@ -40,18 +49,14 @@ vars:
     sh: >-
       if [ -n "${SCCACHE_S3_ACCESS_KEY_FILE:-}" ]; then
         printf '%s' "$SCCACHE_S3_ACCESS_KEY_FILE";
-      elif [ -r "{{.REPO_ROOT}}/.nook/cache/sccache-access-key" ]; then
-        printf '%s' "{{.REPO_ROOT}}/.nook/cache/sccache-access-key";
-      elif [ -r "${HOME}/.nook/cache/sccache-access-key" ]; then
+      else
         printf '%s' "${HOME}/.nook/cache/sccache-access-key";
       fi
   SCCACHE_S3_SECRET_KEY_FILE:
     sh: >-
       if [ -n "${SCCACHE_S3_SECRET_KEY_FILE:-}" ]; then
         printf '%s' "$SCCACHE_S3_SECRET_KEY_FILE";
-      elif [ -r "{{.REPO_ROOT}}/.nook/cache/sccache-secret-key" ]; then
-        printf '%s' "{{.REPO_ROOT}}/.nook/cache/sccache-secret-key";
-      elif [ -r "${HOME}/.nook/cache/sccache-secret-key" ]; then
+      else
         printf '%s' "${HOME}/.nook/cache/sccache-secret-key";
       fi
   SCCACHE_S3_CREDENTIAL_MOUNTS:
@@ -86,7 +91,8 @@ vars:
     --allow=fs.read={{.REPO_ROOT}}
     {{.SCCACHE_S3_BUILD_SECRETS}}
     -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
-    -f {{.REPO_ROOT}}/nook-app/docker/base.docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/docker/rust.docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/docker/web.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-core/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-wasm/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/docker/toolchain.docker-bake.hcl
@@ -135,17 +141,27 @@ tasks:
       - task: build
 
   sccache:ensure:
-    desc: Verify the SeaweedFS S3 sccache backend when local credentials are available.
+    desc: Require a healthy SeaweedFS S3 sccache backend before Rust/WASM builds.
     dir: '{{.REPO_ROOT}}'
     cmds:
       - >-
         bash -c 'set -euo pipefail;
         access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
         secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
+        optional="${SCCACHE_OPTIONAL:-}";
         if [ -z "$access_file" ] || [ ! -r "$access_file" ] ||
            [ -z "$secret_file" ] || [ ! -r "$secret_file" ]; then
-          echo "task sccache:ensure: no S3 credential; compiling without sccache";
-          exit 0;
+          if [ "$optional" = "1" ]; then
+            echo "task sccache:ensure: SCCACHE_OPTIONAL=1; continuing without sccache" >&2;
+            exit 0;
+          fi;
+          echo "task sccache:ensure: missing S3 credentials" >&2;
+          echo "Expected readable files:" >&2;
+          echo "  $access_file" >&2;
+          echo "  $secret_file" >&2;
+          echo "Refusing to compile without sccache (silent cold builds destroy shared cache reuse)." >&2;
+          echo "Restore credentials under ~/.nook/cache/, or set SCCACHE_OPTIONAL=1 only for an intentional cold build." >&2;
+          exit 1;
         fi;
         if ! {{.DOCKER}} run --rm \
           -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
@@ -154,8 +170,13 @@ tasks:
           amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
           --endpoint-url "{{.SCCACHE_ENDPOINT}}" \
           s3api head-bucket --bucket "{{.SCCACHE_BUCKET}}" >/dev/null 2>&1; then
-          echo "task sccache:ensure: SeaweedFS S3 is unavailable; compiling without remote sccache" >&2;
-          exit 0;
+          if [ "$optional" = "1" ]; then
+            echo "task sccache:ensure: SCCACHE_OPTIONAL=1; SeaweedFS S3 unavailable, continuing without remote sccache" >&2;
+            exit 0;
+          fi;
+          echo "task sccache:ensure: SeaweedFS S3 is unavailable at {{.SCCACHE_ENDPOINT}} bucket {{.SCCACHE_BUCKET}}" >&2;
+          echo "Refusing to compile without a healthy remote sccache backend." >&2;
+          exit 1;
         fi;
         echo "task sccache:ensure: SeaweedFS S3 sccache is healthy"'
 
@@ -170,8 +191,8 @@ tasks:
         secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
         if [ -z "$access_file" ] || [ ! -r "$access_file" ] ||
            [ -z "$secret_file" ] || [ ! -r "$secret_file" ]; then
-          echo "task sccache:stats: no S3 credential";
-          exit 0;
+          echo "task sccache:stats: missing S3 credentials" >&2;
+          exit 1;
         fi;
         page_file="$(mktemp)";
         trap '"'"'rm -f "$page_file"'"'"' EXIT;
@@ -257,7 +278,7 @@ tasks:
         trap cleanup EXIT;
         rm -rf "$artifacts_dir";
         mkdir -p "$artifacts_dir";
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" --set "rust-format-check.output=type=cacheonly" --set "builder-wasm-deps.output=type=cacheonly" --set "builder-deps.output=type=cacheonly" --set "builder-debug.output=type=cacheonly" {{.PREPARE_GROUP}};
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" --set "rust-format-check.output=type=cacheonly" --set "builder-wasm-deps.output=type=cacheonly" --set "builder-core-deps.output=type=cacheonly" --set "builder-debug.output=type=cacheonly" {{.PREPARE_GROUP}};
         artifact_kib="$(du -sk "$artifacts_dir" | cut -f1)";
         echo "task setup: commit-scoped host WASM/coverage handoff is ${artifact_kib} KiB";
         test "$artifact_kib" -le 262144 || { echo "task setup: refusing oversized Rust/web handoff (${artifact_kib} KiB)" >&2; exit 1; };

@@ -101,10 +101,8 @@ tasks:
       - |
         bash <<'BASH'
         set -euo pipefail
-        repo_root="$(git rev-parse --show-toplevel)"
         home_cache="${HOME}/.nook/cache"
-        credential_dir="$repo_root/.nook/cache"
-        install -d -m 0700 "$home_cache" "$credential_dir"
+        install -d -m 0700 "$home_cache"
         umask 077
         host="{{.NOOK_REGISTRY_HOST}}"
         username="$(
@@ -138,26 +136,13 @@ tasks:
           "$home_cache/registry-password" \
           "$home_cache/registry-remote-username" \
           "$home_cache/registry-remote-password"
-        cp -f \
-          "$home_cache/registry-host" \
-          "$home_cache/registry-username" \
-          "$home_cache/registry-password" \
-          "$home_cache/registry-remote-username" \
-          "$home_cache/registry-remote-password" \
-          "$credential_dir/"
-        chmod 0600 \
-          "$credential_dir/registry-host" \
-          "$credential_dir/registry-username" \
-          "$credential_dir/registry-password" \
-          "$credential_dir/registry-remote-username" \
-          "$credential_dir/registry-remote-password"
         printf '%s\n' "$password" | docker login "$host" -u "$username" --password-stdin
         printf '%s\n' "$host" | gh secret set NOOK_REGISTRY_HOST --repo meta-secret/nook
         printf '%s\n' "$username" | gh secret set NOOK_REGISTRY_USERNAME --repo meta-secret/nook
         printf '%s\n' "$password" | gh secret set NOOK_REGISTRY_PASSWORD --repo meta-secret/nook
         printf '%s\n' "$remote_username" | gh secret set NOOK_REGISTRY_REMOTE_USERNAME --repo meta-secret/nook
         printf '%s\n' "$remote_password" | gh secret set NOOK_REGISTRY_REMOTE_PASSWORD --repo meta-secret/nook
-        echo "Main and remote registry credentials synchronized to local caches, Docker, and GitHub Actions secrets"
+        echo "Main and remote registry credentials synchronized to ~/.nook/cache, Docker, and GitHub Actions secrets"
         BASH
 
   registry:deploy:

@@ -123,6 +123,56 @@ fn ui_demo_rebuilds_the_preview_with_test_only_debug_hooks() -> anyhow::Result<(
 }
 
 #[test]
+fn local_https_material_lives_under_home_nook_across_worktrees() -> anyhow::Result<()> {
+    let root = repository_root();
+    let app_tasks = read(&root, "nook-app/Taskfile.yml");
+    let web_tasks = read(&root, "nook-app/nook-web/.task/web.yml");
+    let docker_tasks = read(&root, "nook-app/docker/Taskfile.yml");
+
+    for required in [
+        "${HOME}/.nook/https",
+        "LOCAL_HTTPS_DIR",
+        "LOCAL_HTTPS_CONTAINER_DIR",
+        "/run/nook/https",
+    ] {
+        assert!(
+            app_tasks.contains(required),
+            "shared local HTTPS configuration is missing: {required}"
+        );
+    }
+    for required in [
+        "{{.LOCAL_HTTPS_DIR}}/localhost.pem",
+        "{{.LOCAL_HTTPS_DIR}}/rootCA.pem",
+        "legacy=\"{{.REPO_ROOT}}/.nook/https\"",
+    ] {
+        assert!(
+            web_tasks.contains(required),
+            "web HTTPS setup must use home-shared cert material: {required}"
+        );
+    }
+    assert!(
+        !web_tasks.contains("{{.REPO_ROOT}}/.nook/https/localhost.pem")
+            && !web_tasks.contains("-v \"{{.REPO_ROOT}}/.nook/https:/certs\""),
+        "local HTTPS must not generate or trust checkout-scoped certificate paths"
+    );
+    for required in [
+        "-v \"{{.LOCAL_HTTPS_DIR}}:{{.LOCAL_HTTPS_CONTAINER_DIR}}:ro\"",
+        "NOOK_LOCAL_HTTPS_CERT_PATH={{.LOCAL_HTTPS_CONTAINER_DIR}}/localhost.pem",
+        "NOOK_LOCAL_HTTPS_KEY_PATH={{.LOCAL_HTTPS_CONTAINER_DIR}}/localhost-key.pem",
+    ] {
+        assert!(
+            docker_tasks.contains(required),
+            "web-dev containers must mount home-shared HTTPS material: {required}"
+        );
+    }
+    assert!(
+        !docker_tasks.contains("/meta-secret/nook/.nook/https/"),
+        "web-dev containers must not read HTTPS material from the checkout mount"
+    );
+    Ok(())
+}
+
+#[test]
 fn pr_audit_wrappers_accept_pat_only_authentication() -> anyhow::Result<()> {
     let root = repository_root();
     let tasks = read(&root, ".task/agentic-ai.yml");
@@ -771,12 +821,12 @@ fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() -> 
 #[test]
 fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Result<()> {
     let root = repository_root();
-    let dependency_dockerfile = read(&root, "nook-app/docker/base.Dockerfile");
+    let dependency_dockerfile = read(&root, "nook-app/docker/rust.Dockerfile");
     let source_dockerfile = read(&root, "nook-app/nook-core/Dockerfile");
     let warmup = section(
         &dependency_dockerfile,
-        "FROM builder-wasm-deps AS builder-deps",
-        "# --- Web/e2e branch",
+        "FROM builder-wasm-deps AS builder-core-deps",
+        "FROM builder-core-deps AS nook-rust-test",
     );
 
     assert_eq!(
@@ -898,7 +948,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "extension setup already sealed a validated build"
     );
 
-    let web_base = read(&root, "nook-app/docker/base.Dockerfile");
+    let web_base = read(&root, "nook-app/docker/web.Dockerfile");
     assert!(web_base.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium"));
     assert!(web_base.contains("chromium ffmpeg xvfb"));
     assert!(

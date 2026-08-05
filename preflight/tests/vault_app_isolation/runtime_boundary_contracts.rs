@@ -118,6 +118,7 @@ fn vault_apps_keep_rust_owned_runtime_boundaries() {
     );
     for ignored in [
         "**/target",
+        "preflight/target",
         "**/node_modules",
         "**/dist",
         "**/test-results",

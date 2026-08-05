@@ -36,8 +36,8 @@ containing `secrets/` directory is mode `0700`; credential files are mode
 `0600`.
 
 `task infra:sccache:credential:sync` copies the bucket-scoped build keys into
-`~/.nook/cache/` (shared across checkouts) and the repo `.nook/cache/`, then upserts GitHub
-Actions secrets `NOOK_SCCACHE_ENDPOINT`, `NOOK_SCCACHE_ACCESS_KEY`,
+`~/.nook/cache/` (shared across checkouts; never into the repo), then upserts
+GitHub Actions secrets `NOOK_SCCACHE_ENDPOINT`, `NOOK_SCCACHE_ACCESS_KEY`,
 `NOOK_SCCACHE_SECRET_KEY`, and `NOOK_SCCACHE_BUCKET`. That identity has only
 read, write, list, and tagging actions for `nook-sccache`; explicit Remote tasks
 use a second identity limited to read/list actions on `nook-sccache`. A separate
@@ -45,12 +45,12 @@ administrative identity creates the bucket and remains server-side; its keys are
 never copied to a checkout or GitHub.
 
 `task infra:registry:credential:sync` copies the registry token into
-`~/.nook/cache/` and the repo `.nook/cache/`, runs `docker login` for
-`registry.dev.nokey.sh`, and upserts GitHub Actions secrets
-`NOOK_REGISTRY_HOST`, `NOOK_REGISTRY_USERNAME`, `NOOK_REGISTRY_PASSWORD`,
-`NOOK_REGISTRY_REMOTE_USERNAME`, and `NOOK_REGISTRY_REMOTE_PASSWORD`. The Main
-identity administers the registry; the Remote identity may update only
-`nook/remote-buildcache/**` and can read but not update `nook/buildcache/**`.
+`~/.nook/cache/`, runs `docker login` for `registry.dev.nokey.sh`, and upserts
+GitHub Actions secrets `NOOK_REGISTRY_HOST`, `NOOK_REGISTRY_USERNAME`,
+`NOOK_REGISTRY_PASSWORD`, `NOOK_REGISTRY_REMOTE_USERNAME`, and
+`NOOK_REGISTRY_REMOTE_PASSWORD`. The Main identity administers the registry; the
+Remote identity may update only `nook/remote-buildcache/**` and can read but not
+update `nook/buildcache/**`.
 
 DNS for `sccache.dev.nokey.sh` and `registry.dev.nokey.sh` must point at the
 Borg public IP (DNS-only A/AAAA, not proxied) before HTTPS verification can

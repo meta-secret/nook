@@ -2,31 +2,27 @@ version: '3'
 
 vars:
   HIVE_DIR: ..
+  HIVE_TASK_DIR:
+    sh: 'cd "{{.TASKFILE_DIR}}" && pwd'
   HIVE_IMAGE: '{{default "nook-hive:local" .HIVE_IMAGE}}'
   HIVE_FORMAT_IMAGE: '{{default "nook-hive-format:local" .HIVE_FORMAT_IMAGE}}'
-  HIVE_TEST_RUNTIME_IMAGE: rust:1.96-trixie@sha256:1f0dbad1df66647807e6952d1db85d0b2bda7606cb2139d82517e4f009967376
-  NOOK_APP_CONTEXT: ../../nook-app
+  HIVE_RUST_VERSION: '1.97'
+  HIVE_DEBIAN_RELEASE: trixie
+  HIVE_RUST_DIGEST: sha256:1bcff4befb740599103a2c7cb51058e14479b2e35e3a34a3f0dc4ede09927488
+  HIVE_TEST_RUNTIME_IMAGE: rust:{{.HIVE_RUST_VERSION}}-{{.HIVE_DEBIAN_RELEASE}}@{{.HIVE_RUST_DIGEST}}
   SCCACHE_S3_ACCESS_KEY_FILE:
     sh: >-
       if [ -n "${SCCACHE_S3_ACCESS_KEY_FILE:-}" ]; then
         printf '%s' "$SCCACHE_S3_ACCESS_KEY_FILE";
-      elif [ -r "../../.nook/cache/sccache-access-key" ]; then
-        printf '%s' "../../.nook/cache/sccache-access-key";
-      elif [ -r "${HOME}/.nook/cache/sccache-access-key" ]; then
-        printf '%s' "${HOME}/.nook/cache/sccache-access-key";
       else
-        printf '%s' "../../.nook/cache/sccache-access-key";
+        printf '%s' "${HOME}/.nook/cache/sccache-access-key";
       fi
   SCCACHE_S3_SECRET_KEY_FILE:
     sh: >-
       if [ -n "${SCCACHE_S3_SECRET_KEY_FILE:-}" ]; then
         printf '%s' "$SCCACHE_S3_SECRET_KEY_FILE";
-      elif [ -r "../../.nook/cache/sccache-secret-key" ]; then
-        printf '%s' "../../.nook/cache/sccache-secret-key";
-      elif [ -r "${HOME}/.nook/cache/sccache-secret-key" ]; then
-        printf '%s' "${HOME}/.nook/cache/sccache-secret-key";
       else
-        printf '%s' "../../.nook/cache/sccache-secret-key";
+        printf '%s' "${HOME}/.nook/cache/sccache-secret-key";
       fi
 
 tasks:
@@ -35,14 +31,19 @@ tasks:
     dir: '{{.HIVE_DIR}}'
     cmds:
       - |
+        HIVE_TASK_DIR='{{.HIVE_TASK_DIR}}' \
+        HIVE_FORMAT_IMAGE='{{.HIVE_FORMAT_IMAGE}}' \
         bash <<'BASH'
         set -euo pipefail
-        image="{{.HIVE_FORMAT_IMAGE}}"
+        # shellcheck source=prepare-sccache-context.sh
+        . "$HIVE_TASK_DIR/prepare-sccache-context.sh"
+        prepare_nook_sccache_helpers_context
+        image="$HIVE_FORMAT_IMAGE"
         docker build \
           --platform linux/amd64 \
           --target formatter \
           --tag "$image" \
-          --build-context "nook-app={{.NOOK_APP_CONTEXT}}" \
+          --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT" \
           --file hive/Dockerfile \
           .
         container="$(docker create "$image")"
@@ -50,6 +51,7 @@ tasks:
         cleanup() {
           docker rm "$container" >/dev/null 2>&1 || true
           rm -rf "$formatted"
+          cleanup_nook_sccache_helpers_context
         }
         trap cleanup EXIT
         for crate in hive lace; do
@@ -63,7 +65,7 @@ tasks:
           --platform linux/amd64 \
           --target console-formatter \
           --tag "$console_image" \
-          --build-context "nook-app={{.NOOK_APP_CONTEXT}}" \
+          --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT" \
           --file hive/Dockerfile \
           .
         console_container="$(docker create "$console_image")"
@@ -80,8 +82,15 @@ tasks:
     dir: '{{.HIVE_DIR}}'
     cmds:
       - |
+        HIVE_TASK_DIR='{{.HIVE_TASK_DIR}}' \
+        SCCACHE_S3_ACCESS_KEY_FILE='{{.SCCACHE_S3_ACCESS_KEY_FILE}}' \
+        SCCACHE_S3_SECRET_KEY_FILE='{{.SCCACHE_S3_SECRET_KEY_FILE}}' \
         bash <<'BASH'
         set -euo pipefail
+        # shellcheck source=prepare-sccache-context.sh
+        . "$HIVE_TASK_DIR/prepare-sccache-context.sh"
+        prepare_nook_sccache_helpers_context
+        trap cleanup_nook_sccache_helpers_context EXIT
         command=(docker buildx build
           --platform linux/amd64
           --target check
@@ -97,8 +106,8 @@ tasks:
         if [ -n "${HIVE_CACHE_TO:-}" ]; then
           command+=(--cache-to "$HIVE_CACHE_TO")
         fi
-        access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}"
-        secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}"
+        access_file="$SCCACHE_S3_ACCESS_KEY_FILE"
+        secret_file="$SCCACHE_S3_SECRET_KEY_FILE"
         if [ -r "$access_file" ] && [ -r "$secret_file" ]; then
           command+=(--secret "id=sccache_s3_access_key,src=$access_file")
           command+=(--secret "id=sccache_s3_secret_key,src=$secret_file")
@@ -106,7 +115,7 @@ tasks:
           echo "Hive S3 sccache credentials unavailable" >&2
         fi
         command+=(
-          --build-context "nook-app={{.NOOK_APP_CONTEXT}}"
+          --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT"
           --file hive/Dockerfile
           .)
         "${command[@]}"
@@ -117,11 +126,19 @@ tasks:
     dir: '{{.HIVE_DIR}}'
     cmds:
       - |
+        HIVE_TASK_DIR='{{.HIVE_TASK_DIR}}' \
+        SCCACHE_S3_ACCESS_KEY_FILE='{{.SCCACHE_S3_ACCESS_KEY_FILE}}' \
+        SCCACHE_S3_SECRET_KEY_FILE='{{.SCCACHE_S3_SECRET_KEY_FILE}}' \
+        HIVE_TEST_RUNTIME_IMAGE='{{.HIVE_TEST_RUNTIME_IMAGE}}' \
         bash <<'BASH'
         set -euo pipefail
+        # shellcheck source=prepare-sccache-context.sh
+        . "$HIVE_TASK_DIR/prepare-sccache-context.sh"
+        prepare_nook_sccache_helpers_context
         verified="$(mktemp -d)"
         cleanup() {
           rm -rf "$verified"
+          cleanup_nook_sccache_helpers_context
         }
         trap cleanup EXIT
         command=(docker buildx build
@@ -139,8 +156,8 @@ tasks:
         if [ -n "${HIVE_CACHE_TO:-}" ]; then
           command+=(--cache-to "$HIVE_CACHE_TO")
         fi
-        access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}"
-        secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}"
+        access_file="$SCCACHE_S3_ACCESS_KEY_FILE"
+        secret_file="$SCCACHE_S3_SECRET_KEY_FILE"
         if [ -r "$access_file" ] && [ -r "$secret_file" ]; then
           command+=(--secret "id=sccache_s3_access_key,src=$access_file")
           command+=(--secret "id=sccache_s3_secret_key,src=$secret_file")
@@ -148,7 +165,7 @@ tasks:
           echo "Hive S3 sccache credentials unavailable" >&2
         fi
         command+=(
-          --build-context "nook-app={{.NOOK_APP_CONTEXT}}"
+          --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT"
           --file hive/Dockerfile
           .)
         "${command[@]}"
@@ -173,7 +190,7 @@ tasks:
           --network host \
           --mount "type=bind,src=$verified/hive-tests,dst=/tests,readonly" \
           "${test_environment[@]}" \
-          "{{.HIVE_TEST_RUNTIME_IMAGE}}" \
+          "$HIVE_TEST_RUNTIME_IMAGE" \
           bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'
         BASH
 
@@ -181,25 +198,41 @@ tasks:
     desc: Build the Hive worker in its pinned builder image.
     dir: '{{.HIVE_DIR}}'
     cmds:
-      - >-
-        docker buildx build
-        --platform linux/amd64
-        --target builder
-        --output type=cacheonly
-        --build-context nook-app={{.NOOK_APP_CONTEXT}}
-        --file hive/Dockerfile
-        .
+      - |
+        HIVE_TASK_DIR='{{.HIVE_TASK_DIR}}' \
+        bash <<'BASH'
+        set -euo pipefail
+        # shellcheck source=prepare-sccache-context.sh
+        . "$HIVE_TASK_DIR/prepare-sccache-context.sh"
+        prepare_nook_sccache_helpers_context
+        trap cleanup_nook_sccache_helpers_context EXIT
+        docker buildx build \
+          --platform linux/amd64 \
+          --target builder \
+          --output type=cacheonly \
+          --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT" \
+          --file hive/Dockerfile \
+          .
+        BASH
 
   test:
     desc: Run Hive behavior tests in its pinned builder image.
     dir: '{{.HIVE_DIR}}'
     cmds:
       - |
+        HIVE_TASK_DIR='{{.HIVE_TASK_DIR}}' \
+        SCCACHE_S3_ACCESS_KEY_FILE='{{.SCCACHE_S3_ACCESS_KEY_FILE}}' \
+        SCCACHE_S3_SECRET_KEY_FILE='{{.SCCACHE_S3_SECRET_KEY_FILE}}' \
+        HIVE_TEST_RUNTIME_IMAGE='{{.HIVE_TEST_RUNTIME_IMAGE}}' \
         bash <<'BASH'
         set -euo pipefail
+        # shellcheck source=prepare-sccache-context.sh
+        . "$HIVE_TASK_DIR/prepare-sccache-context.sh"
+        prepare_nook_sccache_helpers_context
         compiled="$(mktemp -d)"
         cleanup() {
           rm -rf "$compiled"
+          cleanup_nook_sccache_helpers_context
         }
         trap cleanup EXIT
         command=(docker buildx build
@@ -217,8 +250,8 @@ tasks:
         if [ -n "${HIVE_CACHE_TO:-}" ]; then
           command+=(--cache-to "$HIVE_CACHE_TO")
         fi
-        access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}"
-        secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}"
+        access_file="$SCCACHE_S3_ACCESS_KEY_FILE"
+        secret_file="$SCCACHE_S3_SECRET_KEY_FILE"
         if [ -r "$access_file" ] && [ -r "$secret_file" ]; then
           command+=(--secret "id=sccache_s3_access_key,src=$access_file")
           command+=(--secret "id=sccache_s3_secret_key,src=$secret_file")
@@ -226,7 +259,7 @@ tasks:
           echo "Hive S3 sccache credentials unavailable" >&2
         fi
         command+=(
-          --build-context "nook-app={{.NOOK_APP_CONTEXT}}"
+          --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT"
           --file hive/Dockerfile
           .)
         "${command[@]}"
@@ -249,7 +282,7 @@ tasks:
           --network host \
           --mount "type=bind,src=$compiled/hive-tests,dst=/tests,readonly" \
           "${test_environment[@]}" \
-          "{{.HIVE_TEST_RUNTIME_IMAGE}}" \
+          "$HIVE_TEST_RUNTIME_IMAGE" \
           bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'
         BASH
 
@@ -261,8 +294,15 @@ tasks:
         msg: HIVE_CACHE_TO is required for cache publication.
     cmds:
       - |
+        HIVE_TASK_DIR='{{.HIVE_TASK_DIR}}' \
+        SCCACHE_S3_ACCESS_KEY_FILE='{{.SCCACHE_S3_ACCESS_KEY_FILE}}' \
+        SCCACHE_S3_SECRET_KEY_FILE='{{.SCCACHE_S3_SECRET_KEY_FILE}}' \
         bash <<'BASH'
         set -euo pipefail
+        # shellcheck source=prepare-sccache-context.sh
+        . "$HIVE_TASK_DIR/prepare-sccache-context.sh"
+        prepare_nook_sccache_helpers_context
+        trap cleanup_nook_sccache_helpers_context EXIT
         command=(docker buildx build
           --platform linux/amd64
           --target cache-publish
@@ -276,8 +316,8 @@ tasks:
         if [ -n "${HIVE_CACHE_SEED_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_SEED_FROM")
         fi
-        access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}"
-        secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}"
+        access_file="$SCCACHE_S3_ACCESS_KEY_FILE"
+        secret_file="$SCCACHE_S3_SECRET_KEY_FILE"
         if [ -r "$access_file" ] && [ -r "$secret_file" ]; then
           command+=(--secret "id=sccache_s3_access_key,src=$access_file")
           command+=(--secret "id=sccache_s3_secret_key,src=$secret_file")
@@ -285,7 +325,7 @@ tasks:
           echo "Hive S3 sccache credentials unavailable" >&2
         fi
         command+=(
-          --build-context "nook-app={{.NOOK_APP_CONTEXT}}"
+          --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT"
           --file hive/Dockerfile
           .)
         "${command[@]}"
@@ -295,10 +335,19 @@ tasks:
     desc: Build the linux/amd64 Hive worker image.
     dir: '{{.HIVE_DIR}}'
     cmds:
-      - >-
-        docker build
-        --platform linux/amd64
-        --tag {{.HIVE_IMAGE}}
-        --build-context nook-app={{.NOOK_APP_CONTEXT}}
-        --file hive/Dockerfile
-        .
+      - |
+        HIVE_TASK_DIR='{{.HIVE_TASK_DIR}}' \
+        HIVE_IMAGE='{{.HIVE_IMAGE}}' \
+        bash <<'BASH'
+        set -euo pipefail
+        # shellcheck source=prepare-sccache-context.sh
+        . "$HIVE_TASK_DIR/prepare-sccache-context.sh"
+        prepare_nook_sccache_helpers_context
+        trap cleanup_nook_sccache_helpers_context EXIT
+        docker build \
+          --platform linux/amd64 \
+          --tag "$HIVE_IMAGE" \
+          --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT" \
+          --file hive/Dockerfile \
+          .
+        BASH

@@ -1,14 +1,15 @@
 // App bake: shared variables, parallel groups, and loadable runtime variants.
 // Every target's build definition (dockerfile/target/contexts) lives next to its Dockerfile and
 // is merged in via multiple -f flags (bake has no `include`):
-//   nook-app/docker/base.docker-bake.hcl        -> rust-base, web-base
-//   nook-app/nook-core/docker-bake.hcl          -> builder-deps, builder-debug
+//   nook-app/docker/rust.docker-bake.hcl        -> rust-base + ecosystem gates
+//   nook-app/docker/web.docker-bake.hcl         -> web-base, web-e2e-base
+//   nook-app/nook-core/docker-bake.hcl          -> builder-core-deps, builder-debug
 //   nook-app/nook-wasm/docker-bake.hcl          -> builder-wasm, web-artifacts, on-demand Rust images
 //   nook-app/docker/toolchain.docker-bake.hcl   -> web-deps
 //   nook-app/nook-web/nook-web-app/docker-bake.hcl -> slim web runtime and CI targets
 // Callers (Taskfile `setup`, nook-app/docker/Taskfile.yml) pass all files via the NOOK_BAKE_FILES list.
 //
-// PREPARE PHASE: rust-base -> builder-deps -> (builder-debug || builder-wasm) -> web-artifacts, in
+// PREPARE PHASE: rust-base -> builder-core-deps -> (builder-debug || builder-wasm) -> web-artifacts, in
 // parallel with web-base -> web-deps. web-artifacts joins only small outputs and is exported to a commit-scoped,
 // invocation-isolated host directory.
 // WEB PHASE: nook-web consumes web-base + web-deps + only that host artifact directory. The heavy
@@ -54,6 +55,10 @@ variable "SCCACHE_BUCKET" {
 
 variable "SCCACHE_S3_MODE" {
   default = "external"
+}
+
+variable "FUZZ_SECONDS" {
+  default = "20"
 }
 
 // Enabled only by the GitHub Actions Docker setup after registry login.

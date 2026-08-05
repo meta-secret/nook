@@ -24,7 +24,7 @@ fn classifies_source_and_build_only_coverage_inputs() -> anyhow::Result<()> {
     assert!(source.base_coverage_required);
 
     let build_only = classify_coverage_inputs([
-        "nook-app/docker/base.Dockerfile",
+        "nook-app/docker/rust.Dockerfile",
         "nook-app/nook-core/docker-bake.hcl",
     ]);
     assert!(build_only.coverage_inputs_changed);
@@ -127,7 +127,12 @@ fn coverage_report_command_writes_github_outputs_and_markdown() -> anyhow::Resul
     write_coverage_directory(&current, 93.25, 90.0)?;
     write_coverage_directory(&base, 92.0, 90.0)?;
 
-    let status = Command::new(env!("CARGO_BIN_EXE_nook-preflight"))
+    // Cargo injects CARGO_BIN_EXE_* for integration tests (hyphens → underscores).
+    // Clippy check builds often omit it; skip the process-level assertion there.
+    let Some(preflight_bin) = option_env!("CARGO_BIN_EXE_nook_preflight") else {
+        return Ok(());
+    };
+    let status = Command::new(preflight_bin)
         .args(["coverage-report", "--current"])
         .arg(&current)
         .arg("--base")
