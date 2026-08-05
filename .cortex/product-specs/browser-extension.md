@@ -48,17 +48,20 @@ application capability checks enforce the vault-type boundary.
 | In-page auth gate                 | Universal Continue with Nook gate plus optional open/unlock/select/fill/save actions                          |
 | Content script                    | DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials      |
 
-Authenticator items remain standalone and are not guessed from an issuer name
-or silently associated with the current origin. The in-page gate opens an
-extension-controlled picker for every OTP fill. That picker searches all
-authenticator items through Rust/WASM, shows issuer/account labels only inside
-the extension document, and returns the selected opaque item identity to the
-origin-bound content script. An empty result stays in the picker without
-exposing vault metadata to the website DOM. Page QR and backup code enrollment
-uses explicit Pilot actions
-(**Add 2FA from this page** / **Save backup codes**) with local decode/extract,
-WASM validation, and confirmation before any vault write. It is never silent
-page scraping or background scanning.
+Authenticator items remain standalone.
+They are not guessed from an issuer name or silently associated with the current
+origin.
+The in-page gate opens an extension-controlled picker for every OTP fill.
+That picker searches all authenticator items through Rust/WASM.
+It shows issuer/account labels only inside the extension document.
+It returns the selected opaque item identity to the origin-bound content script.
+An empty result stays in the picker.
+Vault metadata is not exposed to the website DOM.
+Page QR and backup code enrollment uses explicit Pilot actions
+(**Add 2FA from this page** / **Save backup codes**).
+It uses local decode/extract, WASM validation, and confirmation before any vault
+write.
+It is never silent page scraping or background scanning.
 
 "No vault UI in the extension" means no second vault-management UI. The toolbar
 popup may contain the standard one-time device-protection widget because
@@ -156,25 +159,32 @@ The Simple Vault base URL is build-selected rather than hard-coded:
   trusted development certificate.
 
 The production, development, local, and each per-PR build have distinct,
-deterministic extension ids. Rebuilding one channel preserves its
-extension-origin IndexedDB and passkey RP identity; switching channels cannot
-reuse extension-private state. The sealed image publishes the tested bundle as
-a root-level ZIP plus `extension.json` metadata and a SHA-256 checksum under the
-matching site deployment's `/downloads/` path. PR and development bundles are
-unsigned developer artifacts and must be unzipped and loaded through the
-browser's extension developer mode.
-The supported developer launcher resolves hosted builds from that metadata,
-binds the archive and checksum URLs to the selected deployment origin, verifies
-SHA-256 before extraction, and activates a release atomically through a stable
-channel-specific path. It uses an isolated Nook browser profile. Brave,
-Chromium, and Chrome for Testing receive the verified directory through
-`--load-extension`. Branded Google Chrome removed that switch in Chrome 137, so
-the launcher opens its extension manager and requires a one-time **Load
-unpacked** selection of the verified `current` directory. Development,
-production, and every PR number have separate install and profile directories;
-the launcher never modifies or silently installs into the user's normal browser
-profile. Failed downloads, metadata checks, checksum checks, or archive
-validation leave the prior active release unchanged.
+deterministic extension ids.
+Rebuilding one channel preserves its extension-origin IndexedDB and passkey RP
+identity.
+Switching channels cannot reuse extension-private state.
+The sealed image publishes the tested bundle as a root-level ZIP plus
+`extension.json` metadata and a SHA-256 checksum under the matching site
+deployment's `/downloads/` path.
+PR and development bundles are unsigned developer artifacts.
+They must be unzipped and loaded through the browser's extension developer mode.
+The supported developer launcher resolves hosted builds from that metadata.
+It binds the archive and checksum URLs to the selected deployment origin.
+It verifies SHA-256 before extraction.
+It activates a release atomically through a stable channel-specific path.
+It uses an isolated Nook browser profile.
+Brave, Chromium, and Chrome for Testing receive the verified directory through
+`--load-extension`.
+Branded Google Chrome removed that switch in Chrome 137.
+The launcher opens its extension manager instead.
+It requires a one-time **Load unpacked** selection of the verified `current`
+directory.
+Development, production, and every PR number have separate install and profile
+directories.
+The launcher never modifies or silently installs into the user's normal browser
+profile.
+Failed downloads, metadata checks, checksum checks, or archive validation leave
+the prior active release unchanged.
 
 Interactive local development uses HTTPS so passkeys, CloudKit, OAuth, and
 extension-to-site messaging run under production-like secure-context rules.
@@ -216,30 +226,40 @@ The layers have intentionally different responsibilities:
 The initial production slice classifies login (including email-first /
 username-only steps used by Microsoft, Slack, and similar SSO shells),
 signup, password-change, and standalone one-time-code structures through
-Rust/WASM. Username detection uses autocomplete tokens plus identity heuristics
-(`loginfmt`, `login_email`, account/email labels) while still ignoring
-newsletter-style email fields. Credential matching may use an explicit
-related-login host allowlist so a saved `microsoft.com` login can fill on
-`login.microsoftonline.com`. It performs explicit login selection/fill/submit
-and TOTP selection/fill. It shows a
-verification-wait state only after a site form was actually submitted; a
-filled-only login or TOTP remains at the current checkpoint for manual review
-and submission. After a login or signup form submit, Nook Pilot stages
-credentials in extension memory and waits for Rust-classified outcome evidence
-before offering Save / Update. Durable writes through the unlocked extension
-WASM session (`add_secret` / `replace_secret`) require a Sufficient verdict —
-navigation alone never counts. Content scripts report only bounded non-secret
-signals (`data-nook-auth-outcome`, auth-field presence, SPA mutation, iframe
-context, elapsed time). Site-specific plugins may add markers through that
-adapter attribute; they must not scrape secrets or bypass the Rust classifier.
+Rust/WASM.
+Username detection uses autocomplete tokens plus identity heuristics
+(`loginfmt`, `login_email`, account/email labels).
+It still ignores newsletter-style email fields.
+Credential matching may use an explicit related-login host allowlist.
+A saved `microsoft.com` login can fill on `login.microsoftonline.com`.
+It performs explicit login selection/fill/submit and TOTP selection/fill.
+It shows a verification-wait state only after a site form was actually
+submitted.
+A filled-only login or TOTP remains at the current checkpoint for manual review
+and submission.
+After a login or signup form submit, Nook Pilot stages credentials in extension
+memory.
+It waits for Rust-classified outcome evidence before offering Save / Update.
+Durable writes through the unlocked extension WASM session
+(`add_secret` / `replace_secret`) require a Sufficient verdict.
+Navigation alone never counts.
+Content scripts report only bounded non-secret signals
+(`data-nook-auth-outcome`, auth-field presence, SPA mutation, iframe context,
+elapsed time).
+Site-specific plugins may add markers through that adapter attribute.
+They must not scrape secrets or bypass the Rust classifier.
 Signup and password-change pages may offer **Generate password** through
-Rust/WASM; generated values fill only `new-password` fields and stay in page
-memory until an evidence-gated Save / Update. CAPTCHA, terms acceptance, and
-email-verification style checkpoints force Take over. Pilot-guided 2FA
-enrollment stages an otpauth setup in extension memory after consent, fills the
-verification code via Rust/WASM, and encrypts the authenticator only after
-Sufficient outcome evidence. Consented backup-code capture follows; secrets
-never appear in the HUD.
+Rust/WASM.
+Generated values fill only `new-password` fields.
+They stay in page memory until an evidence-gated Save / Update.
+CAPTCHA, terms acceptance, and email-verification style checkpoints force Take
+over.
+Pilot-guided 2FA enrollment stages an otpauth setup in extension memory after
+consent.
+It fills the verification code via Rust/WASM.
+It encrypts the authenticator only after Sufficient outcome evidence.
+Consented backup-code capture follows.
+Secrets never appear in the HUD.
 
 The companion popup “Ready / Connected” state means the extension device is
 paired to a vault. It is not login detection. Login detection is the in-page
@@ -371,26 +391,34 @@ migration. Quarantined rows are removed when the user clears the extension's
 browser storage. Ongoing pairing reads and writes use Rexie only.
 
 The `/extension-connect` creation path may temporarily use the unlocked
-extension identity. The website first creates a one-time age recipient whose
-private key remains inside its WASM manager. The extension encrypts its age
-private key and event-signing seed to that recipient; the website's Rust/WASM
-boundary decrypts the envelope, validates the route nonce and advertised
-device id/public keys, and keeps the adopted material only in memory. Raw
-private material never appears in URL parameters, TypeScript values,
-browser-vendor storage, website IndexedDB, or logs. Reloading the website
-requests a new handoff from the unlocked extension, including when the user
-arrived at the normal vault route rather than `/extension-connect`. The website
-discovers the pairing by the local vault store id; the extension returns a
-handoff only when it holds a current grant for that exact vault. The extension
-launcher must also honor an explicit pairing intent from an authenticated vault
-that is not paired: a cached ready record for a different or deleted vault must
-not hide the pairing action or trap the user in an open-vault loop. The extension
-records each issued nonce, vault store id, and public device tuple in
-extension-only `chrome.storage.session`, consumes it before sealing, and returns
-a freshly issued nonce for a later lock/unlock. Only the service worker may
-invoke the offscreen secret-sealing command. A failed website adoption resets
-both device identity and event-log signing state before another authorization
-attempt.
+extension identity.
+The website first creates a one-time age recipient.
+The private key remains inside its WASM manager.
+The extension encrypts its age private key and event-signing seed to that
+recipient.
+The website's Rust/WASM boundary decrypts the envelope.
+It validates the route nonce and advertised device id/public keys.
+It keeps the adopted material only in memory.
+Raw private material never appears in URL parameters, TypeScript values,
+browser-vendor storage, website IndexedDB, or logs.
+Reloading the website requests a new handoff from the unlocked extension.
+That includes when the user arrived at the normal vault route rather than
+`/extension-connect`.
+The website discovers the pairing by the local vault store id.
+The extension returns a handoff only when it holds a current grant for that exact
+vault.
+The extension launcher must also honor an explicit pairing intent from an
+authenticated vault that is not paired.
+A cached ready record for a different or deleted vault must not hide the pairing
+action.
+It must not trap the user in an open-vault loop.
+The extension records each issued nonce, vault store id, and public device tuple
+in extension-only `chrome.storage.session`.
+It consumes the nonce before sealing.
+It returns a freshly issued nonce for a later lock/unlock.
+Only the service worker may invoke the offscreen secret-sealing command.
+A failed website adoption resets both device identity and event-log signing state
+before another authorization attempt.
 
 Deleting Simple Vault's local website data does not revoke or erase the
 extension device. The extension remains independently paired to its encrypted

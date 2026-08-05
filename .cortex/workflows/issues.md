@@ -95,9 +95,16 @@ Creating or editing any other record must not start implementation. The worker
 claims a ready record by committing `status: in_progress` before it runs.
 
 Main-failure handoff records instead use `status: ready` with `automation:
-hive`. A single token-free dispatcher reconciles those records into Neo4j by
-failed Main SHA; the isolated task owns diagnosis through exact-head PR checks,
-review resolution, squash merge, and verification of the resulting Main run.
+hive`.
+
+A single token-free dispatcher reconciles those records into Neo4j by failed Main
+SHA. The isolated task owns:
+
+- diagnosis;
+- exact-head PR checks;
+- review resolution;
+- squash merge; and
+- verification of the resulting Main run.
 
 ## Choose update versus create
 
@@ -161,13 +168,16 @@ Before implementation edits, every task-owning agent must publish one plan from
 Use `plans/<feature>/<timestamp>-<task>.md`; use the closest feature or
 `unplanned` when no feature record exists.
 
+The task plan is an LLM-authored interpretation of the important request. It is
+not a copy, transcript, or sentence-by-sentence paraphrase of the user's prompt.
+
 The plan must contain:
 
 - the agent's own complete interpretation of the desired outcome;
 - material functional, workflow, security, and delivery requirements;
 - explicit constraints, assumptions, and exclusions;
 - a small ordered execution plan;
-- expected completion evidence;
+- expected completion evidence; and
 - a safety review confirming that no raw prompt, transcript, secret, private
   data, raw log, local path, or unnecessary infrastructure detail is present.
 
