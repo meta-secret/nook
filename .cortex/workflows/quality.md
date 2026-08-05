@@ -10,8 +10,8 @@ Use this workflow for quality, CI, and deployment changes.
    - Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`.
    - `task preflight` Bakes `preflight-test` on the shared `rust-base` target with cargo-chef dependency cooks and SeaweedFS sccache.
    - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
-   - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as separate Bake images/stages in `nook-app/docker/rust.Dockerfile` (off `rust-base`, not inside it) and run via `rust-ecosystem.yml`.
-   - Do not duplicate those commands in bespoke preflight scanners or compile their CLIs on the GitHub-hosted runner host.
+   - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as separate Bake images/stages in `nook-app/docker/rust.Dockerfile` (off `rust-base`, not inside it) and run through `task docker:ecosystem:*` from `rust-ecosystem.yml`.
+   - Do not duplicate those commands in bespoke preflight scanners, call Bake helpers directly from the workflow, or compile their CLIs on the GitHub-hosted runner host.
    - Kani remains on its official action because it provisions a specialized model-checking toolchain.
 2. Public Taskfile commands must run project builds/checks inside Docker.
    - CI may install host orchestration tools such as Task, but should call Taskfile tasks for normal repo behavior.
@@ -55,29 +55,32 @@ Use this workflow for quality, CI, and deployment changes.
    - `vite build`
    - `task preflight` — repository-wide Rust invariant tests, before app setup
    - `Rust ecosystem checks / Dependency policy and RustSec` —
-     Bake `rust-dependency-policy` from `nook-app/docker/rust.Dockerfile` via
-     the separate `rust-ecosystem-policy-tools` image (pinned `cargo-deny` +
-     `cargo-audit`; not installed into `rust-base`). Never `cargo install`
-     those tools on the runner host. Advisory exceptions must name the RustSec
-     IDs, identify the exact pinned upstream graph, and state the dependency
-     upgrade that removes them in both `deny.toml` and the affected workspace's
-     `.cargo/audit.toml`. The current `agentic-ai/minds` exception is limited to
-     RUSTSEC-2026-0118 and RUSTSEC-2026-0119 in the pinned `openai/codex`
-     Rama/Hickory graph; remove it when upstream moves from `hickory-proto`
-     0.25.2 to 0.26.1 or later.
+     `task docker:ecosystem:dependency-policy` Bakes `rust-dependency-policy`
+     from `nook-app/docker/rust.Dockerfile` via the separate
+     `rust-ecosystem-policy-tools` image (pinned `cargo-deny` + `cargo-audit`;
+     not installed into `rust-base`). Never `cargo install` those tools on the
+     runner host. Advisory exceptions must name the RustSec IDs, identify the
+     exact pinned upstream graph, and state the dependency upgrade that removes
+     them in both `deny.toml` and the affected workspace's `.cargo/audit.toml`.
+     The current `agentic-ai/minds` exception is limited to RUSTSEC-2026-0118 and
+     RUSTSEC-2026-0119 in the pinned `openai/codex` Rama/Hickory graph; remove it
+     when upstream moves from `hickory-proto` 0.25.2 to 0.26.1 or later.
    - `Rust ecosystem checks / Proptest, Insta, and Loom` —
-     Bake `rust-ecosystem-deterministic` on `builder-core-deps` so
+     `task docker:ecosystem:deterministic` Bakes `rust-ecosystem-deterministic`
+     on `builder-core-deps` so
      [`proptest`](https://proptest-rs.github.io/proptest/),
      [`insta`](https://insta.rs/), and [`loom`](https://github.com/tokio-rs/loom)
      reuse the sealed Rust dependency graph instead of a host toolchain.
    - `Rust ecosystem checks / Cargo fuzz smoke` —
-     Bake `rust-fuzz-smoke` from `rust-ecosystem-nightly` with pinned
+     `task docker:ecosystem:fuzz` Bakes `rust-fuzz-smoke` from
+     `rust-ecosystem-nightly` with pinned
      [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html).
    - `Rust ecosystem checks / Kani bounded proofs` —
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
      bounded proof harnesses via the official action (specialized toolchain).
    - `Rust ecosystem checks / Dylint repository lints` —
-     Bake `rust-dylint` from `rust-ecosystem-nightly` with pinned
+     `task docker:ecosystem:dylint` Bakes `rust-dylint` from
+     `rust-ecosystem-nightly` with pinned
      [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
      `dylint-link` release binaries (no host `cargo install`).
 7. Build wasm before Svelte checks or web builds.

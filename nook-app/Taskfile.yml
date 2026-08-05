@@ -282,14 +282,7 @@ tasks:
         artifact_kib="$(du -sk "$artifacts_dir" | cut -f1)";
         echo "task setup: commit-scoped host WASM/coverage handoff is ${artifact_kib} KiB";
         test "$artifact_kib" -le 262144 || { echo "task setup: refusing oversized Rust/web handoff (${artifact_kib} KiB)" >&2; exit 1; };
-        for attempt in 1 2; do
-          if WEB_ARTIFACTS_CONTEXT="$artifacts_dir" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} "$setup_target"; then
-            exit 0;
-          fi;
-          if [ "$attempt" -eq 2 ]; then exit 1; fi;
-          echo "task setup: transient $setup_target Bake failure; retrying final web solve in 2s..." >&2;
-          sleep 2;
-        done'
+        WEB_ARTIFACTS_CONTEXT="$artifacts_dir" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "setup: $setup_target" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} "$setup_target"'
 
   setup:web:focused:
     desc: Build the narrow source-sealed web image for focused checks without full verification or production builds.

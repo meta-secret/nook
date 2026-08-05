@@ -358,14 +358,7 @@ tasks:
         test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
-        for attempt in 1 2; do
-          if WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} --set "web-deps.output=type=cacheonly" nook-web-ci web-deps; then
-            exit 0;
-          fi;
-          if [ "$attempt" -eq 2 ]; then exit 1; fi;
-          echo "task docker:ci:web:build: transient Bake failure; retrying in 2s..." >&2;
-          sleep 2;
-        done'
+        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:build" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} --set "web-deps.output=type=cacheonly" nook-web-ci web-deps'
 
   docker:ci:web:e2e:build:
     desc: Build the Chromium web image from the same-runner CI WASM artifact.
@@ -380,14 +373,46 @@ tasks:
         test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
-        for attempt in 1 2; do
-          if WEB_ARTIFACTS_CONTEXT="$artifacts" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web-e2e; then
-            exit 0;
-          fi;
-          if [ "$attempt" -eq 2 ]; then exit 1; fi;
-          echo "task docker:ci:web:e2e:build: transient Bake failure; retrying in 2s..." >&2;
-          sleep 2;
-        done'
+        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:e2e:build" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web-e2e'
+
+  docker:ecosystem:dependency-policy:
+    desc: Bake cargo-deny and cargo-audit on the sealed ecosystem policy image.
+    deps: [sccache:ensure]
+    cmds:
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}}
+        rust-dependency-policy
+
+  docker:ecosystem:deterministic:
+    desc: Bake Proptest, Insta, and Loom on the sealed Rust dependency graph.
+    deps: [sccache:ensure]
+    cmds:
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}}
+        rust-ecosystem-deterministic
+
+  docker:ecosystem:fuzz:
+    desc: Bake the cargo-fuzz smoke target with a bounded runtime.
+    deps: [sccache:ensure]
+    vars:
+      FUZZ_SECONDS: '{{default "20" .FUZZ_SECONDS}}'
+    cmds:
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}}
+        --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}"
+        rust-fuzz-smoke
+
+  docker:ecosystem:dylint:
+    desc: Bake repository Dylint lints on the sealed nightly ecosystem image.
+    deps: [sccache:ensure]
+    cmds:
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}}
+        rust-dylint
 
   docker:web:dev:
     internal: true

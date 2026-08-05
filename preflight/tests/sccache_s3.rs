@@ -525,6 +525,20 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             "registry BuildKit write cache ref is missing: {write_scope}"
         );
     }
+    for cold_isolated_import in [
+        "${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+    ] {
+        assert!(
+            bake.contains(cold_isolated_import),
+            "cold isolated cache-from must ignore missing remote-buildcache refs: {cold_isolated_import}"
+        );
+    }
     assert!(
         bake.contains(
             "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1"

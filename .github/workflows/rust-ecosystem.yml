@@ -12,7 +12,9 @@ on:
       - nook-app/.cargo/**
       - nook-app/docker/rust.Dockerfile
       - nook-app/docker/rust.docker-bake.hcl
+      - nook-app/docker/Taskfile.yml
       - nook-app/docker-bake.hcl
+      - nook-app/Taskfile.yml
       - fuzz/**
       - preflight/**
       - agentic-ai/minds/**
@@ -32,12 +34,6 @@ concurrency:
     ${{ github.event.pull_request.number || github.ref }}-
     ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'shared' }}
   cancel-in-progress: true
-
-env:
-  NOOK_BAKE_FILES: >-
-    -f nook-app/docker-bake.hcl
-    -f nook-app/docker/rust.docker-bake.hcl
-    -f nook-app/nook-core/docker-bake.hcl
 
 jobs:
   validation-request:
@@ -87,9 +83,7 @@ jobs:
           main-cache-only: "true"
           isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
       - name: Bake rust-dependency-policy
-        run: >-
-          bash .github/scripts/docker-bake-sccache.sh
-          $NOOK_BAKE_FILES rust-dependency-policy
+        run: task docker:ecosystem:dependency-policy
 
   deterministic-tests:
     needs: validation-request
@@ -115,9 +109,7 @@ jobs:
           main-cache-only: "true"
           isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
       - name: Bake rust-ecosystem-deterministic
-        run: >-
-          bash .github/scripts/docker-bake-sccache.sh
-          $NOOK_BAKE_FILES rust-ecosystem-deterministic
+        run: task docker:ecosystem:deterministic
 
   fuzz-smoke:
     needs: validation-request
@@ -145,11 +137,7 @@ jobs:
       - name: Bake rust-fuzz-smoke
         env:
           FUZZ_SECONDS: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '900' || '20' }}
-        run: >-
-          bash .github/scripts/docker-bake-sccache.sh
-          $NOOK_BAKE_FILES
-          --set rust-fuzz-smoke.args.FUZZ_SECONDS=$FUZZ_SECONDS
-          rust-fuzz-smoke
+        run: task docker:ecosystem:fuzz FUZZ_SECONDS="$FUZZ_SECONDS"
 
   kani:
     needs: validation-request
@@ -191,6 +179,4 @@ jobs:
           main-cache-only: "true"
           isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
       - name: Bake rust-dylint
-        run: >-
-          bash .github/scripts/docker-bake-sccache.sh
-          $NOOK_BAKE_FILES rust-dylint
+        run: task docker:ecosystem:dylint
