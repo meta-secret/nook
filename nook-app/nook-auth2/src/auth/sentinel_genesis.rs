@@ -756,8 +756,7 @@ mod tests {
     }
 
     #[test]
-    fn request_link_preserves_a_canonical_route_without_a_trailing_slash(
-    ) -> anyhow::Result<()> {
+    fn request_link_preserves_a_canonical_route_without_a_trailing_slash() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
         let session =

@@ -124,9 +124,10 @@ test.describe('login unlock flow (local-first)', () => {
     await page.getByTestId('unlock-vault-btn').click()
 
     await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await expect(page).toHaveURL(/\/vault\/admin$/)
     await waitForPersistedAppLog(page, {
       scope: 'vault-password',
       level: 'info',
@@ -155,9 +156,10 @@ test.describe('login unlock flow (local-first)', () => {
       entryLabel: 'Recovery',
       password: 'recovery-pass-99',
     })
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await expect(page).toHaveURL(/\/vault\/admin$/)
   })
 
   test('hides backup password option when vault has no password entries', async ({
