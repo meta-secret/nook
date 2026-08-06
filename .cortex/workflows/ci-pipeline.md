@@ -12,7 +12,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 | Workflow | Trigger | What runs | GitHub PAT |
 | --- | --- | --- | --- |
 | [`remote.yml`](../../.github/workflows/remote.yml) | Manual allowlisted task dispatch | One focused Taskfile command; no merge authorization | No |
-| [`pr.yml`](../../.github/workflows/pr.yml) | Explicit `ci:validate` / `ci:full-e2e` label | Exact-head PR gate | No |
+| [`pr.yml`](../../.github/workflows/pr.yml) | Explicit `ci:validate` / `ci:full-e2e` label | Exact-head PR gate, including Rust ecosystem jobs | No |
+| [`rust-ecosystem.yml`](../../.github/workflows/rust-ecosystem.yml) | Schedule, path-filtered main push, manual | Non-PR Rust ecosystem entry points | No |
 | [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml) | Successful same-repository PR workflow | Promote trusted PR artifacts | No |
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml) | Successful PR workflow / PR close | Publish PR demo WebMs to Linear | No |
 | [`main.yml`](../../.github/workflows/main.yml) | Push to `main` | Main verify, e2e, dev deploy | No |
@@ -37,10 +38,22 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 **`pr.yml`**
 
 - Rust domain unit tests + coverage, no-opt WASM, web/unit tests, all three web builds.
+- Shared Rust ecosystem gates via `rust-ecosystem-checks.yml`.
+- Those ecosystem jobs run in parallel with native Rust, WASM, and verify.
+- Ordinary pushes do not start this workflow.
+- Only `ci:validate` / `ci:full-e2e` label events start it.
 - Changed headless UI demo specs + 90-day artifact when UI changes.
 - Internal harness plus isolated native Pages aliases.
 - `github-pages` deployment status.
 - `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite.
+
+**`rust-ecosystem.yml`**
+
+- Thin entry points outside the product PR pipeline.
+- Weekly schedule, path-filtered main push, and `workflow_dispatch`.
+- Labeled `agentic-ai/minds/**` PRs only, because `pr.yml` ignores `agentic-ai/**`.
+- Calls the same `rust-ecosystem-checks.yml` jobs as labeled product PRs.
+- Ordinary PR pushes do not start it.
 
 **`pr-validation-handoff.yml`**
 

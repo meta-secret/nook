@@ -14,7 +14,9 @@ fn read(relative_path: &str) -> anyhow::Result<String> {
 
 #[test]
 fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()> {
-    let workflow = read(".github/workflows/rust-ecosystem.yml")?;
+    let entry = read(".github/workflows/rust-ecosystem.yml")?;
+    let checks = read(".github/workflows/rust-ecosystem-checks.yml")?;
+    let pr = read(".github/workflows/pr.yml")?;
     let quality = read(".cortex/workflows/quality.md")?;
     let workspace = read("nook-app/Cargo.toml")?;
     let rust_dockerfile = read("nook-app/docker/rust.Dockerfile")?;
@@ -23,6 +25,23 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let fuzz_target = read("fuzz/fuzz_targets/wire_parsers.rs")?;
     let fuzz_manifest = read("fuzz/Cargo.toml")?;
     let readiness = read("agentic-ai/ci-agent/src/main/github.ts")?;
+
+    assert!(
+        pr.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),
+        "Labeled product PRs must call the shared Rust ecosystem checks"
+    );
+    assert!(
+        entry.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),
+        "Thin rust-ecosystem.yml must call the shared Rust ecosystem checks"
+    );
+    assert!(
+        entry.contains("agentic-ai/minds/**"),
+        "Thin rust-ecosystem.yml must keep labeled minds-only PR coverage"
+    );
+    assert!(
+        !entry.contains("Bake rust-dependency-policy"),
+        "Thin rust-ecosystem.yml must not duplicate Bake steps"
+    );
 
     for marker in [
         "Bake rust-dependency-policy",
@@ -37,29 +56,28 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "NOOK_SCCACHE_ACCESS_KEY",
         "kani-github-action",
         "FUZZ_SECONDS",
+        "isolated-cache-write: ${{ inputs.isolated_cache_write }}",
+        "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}",
     ] {
         assert!(
-            workflow.contains(marker),
-            "Rust ecosystem workflow is missing {marker}"
+            checks.contains(marker),
+            "Shared Rust ecosystem checks are missing {marker}"
         );
     }
     assert!(
-        workflow.contains(
-            "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
-        ),
-        "Rust ecosystem PRs must export only isolated remote-buildcache scopes"
+        !checks.contains("docker-bake-sccache.sh")
+            && !checks.contains("NOOK_BAKE_FILES")
+            && !checks.contains("docker buildx bake"),
+        "Rust ecosystem checks must invoke Taskfile tasks instead of Bake helpers"
     );
-    assert!(
-        workflow.contains(
-            "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}"
-        ),
-        "Rust ecosystem main pushes must seed the trusted nightly BuildKit cache"
-    );
-    assert!(
-        !workflow.contains("docker-bake-sccache.sh")
-            && !workflow.contains("NOOK_BAKE_FILES")
-            && !workflow.contains("docker buildx bake"),
-        "Rust ecosystem workflow must invoke Taskfile tasks instead of Bake helpers"
+    assert_eq!(
+        checks
+            .matches(
+                "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}"
+            )
+            .count(),
+        4,
+        "every Bake-backed ecosystem job must seed Main and isolate PR cache writes"
     );
     let docker_tasks = read("nook-app/docker/Taskfile.yml")?;
     for marker in [
@@ -88,8 +106,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "taiki-e/install-action",
     ] {
         assert!(
-            !workflow.contains(forbidden),
-            "Rust ecosystem workflow must not use host-toolchain path: {forbidden}"
+            !checks.contains(forbidden),
+            "Rust ecosystem checks must not use host-toolchain path: {forbidden}"
         );
     }
 
@@ -148,6 +166,14 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         );
     }
     assert!(
+        rust_bake.contains("cache-to   = rust_ecosystem_policy_cache_to")
+            && rust_bake
+                .matches("cache-to   = rust_ecosystem_policy_cache_to")
+                .count()
+                >= 2,
+        "ecosystem policy-tools and dependency-policy must seed the policy hosted cache"
+    );
+    assert!(
         rust_bake.contains("cache-from = rust_ecosystem_nightly_cache_from")
             && rust_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
             && rust_bake
@@ -155,6 +181,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
                 .count()
                 >= 3,
         "ecosystem nightly/fuzz/dylint must share the hosted nightly cache scope"
+    );
+    assert!(
+        rust_bake.contains("cache-from = rust_ecosystem_deterministic_cache_from")
+            && rust_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),
+        "ecosystem deterministic must seed its own hosted cache above rust-deps"
     );
 
     for capability in [
@@ -202,6 +233,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         );
     }
     assert!(readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
+    assert!(readiness.contains("paths.every(isMainPrIgnoredPath)"));
     Ok(())
 }
 

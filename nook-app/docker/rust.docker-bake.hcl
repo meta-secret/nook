@@ -1,6 +1,7 @@
 // Rust toolchain base + ecosystem gates. Hosted CI seeds rust_base_cache_* before
-// dependency scopes consume it. Fuzz/dylint also seed rust_ecosystem_nightly_cache_*
-// so the second toolchain is reused without folding it into product rust-base.
+// dependency scopes consume it. Ecosystem Bake targets seed their own scopes so
+// deny/audit, nightly/fuzz/dylint, and deterministic compiles are reused without
+// folding that tooling into product rust-base.
 
 target "rust-base" {
   context    = "."
@@ -21,7 +22,8 @@ target "rust-ecosystem-policy-tools" {
   dockerfile = "nook-app/docker/rust.Dockerfile"
   target     = "rust-ecosystem-policy-tools"
   platforms  = ["linux/amd64"]
-  cache-from = rust_base_cache_from
+  cache-from = rust_ecosystem_policy_cache_from
+  cache-to   = rust_ecosystem_policy_cache_to
   output     = ["type=cacheonly"]
 }
 
@@ -30,7 +32,8 @@ target "rust-dependency-policy" {
   dockerfile = "nook-app/docker/rust.Dockerfile"
   target     = "rust-dependency-policy"
   platforms  = ["linux/amd64"]
-  cache-from = rust_base_cache_from
+  cache-from = rust_ecosystem_policy_cache_from
+  cache-to   = rust_ecosystem_policy_cache_to
   output     = ["type=cacheonly"]
 }
 
@@ -76,6 +79,7 @@ target "rust-ecosystem-deterministic" {
   dockerfile = "nook-app/docker/rust.Dockerfile"
   target     = "rust-ecosystem-deterministic"
   platforms  = ["linux/amd64"]
-  cache-from = rust_deps_cache_from
+  cache-from = rust_ecosystem_deterministic_cache_from
+  cache-to   = rust_ecosystem_deterministic_cache_to
   output     = ["type=cacheonly"]
 }

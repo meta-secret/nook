@@ -288,7 +288,7 @@ fn assert_workflows_scope_cache_credentials() {
     );
     assert!(!pr.contains("NOOK_CACHE_REDIS_PASSWORD"));
 
-    let ecosystem = read(".github/workflows/rust-ecosystem.yml");
+    let ecosystem = read(".github/workflows/rust-ecosystem-checks.yml");
     let ecosystem_docker_setups = ecosystem
         .matches("uses: ./.github/actions/nook-docker-setup")
         .count();
@@ -297,8 +297,10 @@ fn assert_workflows_scope_cache_credentials() {
         ecosystem_docker_setups,
         "Rust ecosystem Docker jobs must mount SeaweedFS sccache"
     );
-    assert!(ecosystem.contains(
-        "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
+    assert!(ecosystem.contains("isolated-cache-write: ${{ inputs.isolated_cache_write }}"));
+    let ecosystem_entry = read(".github/workflows/rust-ecosystem.yml");
+    assert!(ecosystem_entry.contains(
+        "isolated_cache_write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
     ));
 
     let remote = read(".github/workflows/remote.yml");

@@ -249,6 +249,7 @@ const RUST_ECOSYSTEM_PR_WORKFLOW: RequiredPrWorkflow = {
 function isRustEcosystemPath(path: string): boolean {
   return (
     path === ".github/workflows/rust-ecosystem.yml" ||
+    path === ".github/workflows/rust-ecosystem-checks.yml" ||
     path === "deny.toml" ||
     path === "nook-app/Cargo.lock" ||
     path === "nook-app/.insta.yaml" ||
@@ -267,7 +268,12 @@ export function requiredPrWorkflows(paths: string[]): RequiredPrWorkflow[] {
   if (paths.some(isWebResearchPath)) {
     required.push(WEB_RESEARCH_PR_WORKFLOW);
   }
-  if (paths.some(isRustEcosystemPath)) {
+  // Product PRs run ecosystem jobs inside pr.yml. Only minds-only PRs still
+  // require the thin rust-ecosystem.yml entry point.
+  if (
+    paths.some(isRustEcosystemPath) &&
+    paths.every(isMainPrIgnoredPath)
+  ) {
     required.push(RUST_ECOSYSTEM_PR_WORKFLOW);
   }
   if (paths.some((path) => !isMainPrIgnoredPath(path))) {

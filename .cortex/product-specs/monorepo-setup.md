@@ -102,7 +102,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - `pr.yml` exports only PR-scoped `nook/remote-buildcache/**` refs.
   - Main restore stays available.
   - `pr.yml` starts only for `ci:validate` or `ci:full-e2e` label events.
-  - It then runs native Rust and one verified-WASM producer independently.
+  - It then runs native Rust, shared Rust ecosystem gates, and one verified-WASM producer independently.
   - Its small generated artifact feeds parallel preview and optional Main-fix consumers.
   - Main-fix web and extension e2e run as independent artifact consumers on separate hosted runners.
   - Each Main-fix consumer builds only the browser image.

@@ -137,6 +137,41 @@ rust_ecosystem_nightly_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-nightly-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
 ] : []
 
+// cargo-deny + cargo-audit CLI stage. Kept out of rust-base; policy refs use
+// ignore-error while the scope is new/cold.
+rust_ecosystem_policy_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-policy-v1:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1:buildcache",
+] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+]
+
+rust_ecosystem_policy_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
+] : []
+
+// Proptest/Insta/Loom compile layers on top of builder-core-deps. Falls back through
+// rust-deps so the cooked graph can hydrate without a product rebuild.
+rust_ecosystem_deterministic_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-deterministic-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v1:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1:buildcache",
+] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-deterministic-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+]
+
+rust_ecosystem_deterministic_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-deterministic-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
+] : []
+
 rust_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2:buildcache",

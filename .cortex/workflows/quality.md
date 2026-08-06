@@ -11,7 +11,10 @@ Use this workflow for quality, CI, and deployment changes.
    - `task preflight` Bakes `preflight-test` on the shared `rust-base` target with cargo-chef dependency cooks and SeaweedFS sccache.
    - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
    - Reusable GitHub workflow shell lives in `.task/ci-workflows.yml` and `.github/scripts/`; workflows stay thin `task` wrappers around Actions-only glue.
-   - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as separate Bake images/stages in `nook-app/docker/rust.Dockerfile` (off `rust-base`, not inside it) and run through `task docker:ecosystem:*` from `rust-ecosystem.yml`.
+   - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as separate Bake images/stages in `nook-app/docker/rust.Dockerfile` (off `rust-base`, not inside it).
+   - They run through `task docker:ecosystem:*`.
+   - Labeled product PRs call the shared jobs from `pr.yml` via `rust-ecosystem-checks.yml`.
+   - Thin `rust-ecosystem.yml` keeps schedule, main-path, manual, and labeled minds-only PR entry points.
    - Do not duplicate those commands in bespoke preflight scanners, call Bake helpers directly from the workflow, or compile their CLIs on the GitHub-hosted runner host.
    - Kani remains on its official action because it provisions a specialized model-checking toolchain.
 2. Public Taskfile commands must run project builds/checks inside Docker.
@@ -55,7 +58,7 @@ Use this workflow for quality, CI, and deployment changes.
    - `vitest run`
    - `vite build`
    - `task preflight` — repository-wide Rust invariant tests, before app setup
-   - `Rust ecosystem checks / Dependency policy and RustSec` —
+   - `PR / Rust ecosystem / Dependency policy and RustSec` —
      `task docker:ecosystem:dependency-policy` Bakes `rust-dependency-policy`
      from `nook-app/docker/rust.Dockerfile` via the separate
      `rust-ecosystem-policy-tools` image (pinned `cargo-deny` + `cargo-audit`;
@@ -66,20 +69,20 @@ Use this workflow for quality, CI, and deployment changes.
      The current `agentic-ai/minds` exception is limited to RUSTSEC-2026-0118 and
      RUSTSEC-2026-0119 in the pinned `openai/codex` Rama/Hickory graph; remove it
      when upstream moves from `hickory-proto` 0.25.2 to 0.26.1 or later.
-   - `Rust ecosystem checks / Proptest, Insta, and Loom` —
+   - `PR / Rust ecosystem / Proptest, Insta, and Loom` —
      `task docker:ecosystem:deterministic` Bakes `rust-ecosystem-deterministic`
      on `builder-core-deps` so
      [`proptest`](https://proptest-rs.github.io/proptest/),
      [`insta`](https://insta.rs/), and [`loom`](https://github.com/tokio-rs/loom)
      reuse the sealed Rust dependency graph instead of a host toolchain.
-   - `Rust ecosystem checks / Cargo fuzz smoke` —
+   - `PR / Rust ecosystem / Cargo fuzz smoke` —
      `task docker:ecosystem:fuzz` Bakes `rust-fuzz-smoke` from
      `rust-ecosystem-nightly` with pinned
      [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html).
-   - `Rust ecosystem checks / Kani bounded proofs` —
+   - `PR / Rust ecosystem / Kani bounded proofs` —
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
      bounded proof harnesses via the official action (specialized toolchain).
-   - `Rust ecosystem checks / Dylint repository lints` —
+   - `PR / Rust ecosystem / Dylint repository lints` —
      `task docker:ecosystem:dylint` Bakes `rust-dylint` from
      `rust-ecosystem-nightly` with pinned
      [`cargo-dylint`](https://trailofbits.github.io/dylint/) /

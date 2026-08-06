@@ -1,0 +1,122 @@
+# Shared Rust ecosystem gates (dependency policy, deterministic tests, fuzz,
+# Kani, Dylint). Called from the labeled PR workflow and from the thin
+# non-PR rust-ecosystem.yml entry points.
+# Kept reusable so PR validation shows every job on one run page without
+# duplicating Bake steps for schedule / main-path / manual dispatch.
+
+name: Rust ecosystem checks
+
+on:
+  workflow_call:
+    inputs:
+      fuzz_seconds:
+        description: Seconds for the cargo-fuzz smoke campaign.
+        type: string
+        required: true
+      isolated_cache_write:
+        description: Whether Docker setup may write PR-scoped isolated cache.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-policy:
+    name: Dependency policy and RustSec
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          # Main push seeds trusted ecosystem caches; PRs write isolated remote
+          # refs with Main fallback. Schedule/dispatch stay read-only consumers.
+          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
+          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
+          isolated-cache-write: ${{ inputs.isolated_cache_write }}
+      - name: Bake rust-dependency-policy
+        run: task docker:ecosystem:dependency-policy
+
+  deterministic-tests:
+    name: Proptest, Insta, and Loom
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
+          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
+          isolated-cache-write: ${{ inputs.isolated_cache_write }}
+      - name: Bake rust-ecosystem-deterministic
+        run: task docker:ecosystem:deterministic
+
+  fuzz-smoke:
+    name: Cargo fuzz smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
+          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
+          isolated-cache-write: ${{ inputs.isolated_cache_write }}
+      - name: Bake rust-fuzz-smoke
+        env:
+          FUZZ_SECONDS: ${{ inputs.fuzz_seconds }}
+        run: task docker:ecosystem:fuzz FUZZ_SECONDS="$FUZZ_SECONDS"
+
+  kani:
+    name: Kani bounded proofs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: model-checking/kani-github-action@v1.1
+        with:
+          working-directory: nook-app
+          args: --package nook-replication
+
+  dylint:
+    name: Dylint repository lints
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
+          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
+          isolated-cache-write: ${{ inputs.isolated_cache_write }}
+      - name: Bake rust-dylint
+        run: task docker:ecosystem:dylint
