@@ -812,6 +812,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     assert!(
         !verify_job.contains("Download Rust coverage handoff")
             && !verify_job.contains("Waiting for native coverage artifact")
+            && !preview_job.contains("Download Rust coverage handoff")
             && coverage_job.contains("needs: rust")
             && coverage_job.contains("uses: ./.github/workflows/pr-coverage.yml")
             && coverage_workflow.contains("actions/download-artifact@v8")
@@ -832,7 +833,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
         "PR verification must download the WASM handoff through needs instead of polling GitHub"
     );
     let deploy = section(
-        &pr,
+        &preview_job,
         "      - name: Deploy and verify Pages previews\n",
         "      - name: Comment preview URL on PR\n",
     );
