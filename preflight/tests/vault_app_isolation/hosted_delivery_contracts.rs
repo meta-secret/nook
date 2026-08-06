@@ -388,12 +388,18 @@ fn assert_preflight_reporter_contract(root: &Path) {
         "nook-app/docker/rust.docker-bake.hcl",
         "SCCACHE_S3_BUILD_SECRETS",
         "deps:\n      - sccache:ensure",
+        "--set \"rust-base.cache-to=\"",
     ] {
         assert!(
             preflight_tasks.contains(required),
             "preflight Taskfile Bake/sccache wiring is missing: {required}"
         );
     }
+    assert_eq!(
+        preflight_tasks.matches("--set \"rust-base.cache-to=\"").count(),
+        2,
+        "preflight test and export must both suppress rust-base cache writes"
+    );
 }
 
 fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {

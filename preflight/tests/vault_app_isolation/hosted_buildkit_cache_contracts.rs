@@ -282,6 +282,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("docker:ci:cache:publish:native:")
             && docker_tasks.contains("docker:ci:cache:publish:wasm:")
             && docker_tasks.contains("docker:ci:cache:publish:web:")
+            && docker_tasks.contains("preflight-test")
             && docker_tasks.contains("--set \"builder-wasm-deps.cache-from=\"")
             && docker_tasks.contains(
                 "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}/nook/buildcache/"
@@ -291,6 +292,16 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh")
             && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX"),
         "producer-owned publishers must select local verified graphs, preserve the isolated no-import WASM dependency export, verify Main from a fresh builder, and branch PR/Remote isolated exports"
+    );
+    let native_publish = docker_tasks
+        .split("docker:ci:cache:publish:native:")
+        .nth(1)
+        .and_then(|tail| tail.split("docker:ci:cache:publish:wasm:").next())
+        .unwrap_or("");
+    assert!(
+        native_publish.contains("preflight-test")
+            && native_publish.contains("--set \"rust-base.cache-to=\""),
+        "native cache publish must export preflight without rewriting rust-base"
     );
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(

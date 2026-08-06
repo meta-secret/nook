@@ -58,9 +58,11 @@ tasks:
     deps:
       - sccache:ensure
     cmds:
+      # rust-base is restored via Bake contexts; never let this target write it.
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.PREFLIGHT_BAKE_FILES}}
+        --set "rust-base.cache-to="
         preflight-test
 
   preflight:export:
@@ -76,6 +78,7 @@ tasks:
         {{.PREFLIGHT_BAKE_FILES}}
         --allow="fs.write={{.PREFLIGHT_OUTPUT_DIR}}"
         --set "preflight-cli-export.output=type=local,dest={{.PREFLIGHT_OUTPUT_DIR}}"
+        --set "rust-base.cache-to="
         preflight-cli-export
 
   preflight:source-architecture:

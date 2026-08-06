@@ -13,6 +13,8 @@ Use this workflow for quality, CI, and deployment changes.
    - Restore `rust-base` only through Bake `contexts` (`target:rust-base`).
    - Do not also cache-from `rust-base` on the preflight target.
    - That shorter parent importer orphans chef cook layers.
+   - Preflight Bake callers clear `rust-base.cache-to` so they never rewrite
+     the shared parent scope.
    - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
    - Reusable GitHub workflow shell lives in `.task/ci-workflows.yml` and `.github/scripts/`; workflows stay thin `task` wrappers around Actions-only glue.
    - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as separate Bake images/stages in `nook-app/docker/rust.Dockerfile` (off `rust-base`, not inside it).
