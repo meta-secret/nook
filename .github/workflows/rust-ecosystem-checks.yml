@@ -31,8 +31,10 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          # Main push must use the trusted writer for nook/buildcache/**.
+          # PRs/schedule keep the remote identity for isolated/read-only access.
+          registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
@@ -54,8 +56,10 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          # Main push must use the trusted writer for nook/buildcache/**.
+          # PRs/schedule keep the remote identity for isolated/read-only access.
+          registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
@@ -75,8 +79,10 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          # Main push must use the trusted writer for nook/buildcache/**.
+          # PRs/schedule keep the remote identity for isolated/read-only access.
+          registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
@@ -109,8 +115,10 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          # Main push must use the trusted writer for nook/buildcache/**.
+          # PRs/schedule keep the remote identity for isolated/read-only access.
+          registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
