@@ -230,8 +230,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "ecosystem and product deps cache-from must use trusted rust-base only"
     );
     assert!(
-        policy_from.contains("nook-rust-ecosystem-policy-tools-v1")
-            && docker_bake.contains("nook-rust-ecosystem-policy-tools-v1"),
+        policy_from.contains("nook-rust-ecosystem-policy-tools-v2")
+            && docker_bake.contains("nook-rust-ecosystem-policy-tools-v2"),
         "dependency-policy must restore the dedicated policy-tools cache scope"
     );
     assert!(

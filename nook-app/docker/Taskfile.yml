@@ -379,10 +379,15 @@ tasks:
     desc: Bake cargo-deny and cargo-audit on the sealed ecosystem policy image.
     deps: [sccache:ensure]
     cmds:
+      # Sequential: parallel bake raced tools cache-to while the tools RUN was
+      # still open, so the next job imported a manifest that never matched.
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}}
         rust-ecosystem-policy-tools
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}}
         rust-dependency-policy
 
   docker:ecosystem:deterministic:

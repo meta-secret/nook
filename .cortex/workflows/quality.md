@@ -60,10 +60,11 @@ Use this workflow for quality, CI, and deployment changes.
    - `task preflight` — repository-wide Rust invariant tests, before app setup
    - `PR / Rust ecosystem / Dependency policy and RustSec` —
      `task docker:ecosystem:dependency-policy` Bakes
-     `rust-ecosystem-policy-tools` then `rust-dependency-policy` from
+     `rust-ecosystem-policy-tools` alone, then `rust-dependency-policy`, from
      `nook-app/docker/rust.Dockerfile` (pinned `cargo-deny` + `cargo-audit`;
      not installed into `rust-base`). Tools and deny/audit leaf use separate
-     Zot scopes so COPY invalidation cannot replace the tools index.
+     Zot scopes. The tools Bake must finish exporting before the leaf Bake
+     starts so cache-to cannot race an open tools RUN.
      Never `cargo install` those tools on the runner host. Advisory exceptions
      must name the RustSec IDs, identify the exact pinned upstream graph, and
      state the dependency upgrade that removes them in both `deny.toml` and

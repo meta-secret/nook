@@ -6,8 +6,8 @@
 // isolated remote-buildcache refs.
 // Only one CI job may cache-to the shared nightly scope (dylint). Fuzz reads the
 // same cache-from list but does not race the registry index.
-// Policy-tools has its own scope; dependency-policy writes only the leaf policy
-// scope after restoring tools.
+// Policy-tools has its own scope and must be baked alone before dependency-policy
+// so tools cache-to cannot race an in-flight tools RUN.
 
 target "rust-base" {
   context    = "."
