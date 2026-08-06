@@ -38,6 +38,12 @@
   } from '$lib/components/ui/card'
   import ProductIntro from '$lib/components/ProductIntro.svelte'
   import DevicesAccessDashboard from '$lib/components/DevicesAccessDashboard.svelte'
+  import {
+    WorkspaceRoute,
+    WorkspaceRouteLookupKind,
+    workspacePath,
+    workspaceRouteFromPath,
+  } from '$lib/app/workspace-route'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
@@ -159,7 +165,16 @@
 
   let enrollmentPanelOpen = $state(false)
   let showProviderSetupLink = $state(false)
-  let devicesAccessOpen = $state(false)
+  function loginDevicesAccessRouteOpen(): boolean {
+    if (!('window' in globalThis)) return false
+    const route = workspaceRouteFromPath(window.location.pathname)
+    return (
+      route.kind === WorkspaceRouteLookupKind.Workspace &&
+      route.route === WorkspaceRoute.DevicesAccess
+    )
+  }
+
+  let devicesAccessOpen = $state(loginDevicesAccessRouteOpen())
   let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header)
   let devicesAccessHost = $state<DevicesAccessHostMount>({
     kind: DevicesAccessHostMountKind.Unmounted,
@@ -206,12 +221,14 @@
   ): Promise<void> {
     devicesAccessTrigger = trigger
     devicesAccessOpen = true
+    history.pushState({}, '', workspacePath(WorkspaceRoute.DevicesAccess))
     await tick()
     focusHostButton('devices-access-back')
   }
 
   async function closeDevicesAccess(): Promise<void> {
     devicesAccessOpen = false
+    history.pushState({}, '', workspacePath(WorkspaceRoute.Vault))
     await tick()
     const testId =
       devicesAccessTrigger === DevicesAccessTriggerKind.Nudge

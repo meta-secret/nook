@@ -1,8 +1,8 @@
 use crate::errors::{AgeCryptoError, MultiDeviceError, MultiDeviceResult};
 use crate::{
-    AgeArmoredCiphertext, AuthKeyId, CompactToken, DeviceId, DeviceIdentitySecret, DevicePublicKey,
-    DeviceSigningPublicKey, SecretId, SecretType, StoredRecordPayload, StoredSecretRecord,
-    SymmetricKey, VaultCrypto,
+    AgeArmoredCiphertext, AppId, AuthKeyId, CompactToken, DeviceId, DeviceIdentitySecret,
+    DevicePublicKey, DeviceSigningPublicKey, SecretId, SecretType, StoredRecordPayload,
+    StoredSecretRecord, SymmetricKey, VaultCrypto,
 };
 use age::secrecy::ExposeSecret;
 use age::x25519::{Identity, Recipient};

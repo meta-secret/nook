@@ -43,6 +43,10 @@ pub use auth::enrollment::{
     is_plausible_email, normalize_enrollment_code, parse_enrollment_envelope,
     peek_enrollment_entry_id, peek_enrollment_entry_label, peek_enrollment_issued_at,
 };
+pub use auth::identity::{
+    IdentityId, IdentityMember, IdentityRecord, IdentityVaultDek, MemberDekEnvelope,
+    identity_fingerprint,
+};
 #[cfg(any(test, feature = "mock-passkey"))]
 pub use auth::mock_passkey::{
     MemoryPasskeyAuthenticator, MockPasskeyAssertion, MockPasskeyAssertionRequest,
@@ -51,12 +55,12 @@ pub use auth::mock_passkey::{
 };
 pub mod multi_device_api {
     pub use crate::auth::multi_device::{
-        AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
-        MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SelfRosterSync,
-        SentinelParticipantEntry, SentinelShareEnvelope, VaultKeys, VaultMember, VaultMetaRecord,
-        VaultMetaState, approve_join_request, assess_connect_access, auth_record,
-        build_members_records, count_sentinel_share_records, create_join_request_record,
-        create_join_request_record_with_signing_key,
+        AppKey, AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest,
+        MEMBER_RECORD_PREFIX, MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX,
+        SelfRosterSync, SentinelParticipantEntry, SentinelShareEnvelope, VaultKeys, VaultMember,
+        VaultMetaRecord, VaultMetaState, app_id_from_public_key, approve_join_request,
+        assess_connect_access, auth_record, build_members_records, count_sentinel_share_records,
+        create_join_request_record, create_join_request_record_with_signing_key,
         create_sentinel_root_share_records_for_recipients, create_sentinel_share_records,
         create_sentinel_share_records_for_recipients, dec_auth_id, dec_auth_id_from_public_key,
         deny_join_request, device_id_from_public_key, device_is_enrolled, encrypt_for_recipient,
@@ -109,11 +113,11 @@ pub use errors::{
     VaultCryptoResult,
 };
 pub use ids::{
-    AUTH_KEY_ID_PREFIX, AuthKeyId, CompactToken, DeviceId, SECRET_ID_PREFIX, STORE_ID_PREFIX,
-    SecretId, StoreId, auth_key_digest, format_auth_key_id, format_secret_id, format_store_id,
-    generate_secret_id, generate_store_id, is_auth_key_id, is_compact_token, is_device_id,
-    normalize_auth_key_id, normalize_secret_id_for_write, normalize_store_id, validate_secret_id,
-    validate_store_id,
+    AUTH_KEY_ID_PREFIX, AppId, AuthKeyId, CompactToken, DeviceId, SECRET_ID_PREFIX,
+    STORE_ID_PREFIX, SecretId, StoreId, auth_key_digest, format_auth_key_id, format_secret_id,
+    format_store_id, generate_secret_id, generate_store_id, is_app_id, is_auth_key_id,
+    is_compact_token, is_device_id, normalize_auth_key_id, normalize_secret_id_for_write,
+    normalize_store_id, validate_secret_id, validate_store_id,
 };
 pub use multi_device_api::*;
 pub use records::{SecretType, StoredRecordPayload, StoredSecretRecord};

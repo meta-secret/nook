@@ -38,6 +38,7 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('login-devices-access')).toBeFocused()
 
     await page.getByTestId('login-devices-access').click()
+    await expect(page).toHaveURL(/\/devices-access$/)
     await expect(page.getByTestId('devices-access-back')).toBeFocused()
     const dashboard = page.getByTestId('devices-access-dashboard')
     await expect(dashboard).toBeVisible()
@@ -117,22 +118,20 @@ test.describe('devices and access dashboard', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     const bridge = page.getByTestId('devices-access-chain')
-    await expect(bridge).toContainText('Unlock protection')
+    await expect(bridge).toContainText('Passkey')
     await expect(bridge).toContainText('Passkey · recoverable identity')
-    await expect(bridge).toContainText('Device-key evidence')
-    await expect(bridge).toContainText('Verified device-key access')
+    await expect(bridge).toContainText('App key')
+    await expect(bridge).toContainText('Vaults')
     await expect(bridge).toContainText('Test vault')
     await expect(bridge.locator('.svelte-flow__edge')).not.toHaveCount(0)
     await expect(
       bridge.getByRole('article', {
-        name: /Unlock protection: Passkey · recoverable identity. Unlocks this device key/,
+        name: /Passkey: Passkey · recoverable identity. Unlocks this app key/,
       }),
     ).toBeVisible()
+    await expect(bridge.getByRole('article', { name: /App key/ })).toBeVisible()
     await expect(
-      bridge.getByRole('article', { name: /Device-key evidence/ }),
-    ).toBeVisible()
-    await expect(
-      bridge.getByRole('article', { name: /Device-key access/ }),
+      bridge.getByRole('article', { name: /Vault access/ }),
     ).toBeVisible()
     const panel = page.getByTestId('devices-access-panel')
     await expect(panel).toContainText('Passkey · recoverable identity')
@@ -165,7 +164,7 @@ test.describe('devices and access dashboard', () => {
     )
     await expect(
       page.getByRole('button', {
-        name: /Local identity state.*1 opened by key/,
+        name: /Identity.*1 vaults/,
       }),
     ).toBeVisible()
 
@@ -173,30 +172,28 @@ test.describe('devices and access dashboard', () => {
     const deviceKeyNode = page.getByTestId('devices-access-node-device-key')
     const vaultsNode = page.getByTestId('devices-access-node-vaults')
     const bridge = page.getByTestId('devices-access-chain')
-    await expect(bridge).toContainText('Device-key evidence')
-    await expect(bridge).toContainText('Unlock protection')
-    await expect(bridge).toContainText('Local identity state')
-    await expect(bridge).toContainText('Verified device-key access')
+    await expect(bridge).toContainText('App key')
+    await expect(bridge).toContainText('Passkey')
+    await expect(bridge).toContainText('Identity')
+    await expect(bridge).toContainText('Vaults')
     await expect(bridge.locator('.svelte-flow__edge')).not.toHaveCount(0)
-    await expect(
-      bridge.getByRole('article', { name: /Device-key evidence/ }),
-    ).toBeVisible()
+    await expect(bridge.getByRole('article', { name: /App key/ })).toBeVisible()
     await expect(
       bridge.getByRole('article', {
-        name: /Unlock protection: Passkey · recoverable identity. Unlocks this device key/,
+        name: /Passkey: Passkey · recoverable identity. Unlocks this app key/,
       }),
     ).toBeVisible()
     await expect(
       bridge.getByRole('article', {
-        name: /Browser identity state.*Identity unlocked/,
+        name: /Identity.*Identity unlocked/,
       }),
     ).toBeVisible()
     await expect(
-      bridge.getByRole('article', { name: /Device-key access/ }),
+      bridge.getByRole('article', { name: /Vault access/ }),
     ).toBeVisible()
     await expect(unlockNode).toHaveAttribute('aria-selected', 'true')
-    await expect(unlockNode).toContainText('Protection')
-    await expect(deviceKeyNode).toContainText('Device key')
+    await expect(unlockNode).toContainText('Passkey')
+    await expect(deviceKeyNode).toContainText('App key')
     await expect(vaultsNode).toContainText('Vault access')
     const strengthVaults = page.getByTestId('devices-access-strength-vaults')
     await expect(strengthVaults).toHaveCount(1)
@@ -205,7 +202,7 @@ test.describe('devices and access dashboard', () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await expect(
       bridge.getByRole('img', {
-        name: /device key opened Test vault; an identity-level grant is not inferred/i,
+        name: /This identity holds the DEK for Test vault/i,
       }),
     ).toHaveCount(1)
     expect(
@@ -227,7 +224,7 @@ test.describe('devices and access dashboard', () => {
       .poll(() =>
         bridge.evaluate((element) => {
           const protection = element.querySelector(
-            'article[aria-label*="Unlock protection"]',
+            'article[aria-label*="Passkey"]',
           )
           if (!(protection instanceof HTMLElement)) return false
 
@@ -244,17 +241,17 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('devices-access-perspective-vaults').click()
     await expect(
       page.getByRole('button', {
-        name: /Test vault.*Verified device keys: 1/,
+        name: /Test vault.*App keys: 1/,
       }),
     ).toBeVisible()
     await expect(
       bridge.getByRole('img', {
-        name: /Test vault was opened by this exact device key/,
+        name: /Test vault was opened by this app key/,
       }),
     ).toHaveCount(1)
     await expect(
       bridge.getByRole('article', {
-        name: /Device-key evidence: Device key.*Test vault was opened by this exact device key/i,
+        name: /App key: This browser.*Test vault was opened by this app key/i,
       }),
     ).toBeVisible()
     await expect(bridge).not.toContainText('This browser')
@@ -290,15 +287,15 @@ test.describe('devices and access dashboard', () => {
     await deviceKeyNode.press('ArrowRight')
     await expect(vaultsNode).toBeFocused()
     await expect(vaultsNode).toHaveAttribute('aria-selected', 'true')
-    await expect(panel).toContainText('Vaults known to this device key')
+    await expect(panel).toContainText('Vaults known to this app key')
     await expect(strengthVaults).toContainText('Verified way in')
     await expect(
-      bridge.getByRole('article', { name: /Device-key access/ }),
+      bridge.getByRole('article', { name: /Vault access/ }),
     ).toHaveCount(1)
 
     await vaultsNode.press('ArrowLeft')
     await expect(deviceKeyNode).toBeFocused()
-    await expect(panel).toContainText('Browser device key')
+    await expect(panel).toContainText('App key')
     const deviceIdentifier = await page
       .getByTestId('devices-access-device-id')
       .innerText()
@@ -310,7 +307,7 @@ test.describe('devices and access dashboard', () => {
     await expect(unlockNode).toBeFocused()
     await unlockNode.press('ArrowLeft')
     await expect(vaultsNode).toBeFocused()
-    await expect(panel).toContainText('Vaults known to this device key')
+    await expect(panel).toContainText('Vaults known to this app key')
     await expect(page.getByTestId('devices-access-vaults')).toContainText(
       'Access verified',
     )
@@ -490,10 +487,8 @@ test.describe('devices and access dashboard', () => {
     await expect(bridge).toContainText('Paired device identity', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(bridge).toContainText('Paired-device identity state')
+    await expect(bridge).toContainText('Paired-device identity')
     await expect(bridge).toContainText('Reported by paired device')
-    await expect(bridge).not.toContainText('Browser identity state')
-    await expect(bridge).not.toContainText('Local identity state')
     await expect(bridge).not.toContainText('This browser')
     const deviceKeyNode = page.getByTestId('devices-access-node-device-key')
     await deviceKeyNode.click()
@@ -505,7 +500,7 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('devices-access-node-unlock').click()
     await expect(panel).not.toContainText('Named by you')
     await page.getByTestId('devices-access-node-vaults').click()
-    await expect(panel).toContainText('Vaults known to this device key')
+    await expect(panel).toContainText('Vaults known to this app key')
   })
 
   test('keeps known vaults visible after identity recovery reset', async ({
@@ -533,6 +528,8 @@ test.describe('devices and access dashboard', () => {
             store.delete('device_access_profile')
             store.delete('device_identity_wrapped')
             store.delete('device_id')
+            store.delete('app_key_wrapped')
+            store.delete('app_id')
             transaction.onerror = () => reject(transaction.error)
             transaction.oncomplete = () => {
               db.close()
@@ -615,7 +612,7 @@ test.describe('devices and access dashboard', () => {
 
     await vaultsNode.click()
     const panel = page.getByTestId('devices-access-panel')
-    await expect(panel).toContainText('Vaults known to this device key')
+    await expect(panel).toContainText('Vaults known to this app key')
     const vaults = page.getByTestId('devices-access-vaults')
     await expect(vaults).toContainText('Access not yet verified')
     await expect(vaults).not.toContainText('Access verified')
@@ -722,7 +719,8 @@ test.describe('devices and access dashboard', () => {
     })
 
     await page.getByTestId('header-lock-vault-btn').click()
-    await page.getByTestId('login-devices-access').click()
+    // Locking from /devices-access keeps that URL, so login opens Access directly.
+    await expect(page).toHaveURL(/\/devices-access$/)
     await expect(
       page.getByTestId('devices-access-identity-state'),
     ).toContainText('Identity locked')

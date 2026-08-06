@@ -1,10 +1,10 @@
 use super::{
-    AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, Deserialize, DeviceId, DeviceIdentitySecret,
-    DevicePublicKey, DeviceSigningPublicKey, Digest, ExposeSecret, HashMap, Identity,
-    MultiDeviceError, MultiDeviceResult, Recipient, SENTINEL_SHARE_RECORD_PREFIX, SecretId,
-    SecretType, SentinelShareEnvelope, Serialize, Sha256, StoredRecordPayload, StoredSecretRecord,
-    SymmetricKey, decrypt_with_identity, encrypt_with_recipient, is_auth_id, join_record_key,
-    parse_auth_envelopes, parse_join_request, parse_sentinel_share_envelope,
+    AgeArmoredCiphertext, AppId, AuthEnvelopes, AuthKeyId, Deserialize, DeviceId,
+    DeviceIdentitySecret, DevicePublicKey, DeviceSigningPublicKey, Digest, ExposeSecret, HashMap,
+    Identity, MultiDeviceError, MultiDeviceResult, Recipient, SENTINEL_SHARE_RECORD_PREFIX,
+    SecretId, SecretType, SentinelShareEnvelope, Serialize, Sha256, StoredRecordPayload,
+    StoredSecretRecord, SymmetricKey, decrypt_with_identity, encrypt_with_recipient, is_auth_id,
+    join_record_key, parse_auth_envelopes, parse_join_request, parse_sentinel_share_envelope,
     sentinel_share_record_key,
 };
 
@@ -311,21 +311,23 @@ pub struct JoinRequest {
     pub requested_at: String,
 }
 
-/// Per-device X25519 identity used to unwrap `secrets_key/members_key` from the vault file.
+/// Installation-local X25519 app key used to unwrap vault DEK envelopes.
+///
+/// Historical name was `DeviceIdentity`. New code must use [`AppKey`].
 #[derive(Clone)]
-pub struct DeviceIdentity {
+pub struct AppKey {
     identity: Identity,
-    device_id: DeviceId,
+    app_id: AppId,
 }
 
-impl DeviceIdentity {
+/// Migration alias for [`AppKey`].
+pub type DeviceIdentity = AppKey;
+
+impl AppKey {
     pub fn generate() -> MultiDeviceResult<Self> {
         let identity = Identity::generate();
-        let device_id = device_id_from_public(&identity.to_public());
-        Ok(Self {
-            identity,
-            device_id,
-        })
+        let app_id = app_id_from_public(&identity.to_public());
+        Ok(Self { identity, app_id })
     }
 
     pub fn from_secret_str(secret: &DeviceIdentitySecret) -> MultiDeviceResult<Self> {
@@ -333,16 +335,19 @@ impl DeviceIdentity {
             .as_str()
             .parse::<Identity>()
             .map_err(|e| MultiDeviceError::InvalidDeviceIdentity(e.to_string()))?;
-        let device_id = device_id_from_public(&identity.to_public());
-        Ok(Self {
-            identity,
-            device_id,
-        })
+        let app_id = app_id_from_public(&identity.to_public());
+        Ok(Self { identity, app_id })
     }
 
     #[must_use]
-    pub fn device_id(&self) -> &DeviceId {
-        &self.device_id
+    pub fn app_id(&self) -> &AppId {
+        &self.app_id
+    }
+
+    /// Migration alias for [`AppKey::app_id`].
+    #[must_use]
+    pub fn device_id(&self) -> &AppId {
+        self.app_id()
     }
 
     #[must_use]
@@ -383,26 +388,32 @@ impl DeviceIdentity {
         encrypt_with_recipient(plaintext.as_bytes(), &self.identity.to_public())
     }
 
-    /// Open a string previously sealed with [`DeviceIdentity::seal_utf8`].
+    /// Open a string previously sealed with [`AppKey::seal_utf8`].
     pub fn open_utf8(&self, ciphertext: &AgeArmoredCiphertext) -> MultiDeviceResult<String> {
         decrypt_with_identity(ciphertext, &self.identity)
     }
 }
 
-pub fn device_id_from_public(recipient: &Recipient) -> DeviceId {
+#[must_use]
+pub fn app_id_from_public(recipient: &Recipient) -> AppId {
     let hash = Sha256::digest(recipient.to_string().as_bytes());
     let mut prefix = [0_u8; 8];
     prefix.copy_from_slice(&hash[..8]);
-    DeviceId::from_sha256_prefix(prefix)
+    AppId::from_sha256_prefix(prefix)
 }
 
-pub fn device_id_from_public_key(public_key: &DevicePublicKey) -> MultiDeviceResult<DeviceId> {
-    Ok(device_id_from_public(
+pub fn app_id_from_public_key(public_key: &DevicePublicKey) -> MultiDeviceResult<AppId> {
+    Ok(app_id_from_public(
         &public_key
             .as_str()
             .parse::<Recipient>()
             .map_err(|e| MultiDeviceError::InvalidRecipientPublicKey(e.to_string()))?,
     ))
+}
+
+/// Migration alias for [`app_id_from_public_key`].
+pub fn device_id_from_public_key(public_key: &DevicePublicKey) -> MultiDeviceResult<AppId> {
+    app_id_from_public_key(public_key)
 }
 
 #[must_use]

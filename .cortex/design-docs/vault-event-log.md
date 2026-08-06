@@ -14,6 +14,17 @@ Do **not** use:
 - wall-clock or hash last-writer-wins for secrets or security state;
 - a generic CRDT library as the initial merge engine.
 
+### Identity-owned DEKs
+
+The vault event log encrypts secrets under a DEK.
+That DEK is generated and held by an **identity**.
+The vault cannot exist without an authorizing identity.
+Member and app-key roster changes update identity DEK envelopes.
+They do not rewrite vault membership as the authority model.
+
+Legacy `join-approved` and `auth:` envelopes remain a compatibility boundary.
+See [identity-vault-architecture.md](identity-vault-architecture.md).
+
 ## Architecture
 
 ```text

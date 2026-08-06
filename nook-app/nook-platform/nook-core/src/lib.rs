@@ -212,6 +212,11 @@ pub use nook_auth2::{
 };
 
 pub use multi_device::sentinel_member_records_from_public_roster;
+pub use nook_auth2::{
+    AppId, AppKey, IdentityId, IdentityMember, IdentityRecord, IdentityVaultDek, MemberDekEnvelope,
+    identity_fingerprint,
+};
+
 pub use multi_device::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
     MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SelfRosterSync,
