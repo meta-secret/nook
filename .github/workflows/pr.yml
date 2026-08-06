@@ -1,9 +1,9 @@
 # Pull requests: run Rust/WASM/JS unit tests, Svelte/type/lint/format checks, build no-opt WASM,
-# build and deploy the preview. Full browser regression e2e is opt-in through the `ci:full-e2e`
-# label for PRs that repair a Main failure; UI-changing PRs otherwise run only their dedicated
-# headless demo specs and retain the resulting videos on the PR workflow run. Main also runs the
-# full local-provider and extension suites. Live-provider sync checks remain
-# available through the manually dispatched e2e-pr.yml workflow.
+# build and deploy the preview, and the shared Rust ecosystem gates. Full browser regression e2e
+# is opt-in through the `ci:full-e2e` label for PRs that repair a Main failure; UI-changing PRs
+# otherwise run only their dedicated headless demo specs and retain the resulting videos on the
+# PR workflow run. Main also runs the full local-provider and extension suites. Live-provider
+# sync checks remain available through the manually dispatched e2e-pr.yml workflow.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
 # agentic-AI-only changes do not need the product pipeline. Agent statistics
 # live in meta-secret/nook-workbench.
@@ -11,6 +11,7 @@
 # spend hosted workers. A later push invalidates the prior head's checks, so the
 # label must be toggled again before merge. PR close still cancels an in-flight
 # validation through the concurrency group below.
+# Schedule, main-path, and manual ecosystem entry points stay in rust-ecosystem.yml.
 
 name: PR
 
@@ -57,6 +58,19 @@ jobs:
               exit 1
               ;;
           esac
+
+  rust-ecosystem:
+    name: Rust ecosystem
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e')
+    needs: validation-request
+    uses: ./.github/workflows/rust-ecosystem-checks.yml
+    secrets: inherit
+    with:
+      fuzz_seconds: "20"
+      isolated_cache_write: "true"
 
   rust:
     name: Native Rust verification

@@ -17,15 +17,15 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
   assert.deepEqual(requiredPrCheckNames([".cortex/rules.md"]), []);
   assert.deepEqual(
     requiredPrCheckNames(["nook-app/nook-platform/nook-core/src/lib.rs"]),
-    ["Rust ecosystem checks", "Verify and preview"],
+    ["Verify and preview"],
   );
   assert.deepEqual(
     requiredPrCheckNames(["nook-app/.cargo/config.toml"]),
-    ["Rust ecosystem checks", "Verify and preview"],
+    ["Verify and preview"],
   );
   assert.deepEqual(
     requiredPrCheckNames(["preflight/Cargo.lock"]),
-    ["Rust ecosystem checks", "Verify and preview"],
+    ["Verify and preview"],
   );
   assert.deepEqual(
     requiredPrCheckNames(["agentic-ai/minds/Cargo.lock"]),
@@ -40,22 +40,20 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
       "nook-app/nook-platform/nook-core/src/lib.rs",
       "nook-app/nook-web/nook-web-research/src/main.ts",
     ]),
-    [
-      "Build and deploy research catalog",
-      "Rust ecosystem checks",
-      "Verify and preview",
-    ],
+    ["Build and deploy research catalog", "Verify and preview"],
   );
   assert.deepEqual(requiredPrWorkflows(["nook-app/nook-platform/nook-core/src/lib.rs"]), [
-    {
-      checkName: "Rust ecosystem checks",
-      workflowFile: "rust-ecosystem.yml",
-      workflowName: "Rust ecosystem checks",
-    },
     {
       checkName: "Verify and preview",
       workflowFile: "pr.yml",
       workflowName: "PR",
+    },
+  ]);
+  assert.deepEqual(requiredPrWorkflows(["agentic-ai/minds/Cargo.lock"]), [
+    {
+      checkName: "Rust ecosystem checks",
+      workflowFile: "rust-ecosystem.yml",
+      workflowName: "Rust ecosystem checks",
     },
   ]);
 });

@@ -53,8 +53,9 @@ them manually with `task wasm:test:browser`.
 
 **Rust quality capabilities**
 
-The dedicated `Rust ecosystem checks` workflow supplements Clippy, unit tests,
-and coverage with:
+Labeled product PR validation and thin `rust-ecosystem.yml` entry points share
+the same ecosystem gates. Those gates supplement Clippy, unit tests, and
+coverage with:
 
 - cargo-deny and RustSec dependency policy;
 - Proptest generated invariants;
