@@ -216,26 +216,20 @@ where
         NookError::IndexedDb(format!("Atomic string update store error: {error:?}"))
     })?;
     if let StringUpdateGuard::WrappedCredentialFingerprint(expected) = guard {
-        let wrapped_key =
-            serde_wasm_bindgen::to_value(WRAPPED_DEVICE_IDENTITY_KEY).map_err(|error| {
-                NookError::IndexedDb(format!("Atomic string guard key error: {error:?}"))
-            })?;
-        let wrapped = store.get(wrapped_key).await.map_err(|error| {
-            NookError::IndexedDb(format!("Atomic string guard read error: {error:?}"))
-        })?;
-        let fingerprint = match wrapped {
-            Some(value) if !value.is_undefined() && !value.is_null() => {
-                let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
-                    NookError::IndexedDb(format!("Atomic string guard decode error: {error:?}"))
-                })?;
-                let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
-                wrapped
-                    .credential_id_bytes()
-                    .map(|bytes| nook_core::passkey_credential_identifier(&bytes))
-                    .ok()
-            }
-            _ => None,
-        };
+        let fingerprint = read_string_preferring(
+            &store,
+            APP_KEY_WRAPPED_KEY,
+            WRAPPED_DEVICE_IDENTITY_KEY,
+            "Atomic string guard",
+        )
+        .await?
+        .and_then(|raw| {
+            let wrapped = nook_core::parse_wrapped_device_identity(&raw).ok()?;
+            wrapped
+                .credential_id_bytes()
+                .ok()
+                .map(|bytes| nook_core::passkey_credential_identifier(&bytes))
+        });
         if fingerprint.as_deref() != Some(expected) {
             transaction.done().await.map_err(|error| {
                 NookError::IndexedDb(format!("Atomic string guard completion error: {error:?}"))
@@ -495,7 +489,9 @@ pub(crate) async fn save_secret_search_catalog_buckets(
 
 pub(crate) async fn device_identity_protection_status()
 -> Result<nook_core::DeviceProtectionStatus, NookError> {
-    let Some(raw) = idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await? else {
+    let Some(raw) =
+        idb_get_string_preferring(APP_KEY_WRAPPED_KEY, WRAPPED_DEVICE_IDENTITY_KEY).await?
+    else {
         return Ok(nook_core::DeviceProtectionStatus::Missing);
     };
     let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
@@ -518,7 +514,9 @@ pub enum DeviceProtectionDeviceModeState {
 
 pub(crate) async fn device_identity_device_mode()
 -> Result<DeviceProtectionDeviceModeState, NookError> {
-    let Some(raw) = idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await? else {
+    let Some(raw) =
+        idb_get_string_preferring(APP_KEY_WRAPPED_KEY, WRAPPED_DEVICE_IDENTITY_KEY).await?
+    else {
         return Ok(DeviceProtectionDeviceModeState::Missing);
     };
     let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
@@ -590,6 +588,16 @@ async fn read_string_preferring(
         }
     }
     Ok(None)
+}
+
+async fn idb_get_string_preferring(
+    preferred_key: &str,
+    legacy_key: &str,
+) -> Result<Option<String>, NookError> {
+    if let Some(value) = idb_get_string(preferred_key).await? {
+        return Ok(Some(value));
+    }
+    idb_get_string(legacy_key).await
 }
 
 /// Atomically install a verified wrapped identity after the just-written

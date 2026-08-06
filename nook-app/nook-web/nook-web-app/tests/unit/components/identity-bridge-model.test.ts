@@ -120,6 +120,24 @@ describe('identity bridge graph', () => {
     ])
   })
 
+  test('compact identity vault edges use lateral vault-access handles', () => {
+    const graph = buildIdentityBridge({
+      ...input(IdentityBridgePerspective.Identities),
+      compact: true,
+    })
+    const identity = graph.nodes.find((node) => node.id === 'identity-current')
+    expect(identity?.data.kind).toBe(IdentityBridgeNodeKind.Identity)
+    if (identity?.data.kind === IdentityBridgeNodeKind.Identity) {
+      expect(identity.data.lateralAccessPort).toBe(true)
+    }
+    expect(
+      graph.edges.find((edge) => edge.id === 'identity-to-home'),
+    ).toMatchObject({
+      sourceHandle: 'vault-access',
+      targetHandle: 'vault-access',
+    })
+  })
+
   test('shows the passkey that unlocks the app key', () => {
     const graph = buildIdentityBridge(
       input(IdentityBridgePerspective.Identities),

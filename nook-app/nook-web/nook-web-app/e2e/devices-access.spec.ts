@@ -63,14 +63,14 @@ test.describe('devices and access dashboard', () => {
       throw new Error('Devices & access preview has no text content')
     }
     const previewText = previewTextState.text
-    expect(previewText.indexOf('No browser identity')).toBeLessThan(
+    expect(previewText.indexOf('No local identity')).toBeLessThan(
       previewText.indexOf('My browser'),
     )
     expect(previewText.indexOf('My browser')).toBeLessThan(
       previewText.indexOf('Vault access'),
     )
     await expect(preview).not.toContainText('Passkey')
-    await expect(preview).toContainText('No browser identity')
+    await expect(preview).toContainText('No local identity')
     await expect(preview).toContainText('No local vaults yet')
     await expect(page.getByTestId('devices-access-chain')).toHaveCount(0)
     await expect(
@@ -140,7 +140,7 @@ test.describe('devices and access dashboard', () => {
     ).not.toHaveText('Unknown')
   })
 
-  test('walks the access chain from passkey to device key to vaults', async ({
+  test('walks the access chain from passkey to app key to vaults', async ({
     page,
   }) => {
     await connectLocalVault(page)
@@ -326,7 +326,7 @@ test.describe('devices and access dashboard', () => {
       .getByTestId('devices-access-member-details')
       .first()
     await expect(memberDetails.locator('p')).toBeHidden()
-    await memberDetails.getByText('Device identifier', { exact: true }).click()
+    await memberDetails.getByText('App key identifier', { exact: true }).click()
     await expect(memberDetails.locator('p')).toBeVisible()
 
     await panel.getByRole('button', { name: 'Manage enrolled devices' }).click()
@@ -554,7 +554,7 @@ test.describe('devices and access dashboard', () => {
     await expect(preview).not.toContainText('No local vaults yet')
   })
 
-  test('never claims access to a vault this device key has not opened', async ({
+  test('never claims access to a vault this app key has not opened', async ({
     page,
   }) => {
     await connectLocalVault(page)
@@ -568,7 +568,7 @@ test.describe('devices and access dashboard', () => {
 
     // Verified access is descriptive metadata written after an unlock succeeds.
     // Removing it leaves the vault registered on this browser with nothing
-    // proving this device key ever opened it, which is how a locally cached
+    // proving this app key ever opened it, which is how a locally cached
     // vault from another identity arrives.
     await page.evaluate(
       () =>
@@ -604,7 +604,7 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('vault-devices-access-tab').click()
 
     const chain = page.getByTestId('devices-access-chain')
-    await expect(chain).toContainText('0 opened by key')
+    await expect(chain).toContainText('0 vaults')
     await expect(
       page.getByTestId('devices-access-strength-vaults'),
     ).toHaveCount(0)

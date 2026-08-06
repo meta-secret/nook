@@ -138,11 +138,19 @@ async function readRequiredVaultString(
 }
 
 async function readPersistedDeviceIdentity(page: Page): Promise<string> {
-  return readRequiredVaultString(page, 'device_identity_wrapped')
+  try {
+    return await readRequiredVaultString(page, 'app_key_wrapped')
+  } catch {
+    return readRequiredVaultString(page, 'device_identity_wrapped')
+  }
 }
 
 async function readDeviceId(page: Page): Promise<string> {
-  return readRequiredVaultString(page, 'device_id')
+  try {
+    return await readRequiredVaultString(page, 'app_id')
+  } catch {
+    return readRequiredVaultString(page, 'device_id')
+  }
 }
 
 async function clearDeviceMetadata(page: Page): Promise<void> {
@@ -157,6 +165,8 @@ async function clearDeviceMetadata(page: Page): Promise<void> {
           const store = transaction.objectStore('vault')
           store.delete('device_id')
           store.delete('device_identity_wrapped')
+          store.delete('app_id')
+          store.delete('app_key_wrapped')
           transaction.onerror = () => reject(transaction.error)
           transaction.oncomplete = () => {
             db.close()
@@ -670,13 +680,16 @@ test.describe('passkey device-key protection', () => {
               const db = request.result
               const transaction = db.transaction('vault', 'readonly')
               const store = transaction.objectStore('vault')
-              const wrappedRequest = store.get('device_identity_wrapped')
+              const legacyWrappedRequest = store.get('device_identity_wrapped')
+              const appKeyWrappedRequest = store.get('app_key_wrapped')
               const registryRequest = store.get('vault_registry')
               transaction.onerror = () => reject(transaction.error)
               transaction.oncomplete = () => {
                 db.close()
                 resolve({
-                  wrappedIdentityStored: Boolean(wrappedRequest.result),
+                  wrappedIdentityStored: Boolean(
+                    legacyWrappedRequest.result || appKeyWrappedRequest.result,
+                  ),
                   registry: registryRequest.result,
                 })
               }

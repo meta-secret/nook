@@ -43,9 +43,11 @@
   {/if}
 {/if}
 
-{#if data.kind === IdentityBridgeNodeKind.Device &&
-data.lateralAccessPort &&
-(data.portMode === IdentityBridgePortMode.Source || data.portMode === IdentityBridgePortMode.Both)}
+{#if (data.kind === IdentityBridgeNodeKind.Device ||
+    data.kind === IdentityBridgeNodeKind.Identity) &&
+  data.lateralAccessPort &&
+  (data.portMode === IdentityBridgePortMode.Source ||
+    data.portMode === IdentityBridgePortMode.Both)}
   <Handle
     class="bridge-handle"
     type={IdentityBridgeHandleType.Source}
