@@ -573,7 +573,17 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: pr-web-dist-${{ github.run_id }}
-          path: .
+          # upload-artifact roots at the least common ancestor of the dist paths
+          # (nook-app/nook-web), so restore into that directory.
+          path: nook-app/nook-web
+
+      - name: Confirm preview dist handoff
+        run: |
+          set -euo pipefail
+          test -d nook-app/nook-web/nook-web-app/dist
+          test -d nook-app/nook-web/nook-web-app/dist/site
+          test -d nook-app/nook-web/nook-vault-simple/dist
+          test -d nook-app/nook-web/nook-vault-sentinel/dist
 
       - name: Deploy and verify Pages previews
         id: deploy-all
