@@ -1,12 +1,21 @@
+# Non-product entry points for Rust ecosystem gates.
+# Labeled product PRs run the same jobs inside pr.yml so every exact-head gate
+# appears on one Actions run page. Ordinary PR pushes never start these checks.
+# agentic-ai/minds-only PRs still use this workflow because pr.yml ignores
+# agentic-ai/** and must not run the product preview pipeline for those changes.
+
 name: Rust ecosystem checks
 
 on:
   pull_request:
     types: [labeled]
+    paths:
+      - agentic-ai/minds/**
   push:
     branches: [main]
     paths:
       - .github/workflows/rust-ecosystem.yml
+      - .github/workflows/rust-ecosystem-checks.yml
       - deny.toml
       - nook-app/.insta.yaml
       - nook-app/.cargo/**
@@ -57,126 +66,15 @@ jobs:
               ;;
           esac
 
-  dependency-policy:
+  ecosystem:
+    name: Rust ecosystem
     needs: validation-request
     if: >-
       github.event_name != 'pull_request' ||
       github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e'
-    name: Dependency policy and RustSec
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-      - name: Bake rust-dependency-policy
-        run: task docker:ecosystem:dependency-policy
-
-  deterministic-tests:
-    needs: validation-request
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e'
-    name: Proptest, Insta, and Loom
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-      - name: Bake rust-ecosystem-deterministic
-        run: task docker:ecosystem:deterministic
-
-  fuzz-smoke:
-    needs: validation-request
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e'
-    name: Cargo fuzz smoke
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-      - name: Bake rust-fuzz-smoke
-        env:
-          FUZZ_SECONDS: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '900' || '20' }}
-        run: task docker:ecosystem:fuzz FUZZ_SECONDS="$FUZZ_SECONDS"
-
-  kani:
-    needs: validation-request
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e'
-    name: Kani bounded proofs
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: model-checking/kani-github-action@v1.1
-        with:
-          working-directory: nook-app
-          args: --package nook-replication
-
-  dylint:
-    needs: validation-request
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e'
-    name: Dylint repository lints
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-      - name: Bake rust-dylint
-        run: task docker:ecosystem:dylint
+    uses: ./.github/workflows/rust-ecosystem-checks.yml
+    secrets: inherit
+    with:
+      fuzz_seconds: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '900' || '20' }}
+      isolated_cache_write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}

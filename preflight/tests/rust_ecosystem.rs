@@ -14,7 +14,9 @@ fn read(relative_path: &str) -> anyhow::Result<String> {
 
 #[test]
 fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()> {
-    let workflow = read(".github/workflows/rust-ecosystem.yml")?;
+    let entry = read(".github/workflows/rust-ecosystem.yml")?;
+    let checks = read(".github/workflows/rust-ecosystem-checks.yml")?;
+    let pr = read(".github/workflows/pr.yml")?;
     let quality = read(".cortex/workflows/quality.md")?;
     let workspace = read("nook-app/Cargo.toml")?;
     let rust_dockerfile = read("nook-app/docker/rust.Dockerfile")?;
@@ -23,6 +25,23 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let fuzz_target = read("fuzz/fuzz_targets/wire_parsers.rs")?;
     let fuzz_manifest = read("fuzz/Cargo.toml")?;
     let readiness = read("agentic-ai/ci-agent/src/main/github.ts")?;
+
+    assert!(
+        pr.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),
+        "Labeled product PRs must call the shared Rust ecosystem checks"
+    );
+    assert!(
+        entry.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),
+        "Thin rust-ecosystem.yml must call the shared Rust ecosystem checks"
+    );
+    assert!(
+        entry.contains("agentic-ai/minds/**"),
+        "Thin rust-ecosystem.yml must keep labeled minds-only PR coverage"
+    );
+    assert!(
+        !entry.contains("Bake rust-dependency-policy"),
+        "Thin rust-ecosystem.yml must not duplicate Bake steps"
+    );
 
     for marker in [
         "Bake rust-dependency-policy",
@@ -37,23 +56,18 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "NOOK_SCCACHE_ACCESS_KEY",
         "kani-github-action",
         "FUZZ_SECONDS",
+        "isolated-cache-write: ${{ inputs.isolated_cache_write }}",
     ] {
         assert!(
-            workflow.contains(marker),
-            "Rust ecosystem workflow is missing {marker}"
+            checks.contains(marker),
+            "Shared Rust ecosystem checks are missing {marker}"
         );
     }
     assert!(
-        workflow.contains(
-            "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
-        ),
-        "Rust ecosystem PRs must export only isolated remote-buildcache scopes"
-    );
-    assert!(
-        !workflow.contains("docker-bake-sccache.sh")
-            && !workflow.contains("NOOK_BAKE_FILES")
-            && !workflow.contains("docker buildx bake"),
-        "Rust ecosystem workflow must invoke Taskfile tasks instead of Bake helpers"
+        !checks.contains("docker-bake-sccache.sh")
+            && !checks.contains("NOOK_BAKE_FILES")
+            && !checks.contains("docker buildx bake"),
+        "Rust ecosystem checks must invoke Taskfile tasks instead of Bake helpers"
     );
     let docker_tasks = read("nook-app/docker/Taskfile.yml")?;
     for marker in [
@@ -82,8 +96,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "taiki-e/install-action",
     ] {
         assert!(
-            !workflow.contains(forbidden),
-            "Rust ecosystem workflow must not use host-toolchain path: {forbidden}"
+            !checks.contains(forbidden),
+            "Rust ecosystem checks must not use host-toolchain path: {forbidden}"
         );
     }
 
@@ -187,6 +201,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         );
     }
     assert!(readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
+    assert!(readiness.contains("paths.every(isMainPrIgnoredPath)"));
     Ok(())
 }
 
