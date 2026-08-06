@@ -74,6 +74,7 @@ tasks:
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.PREFLIGHT_BAKE_FILES}}
+        --allow="fs.write={{.PREFLIGHT_OUTPUT_DIR}}"
         --set "preflight-cli-export.output=type=local,dest={{.PREFLIGHT_OUTPUT_DIR}}"
         preflight-cli-export
 
