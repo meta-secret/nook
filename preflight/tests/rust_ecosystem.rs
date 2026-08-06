@@ -185,9 +185,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && rust_bake
                 .matches("cache-to   = rust_ecosystem_nightly_cache_to")
                 .count()
-                == 2
-            && rust_bake.contains("cache-to   = []"),
-        "nightly/fuzz/dylint must share nightly cache-from; only nightly+dylint write it"
+                == 3,
+        "nightly/fuzz/dylint must share the hosted nightly cache scope"
     );
     let docker_bake = read("nook-app/docker-bake.hcl")?;
     let nightly_from = docker_bake
