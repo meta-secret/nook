@@ -297,9 +297,7 @@ fn assert_workflows_scope_cache_credentials() {
         ecosystem_docker_setups,
         "Rust ecosystem Docker jobs must mount SeaweedFS sccache"
     );
-    assert!(ecosystem.contains(
-        "isolated-cache-write: ${{ inputs.isolated_cache_write }}"
-    ));
+    assert!(ecosystem.contains("isolated-cache-write: ${{ inputs.isolated_cache_write }}"));
     let ecosystem_entry = read(".github/workflows/rust-ecosystem.yml");
     assert!(ecosystem_entry.contains(
         "isolated_cache_write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
