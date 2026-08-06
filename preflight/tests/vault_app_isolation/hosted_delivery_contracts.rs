@@ -596,10 +596,8 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && !trusted_handoff.contains("filter: 'latest'")
             && trusted_handoff.contains("const currentAttempt = run.run_attempt")
             && trusted_handoff.contains("!hasSuccessfulJob('Native Rust verification', true)",)
-            && trusted_handoff
-                .contains("!hasSuccessfulJob('WASM build and artifact', true)",)
-            && trusted_handoff
-                .contains("!hasSuccessfulJob('WASM Node tests', true)",)
+            && trusted_handoff.contains("!hasSuccessfulJob('WASM build and artifact', true)",)
+            && trusted_handoff.contains("!hasSuccessfulJob('WASM Node tests', true)",)
             && trusted_handoff.contains("!hasSuccessfulJob('Verify and preview', false)")
             && trusted_handoff.contains("candidate.run_attempt < currentAttempt"),
         "trusted validation promotion must accept successful producers omitted from a failed-job rerun while requiring the current consumer attempt"
