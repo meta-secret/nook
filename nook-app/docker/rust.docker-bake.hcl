@@ -4,6 +4,7 @@
 // folding that tooling into product rust-base.
 // Main seeds those scopes with the trusted registry writer; PRs only write
 // isolated remote-buildcache refs.
+// Probe marker: trusted ecosystem cache reuse after main seed (#931).
 
 target "rust-base" {
   context    = "."
