@@ -9,6 +9,7 @@ Use this workflow for quality, CI, and deployment changes.
    - Web-family tasks live in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`.
    - Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`.
    - `task preflight` Bakes `preflight-test` on the shared `rust-base` target with cargo-chef dependency cooks and SeaweedFS sccache.
+   - Preflight uses the dedicated `nook-preflight-v1` Zot scope so chef cooks reuse across PR runs.
    - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
    - Reusable GitHub workflow shell lives in `.task/ci-workflows.yml` and `.github/scripts/`; workflows stay thin `task` wrappers around Actions-only glue.
    - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as separate Bake images/stages in `nook-app/docker/rust.Dockerfile` (off `rust-base`, not inside it).
@@ -65,7 +66,7 @@ Use this workflow for quality, CI, and deployment changes.
      not installed into `rust-base`). Tools and deny/audit leaf use separate
      Zot scopes.
      Each stage imports with cache-to cleared, then publishes with cache-from
-     cleared so a CACHED solve cannot overwrite Zot with a thin index.
+     kept so remote hits re-export without cold tool or chef rebuilds.
      Tools and nightly scopes must not also import `rust-base`.
      That shorter parent importer orphans the toolchain RUN layers.
      Never `cargo install` those tools on the runner host. Advisory exceptions
@@ -85,7 +86,7 @@ Use this workflow for quality, CI, and deployment changes.
      `task docker:ecosystem:fuzz` Bakes `rust-fuzz-smoke` from
      `rust-ecosystem-nightly` with pinned
      [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html).
-     Fuzz restores the shared nightly scope read-only; dylint alone writes it.
+     Fuzz restores nightly read-only and writes `nook-rust-ecosystem-fuzz-v1`.
    - `PR / Rust ecosystem / Kani bounded proofs` —
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
      bounded proof harnesses via the official action (specialized toolchain).
@@ -94,9 +95,8 @@ Use this workflow for quality, CI, and deployment changes.
      `rust-ecosystem-nightly` with pinned
      [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
      `dylint-link` release binaries (no host `cargo install`).
-     Lint is read-only for nightly cache.
-     When writes are enabled, the Task then publishes `rust-ecosystem-nightly`
-     with cache-from cleared (sole nightly writer).
+     When writes are enabled, the Task publishes nightly (sole nightly writer)
+     and the dylint leaf scope `nook-rust-ecosystem-dylint-v1`.
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
@@ -115,7 +115,8 @@ Use this workflow for quality, CI, and deployment changes.
     - GitHub Actions cache is forbidden.
     - Delivery Bake restores private Zot registry scopes for:
       - Rust toolchain
-      - Rust ecosystem nightly, policy-tools, policy leaf, and deterministic
+      - Rust ecosystem nightly, dylint leaf, fuzz leaf, policy-tools, policy leaf, and deterministic
+      - preflight chef/test
       - stable Rust dependencies
       - source-sensitive native/WASM snapshots
       - web dependencies
@@ -125,8 +126,10 @@ Use this workflow for quality, CI, and deployment changes.
     - They must not import PR-isolated rust-base parents.
     - Ecosystem nightly/policy-tools/policy scopes must not import rust-base at all.
     - Their mode=max exports already embed that parent chain.
-    - Ecosystem and PR product jobs verify with cache-to off, then publish with
-      cache-from cleared so CACHED solves cannot thin-export over a warm index.
+    - Ecosystem jobs verify with cache-to off, then publish with cache-from kept
+      so remote hits re-export without cold chef/toolchain rebuilds.
+    - Main product publishers still clear cache-from for fat trusted exports.
+    - PR product publishers keep cache-from for the same reason as ecosystem.
     - One CI job writes each shared ecosystem registry ref.
     - The complete Rust/WASM cargo-chef dependency graph uses an immutable scope fingerprinted from manifests, lockfiles, compiler Dockerfiles, Task invocation inputs, and Bake definitions.
     - Hosted builds never attach Redis credentials.

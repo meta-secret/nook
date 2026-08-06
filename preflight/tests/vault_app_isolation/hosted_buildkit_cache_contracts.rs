@@ -17,6 +17,9 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "default = \"registry.dev.nokey.sh\"",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-nightly-v3",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-dylint-v1",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-fuzz-v1",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-policy-tools-v3",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-policy-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v1",
@@ -59,12 +62,19 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
                 .matches("cache-to   = rust_ecosystem_nightly_cache_to")
                 .count()
                 == 1
-            && rust_toolchain_bake.contains("cache-to   = []"),
-        "ecosystem nightly target alone writes the shared nightly cache; dylint/fuzz are read-only"
+            && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_dylint_cache_to")
+            && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_fuzz_cache_to"),
+        "ecosystem nightly writes the shared nightly cache; dylint/fuzz write leaf caches"
     );
     assert!(
         rust_toolchain_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),
         "ecosystem deterministic must seed its own hosted cache"
+    );
+    let preflight_bake = read(root, "preflight/docker-bake.hcl");
+    assert!(
+        preflight_bake.contains("cache-from = preflight_cache_from")
+            && preflight_bake.contains("cache-to   = preflight_cache_to"),
+        "preflight must seed its own hosted chef/test cache"
     );
     assert!(
         !bake.contains("type=gha"),
@@ -72,7 +82,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
-        12,
+        15,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
     assert_rust_cache_export_hardening(&bake);

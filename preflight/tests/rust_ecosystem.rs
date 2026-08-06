@@ -96,12 +96,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "rust-ecosystem-nightly",
         "sccache:ensure",
         "rust-ecosystem-policy-tools.cache-to=",
-        "rust-ecosystem-policy-tools.cache-from=",
         "rust-dependency-policy.cache-to=",
-        "rust-dependency-policy.cache-from=",
         "rust-ecosystem-deterministic.cache-to=",
-        "rust-ecosystem-deterministic.cache-from=",
-        "rust-ecosystem-nightly.cache-from=",
+        "rust-dylint.cache-to=",
+        "rust-fuzz-smoke.cache-to=",
+        "preflight-test",
         "GHA_CACHE_WRITE_ENABLED",
     ] {
         assert!(
@@ -192,17 +191,16 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "policy-tools and dependency-policy must seed separate hosted cache scopes"
     );
     assert!(
-        rust_bake.contains("cache-from = rust_ecosystem_nightly_cache_from")
-            && rust_bake
-                .matches("cache-from = rust_ecosystem_nightly_cache_from")
-                .count()
-                >= 3
+        rust_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
             && rust_bake
                 .matches("cache-to   = rust_ecosystem_nightly_cache_to")
                 .count()
                 == 1
-            && rust_bake.contains("cache-to   = []"),
-        "nightly/fuzz/dylint share nightly cache-from; only the nightly target writes it"
+            && rust_bake.contains("cache-to   = rust_ecosystem_dylint_cache_to")
+            && rust_bake.contains("cache-to   = rust_ecosystem_fuzz_cache_to")
+            && rust_bake.contains("cache-from = rust_ecosystem_dylint_cache_from")
+            && rust_bake.contains("cache-from = rust_ecosystem_fuzz_cache_from"),
+        "nightly alone writes the shared nightly scope; dylint/fuzz write leaf scopes"
     );
     let docker_bake = read("nook-app/docker-bake.hcl")?;
     let nightly_from = docker_bake

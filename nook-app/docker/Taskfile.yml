@@ -305,35 +305,56 @@ tasks:
   docker:ci:cache:publish:native:
     desc: Export the already-verified native dependency/source graph from this job's builder.
     cmds:
-      - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
-        {{.NOOK_BAKE_FILES}}
-        --set "*.output=type=cacheonly"
-        --set "rust-base.cache-from="
-        --set "builder-core-deps.cache-from="
-        --set "builder-debug.cache-from="
-        rust-base builder-core-deps builder-debug
-
-  docker:ci:cache:publish:wasm:
-    desc: Export verified WASM scopes from local layers without reimporting a thin hosted index.
-    cmds:
-      # Main writes the trusted fingerprint scope and verifies restore. PR/Remote
-      # keep Bake's isolated cache-to (remote-buildcache + scope suffix).
+      # Main clears cache-from so export uses fully local layers. PR/Remote keep
+      # cache-from so remote hits re-export without cold chef cooks.
       - |
         set -euo pipefail
         if [ -n "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
+            rust-base builder-core-deps builder-debug
+        else
+          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
             --set "rust-base.cache-from=" \
-            --set "builder-wasm-deps.cache-from=" \
+            --set "builder-core-deps.cache-from=" \
+            --set "builder-debug.cache-from=" \
+            rust-base builder-core-deps builder-debug
+        fi
+      # Preflight has its own Bake files and Zot scope; export it with product native.
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        --allow=fs.read={{.REPO_ROOT}}
+        {{.SCCACHE_S3_BUILD_SECRETS}}
+        -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
+        -f {{.REPO_ROOT}}/nook-app/docker/rust.docker-bake.hcl
+        -f {{.REPO_ROOT}}/preflight/docker-bake.hcl
+        --set '*.context={{.REPO_ROOT}}'
+        --set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'
+        --set '*.args.SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}'
+        --set '*.args.SCCACHE_BUCKET={{.SCCACHE_BUCKET}}'
+        --set "*.output=type=cacheonly"
+        preflight-test
+
+  docker:ci:cache:publish:wasm:
+    desc: Export verified WASM scopes from local layers without reimporting a thin hosted index.
+    cmds:
+      # Main clears cache-from, writes the trusted fingerprint scope, and verifies
+      # restore. PR/Remote keep cache-from and Bake's isolated cache-to.
+      - |
+        set -euo pipefail
+        if [ -n "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
+          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
             rust-base builder-wasm-deps
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
             --set "rust-base.cache-to=" \
             --set "builder-wasm-deps.cache-to=" \
-            --set "wasm-export.cache-from=" \
             wasm-export
         else
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
@@ -397,9 +418,8 @@ tasks:
     desc: Bake cargo-deny and cargo-audit on the sealed ecosystem policy image.
     deps: [sccache:ensure]
     cmds:
-      # Sequential tools then leaf. Build imports remote cache with cache-to off.
-      # Publish clears cache-from so a CACHED solve cannot overwrite Zot with a
-      # thin index (same pattern as docker:ci:cache:publish:wasm).
+      # Sequential tools then leaf. Build imports with cache-to off. Publish keeps
+      # cache-from so remote CACHED layers re-export without cold tool installs.
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}}
@@ -409,7 +429,6 @@ tasks:
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
-            --set "rust-ecosystem-policy-tools.cache-from=" \
             rust-ecosystem-policy-tools
         fi
       - >-
@@ -421,7 +440,6 @@ tasks:
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
-            --set "rust-dependency-policy.cache-from=" \
             rust-dependency-policy
         fi
 
@@ -438,7 +456,6 @@ tasks:
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
-            --set "rust-ecosystem-deterministic.cache-from=" \
             rust-ecosystem-deterministic
         fi
 
@@ -452,7 +469,15 @@ tasks:
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}"
+        --set "rust-fuzz-smoke.cache-to="
         rust-fuzz-smoke
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
+          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}" \
+            rust-fuzz-smoke
+        fi
 
   docker:ecosystem:dylint:
     desc: Bake repository Dylint lints on the sealed nightly ecosystem image.
@@ -461,13 +486,16 @@ tasks:
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}}
+        --set "rust-dylint.cache-to="
         rust-dylint
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
-            --set "rust-ecosystem-nightly.cache-from=" \
             rust-ecosystem-nightly
+          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+            {{.NOOK_BAKE_FILES}} \
+            rust-dylint
         fi
 
   docker:web:dev:
