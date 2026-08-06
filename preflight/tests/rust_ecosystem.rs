@@ -223,6 +223,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         .nth(1)
         .and_then(|tail| tail.split("rust_deps_cache_to =").next())
         .unwrap_or("");
+    let preflight_from = docker_bake
+        .split("preflight_cache_from =")
+        .nth(1)
+        .and_then(|tail| tail.split("preflight_cache_to =").next())
+        .unwrap_or("");
     let pr_isolated_rust_base =
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true";
     let trusted_rust_base = "nook/buildcache/nook-rust-base-v1:buildcache";
@@ -233,9 +238,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && !policy_tools_from.contains(pr_isolated_rust_base)
             && !policy_from.contains(trusted_rust_base)
             && !policy_from.contains(pr_isolated_rust_base)
+            && !preflight_from.contains(trusted_rust_base)
+            && !preflight_from.contains(pr_isolated_rust_base)
             && deps_from.contains(trusted_rust_base)
             && !deps_from.contains(pr_isolated_rust_base),
-        "ecosystem toolchain scopes must not import rust-base; product deps keep trusted rust-base only"
+        "ecosystem/preflight scopes must not import rust-base; product deps keep trusted rust-base only"
     );
     assert!(
         policy_from.contains("nook-rust-ecosystem-policy-tools-v3")

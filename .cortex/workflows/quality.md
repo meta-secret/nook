@@ -10,6 +10,9 @@ Use this workflow for quality, CI, and deployment changes.
    - Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`.
    - `task preflight` Bakes `preflight-test` on the shared `rust-base` target with cargo-chef dependency cooks and SeaweedFS sccache.
    - Preflight uses the dedicated `nook-preflight-v1` Zot scope so chef cooks reuse across PR runs.
+   - Restore `rust-base` only through Bake `contexts` (`target:rust-base`).
+   - Do not also cache-from `rust-base` on the preflight target.
+   - That shorter parent importer orphans chef cook layers.
    - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
    - Reusable GitHub workflow shell lives in `.task/ci-workflows.yml` and `.github/scripts/`; workflows stay thin `task` wrappers around Actions-only glue.
    - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as separate Bake images/stages in `nook-app/docker/rust.Dockerfile` (off `rust-base`, not inside it).
@@ -67,8 +70,8 @@ Use this workflow for quality, CI, and deployment changes.
      Zot scopes.
      Each stage imports with cache-to cleared, then publishes with cache-from
      kept so remote hits re-export without cold tool or chef rebuilds.
-     Tools and nightly scopes must not also import `rust-base`.
-     That shorter parent importer orphans the toolchain RUN layers.
+     Tools, nightly, and preflight scopes must not also import `rust-base`.
+     That shorter parent importer orphans the toolchain or chef RUN layers.
      Never `cargo install` those tools on the runner host. Advisory exceptions
      must name the RustSec IDs, identify the exact pinned upstream graph, and
      state the dependency upgrade that removes them in both `deny.toml` and
@@ -124,8 +127,10 @@ Use this workflow for quality, CI, and deployment changes.
       - e2e web
     - Product deps cache-from use trusted `nook-rust-base-v1` only.
     - They must not import PR-isolated rust-base parents.
-    - Ecosystem nightly/policy-tools/policy scopes must not import rust-base at all.
+    - Ecosystem nightly/policy-tools/policy and preflight scopes must not
+      import rust-base at all.
     - Their mode=max exports already embed that parent chain.
+    - Preflight restores rust-base only via Bake `contexts` (`target:rust-base`).
     - Ecosystem jobs verify with cache-to off, then publish with cache-from kept
       so remote hits re-export without cold chef/toolchain rebuilds.
     - Main product publishers still clear cache-from for fat trusted exports.

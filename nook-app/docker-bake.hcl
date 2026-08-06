@@ -170,13 +170,14 @@ rust_ecosystem_fuzz_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 
 // Preflight chef/test graph. Own scope so Native product exports do not need to
 // rebuild preflight cooks on every PR head.
+// Do not cache-from rust-base here: Bake restores it via contexts rust-base =
+// target:rust-base. A shorter rust-base importer on this target orphans chef
+// cooks the same way nightly/policy were orphaned.
 preflight_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1:buildcache",
 ] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1:buildcache",
 ]
 
 preflight_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
