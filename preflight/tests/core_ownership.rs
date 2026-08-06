@@ -93,7 +93,8 @@ fn shared_application_primitives_have_one_leaf_crate() -> anyhow::Result<()> {
     }
 
     for consumer in ["nook-auth2", "nook-core"] {
-        let manifest = fs::read_to_string(root.join(format!("nook-app/{consumer}/Cargo.toml")))?;
+        let manifest =
+            fs::read_to_string(root.join(format!("nook-app/nook-platform/{consumer}/Cargo.toml")))?;
         assert!(
             manifest.contains("nook-app-common ="),
             "{consumer} must consume shared application primitives from nook-app-common"
