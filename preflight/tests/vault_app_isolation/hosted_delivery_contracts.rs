@@ -833,7 +833,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
         "PR verification must download the WASM handoff through needs instead of polling GitHub"
     );
     let deploy = section(
-        &preview_job,
+        preview_job,
         "      - name: Deploy and verify Pages previews\n",
         "      - name: Comment preview URL on PR\n",
     );
