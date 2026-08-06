@@ -528,6 +528,8 @@ test.describe('devices and access dashboard', () => {
             store.delete('device_access_profile')
             store.delete('device_identity_wrapped')
             store.delete('device_id')
+            store.delete('app_key_wrapped')
+            store.delete('app_id')
             transaction.onerror = () => reject(transaction.error)
             transaction.oncomplete = () => {
               db.close()
@@ -717,7 +719,8 @@ test.describe('devices and access dashboard', () => {
     })
 
     await page.getByTestId('header-lock-vault-btn').click()
-    await page.getByTestId('login-devices-access').click()
+    // Locking from /devices-access keeps that URL, so login opens Access directly.
+    await expect(page).toHaveURL(/\/devices-access$/)
     await expect(
       page.getByTestId('devices-access-identity-state'),
     ).toContainText('Identity locked')

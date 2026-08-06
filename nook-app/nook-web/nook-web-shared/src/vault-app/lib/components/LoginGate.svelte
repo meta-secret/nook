@@ -166,7 +166,7 @@
   let enrollmentPanelOpen = $state(false)
   let showProviderSetupLink = $state(false)
   function loginDevicesAccessRouteOpen(): boolean {
-    if (typeof window === 'undefined') return false
+    if (!('window' in globalThis)) return false
     const route = workspaceRouteFromPath(window.location.pathname)
     return (
       route.kind === WorkspaceRouteLookupKind.Workspace &&

@@ -165,18 +165,21 @@ impl IdentityRecord {
     }
 
     pub fn remove_member(&mut self, app_id: &AppId) -> MultiDeviceResult<()> {
-        let before = self.members.len();
-        self.members.retain(|member| &member.app_id != app_id);
-        if self.members.len() == before {
+        let Some(index) = self
+            .members
+            .iter()
+            .position(|member| &member.app_id == app_id)
+        else {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
                 "app key is not a member of this identity".to_owned(),
             ));
-        }
-        if self.members.is_empty() {
+        };
+        if self.members.len() == 1 {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
                 "identity must keep at least one app key".to_owned(),
             ));
         }
+        self.members.remove(index);
         self.control_epoch = self.control_epoch.saturating_add(1);
         Ok(())
     }
