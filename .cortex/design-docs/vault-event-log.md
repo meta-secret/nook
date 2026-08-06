@@ -103,7 +103,7 @@ Events are hashed and signed over **canonical JSON**:
 - array order preserved (`parents` sorted before signing);
 - `created_at` is audit/UI only — never used for merge correctness.
 
-Implementation: `nook-app/nook-event-log/src/canonical.rs`.
+Implementation: `nook-app/nook-platform/nook-event-log/src/canonical.rs`.
 
 ## Causal model
 
@@ -117,12 +117,12 @@ Unknown-parent events stay **pending** until dependencies arrive.
 
 Provider-neutral parent indexing, heads, ancestry, concurrency, pending events,
 topological order, and set union live in
-`nook-app/nook-replication/src/causal_graph.rs`. Vault event-envelope validation
-and actor authorization live in `nook-app/nook-event-log/src/graph.rs`.
+`nook-app/nook-platform/nook-replication/src/causal_graph.rs`. Vault event-envelope validation
+and actor authorization live in `nook-app/nook-platform/nook-event-log/src/graph.rs`.
 
 ## Domain projection
 
-The reducer (`nook-app/nook-event-log/src/projection.rs`) must yield the same
+The reducer (`nook-app/nook-platform/nook-event-log/src/projection.rs`) must yield the same
 result for every permutation of the same valid event set.
 
 | Operation | Semantics |
@@ -139,7 +139,7 @@ result for every permutation of the same valid event set.
 
 File-sync disconnect/reconnect coverage (shared vault bucket cleared, offline concurrent
 `login-a-1` creates, reconnect):
-`nook-app/nook-core/tests/event_log_file_sync_replication.rs`.
+`nook-app/nook-platform/nook-core/tests/event_log_file_sync_replication.rs`.
 
 ## Key epochs
 
@@ -255,7 +255,7 @@ When adding operations or merge rules, add colocated unit tests **and** extend t
 
 **Coverage:** `task rust:coverage:check` enforces a combined **90%** line floor
 for `nook-replication`, `nook-event-log`, `nook-core`, and `nook-auth2`
-(`nook-app/nook-core/coverage-floor.json`). Replication mechanics
+(`nook-app/nook-platform/nook-core/coverage-floor.json`). Replication mechanics
 (`causal_graph`, `replica_store`) and vault policy modules
 (`graph`, `projection`, `store`) are high-priority
 for behavior-focused tests when sync semantics change or coverage drops below

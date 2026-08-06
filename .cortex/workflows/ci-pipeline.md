@@ -496,7 +496,7 @@ task web:test:e2e:github            # → sync-live
 
 ## Portable Rust crate coverage export
 
-The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-log` coverage gate runs during the Docker image build in `nook-app/nook-core/Dockerfile` (`builder-debug`).
+The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-log` coverage gate runs during the Docker image build in `nook-app/nook-platform/nook-core/Dockerfile` (`builder-debug`).
 
 **Image build:**
 

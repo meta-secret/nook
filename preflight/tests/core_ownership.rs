@@ -52,7 +52,8 @@ fn repository_root() -> PathBuf {
 #[test]
 fn event_log_crate_keeps_the_portable_dependency_direction() -> anyhow::Result<()> {
     let root = repository_root();
-    let event_log = fs::read_to_string(root.join("nook-app/nook-event-log/Cargo.toml"))?;
+    let event_log =
+        fs::read_to_string(root.join("nook-app/nook-platform/nook-event-log/Cargo.toml"))?;
     assert!(event_log.contains("nook-auth2 ="));
     assert!(event_log.contains("nook-replication ="));
     for forbidden in ["nook-core =", "nook-wasm =", "web-sys =", "js-sys ="] {
@@ -62,7 +63,7 @@ fn event_log_crate_keeps_the_portable_dependency_direction() -> anyhow::Result<(
         );
     }
 
-    let core = fs::read_to_string(root.join("nook-app/nook-core/Cargo.toml"))?;
+    let core = fs::read_to_string(root.join("nook-app/nook-platform/nook-core/Cargo.toml"))?;
     assert!(core.contains("nook-event-log ="));
     assert!(
         !core.contains("nook-replication ="),
@@ -74,7 +75,8 @@ fn event_log_crate_keeps_the_portable_dependency_direction() -> anyhow::Result<(
 #[test]
 fn shared_application_primitives_have_one_leaf_crate() -> anyhow::Result<()> {
     let root = repository_root();
-    let common = fs::read_to_string(root.join("nook-app/nook-app-common/Cargo.toml"))?;
+    let common =
+        fs::read_to_string(root.join("nook-app/nook-platform/nook-app-common/Cargo.toml"))?;
     for forbidden in [
         "nook-auth2 =",
         "nook-replication =",
@@ -91,7 +93,8 @@ fn shared_application_primitives_have_one_leaf_crate() -> anyhow::Result<()> {
     }
 
     for consumer in ["nook-auth2", "nook-core"] {
-        let manifest = fs::read_to_string(root.join(format!("nook-app/{consumer}/Cargo.toml")))?;
+        let manifest =
+            fs::read_to_string(root.join(format!("nook-app/nook-platform/{consumer}/Cargo.toml")))?;
         assert!(
             manifest.contains("nook-app-common ="),
             "{consumer} must consume shared application primitives from nook-app-common"
@@ -99,15 +102,15 @@ fn shared_application_primitives_have_one_leaf_crate() -> anyhow::Result<()> {
     }
 
     assert!(
-        root.join("nook-app/nook-app-common/src/generated/i18n_keys.rs")
+        root.join("nook-app/nook-platform/nook-app-common/src/generated/i18n_keys.rs")
             .is_file(),
         "nook-app-common must own the single generated Rust translation-key registry"
     );
     for obsolete in [
-        "nook-app/nook-core/src/generated/i18n_keys.rs",
-        "nook-app/nook-auth2/src/generated/i18n_keys.rs",
-        "nook-app/nook-core/locales/en.json",
-        "nook-app/nook-core/locales/ru.json",
+        "nook-app/nook-platform/nook-core/src/generated/i18n_keys.rs",
+        "nook-app/nook-platform/nook-auth2/src/generated/i18n_keys.rs",
+        "nook-app/nook-platform/nook-core/locales/en.json",
+        "nook-app/nook-platform/nook-core/locales/ru.json",
     ] {
         assert!(
             !root.join(obsolete).exists(),

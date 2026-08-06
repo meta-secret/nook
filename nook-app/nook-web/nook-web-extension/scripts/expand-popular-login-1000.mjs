@@ -23,7 +23,10 @@ const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../..',
 )
-const catalogPath = path.join(root, 'nook-core/data/popular_login_sites.json')
+const catalogPath = path.join(
+  root,
+  'nook-platform/nook-core/data/popular_login_sites.json',
+)
 const fixturesRoot = path.join(
   root,
   'nook-web/nook-web-extension/e2e/mock-auth/fixtures',

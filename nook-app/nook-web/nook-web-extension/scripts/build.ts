@@ -27,6 +27,7 @@ const sharedRoot = join(webGroupRoot, 'nook-web-shared')
 const appCommonLocalesRoot = join(
   webGroupRoot,
   '..',
+  'nook-platform',
   'nook-app-common',
   'locales',
 )

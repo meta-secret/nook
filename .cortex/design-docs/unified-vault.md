@@ -102,7 +102,7 @@ secrets:
 | **Genesis** | `vault_version: 1` on first persist |
 | **Every save** | Increment before write |
 
-Implementation: `nook-app/nook-core/src/vault/vault_format.rs` (`read_vault_version`), `nook-app/nook-core/src/sync/vault_sync.rs`.
+Implementation: `nook-app/nook-platform/nook-core/src/vault/vault_format.rs` (`read_vault_version`), `nook-app/nook-platform/nook-core/src/sync/vault_sync.rs`.
 
 ---
 
@@ -213,7 +213,7 @@ Manual **Sync all** in the status bar runs the same sync loop with user-visible 
 
 ### In-memory sync tests
 
-`MemoryVaultStore` in `nook-app/nook-core/src/sync/vault_sync_store.rs` is a HashMap-friendly stand-in for local IndexedDB and remote providers. `reconcile_vault_stores` and `fan_out_sync` apply the same actions as the web layer after I/O. Integration coverage lives in `nook-app/nook-core/tests/vault_sync_workflow.rs` (no browser required).
+`MemoryVaultStore` in `nook-app/nook-platform/nook-core/src/sync/vault_sync_store.rs` is a HashMap-friendly stand-in for local IndexedDB and remote providers. `reconcile_vault_stores` and `fan_out_sync` apply the same actions as the web layer after I/O. Integration coverage lives in `nook-app/nook-platform/nook-core/tests/vault_sync_workflow.rs` (no browser required).
 
 ---
 

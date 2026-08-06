@@ -1,13 +1,13 @@
 [workspace]
 members = [
-    "nook-app-common",
-    "nook-auth2",
-    "nook-replication",
-    "nook-event-log",
-    "nook-companion-core",
-    "nook-core",
-    "nook-companion-wasm",
-    "nook-wasm",
+    "nook-platform/nook-app-common",
+    "nook-platform/nook-auth2",
+    "nook-platform/nook-replication",
+    "nook-platform/nook-event-log",
+    "nook-platform/nook-companion-core",
+    "nook-platform/nook-core",
+    "nook-platform/nook-companion-wasm",
+    "nook-platform/nook-wasm",
 ]
 resolver = "3"
 
@@ -15,7 +15,7 @@ resolver = "3"
 version = "1.0.0"
 edition = "2024"
 license = "MIT"
-description = "Rust core, wasm bindings, and Svelte web app for Nook."
+description = "Rust core and wasm bindings for Nook."
 repository = "https://github.com/meta-secret/nook"
 
 [workspace.lints.rust]

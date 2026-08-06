@@ -35,7 +35,7 @@ See [Agent rule: use app logs](#agent-rule-use-app-logs-for-playwright-debug-and
 
 | Layer | File | Responsibility |
 |-------|------|----------------|
-| Logger core | [`nook-app/nook-wasm/src/logger.rs`](../../nook-app/nook-wasm/src/logger.rs) | `tracing` subscriber + reloadable level filter, `IndexedDbLayer` persistence (rexie), dump/flush/clear |
+| Logger core | [`nook-app/nook-platform/nook-wasm/src/logger.rs`](../../nook-app/nook-platform/nook-wasm/src/logger.rs) | `tracing` subscriber + reloadable level filter, `IndexedDbLayer` persistence (rexie), dump/flush/clear |
 | Web shim / console authority | [`runtime/log.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/runtime/log.ts) | `createLogger(scope)`, `console.*` capture, `window.__nookConsole.echo`, initial level, flush loop, `window.__nookLog` |
 | Viewer | [`LogsPage.svelte`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/LogsPage.svelte) | `/logs` page: filter, pagination, copy, clear |
 | JSON export | [`app/logs-api.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/app/logs-api.ts), [`AppLogsApiPage.svelte`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/AppLogsApiPage.svelte) | `/app-logs` — machine-readable JSON export for agents and log pipelines |
@@ -57,7 +57,7 @@ See [Agent rule: use app logs](#agent-rule-use-app-logs-for-playwright-debug-and
 - **Entry shape:** `{ ts, level, scope, message, data? }`.
 - **Bindings:** `nookLog` (persist-only), `nookLogInit`, `nookLogSetLevel`,
   `nookLogGetLevel`, `nookLogDump`, `nookLogCount`, `nookLogFlush`,
-  `nookLogClear` (exported from `nook-app/nook-wasm/src/logger.rs`). The web shim wraps
+  `nookLogClear` (exported from `nook-app/nook-platform/nook-wasm/src/logger.rs`). The web shim wraps
   these; do not call them directly from app code.
 
 ## Levels are persistence-gated

@@ -52,7 +52,7 @@ This document defines the strict development standards, architectural boundaries
   - Do not return string-based errors (e.g., `Result<T, JsValue>`). This allows the JS runtime to catch actual JavaScript `Error` objects with full stack traces.
 - **Minimal raw JS Type Exposure:**
   - Authored `nook-wasm` Rust must not use `JsValue`. Data crossing the JS boundary uses strongly typed `#[wasm_bindgen]` structs, and browser integrations use the narrowest typed `web-sys` / `js-sys` API type.
-  - The syntax-aware repository preflight inspects authored Rust before macro expansion and rejects every `JsValue` path under `nook-app/nook-wasm/src`. The built-in Clippy `disallowed_types` lint is not used because wasm-bindgen's procedural macros generate that ABI type internally and cause false positives on typed exports.
+  - The syntax-aware repository preflight inspects authored Rust before macro expansion and rejects every `JsValue` path under `nook-app/nook-platform/nook-wasm/src`. The built-in Clippy `disallowed_types` lint is not used because wasm-bindgen's procedural macros generate that ABI type internally and cause false positives on typed exports.
 - **Typed Core Models:**
   - Prefer exporting simple `nook-core` enums/DTOs through WASM over recreating their tags as strings or parallel TypeScript unions.
   - `nook-wasm` should adapt browser I/O and JS-friendly constructors/getters; it should not own duplicate domain models.
@@ -114,8 +114,8 @@ They do **not** prove correctness of event sourcing, causal DAG merge, projectio
 
 | Layer                         | Target                                                                            | Where                                                        |
 | ----------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **Unit / property tests**     | ~99% of domain behavior — edge cases, concurrency, replay invariance, error paths | `nook-app/nook-replication/src/**`, `nook-app/nook-event-log/src/**`, `nook-app/nook-core/src/**`, `nook-app/nook-core/tests/*.rs` |
-| **Integration harness tests** | Multi-device decentralized sync, provider union, session orchestration            | `nook-app/nook-core/tests/event_log_*.rs`, `multi_device_workflow.rs` |
+| **Unit / property tests**     | ~99% of domain behavior — edge cases, concurrency, replay invariance, error paths | `nook-app/nook-platform/nook-replication/src/**`, `nook-app/nook-platform/nook-event-log/src/**`, `nook-app/nook-platform/nook-core/src/**`, `nook-app/nook-platform/nook-core/tests/*.rs` |
+| **Integration harness tests** | Multi-device decentralized sync, provider union, session orchestration            | `nook-app/nook-platform/nook-core/tests/event_log_*.rs`, `multi_device_workflow.rs` |
 | **E2e (Playwright)**          | Critical UI smoke only — unlock, save, local-provider sync, conflict UX           | `nook-app/nook-web/nook-web-app/e2e/`                                  |
 
 When adding or changing domain logic, **add Rust tests first** (or in the same PR). Do not rely on e2e to catch regressions in sync or projection.
@@ -152,7 +152,7 @@ committed **90%** line floor:
 
 | Artifact | Purpose |
 | --- | --- |
-| `nook-app/nook-core/coverage-floor.json` | Minimum combined line coverage % (currently **90**) |
+| `nook-app/nook-platform/nook-core/coverage-floor.json` | Minimum combined line coverage % (currently **90**) |
 | `task rust:coverage:check` | CI gate — compares measured vs floor |
 | `task rust:coverage` | Report only (no threshold check) |
 | `task rust:coverage:update` | Optional — rewrite floor file (user approval only) |

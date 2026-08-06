@@ -93,8 +93,8 @@ vars:
     -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/docker/rust.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/docker/web.docker-bake.hcl
-    -f {{.REPO_ROOT}}/nook-app/nook-core/docker-bake.hcl
-    -f {{.REPO_ROOT}}/nook-app/nook-wasm/docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/nook-platform/nook-core/docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/nook-platform/nook-wasm/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/docker/toolchain.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/docker-bake.hcl
     --set '*.context={{.REPO_ROOT}}'

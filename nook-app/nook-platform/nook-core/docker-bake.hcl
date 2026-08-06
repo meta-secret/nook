@@ -34,7 +34,7 @@ target "builder-wasm-deps" {
 target "builder-debug" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-core/Dockerfile"
+  dockerfile = "nook-app/nook-platform/nook-core/Dockerfile"
   target     = "builder-debug"
   platforms  = ["linux/amd64"]
   contexts = {
@@ -49,7 +49,7 @@ target "builder-debug" {
 target "coverage-export" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-core/Dockerfile"
+  dockerfile = "nook-app/nook-platform/nook-core/Dockerfile"
   target     = "coverage-export"
   platforms  = ["linux/amd64"]
   contexts = {

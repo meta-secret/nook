@@ -107,7 +107,7 @@ version is required — old Debian binaryen corrupts `externref` tables.
 - `nook-wasm` may own durable browser storage/provider adapters and typed
   manager state; `nook-web` owns presentation and browser orchestration.
 
-## 4. Typed WASM boundary (`nook-app/nook-wasm/src/types.rs`)
+## 4. Typed WASM boundary (`nook-app/nook-platform/nook-wasm/src/types.rs`)
 
 **Use typed `#[wasm_bindgen]` structs instead of raw JavaScript values for every
 application data shape.** Errors surface as `JsError`. Browser adapters use the
@@ -152,7 +152,7 @@ free wrappers returned to JavaScript after their data has been copied out.
 
 ## 5. Vault secrets at the JS boundary
 
-**Canonical schema:** `nook-app/nook-core/src/secret_types.rs` (`SecretType`, payload structs, `SecretValue`, `SecretRecord`).
+**Canonical schema:** `nook-app/nook-platform/nook-core/src/secret_types.rs` (`SecretType`, payload structs, `SecretValue`, `SecretRecord`).
 
 **Typed domain strings:** Prefer newtypes over raw `String` / `u32` in `nook-core`.
 
@@ -221,15 +221,15 @@ ends.
 
 ### Adding a new secret type
 
-1. **`nook-app/nook-core/src/secret_types.rs`** — new `SecretType` variant, payload struct, `SecretValue` arms in `from_yaml` / `to_yaml`.
-2. **`nook-app/nook-core/src/secret_view.rs`** — update `display_title`, `group_key`, `summary`, `matches_search`, and `build_secret_yaml` arms.
-3. **`nook-app/nook-wasm/src/lib.rs`** — add typed getters on `NookSecretRecord` for the new fields.
-4. **`nook-app/nook-core` tests** — round-trip and validation tests (authority for payload behavior).
+1. **`nook-app/nook-platform/nook-core/src/secret_types.rs`** — new `SecretType` variant, payload struct, `SecretValue` arms in `from_yaml` / `to_yaml`.
+2. **`nook-app/nook-platform/nook-core/src/secret_view.rs`** — update `display_title`, `group_key`, `summary`, `matches_search`, and `build_secret_yaml` arms.
+3. **`nook-app/nook-platform/nook-wasm/src/lib.rs`** — add typed getters on `NookSecretRecord` for the new fields.
+4. **`nook-app/nook-platform/nook-core` tests** — round-trip and validation tests (authority for payload behavior).
 5. **`nook-app/nook-web`** — add-secret form fields + `SecretDetailRow` rendering only. **No** new TS struct mirror or `parseVaultItem` arm.
 6. **Playwright** — e2e for the new form if user-visible.
 
 ## 6. Testing
 - Test vault formats, crypto, validation, and passwords in `nook-core`.
-- **Coverage gate:** `task rust:coverage:check` (llvm-cov + nextest, **90%** line floor in `nook-app/nook-core/coverage-floor.json`). Part of `task check` / CI. Below 90%, add Rust tests.
+- **Coverage gate:** `task rust:coverage:check` (llvm-cov + nextest, **90%** line floor in `nook-app/nook-platform/nook-core/coverage-floor.json`). Part of `task check` / CI. Below 90%, add Rust tests.
 - **Fast tests:** `task rust:test` (nextest only, no coverage instrumentation).
 - Use Playwright e2e for UI flows; do not duplicate domain rules in TypeScript tests.

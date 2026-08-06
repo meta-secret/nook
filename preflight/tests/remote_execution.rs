@@ -176,8 +176,8 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     let extension_tasks = read("nook-app/nook-web/.task/extension.yml");
     let base_dockerfile = read("nook-app/docker/rust.Dockerfile");
     let base_dockerignore = read("nook-app/docker/rust.Dockerfile.dockerignore");
-    let core_bake = read("nook-app/nook-core/docker-bake.hcl");
-    let wasm_dockerfile = read("nook-app/nook-wasm/Dockerfile");
+    let core_bake = read("nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let wasm_dockerfile = read("nook-app/nook-platform/nook-wasm/Dockerfile");
     let bake = read("nook-app/docker-bake.hcl");
 
     for required in [
@@ -206,10 +206,10 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     assert!(base_dockerfile.contains("--no-run"));
     for ignored in [
         "**/docker-bake.hcl",
-        "nook-app/nook-core/Dockerfile",
-        "nook-app/nook-core/coverage-floor.json",
-        "nook-app/nook-wasm/Dockerfile",
-        "nook-app/nook-wasm/LICENSE",
+        "nook-app/nook-platform/nook-core/Dockerfile",
+        "nook-app/nook-platform/nook-core/coverage-floor.json",
+        "nook-app/nook-platform/nook-wasm/Dockerfile",
+        "nook-app/nook-platform/nook-wasm/LICENSE",
     ] {
         assert!(
             base_dockerignore.lines().any(|line| line == ignored),
@@ -241,7 +241,10 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
         );
         assert!(stage[..compile].contains("COPY nook-app/.cargo nook-app/.cargo"));
         assert!(stage[..compile].contains("COPY nook-app/.config nook-app/.config"));
-        assert!(stage[..compile].contains("COPY nook-app/nook-core nook-app/nook-core"));
+        assert!(
+            stage[..compile]
+                .contains("COPY nook-app/nook-platform/nook-core nook-app/nook-platform/nook-core")
+        );
     }
     assert!(wasm_dockerfile.contains("FROM builder-wasm-build AS focused-web-artifacts-source"));
     assert!(wasm_dockerfile.contains("FROM scratch AS focused-web-artifacts"));

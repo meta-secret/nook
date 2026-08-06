@@ -7,7 +7,7 @@ import { summarizeAuthenticationWorkflowForms } from '../../../../nook-web-share
 const here = path.dirname(fileURLToPath(import.meta.url))
 const catalogPath = path.resolve(
   here,
-  '../../../../../nook-core/data/popular_login_sites.json',
+  '../../../../../nook-platform/nook-core/data/popular_login_sites.json',
 )
 const fixturesRoot = path.resolve(
   here,

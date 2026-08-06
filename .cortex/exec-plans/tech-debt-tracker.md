@@ -15,16 +15,16 @@ Scope: event envelope, projection, and wire types. See [typed-newtypes.md](../de
 
 **Already normalized:**
 
-- `nook-app/nook-core/src/vault/vault_connect.rs` — loaded vault metadata/key fields
-- `nook-app/nook-core/src/sync/vault_sync_session.rs` — loaded vault metadata/key fields
+- `nook-app/nook-platform/nook-core/src/vault/vault_connect.rs` — loaded vault metadata/key fields
+- `nook-app/nook-platform/nook-core/src/sync/vault_sync_session.rs` — loaded vault metadata/key fields
 - Vault access states now cross WASM as the core `VaultAccessStatus` enum
-- `nook-app/nook-wasm/src/storage/indexed_db.rs` — local vault registry labels/timestamps
-- `nook-app/nook-wasm/src/logger.rs` — log timestamps
-- `nook-app/nook-wasm/src/manager/event_log.rs` — external event YAML into typed `VaultEvent`
+- `nook-app/nook-platform/nook-wasm/src/storage/indexed_db.rs` — local vault registry labels/timestamps
+- `nook-app/nook-platform/nook-wasm/src/logger.rs` — log timestamps
+- `nook-app/nook-platform/nook-wasm/src/manager/event_log.rs` — external event YAML into typed `VaultEvent`
 
 **Remaining audit targets:**
 
-- Provider snapshot compatibility structs in `nook-app/nook-core/src/sync/sync_provider_store.rs`
-- API DTO option bags and other manager sentinel strings in `nook-app/nook-wasm/src/types.rs` / `manager/mod.rs`
-- Member/enrollment timestamp strings in `nook-app/nook-core/src/auth/multi_device.rs` and `nook-app/nook-core/src/auth/enrollment.rs`
-- Projection conflict optional fields in `nook-app/nook-event-log/src/projection.rs`
+- Provider snapshot compatibility structs in `nook-app/nook-platform/nook-core/src/sync/sync_provider_store.rs`
+- API DTO option bags and other manager sentinel strings in `nook-app/nook-platform/nook-wasm/src/types.rs` / `manager/mod.rs`
+- Member/enrollment timestamp strings in `nook-app/nook-platform/nook-core/src/auth/multi_device.rs` and `nook-app/nook-platform/nook-core/src/auth/enrollment.rs`
+- Projection conflict optional fields in `nook-app/nook-platform/nook-event-log/src/projection.rs`

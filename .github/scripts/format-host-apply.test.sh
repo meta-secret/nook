@@ -9,10 +9,10 @@ sample="$(
   printf '%s\n' \
     'task: [docker:rust:task]' \
     '==> Rust formatting changes (host apply via task format):' \
-    'diff --git a/nook-app/nook-core/src/foo.rs b/nook-app/nook-core/src/foo.rs' \
+    'diff --git a/nook-app/nook-platform/nook-core/src/foo.rs b/nook-app/nook-platform/nook-core/src/foo.rs' \
     'index 1111111..2222222 100644' \
-    '--- a/nook-app/nook-core/src/foo.rs' \
-    '+++ b/nook-app/nook-core/src/foo.rs' \
+    '--- a/nook-app/nook-platform/nook-core/src/foo.rs' \
+    '+++ b/nook-app/nook-platform/nook-core/src/foo.rs' \
     '@@ -1,3 +1,3 @@' \
     ' fn main() {' \
     '-    let x=1;' \
@@ -32,7 +32,7 @@ sample="$(
 
 patch="$(printf '%s\n' "$sample" | awk -f "$extract_awk")"
 
-printf '%s\n' "$patch" | grep -q 'diff --git a/nook-app/nook-core/src/foo.rs' \
+printf '%s\n' "$patch" | grep -q 'diff --git a/nook-app/nook-platform/nook-core/src/foo.rs' \
   || { echo 'format-host-apply test: missing rust diff' >&2; exit 1; }
 printf '%s\n' "$patch" | grep -q 'diff --git a/nook-app/nook-web/nook-web-app/src/x.ts' \
   || { echo 'format-host-apply test: missing web diff' >&2; exit 1; }

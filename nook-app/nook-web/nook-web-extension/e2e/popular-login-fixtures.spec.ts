@@ -17,7 +17,7 @@ import {
 const here = path.dirname(fileURLToPath(import.meta.url))
 const catalogPath = path.resolve(
   here,
-  '../../../nook-core/data/popular_login_sites.json',
+  '../../../nook-platform/nook-core/data/popular_login_sites.json',
 )
 
 type CatalogEntry = { id: string }

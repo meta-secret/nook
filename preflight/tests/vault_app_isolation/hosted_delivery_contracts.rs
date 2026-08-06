@@ -75,7 +75,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_rust_cache_export_hardening(&bake);
 
-    let rust_bake = read(root, "nook-app/nook-wasm/docker-bake.hcl");
+    let rust_bake = read(root, "nook-app/nook-platform/nook-wasm/docker-bake.hcl");
     assert!(
         rust_bake.contains("builder-wasm-deps = \"target:builder-wasm-deps\"")
             && rust_bake
@@ -84,7 +84,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
                 == 5,
         "WASM exports, focused artifacts, task images, and browser task images must persist the source-sensitive hosted lineage"
     );
-    let core_bake = read(root, "nook-app/nook-core/docker-bake.hcl");
+    let core_bake = read(root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
     assert!(
         core_bake.contains("cache-to   = rust_deps_cache_to")
             && core_bake.contains("cache-from = rust_native_source_cache_from")
@@ -317,7 +317,7 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("needs: [web, web-e2e]"),
         "Main must split native Rust, WASM, web verify, and browser suites without a duplicate cache publisher"
     );
-    let coverage_export = read(root, "nook-app/nook-core/docker-bake.hcl")
+    let coverage_export = read(root, "nook-app/nook-platform/nook-core/docker-bake.hcl")
         .split("target \"coverage-export\" {")
         .nth(1)
         .context("core bake file must define the coverage export target")?
@@ -330,7 +330,7 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
 }
 
 fn assert_release_wasm_cache_contract(root: &Path) {
-    let wasm_dockerfile = read(root, "nook-app/nook-wasm/Dockerfile");
+    let wasm_dockerfile = read(root, "nook-app/nook-platform/nook-wasm/Dockerfile");
     assert!(
         wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm-source")
             && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-clippy")
@@ -345,15 +345,15 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile.contains(
                 "cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm -p nook-companion-wasm",
             )
-            && wasm_dockerfile.contains("wasm-pack test --node --release nook-wasm")
-            && wasm_dockerfile.contains("wasm-pack build nook-companion-wasm")
+            && wasm_dockerfile.contains("wasm-pack test --node --release nook-platform/nook-wasm")
+            && wasm_dockerfile.contains("wasm-pack build nook-platform/nook-companion-wasm")
             && wasm_dockerfile.contains("COPY --from=builder-wasm-build")
-            && wasm_dockerfile.contains("touch nook-app-common/src/i18n.rs")
+            && wasm_dockerfile.contains("touch nook-platform/nook-app-common/src/i18n.rs")
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
         "native verification, WASM clippy, package export, and release-test compilation must run as sibling branches, preserve locale rebuilds, and join only small outputs before release-profile Node tests"
     );
     let dependency_dockerfile = read(root, "nook-app/docker/rust.Dockerfile");
-    let core_dockerfile = read(root, "nook-app/nook-core/Dockerfile");
+    let core_dockerfile = read(root, "nook-app/nook-platform/nook-core/Dockerfile");
     assert!(
         !core_dockerfile.contains("wasm-dependency-test")
             && !core_dockerfile
@@ -365,7 +365,7 @@ fn assert_release_wasm_cache_contract(root: &Path) {
     );
     assert!(
         read(root, "nook-app/nook-web/.task/wasm.yml")
-            .contains("wasm-pack test --node --release nook-wasm"),
+            .contains("wasm-pack test --node --release nook-platform/nook-wasm"),
         "the documented manual WASM test task must use the same release profile as hosted CI"
     );
 }
@@ -447,10 +447,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "steps.trusted-wasm.outputs.found != 'true'",
         "'.github/actions/nook-cache-connect/**'",
         "'preflight/**'",
-        "'nook-app/nook-app-common/**'",
-        "'nook-app/nook-companion-core/**'",
-        "'nook-app/nook-companion-wasm/**'",
-        "'nook-app/nook-wasm/**'",
+        "'nook-app/nook-platform/nook-app-common/**'",
+        "'nook-app/nook-platform/nook-companion-core/**'",
+        "'nook-app/nook-platform/nook-companion-wasm/**'",
+        "'nook-app/nook-platform/nook-wasm/**'",
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
         "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
@@ -535,7 +535,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "nook-trusted-wasm-validation-v2-",
         "'.github/actions/nook-cache-connect/**'",
         "'preflight/**'",
-        "'nook-app/nook-app-common/**'",
+        "'nook-app/nook-platform/nook-app-common/**'",
         "chmod +x \"$native/tools/nook-preflight\"",
         "test -x \"$native/tools/nook-preflight\"",
     ] {

@@ -31,10 +31,10 @@ Use Bun for JavaScript tooling and run project commands through Taskfile/Docker.
 
 Portable work belongs in `nook-core` first so web, mobile, and CLI can share it:
 
-1. `nook-app/nook-core/src/secret_types.rs` — enum variant + payload struct + `SecretValue` parse/serialize.
-2. `nook-app/nook-core/src/secret_view.rs` — list/search/build helpers (`display_title`, `group_key`, `build_secret_yaml`, …).
-3. `nook-app/nook-wasm` — expose fields on `NookSecretRecord`; extend `records_to_array` if needed.
-4. `nook-app/nook-core` tests — payload round-trips and validation (no TS mirror tests).
+1. `nook-app/nook-platform/nook-core/src/secret_types.rs` — enum variant + payload struct + `SecretValue` parse/serialize.
+2. `nook-app/nook-platform/nook-core/src/secret_view.rs` — list/search/build helpers (`display_title`, `group_key`, `build_secret_yaml`, …).
+3. `nook-app/nook-platform/nook-wasm` — expose fields on `NookSecretRecord`; extend `records_to_array` if needed.
+4. `nook-app/nook-platform/nook-core` tests — payload round-trips and validation (no TS mirror tests).
 5. `nook-app/nook-web` — form + detail UI only; use `buildSecretYaml` and wasm getters, not duplicated TS schemas.
 6. Playwright — user flow coverage when the type is exposed in the vault UI.
 

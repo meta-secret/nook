@@ -10,7 +10,7 @@ Nook is a modular monorepo with strict uni-directional dependency flow.
 
 App code lives under `nook-app/`.
 
-That directory contains the Rust core, WASM bridge, web app, browser-extension package, and Docker build definitions for the split Rust/WASM and web images.
+That directory contains the Rust platform crates under `nook-platform/`, the WASM bridge, web app, browser-extension package, and Docker build definitions for the split Rust/WASM and web images.
 
 This layout prevents architectural drift.
 
@@ -49,12 +49,15 @@ root/
     ├── .cargo/
     ├── .config/
     ├── docker/              (shared app/toolchain image definitions)
-    ├── nook-app-common/     (shared leaf primitives and localization)
-    ├── nook-auth2/
-    ├── nook-replication/
-    ├── nook-event-log/
-    ├── nook-core/
-    ├── nook-wasm/
+    ├── nook-platform/       (Rust workspace members)
+    │   ├── nook-app-common/ (shared leaf primitives and localization)
+    │   ├── nook-auth2/
+    │   ├── nook-replication/
+    │   ├── nook-event-log/
+    │   ├── nook-companion-core/
+    │   ├── nook-core/
+    │   ├── nook-companion-wasm/
+    │   └── nook-wasm/
     ├── nook-web/
     │   ├── Taskfile.yml  (web-family task include)
     │   ├── .task/        (web, extension, and wasm task includes)
@@ -239,7 +242,7 @@ this crate.
 - **Host boundary:** `LocalEventStore` and `MemoryVaultStore` are portable in-memory service inputs.
 - Browser event storage, projection cache, clocks, secure randomness ceremonies, and provider transports remain adapters in `nook-wasm`.
 - Portable functions receive their resulting typed data explicitly.
-- **Root exports:** `nook-app/nook-core/src/lib.rs` keeps established `nook_core::...` type and function paths available.
+- **Root exports:** `nook-app/nook-platform/nook-core/src/lib.rs` keeps established `nook_core::...` type and function paths available.
 - It re-exports the event-log domain alongside core-owned application services.
 - Fallible event-log APIs return `EventResult` / `EventError` at both crate roots.
 - Core-owned application services convert those errors into `VaultResult` / `VaultError`.
@@ -533,7 +536,7 @@ members:  members_key-encrypted catalog entries
 Portable Rust crate detail:
 
 - `task rust:coverage:check` uses llvm-cov + nextest.
-- Line coverage floor lives in `nook-app/nook-core/coverage-floor.json`.
+- Line coverage floor lives in `nook-app/nook-platform/nook-core/coverage-floor.json`.
 - Fast path: `task rust:test`.
 
 Web e2e detail:

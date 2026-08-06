@@ -284,7 +284,7 @@ mod tests {
     fn reports_implicit_boundary_absence_but_allows_named_types() -> anyhow::Result<()> {
         let root =
             std::env::temp_dir().join(format!("nook-rust-tsify-state-{}", std::process::id()));
-        let source_root = root.join("nook-app/nook-core/src");
+        let source_root = root.join("nook-app/nook-platform/nook-core/src");
         if root.exists() {
             fs::remove_dir_all(&root)?;
         }
@@ -328,23 +328,23 @@ value
             violations,
             vec![
                 Violation {
-                    path: PathBuf::from("nook-app/nook-core/src/boundary.rs"),
+                    path: PathBuf::from("nook-app/nook-platform/nook-core/src/boundary.rs"),
                     line: 3,
                 },
                 Violation {
-                    path: PathBuf::from("nook-app/nook-core/src/boundary.rs"),
+                    path: PathBuf::from("nook-app/nook-platform/nook-core/src/boundary.rs"),
                     line: 5,
                 },
                 Violation {
-                    path: PathBuf::from("nook-app/nook-core/src/boundary.rs"),
+                    path: PathBuf::from("nook-app/nook-platform/nook-core/src/boundary.rs"),
                     line: 13,
                 },
                 Violation {
-                    path: PathBuf::from("nook-app/nook-core/src/boundary.rs"),
+                    path: PathBuf::from("nook-app/nook-platform/nook-core/src/boundary.rs"),
                     line: 17,
                 },
                 Violation {
-                    path: PathBuf::from("nook-app/nook-core/src/boundary.rs"),
+                    path: PathBuf::from("nook-app/nook-platform/nook-core/src/boundary.rs"),
                     line: 23,
                 },
             ]

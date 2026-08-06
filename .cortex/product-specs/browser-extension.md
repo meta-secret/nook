@@ -270,7 +270,7 @@ Nook Pilot HUD; the companion may also show a one-line current-tab hint
 
 CI does **not** hit live third-party login pages. Coverage is data-driven:
 
-1. Catalog: [`nook-core/data/popular_login_sites.json`](../../nook-app/nook-core/data/popular_login_sites.json)
+1. Catalog: [`nook-core/data/popular_login_sites.json`](../../nook-app/nook-platform/nook-core/data/popular_login_sites.json)
    — exactly **1000** password-manager-relevant destinations (`id`, `family`,
    `loginUrl`, `hosts`, `rank`). Thin index only—not duplicated DOM fixtures.
 2. Shared shell templates: `nook-web-extension/e2e/mock-auth/fixtures/templates/*.json`
@@ -294,7 +294,7 @@ CI does **not** hit live third-party login pages. Coverage is data-driven:
    (not one e2e visit per catalog id).
 
 Related host credential matching remains in
-[`login_site_hosts.json`](../../nook-app/nook-core/data/login_site_hosts.json).
+[`login_site_hosts.json`](../../nook-app/nook-platform/nook-core/data/login_site_hosts.json).
 
 ### In-Page HUD
 
