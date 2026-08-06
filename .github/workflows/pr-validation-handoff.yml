@@ -108,7 +108,8 @@ jobs:
 
             if (
               !hasSuccessfulJob('Native Rust verification', true) ||
-              !hasSuccessfulJob('WASM verification and artifact', true) ||
+              !hasSuccessfulJob('WASM build and artifact', true) ||
+              !hasSuccessfulJob('WASM Node tests', true) ||
               !hasSuccessfulJob('Verify and preview', false)
             ) {
               return

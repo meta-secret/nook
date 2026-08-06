@@ -195,13 +195,15 @@ jobs:
         uses: ./.github/actions/nook-cache-telemetry
 
   wasm:
-    name: WASM verification and artifact
+    name: WASM build and artifact
     if: >-
       github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: validation-request
     runs-on: ubuntu-latest
+    outputs:
+      run-node-tests: ${{ steps.decide-node-tests.outputs.run-node-tests }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -293,6 +295,15 @@ jobs:
             test -s "$dir/nook-companion-wasm/$file"
           done
 
+      - name: Decide whether Node tests must run
+        id: decide-node-tests
+        run: |
+          if [ "${{ steps.trusted-wasm.outputs.found }}" = "true" ]; then
+            echo "run-node-tests=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run-node-tests=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: WASM clippy and build
         if: steps.trusted-wasm.outputs.found != 'true'
         run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
@@ -303,8 +314,7 @@ jobs:
       - name: Stamp WASM handoff attempt
         run: echo "$GITHUB_RUN_ATTEMPT" > "${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm/nook-run-attempt"
 
-      # The exact package can feed the independent web gate as soon as clippy/build succeeds.
-      # Node tests continue on this producer and remain a required job conclusion.
+      # Publish as soon as build succeeds so web verification can start through needs.
       - name: Upload built WASM handoff
         uses: actions/upload-artifact@v7
         with:
@@ -314,24 +324,60 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
+  wasm-node-test:
+    name: WASM Node tests
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e')
+    needs: wasm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        if: needs.wasm.outputs.run-node-tests == 'true'
+        uses: actions/checkout@v7
+
+      - name: Docker setup
+        if: needs.wasm.outputs.run-node-tests == 'true'
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          cache-write: "false"
+          main-cache-only: "true"
+          isolated-cache-write: "true"
+
       - name: WASM Node tests
-        if: steps.trusted-wasm.outputs.found != 'true'
+        if: needs.wasm.outputs.run-node-tests == 'true'
         run: task ci:wasm:node-test
         env:
           CI: true
           WASM_BUILD_MODE: dev
 
+      - name: Trusted handoff already covered Node tests
+        if: needs.wasm.outputs.run-node-tests != 'true'
+        run: echo "Exact trusted WASM handoff already proved Node tests"
+
       - name: Preserve cache telemetry
-        if: always()
+        if: always() && needs.wasm.outputs.run-node-tests == 'true'
         uses: ./.github/actions/nook-cache-telemetry
 
   verify:
-    name: Verify and preview
+    name: Web verification
     if: >-
       github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
-    needs: validation-request
+    needs: [validation-request, wasm]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -375,70 +421,19 @@ jobs:
           main-cache-only: "true"
           isolated-cache-write: "true"
 
-      # Checkout, contract tests, and Docker setup run in parallel with the producer jobs. Only the
-      # first step that consumes WASM waits. A current producer's attempt marker prevents a failed-job
-      # rerun from consuming an older run-stable artifact before the producer overwrites it.
-      - name: Wait for built WASM handoff
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTIFACT_NAME: pr-wasm-${{ github.run_id }}
+      - name: Download built WASM handoff
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-wasm-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
+
+      - name: Confirm WASM handoff shape
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 900); do
-            wasm_job="$(
-              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
-                --jq '[.jobs[] | select(.name == "WASM verification and artifact")] | first // {}'
-            )"
-            wasm_job_id="$(jq -r '.id // empty' <<< "$wasm_job")"
-            wasm_status="$(jq -r '.status // "queued"' <<< "$wasm_job")"
-            wasm_conclusion="$(jq -r '.conclusion // ""' <<< "$wasm_job")"
-            successful_wasm_attempts=""
-            if [ -z "$wasm_job_id" ]; then
-              successful_wasm_attempts="$(
-                gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=all&per_page=100" \
-                  --jq '.jobs[] | select(.name == "WASM verification and artifact" and .conclusion == "success") | .run_attempt'
-              )"
-            fi
-            if [ -n "$wasm_job_id" ] \
-              && [ "$wasm_status" = "completed" ] \
-              && [ "$wasm_conclusion" != "success" ]; then
-              echo "::error::WASM verification completed with $wasm_conclusion"
-              exit 1
-            fi
-
-            if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
-              --paginate \
-              --jq '.artifacts[].name' \
-              | grep -Fxq "$ARTIFACT_NAME"; then
-              destination="${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm"
-              candidate="${destination}.candidate"
-              rm -rf "$candidate"
-              mkdir -p "$candidate"
-              if gh run download "$GITHUB_RUN_ID" \
-                --name "$ARTIFACT_NAME" \
-                --dir "$candidate"; then
-                artifact_attempt="$(cat "$candidate/nook-run-attempt" 2>/dev/null || true)"
-                if { [ -n "$wasm_job_id" ] && [ "$artifact_attempt" = "$GITHUB_RUN_ATTEMPT" ]; } \
-                  || { [ -z "$wasm_job_id" ] && [ -n "$artifact_attempt" ] \
-                    && grep -Fxq "$artifact_attempt" <<< "$successful_wasm_attempts"; }; then
-                  test -s "$candidate/nook_wasm.js"
-                  rm -rf "$destination"
-                  mv "$candidate" "$destination"
-                  exit 0
-                fi
-              fi
-              rm -rf "$candidate"
-            fi
-            if [ -z "$wasm_job_id" ]; then
-              echo "::error::This failed-job rerun has no WASM producer and the run-stable artifact is unavailable"
-              exit 1
-            fi
-
-            echo "Waiting for current-attempt WASM artifact (attempt $attempt/900; wasm=$wasm_status${wasm_conclusion:+/$wasm_conclusion})"
-            sleep 2
-          done
-          echo "::error::Current-attempt WASM artifact was not published within 30 minutes"
-          exit 1
+          dir="${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm"
+          test -s "$dir/nook_wasm.js"
+          test -s "$dir/nook-companion-wasm/nook_companion_wasm.js"
+          test -s "$dir/nook-run-attempt"
 
       - name: Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
         run: |
@@ -535,47 +530,60 @@ jobs:
               })
             }
 
-      - name: Require WASM producer success before preview
+      - name: Extract preview dist to the host
+        run: task docker:extract:dist
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI: true
+
+      - name: Upload preview dist handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-web-dist-${{ github.run_id }}
+          path: |
+            nook-app/nook-web/nook-web-app/dist
+            nook-app/nook-web/nook-vault-simple/dist
+            nook-app/nook-web/nook-vault-sentinel/dist
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
+
+  preview:
+    name: Verify and preview
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e')
+    needs: [verify, wasm-node-test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node for host Pages deploy
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Download preview dist handoff
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-web-dist-${{ github.run_id }}
+          # upload-artifact roots at the least common ancestor of the dist paths
+          # (nook-app/nook-web), so restore into that directory.
+          path: nook-app/nook-web
+
+      - name: Confirm preview dist handoff
         run: |
           set -euo pipefail
-          artifact_attempt="$(
-            cat "${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm/nook-run-attempt"
-          )"
-          test -n "$artifact_attempt"
-          for attempt in $(seq 1 900); do
-            wasm_job="$(
-              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
-                --jq '[.jobs[] | select(.name == "WASM verification and artifact")] | first // {}'
-            )"
-            wasm_job_id="$(jq -r '.id // empty' <<< "$wasm_job")"
-            wasm_status="$(jq -r '.status // "queued"' <<< "$wasm_job")"
-            wasm_conclusion="$(jq -r '.conclusion // ""' <<< "$wasm_job")"
-            # A failed-job rerun may omit the producer, but the built artifact alone is not proof
-            # that its later Node tests passed. Require a successful producer from an earlier
-            # attempt before allowing deployment.
-            if [ -z "$wasm_job_id" ]; then
-              if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=all&per_page=100" \
-                --jq '.jobs[] | select(.name == "WASM verification and artifact" and .conclusion == "success") | .run_attempt' \
-                | grep -Fxq "$artifact_attempt"; then
-                exit 0
-              fi
-              echo "::error::WASM artifact attempt $artifact_attempt did not complete successfully"
-              exit 1
-            fi
-            if [ "$wasm_status" = "completed" ]; then
-              if [ "$wasm_conclusion" = "success" ]; then
-                exit 0
-              fi
-              echo "::error::WASM verification completed with $wasm_conclusion"
-              exit 1
-            fi
-            echo "Waiting to gate preview on WASM Node tests (attempt $attempt/900; wasm=$wasm_status)"
-            sleep 2
-          done
-          echo "::error::WASM verification did not complete within 30 minutes"
-          exit 1
+          test -d nook-app/nook-web/nook-web-app/dist
+          test -d nook-app/nook-web/nook-web-app/dist/site
+          test -d nook-app/nook-web/nook-vault-simple/dist
+          test -d nook-app/nook-web/nook-vault-sentinel/dist
 
       - name: Deploy and verify Pages previews
         id: deploy-all
@@ -585,7 +593,8 @@ jobs:
           CF_PAGES_BRANCH: pr-${{ github.event.pull_request.number }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: task ci:pr:deploy-and-verify-previews
+          NOOK_HOST_PAGES_DEPLOY: "1"
+        run: bash .github/scripts/ci-pr-deploy-and-verify-previews.sh
 
       - name: Comment preview URL on PR
         if: steps.deploy-all.outcome == 'success'
@@ -707,10 +716,6 @@ jobs:
               auto_inactive: false,
             })
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
   coverage:
     name: Rust coverage report
     if: >-
@@ -726,7 +731,7 @@ jobs:
     if: >-
       github.event.action != 'closed' &&
       contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
-    needs: wasm
+    needs: [wasm, wasm-node-test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -781,7 +786,7 @@ jobs:
     if: >-
       github.event.action != 'closed' &&
       contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
-    needs: wasm
+    needs: [wasm, wasm-node-test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
