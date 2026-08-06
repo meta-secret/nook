@@ -241,7 +241,10 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
         );
         assert!(stage[..compile].contains("COPY nook-app/.cargo nook-app/.cargo"));
         assert!(stage[..compile].contains("COPY nook-app/.config nook-app/.config"));
-        assert!(stage[..compile].contains("COPY nook-app/nook-platform/nook-core nook-app/nook-platform/nook-core"));
+        assert!(
+            stage[..compile]
+                .contains("COPY nook-app/nook-platform/nook-core nook-app/nook-platform/nook-core")
+        );
     }
     assert!(wasm_dockerfile.contains("FROM builder-wasm-build AS focused-web-artifacts-source"));
     assert!(wasm_dockerfile.contains("FROM scratch AS focused-web-artifacts"));
