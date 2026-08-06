@@ -47,11 +47,15 @@ export function lockDeviceProtection(state: VaultState): Promise<void> {
     state.storageMode = LOCAL_PROVIDER_TYPE;
   }
   if (!state.hasManager) return Promise.resolve();
-  return state
-    .enqueueStorage(() => state.requireManager().lockDeviceIdentity())
-    .catch(() => {
-      // Persisted identity remains wrapped even if the manager is tearing down.
-    });
+  // Zeroize in-memory app-key material immediately. Queuing through storage
+  // would leave Devices & access reporting Identity unlocked until the queue
+  // drained, including when lock keeps the /devices-access route open.
+  try {
+    state.requireManager().lockDeviceIdentity();
+  } catch {
+    // Persisted identity remains wrapped even if the manager is tearing down.
+  }
+  return Promise.resolve();
 }
 
 async function finishAuthorizedInitialization(
