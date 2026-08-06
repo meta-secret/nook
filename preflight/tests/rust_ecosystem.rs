@@ -57,6 +57,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "kani-github-action",
         "FUZZ_SECONDS",
         "isolated-cache-write: ${{ inputs.isolated_cache_write }}",
+        "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}",
     ] {
         assert!(
             checks.contains(marker),
@@ -68,6 +69,15 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && !checks.contains("NOOK_BAKE_FILES")
             && !checks.contains("docker buildx bake"),
         "Rust ecosystem checks must invoke Taskfile tasks instead of Bake helpers"
+    );
+    assert_eq!(
+        checks
+            .matches(
+                "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}"
+            )
+            .count(),
+        4,
+        "every Bake-backed ecosystem job must seed Main and isolate PR cache writes"
     );
     let docker_tasks = read("nook-app/docker/Taskfile.yml")?;
     for marker in [
@@ -155,6 +165,28 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             "rust.docker-bake.hcl is missing target {target}"
         );
     }
+    assert!(
+        rust_bake.contains("cache-to   = rust_ecosystem_policy_cache_to")
+            && rust_bake
+                .matches("cache-to   = rust_ecosystem_policy_cache_to")
+                .count()
+                >= 2,
+        "ecosystem policy-tools and dependency-policy must seed the policy hosted cache"
+    );
+    assert!(
+        rust_bake.contains("cache-from = rust_ecosystem_nightly_cache_from")
+            && rust_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
+            && rust_bake
+                .matches("cache-to   = rust_ecosystem_nightly_cache_to")
+                .count()
+                >= 3,
+        "ecosystem nightly/fuzz/dylint must share the hosted nightly cache scope"
+    );
+    assert!(
+        rust_bake.contains("cache-from = rust_ecosystem_deterministic_cache_from")
+            && rust_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),
+        "ecosystem deterministic must seed its own hosted cache above rust-deps"
+    );
 
     for capability in [
         "cargo-deny",
