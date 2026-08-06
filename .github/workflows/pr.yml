@@ -584,7 +584,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           NOOK_HOST_PAGES_DEPLOY: "1"
-        run: task ci:pr:deploy-and-verify-previews
+        run: bash .github/scripts/ci-pr-deploy-and-verify-previews.sh
 
       - name: Comment preview URL on PR
         if: steps.deploy-all.outcome == 'success'

@@ -171,8 +171,8 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
 
     let pull_request = read(&root, ".github/workflows/pr.yml");
     assert!(
-        pull_request.contains("task ci:pr:deploy-and-verify-previews"),
-        "PR preview deploy must invoke the Taskfile entry"
+        pull_request.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh"),
+        "PR preview deploy must invoke the host Pages script"
     );
     let pr_deploy_script = read(&root, ".github/scripts/ci-pr-deploy-and-verify-previews.sh");
     assert!(

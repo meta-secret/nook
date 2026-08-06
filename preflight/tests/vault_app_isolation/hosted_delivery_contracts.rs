@@ -638,7 +638,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     assert!(
         preview_job.contains("needs: [verify, wasm-node-test]")
             && preview_job.contains("NOOK_HOST_PAGES_DEPLOY: \"1\"")
-            && preview_job.contains("task ci:pr:deploy-and-verify-previews")
+            && preview_job.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh")
             && preview_job.contains("name: pr-web-dist-${{ github.run_id }}")
             && !preview_job.contains("attempt $attempt/900"),
         "PR preview must deploy only after web verification and WASM Node tests succeed"
@@ -839,9 +839,9 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         deploy.contains("id: deploy-all")
-            && deploy.contains("task ci:pr:deploy-and-verify-previews")
+            && deploy.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh")
             && deploy.contains("NOOK_HOST_PAGES_DEPLOY: \"1\""),
-        "PR preview deploy must invoke the Taskfile entry that owns concurrent Pages uploads"
+        "PR preview deploy must invoke the host Pages script that owns concurrent uploads"
     );
     let deploy_script = read(root, ".github/scripts/ci-pr-deploy-and-verify-previews.sh");
     assert!(
