@@ -848,10 +848,11 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
         deploy_script.contains("deploy_pages()")
             && deploy_script.contains("NOOK_HOST_PAGES_DEPLOY")
             && deploy_script.contains("ci-pr-host-pages-deploy.sh")
-            && deploy_script.contains(">\"$deploy_dir/unified.log\"")
-            && deploy_script.contains(">\"$deploy_dir/site.log\"")
-            && deploy_script.contains(">\"$deploy_dir/simple.log\"")
-            && deploy_script.contains(">\"$deploy_dir/sentinel.log\"")
+            && deploy_script.contains(">\"$log\" 2>&1 &")
+            && deploy_script.contains("\"$deploy_dir/unified.log\"")
+            && deploy_script.contains("\"$deploy_dir/site.log\"")
+            && deploy_script.contains("\"$deploy_dir/simple.log\"")
+            && deploy_script.contains("\"$deploy_dir/sentinel.log\"")
             && deploy_script.contains("wait_for_deploy"),
         "independent Cloudflare preview uploads must run concurrently and all succeed before alias verification"
     );
