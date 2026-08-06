@@ -131,8 +131,10 @@ jobs:
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
+          # Main push seeds trusted nightly cache; PRs write isolated remote refs
+          # with Main fallback. Schedule/dispatch stay read-only consumers.
+          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
+          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
           isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
       - name: Bake rust-fuzz-smoke
         env:
@@ -175,8 +177,9 @@ jobs:
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
+          # Same write policy as fuzz-smoke: seed Main, isolate PR writes.
+          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
+          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
           isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
       - name: Bake rust-dylint
         run: task docker:ecosystem:dylint

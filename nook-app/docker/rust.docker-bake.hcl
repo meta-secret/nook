@@ -1,5 +1,6 @@
 // Rust toolchain base + ecosystem gates. Hosted CI seeds rust_base_cache_* before
-// dependency scopes consume it. Ecosystem targets Bake from the same Dockerfile.
+// dependency scopes consume it. Fuzz/dylint also seed rust_ecosystem_nightly_cache_*
+// so the second toolchain is reused without folding it into product rust-base.
 
 target "rust-base" {
   context    = "."
@@ -39,7 +40,8 @@ target "rust-ecosystem-nightly" {
   dockerfile = "nook-app/docker/rust.Dockerfile"
   target     = "rust-ecosystem-nightly"
   platforms  = ["linux/amd64"]
-  cache-from = rust_base_cache_from
+  cache-from = rust_ecosystem_nightly_cache_from
+  cache-to   = rust_ecosystem_nightly_cache_to
   output     = ["type=cacheonly"]
 }
 
@@ -52,7 +54,8 @@ target "rust-fuzz-smoke" {
   args = {
     FUZZ_SECONDS = FUZZ_SECONDS
   }
-  cache-from = rust_base_cache_from
+  cache-from = rust_ecosystem_nightly_cache_from
+  cache-to   = rust_ecosystem_nightly_cache_to
   output     = ["type=cacheonly"]
 }
 
@@ -62,7 +65,8 @@ target "rust-dylint" {
   dockerfile = "nook-app/docker/rust.Dockerfile"
   target     = "rust-dylint"
   platforms  = ["linux/amd64"]
-  cache-from = rust_base_cache_from
+  cache-from = rust_ecosystem_nightly_cache_from
+  cache-to   = rust_ecosystem_nightly_cache_to
   output     = ["type=cacheonly"]
 }
 
