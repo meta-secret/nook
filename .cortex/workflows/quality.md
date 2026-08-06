@@ -63,8 +63,11 @@ Use this workflow for quality, CI, and deployment changes.
      `rust-ecosystem-policy-tools` alone, then `rust-dependency-policy`, from
      `nook-app/docker/rust.Dockerfile` (pinned `cargo-deny` + `cargo-audit`;
      not installed into `rust-base`). Tools and deny/audit leaf use separate
-     Zot scopes. The tools Bake must finish exporting before the leaf Bake
-     starts so cache-to cannot race an open tools RUN.
+     Zot scopes.
+     Each stage imports with cache-to cleared, then publishes with cache-from
+     cleared so a CACHED solve cannot overwrite Zot with a thin index.
+     Tools and nightly scopes must not also import `rust-base`.
+     That shorter parent importer orphans the toolchain RUN layers.
      Never `cargo install` those tools on the runner host. Advisory exceptions
      must name the RustSec IDs, identify the exact pinned upstream graph, and
      state the dependency upgrade that removes them in both `deny.toml` and
@@ -91,7 +94,9 @@ Use this workflow for quality, CI, and deployment changes.
      `rust-ecosystem-nightly` with pinned
      [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
      `dylint-link` release binaries (no host `cargo install`).
-     Sole writer for the shared nightly Zot scope.
+     Lint is read-only for nightly cache.
+     When writes are enabled, the Task then publishes `rust-ecosystem-nightly`
+     with cache-from cleared (sole nightly writer).
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
@@ -116,8 +121,12 @@ Use this workflow for quality, CI, and deployment changes.
       - web dependencies
       - browser-free web
       - e2e web
-    - Ecosystem and product deps cache-from use trusted `nook-rust-base-v1` only.
+    - Product deps cache-from use trusted `nook-rust-base-v1` only.
     - They must not import PR-isolated rust-base parents.
+    - Ecosystem nightly/policy-tools/policy scopes must not import rust-base at all.
+    - Their mode=max exports already embed that parent chain.
+    - Ecosystem and PR product jobs verify with cache-to off, then publish with
+      cache-from cleared so CACHED solves cannot thin-export over a warm index.
     - One CI job writes each shared ecosystem registry ref.
     - The complete Rust/WASM cargo-chef dependency graph uses an immutable scope fingerprinted from manifests, lockfiles, compiler Dockerfiles, Task invocation inputs, and Bake definitions.
     - Hosted builds never attach Redis credentials.

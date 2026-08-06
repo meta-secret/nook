@@ -16,8 +16,8 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "NOOK_REGISTRY_CACHE_HOST",
         "default = \"registry.dev.nokey.sh\"",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-nightly-v2",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-policy-tools-v2",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-nightly-v3",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-policy-tools-v3",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-policy-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2",
@@ -58,9 +58,9 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
             && rust_toolchain_bake
                 .matches("cache-to   = rust_ecosystem_nightly_cache_to")
                 .count()
-                == 2
+                == 1
             && rust_toolchain_bake.contains("cache-to   = []"),
-        "ecosystem nightly+dylint write the shared nightly cache; fuzz is read-only"
+        "ecosystem nightly target alone writes the shared nightly cache; dylint/fuzz are read-only"
     );
     assert!(
         rust_toolchain_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),
@@ -142,7 +142,56 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "selected dependency and native-source cache publishers must be explicit cache-only Bake outputs"
     );
     assert_main_producer_owned_cache_publish(root)?;
+    assert_pr_producer_owned_cache_publish(root)?;
     assert_main_split_pipeline(root)?;
+    Ok(())
+}
+
+fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
+    let pr = read(root, ".github/workflows/pr.yml");
+    for marker in [
+        "Publish PR-scoped native BuildKit cache",
+        "Publish PR-scoped WASM BuildKit cache",
+        "Publish PR-scoped web BuildKit cache",
+        "task ci:main:publish-native-cache",
+        "task ci:main:publish-wasm-cache",
+        "task ci:main:publish-web-cache",
+    ] {
+        assert!(
+            pr.contains(marker),
+            "PR producers must publish warm local layers after verify: missing {marker}"
+        );
+    }
+    let rust_verify = pr
+        .find("task ci:pr:rust")
+        .context("PR Rust job must verify")?;
+    let rust_publish = pr
+        .find("task ci:main:publish-native-cache")
+        .context("PR Rust job must publish its cache")?;
+    let wasm_verify = pr
+        .find("task ci:pr:wasm")
+        .context("PR WASM job must verify")?;
+    let wasm_publish = pr
+        .find("task ci:main:publish-wasm-cache")
+        .context("PR WASM job must publish its cache")?;
+    let web_verify = pr
+        .find("task ci:pr:web")
+        .context("PR web job must verify")?;
+    let web_publish = pr
+        .find("task ci:main:publish-web-cache")
+        .context("PR web job must publish its cache")?;
+    assert!(
+        rust_verify < rust_publish
+            && pr[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && pr[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && wasm_verify < wasm_publish
+            && pr[wasm_verify..wasm_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && pr[wasm_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && web_verify < web_publish
+            && pr[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && pr[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\""),
+        "PR producers must verify read-only, then publish from warm builders with writes enabled"
+    );
     Ok(())
 }
 
@@ -229,8 +278,9 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             )
             && docker_tasks.contains("--set \"builder-wasm-deps.cache-to=\"")
             && docker_tasks.contains("--set \"wasm-export.cache-from=\"")
-            && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh"),
-        "producer-owned publishers must select local verified graphs, preserve the isolated no-import WASM dependency export, and verify it from a fresh builder"
+            && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh")
+            && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX"),
+        "producer-owned publishers must select local verified graphs, preserve the isolated no-import WASM dependency export, verify Main from a fresh builder, and branch PR/Remote isolated exports"
     );
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
