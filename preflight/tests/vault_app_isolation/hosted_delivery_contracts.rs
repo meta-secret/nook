@@ -45,6 +45,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "default = \"registry.dev.nokey.sh\"",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-nightly-v1",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-policy-tools-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-policy-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2",
@@ -68,20 +69,26 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "the Rust toolchain base must seed its own hosted cache before dependency scopes consume it"
     );
     assert!(
-        rust_toolchain_bake.contains("cache-to   = rust_ecosystem_policy_cache_to")
+        rust_toolchain_bake.contains("cache-to   = rust_ecosystem_policy_tools_cache_to")
+            && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_policy_cache_to")
+            && rust_toolchain_bake
+                .matches("cache-to   = rust_ecosystem_policy_tools_cache_to")
+                .count()
+                == 1
             && rust_toolchain_bake
                 .matches("cache-to   = rust_ecosystem_policy_cache_to")
                 .count()
-                >= 2,
-        "ecosystem policy-tools and dependency-policy must seed the policy hosted cache"
+                == 1,
+        "ecosystem policy-tools and dependency-policy must seed separate hosted caches"
     );
     assert!(
         rust_toolchain_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
             && rust_toolchain_bake
                 .matches("cache-to   = rust_ecosystem_nightly_cache_to")
                 .count()
-                == 3,
-        "ecosystem nightly, fuzz-smoke, and dylint must seed the shared nightly hosted cache"
+                == 2
+            && rust_toolchain_bake.contains("cache-to   = []"),
+        "ecosystem nightly+dylint write the shared nightly cache; fuzz is read-only"
     );
     assert!(
         rust_toolchain_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),
@@ -93,7 +100,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
-        11,
+        12,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
     assert_rust_cache_export_hardening(&bake);

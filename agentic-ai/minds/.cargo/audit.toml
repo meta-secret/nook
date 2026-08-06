@@ -9,4 +9,5 @@ ignore = [
 
 [output]
 # Keep advisory IDs/titles; skip inverse trees that flood CI logs.
+quiet = false
 show_tree = false

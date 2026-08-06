@@ -382,6 +382,7 @@ tasks:
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}}
+        rust-ecosystem-policy-tools
         rust-dependency-policy
 
   docker:ecosystem:deterministic:
