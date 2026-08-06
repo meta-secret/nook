@@ -52,7 +52,8 @@ fn repository_root() -> PathBuf {
 #[test]
 fn event_log_crate_keeps_the_portable_dependency_direction() -> anyhow::Result<()> {
     let root = repository_root();
-    let event_log = fs::read_to_string(root.join("nook-app/nook-platform/nook-event-log/Cargo.toml"))?;
+    let event_log =
+        fs::read_to_string(root.join("nook-app/nook-platform/nook-event-log/Cargo.toml"))?;
     assert!(event_log.contains("nook-auth2 ="));
     assert!(event_log.contains("nook-replication ="));
     for forbidden in ["nook-core =", "nook-wasm =", "web-sys =", "js-sys ="] {
@@ -74,7 +75,8 @@ fn event_log_crate_keeps_the_portable_dependency_direction() -> anyhow::Result<(
 #[test]
 fn shared_application_primitives_have_one_leaf_crate() -> anyhow::Result<()> {
     let root = repository_root();
-    let common = fs::read_to_string(root.join("nook-app/nook-platform/nook-app-common/Cargo.toml"))?;
+    let common =
+        fs::read_to_string(root.join("nook-app/nook-platform/nook-app-common/Cargo.toml"))?;
     for forbidden in [
         "nook-auth2 =",
         "nook-replication =",
