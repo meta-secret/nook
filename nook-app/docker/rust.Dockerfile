@@ -381,8 +381,8 @@ FROM rust-base AS rust-ecosystem-policy-tools
 
 ARG CARGO_DENY_VERSION=0.20.2
 ARG CARGO_DENY_SHA256=9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
-ARG CARGO_AUDIT_VERSION=0.22.1
-ARG CARGO_AUDIT_SHA256=c32506f338bdcdaef5a17fb9f33abb6ecf9561324cfd34237fd335f9283a1eab
+ARG CARGO_AUDIT_VERSION=0.22.2
+ARG CARGO_AUDIT_SHA256=7fb9497f8594b389e5fce5ef9b92db08432996895b2e0c5a0167a69ed445c428
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
@@ -414,6 +414,8 @@ FROM rust-ecosystem-policy-tools AS rust-dependency-policy
 
 WORKDIR /meta-secret/nook
 COPY . .
+# --quiet keeps advisory summaries; cargo-audit 0.22.2+ also hides inverse
+# dependency trees (same intent as deny --hide-inclusion-graph).
 RUN set -eux; \
     for manifest in \
       nook-app/Cargo.toml \
@@ -424,7 +426,7 @@ RUN set -eux; \
         check --hide-inclusion-graph; \
     done; \
     for workspace in nook-app fuzz preflight agentic-ai/minds; do \
-      (cd "$workspace" && cargo-audit audit); \
+      (cd "$workspace" && cargo-audit audit --quiet); \
     done
 
 FROM rust-base AS rust-ecosystem-nightly

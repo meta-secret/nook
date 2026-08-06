@@ -129,7 +129,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "cargo-deny --manifest-path",
         "--hide-inclusion-graph",
         "--log-level error",
-        "cargo-audit audit",
+        "cargo-audit audit --quiet",
         "cargo fuzz run",
         "cargo dylint --all",
     ] {

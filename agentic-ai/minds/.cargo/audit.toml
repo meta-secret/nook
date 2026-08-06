@@ -6,3 +6,7 @@ ignore = [
   "RUSTSEC-2026-0118",
   "RUSTSEC-2026-0119",
 ]
+
+[output]
+# Keep advisory IDs/titles; skip inverse trees that flood CI logs.
+show_tree = false
