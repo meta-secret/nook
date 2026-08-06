@@ -42,14 +42,14 @@ test.describe('devices and access dashboard', () => {
     const dashboard = page.getByTestId('devices-access-dashboard')
     await expect(dashboard).toBeVisible()
     await expect(dashboard).toContainText('Not prepared')
-    // The preview keeps identity, protection, and vault state separate instead
-    // of drawing relationships the browser cannot prove.
+    // An unprepared browser previews the same three bands it will populate
+    // instead of offering evidence it cannot have yet.
     const preview = page.getByTestId('devices-access-chain-preview')
     await expect(preview).toContainText('My browser')
     await expect(preview).toContainText('My identities')
     await expect(preview).toContainText('Vault access')
-    await expect(preview).not.toContainText('unlocks')
-    await expect(preview).not.toContainText('opens')
+    await expect(preview).toContainText('unlocks')
+    await expect(preview).toContainText('opens')
     // DOM order matters here; innerText applies the micro-label's visual
     // uppercase transform and would make the source-case labels unsearchable.
     const previewTextState = await preview.evaluate((element, kind) => {
@@ -107,7 +107,41 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('login-devices-access')).toBeVisible()
   })
 
-  test('keeps local identity independent from protection and vault access', async ({
+  test('after creating a passkey vault shows the access dependency graph', async ({
+    page,
+  }) => {
+    await connectLocalVault(page)
+    await page.getByTestId('vault-devices-access-tab').click()
+    const dashboard = page.getByTestId('devices-access-dashboard')
+    await expect(dashboard).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    const bridge = page.getByTestId('devices-access-chain')
+    await expect(bridge).toContainText('Unlock protection')
+    await expect(bridge).toContainText('Passkey · recoverable identity')
+    await expect(bridge).toContainText('Device-key evidence')
+    await expect(bridge).toContainText('Verified device-key access')
+    await expect(bridge).toContainText('Test vault')
+    await expect(bridge.locator('.svelte-flow__edge')).not.toHaveCount(0)
+    await expect(
+      bridge.getByRole('article', {
+        name: /Unlock protection: Passkey · recoverable identity. Unlocks this device key/,
+      }),
+    ).toBeVisible()
+    await expect(
+      bridge.getByRole('article', { name: /Device-key evidence/ }),
+    ).toBeVisible()
+    await expect(
+      bridge.getByRole('article', { name: /Device-key access/ }),
+    ).toBeVisible()
+    const panel = page.getByTestId('devices-access-panel')
+    await expect(panel).toContainText('Passkey · recoverable identity')
+    await expect(
+      page.getByTestId('devices-access-credential-id'),
+    ).not.toHaveText('Unknown')
+  })
+
+  test('walks the access chain from passkey to device key to vaults', async ({
     page,
   }) => {
     await connectLocalVault(page)
@@ -123,25 +157,57 @@ test.describe('devices and access dashboard', () => {
     await expect(dashboard).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('devices-access-identity-card')).toBeVisible()
-    const unlockNode = page.getByTestId('devices-access-node-unlock')
-    const vaultsNode = page.getByTestId('devices-access-node-vaults')
-    const bridge = page.getByTestId('devices-access-chain')
-    await expect(bridge).toContainText('Local identity state')
     await expect(
-      bridge.getByRole('article', {
-        name: /Browser identity state.*no virtual identity ID is inferred/,
+      page.getByTestId('devices-access-identity-state'),
+    ).toContainText('Identity unlocked')
+    await expect(page.getByTestId('devices-access-chain')).toContainText(
+      'Passkey · recoverable identity',
+    )
+    await expect(
+      page.getByRole('button', {
+        name: /Local identity state.*1 opened by key/,
       }),
     ).toBeVisible()
-    await expect(bridge).not.toContainText('Passkey')
-    await expect(bridge).not.toContainText('Device key')
-    await expect(bridge).not.toContainText('Test vault')
-    await expect(bridge.locator('.svelte-flow__edge')).toHaveCount(0)
+
+    const unlockNode = page.getByTestId('devices-access-node-unlock')
+    const deviceKeyNode = page.getByTestId('devices-access-node-device-key')
+    const vaultsNode = page.getByTestId('devices-access-node-vaults')
+    const bridge = page.getByTestId('devices-access-chain')
+    await expect(bridge).toContainText('Device-key evidence')
+    await expect(bridge).toContainText('Unlock protection')
+    await expect(bridge).toContainText('Local identity state')
+    await expect(bridge).toContainText('Verified device-key access')
+    await expect(bridge.locator('.svelte-flow__edge')).not.toHaveCount(0)
+    await expect(
+      bridge.getByRole('article', { name: /Device-key evidence/ }),
+    ).toBeVisible()
+    await expect(
+      bridge.getByRole('article', {
+        name: /Unlock protection: Passkey · recoverable identity. Unlocks this device key/,
+      }),
+    ).toBeVisible()
+    await expect(
+      bridge.getByRole('article', {
+        name: /Browser identity state.*Identity unlocked/,
+      }),
+    ).toBeVisible()
+    await expect(
+      bridge.getByRole('article', { name: /Device-key access/ }),
+    ).toBeVisible()
     await expect(unlockNode).toHaveAttribute('aria-selected', 'true')
     await expect(unlockNode).toContainText('Protection')
+    await expect(deviceKeyNode).toContainText('Device key')
     await expect(vaultsNode).toContainText('Vault access')
+    const strengthVaults = page.getByTestId('devices-access-strength-vaults')
+    await expect(strengthVaults).toHaveCount(1)
+    await expect(strengthVaults).toContainText('Verified way in')
 
     await page.setViewportSize({ width: 390, height: 844 })
+    await expect(
+      bridge.getByRole('img', {
+        name: /device key opened Test vault; an identity-level grant is not inferred/i,
+      }),
+    ).toHaveCount(1)
     expect(
       await page.evaluate(
         () =>
@@ -160,16 +226,16 @@ test.describe('devices and access dashboard', () => {
     await expect
       .poll(() =>
         bridge.evaluate((element) => {
-          const identity = element.querySelector(
-            '[data-testid="devices-access-identity-card"]',
+          const protection = element.querySelector(
+            'article[aria-label*="Unlock protection"]',
           )
-          if (!(identity instanceof HTMLElement)) return false
+          if (!(protection instanceof HTMLElement)) return false
 
           const bridgeBounds = element.getBoundingClientRect()
-          const identityBounds = identity.getBoundingClientRect()
+          const protectionBounds = protection.getBoundingClientRect()
           return (
-            identityBounds.left >= bridgeBounds.left &&
-            identityBounds.right <= bridgeBounds.right
+            protectionBounds.left >= bridgeBounds.left &&
+            protectionBounds.right <= bridgeBounds.right
           )
         }),
       )
@@ -178,24 +244,28 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('devices-access-perspective-vaults').click()
     await expect(
       page.getByRole('button', {
-        name: /Test vault.*Verified way in/,
+        name: /Test vault.*Verified device keys: 1/,
       }),
     ).toBeVisible()
     await expect(
+      bridge.getByRole('img', {
+        name: /Test vault was opened by this exact device key/,
+      }),
+    ).toHaveCount(1)
+    await expect(
       bridge.getByRole('article', {
-        name: /Local vault access: Test vault. Verified way in/,
+        name: /Device-key evidence: Device key.*Test vault was opened by this exact device key/i,
       }),
     ).toBeVisible()
-    await expect(bridge).not.toContainText('Local identity state')
-    await expect(bridge).not.toContainText('Device key')
-    await expect(bridge.locator('.svelte-flow__edge')).toHaveCount(0)
+    await expect(bridge).not.toContainText('This browser')
+    await expect(bridge).not.toContainText('Identity reference')
     await page.getByTestId('devices-access-perspective-identities').click()
     await page.setViewportSize({ width: 1440, height: 900 })
 
-    // Protection remains inspectable below the graph, but it is not rendered
-    // as an identity relationship.
+    // The first link opens selected: one passkey fingerprint, and the same
+    // fingerprint on its node, so the relationship and the evidence agree.
     const panel = page.getByTestId('devices-access-panel')
-    await expect(panel).toContainText('Passkey · recoverable access')
+    await expect(panel).toContainText('Passkey · recoverable identity')
     const credentialFingerprint = await page
       .getByTestId('devices-access-credential-id')
       .innerText()
@@ -212,20 +282,38 @@ test.describe('devices and access dashboard', () => {
     await expect(panel).not.toContainText('hybrid, internal')
     await expect(panel).toContainText('01010101-0101-0101-0101-010101010101')
 
-    // Arrow keys move only between the two independent evidence categories.
+    // Arrow keys follow the map's visible order, and the panel follows focus.
     await unlockNode.press('ArrowRight')
+    await expect(deviceKeyNode).toBeFocused()
+    await expect(deviceKeyNode).toHaveAttribute('aria-selected', 'true')
+
+    await deviceKeyNode.press('ArrowRight')
     await expect(vaultsNode).toBeFocused()
     await expect(vaultsNode).toHaveAttribute('aria-selected', 'true')
-    await expect(panel).toContainText('Vault access evidence')
-    await expect(page.getByTestId('devices-access-vaults')).toContainText(
-      'Access verified',
-    )
+    await expect(panel).toContainText('Vaults known to this device key')
+    await expect(strengthVaults).toContainText('Verified way in')
+    await expect(
+      bridge.getByRole('article', { name: /Device-key access/ }),
+    ).toHaveCount(1)
 
     await vaultsNode.press('ArrowLeft')
+    await expect(deviceKeyNode).toBeFocused()
+    await expect(panel).toContainText('Browser device key')
+    const deviceIdentifier = await page
+      .getByTestId('devices-access-device-id')
+      .innerText()
+    expect(deviceIdentifier).not.toBe('Unknown')
+    await expect(panel).toContainText(deviceIdentifier)
+    await expect(panel).toContainText('A backup password is different')
+
+    await deviceKeyNode.press('ArrowLeft')
     await expect(unlockNode).toBeFocused()
     await unlockNode.press('ArrowLeft')
     await expect(vaultsNode).toBeFocused()
-    await expect(panel).toContainText('Vault access evidence')
+    await expect(panel).toContainText('Vaults known to this device key')
+    await expect(page.getByTestId('devices-access-vaults')).toContainText(
+      'Access verified',
+    )
     const vaultIdentifier = panel
       .locator('details')
       .filter({ hasText: 'Vault identifier' })
@@ -233,7 +321,7 @@ test.describe('devices and access dashboard', () => {
     await vaultIdentifier.getByText('Vault identifier', { exact: true }).click()
     await expect(vaultIdentifier.locator('p')).toBeVisible()
     const fullVaultIdentifier = await vaultIdentifier.locator('p').innerText()
-    await expect(bridge).not.toContainText(fullVaultIdentifier)
+    await expect(strengthVaults).not.toContainText(fullVaultIdentifier)
     await expect(
       page.getByTestId('devices-access-current-vault'),
     ).toContainText('Emergency recovery')
@@ -270,10 +358,10 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('header-language-option-ru').click()
 
     await expect(page.getByTestId('devices-access-node-unlock')).toBeVisible()
-    await expect(page.getByTestId('devices-access-node-vaults')).toBeVisible()
     await expect(
       page.getByTestId('devices-access-node-device-key'),
-    ).toHaveCount(0)
+    ).toBeVisible()
+    await expect(page.getByTestId('devices-access-node-vaults')).toBeVisible()
     expect(
       await page.evaluate(
         () =>
@@ -399,24 +487,25 @@ test.describe('devices and access dashboard', () => {
 
     await page.getByTestId('vault-devices-access-tab').click()
     const bridge = page.getByTestId('devices-access-chain')
-    await expect(bridge).toContainText('Paired-device identity state', {
+    await expect(bridge).toContainText('Paired device identity', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await expect(bridge).toContainText('Paired-device identity state')
     await expect(bridge).toContainText('Reported by paired device')
     await expect(bridge).not.toContainText('Browser identity state')
     await expect(bridge).not.toContainText('Local identity state')
     await expect(bridge).not.toContainText('This browser')
+    const deviceKeyNode = page.getByTestId('devices-access-node-device-key')
+    await deviceKeyNode.click()
     const panel = page.getByTestId('devices-access-panel')
-    await expect(
-      page.getByTestId('devices-access-node-device-key'),
-    ).toHaveCount(0)
+    await expect(panel).toContainText('Paired device identity', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(panel).not.toContainText('My browser')
+    await page.getByTestId('devices-access-node-unlock').click()
     await expect(panel).not.toContainText('Named by you')
-    await expect(
-      page.getByTestId('devices-access-companion-session'),
-    ).toContainText('active vault session was provided by a paired device')
     await page.getByTestId('devices-access-node-vaults').click()
-    await expect(panel).toContainText('Vault access evidence')
+    await expect(panel).toContainText('Vaults known to this device key')
   })
 
   test('keeps known vaults visible after identity recovery reset', async ({
@@ -425,10 +514,9 @@ test.describe('devices and access dashboard', () => {
     await connectLocalVault(page)
     await page.getByTestId('vault-devices-access-tab').click()
     await page.getByTestId('devices-access-node-vaults').click()
-    await expect(page.getByTestId('devices-access-vaults')).toContainText(
-      'Test vault',
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
+    await expect(
+      page.getByTestId('devices-access-strength-vaults'),
+    ).toContainText('Test vault', { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 
     // The production reset flow is covered in device-key-protection.spec.ts.
     // Reproduce its persisted identity deletion here without invoking the
@@ -464,17 +552,17 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('devices-access-preview-vaults'),
     ).toContainText('Access not yet verified')
+    await expect(preview).toContainText('not verified')
     await expect(preview).not.toContainText('opens')
     await expect(preview).not.toContainText('No local vaults yet')
   })
 
-  test('keeps unverified local vault access separate from identity', async ({
+  test('never claims access to a vault this device key has not opened', async ({
     page,
   }) => {
     await connectLocalVault(page)
     await page.getByTestId('vault-devices-access-tab').click()
     const vaultsNode = page.getByTestId('devices-access-node-vaults')
-    await page.getByTestId('devices-access-perspective-vaults').click()
     await expect(
       page.getByTestId('devices-access-strength-vaults'),
     ).toHaveCount(1, {
@@ -483,8 +571,8 @@ test.describe('devices and access dashboard', () => {
 
     // Verified access is descriptive metadata written after an unlock succeeds.
     // Removing it leaves the vault registered on this browser with nothing
-    // proving local access. The vault must remain visible without becoming an
-    // identity relationship.
+    // proving this device key ever opened it, which is how a locally cached
+    // vault from another identity arrives.
     await page.evaluate(
       () =>
         new Promise<void>((resolve, reject) => {
@@ -517,23 +605,17 @@ test.describe('devices and access dashboard', () => {
     // The dashboard reads the snapshot when it mounts, so leave and come back.
     await page.getByTestId('vault-secrets-tab').click()
     await page.getByTestId('vault-devices-access-tab').click()
-    await page.getByTestId('devices-access-perspective-vaults').click()
 
     const chain = page.getByTestId('devices-access-chain')
-    await expect(chain).toContainText('No verified way in')
-    await expect(chain).not.toContainText('Device key')
-    await expect(chain).not.toContainText('Local identity state')
-    await expect(chain.locator('.svelte-flow__edge')).toHaveCount(0)
+    await expect(chain).toContainText('0 opened by key')
     await expect(
       page.getByTestId('devices-access-strength-vaults'),
-    ).toHaveCount(1)
-    await expect(
-      page.getByRole('heading', { name: 'Local access to Test vault' }),
-    ).toBeVisible()
+    ).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: /0 vaults/ })).toBeVisible()
 
     await vaultsNode.click()
     const panel = page.getByTestId('devices-access-panel')
-    await expect(panel).toContainText('Vault access evidence')
+    await expect(panel).toContainText('Vaults known to this device key')
     const vaults = page.getByTestId('devices-access-vaults')
     await expect(vaults).toContainText('Access not yet verified')
     await expect(vaults).not.toContainText('Access verified')
@@ -558,7 +640,6 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('devices-access-provider-label'),
     ).toBeFocused()
-    await page.getByTestId('devices-access-perspective-vaults').click()
     await page.getByTestId('devices-access-node-vaults').click()
     await expect(
       page.getByTestId('devices-access-strength-vaults'),
@@ -631,7 +712,7 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-node-vaults')).toBeFocused()
   })
 
-  test('keeps last-known vault access separate while vault contents are locked', async ({
+  test('a locked browser identity keeps last-known vault access without vault contents', async ({
     page,
   }) => {
     await connectLocalVault(page)
@@ -642,24 +723,16 @@ test.describe('devices and access dashboard', () => {
 
     await page.getByTestId('header-lock-vault-btn').click()
     await page.getByTestId('login-devices-access').click()
-    await expect(page.getByTestId('devices-access-identity-card')).toBeVisible()
     await expect(
       page.getByTestId('devices-access-identity-state'),
     ).toContainText('Identity locked')
     await expect(
       page.getByTestId('devices-access-identity-card'),
     ).toHaveAttribute('data-identity-state', 'Locked')
-    const identityGraph = page.getByTestId('devices-access-chain')
-    await expect(identityGraph).not.toContainText('Passkey')
-    await expect(identityGraph).not.toContainText('Device key')
-    await expect(identityGraph.locator('.svelte-flow__edge')).toHaveCount(0)
-    await page.getByTestId('devices-access-perspective-vaults').click()
     await page.getByTestId('devices-access-node-vaults').click()
-    const vaults = page.getByTestId('devices-access-vaults')
-    await expect(vaults).toContainText('Access verified')
-    const panel = page.getByTestId('devices-access-panel')
-    await expect(panel).toContainText('previously observed successful access')
-    await expect(panel).not.toContainText('in this session')
+    await expect(page.getByTestId('devices-access-vaults')).toContainText(
+      'Access verified',
+    )
     await expect(page.getByTestId('devices-access-current-vault')).toHaveCount(
       0,
     )

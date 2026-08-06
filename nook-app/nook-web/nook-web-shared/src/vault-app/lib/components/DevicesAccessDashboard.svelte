@@ -1,9 +1,9 @@
 <!--
-THESIS: Identity, protection, and vault access stay separate until typed domain evidence relates them.
+THESIS: Identity Bridge is an operational map, not a dashboard of disconnected facts.
 OWN-WORLD: Nook's restrained security surfaces, semantic tokens, evidence-aware language, and real local state remain intact.
-STORY: Choose local identity state or a vault, inspect that subject alone, then review independent protection or vault-access details below.
-FIRST VIEWPORT: Navigation, plain-language consequence, and the complete evidence view appear before supporting controls.
-FORM: The Identity Bridge navigation remains, while its canvas stops drawing unsupported key and identity relationships; standard panels retain existing actions.
+STORY: Choose the current identity context or a vault, follow verified device-key evidence without inferring an identity grant, then inspect or manage the selected layer below.
+FIRST VIEWPORT: Navigation, plain-language consequence, and the complete relationship graph appear before supporting controls.
+FORM: The approved Identity Bridge hierarchy becomes the production interaction model; graph nodes explain relationships while standard panels retain every existing action.
 -->
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
@@ -44,6 +44,7 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
     ProviderSaveKind,
   } from './devices-access-dashboard-state'
   import AccessStrengthPreview from './devices-access/AccessStrengthPreview.svelte'
+  import AccessDeviceKeyPanel from './devices-access/AccessDeviceKeyPanel.svelte'
   import AccessUnlockPanel from './devices-access/AccessUnlockPanel.svelte'
   import AccessVaultsPanel from './devices-access/AccessVaultsPanel.svelte'
   import {
@@ -51,16 +52,19 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
     accessChainTab,
     accessChainTabId,
     AccessChainTabKind,
+    deviceKeyTitle,
     formatAccessDate,
     identityStateLabel,
     panelDescription,
     panelTitle,
+    protectionLabel,
     textValue,
     type VaultAccessView,
   } from './devices-access/access-chain'
   import IdentityBridgeGraph from './devices-access/IdentityBridgeGraph.svelte'
   import IdentityBridgeNavigation from './devices-access/IdentityBridgeNavigation.svelte'
   import {
+    IdentityBridgeDeviceIconKind,
     IdentityBridgePerspective,
     IdentityBridgeVaultSelectionKind,
     type IdentityBridgeCopy,
@@ -82,6 +86,7 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
   type DashboardView = {
     protection: DeviceAccessProtectionKind
     identityState: DeviceAccessIdentityState
+    deviceId: DashboardText
     credentialId: DashboardText
     userHandleId: DashboardText
     passkeyName: DashboardText
@@ -214,6 +219,7 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
         const view: DashboardView = {
           protection: snapshot.protection,
           identityState: snapshot.identityState,
+          deviceId: readText(snapshot.deviceId),
           credentialId: readText(snapshot.credentialId),
           userHandleId: readText(snapshot.userHandleId),
           passkeyName: readText(snapshot.passkeyName),
@@ -350,6 +356,7 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
   ): Promise<void> {
     const stages = [
       AccessChainStage.Unlock,
+      AccessChainStage.DeviceKey,
       AccessChainStage.Vaults,
     ] as const
     let nextIndex = stages.indexOf(currentStage)
@@ -378,6 +385,15 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
       }
     }
     return vault.t(I18N_KEYS.DevicesAccessBridgeVault)
+  }
+
+  function selectedVaultVerified(view: DashboardView): boolean {
+    if (selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected) {
+      for (const entry of view.vaults) {
+        if (entry.storeId === selectedVault.storeId) return entry.verified
+      }
+    }
+    return false
   }
 
   $effect(() => {
@@ -460,9 +476,17 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
           />
         </div>
       {:else}
+        {@const verifiedVaultCount = view.vaults.filter(
+          (entry) => entry.verified,
+        ).length}
+        {@const selectedVaultIsVerified = selectedVaultVerified(view)}
         {@const selectedVaultName = selectedVaultLabel(view)}
         {@const selectedVaultExists =
           selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected}
+        {@const deviceIdentifier =
+          view.deviceId.kind === DashboardTextKind.Known
+            ? view.deviceId.value
+            : vault.t(I18N_KEYS.DevicesAccessUnknown)}
         {@const companionIdentity =
           view.protection === DeviceAccessProtectionKind.CompanionSession}
         {@const identityTitle = companionIdentity
@@ -472,31 +496,73 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
           ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentityDesc)
           : vault.t(I18N_KEYS.DevicesAccessBridgeCurrentIdentityDesc)}
         {@const bridgeCopy = {
+          protectionStage: vault.t(
+            I18N_KEYS.DevicesAccessBridgeProtectionEvidence,
+          ),
+          deviceStage: vault.t(I18N_KEYS.DevicesAccessBridgeDeviceEvidence),
           identityStage: companionIdentity
             ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentityContext)
             : vault.t(I18N_KEYS.DevicesAccessBridgeDistributedIdentity),
+          vaultStage: vault.t(I18N_KEYS.DevicesAccessBridgeVaultGrants),
           selectedVaultStage: vault.t(
             I18N_KEYS.DevicesAccessBridgeSelectedVault,
           ),
+          currentDevice:
+            view.protection === DeviceAccessProtectionKind.PasskeyStandard
+              ? vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice)
+              : deviceKeyTitle(vault, view.protection),
           currentIdentity: identityTitle,
           selectedIdentity: companionIdentity
             ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentityContext)
             : vault.t(I18N_KEYS.DevicesAccessBridgeSelectedIdentity),
-          vaultAccess: vault.t(I18N_KEYS.DevicesAccessBridgeVaultGrant),
-          identityDescription,
+          vaultGrant: vault.t(I18N_KEYS.DevicesAccessBridgeVaultGrant),
+          deviceKey: vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice),
+          oneDeviceKey: vault.t(I18N_KEYS.DevicesAccessBridgeOneDeviceKey),
+          identityDescription: protectionLabel(vault, view.protection),
           identityState: identityStateLabel(vault, view.identityState),
+          deviceMetricLabel: vault.t(
+            I18N_KEYS.DevicesAccessBridgeDeviceEvidence,
+          ),
+          vaultMetricLabel: vault.t(I18N_KEYS.DevicesAccessVerifiedVaultsLabel),
+          verifiedVaultCount: vault.t(
+            I18N_KEYS.DevicesAccessBridgeVerifiedVaultCount,
+            { count: String(verifiedVaultCount) },
+          ),
           statusMetricLabel: vault.t(I18N_KEYS.DevicesAccessStatusLabel),
           evidenceMetricLabel: vault.t(
             I18N_KEYS.DevicesAccessLastSuccessfulUse,
           ),
           verifiedStatus: vault.t(I18N_KEYS.DevicesAccessRouteVerified),
           unverifiedStatus: vault.t(I18N_KEYS.DevicesAccessRouteUnverified),
+          noAuthorizedIdentity: vault.t(
+            I18N_KEYS.DevicesAccessBridgeNoAuthorized,
+          ),
+          noAuthorizedIdentityDescription: vault.t(
+            I18N_KEYS.DevicesAccessBridgeNoAuthorizedDesc,
+          ),
+          noVerifiedVaults: vault.t(
+            I18N_KEYS.DevicesAccessBridgeNoVerifiedVaults,
+          ),
+          noVerifiedVaultsDescription: vault.t(
+            I18N_KEYS.DevicesAccessBridgeNoVerifiedVaultsDesc,
+          ),
           noSelectedVault: vault.t(
             I18N_KEYS.DevicesAccessBridgeNoSelectedVault,
           ),
           noSelectedVaultDescription: vault.t(
             I18N_KEYS.DevicesAccessBridgeNoSelectedVaultDesc,
           ),
+          protectionDeviceRelation: vault.t(
+            I18N_KEYS.DevicesAccessBridgeProtectionDeviceRelation,
+          ),
+          deviceVaultRelation: (vaultLabel: string) =>
+            vault.t(I18N_KEYS.DevicesAccessBridgeDeviceVaultRelation, {
+              vault: vaultLabel,
+            }),
+          vaultDeviceRelation: (vaultLabel: string) =>
+            vault.t(I18N_KEYS.DevicesAccessBridgeVaultDeviceRelation, {
+              vault: vaultLabel,
+            }),
           formatEvidence: (value: string) => formatAccessDate(vault, value),
           unknown: vault.t(I18N_KEYS.DevicesAccessUnknown),
         } satisfies IdentityBridgeCopy}
@@ -507,6 +573,7 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
             {vault}
             perspective={selectedPerspective}
             {selectedVault}
+            {verifiedVaultCount}
             vaults={view.vaults}
             {identityTitle}
             {identityDescription}
@@ -526,9 +593,22 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
                 class="mt-2 max-w-4xl text-3xl font-semibold tracking-[-0.025em] text-balance text-foreground sm:text-4xl"
               >
                 {#if selectedPerspective === IdentityBridgePerspective.Identities}
-                  {vault.t(I18N_KEYS.DevicesAccessBridgeIdentityHeadline)}
+                  {vault.t(I18N_KEYS.DevicesAccessBridgeIdentityHeadline, {
+                    count: String(verifiedVaultCount),
+                    vaults: vault.t(
+                      verifiedVaultCount === 1
+                        ? I18N_KEYS.DevicesAccessBridgeVaultSingular
+                        : I18N_KEYS.DevicesAccessBridgeVaultPlural,
+                    ),
+                  })}
                 {:else if selectedVaultExists}
                   {vault.t(I18N_KEYS.DevicesAccessBridgeVaultHeadline, {
+                    count: selectedVaultIsVerified ? '1' : '0',
+                    identities: vault.t(
+                      selectedVaultIsVerified
+                        ? I18N_KEYS.DevicesAccessBridgeIdentitySingular
+                        : I18N_KEYS.DevicesAccessBridgeIdentityPlural,
+                    ),
                     vault: selectedVaultName,
                   })}
                 {:else}
@@ -551,7 +631,16 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
             <IdentityBridgeGraph
               perspective={selectedPerspective}
               {selectedVault}
+              {deviceIdentifier}
               identityStatus={view.identityState}
+              protectionLabel={protectionLabel(vault, view.protection)}
+              deviceIconKind={view.protection ===
+              DeviceAccessProtectionKind.PasskeyStandard
+                ? IdentityBridgeDeviceIconKind.RecoverableKey
+                : view.protection ===
+                    DeviceAccessProtectionKind.CompanionSession
+                  ? IdentityBridgeDeviceIconKind.PairedDevice
+                  : IdentityBridgeDeviceIconKind.Browser}
               vaults={view.vaults}
               copy={bridgeCopy}
               graphLabel={vault.t(I18N_KEYS.DevicesAccessBridgeGraphLabel)}
@@ -626,7 +715,7 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
               </p>
             </div>
             <div
-              class="grid w-full grid-cols-2 border border-border bg-card p-1 sm:w-auto"
+              class="grid w-full grid-cols-3 border border-border bg-card p-1 sm:w-auto"
               role="tablist"
               aria-label={vault.t(I18N_KEYS.DevicesAccessBridgeDetails)}
             >
@@ -646,6 +735,21 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
                 >{vault.t(
                   I18N_KEYS.DevicesAccessBridgeDetailProtection,
                 )}</button
+              >
+              <button
+                type="button"
+                role="tab"
+                id={accessChainTabId(AccessChainStage.DeviceKey)}
+                aria-selected={selectedStage === AccessChainStage.DeviceKey}
+                aria-controls={PANEL_CONTENT_ID}
+                tabindex={selectedStage === AccessChainStage.DeviceKey ? 0 : -1}
+                class:active={selectedStage === AccessChainStage.DeviceKey}
+                class="detail-tab"
+                data-testid="devices-access-node-device-key"
+                onclick={() => (selectedStage = AccessChainStage.DeviceKey)}
+                onkeydown={(event) =>
+                  void navigateDetailTabs(event, AccessChainStage.DeviceKey)}
+                >{vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice)}</button
               >
               <button
                 type="button"
@@ -690,6 +794,12 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
                 {providerSaveState}
                 onSaveProviderLabel={() => void saveProviderLabel()}
                 onProviderDraftInput={clearProviderSaveFailure}
+              />
+            {:else if selectedStage === AccessChainStage.DeviceKey}
+              <AccessDeviceKeyPanel
+                {vault}
+                protection={view.protection}
+                deviceId={view.deviceId}
               />
             {:else}
               <AccessVaultsPanel

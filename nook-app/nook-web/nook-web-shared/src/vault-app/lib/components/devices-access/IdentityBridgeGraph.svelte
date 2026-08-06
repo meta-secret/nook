@@ -8,10 +8,10 @@
     type AriaLabelConfig,
     type NodeTypes,
   } from '@xyflow/svelte'
-  import type { DeviceAccessIdentityState } from '$app-wasm'
   import {
     buildIdentityBridge,
     IdentityBridgeControlPosition,
+    type IdentityBridgeDeviceIconKind,
     IdentityBridgeNodeType,
     IdentityBridgeVaultSelectionKind,
     type IdentityBridgeCopy,
@@ -19,12 +19,16 @@
     type IdentityBridgeVaultSelection,
   } from './identity-bridge-model'
   import type { VaultAccessView } from './access-chain'
+  import type { DeviceAccessIdentityState } from '$app-wasm'
   import IdentityBridgeNode from './IdentityBridgeNode.svelte'
 
   let {
     perspective,
     selectedVault,
+    deviceIdentifier,
     identityStatus,
+    protectionLabel,
+    deviceIconKind,
     vaults,
     copy,
     graphLabel,
@@ -33,7 +37,10 @@
   }: {
     perspective: IdentityBridgePerspective
     selectedVault: IdentityBridgeVaultSelection
+    deviceIdentifier: string
     identityStatus: DeviceAccessIdentityState
+    protectionLabel: string
+    deviceIconKind: IdentityBridgeDeviceIconKind
     vaults: readonly VaultAccessView[]
     copy: IdentityBridgeCopy
     graphLabel: string
@@ -50,8 +57,11 @@
     buildIdentityBridge({
       perspective,
       selectedVault,
-      identityStatus,
       compact,
+      deviceIdentifier,
+      identityStatus,
+      protectionLabel,
+      deviceIconKind,
       vaults,
       copy,
     }),
@@ -79,7 +89,7 @@
   style={`--bridge-height: ${graph.compactHeight}px`}
   aria-label={graphLabel}
 >
-  {#key `${perspective}:${selectedVaultKey}:${compact}:${canvasWidth}:${vaults.length}`}
+  {#key `${perspective}:${selectedVaultKey}:${compact}:${canvasWidth}:${deviceIdentifier}:${vaults.length}`}
     <SvelteFlow
       nodes={graph.nodes}
       edges={graph.edges}
@@ -127,8 +137,8 @@
 <style>
   .bridge-canvas {
     position: relative;
-    height: min(22rem, calc(100svh - 10rem));
-    min-height: 20rem;
+    height: min(32rem, calc(100svh - 10rem));
+    min-height: 30rem;
     overflow: hidden;
     border: 1px solid color-mix(in oklab, var(--foreground) 14%, transparent);
     border-radius: calc(var(--radius) + 0.125rem);
