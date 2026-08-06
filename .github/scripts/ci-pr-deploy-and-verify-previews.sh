@@ -26,29 +26,34 @@ sentinel_url="https://pr-$pr.nokey-sentinel.pages.dev"
 deploy_dir="$(mktemp -d)"
 trap 'rm -rf "$deploy_dir"' EXIT
 
-CF_PAGES_PROJECT_NAME=nook \
-  CF_PAGES_PRODUCTION_BRANCH=main \
-  CF_PAGES_DIST_DIR=nook-app/nook-web/nook-web-app/dist \
-  task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev \
-  >"$deploy_dir/unified.log" 2>&1 &
+deploy_pages() {
+  project="$1"
+  dist="$2"
+  log="$3"
+  # Background in this shell so the caller's $! remains a waitable child. Do not
+  # capture this function through command substitution.
+  if [ "${NOOK_HOST_PAGES_DEPLOY:-}" = "1" ]; then
+    CF_PAGES_PROJECT_NAME="$project" \
+      CF_PAGES_PRODUCTION_BRANCH=main \
+      CF_PAGES_DIST_DIR="$dist" \
+      bash "$ROOT/.github/scripts/ci-pr-host-pages-deploy.sh" \
+      >"$log" 2>&1 &
+  else
+    CF_PAGES_PROJECT_NAME="$project" \
+      CF_PAGES_PRODUCTION_BRANCH=main \
+      CF_PAGES_DIST_DIR="$dist" \
+      task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev \
+      >"$log" 2>&1 &
+  fi
+}
+
+deploy_pages nook nook-app/nook-web/nook-web-app/dist "$deploy_dir/unified.log"
 unified_pid=$!
-CF_PAGES_PROJECT_NAME=nokey-sh \
-  CF_PAGES_PRODUCTION_BRANCH=main \
-  CF_PAGES_DIST_DIR=nook-app/nook-web/nook-web-app/dist/site \
-  task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev \
-  >"$deploy_dir/site.log" 2>&1 &
+deploy_pages nokey-sh nook-app/nook-web/nook-web-app/dist/site "$deploy_dir/site.log"
 site_pid=$!
-CF_PAGES_PROJECT_NAME=nokey-simple \
-  CF_PAGES_PRODUCTION_BRANCH=main \
-  CF_PAGES_DIST_DIR=nook-app/nook-web/nook-vault-simple/dist \
-  task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev \
-  >"$deploy_dir/simple.log" 2>&1 &
+deploy_pages nokey-simple nook-app/nook-web/nook-vault-simple/dist "$deploy_dir/simple.log"
 simple_pid=$!
-CF_PAGES_PROJECT_NAME=nokey-sentinel \
-  CF_PAGES_PRODUCTION_BRANCH=main \
-  CF_PAGES_DIST_DIR=nook-app/nook-web/nook-vault-sentinel/dist \
-  task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev \
-  >"$deploy_dir/sentinel.log" 2>&1 &
+deploy_pages nokey-sentinel nook-app/nook-web/nook-vault-sentinel/dist "$deploy_dir/sentinel.log"
 sentinel_pid=$!
 
 wait_for_deploy() {

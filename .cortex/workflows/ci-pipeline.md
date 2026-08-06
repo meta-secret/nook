@@ -305,8 +305,11 @@ PR, main, release, AI, scheduled, manual e2e, and research jobs use GitHub-hoste
 - PR-writable caches never bypass required validation.
 - Repository invariant preflight still runs on every PR head.
 - On a native producer miss, preflight must finish before the native application Docker solve begins.
-- The preview job starts independently, does checkout, contract tests, and Docker setup in parallel with both producers.
-- It polls the current run attempt before downloading the stable WASM artifact.
+- `Web verification` declares `needs` on the WASM build producer.
+- It downloads the run-stable WASM artifact directly after that job succeeds.
+- `Verify and preview` declares `needs` on web verification and WASM Node tests.
+- Preview deploys from a host dist handoff with pinned wrangler.
+- No consumer polls GitHub for a sibling producer.
 - Changed inputs must execute and complete the full workflow before a new handoff can be promoted.
 - If promotion cannot prove its provenance, consumers treat the artifact as a miss and run the producers.
 - The required-job budget is four to five minutes for exact handoff hits and ordinary source-changing PRs.
@@ -522,21 +525,21 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 
 - PR CI uses independent native Rust and WASM producers.
 - Native Rust runs the portable Rust nextest/coverage branch and uploads its small coverage handoff.
-- The WASM producer runs clippy/build once, uploads the generated package under a run-stable artifact name, then continues with required Node tests.
-- `Verify and preview` can begin browser-free web validation from that built handoff while Node tests run.
-- It must observe a successful producer before deploying.
-- Optional web and extension e2e consumers retain `needs: wasm` and receive only a fully verified handoff.
+- The WASM build producer runs clippy/build once and uploads the generated package under a run-stable artifact name.
+- `WASM Node tests` depends on that build job and finishes the producer gate.
+- `Web verification` depends on the build job and downloads the package with `actions/download-artifact`.
+- It can run browser-free web validation while Node tests continue.
+- It exports host dist trees for preview deploy.
+- `Verify and preview` depends on web verification and WASM Node tests.
+- Optional web and extension e2e consumers need both WASM jobs and receive only a fully verified handoff.
 - A separate `Rust coverage report` job declares `needs: rust`, downloads the native handoff directly, and performs reporting without occupying or delaying the preview runner.
 
 **Rerun and artifact rules:**
 
-- On a rerun, each consumer first checks for its producer in the current attempt and waits when present.
-- A failed-job rerun that omits an already-successful producer may reuse the existing exact-head run artifact.
-- A built artifact from a producer that later failed Node tests is rejected: the artifact's stamped run attempt must match the successful producer attempt exactly.
-- Absence of both a current producer and a matching successful attempt fails immediately instead of polling for a job GitHub did not reschedule.
-- GitHub job and artifact polling uses a ten-second interval so a cold build remains below the `GITHUB_TOKEN` REST budget.
+- `needs` reuses a successful producer omitted from a failed-job-only rerun.
+- Consumers download the exact-head run artifact after that producer edge is satisfied.
 - Do not serialize the **PR** producers or move Rust coverage into preview: a cold Rust cache must not dominate the PR web critical path.
-- Coverage reporting must depend on the native producer instead of polling it from an already-running preview job.
+- Coverage reporting must depend on the native producer instead of starting from the preview job.
 
 **Main serialization:**
 
