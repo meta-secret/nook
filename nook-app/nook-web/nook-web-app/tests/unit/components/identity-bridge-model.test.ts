@@ -12,20 +12,20 @@ import { DashboardTextKind } from '../../../../nook-web-shared/src/vault-app/lib
 import { DeviceAccessIdentityState } from '$app-wasm'
 
 const copy: IdentityBridgeCopy = {
-  protectionStage: 'Unlock protection',
-  deviceStage: 'Device evidence',
-  identityStage: 'Identity context',
-  vaultStage: 'Verified device-key access',
+  protectionStage: 'Passkey',
+  deviceStage: 'App key',
+  identityStage: 'Identity',
+  vaultStage: 'Vaults',
   selectedVaultStage: 'Selected vault',
   currentDevice: 'This browser',
-  currentIdentity: 'Local identity state',
-  selectedIdentity: 'Browser identity state',
+  currentIdentity: 'Identity',
+  selectedIdentity: 'Identity',
   vaultGrant: 'Vault access',
-  deviceKey: 'Device key',
-  oneDeviceKey: '1 key',
+  deviceKey: 'App key',
+  oneDeviceKey: '1 app key',
   identityDescription: 'Passkey protected',
   identityState: 'Identity unlocked',
-  deviceMetricLabel: 'Device evidence',
+  deviceMetricLabel: 'App key',
   vaultMetricLabel: 'Verified vaults',
   verifiedVaultCount: '1 verified',
   statusMetricLabel: 'Status',
@@ -35,14 +35,16 @@ const copy: IdentityBridgeCopy = {
   noAuthorizedIdentity: 'No verified relationship',
   noAuthorizedIdentityDescription: 'No verified evidence exists.',
   noVerifiedVaults: 'No verified vault access',
-  noVerifiedVaultsDescription: 'This key has not opened a known vault.',
+  noVerifiedVaultsDescription: 'This identity has not opened a known vault.',
   noSelectedVault: 'No vault selected',
   noSelectedVaultDescription: 'Select a vault.',
-  protectionDeviceRelation: 'Unlocks this device key',
-  deviceVaultRelation: (vaultLabel) =>
-    `Device key opened ${vaultLabel}; identity grant unknown`,
+  protectionDeviceRelation: 'Unlocks this app key',
+  appKeyIdentityRelation: 'App key belongs to this identity',
+  identityVaultRelation: (vaultLabel) =>
+    `This identity holds the DEK for ${vaultLabel}`,
+  deviceVaultRelation: (vaultLabel) => `App key opened ${vaultLabel}`,
   vaultDeviceRelation: (vaultLabel) =>
-    `${vaultLabel} was opened by this exact device key`,
+    `${vaultLabel} was opened by this app key`,
   formatEvidence: (value) => `Local ${value}`,
   unknown: 'Unknown',
 }
@@ -68,7 +70,7 @@ function input(
       storeId: selectedStoreId,
     },
     compact: false,
-    deviceIdentifier: 'device_public_key',
+    deviceIdentifier: 'app_public_key',
     identityStatus: DeviceAccessIdentityState.Unlocked,
     protectionLabel: 'Passkey protected',
     deviceIconKind: IdentityBridgeDeviceIconKind.Browser,
@@ -78,7 +80,7 @@ function input(
 }
 
 describe('identity bridge graph', () => {
-  test('keeps the passkey handle out of the local identity-state card', () => {
+  test('centers identity between app key and vaults', () => {
     const graph = buildIdentityBridge(
       input(IdentityBridgePerspective.Identities),
     )
@@ -87,16 +89,16 @@ describe('identity bridge graph', () => {
 
     expect(device?.data.kind).toBe(IdentityBridgeNodeKind.Device)
     if (device?.data.kind === IdentityBridgeNodeKind.Device) {
-      expect(device.data.installations[0]?.id).toBe('device_public_key')
+      expect(device.data.installations[0]?.id).toBe('app_public_key')
     }
     expect(identity?.data.kind).toBe(IdentityBridgeNodeKind.Identity)
     if (identity?.data.kind === IdentityBridgeNodeKind.Identity) {
       expect(identity.data).not.toHaveProperty('identifier')
-      expect(identity.data.deviceMetricValue).toBe('1 key')
+      expect(identity.data.deviceMetricValue).toBe('1 app key')
     }
   })
 
-  test('draws access only for vaults this exact device key opened', () => {
+  test('draws passkey → app key → identity → verified vaults', () => {
     const graph = buildIdentityBridge(
       input(IdentityBridgePerspective.Identities),
     )
@@ -105,18 +107,20 @@ describe('identity bridge graph', () => {
     expect(graph.nodes.some((node) => node.id === 'vault-archive')).toBe(false)
     expect(graph.edges.map((edge) => edge.id)).toEqual([
       'protection-to-device',
-      'device-to-home',
+      'device-to-identity',
+      'identity-to-home',
     ])
     expect(
-      graph.edges.find((edge) => edge.id === 'device-to-home'),
-    ).toMatchObject({ source: 'device-current', target: 'vault-home' })
+      graph.edges.find((edge) => edge.id === 'identity-to-home'),
+    ).toMatchObject({ source: 'identity-current', target: 'vault-home' })
     expect(graph.edges.map((edge) => edge.ariaLabel)).toEqual([
-      'Unlocks this device key',
-      'Device key opened Home; identity grant unknown',
+      'Unlocks this app key',
+      'App key belongs to this identity',
+      'This identity holds the DEK for Home',
     ])
   })
 
-  test('shows the protection evidence that unlocks the device key', () => {
+  test('shows the passkey that unlocks the app key', () => {
     const graph = buildIdentityBridge(
       input(IdentityBridgePerspective.Identities),
     )
@@ -135,13 +139,13 @@ describe('identity bridge graph', () => {
     })
     expect(
       graph.nodes.find((node) => node.id === 'device-current')?.ariaLabel,
-    ).toContain('Unlocks this device key')
+    ).toContain('Unlocks this app key')
     expect(
       graph.nodes.find((node) => node.id === 'vault-home')?.ariaLabel,
-    ).toContain('Device key opened Home')
+    ).toContain('This identity holds the DEK for Home')
   })
 
-  test('routes vault-first evidence to the exact device key', () => {
+  test('routes vault-first evidence to the exact app key', () => {
     const graph = buildIdentityBridge(input(IdentityBridgePerspective.Vaults))
 
     expect(graph.nodes.some((node) => node.id === 'vault-selected')).toBe(true)
@@ -194,7 +198,7 @@ describe('identity bridge graph', () => {
       expect(vaultNode.data.evidenceLabel).toBe('Local 2026-08-04T10:00:00Z')
       expect(vaultNode.data).not.toHaveProperty('identifier')
       expect(vaultNode.data.incomingRelation).toContain(
-        'Device key opened Home',
+        'This identity holds the DEK for Home',
       )
     }
   })
@@ -208,7 +212,7 @@ describe('identity bridge graph', () => {
     expect(empty?.data).toMatchObject({
       kind: IdentityBridgeNodeKind.Empty,
       label: 'No verified vault access',
-      description: 'This key has not opened a known vault.',
+      description: 'This identity has not opened a known vault.',
     })
   })
 

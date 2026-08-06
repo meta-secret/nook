@@ -100,30 +100,35 @@ nook-wasm                     browser I/O, session, wasm-bindgen
 Nook separates identity management from encrypted vault storage:
 
 ```text
-person -> [virtual identity A | virtual identity B | ...]
-passkey/local protector -> local device key -> identity public-key record
+person -> [identity A | identity B | ...]
+passkey/PIN -> local app key (app_id) -> identity member record
 replication provider -> encrypted identity control log
-identity -> encrypted DEK authorization grant -> vault
+identity -> owns per-vault DEK envelopes -> vault secrets log
 replication provider -> encrypted vault event log
 ```
 
-An identity is a virtual account.
+An identity is a logical account.
+
+It possesses passkeys and therefore app keys.
+
+It owns each vault DEK.
 
 One person may use multiple identities.
 
-Each identity may have zero or more keys.
+An installation holds one local app private key (`app_id`).
 
-Physical devices are hardware inventory.
+Passkeys protect app keys.
 
-Installations are local storage contexts.
+Identity records replicate app public keys and passkey credential records.
 
-Installation-specific device keys are cryptographic authority.
+Private app keys remain local.
 
-Identity records replicate public device keys and passkey credential records through identity-specific provider mounts.
+A vault owns its `store_id`, secret ciphertext, signed event log, and
+projection.
 
-Private device keys remain local.
+A vault cannot exist without an authorizing identity.
 
-A vault owns its `store_id`, independent DEK, encrypted content, signed event log, projection, and grant policy.
+A vault cannot hold a DEK by itself.
 
 Passwords are vault content.
 
@@ -131,9 +136,10 @@ A provider is a caller-supplied replication adapter.
 
 It is never an identity or unlock factor.
 
-Provider credentials stay sealed to a local device key.
+Provider credentials stay sealed to a local app key.
 
-The normative model, passkey-locality rules, and migration boundary are in [identity-vault-architecture.md](design-docs/identity-vault-architecture.md).
+The normative model is in
+[identity-vault-architecture.md](design-docs/identity-vault-architecture.md).
 
 ---
 
@@ -153,21 +159,18 @@ The normative model, passkey-locality rules, and migration boundary are in [iden
 
 ### A. `nook-auth2` (Portable Identity and Vault Authorization)
 
-- **Target device and identity foundations (not yet implemented):** Virtual
-  identity ids, installation-specific X25519 encryption and Ed25519 signing
-  keys, physical-device/key distinction, device fingerprints, and
-  identity/member relationships belong here when the identity migration is
-  implemented. Current auth ids and age envelopes remain the compatibility
-  boundary described below.
-- **Device-key protection:** Passkey PRF result validation plus HKDF/AES-GCM
-  wrapping for an installation-specific private device key. Browser/WebAuthn
-  ceremonies stay outside this crate. The target model always generates a
-  fresh random local device key; deterministic passkey-derived identities are
-  an existing compatibility boundary, not the future physical-device model.
-- **Authorization envelopes:** Current `auth:` rows, `password_entries`,
-  enrollment payloads, member roster encryption, and key-resolution helpers
-  implement the existing wire boundary. Their target meaning is an explicit
-  identity-to-vault grant for the vault DEK/key hierarchy.
+- **Identity and app-key foundations:** `IdentityId`, identity control records,
+  app keys (`AppKey` / `AppId`), passkey bindings, and identity-owned per-vault
+  DEK envelopes belong here. Legacy `DeviceIdentity` / `device_id` names are
+  migration aliases only.
+- **App-key protection:** Passkey PRF validation plus HKDF/AES-GCM wrapping for
+  an installation-specific private app key. Browser/WebAuthn ceremonies stay
+  outside this crate. Target model: fresh random local app key.
+  Deterministic passkey-derived keys remain a compatibility boundary.
+- **Authorization envelopes:** Current vault `auth:` rows remain the legacy
+  wire boundary. Target ownership moves DEK envelopes onto the identity
+  control log. Vault create requires an identity with at least one key and a
+  generated DEK.
 - **Quorum recovery:** Fixed-policy SLIP-0039 recovery roots, protected per-device shares, and recovery-envelope helpers for `secrets_key` and `members_key` live here; recovery request/response exchange state stays out of sync providers.
 - **Key material and row types:** Portable newtypes for vault key material, auth/member ids, age-armored ciphertext, signing public keys, and the opaque `StoredSecretRecord` row shape shared by user secrets and auth metadata.
 - **No provider I/O:** No GitHub, Drive, iCloud, IndexedDB, OAuth, PAT, browser
@@ -469,18 +472,20 @@ Unlock mode detail:
 
 Authorization and membership detail:
 
-- `auth:` rows encode encrypted `secrets_key` and `members_key`.
-- Target ownership is an identity-to-vault DEK grant.
-- `members:` rows use `pk_id` plus `members_key`-encrypted data.
-- Identity membership is moving to the independent identity domain.
-- `joins:` is transient device join wire.
-- Target onboarding belongs to identity management before a separate vault grant.
+- Legacy `auth:` rows encode encrypted `secrets_key` and `members_key`.
+- Target ownership: identity holds per-vault DEK envelopes to app public keys.
+- Legacy `members:` rows use `pk_id` plus `members_key`-encrypted data.
+- Identity membership and app public keys live in the identity control log.
+- `joins:` remains transient join wire during migration.
+- Vault create requires identity + key + identity-generated DEK first.
 
-Device identity detail:
+App key detail:
 
+- Historical name was device identity / device key.
 - Deterministic standard mode is compatibility state.
-- Target model: fresh random installation-specific device key wrapped locally.
-- Identity records sync only the public key.
+- Target model: fresh random installation-specific app key wrapped locally
+  (`app_id`).
+- Identity records sync only app public keys and passkey records.
 
 Provider connections detail:
 

@@ -458,6 +458,8 @@ pub const DEVICES_ACCESS_BRIDGE_A11Y_NODE: &str = "devices_access.bridge_a11y_no
 pub const DEVICES_ACCESS_BRIDGE_A11Y_NODE_MOVED: &str = "devices_access.bridge_a11y_node_moved";
 pub const DEVICES_ACCESS_BRIDGE_A11Y_ZOOM_IN: &str = "devices_access.bridge_a11y_zoom_in";
 pub const DEVICES_ACCESS_BRIDGE_A11Y_ZOOM_OUT: &str = "devices_access.bridge_a11y_zoom_out";
+pub const DEVICES_ACCESS_BRIDGE_APP_KEY_IDENTITY_RELATION: &str =
+    "devices_access.bridge_app_key_identity_relation";
 pub const DEVICES_ACCESS_BRIDGE_BROWSE_BY: &str = "devices_access.bridge_browse_by";
 pub const DEVICES_ACCESS_BRIDGE_COMPANION_IDENTITY: &str =
     "devices_access.bridge_companion_identity";
@@ -484,6 +486,8 @@ pub const DEVICES_ACCESS_BRIDGE_IDENTITY_HEADLINE: &str = "devices_access.bridge
 pub const DEVICES_ACCESS_BRIDGE_IDENTITY_LEDE: &str = "devices_access.bridge_identity_lede";
 pub const DEVICES_ACCESS_BRIDGE_IDENTITY_PLURAL: &str = "devices_access.bridge_identity_plural";
 pub const DEVICES_ACCESS_BRIDGE_IDENTITY_SINGULAR: &str = "devices_access.bridge_identity_singular";
+pub const DEVICES_ACCESS_BRIDGE_IDENTITY_VAULT_RELATION: &str =
+    "devices_access.bridge_identity_vault_relation";
 pub const DEVICES_ACCESS_BRIDGE_IDENTITY_VIEW: &str = "devices_access.bridge_identity_view";
 pub const DEVICES_ACCESS_BRIDGE_NO_AUTHORIZED: &str = "devices_access.bridge_no_authorized";
 pub const DEVICES_ACCESS_BRIDGE_NO_AUTHORIZED_DESC: &str =

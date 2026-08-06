@@ -33,7 +33,11 @@ use wasm_bindgen::prelude::wasm_bindgen;
 const ACTIVE_VAULT_KEY: &str = "active_vault_id";
 const VAULT_REGISTRY_KEY: &str = "vault_registry";
 const PENDING_NEW_LOCAL_VAULT_KEY: &str = "pending_new_local_vault";
+const APP_ID_KEY: &str = "app_id";
+const APP_KEY_WRAPPED_KEY: &str = "app_key_wrapped";
+/// Legacy dual-read key for [`APP_ID_KEY`].
 const DEVICE_ID_KEY: &str = "device_id";
+/// Legacy dual-read key for [`APP_KEY_WRAPPED_KEY`].
 const WRAPPED_DEVICE_IDENTITY_KEY: &str = "device_identity_wrapped";
 const SENTINEL_GENESIS_SHARE_CATALOG_KEY: &str = "sentinel_genesis_share_catalog";
 const SENTINEL_GENESIS_FINALIZATION_PENDING_KEY: &str = "sentinel_genesis_finalization_pending";
@@ -127,7 +131,7 @@ async fn clear_vault_store(rexie: &rexie::Rexie, store_name: &str) -> Result<(),
     Ok(())
 }
 
-pub(super) async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
+pub(crate) async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
@@ -156,7 +160,7 @@ pub(super) async fn idb_get_string(key: &str) -> Result<Option<String>, NookErro
     }
 }
 
-pub(super) async fn idb_put_string(key: &str, value: &str) -> Result<(), NookError> {
+pub(crate) async fn idb_put_string(key: &str, value: &str) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
@@ -268,7 +272,7 @@ where
     Ok(StringUpdateResult::Applied)
 }
 
-pub(super) async fn idb_delete_key(key: &str) -> Result<(), NookError> {
+pub(crate) async fn idb_delete_key(key: &str) -> Result<(), NookError> {
     idb_delete_keys(&[key]).await
 }
 
@@ -534,52 +538,58 @@ pub(crate) async fn load_wrapped_device_identity()
     let rexie = open_nook_database().await?;
     // Writers replace the ID and wrapped credential together. Read both from
     // the same snapshot so a concurrent replacement cannot fabricate a mixed
-    // identity from two different commits.
+    // app-key record from two different commits.
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
         .map_err(|error| {
-            NookError::IndexedDb(format!("Device identity read transaction error: {error:?}"))
+            NookError::IndexedDb(format!("App key read transaction error: {error:?}"))
         })?;
-    let store = transaction.store("vault").map_err(|error| {
-        NookError::IndexedDb(format!("Device identity read store error: {error:?}"))
-    })?;
-    let wrapped_key =
-        serde_wasm_bindgen::to_value(WRAPPED_DEVICE_IDENTITY_KEY).map_err(|error| {
-            NookError::IndexedDb(format!("Device identity wrapped key error: {error:?}"))
-        })?;
-    let device_id_key = serde_wasm_bindgen::to_value(DEVICE_ID_KEY).map_err(|error| {
-        NookError::IndexedDb(format!("Device identity ID key error: {error:?}"))
-    })?;
-    let raw = store.get(wrapped_key).await.map_err(|error| {
-        NookError::IndexedDb(format!("Device identity wrapped read error: {error:?}"))
-    })?;
-    let device_id = store.get(device_id_key).await.map_err(|error| {
-        NookError::IndexedDb(format!("Device identity ID read error: {error:?}"))
-    })?;
+    let store = transaction
+        .store("vault")
+        .map_err(|error| NookError::IndexedDb(format!("App key read store error: {error:?}")))?;
+    let wrapped = read_string_preferring(
+        &store,
+        APP_KEY_WRAPPED_KEY,
+        WRAPPED_DEVICE_IDENTITY_KEY,
+        "App key wrapped",
+    )
+    .await?;
+    let app_id = read_string_preferring(&store, APP_ID_KEY, DEVICE_ID_KEY, "App id").await?;
     transaction.done().await.map_err(|error| {
-        NookError::IndexedDb(format!("Device identity read completion error: {error:?}"))
+        NookError::IndexedDb(format!("App key read completion error: {error:?}"))
     })?;
 
-    let Some(raw) = raw.filter(|value| !value.is_undefined() && !value.is_null()) else {
+    let Some(raw) = wrapped else {
         return Ok(None);
     };
-    let raw: String = serde_wasm_bindgen::from_value(raw).map_err(|error| {
-        NookError::IndexedDb(format!("Device identity wrapped decode error: {error:?}"))
-    })?;
-    let device_id: Option<String> = device_id
-        .filter(|value| !value.is_undefined() && !value.is_null())
-        .map(serde_wasm_bindgen::from_value)
-        .transpose()
-        .map_err(|error| {
-            NookError::IndexedDb(format!("Device identity ID decode error: {error:?}"))
-        })?;
-    let device_id = device_id
+    let app_id = app_id
         .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| {
-            NookError::IndexedDb("Protected device identity is missing device_id.".to_owned())
-        })?;
+        .ok_or_else(|| NookError::IndexedDb("Protected app key is missing app_id.".to_owned()))?;
     let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
-    Ok(Some((device_id, wrapped)))
+    Ok(Some((app_id, wrapped)))
+}
+
+async fn read_string_preferring(
+    store: &rexie::Store,
+    preferred_key: &str,
+    legacy_key: &str,
+    label: &str,
+) -> Result<Option<String>, NookError> {
+    for key_name in [preferred_key, legacy_key] {
+        let key = serde_wasm_bindgen::to_value(key_name)
+            .map_err(|error| NookError::IndexedDb(format!("{label} key error: {error:?}")))?;
+        let value = store
+            .get(key)
+            .await
+            .map_err(|error| NookError::IndexedDb(format!("{label} read error: {error:?}")))?;
+        if let Some(value) = value.filter(|entry| !entry.is_undefined() && !entry.is_null()) {
+            let decoded: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
+                NookError::IndexedDb(format!("{label} decode error: {error:?}"))
+            })?;
+            return Ok(Some(decoded));
+        }
+    }
+    Ok(None)
 }
 
 /// Atomically install a verified wrapped identity after the just-written
@@ -597,35 +607,40 @@ pub(crate) async fn save_wrapped_device_identity(
         .store("vault")
         .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
 
-    let id_key = serde_wasm_bindgen::to_value(DEVICE_ID_KEY)
-        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-    let wrapped_key = serde_wasm_bindgen::to_value(WRAPPED_DEVICE_IDENTITY_KEY)
-        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
     let id_value = serde_wasm_bindgen::to_value(device_id)
         .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
     let wrapped_value = serde_wasm_bindgen::to_value(&wrapped)
         .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
 
-    store
-        .put(&id_value, Some(&id_key))
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("Put error: {e:?}")))?;
-    store
-        .put(&wrapped_value, Some(&wrapped_key))
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("Put error: {e:?}")))?;
+    // Dual-write preferred app_* keys and legacy device_* keys during migration.
+    for key_name in [APP_ID_KEY, DEVICE_ID_KEY] {
+        let key = serde_wasm_bindgen::to_value(key_name)
+            .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
+        store
+            .put(&id_value, Some(&key))
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("Put error: {e:?}")))?;
+    }
+    for key_name in [APP_KEY_WRAPPED_KEY, WRAPPED_DEVICE_IDENTITY_KEY] {
+        let key = serde_wasm_bindgen::to_value(key_name)
+            .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
+        store
+            .put(&wrapped_value, Some(&key))
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("Put error: {e:?}")))?;
+    }
+    let verify_key = serde_wasm_bindgen::to_value(APP_KEY_WRAPPED_KEY)
+        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
     let verified_value = store
-        .get(wrapped_key)
+        .get(verify_key)
         .await
         .map_err(|e| NookError::IndexedDb(format!("Verify get error: {e:?}")))?
-        .ok_or_else(|| {
-            NookError::IndexedDb("Wrapped device identity verification failed.".to_owned())
-        })?;
+        .ok_or_else(|| NookError::IndexedDb("Wrapped app key verification failed.".to_owned()))?;
     let verified: String = serde_wasm_bindgen::from_value(verified_value)
         .map_err(|e| NookError::IndexedDb(format!("Verify parse error: {e:?}")))?;
     if verified != wrapped {
         return Err(NookError::IndexedDb(
-            "Wrapped device identity verification mismatch.".to_owned(),
+            "Wrapped app key verification mismatch.".to_owned(),
         ));
     }
 
@@ -639,6 +654,8 @@ pub(crate) async fn save_wrapped_device_identity(
 pub(crate) async fn delete_device_identity_for_recovery() -> Result<(), NookError> {
     idb_delete_keys(&[
         super::device_access::DEVICE_ACCESS_PROFILE_KEY,
+        APP_KEY_WRAPPED_KEY,
+        APP_ID_KEY,
         WRAPPED_DEVICE_IDENTITY_KEY,
         DEVICE_ID_KEY,
     ])
