@@ -80,8 +80,9 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
             && rust_toolchain_bake
                 .matches("cache-to   = rust_ecosystem_nightly_cache_to")
                 .count()
-                >= 3,
-        "ecosystem nightly, fuzz-smoke, and dylint must seed the shared nightly hosted cache"
+                == 2
+            && rust_toolchain_bake.contains("cache-to   = []"),
+        "ecosystem nightly+dylint write the shared nightly cache; fuzz-smoke must not race it"
     );
     assert!(
         rust_toolchain_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),

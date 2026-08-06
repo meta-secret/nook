@@ -4,7 +4,8 @@
 // folding that tooling into product rust-base.
 // Main seeds those scopes with the trusted registry writer; PRs only write
 // isolated remote-buildcache refs.
-// Probe marker: trusted ecosystem cache reuse after main seed (#931).
+// Only one CI job may cache-to the shared nightly scope (dylint). Fuzz reads the
+// same cache-from list but does not race the registry index.
 
 target "rust-base" {
   context    = "."
@@ -61,7 +62,8 @@ target "rust-fuzz-smoke" {
     FUZZ_SECONDS = FUZZ_SECONDS
   }
   cache-from = rust_ecosystem_nightly_cache_from
-  cache-to   = rust_ecosystem_nightly_cache_to
+  // Read-only for the shared nightly scope; dylint is the sole CI writer.
+  cache-to   = []
   output     = ["type=cacheonly"]
 }
 
