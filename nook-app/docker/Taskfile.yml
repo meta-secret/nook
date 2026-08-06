@@ -317,23 +317,41 @@ tasks:
   docker:ci:cache:publish:wasm:
     desc: Export verified WASM scopes from local layers without reimporting a thin hosted index.
     cmds:
-      - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
-        {{.NOOK_BAKE_FILES}}
-        --set "*.output=type=cacheonly"
-        --set "rust-base.cache-from="
-        --set "builder-wasm-deps.cache-from="
-        --set "builder-wasm-deps.cache-to=type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,timeout=10m"
-        rust-base builder-wasm-deps
-      - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
-        {{.NOOK_BAKE_FILES}}
-        --set "*.output=type=cacheonly"
-        --set "rust-base.cache-to="
-        --set "builder-wasm-deps.cache-to="
-        --set "wasm-export.cache-from="
-        wasm-export
-      - bash "{{.REPO_ROOT}}/.github/scripts/verify-wasm-gha-cache.sh"
+      # Main writes the trusted fingerprint scope and verifies restore. PR/Remote
+      # keep Bake's isolated cache-to (remote-buildcache + scope suffix).
+      - |
+        set -euo pipefail
+        if [ -n "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
+          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
+            --set "rust-base.cache-from=" \
+            --set "builder-wasm-deps.cache-from=" \
+            rust-base builder-wasm-deps
+          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
+            --set "rust-base.cache-to=" \
+            --set "builder-wasm-deps.cache-to=" \
+            --set "wasm-export.cache-from=" \
+            wasm-export
+        else
+          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
+            --set "rust-base.cache-from=" \
+            --set "builder-wasm-deps.cache-from=" \
+            --set "builder-wasm-deps.cache-to=type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,timeout=10m" \
+            rust-base builder-wasm-deps
+          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
+            --set "rust-base.cache-to=" \
+            --set "builder-wasm-deps.cache-to=" \
+            --set "wasm-export.cache-from=" \
+            wasm-export
+          bash "{{.REPO_ROOT}}/.github/scripts/verify-wasm-gha-cache.sh"
+        fi
 
   docker:ci:cache:publish:web:
     desc: Export the already-verified web dependency graph from this job's builder.
@@ -379,10 +397,33 @@ tasks:
     desc: Bake cargo-deny and cargo-audit on the sealed ecosystem policy image.
     deps: [sccache:ensure]
     cmds:
+      # Sequential tools then leaf. Build imports remote cache with cache-to off.
+      # Publish clears cache-from so a CACHED solve cannot overwrite Zot with a
+      # thin index (same pattern as docker:ci:cache:publish:wasm).
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}}
+        --set "rust-ecosystem-policy-tools.cache-to="
+        rust-ecosystem-policy-tools
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
+          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "rust-ecosystem-policy-tools.cache-from=" \
+            rust-ecosystem-policy-tools
+        fi
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}}
+        --set "rust-dependency-policy.cache-to="
         rust-dependency-policy
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
+          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "rust-dependency-policy.cache-from=" \
+            rust-dependency-policy
+        fi
 
   docker:ecosystem:deterministic:
     desc: Bake Proptest, Insta, and Loom on the sealed Rust dependency graph.
@@ -391,7 +432,15 @@ tasks:
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}}
+        --set "rust-ecosystem-deterministic.cache-to="
         rust-ecosystem-deterministic
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
+          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "rust-ecosystem-deterministic.cache-from=" \
+            rust-ecosystem-deterministic
+        fi
 
   docker:ecosystem:fuzz:
     desc: Bake the cargo-fuzz smoke target with a bounded runtime.
@@ -413,6 +462,13 @@ tasks:
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}}
         rust-dylint
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
+          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "rust-ecosystem-nightly.cache-from=" \
+            rust-ecosystem-nightly
+        fi
 
   docker:web:dev:
     internal: true

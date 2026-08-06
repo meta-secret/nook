@@ -88,11 +88,21 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "docker:ecosystem:deterministic:",
         "docker:ecosystem:fuzz:",
         "docker:ecosystem:dylint:",
+        "rust-ecosystem-policy-tools",
         "rust-dependency-policy",
         "rust-ecosystem-deterministic",
         "rust-fuzz-smoke",
         "rust-dylint",
+        "rust-ecosystem-nightly",
         "sccache:ensure",
+        "rust-ecosystem-policy-tools.cache-to=",
+        "rust-ecosystem-policy-tools.cache-from=",
+        "rust-dependency-policy.cache-to=",
+        "rust-dependency-policy.cache-from=",
+        "rust-ecosystem-deterministic.cache-to=",
+        "rust-ecosystem-deterministic.cache-from=",
+        "rust-ecosystem-nightly.cache-from=",
+        "GHA_CACHE_WRITE_ENABLED",
     ] {
         assert!(
             docker_tasks.contains(marker),
@@ -129,7 +139,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "cargo-deny --manifest-path",
         "--hide-inclusion-graph",
         "--log-level error",
-        "cargo-audit audit",
+        "cargo-audit audit --quiet",
         "cargo fuzz run",
         "cargo dylint --all",
     ] {
@@ -169,21 +179,71 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         );
     }
     assert!(
-        rust_bake.contains("cache-to   = rust_ecosystem_policy_cache_to")
+        rust_bake.contains("cache-to   = rust_ecosystem_policy_tools_cache_to")
+            && rust_bake.contains("cache-to   = rust_ecosystem_policy_cache_to")
+            && rust_bake
+                .matches("cache-to   = rust_ecosystem_policy_tools_cache_to")
+                .count()
+                == 1
             && rust_bake
                 .matches("cache-to   = rust_ecosystem_policy_cache_to")
                 .count()
-                >= 2,
-        "ecosystem policy-tools and dependency-policy must seed the policy hosted cache"
+                == 1,
+        "policy-tools and dependency-policy must seed separate hosted cache scopes"
     );
     assert!(
         rust_bake.contains("cache-from = rust_ecosystem_nightly_cache_from")
-            && rust_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
+            && rust_bake
+                .matches("cache-from = rust_ecosystem_nightly_cache_from")
+                .count()
+                >= 3
             && rust_bake
                 .matches("cache-to   = rust_ecosystem_nightly_cache_to")
                 .count()
-                >= 3,
-        "ecosystem nightly/fuzz/dylint must share the hosted nightly cache scope"
+                == 1
+            && rust_bake.contains("cache-to   = []"),
+        "nightly/fuzz/dylint share nightly cache-from; only the nightly target writes it"
+    );
+    let docker_bake = read("nook-app/docker-bake.hcl")?;
+    let nightly_from = docker_bake
+        .split("rust_ecosystem_nightly_cache_from =")
+        .nth(1)
+        .and_then(|tail| tail.split("rust_ecosystem_nightly_cache_to =").next())
+        .unwrap_or("");
+    let policy_tools_from = docker_bake
+        .split("rust_ecosystem_policy_tools_cache_from =")
+        .nth(1)
+        .and_then(|tail| tail.split("rust_ecosystem_policy_tools_cache_to =").next())
+        .unwrap_or("");
+    let policy_from = docker_bake
+        .split("rust_ecosystem_policy_cache_from =")
+        .nth(1)
+        .and_then(|tail| tail.split("rust_ecosystem_policy_cache_to =").next())
+        .unwrap_or("");
+    let deps_from = docker_bake
+        .split("rust_deps_cache_from =")
+        .nth(1)
+        .and_then(|tail| tail.split("rust_deps_cache_to =").next())
+        .unwrap_or("");
+    let pr_isolated_rust_base =
+        "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true";
+    let trusted_rust_base = "nook/buildcache/nook-rust-base-v1:buildcache";
+    assert!(
+        !nightly_from.contains(trusted_rust_base)
+            && !nightly_from.contains(pr_isolated_rust_base)
+            && !policy_tools_from.contains(trusted_rust_base)
+            && !policy_tools_from.contains(pr_isolated_rust_base)
+            && !policy_from.contains(trusted_rust_base)
+            && !policy_from.contains(pr_isolated_rust_base)
+            && deps_from.contains(trusted_rust_base)
+            && !deps_from.contains(pr_isolated_rust_base),
+        "ecosystem toolchain scopes must not import rust-base; product deps keep trusted rust-base only"
+    );
+    assert!(
+        policy_from.contains("nook-rust-ecosystem-policy-tools-v3")
+            && docker_bake.contains("nook-rust-ecosystem-policy-tools-v3")
+            && docker_bake.contains("nook-rust-ecosystem-nightly-v3"),
+        "dependency-policy must restore the dedicated policy-tools cache scope"
     );
     assert!(
         rust_bake.contains("cache-from = rust_ecosystem_deterministic_cache_from")

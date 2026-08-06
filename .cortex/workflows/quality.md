@@ -59,13 +59,19 @@ Use this workflow for quality, CI, and deployment changes.
    - `vite build`
    - `task preflight` — repository-wide Rust invariant tests, before app setup
    - `PR / Rust ecosystem / Dependency policy and RustSec` —
-     `task docker:ecosystem:dependency-policy` Bakes `rust-dependency-policy`
-     from `nook-app/docker/rust.Dockerfile` via the separate
-     `rust-ecosystem-policy-tools` image (pinned `cargo-deny` + `cargo-audit`;
-     not installed into `rust-base`). Never `cargo install` those tools on the
-     runner host. Advisory exceptions must name the RustSec IDs, identify the
-     exact pinned upstream graph, and state the dependency upgrade that removes
-     them in both `deny.toml` and the affected workspace's `.cargo/audit.toml`.
+     `task docker:ecosystem:dependency-policy` Bakes
+     `rust-ecosystem-policy-tools` alone, then `rust-dependency-policy`, from
+     `nook-app/docker/rust.Dockerfile` (pinned `cargo-deny` + `cargo-audit`;
+     not installed into `rust-base`). Tools and deny/audit leaf use separate
+     Zot scopes.
+     Each stage imports with cache-to cleared, then publishes with cache-from
+     cleared so a CACHED solve cannot overwrite Zot with a thin index.
+     Tools and nightly scopes must not also import `rust-base`.
+     That shorter parent importer orphans the toolchain RUN layers.
+     Never `cargo install` those tools on the runner host. Advisory exceptions
+     must name the RustSec IDs, identify the exact pinned upstream graph, and
+     state the dependency upgrade that removes them in both `deny.toml` and
+     the affected workspace's `.cargo/audit.toml`.
      The current `agentic-ai/minds` exception is limited to RUSTSEC-2026-0118 and
      RUSTSEC-2026-0119 in the pinned `openai/codex` Rama/Hickory graph; remove it
      when upstream moves from `hickory-proto` 0.25.2 to 0.26.1 or later.
@@ -79,6 +85,7 @@ Use this workflow for quality, CI, and deployment changes.
      `task docker:ecosystem:fuzz` Bakes `rust-fuzz-smoke` from
      `rust-ecosystem-nightly` with pinned
      [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html).
+     Fuzz restores the shared nightly scope read-only; dylint alone writes it.
    - `PR / Rust ecosystem / Kani bounded proofs` —
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
      bounded proof harnesses via the official action (specialized toolchain).
@@ -87,6 +94,9 @@ Use this workflow for quality, CI, and deployment changes.
      `rust-ecosystem-nightly` with pinned
      [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
      `dylint-link` release binaries (no host `cargo install`).
+     Lint is read-only for nightly cache.
+     When writes are enabled, the Task then publishes `rust-ecosystem-nightly`
+     with cache-from cleared (sole nightly writer).
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
@@ -105,11 +115,19 @@ Use this workflow for quality, CI, and deployment changes.
     - GitHub Actions cache is forbidden.
     - Delivery Bake restores private Zot registry scopes for:
       - Rust toolchain
+      - Rust ecosystem nightly, policy-tools, policy leaf, and deterministic
       - stable Rust dependencies
       - source-sensitive native/WASM snapshots
       - web dependencies
       - browser-free web
       - e2e web
+    - Product deps cache-from use trusted `nook-rust-base-v1` only.
+    - They must not import PR-isolated rust-base parents.
+    - Ecosystem nightly/policy-tools/policy scopes must not import rust-base at all.
+    - Their mode=max exports already embed that parent chain.
+    - Ecosystem and PR product jobs verify with cache-to off, then publish with
+      cache-from cleared so CACHED solves cannot thin-export over a warm index.
+    - One CI job writes each shared ecosystem registry ref.
     - The complete Rust/WASM cargo-chef dependency graph uses an immutable scope fingerprinted from manifests, lockfiles, compiler Dockerfiles, Task invocation inputs, and Bake definitions.
     - Hosted builds never attach Redis credentials.
     - There is no dedicated cache-reconstruction build.

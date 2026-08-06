@@ -180,6 +180,15 @@ jobs:
         run: task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
           CI: true
+          # Import only during verify. Export after from local layers so a
+          # CACHED solve cannot overwrite the PR registry index with a thin export.
+          GHA_CACHE_WRITE_ENABLED: ""
+
+      - name: Publish PR-scoped native BuildKit cache
+        if: steps.trusted-native.outputs.found != 'true'
+        run: task ci:main:publish-native-cache
+        env:
+          GHA_CACHE_WRITE_ENABLED: "1"
 
       - name: Upload Rust coverage handoff
         uses: actions/upload-artifact@v7
@@ -309,6 +318,14 @@ jobs:
         run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
         env:
           CI: true
+          WASM_BUILD_MODE: dev
+          GHA_CACHE_WRITE_ENABLED: ""
+
+      - name: Publish PR-scoped WASM BuildKit cache
+        if: steps.trusted-wasm.outputs.found != 'true'
+        run: task ci:main:publish-wasm-cache
+        env:
+          GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
 
       - name: Stamp WASM handoff attempt
@@ -447,10 +464,16 @@ jobs:
             WASM_BUILD_MODE=dev
         env:
           CI: true
+          GHA_CACHE_WRITE_ENABLED: ""
           NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
           NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
+
+      - name: Publish PR-scoped web BuildKit cache
+        run: task ci:main:publish-web-cache
+        env:
+          GHA_CACHE_WRITE_ENABLED: "1"
 
       - name: Record headless UI demo
         id: record-ui-demo

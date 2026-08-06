@@ -4,7 +4,11 @@
 // folding that tooling into product rust-base.
 // Main seeds those scopes with the trusted registry writer; PRs only write
 // isolated remote-buildcache refs.
-// Probe marker: trusted ecosystem cache reuse after main seed (#931).
+// Nightly: rust-ecosystem-nightly is the sole cache-to writer. Dylint/fuzz only
+// restore it; the dylint Task publishes nightly with cache-from cleared so a
+// fully-CACHED build cannot overwrite the registry index with a thin export.
+// Policy-tools has its own scope and must be baked alone before dependency-policy.
+// Build imports remote cache with cache-to cleared; publish clears cache-from.
 
 target "rust-base" {
   context    = "."
@@ -25,8 +29,8 @@ target "rust-ecosystem-policy-tools" {
   dockerfile = "nook-app/docker/rust.Dockerfile"
   target     = "rust-ecosystem-policy-tools"
   platforms  = ["linux/amd64"]
-  cache-from = rust_ecosystem_policy_cache_from
-  cache-to   = rust_ecosystem_policy_cache_to
+  cache-from = rust_ecosystem_policy_tools_cache_from
+  cache-to   = rust_ecosystem_policy_tools_cache_to
   output     = ["type=cacheonly"]
 }
 
@@ -41,7 +45,6 @@ target "rust-dependency-policy" {
 }
 
 target "rust-ecosystem-nightly" {
-  inherits   = ["_sccache"]
   context    = "."
   dockerfile = "nook-app/docker/rust.Dockerfile"
   target     = "rust-ecosystem-nightly"
@@ -61,7 +64,8 @@ target "rust-fuzz-smoke" {
     FUZZ_SECONDS = FUZZ_SECONDS
   }
   cache-from = rust_ecosystem_nightly_cache_from
-  cache-to   = rust_ecosystem_nightly_cache_to
+  // Read-only for the shared nightly scope; the dylint Task publishes nightly.
+  cache-to   = []
   output     = ["type=cacheonly"]
 }
 
@@ -72,7 +76,8 @@ target "rust-dylint" {
   target     = "rust-dylint"
   platforms  = ["linux/amd64"]
   cache-from = rust_ecosystem_nightly_cache_from
-  cache-to   = rust_ecosystem_nightly_cache_to
+  // Read-only during lint; docker:ecosystem:dylint publishes nightly separately.
+  cache-to   = []
   output     = ["type=cacheonly"]
 }
 
