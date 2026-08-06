@@ -30,6 +30,8 @@ deploy_pages() {
   project="$1"
   dist="$2"
   log="$3"
+  # Background in this shell so the caller's $! remains a waitable child. Do not
+  # capture this function through command substitution.
   if [ "${NOOK_HOST_PAGES_DEPLOY:-}" = "1" ]; then
     CF_PAGES_PROJECT_NAME="$project" \
       CF_PAGES_PRODUCTION_BRANCH=main \
@@ -43,13 +45,16 @@ deploy_pages() {
       task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev \
       >"$log" 2>&1 &
   fi
-  echo $!
 }
 
-unified_pid="$(deploy_pages nook nook-app/nook-web/nook-web-app/dist "$deploy_dir/unified.log")"
-site_pid="$(deploy_pages nokey-sh nook-app/nook-web/nook-web-app/dist/site "$deploy_dir/site.log")"
-simple_pid="$(deploy_pages nokey-simple nook-app/nook-web/nook-vault-simple/dist "$deploy_dir/simple.log")"
-sentinel_pid="$(deploy_pages nokey-sentinel nook-app/nook-web/nook-vault-sentinel/dist "$deploy_dir/sentinel.log")"
+deploy_pages nook nook-app/nook-web/nook-web-app/dist "$deploy_dir/unified.log"
+unified_pid=$!
+deploy_pages nokey-sh nook-app/nook-web/nook-web-app/dist/site "$deploy_dir/site.log"
+site_pid=$!
+deploy_pages nokey-simple nook-app/nook-web/nook-vault-simple/dist "$deploy_dir/simple.log"
+simple_pid=$!
+deploy_pages nokey-sentinel nook-app/nook-web/nook-vault-sentinel/dist "$deploy_dir/sentinel.log"
+sentinel_pid=$!
 
 wait_for_deploy() {
   pid="$1"
