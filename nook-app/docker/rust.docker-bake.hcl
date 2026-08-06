@@ -2,6 +2,8 @@
 // dependency scopes consume it. Ecosystem Bake targets seed their own scopes so
 // deny/audit, nightly/fuzz/dylint, and deterministic compiles are reused without
 // folding that tooling into product rust-base.
+// Main seeds those scopes with the trusted registry writer; PRs only write
+// isolated remote-buildcache refs.
 
 target "rust-base" {
   context    = "."

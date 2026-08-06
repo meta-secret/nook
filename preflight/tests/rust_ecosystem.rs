@@ -58,6 +58,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "FUZZ_SECONDS",
         "isolated-cache-write: ${{ inputs.isolated_cache_write }}",
         "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}",
+        "secrets.NOOK_REGISTRY_USERNAME",
+        "secrets.NOOK_REGISTRY_REMOTE_USERNAME",
+        "github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME",
     ] {
         assert!(
             checks.contains(marker),
