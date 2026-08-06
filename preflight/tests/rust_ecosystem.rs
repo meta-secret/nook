@@ -200,13 +200,13 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         .nth(1)
         .and_then(|tail| tail.split("rust_ecosystem_policy_cache_to =").next())
         .unwrap_or("");
+    let pr_isolated_rust_base =
+        "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true";
     assert!(
         nightly_from.contains("nook/buildcache/nook-rust-base-v1:buildcache")
-            && !nightly_from
-                .contains("nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true")
+            && !nightly_from.contains(pr_isolated_rust_base)
             && policy_from.contains("nook/buildcache/nook-rust-base-v1:buildcache")
-            && !policy_from
-                .contains("nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true"),
+            && !policy_from.contains(pr_isolated_rust_base),
         "ecosystem nightly/policy fallback must use trusted rust-base only"
     );
     assert!(
