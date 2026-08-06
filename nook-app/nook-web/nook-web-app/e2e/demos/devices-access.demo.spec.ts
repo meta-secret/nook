@@ -26,9 +26,9 @@ test('walk the access chain from passkey to browser device key to vaults', async
     'Identity unlocked',
   )
   const chain = page.getByTestId('devices-access-chain')
-  await expect(chain).toContainText('Device-key evidence')
-  await expect(chain).toContainText('Local identity state')
-  await expect(chain).toContainText('Verified device-key access')
+  await expect(chain).toContainText('App key')
+  await expect(chain).toContainText('Identity')
+  await expect(chain).toContainText('Vaults')
   await expect(page.getByTestId('devices-access-strength-vaults')).toHaveCount(
     1,
   )
@@ -37,7 +37,7 @@ test('walk the access chain from passkey to browser device key to vaults', async
     .poll(() =>
       chain.evaluate((element) => {
         const protection = element.querySelector(
-          'article[aria-label*="Unlock protection"]',
+          'article[aria-label*="Passkey"]',
         )
         if (!(protection instanceof HTMLElement)) return false
 
@@ -68,7 +68,7 @@ test('walk the access chain from passkey to browser device key to vaults', async
   await page.waitForTimeout(BEAT_MS)
 
   await page.getByTestId('devices-access-node-device-key').click()
-  await expect(panel).toContainText('Browser device key')
+  await expect(panel).toContainText('App key')
   await expect(panel).toContainText('A backup password is different')
   await page.waitForTimeout(BEAT_MS)
 
@@ -87,11 +87,11 @@ test('walk the access chain from passkey to browser device key to vaults', async
   await page.getByTestId('devices-access-perspective-vaults').click()
   await expect(
     page.getByRole('heading', {
-      name: /Verified device-key access to Test vault: 1/,
+      name: /Verified identity access to Test vault: 1/,
     }),
   ).toBeVisible()
   await expect(chain).toContainText('Selected vault')
-  await expect(chain).toContainText('Device-key evidence')
+  await expect(chain).toContainText('App key')
   await page.waitForTimeout(BEAT_MS)
 
   await page.getByTestId('header-lock-vault-btn').click()

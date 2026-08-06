@@ -268,6 +268,7 @@ impl NookVaultManager {
         }
 
         self.purge_legacy_plaintext_search_catalog().await?;
+        let _ = self.ensure_identity_after_connect(&identity).await;
         let records = VerifiedVaultAccessFlow::Connect
             .complete(
                 self.get_records(),
@@ -284,6 +285,47 @@ impl NookVaultManager {
             "connect complete"
         );
         Ok(records)
+    }
+
+    /// Persist a first-class Identity after connect, synthesizing from vault auth when needed.
+    async fn ensure_identity_after_connect(
+        &self,
+        identity: &nook_core::DeviceIdentity,
+    ) -> Result<(), NookError> {
+        if crate::storage::identity_record::load_identity_record()
+            .await?
+            .is_some()
+        {
+            return Ok(());
+        }
+        let label = match &self.vault.vault_name {
+            super::VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
+            _ => "Personal".to_owned(),
+        };
+        if self.vault.store_id.is_empty() {
+            let _ = crate::storage::identity_record::ensure_local_identity_for_app_key(
+                identity, &label,
+            )
+            .await?;
+            return Ok(());
+        }
+        let store_id = nook_core::StoreId::parse(&self.vault.store_id)
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        if let Some(envelopes) = self.vault.meta.auth.get(&identity.auth_id()) {
+            let _ = crate::storage::identity_record::ensure_identity_from_legacy_vault(
+                identity,
+                &store_id,
+                envelopes.secrets_key.clone(),
+                envelopes.members_key.clone(),
+                &label,
+            )
+            .await?;
+            return Ok(());
+        }
+        let _ =
+            crate::storage::identity_record::ensure_local_identity_for_app_key(identity, &label)
+                .await?;
+        Ok(())
     }
 
     async fn connect_existing_content(
@@ -350,10 +392,8 @@ impl NookVaultManager {
         &mut self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
-        self.initialize_genesis_vault(identity)?;
-        if self.vault.store_id.is_empty() {
-            self.vault.store_id = nook_core::generate_store_id()?.to_string();
-        }
+        self.initialize_genesis_vault_with_identity(identity)
+            .await?;
         self.bootstrap_event_log_genesis().await?;
         self.maybe_sync_self_into_roster(identity)?;
         self.event_log.enabled = true;
@@ -418,14 +458,56 @@ impl NookVaultManager {
         }
     }
 
+    /// Create vault keys through a first-class Identity (fail closed without members).
+    ///
+    /// Identity owns the DEK envelopes. Vault genesis still writes `auth:` rows so
+    /// legacy unlock paths keep working during the extract.
+    pub(in crate::manager) async fn initialize_genesis_vault_with_identity(
+        &mut self,
+        identity: &nook_core::DeviceIdentity,
+    ) -> Result<(), NookError> {
+        if self.vault.store_id.is_empty() {
+            self.vault.store_id = nook_core::generate_store_id()?.to_string();
+        }
+        let store_id = nook_core::StoreId::parse(&self.vault.store_id)
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        let label = match &self.vault.vault_name {
+            super::VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
+            _ => "Personal".to_owned(),
+        };
+        let mut identity_record =
+            crate::storage::identity_record::ensure_local_identity_for_app_key(identity, &label)
+                .await?;
+        if !identity_record.has_members() {
+            return Err(NookError::Database(
+                "Identity must have at least one app key before creating a vault.".to_owned(),
+            ));
+        }
+        let keys = identity_record
+            .generate_vault_dek(store_id)
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        crate::storage::identity_record::save_identity_record(&identity_record).await?;
+        self.apply_genesis_vault_keys(identity, &keys)
+    }
+
+    /// Test/helper path that still creates vault keys without Identity persistence.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::manager) fn initialize_genesis_vault(
         &mut self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
+        let keys = nook_core::generate_vault_keys()?;
+        self.apply_genesis_vault_keys(identity, &keys)
+    }
+
+    fn apply_genesis_vault_keys(
+        &mut self,
+        identity: &nook_core::DeviceIdentity,
+        keys: &nook_core::VaultKeys,
+    ) -> Result<(), NookError> {
         self.vault.password_entries.clear();
         self.vault.unlock = nook_core::VaultUnlock::Keys;
         self.vault.meta = nook_core::VaultMetaState::default();
-        let keys = nook_core::generate_vault_keys()?;
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         match self.vault.architecture.vault_type {
             nook_core::VaultType::Simple => {

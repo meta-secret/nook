@@ -1,7 +1,8 @@
-//! Device, member, enrollment, and unlock-domain primitives.
+//! App-key, identity, enrollment, and unlock-domain primitives.
 
 pub mod device_key_protection;
 pub mod enrollment;
+pub mod identity;
 pub mod multi_device;
 pub mod password_envelope;
 pub mod sentinel_genesis;

@@ -48,12 +48,17 @@ impl AsRef<str> for CompactToken {
     }
 }
 
-/// Short device fingerprint (16 hex chars — first 8 bytes of SHA256).
+/// Short app-key fingerprint (16 hex chars — first 8 bytes of SHA256).
+///
+/// Historical name was `DeviceId`. New code must use [`AppId`].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct DeviceId(String);
+pub struct AppId(String);
 
-impl DeviceId {
+/// Migration alias for [`AppId`].
+pub type DeviceId = AppId;
+
+impl AppId {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
         let id = raw.trim();
         if id.len() != 16 || !id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
@@ -78,13 +83,13 @@ impl DeviceId {
     }
 }
 
-impl fmt::Display for DeviceId {
+impl fmt::Display for AppId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
 }
 
-impl AsRef<str> for DeviceId {
+impl AsRef<str> for AppId {
     fn as_ref(&self) -> &str {
         &self.0
     }
@@ -321,8 +326,14 @@ pub fn validate_store_id(id: &str) -> ValidationResult<StoreId> {
 }
 
 #[must_use]
+pub fn is_app_id(key: &str) -> bool {
+    AppId::parse(key).is_ok()
+}
+
+/// Migration alias for [`is_app_id`].
+#[must_use]
 pub fn is_device_id(key: &str) -> bool {
-    DeviceId::parse(key).is_ok()
+    is_app_id(key)
 }
 
 #[cfg(test)]

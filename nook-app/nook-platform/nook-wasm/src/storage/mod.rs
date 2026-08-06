@@ -18,6 +18,7 @@ pub(crate) mod extension_state;
 pub(crate) mod github;
 pub(crate) mod github_events;
 pub(crate) mod icloud;
+pub(crate) mod identity_record;
 pub(crate) mod indexed_db;
 pub(crate) mod local_folder;
 pub(crate) mod session;

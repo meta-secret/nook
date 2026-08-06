@@ -555,6 +555,13 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           protectionDeviceRelation: vault.t(
             I18N_KEYS.DevicesAccessBridgeProtectionDeviceRelation,
           ),
+          appKeyIdentityRelation: vault.t(
+            I18N_KEYS.DevicesAccessBridgeAppKeyIdentityRelation,
+          ),
+          identityVaultRelation: (vaultLabel: string) =>
+            vault.t(I18N_KEYS.DevicesAccessBridgeIdentityVaultRelation, {
+              vault: vaultLabel,
+            }),
           deviceVaultRelation: (vaultLabel: string) =>
             vault.t(I18N_KEYS.DevicesAccessBridgeDeviceVaultRelation, {
               vault: vaultLabel,
