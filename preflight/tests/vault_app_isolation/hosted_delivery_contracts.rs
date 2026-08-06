@@ -44,6 +44,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "NOOK_REGISTRY_CACHE_HOST",
         "default = \"registry.dev.nokey.sh\"",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-nightly-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v2",
@@ -59,10 +60,18 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
             "hosted BuildKit cache contract is missing: {required}"
         );
     }
+    let rust_toolchain_bake = read(root, "nook-app/docker/rust.docker-bake.hcl");
     assert!(
-        read(root, "nook-app/docker/rust.docker-bake.hcl")
-            .contains("cache-to   = rust_base_cache_to"),
+        rust_toolchain_bake.contains("cache-to   = rust_base_cache_to"),
         "the Rust toolchain base must seed its own hosted cache before dependency scopes consume it"
+    );
+    assert!(
+        rust_toolchain_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
+            && rust_toolchain_bake
+                .matches("cache-to   = rust_ecosystem_nightly_cache_to")
+                .count()
+                >= 3,
+        "ecosystem nightly, fuzz-smoke, and dylint must seed the shared nightly hosted cache"
     );
     assert!(
         !bake.contains("type=gha"),
@@ -70,7 +79,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
-        8,
+        9,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
     assert_rust_cache_export_hardening(&bake);

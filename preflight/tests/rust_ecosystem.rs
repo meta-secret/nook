@@ -50,6 +50,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "Rust ecosystem PRs must export only isolated remote-buildcache scopes"
     );
     assert!(
+        workflow.contains(
+            "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}"
+        ),
+        "Rust ecosystem main pushes must seed the trusted nightly BuildKit cache"
+    );
+    assert!(
         !workflow.contains("docker-bake-sccache.sh")
             && !workflow.contains("NOOK_BAKE_FILES")
             && !workflow.contains("docker buildx bake"),
@@ -141,6 +147,15 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             "rust.docker-bake.hcl is missing target {target}"
         );
     }
+    assert!(
+        rust_bake.contains("cache-from = rust_ecosystem_nightly_cache_from")
+            && rust_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
+            && rust_bake
+                .matches("cache-to   = rust_ecosystem_nightly_cache_to")
+                .count()
+                >= 3,
+        "ecosystem nightly/fuzz/dylint must share the hosted nightly cache scope"
+    );
 
     for capability in [
         "cargo-deny",
