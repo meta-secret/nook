@@ -657,17 +657,18 @@ The self-hosted `nook` pool remains maintenance-only.
 - Web verification and opt-in browser jobs download that producer's small run-stable artifact.
 - They do not rebuild Rust/WASM locally.
 
-`Verify and preview` behavior:
+PR consumer behavior:
 
-- Starts in parallel and prepares its runner.
-- Polls only for the current producer attempt's clippy-clean WASM package.
-- The producer finishes required Node tests in parallel.
+- `Web verification` depends on the WASM build producer through `needs`.
+- It downloads the clippy-clean WASM package with `actions/download-artifact`.
+- `WASM Node tests` can finish in parallel with web verification.
+- `Verify and preview` depends on web verification and WASM Node tests.
+- It deploys from the exported host dist handoff.
 - Rust coverage reporting is a separate native-dependent job.
 - That job downloads the completed handoff directly.
-- Preview never idles on native compilation.
+- Preview never idles on native compilation or sibling-job polling.
 - The overall gate still requires all jobs.
 - Producer failures are reported explicitly.
-- Preview deployment stays blocked until the Node-test producer succeeds.
 
 Hosted CI cache persistence:
 

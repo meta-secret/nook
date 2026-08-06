@@ -441,7 +441,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     let pr = read(root, ".github/workflows/pr.yml");
     for required in [
         "name: Native Rust verification",
-        "name: WASM verification and artifact",
+        "name: WASM build and artifact",
+        "name: WASM Node tests",
+        "name: Web verification",
         "name: Verify and preview",
         "name: Rust coverage report",
         "uses: ./.github/workflows/pr-coverage.yml",
@@ -476,8 +478,11 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "'nook-app/nook-platform/nook-wasm/**'",
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
-        "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
-        "attempt $attempt/900",
+        "needs: [validation-request, wasm]",
+        "needs: [verify, wasm-node-test]",
+        "name: Download built WASM handoff",
+        "name: Upload preview dist handoff",
+        "NOOK_HOST_PAGES_DEPLOY",
         "needs: rust",
     ] {
         assert!(
@@ -513,18 +518,27 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "coverage input detection belongs in the typed Rust reporter, not workflow shell"
     );
     let native_job = section(&pr, "  rust:\n", "  wasm:\n");
-    let wasm_job = section(&pr, "  wasm:\n", "  verify:\n");
+    let wasm_job = section(&pr, "  wasm:\n", "  wasm-node-test:\n");
+    let wasm_node_job = section(&pr, "  wasm-node-test:\n", "  verify:\n");
     assert!(
         wasm_job.contains("task ci:pr:wasm")
-            && wasm_job.contains("task ci:wasm:node-test")
+            && !wasm_job.contains("task ci:wasm:node-test")
             && wasm_job.contains("steps.trusted-wasm.outputs.found != 'true'")
             && wasm_job.contains("Upload built WASM handoff")
             && wasm_job.contains("nook-run-attempt")
+            && wasm_job.contains("run-node-tests")
             && wasm_job.contains("cache-write: \"false\"")
             && wasm_job.contains("main-cache-only: \"true\"")
             && wasm_job.contains("isolated-cache-write: \"true\"")
             && wasm_job.contains("NOOK_SCCACHE_ACCESS_KEY"),
-        "PR CI must restore or build WASM once, publish the exact attempt, and finish Node tests"
+        "PR CI must restore or build WASM once and publish the exact attempt before Node tests"
+    );
+    assert!(
+        wasm_node_job.contains("needs: wasm")
+            && wasm_node_job.contains("task ci:wasm:node-test")
+            && wasm_node_job.contains("needs.wasm.outputs.run-node-tests == 'true'")
+            && wasm_node_job.contains("Trusted handoff already covered Node tests"),
+        "PR CI must finish WASM Node tests in a dependent job after the build handoff"
     );
     assert!(
         native_job.contains("cache-write: \"false\"")
@@ -550,7 +564,8 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "git merge-tree --write-tree HEAD \"$HEAD_SHA\"",
         "git read-tree --reset -u \"$merge_tree\"",
         "'Native Rust verification'",
-        "'WASM verification and artifact'",
+        "'WASM build and artifact'",
+        "'WASM Node tests'",
         "'Verify and preview'",
         "producer_jobs_verified: true",
         "nook-validation-manifest.json",
@@ -582,7 +597,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && trusted_handoff.contains("const currentAttempt = run.run_attempt")
             && trusted_handoff.contains("!hasSuccessfulJob('Native Rust verification', true)",)
             && trusted_handoff
-                .contains("!hasSuccessfulJob('WASM verification and artifact', true)",)
+                .contains("!hasSuccessfulJob('WASM build and artifact', true)",)
+            && trusted_handoff
+                .contains("!hasSuccessfulJob('WASM Node tests', true)",)
             && trusted_handoff.contains("!hasSuccessfulJob('Verify and preview', false)")
             && trusted_handoff.contains("candidate.run_attempt < currentAttempt"),
         "trusted validation promotion must accept successful producers omitted from a failed-job rerun while requiring the current consumer attempt"
@@ -599,33 +616,34 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         1,
         "PR CI must not duplicate the verified WASM producer"
     );
-    let verify_job = section(&pr, "  verify:\n", "  coverage:\n");
+    let verify_job = section(&pr, "  verify:\n", "  preview:\n");
+    let preview_job = section(&pr, "  preview:\n", "  coverage:\n");
     assert!(
         verify_job.contains("github.event.action != 'closed'")
             && verify_job.contains("github.event.label.name == 'ci:validate'")
             && verify_job.contains("github.event.label.name == 'ci:full-e2e'")
-            && verify_job.contains("needs: validation-request")
-            && !verify_job.contains("needs: wasm")
-            && verify_job.contains("name: Wait for built WASM handoff")
-            && verify_job.contains("WASM verification completed with $wasm_conclusion")
-            && verify_job.contains(
-                "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
-            )
-            && verify_job.contains(
-                "[ \"$artifact_attempt\" = \"$GITHUB_RUN_ATTEMPT\" ]",
-            )
-            && verify_job.contains("jobs?filter=all&per_page=100")
-            && verify_job.contains("| .run_attempt")
-            && verify_job.contains("grep -Fxq \"$artifact_attempt\"")
-            && verify_job.contains("WASM artifact attempt $artifact_attempt did not complete successfully")
-            && verify_job.contains("name: Require WASM producer success before preview")
-            && verify_job.contains("attempt $attempt/900")
-            && verify_job.contains("sleep 2")
+            && verify_job.contains("needs: [validation-request, wasm]")
+            && verify_job.contains("name: Download built WASM handoff")
+            && verify_job.contains("name: Confirm WASM handoff shape")
+            && verify_job.contains("name: Upload preview dist handoff")
+            && verify_job.contains("actions/download-artifact@v8")
+            && verify_job.contains("name: pr-wasm-${{ github.run_id }}")
+            && !verify_job.contains("Wait for built WASM handoff")
+            && !verify_job.contains("attempt $attempt/900")
+            && !verify_job.contains("task ci:pr:deploy-and-verify-previews")
             && !verify_job.contains("task ci:pr:wasm")
             && verify_job.contains(
             "NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/",
         ),
-        "PR preview must prepare in parallel, surface failed WASM verification, consume its artifact on success, and target the isolated Simple Vault alias"
+        "PR web verification must wait on the WASM build through needs, download its artifact, and export host dist"
+    );
+    assert!(
+        preview_job.contains("needs: [verify, wasm-node-test]")
+            && preview_job.contains("NOOK_HOST_PAGES_DEPLOY: \"1\"")
+            && preview_job.contains("task ci:pr:deploy-and-verify-previews")
+            && preview_job.contains("name: pr-web-dist-${{ github.run_id }}")
+            && !preview_job.contains("attempt $attempt/900"),
+        "PR preview must deploy only after web verification and WASM Node tests succeed"
     );
     let coverage_job = section(&pr, "  coverage:\n", "  full-e2e:\n");
     let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");
@@ -643,7 +661,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     let full_e2e_job = section(&pr, "  full-e2e:\n", "  full-extension-e2e:\n");
     assert!(
-        full_e2e_job.contains("needs: wasm")
+        full_e2e_job.contains("needs: [wasm, wasm-node-test]")
             && full_e2e_job.contains("Download verified WASM handoff")
             && full_e2e_job.contains("cache-write: \"false\"")
             && full_e2e_job.contains("main-cache-only: \"true\"")
@@ -657,7 +675,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         .context("PR workflow must define full extension E2E")?
         .1;
     assert!(
-        extension_e2e_job.contains("needs: wasm")
+        extension_e2e_job.contains("needs: [wasm, wasm-node-test]")
             && extension_e2e_job.contains("Download verified WASM handoff")
             && extension_e2e_job.contains("cache-write: \"false\"")
             && extension_e2e_job.contains("main-cache-only: \"true\"")
@@ -789,7 +807,8 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
             && !e2e_only.contains("_ci:main:build"),
         "artifact-backed web e2e must not repeat verification or compete with extension e2e"
     );
-    let verify_job = section(&pr, "  verify:\n", "  coverage:\n");
+    let verify_job = section(&pr, "  verify:\n", "  preview:\n");
+    let preview_job = section(&pr, "  preview:\n", "  coverage:\n");
     let coverage_job = section(&pr, "  coverage:\n", "  full-e2e:\n");
     let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");
     assert!(
@@ -803,21 +822,16 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     );
     let wasm_handoff = section(
         &pr,
-        "      - name: Wait for built WASM handoff\n",
+        "      - name: Download built WASM handoff\n",
         "      - name: Svelte checks, JS unit tests, lint, and preview build",
     );
-    let wasm_job_lookup = wasm_handoff
-        .find("wasm_job=\"$(")
-        .context("PR workflow must resolve the WASM producer job")?;
-    let artifact_lookup = wasm_handoff
-        .find("actions/runs/$GITHUB_RUN_ID/artifacts")
-        .context("PR workflow must resolve the WASM handoff artifact")?;
     assert!(
-        wasm_job_lookup < artifact_lookup
-            && wasm_handoff.contains("[ -z \"$wasm_job_id\" ]")
-            && wasm_handoff.contains("nook-run-attempt")
-            && wasm_handoff.contains("This failed-job rerun has no WASM producer"),
-        "PR verification must consume only the current producer attempt and reuse prior output only when it is absent"
+        wasm_handoff.contains("actions/download-artifact@v8")
+            && wasm_handoff.contains("name: pr-wasm-${{ github.run_id }}")
+            && wasm_handoff.contains("nook-ci-artifacts/joined/nook-wasm")
+            && !wasm_handoff.contains("gh api")
+            && !wasm_handoff.contains("sleep 2"),
+        "PR verification must download the WASM handoff through needs instead of polling GitHub"
     );
     let deploy = section(
         &pr,
@@ -826,17 +840,28 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         deploy.contains("id: deploy-all")
-            && deploy.contains("task ci:pr:deploy-and-verify-previews"),
+            && deploy.contains("task ci:pr:deploy-and-verify-previews")
+            && deploy.contains("NOOK_HOST_PAGES_DEPLOY: \"1\""),
         "PR preview deploy must invoke the Taskfile entry that owns concurrent Pages uploads"
     );
     let deploy_script = read(root, ".github/scripts/ci-pr-deploy-and-verify-previews.sh");
     assert!(
-        deploy_script.contains(">\"$deploy_dir/unified.log\" 2>&1 &")
-            && deploy_script.contains(">\"$deploy_dir/site.log\" 2>&1 &")
-            && deploy_script.contains(">\"$deploy_dir/simple.log\" 2>&1 &")
-            && deploy_script.contains(">\"$deploy_dir/sentinel.log\" 2>&1 &")
+        deploy_script.contains("deploy_pages()")
+            && deploy_script.contains("NOOK_HOST_PAGES_DEPLOY")
+            && deploy_script.contains("ci-pr-host-pages-deploy.sh")
+            && deploy_script.contains(">\"$deploy_dir/unified.log\"")
+            && deploy_script.contains(">\"$deploy_dir/site.log\"")
+            && deploy_script.contains(">\"$deploy_dir/simple.log\"")
+            && deploy_script.contains(">\"$deploy_dir/sentinel.log\"")
             && deploy_script.contains("wait_for_deploy"),
         "independent Cloudflare preview uploads must run concurrently and all succeed before alias verification"
+    );
+    let host_deploy = read(root, ".github/scripts/ci-pr-host-pages-deploy.sh");
+    assert!(
+        host_deploy.contains("npx --yes \"wrangler@${wrangler_version}\"")
+            && host_deploy.contains("NOOK_WRANGLER_VERSION:-4.114.0")
+            && host_deploy.contains("pages deploy"),
+        "host Pages deploy must pin wrangler and deploy from the extracted dist tree"
     );
     assert!(
         ci_tasks.contains("node \"{{.WEB_ROOT}}/node_modules/.bin/wrangler\"")
