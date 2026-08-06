@@ -137,16 +137,32 @@ WORKDIR /meta-secret/nook/nook-app
 COPY nook-app/.cargo .cargo
 COPY nook-app/.config .config
 COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
-COPY nook-app/nook-app-common/Cargo.toml nook-app-common/Cargo.toml
-COPY nook-app/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
-COPY nook-app/nook-replication/Cargo.toml nook-replication/Cargo.toml
-COPY nook-app/nook-event-log/Cargo.toml nook-event-log/Cargo.toml
-COPY nook-app/nook-companion-core/Cargo.toml nook-companion-core/Cargo.toml
-COPY nook-app/nook-core/Cargo.toml nook-core/Cargo.toml
-COPY nook-app/nook-companion-wasm/Cargo.toml nook-companion-wasm/Cargo.toml
-COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
-RUN mkdir -p nook-app-common/src nook-auth2/src nook-replication/src nook-event-log/src nook-companion-core/src nook-core/src nook-companion-wasm/src nook-wasm/src \
-    && touch nook-app-common/src/lib.rs nook-auth2/src/lib.rs nook-replication/src/lib.rs nook-event-log/src/lib.rs nook-companion-core/src/lib.rs nook-core/src/lib.rs nook-companion-wasm/src/lib.rs nook-wasm/src/lib.rs
+COPY nook-app/nook-platform/nook-app-common/Cargo.toml nook-platform/nook-app-common/Cargo.toml
+COPY nook-app/nook-platform/nook-auth2/Cargo.toml nook-platform/nook-auth2/Cargo.toml
+COPY nook-app/nook-platform/nook-replication/Cargo.toml nook-platform/nook-replication/Cargo.toml
+COPY nook-app/nook-platform/nook-event-log/Cargo.toml nook-platform/nook-event-log/Cargo.toml
+COPY nook-app/nook-platform/nook-companion-core/Cargo.toml nook-platform/nook-companion-core/Cargo.toml
+COPY nook-app/nook-platform/nook-core/Cargo.toml nook-platform/nook-core/Cargo.toml
+COPY nook-app/nook-platform/nook-companion-wasm/Cargo.toml nook-platform/nook-companion-wasm/Cargo.toml
+COPY nook-app/nook-platform/nook-wasm/Cargo.toml nook-platform/nook-wasm/Cargo.toml
+RUN mkdir -p \
+      nook-platform/nook-app-common/src \
+      nook-platform/nook-auth2/src \
+      nook-platform/nook-replication/src \
+      nook-platform/nook-event-log/src \
+      nook-platform/nook-companion-core/src \
+      nook-platform/nook-core/src \
+      nook-platform/nook-companion-wasm/src \
+      nook-platform/nook-wasm/src \
+    && touch \
+      nook-platform/nook-app-common/src/lib.rs \
+      nook-platform/nook-auth2/src/lib.rs \
+      nook-platform/nook-replication/src/lib.rs \
+      nook-platform/nook-event-log/src/lib.rs \
+      nook-platform/nook-companion-core/src/lib.rs \
+      nook-platform/nook-core/src/lib.rs \
+      nook-platform/nook-companion-wasm/src/lib.rs \
+      nook-platform/nook-wasm/src/lib.rs
 RUN cargo chef prepare --recipe-path recipe.json
 # Stable epoch for the hosted WASM cook lineage. Bump when reseeding
 # nook-rust-wasm-deps-* so cook digests are new and Main publish must upload real
@@ -234,22 +250,22 @@ WORKDIR /meta-secret/nook
 COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
 COPY nook-app/.cargo nook-app/.cargo
 COPY nook-app/.config nook-app/.config
-COPY nook-app/nook-app-common nook-app/nook-app-common
-COPY nook-app/nook-auth2 nook-app/nook-auth2
-COPY nook-app/nook-replication nook-app/nook-replication
-COPY nook-app/nook-event-log nook-app/nook-event-log
-COPY nook-app/nook-companion-core nook-app/nook-companion-core
-COPY nook-app/nook-core nook-app/nook-core
-COPY nook-app/nook-companion-wasm nook-app/nook-companion-wasm
-COPY nook-app/nook-wasm nook-app/nook-wasm
+COPY nook-app/nook-platform/nook-app-common nook-app/nook-platform/nook-app-common
+COPY nook-app/nook-platform/nook-auth2 nook-app/nook-platform/nook-auth2
+COPY nook-app/nook-platform/nook-replication nook-app/nook-platform/nook-replication
+COPY nook-app/nook-platform/nook-event-log nook-app/nook-platform/nook-event-log
+COPY nook-app/nook-platform/nook-companion-core nook-app/nook-platform/nook-companion-core
+COPY nook-app/nook-platform/nook-core nook-app/nook-platform/nook-core
+COPY nook-app/nook-platform/nook-companion-wasm nook-app/nook-platform/nook-companion-wasm
+COPY nook-app/nook-platform/nook-wasm nook-app/nook-platform/nook-wasm
 
 RUN find \
-      nook-app/nook-app-common/src \
-      nook-app/nook-auth2/src \
-      nook-app/nook-replication/src \
-      nook-app/nook-event-log/src \
-      nook-app/nook-companion-core/src \
-      nook-app/nook-core/src \
+      nook-app/nook-platform/nook-app-common/src \
+      nook-app/nook-platform/nook-auth2/src \
+      nook-app/nook-platform/nook-replication/src \
+      nook-app/nook-platform/nook-event-log/src \
+      nook-app/nook-platform/nook-companion-core/src \
+      nook-app/nook-platform/nook-core/src \
       -type f -name '*.rs' -exec touch {} +
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -284,14 +300,14 @@ WORKDIR /meta-secret/nook
 COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
 COPY nook-app/.cargo nook-app/.cargo
 COPY nook-app/.config nook-app/.config
-COPY nook-app/nook-app-common nook-app/nook-app-common
-COPY nook-app/nook-auth2 nook-app/nook-auth2
-COPY nook-app/nook-replication nook-app/nook-replication
-COPY nook-app/nook-event-log nook-app/nook-event-log
-COPY nook-app/nook-companion-core nook-app/nook-companion-core
-COPY nook-app/nook-core nook-app/nook-core
-COPY nook-app/nook-companion-wasm nook-app/nook-companion-wasm
-COPY nook-app/nook-wasm nook-app/nook-wasm
+COPY nook-app/nook-platform/nook-app-common nook-app/nook-platform/nook-app-common
+COPY nook-app/nook-platform/nook-auth2 nook-app/nook-platform/nook-auth2
+COPY nook-app/nook-platform/nook-replication nook-app/nook-platform/nook-replication
+COPY nook-app/nook-platform/nook-event-log nook-app/nook-platform/nook-event-log
+COPY nook-app/nook-platform/nook-companion-core nook-app/nook-platform/nook-companion-core
+COPY nook-app/nook-platform/nook-core nook-app/nook-platform/nook-core
+COPY nook-app/nook-platform/nook-companion-wasm nook-app/nook-platform/nook-companion-wasm
+COPY nook-app/nook-platform/nook-wasm nook-app/nook-platform/nook-wasm
 
 RUN find nook-app -type f -name '*.rs' -exec touch {} +
 
@@ -326,12 +342,12 @@ WORKDIR /meta-secret/nook
 COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
 COPY nook-app/.cargo nook-app/.cargo
 COPY nook-app/.config nook-app/.config
-COPY nook-app/nook-app-common nook-app/nook-app-common
-COPY nook-app/nook-auth2 nook-app/nook-auth2
-COPY nook-app/nook-replication nook-app/nook-replication
-COPY nook-app/nook-event-log nook-app/nook-event-log
-COPY nook-app/nook-companion-core nook-app/nook-companion-core
-COPY nook-app/nook-core nook-app/nook-core
+COPY nook-app/nook-platform/nook-app-common nook-app/nook-platform/nook-app-common
+COPY nook-app/nook-platform/nook-auth2 nook-app/nook-platform/nook-auth2
+COPY nook-app/nook-platform/nook-replication nook-app/nook-platform/nook-replication
+COPY nook-app/nook-platform/nook-event-log nook-app/nook-platform/nook-event-log
+COPY nook-app/nook-platform/nook-companion-core nook-app/nook-platform/nook-companion-core
+COPY nook-app/nook-platform/nook-core nook-app/nook-platform/nook-core
 
 RUN find nook-app -type f -name '*.rs' -exec touch {} +
 
@@ -443,14 +459,14 @@ WORKDIR /meta-secret/nook
 COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
 COPY nook-app/.cargo nook-app/.cargo
 COPY nook-app/.config nook-app/.config
-COPY nook-app/nook-app-common nook-app/nook-app-common
-COPY nook-app/nook-auth2 nook-app/nook-auth2
-COPY nook-app/nook-replication nook-app/nook-replication
-COPY nook-app/nook-event-log nook-app/nook-event-log
-COPY nook-app/nook-companion-core nook-app/nook-companion-core
-COPY nook-app/nook-core nook-app/nook-core
-COPY nook-app/nook-companion-wasm nook-app/nook-companion-wasm
-COPY nook-app/nook-wasm nook-app/nook-wasm
+COPY nook-app/nook-platform/nook-app-common nook-app/nook-platform/nook-app-common
+COPY nook-app/nook-platform/nook-auth2 nook-app/nook-platform/nook-auth2
+COPY nook-app/nook-platform/nook-replication nook-app/nook-platform/nook-replication
+COPY nook-app/nook-platform/nook-event-log nook-app/nook-platform/nook-event-log
+COPY nook-app/nook-platform/nook-companion-core nook-app/nook-platform/nook-companion-core
+COPY nook-app/nook-platform/nook-core nook-app/nook-platform/nook-core
+COPY nook-app/nook-platform/nook-companion-wasm nook-app/nook-platform/nook-companion-wasm
+COPY nook-app/nook-platform/nook-wasm nook-app/nook-platform/nook-wasm
 COPY fuzz fuzz
 
 ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
@@ -475,14 +491,14 @@ WORKDIR /meta-secret/nook
 COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
 COPY nook-app/.cargo nook-app/.cargo
 COPY nook-app/.config nook-app/.config
-COPY nook-app/nook-app-common nook-app/nook-app-common
-COPY nook-app/nook-auth2 nook-app/nook-auth2
-COPY nook-app/nook-replication nook-app/nook-replication
-COPY nook-app/nook-event-log nook-app/nook-event-log
-COPY nook-app/nook-companion-core nook-app/nook-companion-core
-COPY nook-app/nook-core nook-app/nook-core
-COPY nook-app/nook-companion-wasm nook-app/nook-companion-wasm
-COPY nook-app/nook-wasm nook-app/nook-wasm
+COPY nook-app/nook-platform/nook-app-common nook-app/nook-platform/nook-app-common
+COPY nook-app/nook-platform/nook-auth2 nook-app/nook-platform/nook-auth2
+COPY nook-app/nook-platform/nook-replication nook-app/nook-platform/nook-replication
+COPY nook-app/nook-platform/nook-event-log nook-app/nook-platform/nook-event-log
+COPY nook-app/nook-platform/nook-companion-core nook-app/nook-platform/nook-companion-core
+COPY nook-app/nook-platform/nook-core nook-app/nook-platform/nook-core
+COPY nook-app/nook-platform/nook-companion-wasm nook-app/nook-platform/nook-companion-wasm
+COPY nook-app/nook-platform/nook-wasm nook-app/nook-platform/nook-wasm
 
 ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
 ENV RUSTFLAGS="-D warnings"
@@ -498,14 +514,14 @@ WORKDIR /meta-secret/nook
 COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
 COPY nook-app/.cargo nook-app/.cargo
 COPY nook-app/.config nook-app/.config
-COPY nook-app/nook-app-common nook-app/nook-app-common
-COPY nook-app/nook-auth2 nook-app/nook-auth2
-COPY nook-app/nook-replication nook-app/nook-replication
-COPY nook-app/nook-event-log nook-app/nook-event-log
-COPY nook-app/nook-companion-core nook-app/nook-companion-core
-COPY nook-app/nook-core nook-app/nook-core
-COPY nook-app/nook-companion-wasm nook-app/nook-companion-wasm
-COPY nook-app/nook-wasm nook-app/nook-wasm
+COPY nook-app/nook-platform/nook-app-common nook-app/nook-platform/nook-app-common
+COPY nook-app/nook-platform/nook-auth2 nook-app/nook-platform/nook-auth2
+COPY nook-app/nook-platform/nook-replication nook-app/nook-platform/nook-replication
+COPY nook-app/nook-platform/nook-event-log nook-app/nook-platform/nook-event-log
+COPY nook-app/nook-platform/nook-companion-core nook-app/nook-platform/nook-companion-core
+COPY nook-app/nook-platform/nook-core nook-app/nook-platform/nook-core
+COPY nook-app/nook-platform/nook-companion-wasm nook-app/nook-platform/nook-companion-wasm
+COPY nook-app/nook-platform/nook-wasm nook-app/nook-platform/nook-wasm
 COPY nook-app/.insta.yaml nook-app/.insta.yaml
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \

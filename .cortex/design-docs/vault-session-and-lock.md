@@ -218,7 +218,7 @@ forever.
 | Lock / switch | Clears session; vault chooser when multiple vaults exist |
 | `store_id` mismatch | **Import as new vault** in sync conflict dialog |
 
-Vault projection caches use `vault:{store_id}`. Code: `nook-app/nook-wasm/src/storage/indexed_db.rs`, `LoginVaultPicker.svelte`.
+Vault projection caches use `vault:{store_id}`. Code: `nook-app/nook-platform/nook-wasm/src/storage/indexed_db.rs`, `LoginVaultPicker.svelte`.
 
 ---
 

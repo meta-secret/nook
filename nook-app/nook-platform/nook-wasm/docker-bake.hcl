@@ -7,7 +7,7 @@
 target "builder-wasm" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
   target     = "builder-wasm"
   platforms  = ["linux/amd64"]
   contexts = {
@@ -21,7 +21,7 @@ target "builder-wasm" {
 
 target "_nook-rust-fast-common" {
   context    = "."
-  dockerfile = "nook-app/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
   target     = "nook-rust-fast"
   platforms  = ["linux/amd64"]
   contexts = {
@@ -32,7 +32,7 @@ target "_nook-rust-fast-common" {
 
 target "rust-format-check" {
   context    = "."
-  dockerfile = "nook-app/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
   target     = "rust-format-check"
   platforms  = ["linux/amd64"]
   contexts = {
@@ -44,7 +44,7 @@ target "rust-format-check" {
 target "wasm-export" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
   target     = "wasm-export"
   platforms  = ["linux/amd64"]
   contexts = {
@@ -60,7 +60,7 @@ target "wasm-export" {
 target "focused-web-artifacts" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
   target     = "focused-web-artifacts"
   platforms  = ["linux/amd64"]
   contexts = {
@@ -74,7 +74,7 @@ target "focused-web-artifacts" {
 target "web-artifacts" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
   target     = "web-artifacts"
   platforms  = ["linux/amd64"]
   contexts = {
@@ -92,7 +92,7 @@ target "web-artifacts" {
 target "_nook-rust-common" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
   target     = "nook-rust"
   platforms  = ["linux/amd64"]
   contexts = {
@@ -112,7 +112,7 @@ target "_nook-rust-common" {
 target "_nook-rust-browser-common" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
   target     = "nook-rust-browser"
   platforms  = ["linux/amd64"]
   contexts = {

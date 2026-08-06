@@ -15,17 +15,17 @@ static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 fn classifies_source_and_build_only_coverage_inputs() -> anyhow::Result<()> {
     let source = classify_coverage_inputs([
         "README.md",
-        "nook-app/nook-core/src/lib.rs",
-        "nook-app/nook-replication/src/lib.rs",
-        "nook-app/nook-event-log/src/lib.rs",
-        "nook-app/nook-core/Dockerfile",
+        "nook-app/nook-platform/nook-core/src/lib.rs",
+        "nook-app/nook-platform/nook-replication/src/lib.rs",
+        "nook-app/nook-platform/nook-event-log/src/lib.rs",
+        "nook-app/nook-platform/nook-core/Dockerfile",
     ]);
     assert!(source.coverage_inputs_changed);
     assert!(source.base_coverage_required);
 
     let build_only = classify_coverage_inputs([
         "nook-app/docker/rust.Dockerfile",
-        "nook-app/nook-core/docker-bake.hcl",
+        "nook-app/nook-platform/nook-core/docker-bake.hcl",
     ]);
     assert!(build_only.coverage_inputs_changed);
     assert!(!build_only.base_coverage_required);

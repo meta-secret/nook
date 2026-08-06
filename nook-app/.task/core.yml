@@ -216,9 +216,9 @@ tasks:
     desc: Run portable Rust crate coverage in Docker and let cargo-llvm-cov enforce the line floor.
     vars:
       FLOOR:
-        sh: jq -r '.lines_percent' {{.APP_ROOT}}/nook-core/coverage-floor.json
+        sh: jq -r '.lines_percent' {{.APP_ROOT}}/nook-platform/nook-core/coverage-floor.json
     cmds:
-      # Same cargo-llvm-cov subcommand warmed in nook-app/nook-core/Dockerfile (builder-debug), so the coverage
+      # Same cargo-llvm-cov subcommand warmed in nook-app/nook-platform/nook-core/Dockerfile (builder-debug), so the coverage
       # build is a cache hit — no dep recompile at runtime. cargo-llvm-cov enforces the threshold
       # itself via --fail-under-lines (non-zero exit if below); no output parsing.
       - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --summary-only --fail-under-lines {{.FLOOR}}
@@ -227,7 +227,7 @@ tasks:
     desc: Print measured portable Rust crate line coverage as JSON so the floor can be bumped (apply on host).
     cmds:
       # Emit machine-readable coverage; --fail-under-lines with the current floor still gates, while
-      # the JSON summary gives the exact measured line% to copy into {{.APP_ROOT}}/nook-core/coverage-floor.json.
+      # the JSON summary gives the exact measured line% to copy into {{.APP_ROOT}}/nook-platform/nook-core/coverage-floor.json.
       - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --json --summary-only
 
   _format:

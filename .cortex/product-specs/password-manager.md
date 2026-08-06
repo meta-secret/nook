@@ -239,7 +239,7 @@ secrets:
   stores title/file metadata plus standard-base64 file bytes (max 1 MiB
   decoded); list projections expose metadata only. See
   [file-attachments.md](file-attachments.md).
-Example fixtures: `nook-app/nook-core/fixtures/` (generate via `cd nook-app && cargo run --example generate_vault_fixtures -p nook-core`).
+Example fixtures: `nook-app/nook-platform/nook-core/fixtures/` (generate via `cd nook-app && cargo run --example generate_vault_fixtures -p nook-core`).
 
 ### C. Local Storage Adapter (IndexedDB)
 - **Database Name:** `nook_db`, version `1`, store `vault`
@@ -304,7 +304,7 @@ do not grant vault access.
 | `password.rs` | CSPRNG password generation |
 | `passkey_authenticator.rs` | RP/origin validation, ES256 registration/assertion, counters |
 
-All format, crypto, validation, and generator behavior must be covered by Rust tests (`task rust:test`). Integration workflows live in `nook-app/nook-core/tests/vault_workflow.rs`.
+All format, crypto, validation, and generator behavior must be covered by Rust tests (`task rust:test`). Integration workflows live in `nook-app/nook-platform/nook-core/tests/vault_workflow.rs`.
 
 ---
 

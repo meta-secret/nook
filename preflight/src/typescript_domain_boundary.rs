@@ -281,7 +281,7 @@ pub(super) fn json_round_trip_clone_lines(source: &str) -> Vec<usize> {
 pub fn rust_wasm_domain_boundary_escape_hatches(root: &Path) -> io::Result<Vec<Violation>> {
     source_violations(
         root,
-        Path::new("nook-app/nook-wasm/src"),
+        Path::new("nook-app/nook-platform/nook-wasm/src"),
         &["rs"],
         rust_wasm_boundary_violation_lines,
     )

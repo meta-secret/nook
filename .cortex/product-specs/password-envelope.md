@@ -113,7 +113,7 @@ password_entries:
   vault keys.
 - Uses the **same `age` crate already in `nook-core`** —
   `age::scrypt::Recipient` for encryption and `age::scrypt::Identity` for
-  decryption (see `nook-app/nook-core/src/vault_crypto.rs`).
+  decryption (see `nook-app/nook-platform/nook-core/src/vault_crypto.rs`).
   - No new crypto dependency.
   - No separate scrypt crate.
   - Fully `wasm32-unknown-unknown` compatible.

@@ -232,8 +232,8 @@ impl CoverageReport {
 fn is_coverage_input(path: &Path) -> bool {
     is_base_coverage_input(path)
         || path == Path::new("nook-app/docker-bake.hcl")
-        || path == Path::new("nook-app/nook-core/Dockerfile")
-        || path == Path::new("nook-app/nook-core/docker-bake.hcl")
+        || path == Path::new("nook-app/nook-platform/nook-core/Dockerfile")
+        || path == Path::new("nook-app/nook-platform/nook-core/docker-bake.hcl")
         || path
             .strip_prefix("nook-app/docker")
             .ok()
@@ -252,13 +252,13 @@ fn is_base_coverage_input(path: &Path) -> bool {
     path.starts_with("nook-app/.cargo")
         || path == Path::new("nook-app/Cargo.lock")
         || path == Path::new("nook-app/Cargo.toml")
-        || path.starts_with("nook-app/nook-app-common")
-        || path.starts_with("nook-app/nook-auth2")
-        || path.starts_with("nook-app/nook-replication")
-        || path.starts_with("nook-app/nook-event-log")
-        || (path.starts_with("nook-app/nook-core")
-            && path != Path::new("nook-app/nook-core/Dockerfile")
-            && path != Path::new("nook-app/nook-core/docker-bake.hcl"))
+        || path.starts_with("nook-app/nook-platform/nook-app-common")
+        || path.starts_with("nook-app/nook-platform/nook-auth2")
+        || path.starts_with("nook-app/nook-platform/nook-replication")
+        || path.starts_with("nook-app/nook-platform/nook-event-log")
+        || (path.starts_with("nook-app/nook-platform/nook-core")
+            && path != Path::new("nook-app/nook-platform/nook-core/Dockerfile")
+            && path != Path::new("nook-app/nook-platform/nook-core/docker-bake.hcl"))
 }
 
 fn validate_coverage_artifact_inner(directory: &Path, expected_commit: &str) -> io::Result<()> {

@@ -680,7 +680,7 @@ test.describe('local vault', () => {
   }) => {
     const encryptedExport = readFileSync(
       new URL(
-        '../../../nook-core/src/secrets/fixtures/bitwarden_encrypted_pbkdf2.json',
+        '../../../nook-platform/nook-core/src/secrets/fixtures/bitwarden_encrypted_pbkdf2.json',
         import.meta.url,
       ),
     )

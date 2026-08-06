@@ -132,8 +132,8 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
         "ignored local credentials must never enter a Docker build context"
     );
     for dockerfile_ignore in [
-        "nook-app/nook-core/Dockerfile.dockerignore",
-        "nook-app/nook-wasm/Dockerfile.dockerignore",
+        "nook-app/nook-platform/nook-core/Dockerfile.dockerignore",
+        "nook-app/nook-platform/nook-wasm/Dockerfile.dockerignore",
     ] {
         assert!(
             read(dockerfile_ignore)
@@ -374,8 +374,8 @@ fn assert_rust_build_cache_boundary() {
 
     for path in [
         "nook-app/docker/rust.Dockerfile",
-        "nook-app/nook-core/Dockerfile",
-        "nook-app/nook-wasm/Dockerfile",
+        "nook-app/nook-platform/nook-core/Dockerfile",
+        "nook-app/nook-platform/nook-wasm/Dockerfile",
     ] {
         let dockerfile = read(path);
         let reports = dockerfile.matches("nook-sccache-report ").count();
@@ -419,7 +419,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "nook-app/docker/Taskfile.yml",
         "nook-app/docker/sccache-wrapper.sh",
         "nook-app/docker/sccache-report.sh",
-        "nook-app/nook-core/Dockerfile",
+        "nook-app/nook-platform/nook-core/Dockerfile",
     ] {
         assert!(
             setup.contains(fingerprint_input),
@@ -547,7 +547,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "WASM/native dependency restores must import registry.dev.nokey.sh cache refs including rust-base"
     );
 
-    let wasm_bake = read("nook-app/nook-wasm/docker-bake.hcl");
+    let wasm_bake = read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
     let focused_artifacts = wasm_bake
         .split_once("target \"focused-web-artifacts\"")
         .context("focused WASM artifact target must exist")?
@@ -566,7 +566,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         .0;
     assert!(focused_web.contains("cache-to   = web_cache_to"));
 
-    let core_bake = read("nook-app/nook-core/docker-bake.hcl");
+    let core_bake = read("nook-app/nook-platform/nook-core/docker-bake.hcl");
     let wasm_dependencies = core_bake
         .split_once("target \"builder-wasm-deps\"")
         .context("core bake file must define the WASM dependency target")?
@@ -641,8 +641,8 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
     assert!(rust_base.contains("sccache-report.sh /usr/local/bin/nook-sccache-report"));
     for path in [
         "nook-app/docker/rust.Dockerfile",
-        "nook-app/nook-core/Dockerfile",
-        "nook-app/nook-wasm/Dockerfile",
+        "nook-app/nook-platform/nook-core/Dockerfile",
+        "nook-app/nook-platform/nook-wasm/Dockerfile",
     ] {
         assert!(
             read(path).contains("nook-sccache-report"),
@@ -656,7 +656,7 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
             >= 12
     );
     assert!(
-        read("nook-app/nook-wasm/Dockerfile")
+        read("nook-app/nook-platform/nook-wasm/Dockerfile")
             .matches("nook-sccache-report")
             .count()
             >= 3
@@ -704,7 +704,7 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
 fn rust_build_targets_inherit_the_sccache_configuration() -> anyhow::Result<()> {
     for (path, targets) in [
         (
-            "nook-app/nook-core/docker-bake.hcl",
+            "nook-app/nook-platform/nook-core/docker-bake.hcl",
             [
                 "builder-core-deps",
                 "builder-debug",
@@ -714,7 +714,7 @@ fn rust_build_targets_inherit_the_sccache_configuration() -> anyhow::Result<()> 
             .as_slice(),
         ),
         (
-            "nook-app/nook-wasm/docker-bake.hcl",
+            "nook-app/nook-platform/nook-wasm/docker-bake.hcl",
             [
                 "builder-wasm",
                 "web-artifacts",

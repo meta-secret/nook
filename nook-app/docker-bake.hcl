@@ -3,8 +3,8 @@
 // is merged in via multiple -f flags (bake has no `include`):
 //   nook-app/docker/rust.docker-bake.hcl        -> rust-base + ecosystem gates
 //   nook-app/docker/web.docker-bake.hcl         -> web-base, web-e2e-base
-//   nook-app/nook-core/docker-bake.hcl          -> builder-core-deps, builder-debug
-//   nook-app/nook-wasm/docker-bake.hcl          -> builder-wasm, web-artifacts, on-demand Rust images
+//   nook-app/nook-platform/nook-core/docker-bake.hcl          -> builder-core-deps, builder-debug
+//   nook-app/nook-platform/nook-wasm/docker-bake.hcl          -> builder-wasm, web-artifacts, on-demand Rust images
 //   nook-app/docker/toolchain.docker-bake.hcl   -> web-deps
 //   nook-app/nook-web/nook-web-app/docker-bake.hcl -> slim web runtime and CI targets
 // Callers (Taskfile `setup`, nook-app/docker/Taskfile.yml) pass all files via the NOOK_BAKE_FILES list.

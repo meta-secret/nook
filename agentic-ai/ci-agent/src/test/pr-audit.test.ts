@@ -219,7 +219,7 @@ function mockOctokit(options: MockOptions = {}): Octokit {
       },
     }),
     listFiles: async () => ({
-      data: [{ filename: "nook-app/nook-core/src/lib.rs" }],
+      data: [{ filename: "nook-app/nook-platform/nook-core/src/lib.rs" }],
     }),
     listReviews: async () => {
       if (

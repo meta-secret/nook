@@ -11,8 +11,8 @@ Restructured `.cortex` from an overengineered skill/subagent hierarchy into a fl
 
 ### 2. Pinned Precise Versions
 - Pinned all dependencies to exact versions (removed `^`, `~`, etc.) across:
-  - `nook-app/nook-core/Cargo.toml` (`serde = "=1.0.228"`)
-  - `nook-app/nook-wasm/Cargo.toml` (`serde_json = "=1.0.150"`, `wasm-bindgen = "=0.2.125"`)
+  - `nook-app/nook-platform/nook-core/Cargo.toml` (`serde = "=1.0.228"`)
+  - `nook-app/nook-platform/nook-wasm/Cargo.toml` (`serde_json = "=1.0.150"`, `wasm-bindgen = "=0.2.125"`)
   - `nook-app/nook-web/package.json` (all 22 dependencies pinned to exact versions)
 - Added strict rules to `.cortex/rules.md` to prevent any future semver ranges.
 

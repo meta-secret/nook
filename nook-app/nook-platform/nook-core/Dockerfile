@@ -10,10 +10,10 @@ COPY nook-app/.config .config
 
 # Source-sensitive verification layers are ordered by Rust dependency edge. A nook-core-only change
 # can reuse the common/auth clippy and coverage-test layers; a nook-wasm-only change can reuse both.
-COPY nook-app/nook-app-common nook-app-common
+COPY nook-app/nook-platform/nook-app-common nook-platform/nook-app-common
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    touch nook-app-common/src/i18n.rs \
+    touch nook-platform/nook-app-common/src/i18n.rs \
     && cargo clippy -p nook-app-common --all-targets -- -D warnings \
     && nook-sccache-report native-app-common-clippy
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -21,7 +21,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common \
     && nook-sccache-report native-app-common-coverage
 
-COPY nook-app/nook-auth2 nook-auth2
+COPY nook-app/nook-platform/nook-auth2 nook-platform/nook-auth2
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo clippy -p nook-auth2 --all-targets -- -D warnings \
@@ -34,7 +34,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2 \
     && nook-sccache-report native-auth-coverage
 
-COPY nook-app/nook-replication nook-replication
+COPY nook-app/nook-platform/nook-replication nook-platform/nook-replication
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo clippy -p nook-replication --all-targets -- -D warnings \
@@ -44,7 +44,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo llvm-cov nextest --no-clean --profile ci -p nook-replication \
     && nook-sccache-report native-replication-coverage
 
-COPY nook-app/nook-event-log nook-event-log
+COPY nook-app/nook-platform/nook-event-log nook-platform/nook-event-log
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo clippy -p nook-event-log --all-targets -- -D warnings \
@@ -54,7 +54,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo llvm-cov nextest --no-clean --profile ci -p nook-event-log \
     && nook-sccache-report native-event-log-coverage
 
-COPY nook-app/nook-companion-core nook-companion-core
+COPY nook-app/nook-platform/nook-companion-core nook-platform/nook-companion-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo clippy -p nook-companion-core --all-targets -- -D warnings \
@@ -64,7 +64,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo llvm-cov nextest --no-clean --profile ci -p nook-companion-core \
     && nook-sccache-report native-companion-core-coverage
 
-COPY nook-app/nook-core nook-core
+COPY nook-app/nook-platform/nook-core nook-platform/nook-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo clippy -p nook-core --all-targets -- -D warnings \
@@ -77,17 +77,17 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 # export must not rerun the Rust tests.
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
+    FLOOR="$(jq -r '.lines_percent' nook-platform/nook-core/coverage-floor.json)" \
     && mkdir -p /opt/nook/coverage/nook-core \
     && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only > /tmp/nook-core-coverage-summary.txt \
     && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only --fail-under-lines "$FLOOR" > /opt/nook/coverage/nook-core/summary.txt \
     && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
     && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
-    && cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json \
+    && cp nook-platform/nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json \
     && nook-sccache-report native-core-coverage
 
-COPY nook-app/nook-companion-wasm nook-companion-wasm
-COPY nook-app/nook-wasm nook-wasm
+COPY nook-app/nook-platform/nook-companion-wasm nook-platform/nook-companion-wasm
+COPY nook-app/nook-platform/nook-wasm nook-platform/nook-wasm
 
 # Export only the small, already-computed coverage payload. This target deliberately branches
 # before the WASM/web production stages so a PR fallback never materializes the multi-GB app image.

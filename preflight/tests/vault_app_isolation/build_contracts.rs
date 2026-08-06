@@ -32,7 +32,7 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
         "the mounted build must use the dependency image target directory outside the bind mount"
     );
 
-    let dockerfile = read(&root, "nook-app/nook-wasm/Dockerfile");
+    let dockerfile = read(&root, "nook-app/nook-platform/nook-wasm/Dockerfile");
     assert!(
         dockerfile.contains("FROM builder-wasm-deps AS nook-rust-fast")
             && dockerfile.contains("mv /meta-secret/nook/nook-app/target /opt/nook/cargo-target",)
@@ -210,18 +210,21 @@ fn assert_shared_wasm_build_contract(root: &Path) {
         !workspace.contains("nook-wasm/apps/"),
         "application wrappers must not recompile the shared WASM library"
     );
-    let application = read(root, "nook-app/nook-wasm/src/application.rs");
+    let application = read(root, "nook-app/nook-platform/nook-wasm/src/application.rs");
     assert!(application.contains("compiles and optimizes one shared WASM library"));
     assert!(application.contains("cannot change it"));
 
-    let wasm_dockerfile = read(root, "nook-app/nook-wasm/Dockerfile");
+    let wasm_dockerfile = read(root, "nook-app/nook-platform/nook-wasm/Dockerfile");
     assert!(
-        wasm_dockerfile.matches("wasm-pack build nook-wasm").count() == 1,
+        wasm_dockerfile
+            .matches("wasm-pack build nook-platform/nook-wasm")
+            .count()
+            == 1,
         "delivery must compile and optimize nook-wasm exactly once"
     );
     assert!(
         wasm_dockerfile
-            .matches("wasm-pack build nook-companion-wasm")
+            .matches("wasm-pack build nook-platform/nook-companion-wasm")
             .count()
             == 1,
         "delivery must compile the tiny companion WASM package exactly once"
@@ -240,13 +243,15 @@ fn assert_shared_wasm_build_contract(root: &Path) {
     }
     let wasm_tasks = read(root, "nook-app/nook-web/.task/wasm.yml");
     assert_eq!(
-        wasm_tasks.matches("wasm-pack build nook-wasm").count(),
+        wasm_tasks
+            .matches("wasm-pack build nook-platform/nook-wasm")
+            .count(),
         1,
         "the fast rebuild path must compile the shared vault WASM package once"
     );
     assert_eq!(
         wasm_tasks
-            .matches("wasm-pack build nook-companion-wasm")
+            .matches("wasm-pack build nook-platform/nook-companion-wasm")
             .count(),
         1,
         "the fast rebuild path must compile the companion WASM package once"
@@ -645,7 +650,7 @@ fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() -> 
 fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Result<()> {
     let root = repository_root();
     let dependency_dockerfile = read(&root, "nook-app/docker/rust.Dockerfile");
-    let source_dockerfile = read(&root, "nook-app/nook-core/Dockerfile");
+    let source_dockerfile = read(&root, "nook-app/nook-platform/nook-core/Dockerfile");
     let warmup = section(
         &dependency_dockerfile,
         "FROM builder-wasm-deps AS builder-core-deps",
@@ -691,14 +696,14 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
     let wasm_task = read(&root, "nook-app/nook-web/.task/wasm.yml");
     for required in [
         "\"Cargo.toml\" \"Cargo.lock\"",
-        "\"nook-wasm/Cargo.toml\" \"nook-wasm/src\"",
-        "\"nook-companion-wasm/Cargo.toml\" \"nook-companion-wasm/src\"",
-        "\"nook-companion-core/Cargo.toml\" \"nook-companion-core/src\"",
-        "\"nook-app-common/Cargo.toml\" \"nook-app-common/src\" \"nook-app-common/locales\"",
-        "\"nook-core/Cargo.toml\" \"nook-core/src\"",
-        "\"nook-auth2/Cargo.toml\" \"nook-auth2/src\"",
-        "\"nook-replication/Cargo.toml\" \"nook-replication/src\"",
-        "\"nook-event-log/Cargo.toml\" \"nook-event-log/src\"",
+        "\"nook-platform/nook-wasm/Cargo.toml\" \"nook-platform/nook-wasm/src\"",
+        "\"nook-platform/nook-companion-wasm/Cargo.toml\" \"nook-platform/nook-companion-wasm/src\"",
+        "\"nook-platform/nook-companion-core/Cargo.toml\" \"nook-platform/nook-companion-core/src\"",
+        "\"nook-platform/nook-app-common/Cargo.toml\" \"nook-platform/nook-app-common/src\" \"nook-platform/nook-app-common/locales\"",
+        "\"nook-platform/nook-core/Cargo.toml\" \"nook-platform/nook-core/src\"",
+        "\"nook-platform/nook-auth2/Cargo.toml\" \"nook-platform/nook-auth2/src\"",
+        "\"nook-platform/nook-replication/Cargo.toml\" \"nook-platform/nook-replication/src\"",
+        "\"nook-platform/nook-event-log/Cargo.toml\" \"nook-platform/nook-event-log/src\"",
     ] {
         assert!(
             wasm_task.contains(required),

@@ -135,25 +135,25 @@ const RUST_WASM_TYPED_DOMAIN_FUNCTION_MARKERS: &[&str] = &[
 pub fn portable_core_browser_dependencies(root: &Path) -> io::Result<Vec<Violation>> {
     let mut violations = violations_in_tree(
         root,
-        Path::new("nook-app/nook-app-common/src"),
+        Path::new("nook-app/nook-platform/nook-app-common/src"),
         "rs",
         BROWSER_RUST_MARKERS,
     )?;
     violations.extend(violations_in_tree(
         root,
-        Path::new("nook-app/nook-core/src"),
+        Path::new("nook-app/nook-platform/nook-core/src"),
         "rs",
         BROWSER_RUST_MARKERS,
     )?);
     violations.extend(violations_in_tree(
         root,
-        Path::new("nook-app/nook-replication/src"),
+        Path::new("nook-app/nook-platform/nook-replication/src"),
         "rs",
         BROWSER_RUST_MARKERS,
     )?);
     violations.extend(violations_in_tree(
         root,
-        Path::new("nook-app/nook-event-log/src"),
+        Path::new("nook-app/nook-platform/nook-event-log/src"),
         "rs",
         BROWSER_RUST_MARKERS,
     )?);
@@ -166,7 +166,7 @@ pub fn portable_core_browser_dependencies(root: &Path) -> io::Result<Vec<Violati
 ///
 /// Returns an error when a source file cannot be read or parsed as Rust.
 pub fn wasm_js_values(root: &Path) -> io::Result<Vec<Violation>> {
-    let directory = root.join("nook-app/nook-wasm/src");
+    let directory = root.join("nook-app/nook-platform/nook-wasm/src");
     let mut files = Vec::new();
     collect_files_with_extension(&directory, "rs", &mut files)?;
     let mut violations = Vec::new();
@@ -362,7 +362,7 @@ mod tests {
     fn reports_only_cache_mounts_in_dockerfiles() -> anyhow::Result<()> {
         let root = temporary_directory()?;
         fs::create_dir_all(root.join("nested"))?;
-        fs::create_dir_all(root.join("nook-app/nook-wasm"))?;
+        fs::create_dir_all(root.join("nook-app/nook-platform/nook-wasm"))?;
         fs::create_dir_all(
             root.join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm"),
         )?;
@@ -371,7 +371,7 @@ mod tests {
             "FROM scratch\nRUN --mount=type=cache,target=/cache true\nRUN --mount=target=/other-cache,type=cache true\n",
         )?;
         fs::write(
-            root.join("nook-app/nook-wasm/Dockerfile"),
+            root.join("nook-app/nook-platform/nook-wasm/Dockerfile"),
             "FROM scratch\nRUN --mount=type=cache,target=/wasm-cache true\n",
         )?;
         fs::write(
@@ -394,7 +394,7 @@ mod tests {
                     line: 3,
                 },
                 Violation {
-                    path: PathBuf::from("nook-app/nook-wasm/Dockerfile"),
+                    path: PathBuf::from("nook-app/nook-platform/nook-wasm/Dockerfile"),
                     line: 2,
                 },
             ]

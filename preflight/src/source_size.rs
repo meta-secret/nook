@@ -25,7 +25,7 @@ const EXCLUDED_REPOSITORY_PREFIXES: &[&str] = &[
     ".agents/skills/impeccable",
     "nook-app/nook-web/nook-web-shared/src/wasm",
     "nook-app/nook-web/nook-web-shared/src/generated",
-    "nook-app/nook-app-common/src/generated",
+    "nook-app/nook-platform/nook-app-common/src/generated",
 ];
 
 #[derive(Debug, Eq, PartialEq)]

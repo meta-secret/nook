@@ -16,7 +16,7 @@ const repoRef = { owner: "meta-secret", repo: "nook" };
 test("requiredPrCheckNames maps changed paths to repository-owned gates", () => {
   assert.deepEqual(requiredPrCheckNames([".cortex/rules.md"]), []);
   assert.deepEqual(
-    requiredPrCheckNames(["nook-app/nook-core/src/lib.rs"]),
+    requiredPrCheckNames(["nook-app/nook-platform/nook-core/src/lib.rs"]),
     ["Rust ecosystem checks", "Verify and preview"],
   );
   assert.deepEqual(
@@ -37,7 +37,7 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
   );
   assert.deepEqual(
     requiredPrCheckNames([
-      "nook-app/nook-core/src/lib.rs",
+      "nook-app/nook-platform/nook-core/src/lib.rs",
       "nook-app/nook-web/nook-web-research/src/main.ts",
     ]),
     [
@@ -46,7 +46,7 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
       "Verify and preview",
     ],
   );
-  assert.deepEqual(requiredPrWorkflows(["nook-app/nook-core/src/lib.rs"]), [
+  assert.deepEqual(requiredPrWorkflows(["nook-app/nook-platform/nook-core/src/lib.rs"]), [
     {
       checkName: "Rust ecosystem checks",
       workflowFile: "rust-ecosystem.yml",

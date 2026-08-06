@@ -1,4 +1,4 @@
-//! Writes example vault files to `nook-app/nook-core/fixtures/` for inspection.
+//! Writes example vault files to `nook-app/nook-platform/nook-core/fixtures/` for inspection.
 //!
 //! Run: `cargo run --example generate_vault_fixtures -p nook-core`
 

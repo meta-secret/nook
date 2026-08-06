@@ -8,7 +8,7 @@ const repositoryRoot = resolve(
 )
 const localeDirectory = resolve(
   repositoryRoot,
-  'nook-app/nook-app-common/locales',
+  'nook-app/nook-platform/nook-app-common/locales',
 )
 const typescriptOutput = resolve(
   repositoryRoot,
@@ -16,11 +16,17 @@ const typescriptOutput = resolve(
 )
 const rustOutput = resolve(
   repositoryRoot,
-  'nook-app/nook-app-common/src/generated/i18n_keys.rs',
+  'nook-app/nook-platform/nook-app-common/src/generated/i18n_keys.rs',
 )
 const obsoleteRustOutputs = [
-  resolve(repositoryRoot, 'nook-app/nook-core/src/generated/i18n_keys.rs'),
-  resolve(repositoryRoot, 'nook-app/nook-auth2/src/generated/i18n_keys.rs'),
+  resolve(
+    repositoryRoot,
+    'nook-app/nook-platform/nook-core/src/generated/i18n_keys.rs',
+  ),
+  resolve(
+    repositoryRoot,
+    'nook-app/nook-platform/nook-auth2/src/generated/i18n_keys.rs',
+  ),
 ]
 const landingMessagesPath = resolve(
   repositoryRoot,

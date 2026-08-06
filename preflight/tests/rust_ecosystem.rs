@@ -19,7 +19,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let workspace = read("nook-app/Cargo.toml")?;
     let rust_dockerfile = read("nook-app/docker/rust.Dockerfile")?;
     let rust_bake = read("nook-app/docker/rust.docker-bake.hcl")?;
-    let replication = read("nook-app/nook-replication/src/replica_store.rs")?;
+    let replication = read("nook-app/nook-platform/nook-replication/src/replica_store.rs")?;
     let fuzz_target = read("fuzz/fuzz_targets/wire_parsers.rs")?;
     let fuzz_manifest = read("fuzz/Cargo.toml")?;
     let readiness = read("agentic-ai/ci-agent/src/main/github.ts")?;

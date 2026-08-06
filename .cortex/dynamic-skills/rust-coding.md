@@ -95,7 +95,7 @@ When you see `Option<T>`, ask:
   store/pass the WASM object from Svelte state explicitly.
 - Keep `nook-core` organized by domain module groups (`auth`, `crypto`,
   `secrets`, `sync`, `vault`). Do not add new domain files directly under
-  `nook-app/nook-core/src`; place them in the owning group and re-export through
+  `nook-app/nook-platform/nook-core/src`; place them in the owning group and re-export through
   `lib.rs` only when they are part of the stable public core API.
 - Rust-owned `Tsify`/WASM domain contracts never author `undefined`, `null`, or
   `void` field states. Do not pair `Option<T>` with a

@@ -35,7 +35,7 @@ Use this workflow for quality, CI, and deployment changes.
      and the standalone `preflight` Clippy pass enforce them with `-D warnings`
    - `task rust:coverage:check` — combined `nook-app-common`, `nook-core`,
      `nook-auth2`, `nook-replication`, and `nook-event-log` coverage vs the **90%** line floor
-     (`nook-app/nook-core/coverage-floor.json`)
+     (`nook-app/nook-platform/nook-core/coverage-floor.json`)
    - `svelte-check`
    - `eslint` — the web-family lint command uses a dedicated project that
      includes every linted TypeScript and Svelte source, enables

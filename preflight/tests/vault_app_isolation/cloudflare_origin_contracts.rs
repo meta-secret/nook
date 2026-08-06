@@ -31,7 +31,7 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
     );
     let vault_host_policy = read(
         &root,
-        "nook-app/nook-companion-core/src/vault_host_policy.rs",
+        "nook-app/nook-platform/nook-companion-core/src/vault_host_policy.rs",
     );
     for production_boundary in [
         "https://simple.nokey.sh/",

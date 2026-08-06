@@ -511,7 +511,7 @@ build-performance PR. Full policy:
 * **Rust unit/integration tests** must cover ~99% of domain behavior — especially event sourcing, causal DAG sync, projection, epochs, and crypto. E2e is smoke only. See [rules.md §4](rules.md#4-testing-requirements) and [design-docs/core-beliefs.md §9](design-docs/core-beliefs.md#9-unit-tests-own-domain-correctness-e2e-is-smoke-only).
 * **Line coverage threshold (90%):** `task rust:coverage:check` measures
   `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-log` and fails below
-  `nook-app/nook-core/coverage-floor.json` (90% lines). When coverage is under
+  `nook-app/nook-platform/nook-core/coverage-floor.json` (90% lines). When coverage is under
   90%, add Rust tests in the same task. Above 90%, do not chase marginal
   coverage.
 
