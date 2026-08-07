@@ -15,7 +15,7 @@ target "builder-core-deps" {
 // builder-core-deps (no cache-to) so linked leaves cannot thin-export this parent.
 target "builder-core-deps-publish" {
   inherits = ["builder-core-deps"]
-  cache-to = rust_deps_cache_to
+  cache-to   = rust_deps_cache_to
 }
 
 // Shared platform source overlay on cooked deps. Bulk native leaves take this via
@@ -51,7 +51,7 @@ target "builder-wasm-deps" {
 // Isolated writes use the git-commit remote-buildcache suffix via write_cache_repository.
 target "builder-wasm-deps-publish" {
   inherits = ["builder-wasm-deps"]
-  cache-to = rust_wasm_deps_cache_to
+  cache-to   = rust_wasm_deps_cache_to
 }
 
 // Native verify warm-up (nextest --no-run, clippy, llvm-cov). Parallel with builder-wasm.

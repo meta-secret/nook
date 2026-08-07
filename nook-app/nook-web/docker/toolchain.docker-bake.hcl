@@ -30,5 +30,5 @@ target "web-deps" {
 // named context without cache-to so they cannot thin-export this parent.
 target "web-deps-publish" {
   inherits = ["web-deps"]
-  cache-to = web_deps_cache_to
+  cache-to   = web_deps_cache_to
 }

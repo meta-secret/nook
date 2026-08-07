@@ -197,7 +197,7 @@ target "rust-base" {
 // (no cache-to) so linked leaf bakes cannot thin-export this parent.
 target "rust-base-publish" {
   inherits = ["rust-base"]
-  cache-to = rust_base_cache_to
+  cache-to   = rust_base_cache_to
 }
 
 target "rust-ecosystem-policy-tools" {
@@ -228,7 +228,7 @@ target "rust-ecosystem-nightly" {
 
 target "rust-ecosystem-nightly-publish" {
   inherits = ["rust-ecosystem-nightly"]
-  cache-to = rust_ecosystem_nightly_cache_to
+  cache-to   = rust_ecosystem_nightly_cache_to
 }
 
 // Platform sources over nightly tools. Dylint/fuzz take this via Bake context so
