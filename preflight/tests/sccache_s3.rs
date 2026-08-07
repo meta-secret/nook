@@ -513,8 +513,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     let docker_tasks = read("nook-app/nook-platform/docker/Taskfile.yml");
     let wasm_cache_verifier = read(".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
-        wasm_cache_verifier
-            .contains("GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE")
+        wasm_cache_verifier.contains("GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE")
             && wasm_cache_verifier.contains("nook/buildcache/$cache_scope:buildcache")
             && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh"),
         "Main WASM cache verify must require GHA_RUST_WASM_DEPS_SCOPE and import that buildcache ref"
