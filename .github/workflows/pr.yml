@@ -184,7 +184,7 @@ jobs:
           # CACHED solve cannot overwrite the PR registry index with a thin export.
           GHA_CACHE_WRITE_ENABLED: ""
 
-      - name: Publish PR-scoped native BuildKit cache
+      - name: Publish git-scoped native BuildKit cache
         if: steps.trusted-native.outputs.found != 'true'
         run: task ci:main:publish-native-cache
         env:
@@ -321,7 +321,7 @@ jobs:
           WASM_BUILD_MODE: dev
           GHA_CACHE_WRITE_ENABLED: ""
 
-      - name: Publish PR-scoped WASM BuildKit cache
+      - name: Publish git-scoped WASM BuildKit cache
         if: steps.trusted-wasm.outputs.found != 'true'
         run: task ci:main:publish-wasm-cache
         env:
@@ -472,7 +472,7 @@ jobs:
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
 
-      - name: Publish PR-scoped web BuildKit cache
+      - name: Publish git-scoped web BuildKit cache
         run: task ci:main:publish-web-cache
         env:
           GHA_CACHE_WRITE_ENABLED: "1"

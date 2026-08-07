@@ -800,7 +800,7 @@ unless hive_taskfile.include?("--target cache-publish") &&
   raise "Hive cache publication must export release and parallel verification dependency graphs"
 end
 unless hive_taskfile.scan('command+=(--cache-from "$HIVE_CACHE_SEED_FROM")').length == 4
-  raise "Hive verification must restore its task-scoped Remote cache before trusted Main fallback"
+  raise "Hive verification must restore its git-scoped Remote cache before trusted Main fallback"
 end
 unless hive_taskfile.scan('--build-arg "SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"').length == 4 &&
        hive_taskfile.scan('--build-arg "SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"').length == 4

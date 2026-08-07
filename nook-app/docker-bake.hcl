@@ -37,13 +37,13 @@ variable "GHA_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
-// Main keeps this empty. Explicit Remote tasks use a deterministic branch hash so repeated runs
-// update only the Remote repository and cannot replace the trusted Main cache.
+// Main keeps this empty. Isolated PR/Remote/local writes use -git-<40-char-sha> so each
+// commit owns a distinct remote-buildcache index and cannot replace trusted Main refs.
 variable "GHA_CACHE_SCOPE_SUFFIX" {
   default = ""
 }
 
-// Isolated PR/Remote writes restore their scoped ref first (ignore-error when cold) and then
+// Isolated git-scoped writes restore their commit ref first (ignore-error when cold) and then
 // fall back to Main. Ordinary Main validation keeps this empty and consumes only trusted refs.
 variable "GHA_CACHE_FALLBACK_ENABLED" {
   default = ""

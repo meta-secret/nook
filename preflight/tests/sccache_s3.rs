@@ -447,14 +447,12 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         setup.contains("isolated-cache-write requires main-cache-only=true and cache-write=false")
     );
     assert!(setup.contains("isolated-cache-write requires workflow_dispatch or pull_request"));
-    assert!(setup.contains("scope_suffix=\"-pr-$pr_number\""));
-    assert!(
-        setup.contains(
-            "branch_hash=\"$(printf '%s' \"$GITHUB_REF_NAME\" | sha256sum | cut -c1-20)\""
-        )
-    );
-    assert!(setup.contains("task_hash=\"$(printf '%s' \"$task_name\" | sha256sum | cut -c1-12)\""));
-    assert!(setup.contains("scope_suffix=\"-remote-$branch_hash-task-$task_hash\""));
+    assert!(setup.contains("scope_sha=\"${{ github.event.pull_request.head.sha }}\""));
+    assert!(setup.contains("scope_sha=\"$(git rev-parse HEAD)\""));
+    assert!(setup.contains("scope_suffix=\"-git-$scope_sha\""));
+    assert!(setup.contains("isolated-cache-write requires a 40-char lowercase git SHA"));
+    assert!(!setup.contains("scope_suffix=\"-pr-$pr_number\""));
+    assert!(!setup.contains("scope_suffix=\"-remote-$branch_hash-task-$task_hash\""));
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
     assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
     assert!(setup.contains("HIVE_CACHE_FROM=$hive_remote_ref"));
@@ -522,11 +520,25 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             && root_tasks.contains("NOOK_REGISTRY_CACHE:-1")
             && root_tasks.contains("registry-remote-password")
             && root_tasks.contains("NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:")
+            && root_tasks.contains("git-cache-scope.sh")
+            && root_tasks.contains("git status --porcelain")
+            && !root_tasks.contains("-pr-$pr")
+            && !root_tasks.contains("-local-")
             && docker_tasks.contains("registry-cache:ensure")
             && docker_tasks.contains("registry-cache:publish:wasm")
+            && docker_tasks.contains("git-cache-scope-publish-guard.sh")
             && docker_tasks.contains("login \"$host\"")
             && docker_tasks.contains("task: registry-cache:publish:wasm"),
-        "Task Bake must enable local remote-buildcache restore/publish from root env + registry-cache tasks"
+        "Task Bake must enable local git-commit remote-buildcache restore/publish from root env + registry-cache tasks"
+    );
+    let git_scope = read(".github/scripts/git-cache-scope.sh");
+    let publish_guard = read(".github/scripts/git-cache-scope-publish-guard.sh");
+    assert!(
+        git_scope.contains("-git-$sha")
+            && git_scope.contains("--require-clean")
+            && publish_guard.contains("git-cache-scope.sh\" --require-clean")
+            && publish_guard.contains("GHA_CACHE_SCOPE_SUFFIX must be"),
+        "git-scoped cache helpers must emit -git-<sha> and refuse dirty local publish"
     );
     assert!(
         app_bake.contains("Local Task Bake sets this from root Taskfile env"),

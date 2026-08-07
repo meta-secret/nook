@@ -148,7 +148,9 @@ Use scoped architecture instead:
 - context parents keep `cache-from` and declare no `cache-to`;
 - dedicated `*-publish` targets write `mode=max` refs;
 - Main writes `nook/buildcache/<scope>`;
-- PRs write `nook/remote-buildcache/<scope>${GHA_CACHE_SCOPE_SUFFIX}`.
+- PR/Remote/local writes use
+  `nook/remote-buildcache/<scope>-git-<40-char-sha>`;
+- local publish requires a clean worktree so a commit tag cannot lie.
 
 If a short parent index orphans a leaf RUN, redesign the Bake graph.
 

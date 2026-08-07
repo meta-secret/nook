@@ -205,9 +205,9 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
 fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let pr = read(root, ".github/workflows/pr.yml");
     for marker in [
-        "Publish PR-scoped native BuildKit cache",
-        "Publish PR-scoped WASM BuildKit cache",
-        "Publish PR-scoped web BuildKit cache",
+        "Publish git-scoped native BuildKit cache",
+        "Publish git-scoped WASM BuildKit cache",
+        "Publish git-scoped web BuildKit cache",
         "task ci:main:publish-native-cache",
         "task ci:main:publish-wasm-cache",
         "task ci:main:publish-web-cache",

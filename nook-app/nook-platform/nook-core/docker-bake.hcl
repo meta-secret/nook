@@ -48,7 +48,7 @@ target "builder-wasm-deps" {
 
 // Explicit writer for the WASM deps Zot scope. Context consumers use
 // builder-wasm-deps (no cache-to). Main writes GHA_RUST_WASM_DEPS_SCOPE;
-// PRs write the isolated remote-buildcache suffix via write_cache_repository.
+// Isolated writes use the git-commit remote-buildcache suffix via write_cache_repository.
 target "builder-wasm-deps-publish" {
   inherits = ["builder-wasm-deps"]
   cache-to = rust_wasm_deps_cache_to

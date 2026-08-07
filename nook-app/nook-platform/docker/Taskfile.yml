@@ -26,29 +26,32 @@ tasks:
 
   registry-cache:publish:wasm:
     internal: true
-    desc: Publish local WASM BuildKit layers to the PR/local remote-buildcache scope.
+    desc: Publish local WASM BuildKit layers to the git-commit remote-buildcache scope.
     cmds:
       - |
         set -euo pipefail
         if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" != "1" ]; then exit 0; fi
+        bash "{{.REPO_ROOT}}/.github/scripts/git-cache-scope-publish-guard.sh"
         task docker:ci:cache:publish:wasm
 
   registry-cache:publish:native:
     internal: true
-    desc: Publish local native BuildKit layers to the PR/local remote-buildcache scope.
+    desc: Publish local native BuildKit layers to the git-commit remote-buildcache scope.
     cmds:
       - |
         set -euo pipefail
         if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" != "1" ]; then exit 0; fi
+        bash "{{.REPO_ROOT}}/.github/scripts/git-cache-scope-publish-guard.sh"
         task docker:ci:cache:publish:native
 
   registry-cache:publish:web:
     internal: true
-    desc: Publish local web BuildKit layers to the PR/local remote-buildcache scope.
+    desc: Publish local web BuildKit layers to the git-commit remote-buildcache scope.
     cmds:
       - |
         set -euo pipefail
         if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" != "1" ]; then exit 0; fi
+        bash "{{.REPO_ROOT}}/.github/scripts/git-cache-scope-publish-guard.sh"
         task docker:ci:cache:publish:web
 
   docker:rust:task:
@@ -184,7 +187,7 @@ tasks:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
       # rust-base-publish writes nook-rust-base-v1 under write_cache_repository
-      # (Main: nook/buildcache; PR: nook/remote-buildcache…${GHA_CACHE_SCOPE_SUFFIX}).
+      # (Main: nook/buildcache; isolated: nook/remote-buildcache…-git-<sha>).
       - >-
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
@@ -224,7 +227,7 @@ tasks:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
       # Stage rust-base, then wasm-deps, then source export. Each publisher owns
-      # one scoped Zot ref (Main fingerprint or PR remote-buildcache suffix).
+      # one scoped Zot ref (Main fingerprint or git-commit remote-buildcache).
       - task: docker:ci:cache:publish:rust-base
       - >-
         {{.DOCKER}} buildx bake

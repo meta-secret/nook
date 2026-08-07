@@ -9,7 +9,7 @@
 // Parents restore via Bake contexts (same pattern as preflight).
 // Context parents keep cache-from and never declare cache-to.
 // Dedicated *-publish targets write mode=max refs under write_cache_repository
-// plus GHA_CACHE_SCOPE_SUFFIX (Main: nook/buildcache; PR: nook/remote-buildcache-pr-N).
+// plus GHA_CACHE_SCOPE_SUFFIX (Main: nook/buildcache; isolated: …-git-<sha>).
 // Empty cache-from= and cache-to= overrides are prohibited.
 // Shared GHA_CACHE_* / NOOK_REGISTRY_CACHE_HOST / write_cache_repository live in
 // nook-app/docker-bake.hcl and are merged via NOOK_BAKE_FILES.

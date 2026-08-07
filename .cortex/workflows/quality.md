@@ -167,13 +167,15 @@ Use this workflow for quality, CI, and deployment changes.
     - Context parents declare no `cache-to`.
     - `*-publish` targets write `mode=max` under `write_cache_repository` plus
       `GHA_CACHE_SCOPE_SUFFIX`.
-    - Main uses `nook/buildcache`.
-    - PRs use `nook/remote-buildcache` with a `-pr-N` suffix.
+    - Main uses `nook/buildcache` with stable unsuffixed names.
+    - PR/Remote/local use `nook/remote-buildcache` with `-git-<40-char-sha>`.
+    - PR jobs key that SHA by pull-request head, not the merge `GITHUB_SHA`.
+    - Local publish is disabled on a dirty worktree.
     - If a short parent index orphans a leaf RUN, redesign the Bake graph.
     - Do not wipe cache to paper over a short-chain import.
     - Prefer own-scope leaf `cache-from`, same-Dockerfile stage lineage, or a
       dedicated parent scope that is never thin.
-    - PR FALLBACK for nightly/policy-tools is PR-scope only.
+    - Isolated FALLBACK for nightly/policy-tools is git-scope only.
     - A thin trusted Main index steals fat PR mode=max layers.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
@@ -193,10 +195,10 @@ Use this workflow for quality, CI, and deployment changes.
     - They read/write compiler objects in `nook-sccache` and publish shared verified Zot refs.
     - Explicit collaborator-dispatched Remote jobs use a separate SeaweedFS identity.
     - Remote identity can read but cannot write `nook-sccache`.
-    - Remote jobs restore Main's Zot lineage and write only task-scoped refs under `nook/remote-buildcache/**`.
+    - Remote jobs restore Main's Zot lineage and write only git-commit refs under `nook/remote-buildcache/**`.
     - Same-repository PR and Rust ecosystem Docker jobs mount the Main SeaweedFS build identity.
     - Forks stay secret-free and cold-compile.
-    - PR jobs export only PR-scoped refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
+    - PR jobs export only git-commit refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
     - Release and browser-only jobs receive neither cache credential and cannot evict Main.
 
     #### Main workflow
