@@ -516,6 +516,22 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(docker_tasks.contains(
         "nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}:buildcache"
     ));
+    let root_tasks = read("Taskfile.yml");
+    assert!(
+        root_tasks.contains("GHA_CACHE_ENABLED:")
+            && root_tasks.contains("NOOK_REGISTRY_CACHE:-1")
+            && root_tasks.contains("registry-remote-password")
+            && root_tasks.contains("NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:")
+            && docker_tasks.contains("registry-cache:ensure")
+            && docker_tasks.contains("registry-cache:publish:wasm")
+            && docker_tasks.contains("login \"$host\"")
+            && docker_tasks.contains("task: registry-cache:publish:wasm"),
+        "Task Bake must enable local remote-buildcache restore/publish from root env + registry-cache tasks"
+    );
+    assert!(
+        app_bake.contains("Local Task Bake sets this from root Taskfile env"),
+        "shared bake comments must describe local registry-cache activation"
+    );
     assert!(!bake.contains("type=gha"));
     for fallback in [
         "nook/buildcache/nook-rust-base-v1:buildcache",

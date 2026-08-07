@@ -653,7 +653,8 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 **Zot registry policy:**
 
 - Delivery BuildKit caches use authenticated `type=registry` refs on `registry.dev.nokey.sh` (Zot behind Traefik HTTPS + htpasswd), not GitHub Actions cache storage.
-- Local builds use only their local BuildKit content store unless registry credentials are configured.
+- Local Task Bake restores and publishes PR/local remote-buildcache scopes by default when remote registry credentials exist.
+- Opt out with `NOOK_REGISTRY_CACHE=0`.
 - Cache restoration is an optimization: an unavailable cache falls back to a correct cold build.
 - Main publishes shared cache manifests after lane verification.
 - Explicit Remote tasks restore their deterministic branch-and-task refs first and Main second, then export only those Remote refs.

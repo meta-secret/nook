@@ -180,6 +180,8 @@ tasks:
 
   docker:ci:cache:publish:web:
     desc: Export the already-verified web dependency graph from this job's builder.
+    env:
+      GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
       - >-
         {{.DOCKER}} buildx bake
@@ -190,6 +192,7 @@ tasks:
 
   docker:ci:web:build:
     desc: Build the sealed web image from the same-runner CI WASM artifact.
+    deps: [registry-cache:ensure]
     vars:
       CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/joined" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
     cmds:
@@ -202,9 +205,11 @@ tasks:
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
         WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:build" {{.DOCKER}} buildx bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} --set "web-deps.output=type=cacheonly" nook-web-ci web-deps'
+      - task: registry-cache:publish:web
 
   docker:ci:web:e2e:build:
     desc: Build the Chromium web image from the same-runner CI WASM artifact.
+    deps: [registry-cache:ensure]
     vars:
       CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/joined" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
     cmds:
@@ -217,6 +222,7 @@ tasks:
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
         WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:e2e:build" {{.DOCKER}} buildx bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web-e2e'
+      - task: registry-cache:publish:web
 
   # Precise Bake stages. Warm parents alone before leaves so a leaf miss cannot
   # cold-rebuild apt/nightly. Composites below call these in order.

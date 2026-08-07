@@ -22,11 +22,11 @@ variable "SCCACHE_S3_MODE" {
   default = "external"
 }
 
-// Enabled only by the GitHub Actions Docker setup after registry login.
-// Keeping the default empty preserves zero-network local builds. Separate refs
-// are mandatory so sibling BuildKit lineages do not overwrite each other.
-// Rust exporters omit ignore-error so a failed cook-layer upload fails Main.
-// Web exporters keep ignore-error.
+// Empty by default in HCL. Local Task Bake sets this from root Taskfile env when
+// remote registry credentials exist. CI sets it from nook-docker-setup after
+// registry login. Separate refs keep sibling BuildKit lineages from overwriting
+// each other. Rust exporters omit ignore-error so a failed cook-layer upload
+// fails Main. Web exporters keep ignore-error.
 variable "GHA_CACHE_ENABLED" {
   default = ""
 }

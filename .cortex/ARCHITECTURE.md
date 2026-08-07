@@ -683,8 +683,8 @@ Hosted CI cache persistence:
 - Persists the toolchain.
 - Persists stable native/WASM dependency boundaries.
 - Persists separate source-sensitive native/WASM snapshots as private Zot BuildKit refs.
-- Every PR job reads only Main's complete lineage.
-- PR jobs do not export branch-local caches.
+- Every PR job restores Main's complete lineage plus its PR remote-buildcache scope.
+- PR jobs and local Task Bake export only isolated remote-buildcache refs.
 - Explicit Remote tasks may update only their deterministic branch refs with Main fallback.
 
 SeaweedFS reuse:
@@ -816,13 +816,21 @@ It restores the independent lineages from `registry.dev.nokey.sh`.
 
 **BuildKit caching through `registry.dev.nokey.sh`**
 
-- Local commands keep using the selected builder's local content store.
-- `GHA_CACHE_ENABLED` stays empty locally.
+- Local Task Bake restores and publishes shared layers by default when remote
+  registry credentials exist under the machine cache directory.
+- Root `Taskfile.yml` env enables that path.
+- `registry-cache:ensure` logs into Zot before Bake.
+- Local writes use PR-scoped or branch-local refs under `nook/remote-buildcache/**`.
+- Local writes never update trusted `nook/buildcache/**`.
+- Verify bakes keep `GHA_CACHE_WRITE_ENABLED` empty.
+- A follow-up publish Bake exports fat scopes from local layers.
+- Opt out with `NOOK_REGISTRY_CACHE=0`.
 - Hosted CI first stabilizes the shared Rust toolchain parent in `nook-rust-base-v1`.
 - It exports native and WASM dependency boundaries to `nook-rust-deps-v2` and the fingerprinted WASM deps ref with `mode=max`.
 - Source-sensitive native coverage and WASM outputs use separate `nook-rust-native-source-v2` and `nook-rust-wasm-source-v2` refs.
 - A workflow-only or web-only push does not recompile unchanged Rust on a fresh hosted runner.
-- Every PR job restores only Main's refs and disables export.
+- Same-repository PR jobs restore Main plus their PR remote-buildcache scope.
+- PR exporters write only those PR-scoped remote-buildcache refs.
 - Web dependencies, browser-free web, and e2e web use distinct refs and `mode=max`.
 - Cache export errors on web lineages are non-fatal because cache is an optimization.
 - Zot is reached only through Traefik HTTPS at `registry.dev.nokey.sh` with htpasswd auth.
@@ -859,8 +867,9 @@ Fork, release, and other arbitrary-ref jobs receive no S3 credentials.
 **Main cache visibility**
 
 - Main alone refreshes the shared Rust, WASM, web, and e2e refs under `nook/buildcache/**`.
-- Every PR job is read-only so branch generations cannot poison the authoritative Main lineage.
-- Explicit Remote tasks write OCI cache images only under `nook/remote-buildcache/**`.
+- PR jobs and local Task Bake cannot write that Main repository path.
+- They write only isolated refs under `nook/remote-buildcache/**`.
+- Explicit Remote tasks also write only under `nook/remote-buildcache/**`.
 - Remote uses a separate Zot identity that can read but cannot update Main's repository path.
 - Every Remote ref is scoped by both branch and dispatched task.
 - Independent tasks run in parallel without replacing another graph.
