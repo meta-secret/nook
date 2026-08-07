@@ -256,9 +256,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     );
     assert!(
         rust_bake.contains("target \"rust-ecosystem-nightly-publish\"")
-            && rust_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
+            && rust_bake.contains("cache-to = rust_ecosystem_nightly_cache_to")
             && rust_bake
-                .matches("cache-to   = rust_ecosystem_nightly_cache_to")
+                .matches("cache-to = rust_ecosystem_nightly_cache_to")
                 .count()
                 == 1
             && !rust_bake
