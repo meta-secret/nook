@@ -251,7 +251,7 @@ test.describe('devices and access dashboard', () => {
     ).toHaveCount(1)
     await expect(
       bridge.getByRole('article', {
-        name: /App key: This browser.*Test vault was opened by this app key/i,
+        name: /App key: App key\. Test vault was opened by this app key/i,
       }),
     ).toBeVisible()
     await expect(bridge).not.toContainText('This browser')
@@ -540,6 +540,16 @@ test.describe('devices and access dashboard', () => {
     )
 
     await page.reload()
+    // Wiping the local identity leaves the vault; passkey-first unlock may open
+    // over LoginGate. Dismiss it so Devices & access stays reachable.
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
+    if (await passkeyOverlay.isVisible()) {
+      await page.getByTestId('passkey-auth-overlay-dismiss').click()
+      await expect(passkeyOverlay).toBeHidden()
+    }
     await page.getByTestId('login-devices-access').click()
     const preview = page.getByTestId('devices-access-chain-preview')
     await expect(preview).toContainText('Known vaults remain on this browser')

@@ -17,7 +17,7 @@ const copy: IdentityBridgeCopy = {
   identityStage: 'Identity',
   vaultStage: 'Vaults',
   selectedVaultStage: 'Selected vault',
-  currentDevice: 'This browser',
+  currentDevice: 'App key',
   currentIdentity: 'Identity',
   selectedIdentity: 'Identity',
   vaultGrant: 'Vault access',
@@ -176,6 +176,9 @@ describe('identity bridge graph', () => {
       source: 'vault-selected',
       target: 'device-current',
     })
+    expect(
+      graph.nodes.find((node) => node.id === 'device-current')?.ariaLabel,
+    ).toBe('App key: App key. Home was opened by this app key')
   })
 
   test('shows an honest empty state for an unverified selected vault', () => {
