@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { err, ok, type Result } from '../result.ts'
+import { ResultKind, err, ok, type Result } from '../result.ts'
 
 export type CommandOutput = {
   readonly exitCode: number
@@ -34,7 +34,7 @@ export function runCommandOrThrow(
   cwd: string,
 ): CommandOutput {
   const result = runCommand(command, args, cwd)
-  if (result.kind === 'err') {
+  if (result.kind === ResultKind.Err) {
     throw new Error(result.message)
   }
   return result.value

@@ -5,7 +5,7 @@ import { runPrLand } from './commands/pr-land.ts'
 import { runPrePush } from './commands/pre-push.ts'
 import { runSkillScaffold } from './commands/skill-scaffold.ts'
 import { requireBun } from './lib/repo.ts'
-import type { Result } from './result.ts'
+import { ResultKind, type Result } from './result.ts'
 
 const HELP = `Loom — mechanical cortex rites as Bun CLIs
 
@@ -30,7 +30,7 @@ Task wrappers (from repo root):
 
 async function main(): Promise<number> {
   const bun = requireBun()
-  if (bun.kind === 'err') {
+  if (bun.kind === ResultKind.Err) {
     console.error(bun.message)
     return 2
   }
@@ -67,7 +67,7 @@ async function main(): Promise<number> {
       return 2
   }
 
-  if (result.kind === 'err') {
+  if (result.kind === ResultKind.Err) {
     console.error(result.message)
     return 1
   }

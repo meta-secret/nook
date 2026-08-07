@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, symlinkSync } from 
 import path from 'node:path'
 import { flagPresent, positionalArgs } from '../lib/args.ts'
 import { findRepoRoot } from '../lib/repo.ts'
-import { err, ok, type Result } from '../result.ts'
+import { ResultKind, err, ok, type Result } from '../result.ts'
 
 export type SkillScaffoldReport = {
   readonly cardPath: string
@@ -15,7 +15,7 @@ export async function runSkillScaffold(
   args: readonly string[],
 ): Promise<Result<SkillScaffoldReport>> {
   const repo = findRepoRoot()
-  if (repo.kind === 'err') {
+  if (repo.kind === ResultKind.Err) {
     return repo
   }
   const repoRoot = repo.value

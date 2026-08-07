@@ -4,7 +4,7 @@ import { flagPresent } from '../lib/args.ts'
 import { lintProseDensity, type DensityFinding } from '../lib/density.ts'
 import { findBrokenRelativeLinks, type BrokenLink } from '../lib/links.ts'
 import { findRepoRoot } from '../lib/repo.ts'
-import { err, ok, type Result } from '../result.ts'
+import { ResultKind, err, ok, type Result } from '../result.ts'
 
 export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[]
@@ -19,7 +19,7 @@ export async function runCortexAudit(
   args: readonly string[],
 ): Promise<Result<CortexAuditReport>> {
   const repo = findRepoRoot()
-  if (repo.kind === 'err') {
+  if (repo.kind === ResultKind.Err) {
     return repo
   }
   const repoRoot = repo.value

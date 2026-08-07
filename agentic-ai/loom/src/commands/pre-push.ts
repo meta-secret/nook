@@ -1,7 +1,7 @@
 import { flagPresent } from '../lib/args.ts'
 import { findRepoRoot, requireBun } from '../lib/repo.ts'
 import { runCommand } from '../lib/run.ts'
-import { err, ok, type Result } from '../result.ts'
+import { ResultKind, err, ok, type Result } from '../result.ts'
 
 export type PrePushReport = {
   readonly formatOk: boolean
@@ -15,12 +15,12 @@ export async function runPrePush(
   args: readonly string[],
 ): Promise<Result<PrePushReport>> {
   const bun = requireBun()
-  if (bun.kind === 'err') {
+  if (bun.kind === ResultKind.Err) {
     return bun
   }
 
   const repo = findRepoRoot()
-  if (repo.kind === 'err') {
+  if (repo.kind === ResultKind.Err) {
     return repo
   }
   const repoRoot = repo.value
@@ -29,7 +29,7 @@ export async function runPrePush(
   const messages: string[] = []
 
   const format = runCommand('task', ['format'], repoRoot)
-  if (format.kind === 'err') {
+  if (format.kind === ResultKind.Err) {
     return format
   }
   if (format.value.exitCode !== 0) {
@@ -41,7 +41,7 @@ export async function runPrePush(
 
   if (!skipFetch) {
     const fetch = runCommand('git', ['fetch', 'origin', 'main'], repoRoot)
-    if (fetch.kind === 'err') {
+    if (fetch.kind === ResultKind.Err) {
       return fetch
     }
     if (fetch.value.exitCode !== 0) {
@@ -52,7 +52,7 @@ export async function runPrePush(
   }
 
   const base = runCommand('git', ['rev-parse', 'origin/main'], repoRoot)
-  if (base.kind === 'err') {
+  if (base.kind === ResultKind.Err) {
     return base
   }
   if (base.value.exitCode !== 0) {
@@ -68,7 +68,7 @@ export async function runPrePush(
     ['.github/scripts/ui-demo-contract.sh', baseSha],
     repoRoot,
   )
-  if (contract.kind === 'err') {
+  if (contract.kind === ResultKind.Err) {
     return contract
   }
   if (contract.value.exitCode !== 0) {
@@ -81,7 +81,7 @@ export async function runPrePush(
   let staged = false
   if (!skipStage) {
     const stage = runCommand('git', ['add', '-u'], repoRoot)
-    if (stage.kind === 'err') {
+    if (stage.kind === ResultKind.Err) {
       return stage
     }
     if (stage.value.exitCode !== 0) {

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { isRecord, type UnknownRecord } from './guards.ts'
 import { runCommand } from './run.ts'
-import { err, ok, type Result } from '../result.ts'
+import { ResultKind, err, ok, type Result } from '../result.ts'
 
 export type ScratchEventLog = {
   readonly started_at: string
@@ -16,9 +16,14 @@ export type ScratchEventLog = {
   readonly test_inventory: OptionalRecord
 }
 
+export enum OptionalRecordKind {
+  Present = 'present',
+  Missing = 'missing',
+}
+
 type OptionalRecord =
-  | { readonly kind: 'present'; readonly value: UnknownRecord }
-  | { readonly kind: 'missing' }
+  | { readonly kind: OptionalRecordKind.Present; readonly value: UnknownRecord }
+  | { readonly kind: OptionalRecordKind.Missing }
 
 export type AssembleOptions = {
   readonly repoRoot: string
@@ -77,11 +82,11 @@ export function loadScratchEventLog(scratchPath: string): Result<ScratchEventLog
     comparison: parsed.comparison,
     waste_assessment: parsed.waste_assessment,
     cache_telemetry: isRecord(parsed.cache_telemetry)
-      ? { kind: 'present', value: parsed.cache_telemetry }
-      : { kind: 'missing' },
+      ? { kind: OptionalRecordKind.Present, value: parsed.cache_telemetry }
+      : { kind: OptionalRecordKind.Missing },
     test_inventory: isRecord(parsed.test_inventory)
-      ? { kind: 'present', value: parsed.test_inventory }
-      : { kind: 'missing' },
+      ? { kind: OptionalRecordKind.Present, value: parsed.test_inventory }
+      : { kind: OptionalRecordKind.Missing },
   })
 }
 
@@ -89,7 +94,7 @@ export async function assembleAgentStats(
   options: AssembleOptions,
 ): Promise<Result<AssembledStats>> {
   const scratch = loadScratchEventLog(options.scratchPath)
-  if (scratch.kind === 'err') {
+  if (scratch.kind === ResultKind.Err) {
     return scratch
   }
 
@@ -104,7 +109,7 @@ export async function assembleAgentStats(
     ],
     options.repoRoot,
   )
-  if (prJson.kind === 'err') {
+  if (prJson.kind === ResultKind.Err) {
     return prJson
   }
   if (prJson.value.exitCode !== 0) {
@@ -136,7 +141,7 @@ export async function assembleAgentStats(
   }
 
   const runs = collectGithubActionsRuns(options.repoRoot, options.prNumber, headSha)
-  if (runs.kind === 'err') {
+  if (runs.kind === ResultKind.Err) {
     return runs
   }
 
@@ -145,11 +150,11 @@ export async function assembleAgentStats(
   const actionsSeconds = sumDurationSeconds(runs.value)
 
   let inventory: UnknownRecord
-  if (scratch.value.test_inventory.kind === 'present') {
+  if (scratch.value.test_inventory.kind === OptionalRecordKind.Present) {
     inventory = scratch.value.test_inventory.value
   } else if (options.includeInventory) {
     const counted = countTestInventory(options.repoRoot, headSha)
-    if (counted.kind === 'err') {
+    if (counted.kind === ResultKind.Err) {
       return counted
     }
     inventory = counted.value
@@ -163,7 +168,7 @@ export async function assembleAgentStats(
   }
 
   const cacheTelemetry =
-    scratch.value.cache_telemetry.kind === 'present'
+    scratch.value.cache_telemetry.kind === OptionalRecordKind.Present
       ? scratch.value.cache_telemetry.value
       : {
           totals: {
@@ -249,7 +254,7 @@ function collectGithubActionsRuns(
     ],
     repoRoot,
   )
-  if (listed.kind === 'err') {
+  if (listed.kind === ResultKind.Err) {
     return listed
   }
   if (listed.value.exitCode !== 0) {
@@ -313,10 +318,10 @@ function countTestInventory(
   const webUnit = countVitest(repoRoot)
   const e2e = countPlaywright(repoRoot)
   const byType = {
-    rust: rust.kind === 'ok' ? rust.value : 0,
-    preflight: preflight.kind === 'ok' ? preflight.value : 0,
-    web_unit: webUnit.kind === 'ok' ? webUnit.value : 0,
-    e2e: e2e.kind === 'ok' ? e2e.value : 0,
+    rust: rust.kind === ResultKind.Ok ? rust.value : 0,
+    preflight: preflight.kind === ResultKind.Ok ? preflight.value : 0,
+    web_unit: webUnit.kind === ResultKind.Ok ? webUnit.value : 0,
+    e2e: e2e.kind === ResultKind.Ok ? e2e.value : 0,
   }
   return ok({
     measured_at: measuredAt,
@@ -332,7 +337,7 @@ function countNextest(repoRoot: string, filter: string): Result<number> {
     ['nextest', 'list', '-E', filter, '--lib', '--tests'],
     path.join(repoRoot, 'nook-app'),
   )
-  if (listed.kind === 'err') {
+  if (listed.kind === ResultKind.Err) {
     return listed
   }
   if (listed.value.exitCode !== 0) {
@@ -348,7 +353,7 @@ function countNextest(repoRoot: string, filter: string): Result<number> {
 function countVitest(repoRoot: string): Result<number> {
   const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app')
   const listed = runCommand('bunx', ['vitest', 'list'], appRoot)
-  if (listed.kind === 'err') {
+  if (listed.kind === ResultKind.Err) {
     return listed
   }
   if (listed.value.exitCode !== 0) {
@@ -364,7 +369,7 @@ function countVitest(repoRoot: string): Result<number> {
 function countPlaywright(repoRoot: string): Result<number> {
   const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app')
   const listed = runCommand('bunx', ['playwright', 'test', '--list'], appRoot)
-  if (listed.kind === 'err') {
+  if (listed.kind === ResultKind.Err) {
     return listed
   }
   if (listed.value.exitCode !== 0) {

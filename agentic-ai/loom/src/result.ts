@@ -1,48 +1,58 @@
+export enum ResultKind {
+  Ok = 'ok',
+  Err = 'err',
+}
+
 export type Ok<T> = {
-  readonly kind: 'ok'
+  readonly kind: ResultKind.Ok
   readonly value: T
 }
 
 export type Err = {
-  readonly kind: 'err'
+  readonly kind: ResultKind.Err
   readonly message: string
 }
 
 export type Result<T> = Ok<T> | Err
 
 export function ok<T>(value: T): Ok<T> {
-  return { kind: 'ok', value }
+  return { kind: ResultKind.Ok, value }
 }
 
 export function err(message: string): Err {
-  return { kind: 'err', message }
+  return { kind: ResultKind.Err, message }
+}
+
+export enum MaybeKind {
+  Present = 'present',
+  Absent = 'absent',
 }
 
 export type Present<T> = {
-  readonly kind: 'present'
+  readonly kind: MaybeKind.Present
   readonly value: T
 }
 
 export type Absent = {
-  readonly kind: 'absent'
+  readonly kind: MaybeKind.Absent
 }
 
 export type Maybe<T> = Present<T> | Absent
 
 export function present<T>(value: T): Present<T> {
-  return { kind: 'present', value }
+  return { kind: MaybeKind.Present, value }
 }
 
 export function absent(): Absent {
-  return { kind: 'absent' }
+  return { kind: MaybeKind.Absent }
 }
 
 export function isOk<T>(result: Result<T>): result is Ok<T> {
-  return result.kind === 'ok'
+  return result.kind === ResultKind.Ok
 }
 
 export function unwrapOrThrow<T>(result: Result<T>): T {
-  if (result.kind === 'err') {
+  if (result.kind === ResultKind.Err) {
     throw new Error(result.message)
   }
   return result.value

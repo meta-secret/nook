@@ -1,4 +1,4 @@
-import { absent, err, ok, present, type Maybe, type Result } from '../result.ts'
+import { MaybeKind, ResultKind, absent, err, ok, present, type Maybe, type Result } from '../result.ts'
 
 export function flagPresent(args: readonly string[], name: string): boolean {
   return args.includes(name)
@@ -24,10 +24,10 @@ export function requireOption(
   name: string,
 ): Result<string> {
   const option = readOption(args, name)
-  if (option.kind === 'err') {
+  if (option.kind === ResultKind.Err) {
     return option
   }
-  if (option.value.kind === 'absent') {
+  if (option.value.kind === MaybeKind.Absent) {
     return err(`Required option ${name} is missing`)
   }
   return ok(option.value.value)

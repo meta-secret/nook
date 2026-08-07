@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { validateAgentStatsYaml } from '../src/lib/agent-stats-schema.ts'
+import { ResultKind } from '../src/result.ts'
 
 const validYaml = `
 schema_version: 3
@@ -68,8 +69,8 @@ waste_assessment:
 describe('validateAgentStatsYaml', () => {
   test('accepts a schema-v3 record', () => {
     const result = validateAgentStatsYaml(validYaml, 481)
-    expect(result.kind).toBe('ok')
-    if (result.kind === 'ok') {
+    expect(result.kind).toBe(ResultKind.Ok)
+    if (result.kind === ResultKind.Ok) {
       expect(result.value.ok).toBe(true)
       expect(result.value.errors).toEqual([])
     }
@@ -77,8 +78,8 @@ describe('validateAgentStatsYaml', () => {
 
   test('rejects filename/source PR mismatch', () => {
     const result = validateAgentStatsYaml(validYaml, 999)
-    expect(result.kind).toBe('ok')
-    if (result.kind === 'ok') {
+    expect(result.kind).toBe(ResultKind.Ok)
+    if (result.kind === ResultKind.Ok) {
       expect(result.value.ok).toBe(false)
       expect(result.value.errors.some((item) => item.includes('source_pr.number'))).toBe(
         true,

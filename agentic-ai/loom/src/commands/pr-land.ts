@@ -1,7 +1,7 @@
 import { flagPresent, positionalArgs, requireOption } from '../lib/args.ts'
 import { findRepoRoot } from '../lib/repo.ts'
 import { runCommand } from '../lib/run.ts'
-import { err, ok, type Result } from '../result.ts'
+import { ResultKind, err, ok, type Result } from '../result.ts'
 
 export type PrLandReport = {
   readonly action: string
@@ -22,11 +22,11 @@ export async function runPrLand(
   }
 
   const repo = findRepoRoot()
-  if (repo.kind === 'err') {
+  if (repo.kind === ResultKind.Err) {
     return repo
   }
   const prRaw = requireOption(args, '--pr')
-  if (prRaw.kind === 'err') {
+  if (prRaw.kind === ResultKind.Err) {
     return prRaw
   }
   const prNumber = Number.parseInt(prRaw.value, 10)
@@ -63,7 +63,7 @@ async function status(
     ],
     repoRoot,
   )
-  if (view.kind === 'err') {
+  if (view.kind === ResultKind.Err) {
     return view
   }
   if (view.value.exitCode !== 0) {
@@ -98,7 +98,7 @@ async function validate(
     ['run', '--cwd', 'agentic-ai/loom', 'loom', '--', 'pre-push'],
     repoRoot,
   )
-  if (prePush.kind === 'err') {
+  if (prePush.kind === ResultKind.Err) {
     return prePush
   }
   if (prePush.value.exitCode !== 0) {
@@ -108,13 +108,13 @@ async function validate(
   }
 
   const remoteTask = requireOption(args, '--remote')
-  if (remoteTask.kind === 'ok') {
+  if (remoteTask.kind === ResultKind.Ok) {
     const remote = runCommand(
       'task',
       ['remote', `TASK_NAME=${remoteTask.value}`],
       repoRoot,
     )
-    if (remote.kind === 'err') {
+    if (remote.kind === ResultKind.Err) {
       return remote
     }
     if (remote.value.exitCode !== 0) {
@@ -129,7 +129,7 @@ async function validate(
     validateArgs.push('FULL_E2E=1')
   }
   const validated = runCommand('task', validateArgs, repoRoot)
-  if (validated.kind === 'err') {
+  if (validated.kind === ResultKind.Err) {
     return validated
   }
   if (validated.value.exitCode !== 0) {
@@ -155,7 +155,7 @@ async function ready(
   prNumber: number,
 ): Promise<Result<PrLandReport>> {
   const result = runCommand('task', ['pr:ready', `PR=${prNumber}`], repoRoot)
-  if (result.kind === 'err') {
+  if (result.kind === ResultKind.Err) {
     return result
   }
   const passed = result.value.exitCode === 0
@@ -177,7 +177,7 @@ async function mergeCheck(
   prNumber: number,
 ): Promise<Result<PrLandReport>> {
   const readiness = await ready(repoRoot, prNumber)
-  if (readiness.kind === 'err') {
+  if (readiness.kind === ResultKind.Err) {
     return readiness
   }
   return ok({

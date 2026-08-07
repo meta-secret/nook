@@ -5,7 +5,7 @@ import { assembleAgentStats } from '../lib/agent-stats-assemble.ts'
 import { validateAgentStatsYaml } from '../lib/agent-stats-schema.ts'
 import { findRepoRoot } from '../lib/repo.ts'
 import { runCommand } from '../lib/run.ts'
-import { err, ok, type Result } from '../result.ts'
+import { ResultKind, err, ok, type Result } from '../result.ts'
 
 export type AgentStatsReport = {
   readonly action: string
@@ -39,11 +39,11 @@ async function assemble(
   args: readonly string[],
 ): Promise<Result<AgentStatsReport>> {
   const repo = findRepoRoot()
-  if (repo.kind === 'err') {
+  if (repo.kind === ResultKind.Err) {
     return repo
   }
   const prRaw = requireOption(args, '--pr')
-  if (prRaw.kind === 'err') {
+  if (prRaw.kind === ResultKind.Err) {
     return prRaw
   }
   const prNumber = Number.parseInt(prRaw.value, 10)
@@ -51,11 +51,11 @@ async function assemble(
     return err('--pr must be a positive integer')
   }
   const scratch = requireOption(args, '--scratch')
-  if (scratch.kind === 'err') {
+  if (scratch.kind === ResultKind.Err) {
     return scratch
   }
   const out = requireOption(args, '--out')
-  if (out.kind === 'err') {
+  if (out.kind === ResultKind.Err) {
     return out
   }
   const includeInventory = flagPresent(args, '--inventory')
@@ -66,7 +66,7 @@ async function assemble(
     scratchPath: scratch.value,
     includeInventory,
   })
-  if (assembled.kind === 'err') {
+  if (assembled.kind === ResultKind.Err) {
     return assembled
   }
 
@@ -75,7 +75,7 @@ async function assemble(
   writeFileSync(outPath, assembled.value.yaml, 'utf8')
 
   const validation = validateAgentStatsYaml(assembled.value.yaml, prNumber)
-  if (validation.kind === 'err') {
+  if (validation.kind === ResultKind.Err) {
     return validation
   }
   if (!validation.value.ok) {
@@ -99,7 +99,7 @@ async function validate(
   args: readonly string[],
 ): Promise<Result<AgentStatsReport>> {
   const file = requireOption(args, '--file')
-  if (file.kind === 'err') {
+  if (file.kind === ResultKind.Err) {
     return file
   }
   const prFromName = path.basename(file.value).replace(/\.ya?ml$/, '')
@@ -109,7 +109,7 @@ async function validate(
   }
   const content = readFileSync(file.value, 'utf8')
   const validation = validateAgentStatsYaml(content, prNumber)
-  if (validation.kind === 'err') {
+  if (validation.kind === ResultKind.Err) {
     return validation
   }
   if (!validation.value.ok) {
@@ -126,11 +126,11 @@ async function publish(
   args: readonly string[],
 ): Promise<Result<AgentStatsReport>> {
   const repo = findRepoRoot()
-  if (repo.kind === 'err') {
+  if (repo.kind === ResultKind.Err) {
     return repo
   }
   const file = requireOption(args, '--file')
-  if (file.kind === 'err') {
+  if (file.kind === ResultKind.Err) {
     return file
   }
   const absolute = path.resolve(file.value)
@@ -142,7 +142,7 @@ async function publish(
 
   const content = readFileSync(absolute, 'utf8')
   const validation = validateAgentStatsYaml(content, prNumber)
-  if (validation.kind === 'err') {
+  if (validation.kind === ResultKind.Err) {
     return validation
   }
   if (!validation.value.ok) {
@@ -160,7 +160,7 @@ async function publish(
     ],
     repo.value,
   )
-  if (published.kind === 'err') {
+  if (published.kind === ResultKind.Err) {
     return published
   }
   if (published.value.exitCode !== 0) {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { absent, err, isOk, ok, present } from '../src/result.ts'
+import { MaybeKind, ResultKind, absent, err, isOk, ok, present } from '../src/result.ts'
 
 describe('result helpers', () => {
   test('discriminates ok and err', () => {
@@ -8,7 +8,7 @@ describe('result helpers', () => {
   })
 
   test('maybe present and absent', () => {
-    expect(present('x').kind).toBe('present')
-    expect(absent().kind).toBe('absent')
+    expect(present('x').kind).toBe(MaybeKind.Present)
+    expect(absent().kind).toBe(MaybeKind.Absent)
   })
 })

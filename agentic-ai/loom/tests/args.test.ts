@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { flagPresent, positionalArgs, requireOption } from '../src/lib/args.ts'
+import { ResultKind } from '../src/result.ts'
 
 describe('args helpers', () => {
   test('reads required options and positionals', () => {
@@ -7,8 +8,8 @@ describe('args helpers', () => {
     expect(positionalArgs(args)).toEqual(['assemble'])
     expect(flagPresent(args, '--inventory')).toBe(true)
     const pr = requireOption(args, '--pr')
-    expect(pr.kind).toBe('ok')
-    if (pr.kind === 'ok') {
+    expect(pr.kind).toBe(ResultKind.Ok)
+    if (pr.kind === ResultKind.Ok) {
       expect(pr.value).toBe('12')
     }
   })
