@@ -3,9 +3,9 @@ version: '3'
 vars:
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
 
-# Local Bake restores/publishes PR-scoped Zot caches when remote registry
+# Local Bake restores/publishes git-commit-scoped Zot caches when remote registry
 # credentials exist under ~/.nook/cache. CI leaves workflow-owned GHA_CACHE_*.
-# Opt out: NOOK_REGISTRY_CACHE=0.
+# Opt out: NOOK_REGISTRY_CACHE=0. Local publish requires a clean worktree.
 env:
   NOOK_REGISTRY_CACHE_HOST:
     sh: >-
@@ -23,9 +23,7 @@ env:
     sh: >-
       if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '%s' "${GHA_CACHE_SCOPE_SUFFIX:-}";
       elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ]; then
-        pr="$(gh pr view --json number -q .number 2>/dev/null || true)";
-        if [ -n "$pr" ] && [ "$pr" -eq "$pr" ] 2>/dev/null; then printf '%s' "-pr-$pr";
-        else printf '%s' "-local-$(git rev-parse --abbrev-ref HEAD | sha256sum | cut -c1-20)"; fi;
+        bash "{{.ROOT_DIR}}/.github/scripts/git-cache-scope.sh";
       fi
   GHA_CACHE_FALLBACK_ENABLED:
     sh: >-
@@ -40,7 +38,7 @@ env:
   NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:
     sh: >-
       if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '%s' "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}";
-      elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ]; then printf '1'; fi
+      elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ] && [ -z "$(git status --porcelain)" ]; then printf '1'; fi
 
 includes:
   preflight:

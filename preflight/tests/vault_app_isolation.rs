@@ -28,6 +28,21 @@ fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
         .0
 }
 
+/// Body of `target "<name>" { ... }` until the next Bake target.
+/// Uses the opening brace so `rust-base` does not match `rust-base-publish`.
+fn bake_target_body<'a>(bake: &'a str, target: &str) -> &'a str {
+    let marker = format!("target \"{target}\" {{");
+    bake.split_once(marker.as_str())
+        .map(|(_, rest)| rest.split("target \"").next().unwrap_or(""))
+        .unwrap_or("")
+}
+
+fn bake_target_assigns_cache_to(bake: &str, target: &str) -> bool {
+    bake_target_body(bake, target)
+        .lines()
+        .any(|line| line.trim_start().starts_with("cache-to"))
+}
+
 #[path = "vault_app_isolation/build_contracts.rs"]
 #[allow(clippy::unnecessary_wraps)]
 mod build_contracts;

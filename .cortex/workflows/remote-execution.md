@@ -31,7 +31,7 @@ Remote jobs receive read-only repository and Actions permissions.
 
 They restore only the trusted Main BuildKit lineage as fallback.
 
-They write deterministic branch-and-task Zot cache refs under `nook/remote-buildcache/**`.
+They write git-commit Zot cache refs (`-git-<sha>`) under `nook/remote-buildcache/**`.
 
 Zot repository authorization gives the Remote identity read-only access to `nook/buildcache/**`. Tag selection alone is not the Main security boundary.
 

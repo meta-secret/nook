@@ -13,8 +13,12 @@ Use this workflow for quality, CI, and deployment changes.
    - Restore `rust-base` only through Bake `contexts` (`target:rust-base`).
    - Do not also cache-from `rust-base` on the preflight target.
    - That shorter parent importer orphans chef cook layers.
-   - Preflight Bake callers clear `rust-base.cache-to` so they never rewrite
-     the shared parent scope.
+   - Never clear `cache-from` or `cache-to` with an empty Bake override.
+   - Empty cache overrides are an architectural failure, not cache hygiene.
+   - Context parents keep `cache-from` and declare no `cache-to`.
+   - Dedicated `*-publish` targets write scoped Main/PR Zot refs.
+   - Redesign scopes or Dockerfile lineage instead of wiping cache.
+   - Context `rust-base` declares no `cache-to`, so preflight cannot rewrite it.
    - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
    - Reusable GitHub workflow shell lives in `.task/ci-workflows.yml` and `.github/scripts/`; workflows stay thin `task` wrappers around Actions-only glue.
    - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as sibling Dockerfiles under `nook-app/nook-platform/docker/rust/` (Bake images off `rust-base`, not inside product `lineage.Dockerfile`).
@@ -155,17 +159,30 @@ Use this workflow for quality, CI, and deployment changes.
     - Their mode=max exports already embed that parent chain.
     - Preflight restores rust-base only via Bake `contexts` (`target:rust-base`).
     - Ecosystem nightly/policy/dylint/fuzz restore parents the same way.
-    - After a parent warm, Tasks clear that parent's cache-from so the context
-      target cannot re-import a short Zot index during leaf verify/publish.
     - Leaf `cache-from` stays own-scope only (no short-parent importers).
-    - PR FALLBACK for nightly/policy-tools is PR-scope only.
+    - `mode=max` leaf exports already embed the parent chain.
+    - Empty `cache-from=` and `cache-to=` overrides are prohibited.
+    - Clearing `cache-from` after a remote hit forces cold apt/toolchain rebuilds.
+    - Clearing `cache-to` on a linked parent is banned.
+    - Context parents declare no `cache-to`.
+    - `*-publish` targets write `mode=max` under `write_cache_repository` plus
+      `GHA_CACHE_SCOPE_SUFFIX`.
+    - Main uses `nook/buildcache` with stable unsuffixed names.
+    - PR/Remote/local use `nook/remote-buildcache` with `-git-<40-char-sha>`.
+    - PR jobs key that SHA by pull-request head, not the merge `GITHUB_SHA`.
+    - Local publish is disabled on a dirty worktree.
+    - If a short parent index orphans a leaf RUN, redesign the Bake graph.
+    - Do not wipe cache to paper over a short-chain import.
+    - Prefer own-scope leaf `cache-from`, same-Dockerfile stage lineage, or a
+      dedicated parent scope that is never thin.
+    - Isolated FALLBACK for nightly/policy-tools is git-scope only.
     - A thin trusted Main index steals fat PR mode=max layers.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
     - Native/WASM publishers stage `docker:ci:cache:publish:rust-base` before
       deps/source scopes so one Bake cannot rewrite apt while cooking chef.
-    - PR WASM publish keeps wasm-scope cache-from for the same reason.
-    - Main product publishers still clear cache-from for fat trusted exports.
+    - Publishers keep configured `cache-from` on every Bake.
+    - Main verifies published WASM fingerprints from a fresh builder.
     - One CI job writes each shared ecosystem registry ref.
     - The complete Rust/WASM cargo-chef dependency graph uses an immutable scope fingerprinted from manifests, lockfiles, compiler Dockerfiles, Task invocation inputs, and Bake definitions.
     - Hosted builds never attach Redis credentials.
@@ -178,10 +195,10 @@ Use this workflow for quality, CI, and deployment changes.
     - They read/write compiler objects in `nook-sccache` and publish shared verified Zot refs.
     - Explicit collaborator-dispatched Remote jobs use a separate SeaweedFS identity.
     - Remote identity can read but cannot write `nook-sccache`.
-    - Remote jobs restore Main's Zot lineage and write only task-scoped refs under `nook/remote-buildcache/**`.
+    - Remote jobs restore Main's Zot lineage and write only git-commit refs under `nook/remote-buildcache/**`.
     - Same-repository PR and Rust ecosystem Docker jobs mount the Main SeaweedFS build identity.
     - Forks stay secret-free and cold-compile.
-    - PR jobs export only PR-scoped refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
+    - PR jobs export only git-commit refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
     - Release and browser-only jobs receive neither cache credential and cannot evict Main.
 
     #### Main workflow

@@ -31,7 +31,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 **`remote.yml`**
 
 - One selected focused Taskfile command on an independent GitHub-hosted runner.
-- Branch-and-task-scoped Zot writes with Main fallback.
+- Git-commit-scoped Zot writes (`-git-<sha>`) with Main fallback.
 - Read-only SeaweedFS compiler-object access.
 - No merge authorization.
 
@@ -264,7 +264,7 @@ PR, main, release, AI, scheduled, manual e2e, and research jobs use GitHub-hoste
 - Consuming them as named build contexts is not sufficient to run their dedicated exporters.
 - Only a `push` event on `refs/heads/main` may write the shared scopes.
 - Release, agent, manual, and PR workflows are read-only.
-- Remote workflow dispatches are the one branch exception: they write deterministic branch-and-task refs, fall back to Main on restore, and cannot replace shared Main manifests.
+- Remote workflow dispatches are the one branch exception: they write git-commit refs, fall back to Main on restore, and cannot replace shared Main manifests.
 - The self-hosted `nook` label is reserved for runner cleanup while that machine remains registered.
 
 **Focused remote jobs:**
@@ -612,10 +612,12 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 
 - PR verification, main, and release use GitHub-hosted runners.
 - Main verifies each native/WASM/web lane read-only, then serially exports its already-solved graph from the same job-scoped builder.
-- The WASM dependency export clears `cache-from` and forces zstd recompression so a thin reimported index cannot replace the complete cook lineage.
+- WASM deps publish through `builder-wasm-deps-publish` with scoped `mode=max` refs.
+- Main then verifies the fingerprint from a fresh builder.
+- Empty `cache-from=` and `cache-to=` overrides are prohibited across Taskfiles and scripts.
 - Main thereby exports protected default-branch refs that PR jobs restore from private Zot.
 - Same-repository PR jobs authenticate with the Remote registry identity; Zot ACLs deny that identity write access to `nook/buildcache/**`.
-- PR Bake exporters write only PR-scoped refs under `nook/remote-buildcache/**` (Main fallback restore stays enabled).
+- PR Bake exporters write only git-commit refs under `nook/remote-buildcache/**` (Main fallback restore stays enabled).
 - Fork pull requests receive no registry credentials.
 - Native coverage and WASM source-sensitive layers have separate Zot refs in addition to the manifest-only dependency refs, so non-Rust pushes do not repeat unchanged Cargo compilation.
 
@@ -653,13 +655,14 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 **Zot registry policy:**
 
 - Delivery BuildKit caches use authenticated `type=registry` refs on `registry.dev.nokey.sh` (Zot behind Traefik HTTPS + htpasswd), not GitHub Actions cache storage.
-- Local Task Bake restores and publishes PR/local remote-buildcache scopes by default when remote registry credentials exist.
+- Local Task Bake restores git-commit remote-buildcache scopes when remote registry credentials exist.
+- Local publish also requires a clean worktree.
 - Opt out with `NOOK_REGISTRY_CACHE=0`.
 - Cache restoration is an optimization: an unavailable cache falls back to a correct cold build.
 - Main publishes shared cache manifests after lane verification.
-- Explicit Remote tasks restore their deterministic branch-and-task refs first and Main second, then export only those Remote refs.
+- Explicit Remote tasks restore their git-commit refs first and Main second, then export only those Remote refs.
 - The Remote credential can update only `nook/remote-buildcache/**` and has read-only access to Main's `nook/buildcache/**` repository path.
-- Same-repository pull requests use that same Remote registry identity for PR-scoped exporters under `nook/remote-buildcache/**` and keep Main restore as fallback.
+- Same-repository pull requests use that same Remote registry identity for git-commit exporters under `nook/remote-buildcache/**` and keep Main restore as fallback.
 - Release and label-gated browser e2e jobs remain BuildKit-read-only.
 - Fork pull requests do not receive credentials.
 - Hive images also publish and pull through Zot.

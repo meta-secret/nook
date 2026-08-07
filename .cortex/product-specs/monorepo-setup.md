@@ -48,9 +48,10 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Rust/WASM, web dependencies, browser-free web, and e2e web use separate versioned refs.
   - Parallel targets cannot overwrite one another.
   - Main seeds the default-branch cache visible to new PRs.
-  - Remote writes deterministic branch-and-task refs with Main fallback.
-  - Local builds leave the remote cache disabled.
-  - Local builds keep using their selected builder's local content store.
+  - Remote writes git-commit refs (`-git-<sha>`) with Main fallback.
+  - Local Bake restores those git-commit refs when Remote credentials exist.
+  - Local publish also requires a clean worktree.
+  - Opt out with `NOOK_REGISTRY_CACHE=0`.
 - **Main owns the complete hosted BuildKit lineage.**
   - Main exports the Rust, WASM, web, and e2e caches.
   - Every PR job restores them read-only.
@@ -93,13 +94,13 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - It runs on an ephemeral GitHub-hosted runner.
   - Its frequent Rust test and web/extension check routes use narrow source-sealed images.
   - Those images stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.
-  - Remote restores branch-and-task Zot refs first and Main second.
+  - Remote restores git-commit Zot refs first and Main second.
   - Remote exports only those Remote refs.
   - Remote reads trusted compiler objects through the read-only SeaweedFS identity.
-  - New branch dependency results persist in Zot.
+  - New commit dependency results persist in Zot.
   - Trusted Main/local/Hive writers populate SeaweedFS.
   - `pr.yml` mounts SeaweedFS sccache for same-repository jobs.
-  - `pr.yml` exports only PR-scoped `nook/remote-buildcache/**` refs.
+  - `pr.yml` exports only git-commit `nook/remote-buildcache/**` refs.
   - Main restore stays available.
   - `pr.yml` starts only for `ci:validate` or `ci:full-e2e` label events.
   - It then runs native Rust, shared Rust ecosystem gates, and one verified-WASM producer independently.

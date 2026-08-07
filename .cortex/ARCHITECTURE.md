@@ -820,7 +820,8 @@ It restores the independent lineages from `registry.dev.nokey.sh`.
   registry credentials exist under the machine cache directory.
 - Root `Taskfile.yml` env enables that path.
 - `registry-cache:ensure` logs into Zot before Bake.
-- Local writes use PR-scoped or branch-local refs under `nook/remote-buildcache/**`.
+- Local writes use git-commit refs (`-git-<sha>`) under `nook/remote-buildcache/**`.
+- Local publish requires a clean worktree.
 - Local writes never update trusted `nook/buildcache/**`.
 - Verify bakes keep `GHA_CACHE_WRITE_ENABLED` empty.
 - A follow-up publish Bake exports fat scopes from local layers.
@@ -829,8 +830,8 @@ It restores the independent lineages from `registry.dev.nokey.sh`.
 - It exports native and WASM dependency boundaries to `nook-rust-deps-v2` and the fingerprinted WASM deps ref with `mode=max`.
 - Source-sensitive native coverage and WASM outputs use separate `nook-rust-native-source-v2` and `nook-rust-wasm-source-v2` refs.
 - A workflow-only or web-only push does not recompile unchanged Rust on a fresh hosted runner.
-- Same-repository PR jobs restore Main plus their PR remote-buildcache scope.
-- PR exporters write only those PR-scoped remote-buildcache refs.
+- Same-repository PR jobs restore Main plus the git-commit remote-buildcache scope.
+- PR exporters write only those git-commit remote-buildcache refs.
 - Web dependencies, browser-free web, and e2e web use distinct refs and `mode=max`.
 - Cache export errors on web lineages are non-fatal because cache is an optimization.
 - Zot is reached only through Traefik HTTPS at `registry.dev.nokey.sh` with htpasswd auth.

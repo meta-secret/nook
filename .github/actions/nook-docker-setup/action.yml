@@ -12,8 +12,9 @@ inputs:
     default: "false"
   isolated-cache-write:
     description: >-
-      Publish only an isolated remote-buildcache ref (Remote task or PR number)
-      while retaining Main as fallback. Never writes Main's nook/buildcache refs.
+      Publish only an isolated remote-buildcache ref keyed by git commit SHA
+      (-git-<sha>) while retaining Main as fallback. Never writes Main's
+      nook/buildcache refs.
     required: false
     default: "false"
   require-e2e-cache:
@@ -156,23 +157,28 @@ runs:
         if [ "$isolated_cache_write" = "true" ]; then
           fallback_enabled=1
           if [ "$event_name" = "pull_request" ]; then
-            scope_suffix="-pr-$pr_number"
-            echo "PR cache writes are isolated to $scope_suffix with trusted Main fallback"
+            # Key by PR head SHA (not the merge GITHUB_SHA) so local HEAD publish matches.
+            scope_sha="${{ github.event.pull_request.head.sha }}"
           else
-            branch_hash="$(printf '%s' "$GITHUB_REF_NAME" | sha256sum | cut -c1-20)"
             task_name="${{ github.event.inputs.task }}"
             if [ -z "$task_name" ]; then
               echo "isolated-cache-write requires a dispatched task name" >&2
               exit 1
             fi
-            task_hash="$(printf '%s' "$task_name" | sha256sum | cut -c1-12)"
-            scope_suffix="-remote-$branch_hash-task-$task_hash"
+            scope_sha="$(git rev-parse HEAD)"
+          fi
+          if [[ ! "$scope_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "isolated-cache-write requires a 40-char lowercase git SHA (got: ${scope_sha:-empty})" >&2
+            exit 1
+          fi
+          scope_suffix="-git-$scope_sha"
+          if [ "$event_name" != "pull_request" ]; then
             hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v1$scope_suffix:buildcache"
             echo "HIVE_CACHE_FROM=$hive_remote_ref" >> "$GITHUB_ENV"
             echo "HIVE_CACHE_SEED_FROM=type=registry,ref=${{ inputs.registry-host }}/nook/buildcache/nook-hive-linux-amd64-v1:buildcache" >> "$GITHUB_ENV"
             echo "HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m" >> "$GITHUB_ENV"
-            echo "Remote cache writes are isolated to $scope_suffix with trusted Main fallback"
           fi
+          echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
         echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"

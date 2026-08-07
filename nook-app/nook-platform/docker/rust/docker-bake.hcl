@@ -4,13 +4,13 @@
 // and deterministic compiles are reused without folding that tooling into product rust-base.
 // Main seeds those scopes with the trusted registry writer; PRs only write
 // isolated remote-buildcache refs.
-// Nightly: rust-ecosystem-nightly is the sole writer for the shared nightly ref.
-// Dylint/fuzz write leaf scopes only (no nightly/rust-base in cache-from).
-// Parents restore via Bake contexts (same pattern as preflight). Tasks must clear
-// parent cache-from after warming that parent: target:PARENT still imports the
-// parent's Zot scope, and that shorter index orphans leaf RUNs on verify/publish.
-// Ecosystem Tasks import with cache-to cleared, then publish with leaf cache-from
-// kept so remote hits re-export without cold chef/toolchain rebuilds.
+// Nightly: rust-ecosystem-nightly-publish is the sole writer for the shared nightly
+// ref. Dylint/fuzz write leaf scopes only (no nightly/rust-base in cache-from).
+// Parents restore via Bake contexts (same pattern as preflight).
+// Context parents keep cache-from and never declare cache-to.
+// Dedicated *-publish targets write mode=max refs under write_cache_repository
+// plus GHA_CACHE_SCOPE_SUFFIX (Main: nook/buildcache; isolated: …-git-<sha>).
+// Empty cache-from= and cache-to= overrides are prohibited.
 // Shared GHA_CACHE_* / NOOK_REGISTRY_CACHE_HOST / write_cache_repository live in
 // nook-app/docker-bake.hcl and are merged via NOOK_BAKE_FILES.
 
@@ -191,6 +191,12 @@ target "rust-base" {
     SCCACHE_S3_MODE  = SCCACHE_S3_MODE
   }
   cache-from = rust_base_cache_from
+}
+
+// Explicit writer for the rust-base Zot scope. Context consumers use rust-base
+// (no cache-to) so linked leaf bakes cannot thin-export this parent.
+target "rust-base-publish" {
+  inherits = ["rust-base"]
   cache-to   = rust_base_cache_to
 }
 
@@ -217,8 +223,12 @@ target "rust-ecosystem-nightly" {
     rust-base = "target:rust-base"
   }
   cache-from = rust_ecosystem_nightly_cache_from
-  cache-to   = rust_ecosystem_nightly_cache_to
   output     = ["type=cacheonly"]
+}
+
+target "rust-ecosystem-nightly-publish" {
+  inherits = ["rust-ecosystem-nightly"]
+  cache-to   = rust_ecosystem_nightly_cache_to
 }
 
 // Platform sources over nightly tools. Dylint/fuzz take this via Bake context so
