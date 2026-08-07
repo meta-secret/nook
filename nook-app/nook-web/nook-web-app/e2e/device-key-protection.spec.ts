@@ -71,11 +71,22 @@ async function createSentinelParticipantResponse(
 
 async function openExistingVaultProtectionOverlay(page: Page) {
   const overlay = page.getByTestId('passkey-auth-overlay')
-  await expect(overlay).toBeHidden()
   const unlockVaultButton = page.getByTestId('unlock-vault-btn')
-  await expect(unlockVaultButton).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
+  // Locking from /devices-access keeps that URL, so LoginGate opens Access
+  // directly and may already show the unlock overlay without Unlock.
+  await expect
+    .poll(
+      async () => {
+        if (await overlay.isVisible()) return 'overlay'
+        if (await unlockVaultButton.isVisible()) return 'unlock'
+        return 'waiting'
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .not.toBe('waiting')
+  if (await overlay.isVisible()) {
+    return
+  }
   await unlockVaultButton.click()
   await expect(overlay).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
