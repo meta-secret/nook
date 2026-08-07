@@ -279,9 +279,11 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         docker_tasks.contains("ci-rust builder-core-deps rust-base")
             && docker_tasks.contains("wasm-export builder-wasm-deps")
             && docker_tasks.contains("nook-web-ci web-deps")
+            && docker_tasks.contains("docker:ci:cache:publish:rust-base:")
             && docker_tasks.contains("docker:ci:cache:publish:native:")
             && docker_tasks.contains("docker:ci:cache:publish:wasm:")
             && docker_tasks.contains("docker:ci:cache:publish:web:")
+            && docker_tasks.contains("task: docker:ci:cache:publish:rust-base")
             && docker_tasks.contains("preflight-test")
             && docker_tasks.contains("--set \"builder-wasm-deps.cache-from=\"")
             && docker_tasks.contains(
@@ -291,7 +293,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("--set \"wasm-export.cache-from=\"")
             && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh")
             && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "producer-owned publishers must keep PR WASM cache-from for remote re-export, clear Main WASM cache-from for fat trusted export, verify Main from a fresh builder, and write isolated PR scopes"
+        "producer-owned publishers must stage rust-base before deps, keep PR WASM cache-from for remote re-export, clear Main WASM cache-from for fat trusted export, verify Main from a fresh builder, and write isolated PR scopes"
     );
     let native_publish = docker_tasks
         .split("docker:ci:cache:publish:native:")
@@ -300,8 +302,10 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .unwrap_or("");
     assert!(
         native_publish.contains("preflight-test")
-            && native_publish.contains("--set \"rust-base.cache-to=\""),
-        "native cache publish must export preflight without rewriting rust-base"
+            && native_publish.contains("--set \"rust-base.cache-to=\"")
+            && native_publish.contains("task: docker:ci:cache:publish:rust-base")
+            && native_publish.contains("builder-core-deps builder-debug"),
+        "native cache publish must stage rust-base, then deps/debug, then preflight without rewriting rust-base"
     );
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(

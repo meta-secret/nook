@@ -24,6 +24,37 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
         app_tasks.contains("setup:rust:fast:") && app_tasks.contains("nook-rust-fast"),
         "the fast setup must load the manifest-keyed development image"
     );
+    assert!(
+        app_tasks.contains("DOCKER_LOAD_BUILDER:")
+            && app_tasks
+                .matches("--builder {{.DOCKER_LOAD_BUILDER}}")
+                .count()
+                >= 6,
+        "setup:rust* must load via DOCKER_LOAD_BUILDER, not a sidecar BUILDX_BUILDER container"
+    );
+    for task_name in [
+        "setup:rust:",
+        "setup:rust:test:",
+        "setup:rust:lint:",
+        "setup:rust:coverage:",
+        "setup:rust:fast:",
+        "setup:rust:browser:",
+    ] {
+        let section = app_tasks
+            .split(task_name)
+            .nth(1)
+            .and_then(|tail| {
+                tail.split("\n  setup:")
+                    .next()
+                    .or_else(|| tail.split("\n  docker:").next())
+            })
+            .unwrap_or("");
+        assert!(
+            section.contains("DOCKER_LOAD_BUILDER")
+                && !section.contains("BUILDX_BUILDER"),
+            "{task_name} must bake with DOCKER_LOAD_BUILDER only"
+        );
+    }
 
     let docker_tasks = read(&root, "nook-app/docker/Taskfile.yml");
     assert!(

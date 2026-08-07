@@ -19,6 +19,11 @@ Use this workflow for quality, CI, and deployment changes.
    - Reusable GitHub workflow shell lives in `.task/ci-workflows.yml` and `.github/scripts/`; workflows stay thin `task` wrappers around Actions-only glue.
    - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as separate Bake images/stages in `nook-app/docker/rust.Dockerfile` (off `rust-base`, not inside it).
    - They run through `task docker:ecosystem:*`.
+   - Precise stage tasks warm parents alone before leaves:
+     - `task docker:rust-base` (read-only; never publishes Zot)
+     - `task docker:ecosystem:policy-tools`
+     - `task docker:ecosystem:nightly` / `nightly:verify`
+   - Composites call those stages in order so a leaf miss cannot cold-rebuild apt.
    - Labeled product PRs call the shared jobs from `pr.yml` via `rust-ecosystem-checks.yml`.
    - Thin `rust-ecosystem.yml` keeps schedule, main-path, manual, and labeled minds-only PR entry points.
    - Do not duplicate those commands in bespoke preflight scanners, call Bake helpers directly from the workflow, or compile their CLIs on the GitHub-hosted runner host.
@@ -65,9 +70,9 @@ Use this workflow for quality, CI, and deployment changes.
    - `vite build`
    - `task preflight` — repository-wide Rust invariant tests, before app setup
    - `PR / Rust ecosystem / Dependency policy and RustSec` —
-     `task docker:ecosystem:dependency-policy` Bakes
-     `rust-ecosystem-policy-tools` alone, then `rust-dependency-policy`, from
-     `nook-app/docker/rust.Dockerfile` (pinned `cargo-deny` + `cargo-audit`;
+     `task docker:ecosystem:dependency-policy` runs
+     `docker:ecosystem:policy-tools` then `rust-dependency-policy`
+     from `nook-app/docker/rust.Dockerfile` (pinned `cargo-deny` + `cargo-audit`;
      not installed into `rust-base`). Tools and deny/audit leaf use separate
      Zot scopes.
      Each stage imports with cache-to cleared, then publishes with cache-from
@@ -82,26 +87,26 @@ Use this workflow for quality, CI, and deployment changes.
      RUSTSEC-2026-0119 in the pinned `openai/codex` Rama/Hickory graph; remove it
      when upstream moves from `hickory-proto` 0.25.2 to 0.26.1 or later.
    - `PR / Rust ecosystem / Proptest, Insta, and Loom` —
-     `task docker:ecosystem:deterministic` Bakes `rust-ecosystem-deterministic`
-     on `builder-core-deps` so
+     `task docker:ecosystem:deterministic` warms `docker:rust-base`, then Bakes
+     `rust-ecosystem-deterministic` on `builder-core-deps` so
      [`proptest`](https://proptest-rs.github.io/proptest/),
      [`insta`](https://insta.rs/), and [`loom`](https://github.com/tokio-rs/loom)
      reuse the sealed Rust dependency graph instead of a host toolchain.
    - `PR / Rust ecosystem / Cargo fuzz smoke` —
-     `task docker:ecosystem:fuzz` Bakes `rust-fuzz-smoke` from
-     `rust-ecosystem-nightly` with pinned
+     `task docker:ecosystem:fuzz` warms `docker:ecosystem:nightly:verify`, then
+     Bakes `rust-fuzz-smoke` with pinned
      [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html).
-     Fuzz restores nightly read-only and writes `nook-rust-ecosystem-fuzz-v1`.
+     Fuzz restores nightly read-only and writes `nook-rust-ecosystem-fuzz-v2`.
    - `PR / Rust ecosystem / Kani bounded proofs` —
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
      bounded proof harnesses via the official action (specialized toolchain).
    - `PR / Rust ecosystem / Dylint repository lints` —
-     `task docker:ecosystem:dylint` Bakes `rust-dylint` from
-     `rust-ecosystem-nightly` with pinned
+     `task docker:ecosystem:dylint` runs `docker:ecosystem:nightly` first
+     (sole nightly writer when writes are enabled), then Bakes `rust-dylint`
+     with pinned
      [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
      `dylint-link` release binaries (no host `cargo install`).
-     When writes are enabled, the Task publishes nightly (sole nightly writer)
-     and the dylint leaf scope `nook-rust-ecosystem-dylint-v2`.
+     The dylint leaf scope is `nook-rust-ecosystem-dylint-v2`.
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
@@ -110,7 +115,10 @@ Use this workflow for quality, CI, and deployment changes.
     #### Workflows and runners
 
     - `.github/workflows/pr.yml`, `.github/workflows/main.yml`, and `.github/workflows/release.yml` run on GitHub-hosted `ubuntu-latest`.
-    - Delivery routes all Task/Bake callers through the hosted `docker-container` builder.
+    - Delivery cache-only Bake (Zot publishers, ecosystem gates) uses the hosted
+      `docker-container` builder for registry cache export.
+    - Image-load tasks (`setup:rust*`) use `DOCKER_LOAD_BUILDER` (docker driver).
+    - They must not keep a sidecar BuildKit container just to load `nook-rust:*`.
     - Delivery does not depend on the daemon's default image store and never restarts Docker.
     - E2e uses `127.0.0.1:5173` inside each container — no host `-p 5173`.
 
@@ -139,6 +147,8 @@ Use this workflow for quality, CI, and deployment changes.
     - Leaf `cache-from` stays own-scope only (no short-parent importers).
     - Ecosystem jobs verify with cache-to off, then publish with cache-from kept
       so remote hits re-export without cold apt/toolchain rebuilds.
+    - Native/WASM publishers stage `docker:ci:cache:publish:rust-base` before
+      deps/source scopes so one Bake cannot rewrite apt while cooking chef.
     - PR WASM publish keeps wasm-scope cache-from for the same reason.
     - Main product publishers still clear cache-from for fat trusted exports.
     - One CI job writes each shared ecosystem registry ref.

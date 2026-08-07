@@ -13,16 +13,18 @@ vars:
   # limits are host prerequisites documented in README.md; they cannot be set per container.
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
   DOCKER_RUN_LIMITS: '--ulimit nofile={{.DOCKER_NOFILE_LIMIT}}:{{.DOCKER_NOFILE_LIMIT}}'
-  # buildx builder. We use the `docker` driver (BuildKit embedded in the daemon) so that the slim
-  # web result is written straight into the containerd image store. Heavy Rust snapshots remain
-  # in BuildKit cache unless an explicit Rust command loads one. Hosted CI intentionally overrides
-  # this with a `docker-container` builder because the GHA cache exporter requires that driver.
+  # Cache-only Bake (CI/Zot publishers, ecosystem gates) may use BUILDX_BUILDER.
+  # Hosted CI sets that to a `docker-container` builder for registry cache export.
   #
-  # buildx auto-creates a docker-driver builder named after the active docker context, so
-  # `docker context show` yields the right builder everywhere: `desktop-linux` on Docker Desktop,
-  # `default` on plain Linux/CI. Override by exporting BUILDX_BUILDER.
+  # Image-load bakes (`setup:rust*`, local format images) must use the `docker`
+  # driver instead. A sidecar BuildKit container on ephemeral VMs is pure waste:
+  # it re-exports OCI tarballs and imports them into the daemon for every load.
+  # buildx auto-creates a docker-driver builder named after the active context
+  # (`desktop-linux` on Desktop, `default` on plain Linux).
   BUILDX_BUILDER:
     sh: 'echo "${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"'
+  DOCKER_LOAD_BUILDER:
+    sh: 'echo "${DOCKER_LOAD_BUILDER:-$(docker context show 2>/dev/null || echo default)}"'
   # The slim sealed web image is the common runtime. Heavy Rust images are loaded only by explicit
   # rust/wasm commands (and the browser variant only by manual browser-wasm tests).
   DOCKER_IMAGE: '{{default "nook-web:local" .DOCKER_IMAGE}}'
@@ -328,10 +330,11 @@ tasks:
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
       WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
     cmds:
+      # Load via docker-driver builder only. Ignore BUILDX_BUILDER container sidecars.
       - >-
         bash -c 'set -euo pipefail;
         for attempt in 1 2 3; do
-          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-rust; then
+          if {{.DOCKER}} buildx --builder {{.DOCKER_LOAD_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-rust; then
             exit 0;
           fi;
           if [ "$attempt" -eq 3 ]; then exit 1; fi;
@@ -346,7 +349,7 @@ tasks:
       - sccache:ensure
     cmds:
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx --builder {{.DOCKER_LOAD_BUILDER}} bake
         {{.NOOK_BAKE_FILES}} nook-rust-test
 
   setup:rust:lint:
@@ -356,7 +359,7 @@ tasks:
       - sccache:ensure
     cmds:
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx --builder {{.DOCKER_LOAD_BUILDER}} bake
         {{.NOOK_BAKE_FILES}} nook-rust-lint
 
   setup:rust:coverage:
@@ -366,7 +369,7 @@ tasks:
       - sccache:ensure
     cmds:
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx --builder {{.DOCKER_LOAD_BUILDER}} bake
         {{.NOOK_BAKE_FILES}} nook-rust-coverage
 
   setup:rust:fast:
@@ -376,7 +379,7 @@ tasks:
       - sccache:ensure
     cmds:
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx --builder {{.DOCKER_LOAD_BUILDER}} bake
         {{.NOOK_BAKE_FILES}} nook-rust-fast
 
   setup:rust:browser:
@@ -391,7 +394,7 @@ tasks:
       - >-
         bash -c 'set -euo pipefail;
         for attempt in 1 2 3; do
-          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-rust-browser; then
+          if {{.DOCKER}} buildx --builder {{.DOCKER_LOAD_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-rust-browser; then
             exit 0;
           fi;
           if [ "$attempt" -eq 3 ]; then exit 1; fi;

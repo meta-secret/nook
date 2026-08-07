@@ -74,8 +74,9 @@ runs:
         ensure_minimum fs.inotify.max_user_instances 2500
         ensure_minimum fs.inotify.max_user_watches 10485760
 
-    # Registry cache exporters work with the docker-container driver. setup-buildx owns this
-    # ephemeral builder on GitHub-hosted VMs; all Task/Bake callers use it.
+    # Registry cache exporters need the docker-container driver. setup-buildx owns
+    # this ephemeral builder on GitHub-hosted VMs for cache-only Bake.
+    # Image-load tasks (`setup:rust*`) ignore it and use DOCKER_LOAD_BUILDER.
     - name: Setup Buildx
       id: buildx
       uses: docker/setup-buildx-action@v3

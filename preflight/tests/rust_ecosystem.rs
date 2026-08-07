@@ -84,10 +84,15 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     );
     let docker_tasks = read("nook-app/docker/Taskfile.yml")?;
     for marker in [
+        "docker:rust-base:",
+        "docker:ecosystem:policy-tools:",
+        "docker:ecosystem:nightly:",
+        "docker:ecosystem:nightly:verify:",
         "docker:ecosystem:dependency-policy:",
         "docker:ecosystem:deterministic:",
         "docker:ecosystem:fuzz:",
         "docker:ecosystem:dylint:",
+        "docker:ci:cache:publish:rust-base:",
         "rust-ecosystem-policy-tools",
         "rust-dependency-policy",
         "rust-ecosystem-deterministic",
@@ -100,6 +105,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "rust-ecosystem-deterministic.cache-to=",
         "rust-dylint.cache-to=",
         "rust-fuzz-smoke.cache-to=",
+        "task: docker:rust-base",
+        "task: docker:ecosystem:policy-tools",
+        "task: docker:ecosystem:nightly:verify",
+        "task: docker:ecosystem:nightly",
+        "task: docker:ci:cache:publish:rust-base",
         "preflight-test",
         "GHA_CACHE_WRITE_ENABLED",
     ] {
