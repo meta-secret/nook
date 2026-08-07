@@ -267,6 +267,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "ecosystem/preflight scopes must not import rust-base; product deps keep trusted rust-base only"
     );
     assert!(
+        !nightly_from.contains("nook/buildcache/nook-rust-ecosystem-nightly")
+            && !policy_tools_from.contains("nook/buildcache/nook-rust-ecosystem-policy-tools")
+            && !policy_from.contains("nook/buildcache/nook-rust-ecosystem-policy-tools"),
+        "nightly/policy-tools PR FALLBACK must not import thin trusted Main indexes"
+    );
+    assert!(
         dylint_from.contains("nook-rust-ecosystem-dylint-v2")
             && fuzz_from.contains("nook-rust-ecosystem-fuzz-v2")
             && !dylint_from.contains("nook-rust-ecosystem-nightly")
@@ -283,9 +289,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "ecosystem leaves restore parents via Bake contexts and must not rewrite rust-base/nightly cache-to"
     );
     assert!(
-        policy_from.contains("nook-rust-ecosystem-policy-tools-v3")
-            && docker_bake.contains("nook-rust-ecosystem-policy-tools-v3")
-            && docker_bake.contains("nook-rust-ecosystem-nightly-v3"),
+        policy_from.contains("nook-rust-ecosystem-policy-tools-v4")
+            && docker_bake.contains("nook-rust-ecosystem-policy-tools-v4")
+            && docker_bake.contains("nook-rust-ecosystem-nightly-v4"),
         "dependency-policy must restore the dedicated policy-tools cache scope"
     );
     assert!(

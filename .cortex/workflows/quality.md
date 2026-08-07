@@ -150,6 +150,8 @@ Use this workflow for quality, CI, and deployment changes.
     - After a parent warm, Tasks clear that parent's cache-from so the context
       target cannot re-import a short Zot index during leaf verify/publish.
     - Leaf `cache-from` stays own-scope only (no short-parent importers).
+    - PR FALLBACK for nightly/policy-tools is PR-scope only.
+    - A thin trusted Main index steals fat PR mode=max layers.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
     - Native/WASM publishers stage `docker:ci:cache:publish:rust-base` before
