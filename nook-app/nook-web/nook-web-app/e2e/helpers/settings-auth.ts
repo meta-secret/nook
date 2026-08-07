@@ -406,7 +406,6 @@ export async function authorizeDeviceProtection(
   opts?: { storeId?: string },
 ) {
   const overlay = page.getByTestId('passkey-auth-overlay')
-  const loginGate = page.getByTestId('login-gate')
   const workspacePanel = page
     .getByTestId('vault-panel')
     .or(page.getByTestId('vault-admin-panel'))
@@ -417,20 +416,15 @@ export async function authorizeDeviceProtection(
   const button = page.getByTestId('device-protection-unlock-btn')
   const unlockVaultButton = page.getByTestId('unlock-vault-btn')
 
-  // Locked Access keeps /devices-access and shows the dashboard inside LoginGate
-  // without Unlock. Wait for the overlay, Unlock, or an already-authenticated
-  // workspace (LoginGate gone).
+  // Locked Access can already show the dashboard (no Unlock). Auto-authorize
+  // e2e may also finish without an overlay. Accept overlay, Unlock, or any
+  // workspace surface before continuing.
   await expect
     .poll(
       async () => {
         if (await overlay.isVisible()) return 'overlay'
         if (await unlockVaultButton.isVisible()) return 'unlock'
-        if (
-          (await workspacePanel.isVisible()) &&
-          !(await loginGate.isVisible())
-        ) {
-          return 'unlocked'
-        }
+        if (await workspacePanel.isVisible()) return 'workspace'
         return 'waiting'
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
@@ -439,8 +433,8 @@ export async function authorizeDeviceProtection(
 
   if (
     (await workspacePanel.isVisible()) &&
-    !(await loginGate.isVisible()) &&
-    !(await overlay.isVisible())
+    !(await overlay.isVisible()) &&
+    !(await unlockVaultButton.isVisible())
   ) {
     await waitForVaultOperationsIdle(page)
     return
@@ -467,12 +461,7 @@ export async function authorizeDeviceProtection(
   await expect
     .poll(
       async () => {
-        if (
-          (await workspacePanel.isVisible()) &&
-          !(await loginGate.isVisible())
-        ) {
-          return 'unlocked'
-        }
+        if (await workspacePanel.isVisible()) return 'unlocked'
         if ((await button.isVisible()) && (await button.isEnabled())) {
           return 'authorize'
         }
@@ -481,14 +470,11 @@ export async function authorizeDeviceProtection(
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .not.toBe('waiting')
-  if ((await workspacePanel.isVisible()) && !(await loginGate.isVisible())) {
+  if (await workspacePanel.isVisible()) {
     await waitForVaultOperationsIdle(page)
     return
   }
   await button.click()
-  await expect(loginGate).toBeHidden({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
   await expect(workspacePanel).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

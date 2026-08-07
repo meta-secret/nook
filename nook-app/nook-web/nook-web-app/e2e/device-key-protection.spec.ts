@@ -512,7 +512,7 @@ test.describe('passkey device-key protection', () => {
 
     // Leave Access before locking. PIN unlock uses the login Unlock button;
     // locking while Access stays open leaves neither Unlock nor an overlay.
-    await page.getByTestId('devices-access-back').click()
+    await page.getByTestId('vault-secrets-tab').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
