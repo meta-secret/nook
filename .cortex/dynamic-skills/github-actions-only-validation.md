@@ -2,92 +2,83 @@
 
 ## Purpose
 
-Keep agent machines on the lightest possible local work and use GitHub-hosted
-runners for both iterative builds/tests and complete merge validation.
+Keep agent machines on the lightest possible local work.
+
+Use GitHub-hosted runners for iterative builds/tests and complete merge
+validation.
 
 ## Problem Pattern
 
 Agents burn wall-clock and contend with other worktrees by running Docker builds
-and tests locally. Automatically starting the complete PR pipeline on every
-experimental push also wastes hosted concurrency before the branch is ready.
+and tests locally.
+
+Automatically starting the complete PR pipeline on every experimental push also
+wastes hosted concurrency before the branch is ready.
 
 ## Preferred Pattern
 
-**Required locally:** only `task format` (host-applied), plus the light UI demo
-contract when UI-facing paths change.
+**Required locally:** `task loom:pre-push` only.
 
-**Iterative execution:** after committing and pushing an exact branch head, run
-allowlisted focused jobs with `task remote TASK_NAME=<name>`.
+**Iterative execution:** after pushing an exact branch head, run allowlisted
+focused jobs with `task remote TASK_NAME=<name>`.
 
-**Required remotely:** explicitly trigger the complete exact-head PR workflow
-with `task pr:validate PR=<number>`. For a Main-fix PR, use
-`task pr:validate PR=<number> FULL_E2E=1`.
-
-Expensive remote tasks and complete PR validation refresh their base branch and
-refuse dispatch when the local head is stale. Merge the reported
-`origin/<base>`, run `task format`, push, and retry; do not bypass the guard or
-spend a long browser run against an obsolete base.
+**Required remotely:** explicitly trigger complete exact-head PR validation.
 
 ```bash
-task format
-git add -u
-# When UI paths change vs origin/main:
-#   git fetch origin main
-#   .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
+task loom:pre-push
 git commit …
 git push -u origin HEAD
-task remote TASK_NAME=rust:test       # repeat focused hosted tasks as useful
-task pr:validate PR=<number>          # spend the full PR pipeline when ready
+task remote TASK_NAME=rust:test
+task loom:pr-land ARGS='validate --pr <number>'
+# Main-fix PR:
+# task loom:pr-land ARGS='validate --pr <number> --full-e2e'
 ```
 
-On a red remote run: read `gh run view <id> --log-failed` (and app logs for
-web/e2e) → fix → `task format` → commit → push → dispatch focused remote work
-or complete validation again. Ordinary pushes do not refresh complete PR
-checks.
+Expensive remote tasks and complete PR validation refresh their base branch and
+refuse dispatch when the local head is stale.
+
+Merge the reported `origin/<base>`, run `task loom:pre-push`, push, and retry.
+
+On a red remote run: read `gh run view <id> --log-failed` → fix →
+`task loom:pre-push` → commit → push → focused remote work or complete
+validation again.
+
+Ordinary pushes do not refresh complete PR checks.
 
 ## Scope
 
 Applies to:
 
-- Every normal implementation PR owned by an AI agent.
-- Coding-bro, pull-request, CI-pipeline, and quality workflow docs.
-- Pre-push hygiene and efficient PR delivery skills.
+- Every normal implementation PR owned by an AI agent
+- Coding-bro, pull-request, CI-pipeline, and quality workflow docs
+- Pre-push hygiene and efficient PR delivery skills
 
 Does not apply to:
 
-- Humans who choose to run local mirrors for their own feedback.
-- Workbench issue, worklog, and statistics commits, which are not Nook product
-  changes or Nook PRs.
-- Read-only / question-only sessions with no commits.
-- Interactive development servers and browser sessions that require retained
-  local state.
+- Humans who choose to run local mirrors for their own feedback
+- Workbench issue, worklog, and statistics commits
+- Read-only / question-only sessions with no commits
+- Interactive development servers that require retained local state
 
 ## Examples
 
 - Before: format → push → local `task check` while automatic PR CI consumes
   hosted workers.
-- After: format → commit → push → focused `task remote` jobs → explicit
-  `task pr:validate` → `task pr:ready`.
+- After: Loom pre-push → commit → push → focused `task remote` → Loom validate →
+  Loom ready.
 - Before: remote Verify fails → run full local `task ci:pr` before re-push.
-- After: remote Verify fails → fix from logs → format → push → focused remote
-  proof as useful → explicitly re-trigger complete validation.
+- After: remote Verify fails → fix from logs → Loom pre-push → push → re-validate.
 
 ## Application Checklist
 
-- [ ] Run `task format` unconditionally before every push.
-- [ ] Pass the UI demo contract when UI-facing paths changed.
+- [ ] Run `task loom:pre-push` unconditionally before every push.
 - [ ] Do not require `task check`, `task ci:pr`, full suites, builds, or e2e
       on the agent machine.
-- [ ] Commit and push the exact source before `task remote`.
-- [ ] Use `task pr:validate` only when the head is ready for the complete gate.
-- [ ] Use `FULL_E2E=1` when the PR repairs a Main failure.
-- [ ] After every later push, trigger complete validation again.
-- [ ] Merge only after green applicable Actions checks and `task pr:ready`.
+- [ ] Use `task remote` for focused hosted iteration.
+- [ ] Trigger complete validation explicitly with Loom or `task pr:validate`.
+- [ ] Re-validate after every push that replaces the validated head.
 
 ## Validation
 
-A first Verify attempt should not fail solely on Prettier/rustfmt/demo-contract
-misses. Product correctness is proven by green applicable GitHub Actions on the
-exact head, not by a local Docker mirror. See
-[coding-bro.md](../workflows/coding-bro.md) and
-[remote-execution.md](../workflows/remote-execution.md).
+Proof is a PR whose first Verify attempt is not wasted on format/demo misses,
+and whose complete validation was requested only for a ready head.

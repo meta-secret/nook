@@ -121,8 +121,24 @@ Proof is a docs diff that restores agreement.
 
 Name the checked docs and the code or Task paths used as evidence.
 
-For implementation tasks, run `task format`, commit and push, then use the
-normal hosted validation path.
+Run the mechanical link and index audit:
+
+```bash
+task loom:cortex-audit
+```
+
+Add `--density` through CLI args when prose density should fail closed:
+
+```bash
+bun run --cwd agentic-ai/loom loom -- cortex-audit --density
+```
+
+Loom checks broken relative links, skill-index sync, and executable skill paths.
+
+Semantic conflicts still require agent judgment.
+
+For implementation tasks, run `task loom:pre-push`, commit and push, then use
+the normal hosted validation path.
 
 For a full cortex GC request, report:
 

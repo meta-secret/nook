@@ -1,0 +1,23 @@
+{
+  "name": "@nook/loom",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "bin": {
+    "loom": "./src/cli.ts"
+  },
+  "scripts": {
+    "loom": "bun run src/cli.ts",
+    "check": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc",
+    "test": "bun test",
+    "verify": "bun run format:check && bun run check && bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "prettier": "3.8.4",
+    "typescript": "6.0.3"
+  }
+}

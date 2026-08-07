@@ -19,6 +19,84 @@ vars:
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
 
 tasks:
+  loom:install:
+    desc: Install Loom Bun dependencies with a frozen lockfile.
+    dir: agentic-ai/loom
+    cmds:
+      - bun install --frozen-lockfile
+
+  loom:format:
+    desc: Format Loom TypeScript sources with Prettier.
+    dir: agentic-ai/loom
+    deps: [loom:install]
+    cmds:
+      - bun run format
+
+  loom:format:check:
+    desc: Check Loom Prettier formatting.
+    dir: agentic-ai/loom
+    deps: [loom:install]
+    cmds:
+      - bun run format:check
+
+  loom:test:
+    desc: Run Loom unit tests.
+    dir: agentic-ai/loom
+    deps: [loom:install]
+    cmds:
+      - bun test
+
+  loom:check:
+    desc: Typecheck Loom.
+    dir: agentic-ai/loom
+    deps: [loom:install]
+    cmds:
+      - bun run check
+
+  loom:verify:
+    desc: Format-check, typecheck, and unit-test Loom.
+    deps: [loom:install]
+    cmds:
+      - task: loom:format:check
+      - task: loom:check
+      - task: loom:test
+
+  loom:pre-push:
+    desc: Format Loom, host-apply product format, and enforce the UI demo contract.
+    deps: [loom:format]
+    cmds:
+      - bun run --cwd agentic-ai/loom loom -- pre-push {{.CLI_ARGS}}
+
+  loom:cortex-audit:
+    desc: Audit .cortex links and dynamic-skill index sync via Loom.
+    deps: [loom:install]
+    cmds:
+      - bun run --cwd agentic-ai/loom loom -- cortex-audit {{.CLI_ARGS}}
+
+  loom:skill-scaffold:
+    desc: Scaffold a dynamic-skill card (SLUG=<kebab-case>; pass CLI_ARGS='--wrappers' when needed).
+    deps: [loom:install]
+    requires:
+      vars: [SLUG]
+    cmds:
+      - bun run --cwd agentic-ai/loom loom -- skill-scaffold {{.SLUG}} {{.CLI_ARGS}}
+
+  loom:agent-stats:
+    desc: Assemble, validate, or publish AI-agent stats YAML (ARGS='assemble --pr N ...').
+    deps: [loom:install]
+    requires:
+      vars: [ARGS]
+    cmds:
+      - bun run --cwd agentic-ai/loom loom -- agent-stats {{.ARGS}}
+
+  loom:pr-land:
+    desc: PR land assist via Loom (ARGS='status|validate|ready|merge-check --pr N').
+    deps: [loom:install]
+    requires:
+      vars: [ARGS]
+    cmds:
+      - bun run --cwd agentic-ai/loom loom -- pr-land {{.ARGS}}
+
   hive:format:
     desc: Format the Hive Rust workspace.
     cmds:

@@ -47,6 +47,18 @@ Checklist for every new or edited `.cortex` sentence:
 - [ ] Would a bullet list make the actors or steps clearer?
 - [ ] Can a failure mode stand as its own sentence?
 
+## Mechanical lint
+
+Use Loom for a heuristic density pass over `.cortex`:
+
+```bash
+bun run --cwd agentic-ai/loom loom -- cortex-audit --density
+```
+
+Loom flags long sentences and heavy semicolon / "and" joins.
+
+It does not rewrite meaning. The agent still owns the edit.
+
 ## Scope
 
 Applies to:

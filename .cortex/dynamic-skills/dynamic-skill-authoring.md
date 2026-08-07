@@ -50,14 +50,17 @@ Does not apply to:
 
 - [ ] Read `.cortex/workflows/dynamic-skills.md`.
 - [ ] Decide whether to update an existing skill card or create a new one.
+- [ ] Scaffold with `task loom:skill-scaffold SLUG=<kebab-case>` when creating.
 - [ ] Keep the card concrete: problem, preferred pattern, scope, examples,
       validation.
-- [ ] Create a Cursor project skill only when direct invocation is useful.
-- [ ] Update `.cortex/dynamic-skills/index.md`.
+- [ ] Create wrappers with `--wrappers` only when direct invocation is useful.
+- [ ] Update `.cortex/dynamic-skills/index.md` if Loom did not.
+- [ ] Run `task loom:cortex-audit`.
 
 ## Validation
 
-For documentation-only captures, verify links and skill metadata. For code
-refactors using a dynamic skill, run `task format`, commit and push, use focused
-hosted tasks as useful, then explicitly trigger complete validation with
-`task pr:validate`.
+For documentation-only captures, run `task loom:cortex-audit`.
+
+For code refactors using a dynamic skill, run `task loom:pre-push`, commit and
+push, use focused hosted tasks as useful, then explicitly trigger complete
+validation with `task pr:validate`.

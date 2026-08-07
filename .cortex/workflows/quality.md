@@ -275,7 +275,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Local mirrors remain available to humans.
     - See [remote-execution.md](remote-execution.md), [coding-bro.md](coding-bro.md), and [pull-requests.md § Validation](pull-requests.md#5-hosted-iteration-and-explicit-validation).
 12. Prove the latest pushed head with explicitly triggered green repository-owned checks before merge or handoff. After a remote failure, fix, format, commit, push, use focused hosted proof as useful, and explicitly trigger complete validation again.
-13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [rules.md §5 — Docker daemon](rules.md#docker-daemon--never-kill-it).
+13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [rules.md §5 — Docker daemon](../rules.md#docker-daemon--never-kill-it).
 14. **NEVER pipe a long-running command through `| grep`/`| tail`/`| head`/`| sed` (or any filter).** This is a hard rule, not a suggestion.
     - `grep`/`tail`/`head` **buffer their input until the upstream command exits**.
     - A multi-minute `task setup` / `task check` / `docker buildx bake` then shows **zero output** the entire time.

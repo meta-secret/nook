@@ -69,7 +69,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 
 - **Measure wall-clock time** from the start of the user's assignment until the final handoff message.
 - **Always include elapsed time** when finishing implementation work (PR merged, feature delivered, or explicit done).
-- See [workflows/pull-requests.md § Task completion report](workflows/pull-requests.md#8-task-completion-report).
+- See [workflows/pull-requests.md § Task completion report](../workflows/pull-requests.md#10-task-completion-report).
 
 ## 8. Default to the Coding Bro Pipeline
 

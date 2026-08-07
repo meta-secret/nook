@@ -32,9 +32,11 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 
 ## How To Add One
 
-1. Copy [`_template.md`](_template.md) to `<skill-name>.md`.
+1. Scaffold with Loom: `task loom:skill-scaffold SLUG=<skill-name>`.
 2. Fill in the problem pattern, preferred pattern, scope, examples, and
    validation.
-3. Add the new card to the table above.
-4. If the user wants direct invocation, create `.agents/skills/<skill-name>/SKILL.md`
-   (with symlinks in `.cursor/skills/` and `.claude/skills/`) pointing back to the `.cortex` card, then link it from the table.
+3. Confirm the new card is in the table above.
+4. If the user wants direct invocation, re-run with `--wrappers` or create
+   `.agents/skills/<skill-name>/SKILL.md` (with `.cursor` / `.claude` symlinks)
+   pointing back to the `.cortex` card, then link it from the table.
+5. Verify with `task loom:cortex-audit`.

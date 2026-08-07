@@ -355,32 +355,55 @@ current and mergeable, and all feedback already present is addressed.
 
 ## ⛔ Non-negotiable: format on the host before every push
 
-**Always run `task format` before every commit that will be pushed** — not only
-when you "think" formatting might be needed. Formatting is cheap; a failed
-Prettier/rustfmt Verify cycle is not.
+**Always run pre-push hygiene before every commit that will be pushed.**
 
-`task format` formats inside sealed Docker images **and applies the diff to the
-host working tree**. Sealed images never write the host: `task extension:format`
-and bare in-container format commands discard their edits when the container
-exits. Do not treat a successful sealed format as a host-clean tree.
+Formatting is cheap. A failed Prettier/rustfmt Verify cycle is not.
 
-Pre-push hygiene (cheap, required) before the first push and every later fix
-push:
+Mechanical entrypoint:
 
 ```bash
-task format
-git add -u
-# When UI / shared vault / extension `src` paths change vs origin/main:
-git fetch origin main
-.github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
+task loom:pre-push
 ```
 
-Only after that commit → push. Use `task remote TASK_NAME=<name>` for focused
-build/test feedback, then explicitly trigger complete PR validation with
-`task pr:validate PR=<number>` when the head is ready. Do **not** run
-`task check`, `task ci:pr`, full suites, builds, or e2e on the agent machine.
-Full policy: [workflows/coding-bro.md](workflows/coding-bro.md#pre-push-hygiene--always-format)
+Loom runs host-applied `task format`, the UI demo contract vs `origin/main`,
+and `git add -u`.
+
+Never use `task extension:format` as the only format step before push.
+
+Only after that commit → push.
+
+Use `task remote` for focused hosted feedback.
+
+Use `task pr:validate` for complete exact-head validation.
+
+Do **not** run `task check`, `task ci:pr`, full suites, builds, or e2e on the
+agent machine.
+
+Full policy: [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md)
 and [workflows/remote-execution.md](workflows/remote-execution.md).
+
+## Loom — mechanical cortex rites
+
+[`agentic-ai/loom`](../agentic-ai/loom/README.md) is the Bun CLI for mechanical
+agent procedures that used to live as pasteable bash in `.cortex`.
+
+Bun must be installed. Stop and ask for Bun if `bun --version` fails.
+
+Preferred Task surface:
+
+| Command | Role |
+|---|---|
+| `task loom:pre-push` | Format Loom + product format + UI demo contract |
+| `task loom:verify` | Prettier check + `tsc` + unit tests |
+| `task loom:cortex-audit` | Broken links / skill index sync |
+| `task loom:skill-scaffold SLUG=<name>` | New dynamic-skill card |
+| `task loom:agent-stats ARGS='…'` | Assemble / validate / publish AI stats |
+| `task loom:pr-land ARGS='…'` | Status / validate / ready / merge-check |
+
+Loom holds the same authored-TypeScript quality bar as other TS packages:
+Prettier, `tsc --noEmit`, unit tests, and preflight TypeScript state scanners.
+
+Policy and judgment stay in `.cortex`. Loom only runs deterministic steps.
 
 ## ⛔ Non-negotiable: heavy agent work runs remotely
 
@@ -466,15 +489,27 @@ implementation worker. Full policy:
 ## ⛔ Non-negotiable: record and analyze AI-agent PR statistics
 
 Task-owning AI agents must measure every normal PR's lightweight local runs,
-focused/complete GitHub Actions runs and retriggers, merge attempts, elapsed time, and the
-repository test inventory (counts by type plus absolute total) on the merged
-head. After the implementation PR merges, write
-`stats/ai-agent/<pr-number>.yaml` to Nook Workbench, compare it with one or two
-recent comparable records, and assess build/workflow waste. Publish it directly
-to Workbench `main`; do not create a bookkeeping branch or PR in Nook.
-Any actionable regression or waste must be fixed in a separate normal
-build-performance PR. Full policy:
-[workflows/agent-statistics.md](workflows/agent-statistics.md).
+focused/complete GitHub Actions runs and retriggers, merge attempts, elapsed
+time, and the repository test inventory on the merged head.
+
+After merge, assemble and publish `stats/ai-agent/<pr-number>.yaml` with Loom:
+
+```bash
+task loom:agent-stats ARGS='assemble --pr <n> --scratch <path> --out /tmp/<n>.yaml --inventory'
+task loom:agent-stats ARGS='publish --file /tmp/<n>.yaml'
+```
+
+Compare with one or two recent comparable records.
+
+Assess build/workflow waste in the scratch log before assemble.
+
+Publish directly to Workbench `main`.
+
+Do not create a bookkeeping branch or PR in Nook.
+
+Fix actionable waste in a separate normal build-performance PR.
+
+Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 
 ## 1. Rules & Architectural Layout
 * [ARCHITECTURE.md](ARCHITECTURE.md) — Top-level package layout, dependencies, command surface, and quality gates.
@@ -510,8 +545,9 @@ build-performance PR. Full policy:
 
 ## 6. Workflows (`workflows/`)
 
-- [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task format`** → commit/push → focused hosted tasks → explicit complete PR validation → fix loop → readiness audit → automatic agent-owned squash merge).
+- [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task loom:pre-push`** → commit/push → focused hosted tasks → Loom/Task validate → fix loop → readiness audit → automatic agent-owned squash merge).
 - [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
+- [`agentic-ai/loom/README.md`](../agentic-ai/loom/README.md) — **Loom**: Bun CLIs for mechanical cortex rites (`pre-push`, `cortex-audit`, `agent-stats`, `pr-land`, `skill-scaffold`).
 - [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
 - [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
 - [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md) — **P1 `.cortex` writing rule:** short sentences, bullets, and lists over dense multi-clause prose.
