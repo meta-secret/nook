@@ -11,6 +11,8 @@ target "_preflight-common" {
   contexts = {
     rust-base = "target:rust-base"
   }
+  cache-from = preflight_cache_from
+  cache-to   = preflight_cache_to
 }
 
 target "preflight-test" {

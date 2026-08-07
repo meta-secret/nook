@@ -16,8 +16,11 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "NOOK_REGISTRY_CACHE_HOST",
         "default = \"registry.dev.nokey.sh\"",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-nightly-v3",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-policy-tools-v3",
+        "nook-rust-ecosystem-nightly-v4",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-dylint-v2",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-fuzz-v2",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1",
+        "nook-rust-ecosystem-policy-tools-v4",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-policy-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2",
@@ -59,12 +62,19 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
                 .matches("cache-to   = rust_ecosystem_nightly_cache_to")
                 .count()
                 == 1
-            && rust_toolchain_bake.contains("cache-to   = []"),
-        "ecosystem nightly target alone writes the shared nightly cache; dylint/fuzz are read-only"
+            && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_dylint_cache_to")
+            && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_fuzz_cache_to"),
+        "ecosystem nightly writes the shared nightly cache; dylint/fuzz write leaf caches"
     );
     assert!(
         rust_toolchain_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),
         "ecosystem deterministic must seed its own hosted cache"
+    );
+    let preflight_bake = read(root, "preflight/docker-bake.hcl");
+    assert!(
+        preflight_bake.contains("cache-from = preflight_cache_from")
+            && preflight_bake.contains("cache-to   = preflight_cache_to"),
+        "preflight must seed its own hosted chef/test cache"
     );
     assert!(
         !bake.contains("type=gha"),
@@ -72,7 +82,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
-        12,
+        15,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
     assert_rust_cache_export_hardening(&bake);
@@ -269,9 +279,12 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         docker_tasks.contains("ci-rust builder-core-deps rust-base")
             && docker_tasks.contains("wasm-export builder-wasm-deps")
             && docker_tasks.contains("nook-web-ci web-deps")
+            && docker_tasks.contains("docker:ci:cache:publish:rust-base:")
             && docker_tasks.contains("docker:ci:cache:publish:native:")
             && docker_tasks.contains("docker:ci:cache:publish:wasm:")
             && docker_tasks.contains("docker:ci:cache:publish:web:")
+            && docker_tasks.contains("task: docker:ci:cache:publish:rust-base")
+            && docker_tasks.contains("preflight-test")
             && docker_tasks.contains("--set \"builder-wasm-deps.cache-from=\"")
             && docker_tasks.contains(
                 "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}/nook/buildcache/"
@@ -280,16 +293,30 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("--set \"wasm-export.cache-from=\"")
             && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh")
             && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "producer-owned publishers must select local verified graphs, preserve the isolated no-import WASM dependency export, verify Main from a fresh builder, and branch PR/Remote isolated exports"
+        "producer-owned publishers must stage rust-base before deps, keep PR WASM cache-from for remote re-export, clear Main WASM cache-from for fat trusted export, verify Main from a fresh builder, and write isolated PR scopes"
+    );
+    let native_publish = docker_tasks
+        .split("docker:ci:cache:publish:native:")
+        .nth(1)
+        .and_then(|tail| tail.split("docker:ci:cache:publish:wasm:").next())
+        .unwrap_or("");
+    assert!(
+        native_publish.contains("preflight-test")
+            && native_publish.contains("--set \"rust-base.cache-to=\"")
+            && native_publish.contains("task: docker:ci:cache:publish:rust-base")
+            && native_publish.contains("builder-core-deps builder-debug"),
+        "native cache publish must stage rust-base, then deps/debug, then preflight without rewriting rust-base"
     );
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
         cache_verifier.contains("docker-container")
+            && cache_verifier.contains("--use")
+            && !cache_verifier.contains("--builder")
             && cache_verifier.contains("builder-wasm-deps.cache-from=type=registry")
             && cache_verifier.contains("nook-sccache-report chef-wasm-release")
             && cache_verifier.contains("nook-sccache-report chef-wasm-clippy")
             && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "Main must reject a published WASM cache until a fresh builder restores every dependency layer"
+        "Main must reject a published WASM cache until a fresh builder restores every dependency layer without --builder"
     );
     let base_dockerfile = read(root, "nook-app/docker/rust.Dockerfile");
     assert!(

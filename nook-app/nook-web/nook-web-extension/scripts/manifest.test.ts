@@ -1,3 +1,6 @@
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+
+await companionWasmReady
 import { describe, expect, test } from 'bun:test'
 import { createManifest } from '../src/manifest'
 
