@@ -47,12 +47,8 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     assert!(
         rust_toolchain_bake.contains("target \"rust-base-publish\"")
             && rust_toolchain_bake.contains("cache-to   = rust_base_cache_to")
-            && !rust_toolchain_bake
-                .split("target \"rust-base\"")
-                .nth(1)
-                .and_then(|tail| tail.split("target \"").next())
-                .unwrap_or("")
-                .contains("cache-to"),
+            && bake_target_assigns_cache_to(rust_toolchain_bake.as_str(), "rust-base-publish")
+            && !bake_target_assigns_cache_to(rust_toolchain_bake.as_str(), "rust-base"),
         "rust-base-publish seeds the hosted rust-base scope; context rust-base has no cache-to"
     );
     assert!(
@@ -116,18 +112,10 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
             && core_bake.contains("cache-to   = rust_wasm_deps_cache_to")
             && core_bake.contains("cache-from = rust_native_source_cache_from")
             && core_bake.contains("cache-to   = rust_native_source_cache_to")
-            && !core_bake
-                .split("target \"builder-core-deps\"")
-                .nth(1)
-                .and_then(|tail| tail.split("target \"").next())
-                .unwrap_or("")
-                .contains("cache-to")
-            && !core_bake
-                .split("target \"builder-wasm-deps\"")
-                .nth(1)
-                .and_then(|tail| tail.split("target \"").next())
-                .unwrap_or("")
-                .contains("cache-to"),
+            && bake_target_assigns_cache_to(core_bake.as_str(), "builder-core-deps-publish")
+            && bake_target_assigns_cache_to(core_bake.as_str(), "builder-wasm-deps-publish")
+            && !bake_target_assigns_cache_to(core_bake.as_str(), "builder-core-deps")
+            && !bake_target_assigns_cache_to(core_bake.as_str(), "builder-wasm-deps"),
         "native/wasm deps publish targets own scoped writes; context parents have no cache-to"
     );
     assert_release_wasm_cache_contract(root);
@@ -136,12 +124,8 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         web_toolchain_bake.contains("target \"web-deps-publish\"")
             && web_toolchain_bake.contains("cache-to   = web_deps_cache_to")
             && web_toolchain_bake.contains("web_deps_cache_from =")
-            && !web_toolchain_bake
-                .split("target \"web-deps\"")
-                .nth(1)
-                .and_then(|tail| tail.split("target \"").next())
-                .unwrap_or("")
-                .contains("cache-to"),
+            && bake_target_assigns_cache_to(web_toolchain_bake.as_str(), "web-deps-publish")
+            && !bake_target_assigns_cache_to(web_toolchain_bake.as_str(), "web-deps"),
         "web-deps-publish owns the web-deps scope; context web-deps has no cache-to"
     );
     assert!(
