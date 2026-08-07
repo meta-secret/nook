@@ -449,7 +449,9 @@ jobs:
           set -euo pipefail
           dir="${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm"
           test -s "$dir/nook_wasm.js"
+          test -s "$dir/nook_wasm_bg.wasm"
           test -s "$dir/nook-companion-wasm/nook_companion_wasm.js"
+          test -s "$dir/nook-companion-wasm/nook_companion_wasm_bg.wasm"
           test -s "$dir/nook-run-attempt"
 
       - name: Svelte checks, JS unit tests, lint, and preview build (no browser e2e)

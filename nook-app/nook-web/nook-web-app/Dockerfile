@@ -35,24 +35,11 @@ RUN if command -v ffmpeg >/dev/null 2>&1; then \
       install -d "/opt/nook/ms-playwright/ffmpeg-${revision}"; \
       ln -s /usr/bin/ffmpeg "/opt/nook/ms-playwright/ffmpeg-${revision}/ffmpeg-linux"; \
     fi
-# WASM handoff nests companion under /nook-wasm/nook-companion-wasm so CI can ship both packages
-# through the existing artifact path. Split them into the two shared import roots.
-COPY --from=web-artifacts /nook-wasm /tmp/nook-wasm-handoff
-RUN mkdir -p \
-      /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
-      /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm \
-    && find /tmp/nook-wasm-handoff -mindepth 1 -maxdepth 1 ! -name nook-companion-wasm \
-      -exec cp -a {} /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/ \; \
-    && if [ -d /tmp/nook-wasm-handoff/nook-companion-wasm ]; then \
-      cp -a /tmp/nook-wasm-handoff/nook-companion-wasm/. \
-        /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/; \
-    fi \
-    && rm -rf /tmp/nook-wasm-handoff
 COPY --from=web-artifacts /coverage /opt/nook/coverage
 
 # Workspace source, copied as late as possible so the cached web dependency layers above are never
 # invalidated by a source edit. .dockerignore excludes target/, node_modules, dist/, and the
-# generated wasm pkg, so this layers source without clobbering node_modules or the generated WASM.
+# generated wasm pkg placeholders so the handoff below is the sole WASM source of truth.
 COPY . .
 
 RUN test -f nook-app/Taskfile.yml \
@@ -60,6 +47,21 @@ RUN test -f nook-app/Taskfile.yml \
     && test ! -f Cargo.toml \
     && test ! -e /usr/local/cargo \
     && test ! -d nook-app/target
+
+# WASM handoff nests companion under /nook-wasm/nook-companion-wasm so CI can ship both packages
+# through the existing artifact path. Apply after COPY . . so a host placeholder directory cannot
+# clobber the generated packages.
+COPY --from=web-artifacts /nook-wasm /tmp/nook-wasm-handoff
+RUN mkdir -p \
+      /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
+      /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm \
+    && find /tmp/nook-wasm-handoff -mindepth 1 -maxdepth 1 ! -name nook-companion-wasm \
+      -exec cp -a {} /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/ \; \
+    && cp -a /tmp/nook-wasm-handoff/nook-companion-wasm/. \
+      /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/ \
+    && test -s /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm \
+    && test -s /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm \
+    && rm -rf /tmp/nook-wasm-handoff
 
 # Seed a throwaway git repo of the copied source so in-container write tasks (task format,
 # rust:coverage:update) can emit their changes as `git diff` for the user to apply on the host
