@@ -429,7 +429,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         );
     }
     assert!(
-        setup.contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v4-$wasm_deps_fingerprint")
+        setup.contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$wasm_deps_fingerprint")
     );
     assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
     assert!(setup.contains("[ -z \"$read_only\" ]"));
@@ -483,6 +483,11 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             .count()
             >= 1,
         "every WASM source cache path must directly import the fingerprinted dependency lineage"
+    );
+    assert!(
+        !wasm_source_cache.contains("nook-rust-base-v1")
+            && !wasm_source_cache.contains("nook-rust-deps-v2"),
+        "WASM source cache-from must not import shorter rust-base or native rust-deps parents"
     );
     let docker_tasks = read("nook-app/docker/Taskfile.yml");
     assert!(docker_tasks.contains(
@@ -541,12 +546,26 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             "cold isolated cache-from must ignore missing remote-buildcache refs: {cold_isolated_import}"
         );
     }
+    let wasm_deps_from = bake
+        .split_once("rust_wasm_deps_cache_from =")
+        .context("bake file must define the WASM deps cache inputs")?
+        .1
+        .split_once("rust_wasm_deps_cache_to =")
+        .context("bake file must delimit the WASM deps cache inputs")?
+        .0;
     assert!(
-        bake.contains(
-            "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1"
-        ) && bake.contains("rust_wasm_deps_cache_from")
-            && bake.contains("registry.dev.nokey.sh"),
-        "WASM/native dependency restores must import registry.dev.nokey.sh cache refs including rust-base"
+        bake.contains("rust_wasm_deps_cache_from") && bake.contains("registry.dev.nokey.sh"),
+        "WASM dependency restores must import registry.dev.nokey.sh cache refs"
+    );
+    assert!(
+        !wasm_deps_from.contains("nook-rust-base-v1")
+            && !wasm_deps_from.contains("nook-rust-deps-v2"),
+        "WASM deps cache-from must not import shorter rust-base or native rust-deps parents"
+    );
+    assert!(
+        wasm_deps_from.contains("nook-rust-wasm-deps-v5")
+            && wasm_deps_from.contains("${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true"),
+        "WASM deps must restore the v5 PR scope and fingerprinted Main scope with ignore-error"
     );
 
     let wasm_bake = read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");

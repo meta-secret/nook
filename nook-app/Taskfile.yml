@@ -13,16 +13,8 @@ vars:
   # limits are host prerequisites documented in README.md; they cannot be set per container.
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
   DOCKER_RUN_LIMITS: '--ulimit nofile={{.DOCKER_NOFILE_LIMIT}}:{{.DOCKER_NOFILE_LIMIT}}'
-  # buildx builder. We use the `docker` driver (BuildKit embedded in the daemon) so that the slim
-  # web result is written straight into the containerd image store. Heavy Rust snapshots remain
-  # in BuildKit cache unless an explicit Rust command loads one. Hosted CI intentionally overrides
-  # this with a `docker-container` builder because the GHA cache exporter requires that driver.
-  #
-  # buildx auto-creates a docker-driver builder named after the active docker context, so
-  # `docker context show` yields the right builder everywhere: `desktop-linux` on Docker Desktop,
-  # `default` on plain Linux/CI. Override by exporting BUILDX_BUILDER.
-  BUILDX_BUILDER:
-    sh: 'echo "${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"'
+  # Bake never selects a Buildx instance by name. Hosted CI runs
+  # `docker buildx use` before Task. Local Bake uses the active default.
   # The slim sealed web image is the common runtime. Heavy Rust images are loaded only by explicit
   # rust/wasm commands (and the browser variant only by manual browser-wasm tests).
   DOCKER_IMAGE: '{{default "nook-web:local" .DOCKER_IMAGE}}'
@@ -278,11 +270,11 @@ tasks:
         trap cleanup EXIT;
         rm -rf "$artifacts_dir";
         mkdir -p "$artifacts_dir";
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" --set "rust-format-check.output=type=cacheonly" --set "builder-wasm-deps.output=type=cacheonly" --set "builder-core-deps.output=type=cacheonly" --set "builder-debug.output=type=cacheonly" {{.PREPARE_GROUP}};
+        {{.DOCKER}} buildx bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" --set "rust-format-check.output=type=cacheonly" --set "builder-wasm-deps.output=type=cacheonly" --set "builder-core-deps.output=type=cacheonly" --set "builder-debug.output=type=cacheonly" {{.PREPARE_GROUP}};
         artifact_kib="$(du -sk "$artifacts_dir" | cut -f1)";
         echo "task setup: commit-scoped host WASM/coverage handoff is ${artifact_kib} KiB";
         test "$artifact_kib" -le 262144 || { echo "task setup: refusing oversized Rust/web handoff (${artifact_kib} KiB)" >&2; exit 1; };
-        WEB_ARTIFACTS_CONTEXT="$artifacts_dir" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "setup: $setup_target" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} "$setup_target"'
+        WEB_ARTIFACTS_CONTEXT="$artifacts_dir" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "setup: $setup_target" {{.DOCKER}} buildx bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} "$setup_target"'
 
   setup:web:focused:
     desc: Build the narrow source-sealed web image for focused checks without full verification or production builds.
@@ -310,14 +302,14 @@ tasks:
           rmdir "$artifacts_parent" 2>/dev/null || true;
         };
         trap cleanup EXIT;
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "focused-web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" focused-web-artifacts web-deps;
+        {{.DOCKER}} buildx bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "focused-web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" focused-web-artifacts web-deps;
         artifact_kib="$(du -sk "$artifacts_dir" | cut -f1)";
         echo "task setup:web:focused: WASM handoff is ${artifact_kib} KiB";
         test "$artifact_kib" -le 262144 || {
           echo "task setup:web:focused: refusing oversized WASM handoff (${artifact_kib} KiB)" >&2;
           exit 1;
         };
-        WEB_ARTIFACTS_CONTEXT="$artifacts_dir" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} nook-web-focused'
+        WEB_ARTIFACTS_CONTEXT="$artifacts_dir" {{.DOCKER}} buildx bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} nook-web-focused'
 
   setup:rust:
     desc: Build and load the source-sealed Rust/WASM image for explicit rust/wasm commands.
@@ -331,7 +323,7 @@ tasks:
       - >-
         bash -c 'set -euo pipefail;
         for attempt in 1 2 3; do
-          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-rust; then
+          if {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} nook-rust; then
             exit 0;
           fi;
           if [ "$attempt" -eq 3 ]; then exit 1; fi;
@@ -346,7 +338,7 @@ tasks:
       - sccache:ensure
     cmds:
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}} nook-rust-test
 
   setup:rust:lint:
@@ -356,7 +348,7 @@ tasks:
       - sccache:ensure
     cmds:
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}} nook-rust-lint
 
   setup:rust:coverage:
@@ -366,7 +358,7 @@ tasks:
       - sccache:ensure
     cmds:
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}} nook-rust-coverage
 
   setup:rust:fast:
@@ -376,7 +368,7 @@ tasks:
       - sccache:ensure
     cmds:
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}} nook-rust-fast
 
   setup:rust:browser:
@@ -391,7 +383,7 @@ tasks:
       - >-
         bash -c 'set -euo pipefail;
         for attempt in 1 2 3; do
-          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-rust-browser; then
+          if {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} nook-rust-browser; then
             exit 0;
           fi;
           if [ "$attempt" -eq 3 ]; then exit 1; fi;

@@ -18,10 +18,9 @@ target "builder-wasm-deps" {
   dockerfile = "nook-app/docker/rust.Dockerfile"
   target     = "builder-wasm-deps"
   platforms  = ["linux/amd64"]
-  // Main owns the complete dependency-fingerprinted WASM lineage. Pull requests restore it
-  // read-only, avoiding both dependency rebuilds and competition with the larger native dependency
-  // cache. The restore list also imports rust-base + native deps so cook layers cannot orphan when
-  // sibling scopes advance independently.
+  // Main owns the fingerprinted WASM lineage. PRs restore that scope (and their
+  // isolated write) only. Do not also cache-from rust-base or native rust-deps:
+  // those shorter parents orphan wasm chef cook layers.
   //
   // Cache proof: a repeated solve for the same fingerprint must hit CACHED for both chef cooks.
   cache-from = rust_wasm_deps_cache_from

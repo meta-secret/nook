@@ -74,8 +74,9 @@ runs:
         ensure_minimum fs.inotify.max_user_instances 2500
         ensure_minimum fs.inotify.max_user_watches 10485760
 
-    # Registry cache exporters work with the docker-container driver. setup-buildx owns this
-    # ephemeral builder on GitHub-hosted VMs; all Task/Bake callers use it.
+    # Registry cache exporters need the docker-container driver. setup-buildx
+    # owns this ephemeral builder on GitHub-hosted VMs. Taskfiles never pass
+    # --builder; the health wrapper runs `docker buildx use` first.
     - name: Setup Buildx
       id: buildx
       uses: docker/setup-buildx-action@v3
@@ -104,7 +105,6 @@ runs:
         event_name="${{ github.event_name }}"
         git_ref="${{ github.ref }}"
         echo "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
-        echo "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
         echo "NOOK_REGISTRY_CACHE_HOST=${{ inputs.registry-host }}" >> "$GITHUB_ENV"
 
@@ -182,7 +182,7 @@ runs:
           echo "Could not fingerprint the hosted WASM dependency graph" >&2
           exit 1
         fi
-        echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v4-$wasm_deps_fingerprint" >> "$GITHUB_ENV"
+        echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$wasm_deps_fingerprint" >> "$GITHUB_ENV"
         cache_write_enabled=""
         if [ "$isolated_cache_write" = "true" ]; then
           cache_write_enabled=1
