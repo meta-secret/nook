@@ -24,7 +24,6 @@ bake_args=(
   --set "*.args.SCCACHE_BUCKET=$sccache_bucket"
   --set "*.output=type=cacheonly"
   --set "builder-wasm-deps.cache-from=type=registry,ref=${registry_host}/nook/buildcache/$cache_scope:buildcache"
-  --set "builder-wasm-deps.cache-to="
 )
 
 require_cached_step() {

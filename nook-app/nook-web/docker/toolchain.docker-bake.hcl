@@ -24,5 +24,11 @@ target "web-deps" {
     web-base = "target:web-base"
   }
   cache-from = web_deps_cache_from
-  cache-to   = web_deps_cache_to
+}
+
+// Explicit writer for the web-deps Zot scope. Image leaves use web-deps as a
+// named context without cache-to so they cannot thin-export this parent.
+target "web-deps-publish" {
+  inherits = ["web-deps"]
+  cache-to = web_deps_cache_to
 }

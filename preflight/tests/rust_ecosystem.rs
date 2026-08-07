@@ -118,10 +118,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "rust-dylint",
         "rust-ecosystem-nightly",
         "sccache:ensure",
-        "rust-ecosystem-policy-tools.cache-to=",
-        "rust-ecosystem-deterministic.cache-to=",
-        "rust-dylint.cache-to=",
-        "rust-fuzz-smoke.cache-to=",
+        "rust-ecosystem-nightly-publish",
+        "GHA_CACHE_WRITE_ENABLED=",
         "task: docker:rust-base",
         "task: docker:ecosystem:policy-tools",
         "task: docker:ecosystem:nightly:verify",
@@ -257,16 +255,23 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "policy-tools must be the only deny/audit Bake target and load a runnable image"
     );
     assert!(
-        rust_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
+        rust_bake.contains("target \"rust-ecosystem-nightly-publish\"")
+            && rust_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
             && rust_bake
                 .matches("cache-to   = rust_ecosystem_nightly_cache_to")
                 .count()
                 == 1
+            && !rust_bake
+                .split("target \"rust-ecosystem-nightly\"")
+                .nth(1)
+                .and_then(|tail| tail.split("target \"").next())
+                .unwrap_or("")
+                .contains("cache-to")
             && rust_bake.contains("cache-to   = rust_ecosystem_dylint_cache_to")
             && rust_bake.contains("cache-to   = rust_ecosystem_fuzz_cache_to")
             && rust_bake.contains("cache-from = rust_ecosystem_dylint_cache_from")
             && rust_bake.contains("cache-from = rust_ecosystem_fuzz_cache_from"),
-        "nightly alone writes the shared nightly scope; dylint/fuzz write leaf scopes"
+        "nightly-publish alone writes the shared nightly scope; context nightly has no cache-to; dylint/fuzz write leaf scopes"
     );
     let preflight_bake = read("preflight/docker-bake.hcl")?;
     let nightly_from = rust_bake
@@ -332,11 +337,14 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && rust_bake.contains("rust-platform-nightly = \"target:rust-platform-nightly\"")
             && rust_bake.contains("rust-platform = \"target:rust-platform\"")
             && rust_bake.contains("rust-base = \"target:rust-base\"")
-            && docker_tasks.contains("rust-base.cache-to=")
-            && docker_tasks.contains("rust-ecosystem-nightly.cache-to=")
+            && rust_bake.contains("target \"rust-base-publish\"")
+            && docker_tasks.contains("rust-base-publish")
+            && docker_tasks.contains("rust-ecosystem-nightly-publish")
             && !docker_tasks.contains("cache-from=\"")
-            && !docker_tasks.contains("cache-from='"),
-        "ecosystem leaves restore parents via Bake contexts, keep cache-from, and only clear cache-to on verify"
+            && !docker_tasks.contains("cache-from='")
+            && !docker_tasks.contains("cache-to=\"")
+            && !docker_tasks.contains("cache-to='"),
+        "ecosystem leaves restore context parents without cache-to; scoped *-publish targets own writes"
     );
     assert!(
         rust_bake.contains("nook-rust-ecosystem-policy-tools-v4")

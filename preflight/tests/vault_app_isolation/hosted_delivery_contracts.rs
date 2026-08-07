@@ -387,7 +387,6 @@ fn assert_preflight_reporter_contract(root: &Path) {
         "nook-app/nook-platform/docker/rust/docker-bake.hcl",
         "SCCACHE_S3_BUILD_SECRETS",
         "deps:\n      - sccache:ensure",
-        "--set \"rust-base.cache-to=\"",
         "PREFLIGHT_OUTPUT_PARENT:",
         "dirname \"{{.PREFLIGHT_OUTPUT_DIR}}\"",
         "--allow=\"fs.write={{.PREFLIGHT_OUTPUT_PARENT}}\"",
@@ -399,12 +398,10 @@ fn assert_preflight_reporter_contract(root: &Path) {
             "preflight Taskfile Bake/sccache wiring is missing: {required}"
         );
     }
-    assert_eq!(
-        preflight_tasks
-            .matches("--set \"rust-base.cache-to=\"")
-            .count(),
-        2,
-        "preflight test and export must both suppress rust-base cache writes"
+    assert!(
+        !preflight_tasks.contains("cache-to=\"")
+            && !preflight_tasks.contains("cache-from=\""),
+        "preflight Tasks must not clear Bake cache-to/cache-from; rust-base context has no cache-to"
     );
 }
 

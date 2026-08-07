@@ -60,7 +60,6 @@ tasks:
       - >-
         {{.DOCKER}} buildx bake
         {{.PREFLIGHT_BAKE_FILES}}
-        --set "rust-base.cache-to="
         preflight-test
 
   preflight:export:
@@ -83,7 +82,6 @@ tasks:
         --allow="fs.write={{.PREFLIGHT_OUTPUT_PARENT}}"
         --allow="fs.write={{.PREFLIGHT_OUTPUT_DIR}}"
         --set "preflight-cli-export.output=type=local,dest={{.PREFLIGHT_OUTPUT_DIR}}"
-        --set "rust-base.cache-to="
         preflight-cli-export
 
   preflight:dependency-policy:

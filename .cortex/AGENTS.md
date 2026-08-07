@@ -135,18 +135,22 @@ tests first when the fault is reproducible at the typed boundary, then keep the
 Playwright test for the user-visible flow. Full policy:
 [rules.md §4](rules.md#4-testing-requirements).
 
-## ⛔ Non-negotiable: never clear Bake `cache-from`
+## ⛔ Non-negotiable: never clear Bake `cache-from` or `cache-to`
 
-Empty Bake `cache-from=` overrides are prohibited.
+Empty Bake `cache-from=` and `cache-to=` overrides are prohibited.
 
-Clearing `cache-from` after a remote cache hit forces cold rebuilds from apt
-and toolchain install upward.
+Clearing `cache-from` after a remote hit forces cold rebuilds from apt upward.
 
-If a short parent index orphans a leaf RUN, redesign the Bake graph:
+Clearing `cache-to` to stop a linked parent from writing is the wrong fix.
 
-- keep leaf `cache-from` own-scope only;
-- embed parents with `mode=max`;
-- or put the stage lineage in one Dockerfile.
+Use scoped architecture instead:
+
+- context parents keep `cache-from` and declare no `cache-to`;
+- dedicated `*-publish` targets write `mode=max` refs;
+- Main writes `nook/buildcache/<scope>`;
+- PRs write `nook/remote-buildcache/<scope>${GHA_CACHE_SCOPE_SUFFIX}`.
+
+If a short parent index orphans a leaf RUN, redesign the Bake graph.
 
 Do not wipe cache to hide a graph mistake.
 

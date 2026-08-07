@@ -183,11 +183,13 @@ tasks:
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
+      # web-deps-publish writes nook-web-deps-v1 under write_cache_repository plus
+      # GHA_CACHE_SCOPE_SUFFIX. Image leaves use web-deps (no cache-to) as context.
       - >-
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
-        web-deps
+        web-deps-publish
 
   docker:ci:web:build:
     desc: Build the sealed web image from the same-runner CI WASM artifact.

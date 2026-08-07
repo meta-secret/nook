@@ -9,7 +9,13 @@ target "builder-core-deps" {
   target     = "builder-core-deps"
   platforms  = ["linux/amd64"]
   cache-from = rust_deps_cache_from
-  cache-to   = rust_deps_cache_to
+}
+
+// Explicit writer for the native deps Zot scope. Context consumers use
+// builder-core-deps (no cache-to) so linked leaves cannot thin-export this parent.
+target "builder-core-deps-publish" {
+  inherits = ["builder-core-deps"]
+  cache-to = rust_deps_cache_to
 }
 
 // Shared platform source overlay on cooked deps. Bulk native leaves take this via
@@ -38,7 +44,14 @@ target "builder-wasm-deps" {
   //
   // Cache proof: a repeated solve for the same fingerprint must hit CACHED for both chef cooks.
   cache-from = rust_wasm_deps_cache_from
-  cache-to   = rust_wasm_deps_cache_to
+}
+
+// Explicit writer for the WASM deps Zot scope. Context consumers use
+// builder-wasm-deps (no cache-to). Main writes GHA_RUST_WASM_DEPS_SCOPE;
+// PRs write the isolated remote-buildcache suffix via write_cache_repository.
+target "builder-wasm-deps-publish" {
+  inherits = ["builder-wasm-deps"]
+  cache-to = rust_wasm_deps_cache_to
 }
 
 // Native verify warm-up (nextest --no-run, clippy, llvm-cov). Parallel with builder-wasm.

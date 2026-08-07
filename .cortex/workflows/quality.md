@@ -13,11 +13,12 @@ Use this workflow for quality, CI, and deployment changes.
    - Restore `rust-base` only through Bake `contexts` (`target:rust-base`).
    - Do not also cache-from `rust-base` on the preflight target.
    - That shorter parent importer orphans chef cook layers.
-   - Never clear `cache-from` with an empty Bake override.
-   - Empty `cache-from=` is an architectural failure, not a cache hygiene tool.
-   - Redesign scopes or Dockerfile lineage instead.
-   - Preflight Bake callers clear `rust-base.cache-to` so they never rewrite
-     the shared parent scope.
+   - Never clear `cache-from` or `cache-to` with an empty Bake override.
+   - Empty cache overrides are an architectural failure, not cache hygiene.
+   - Context parents keep `cache-from` and declare no `cache-to`.
+   - Dedicated `*-publish` targets write scoped Main/PR Zot refs.
+   - Redesign scopes or Dockerfile lineage instead of wiping cache.
+   - Context `rust-base` declares no `cache-to`, so preflight cannot rewrite it.
    - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
    - Reusable GitHub workflow shell lives in `.task/ci-workflows.yml` and `.github/scripts/`; workflows stay thin `task` wrappers around Actions-only glue.
    - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as sibling Dockerfiles under `nook-app/nook-platform/docker/rust/` (Bake images off `rust-base`, not inside product `lineage.Dockerfile`).
@@ -160,8 +161,14 @@ Use this workflow for quality, CI, and deployment changes.
     - Ecosystem nightly/policy/dylint/fuzz restore parents the same way.
     - Leaf `cache-from` stays own-scope only (no short-parent importers).
     - `mode=max` leaf exports already embed the parent chain.
-    - Empty `cache-from=` overrides are prohibited.
+    - Empty `cache-from=` and `cache-to=` overrides are prohibited.
     - Clearing `cache-from` after a remote hit forces cold apt/toolchain rebuilds.
+    - Clearing `cache-to` on a linked parent is banned.
+    - Context parents declare no `cache-to`.
+    - `*-publish` targets write `mode=max` under `write_cache_repository` plus
+      `GHA_CACHE_SCOPE_SUFFIX`.
+    - Main uses `nook/buildcache`.
+    - PRs use `nook/remote-buildcache` with a `-pr-N` suffix.
     - If a short parent index orphans a leaf RUN, redesign the Bake graph.
     - Do not wipe cache to paper over a short-chain import.
     - Prefer own-scope leaf `cache-from`, same-Dockerfile stage lineage, or a

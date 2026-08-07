@@ -45,8 +45,15 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         );
     }
     assert!(
-        rust_toolchain_bake.contains("cache-to   = rust_base_cache_to"),
-        "the Rust toolchain base must seed its own hosted cache before dependency scopes consume it"
+        rust_toolchain_bake.contains("target \"rust-base-publish\"")
+            && rust_toolchain_bake.contains("cache-to   = rust_base_cache_to")
+            && !rust_toolchain_bake
+                .split("target \"rust-base\"")
+                .nth(1)
+                .and_then(|tail| tail.split("target \"").next())
+                .unwrap_or("")
+                .contains("cache-to"),
+        "rust-base-publish seeds the hosted rust-base scope; context rust-base has no cache-to"
     );
     assert!(
         rust_toolchain_bake.contains("cache-to   = rust_ecosystem_policy_tools_cache_to")
@@ -59,14 +66,15 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "ecosystem policy-tools must seed its hosted cache without an aggregate deny/audit Bake leaf"
     );
     assert!(
-        rust_toolchain_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
+        rust_toolchain_bake.contains("target \"rust-ecosystem-nightly-publish\"")
+            && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
             && rust_toolchain_bake
                 .matches("cache-to   = rust_ecosystem_nightly_cache_to")
                 .count()
                 == 1
             && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_dylint_cache_to")
             && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_fuzz_cache_to"),
-        "ecosystem nightly writes the shared nightly cache; dylint/fuzz write leaf caches"
+        "nightly-publish writes the shared nightly cache; dylint/fuzz write leaf caches"
     );
     assert!(
         rust_toolchain_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),
@@ -102,17 +110,39 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     let core_bake = read(root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
     assert!(
-        core_bake.contains("cache-to   = rust_deps_cache_to")
+        core_bake.contains("target \"builder-core-deps-publish\"")
+            && core_bake.contains("target \"builder-wasm-deps-publish\"")
+            && core_bake.contains("cache-to   = rust_deps_cache_to")
+            && core_bake.contains("cache-to   = rust_wasm_deps_cache_to")
             && core_bake.contains("cache-from = rust_native_source_cache_from")
-            && core_bake.contains("cache-to   = rust_native_source_cache_to"),
-        "native dependency and source-sensitive coverage layers need independent hosted caches"
+            && core_bake.contains("cache-to   = rust_native_source_cache_to")
+            && !core_bake
+                .split("target \"builder-core-deps\"")
+                .nth(1)
+                .and_then(|tail| tail.split("target \"").next())
+                .unwrap_or("")
+                .contains("cache-to")
+            && !core_bake
+                .split("target \"builder-wasm-deps\"")
+                .nth(1)
+                .and_then(|tail| tail.split("target \"").next())
+                .unwrap_or("")
+                .contains("cache-to"),
+        "native/wasm deps publish targets own scoped writes; context parents have no cache-to"
     );
     assert_release_wasm_cache_contract(root);
     assert_parallel_web_pipeline(root);
     assert!(
-        web_toolchain_bake.contains("cache-to   = web_deps_cache_to")
-            && web_toolchain_bake.contains("web_deps_cache_from ="),
-        "web dependencies need an independent cache scope owned by toolchain bake"
+        web_toolchain_bake.contains("target \"web-deps-publish\"")
+            && web_toolchain_bake.contains("cache-to   = web_deps_cache_to")
+            && web_toolchain_bake.contains("web_deps_cache_from =")
+            && !web_toolchain_bake
+                .split("target \"web-deps\"")
+                .nth(1)
+                .and_then(|tail| tail.split("target \"").next())
+                .unwrap_or("")
+                .contains("cache-to"),
+        "web-deps-publish owns the web-deps scope; context web-deps has no cache-to"
     );
     assert!(
         web_image_bake.contains("web_cache_from =")
@@ -303,16 +333,16 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("docker:ci:cache:publish:wasm:")
             && docker_tasks.contains("docker:ci:cache:publish:web:")
             && docker_tasks.contains("task: docker:ci:cache:publish:rust-base")
+            && docker_tasks.contains("rust-base-publish")
+            && docker_tasks.contains("builder-core-deps-publish")
+            && docker_tasks.contains("builder-wasm-deps-publish")
+            && docker_tasks.contains("web-deps-publish")
             && docker_tasks.contains("preflight-test")
-            && docker_tasks.contains(
-                "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}/nook/buildcache/"
-            )
-            && docker_tasks.contains("--set \"builder-wasm-deps.cache-to=\"")
             && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh")
             && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "producer-owned publishers must stage rust-base before deps, keep configured cache-from, verify Main WASM from a fresh builder, and write isolated PR scopes"
+        "producer-owned publishers must bake scoped *-publish targets and verify Main WASM from a fresh builder"
     );
-    assert_no_empty_cache_from_overrides(&docker_tasks);
+    assert_no_empty_cache_overrides(&docker_tasks);
     let native_publish = docker_tasks
         .split("docker:ci:cache:publish:native:")
         .nth(1)
@@ -320,10 +350,9 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .unwrap_or("");
     assert!(
         native_publish.contains("preflight-test")
-            && native_publish.contains("--set \"rust-base.cache-to=\"")
             && native_publish.contains("task: docker:ci:cache:publish:rust-base")
-            && native_publish.contains("builder-core-deps builder-debug"),
-        "native cache publish must stage rust-base, then deps/debug, then preflight without rewriting rust-base"
+            && native_publish.contains("builder-core-deps-publish builder-debug"),
+        "native cache publish must stage rust-base-publish, then deps-publish/debug, then preflight"
     );
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
@@ -492,7 +521,7 @@ fn assert_parallel_web_pipeline(root: &Path) {
 }
 
 #[test]
-fn bake_callers_never_clear_cache_from() {
+fn bake_callers_never_clear_cache_from_or_cache_to() {
     let root = repository_root();
     let paths = [
         "nook-app/nook-platform/docker/Taskfile.yml",
@@ -503,27 +532,29 @@ fn bake_callers_never_clear_cache_from() {
     ];
     for path in paths {
         let text = read(&root, path);
-        assert_no_empty_cache_from_overrides_in(path, &text);
+        assert_no_empty_cache_overrides_in(path, &text);
     }
 }
 
-fn assert_no_empty_cache_from_overrides(text: &str) {
-    assert_no_empty_cache_from_overrides_in("docker Taskfiles", text);
+fn assert_no_empty_cache_overrides(text: &str) {
+    assert_no_empty_cache_overrides_in("docker Taskfiles", text);
 }
 
-fn assert_no_empty_cache_from_overrides_in(path: &str, text: &str) {
-    for (index, line) in text.lines().enumerate() {
-        let Some(after) = line.split("cache-from=").nth(1) else {
-            continue;
-        };
-        let rest = after.trim_start();
-        let empty = rest.is_empty()
-            || rest.starts_with('\\')
-            || matches!(rest.chars().next(), Some('"' | '\''));
-        assert!(
-            !empty,
-            "{path}:{} clears Bake cache-from; empty cache-from overrides are prohibited",
-            index + 1
-        );
+fn assert_no_empty_cache_overrides_in(path: &str, text: &str) {
+    for key in ["cache-from=", "cache-to="] {
+        for (index, line) in text.lines().enumerate() {
+            let Some(after) = line.split(key).nth(1) else {
+                continue;
+            };
+            let rest = after.trim_start();
+            let empty = rest.is_empty()
+                || rest.starts_with('\\')
+                || matches!(rest.chars().next(), Some('"' | '\''));
+            assert!(
+                !empty,
+                "{path}:{} clears Bake {key}; empty cache overrides are prohibited — use scoped *-publish targets",
+                index + 1
+            );
+        }
     }
 }
