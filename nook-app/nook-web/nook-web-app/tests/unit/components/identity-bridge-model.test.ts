@@ -17,7 +17,7 @@ const copy: IdentityBridgeCopy = {
   identityStage: 'Identity',
   vaultStage: 'Vaults',
   selectedVaultStage: 'Selected vault',
-  currentDevice: 'This browser',
+  currentDevice: 'App key',
   currentIdentity: 'Identity',
   selectedIdentity: 'Identity',
   vaultGrant: 'Vault access',
@@ -120,6 +120,24 @@ describe('identity bridge graph', () => {
     ])
   })
 
+  test('compact identity vault edges use lateral vault-access handles', () => {
+    const graph = buildIdentityBridge({
+      ...input(IdentityBridgePerspective.Identities),
+      compact: true,
+    })
+    const identity = graph.nodes.find((node) => node.id === 'identity-current')
+    expect(identity?.data.kind).toBe(IdentityBridgeNodeKind.Identity)
+    if (identity?.data.kind === IdentityBridgeNodeKind.Identity) {
+      expect(identity.data.lateralAccessPort).toBe(true)
+    }
+    expect(
+      graph.edges.find((edge) => edge.id === 'identity-to-home'),
+    ).toMatchObject({
+      sourceHandle: 'vault-access',
+      targetHandle: 'vault-access',
+    })
+  })
+
   test('shows the passkey that unlocks the app key', () => {
     const graph = buildIdentityBridge(
       input(IdentityBridgePerspective.Identities),
@@ -158,6 +176,9 @@ describe('identity bridge graph', () => {
       source: 'vault-selected',
       target: 'device-current',
     })
+    expect(
+      graph.nodes.find((node) => node.id === 'device-current')?.ariaLabel,
+    ).toBe('App key: App key. Home was opened by this app key')
   })
 
   test('shows an honest empty state for an unverified selected vault', () => {

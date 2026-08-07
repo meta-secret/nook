@@ -63,14 +63,14 @@ test.describe('devices and access dashboard', () => {
       throw new Error('Devices & access preview has no text content')
     }
     const previewText = previewTextState.text
-    expect(previewText.indexOf('No browser identity')).toBeLessThan(
+    expect(previewText.indexOf('No local identity')).toBeLessThan(
       previewText.indexOf('My browser'),
     )
     expect(previewText.indexOf('My browser')).toBeLessThan(
       previewText.indexOf('Vault access'),
     )
     await expect(preview).not.toContainText('Passkey')
-    await expect(preview).toContainText('No browser identity')
+    await expect(preview).toContainText('No local identity')
     await expect(preview).toContainText('No local vaults yet')
     await expect(page.getByTestId('devices-access-chain')).toHaveCount(0)
     await expect(
@@ -140,7 +140,7 @@ test.describe('devices and access dashboard', () => {
     ).not.toHaveText('Unknown')
   })
 
-  test('walks the access chain from passkey to device key to vaults', async ({
+  test('walks the access chain from passkey to app key to vaults', async ({
     page,
   }) => {
     await connectLocalVault(page)
@@ -251,7 +251,7 @@ test.describe('devices and access dashboard', () => {
     ).toHaveCount(1)
     await expect(
       bridge.getByRole('article', {
-        name: /App key: This browser.*Test vault was opened by this app key/i,
+        name: /App key: App key\. Test vault was opened by this app key/i,
       }),
     ).toBeVisible()
     await expect(bridge).not.toContainText('This browser')
@@ -326,7 +326,7 @@ test.describe('devices and access dashboard', () => {
       .getByTestId('devices-access-member-details')
       .first()
     await expect(memberDetails.locator('p')).toBeHidden()
-    await memberDetails.getByText('Device identifier', { exact: true }).click()
+    await memberDetails.getByText('App key identifier', { exact: true }).click()
     await expect(memberDetails.locator('p')).toBeVisible()
 
     await panel.getByRole('button', { name: 'Manage enrolled devices' }).click()
@@ -334,8 +334,15 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('vault-devices-section').locator('button').first(),
     ).toBeFocused()
     await page.getByTestId('vault-devices-access-tab').click()
-    await vaultsNode.click()
-    await panel.getByRole('button', { name: 'Manage backup passwords' }).click()
+    // Remount after leaving Access invalidates the earlier vaultsNode locator.
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.getByTestId('devices-access-node-vaults').click()
+    await page
+      .getByTestId('devices-access-panel')
+      .getByRole('button', { name: 'Manage backup passwords' })
+      .click()
     await expect(
       page.getByTestId('vault-unlock-section').locator('button').first(),
     ).toBeFocused()
@@ -540,9 +547,31 @@ test.describe('devices and access dashboard', () => {
     )
 
     await page.reload()
-    await page.getByTestId('login-devices-access').click()
+    // The vault tab already pushed /devices-access, so LoginGate opens Access
+    // directly after reload. Passkey-first unlock may cover it briefly.
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
+    try {
+      await expect(passkeyOverlay).toBeVisible({ timeout: 5_000 })
+      await page.getByTestId('passkey-auth-overlay-dismiss').click()
+      await expect(passkeyOverlay).toBeHidden()
+    } catch {
+      // Identity metadata is already gone; unlock overlay may never appear.
+    }
+    const loginDevicesAccess = page.getByTestId('login-devices-access')
+    if (await loginDevicesAccess.isVisible()) {
+      await loginDevicesAccess.click()
+    } else {
+      await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+    }
     const preview = page.getByTestId('devices-access-chain-preview')
-    await expect(preview).toContainText('Known vaults remain on this browser')
+    await expect(preview).toContainText('Known vaults remain on this browser', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(
       page.getByTestId('devices-access-preview-vaults'),
     ).toContainText('Test vault')
@@ -554,7 +583,7 @@ test.describe('devices and access dashboard', () => {
     await expect(preview).not.toContainText('No local vaults yet')
   })
 
-  test('never claims access to a vault this device key has not opened', async ({
+  test('never claims access to a vault this app key has not opened', async ({
     page,
   }) => {
     await connectLocalVault(page)
@@ -568,7 +597,7 @@ test.describe('devices and access dashboard', () => {
 
     // Verified access is descriptive metadata written after an unlock succeeds.
     // Removing it leaves the vault registered on this browser with nothing
-    // proving this device key ever opened it, which is how a locally cached
+    // proving this app key ever opened it, which is how a locally cached
     // vault from another identity arrives.
     await page.evaluate(
       () =>
@@ -604,7 +633,7 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('vault-devices-access-tab').click()
 
     const chain = page.getByTestId('devices-access-chain')
-    await expect(chain).toContainText('0 opened by key')
+    await expect(chain).toContainText('0 vaults')
     await expect(
       page.getByTestId('devices-access-strength-vaults'),
     ).toHaveCount(0)
@@ -713,17 +742,35 @@ test.describe('devices and access dashboard', () => {
     page,
   }) => {
     await connectLocalVault(page)
+    await addVaultPassword(page, 'Travel recovery', 'demo recovery passphrase')
     await page.getByTestId('vault-devices-access-tab').click()
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    // Wait for persisted passkey evidence — Identity unlocked alone can appear
+    // from the in-memory session before the wrapped app key is durable, and
+    // locking then leaves Access on the Missing-protection preview.
+    const bridge = page.getByTestId('devices-access-chain')
+    await expect(bridge).toContainText('Passkey · recoverable identity', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(
+      page.getByTestId('devices-access-identity-state'),
+    ).toContainText('Identity unlocked', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(
+      page.getByTestId('devices-access-credential-id'),
+    ).not.toHaveText('Unknown')
 
     await page.getByTestId('header-lock-vault-btn').click()
     // Locking from /devices-access keeps that URL, so login opens Access directly.
     await expect(page).toHaveURL(/\/devices-access$/)
     await expect(
       page.getByTestId('devices-access-identity-state'),
-    ).toContainText('Identity locked')
+    ).toContainText('Identity locked', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(
       page.getByTestId('devices-access-identity-card'),
     ).toHaveAttribute('data-identity-state', 'Locked')

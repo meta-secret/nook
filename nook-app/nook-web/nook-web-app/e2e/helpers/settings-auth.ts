@@ -406,6 +406,12 @@ export async function authorizeDeviceProtection(
   opts?: { storeId?: string },
 ) {
   const overlay = page.getByTestId('passkey-auth-overlay')
+  const loginGate = page.getByTestId('login-gate')
+  const vaultPicker = page.getByTestId('login-vault-picker')
+  const unlockVaultButton = page.getByTestId('unlock-vault-btn')
+  const lockedAccessDashboard = loginGate.getByTestId(
+    'devices-access-dashboard',
+  )
   const workspacePanel = page
     .getByTestId('vault-panel')
     .or(page.getByTestId('vault-admin-panel'))
@@ -414,41 +420,110 @@ export async function authorizeDeviceProtection(
     .or(page.getByTestId('onboard-device-panel'))
     .or(page.getByTestId('help-page'))
   const button = page.getByTestId('device-protection-unlock-btn')
+
+  const isAuthenticatedWorkspace = async () =>
+    (await workspacePanel.isVisible()) && !(await loginGate.isVisible())
+
+  const authorizeButtonReady = async () => {
+    if (!(await button.isVisible())) return false
+    try {
+      return await button.isEnabled({ timeout: 0 })
+    } catch {
+      return false
+    }
+  }
+
+  // Locked /devices-access keeps Access inside LoginGate with no Unlock.
+  // Multi-vault lock shows the vault picker before Unlock. Wait for a real
+  // unlock affordance, locked Access (leave via back), or true auth.
+  await expect
+    .poll(
+      async () => {
+        if (await overlay.isVisible()) return 'overlay'
+        if (await unlockVaultButton.isVisible()) return 'unlock'
+        if (await vaultPicker.isVisible()) return 'picker'
+        if (await lockedAccessDashboard.isVisible()) return 'locked-access'
+        if (await isAuthenticatedWorkspace()) return 'unlocked'
+        return 'waiting'
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .not.toBe('waiting')
+
+  if (await isAuthenticatedWorkspace()) {
+    await waitForVaultOperationsIdle(page)
+    return
+  }
+
+  // Unlock is unavailable on locked Access; leave to the login card, then
+  // restore /devices-access after auth so deep links survive the detour.
+  let restoreDevicesAccess = false
+  if (
+    (await lockedAccessDashboard.isVisible()) &&
+    !(await unlockVaultButton.isVisible()) &&
+    !(await vaultPicker.isVisible()) &&
+    !(await overlay.isVisible())
+  ) {
+    restoreDevicesAccess = true
+    await page.getByTestId('devices-access-back').click()
+    await expect
+      .poll(
+        async () => {
+          if (await overlay.isVisible()) return 'overlay'
+          if (await unlockVaultButton.isVisible()) return 'unlock'
+          if (await vaultPicker.isVisible()) return 'picker'
+          return 'waiting'
+        },
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .not.toBe('waiting')
+  }
+
   if (!(await overlay.isVisible())) {
-    const vaultPicker = page.getByTestId('login-vault-picker')
     if (await vaultPicker.isVisible()) {
       const option = opts?.storeId
         ? page.locator(
             `[data-testid="login-vault-option"][data-store-id="${opts.storeId}"]`,
           )
         : page.getByTestId('login-vault-option').first()
-      await expect(option).toBeVisible({ timeout: UI_TIMEOUT_MS })
+      await expect(option).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
       await option.click()
     }
-    const unlockVaultButton = page.getByTestId('unlock-vault-btn')
-    await expect(unlockVaultButton).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await expect(unlockVaultButton).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await unlockVaultButton.click()
   }
   await expect
     .poll(
       async () => {
-        if (await workspacePanel.isVisible()) return 'unlocked'
-        if ((await button.isVisible()) && (await button.isEnabled())) {
-          return 'authorize'
-        }
+        if (await isAuthenticatedWorkspace()) return 'unlocked'
+        if (await authorizeButtonReady()) return 'authorize'
         return 'waiting'
       },
-      { timeout: UI_TIMEOUT_MS },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .not.toBe('waiting')
-  if (await workspacePanel.isVisible()) {
-    await waitForVaultOperationsIdle(page)
-    return
+  if (!(await isAuthenticatedWorkspace())) {
+    await button.click()
+    await expect(loginGate).toBeHidden({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(workspacePanel).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
   }
-  await button.click()
-  await expect(workspacePanel).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
+
+  if (restoreDevicesAccess) {
+    await page.getByTestId('vault-devices-access-tab').click()
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page).toHaveURL(/\/devices-access$/)
+  }
+
   await waitForVaultOperationsIdle(page)
 }
 

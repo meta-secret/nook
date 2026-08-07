@@ -71,11 +71,22 @@ async function createSentinelParticipantResponse(
 
 async function openExistingVaultProtectionOverlay(page: Page) {
   const overlay = page.getByTestId('passkey-auth-overlay')
-  await expect(overlay).toBeHidden()
   const unlockVaultButton = page.getByTestId('unlock-vault-btn')
-  await expect(unlockVaultButton).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
+  // Locking from /devices-access keeps that URL, so LoginGate opens Access
+  // directly and may already show the unlock overlay without Unlock.
+  await expect
+    .poll(
+      async () => {
+        if (await overlay.isVisible()) return 'overlay'
+        if (await unlockVaultButton.isVisible()) return 'unlock'
+        return 'waiting'
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .not.toBe('waiting')
+  if (await overlay.isVisible()) {
+    return
+  }
   await unlockVaultButton.click()
   await expect(overlay).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -138,11 +149,19 @@ async function readRequiredVaultString(
 }
 
 async function readPersistedDeviceIdentity(page: Page): Promise<string> {
-  return readRequiredVaultString(page, 'device_identity_wrapped')
+  try {
+    return await readRequiredVaultString(page, 'app_key_wrapped')
+  } catch {
+    return readRequiredVaultString(page, 'device_identity_wrapped')
+  }
 }
 
 async function readDeviceId(page: Page): Promise<string> {
-  return readRequiredVaultString(page, 'device_id')
+  try {
+    return await readRequiredVaultString(page, 'app_id')
+  } catch {
+    return readRequiredVaultString(page, 'device_id')
+  }
 }
 
 async function clearDeviceMetadata(page: Page): Promise<void> {
@@ -157,6 +176,8 @@ async function clearDeviceMetadata(page: Page): Promise<void> {
           const store = transaction.objectStore('vault')
           store.delete('device_id')
           store.delete('device_identity_wrapped')
+          store.delete('app_id')
+          store.delete('app_key_wrapped')
           transaction.onerror = () => reject(transaction.error)
           transaction.oncomplete = () => {
             db.close()
@@ -489,6 +510,12 @@ test.describe('passkey device-key protection', () => {
       'PIN or passphrase',
     )
 
+    // Leave Access before locking. PIN unlock uses the login Unlock button;
+    // locking while Access stays open leaves neither Unlock nor an overlay.
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await page.getByTestId('header-lock-vault-btn').click()
     await openExistingVaultProtectionOverlay(page)
     await expect(
@@ -501,7 +528,9 @@ test.describe('passkey device-key protection', () => {
     )
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
 
     await page.reload()
     await openExistingVaultProtectionOverlay(page)
@@ -510,7 +539,9 @@ test.describe('passkey device-key protection', () => {
     ).toBeVisible()
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
   })
 
   test('falls back to PIN setup when passkeys are unavailable', async ({
@@ -670,13 +701,16 @@ test.describe('passkey device-key protection', () => {
               const db = request.result
               const transaction = db.transaction('vault', 'readonly')
               const store = transaction.objectStore('vault')
-              const wrappedRequest = store.get('device_identity_wrapped')
+              const legacyWrappedRequest = store.get('device_identity_wrapped')
+              const appKeyWrappedRequest = store.get('app_key_wrapped')
               const registryRequest = store.get('vault_registry')
               transaction.onerror = () => reject(transaction.error)
               transaction.oncomplete = () => {
                 db.close()
                 resolve({
-                  wrappedIdentityStored: Boolean(wrappedRequest.result),
+                  wrappedIdentityStored: Boolean(
+                    legacyWrappedRequest.result || appKeyWrappedRequest.result,
+                  ),
                   registry: registryRequest.result,
                 })
               }

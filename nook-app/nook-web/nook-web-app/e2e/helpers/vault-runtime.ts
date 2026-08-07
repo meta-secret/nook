@@ -425,6 +425,8 @@ export async function wipeDeviceIdentity(page: Page): Promise<void> {
           const store = tx.objectStore('vault')
           store.delete('device_id')
           store.delete('device_identity_wrapped')
+          store.delete('app_id')
+          store.delete('app_key_wrapped')
           tx.oncomplete = () => {
             db.close()
             resolve()

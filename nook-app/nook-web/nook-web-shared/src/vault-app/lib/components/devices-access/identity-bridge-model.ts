@@ -116,6 +116,7 @@ export type IdentityBridgeIdentityData = {
   deviceMetricValue: string;
   vaultMetricLabel: string;
   vaultMetricValue: string;
+  lateralAccessPort: boolean;
   incomingRelation: string;
 };
 
@@ -312,6 +313,7 @@ function identityData(
   input: IdentityBridgeInput,
   flow: IdentityBridgeFlow,
   portMode: IdentityBridgePortMode,
+  lateralAccessPort = false,
 ): IdentityBridgeIdentityData {
   return {
     kind: IdentityBridgeNodeKind.Identity,
@@ -326,6 +328,7 @@ function identityData(
     deviceMetricValue: input.copy.oneDeviceKey,
     vaultMetricLabel: input.copy.vaultMetricLabel,
     vaultMetricValue: input.copy.verifiedVaultCount,
+    lateralAccessPort,
     incomingRelation: "",
   };
 }
@@ -492,6 +495,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
             input,
             IdentityBridgeFlow.Vertical,
             IdentityBridgePortMode.Both,
+            true,
           ),
           40,
           identityY,
