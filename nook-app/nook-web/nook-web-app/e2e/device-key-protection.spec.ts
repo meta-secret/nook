@@ -510,6 +510,12 @@ test.describe('passkey device-key protection', () => {
       'PIN or passphrase',
     )
 
+    // Leave Access before locking. PIN unlock uses the login Unlock button;
+    // locking while Access stays open leaves neither Unlock nor an overlay.
+    await page.getByTestId('devices-access-back').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await page.getByTestId('header-lock-vault-btn').click()
     await openExistingVaultProtectionOverlay(page)
     await expect(
@@ -522,7 +528,9 @@ test.describe('passkey device-key protection', () => {
     )
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
 
     await page.reload()
     await openExistingVaultProtectionOverlay(page)
@@ -531,7 +539,9 @@ test.describe('passkey device-key protection', () => {
     ).toBeVisible()
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
   })
 
   test('falls back to PIN setup when passkeys are unavailable', async ({
