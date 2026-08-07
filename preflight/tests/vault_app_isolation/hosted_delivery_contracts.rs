@@ -396,7 +396,9 @@ fn assert_preflight_reporter_contract(root: &Path) {
         );
     }
     assert_eq!(
-        preflight_tasks.matches("--set \"rust-base.cache-to=\"").count(),
+        preflight_tasks
+            .matches("--set \"rust-base.cache-to=\"")
+            .count(),
         2,
         "preflight test and export must both suppress rust-base cache writes"
     );
