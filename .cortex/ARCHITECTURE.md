@@ -40,7 +40,7 @@ root/
 └── nook-app/
     ├── Taskfile.yml      (app command surface)
     ├── ci/Taskfile.yml   (ci:* tasks)
-    ├── docker-bake.hcl   (shared vars, web/preflight scopes, composition root)
+    ├── docker-bake.hcl   (shared vars, preflight scopes, composition root)
     ├── nook-platform/    (Rust workspace root and members)
     │   ├── Taskfile.yml  (rust:* tasks)
     │   ├── Cargo.toml
@@ -873,7 +873,8 @@ Fork, release, and other arbitrary-ref jobs receive no S3 credentials.
 
 - App-owned: `nook-app/Taskfile.yml` passes `nook-app/docker-bake.hcl`,
   `nook-app/nook-platform/docker/rust/docker-bake.hcl` (Rust Zot scopes and
-  ecosystem targets), and package-local bake files under
+  ecosystem targets), `nook-app/nook-web/docker/*.docker-bake.hcl` (web Zot
+  scopes and bases), and package-local bake files under
   `nook-app/**/docker-bake.hcl` to `docker buildx bake`.
 - Root `Taskfile.yml` includes those app commands for repo-root usage.
 - The Taskfile passes bake files as absolute paths.

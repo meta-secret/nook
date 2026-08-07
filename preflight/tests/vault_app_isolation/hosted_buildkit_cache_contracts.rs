@@ -11,7 +11,9 @@ fn delivery_ci_scopes_buildkit_caches() -> anyhow::Result<()> {
 fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     let app_bake = read(root, "nook-app/docker-bake.hcl");
     let rust_toolchain_bake = read(root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let bake = format!("{app_bake}\n{rust_toolchain_bake}");
+    let web_image_bake = read(root, "nook-app/nook-web/docker/web.docker-bake.hcl");
+    let web_toolchain_bake = read(root, "nook-app/nook-web/docker/toolchain.docker-bake.hcl");
+    let bake = format!("{app_bake}\n{rust_toolchain_bake}\n{web_image_bake}\n{web_toolchain_bake}");
     for required in [
         "GHA_CACHE_ENABLED",
         "GHA_CACHE_WRITE_ENABLED",
@@ -102,10 +104,19 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_release_wasm_cache_contract(root);
     assert_parallel_web_pipeline(root);
-    let web_bake = read(root, "nook-app/nook-web/docker/toolchain.docker-bake.hcl");
     assert!(
-        web_bake.contains("cache-to   = web_deps_cache_to"),
-        "web dependencies need an independent cache scope"
+        web_toolchain_bake.contains("cache-to   = web_deps_cache_to")
+            && web_toolchain_bake.contains("web_deps_cache_from ="),
+        "web dependencies need an independent cache scope owned by toolchain bake"
+    );
+    assert!(
+        web_image_bake.contains("web_cache_from =")
+            && web_image_bake.contains("web_cache_to =")
+            && web_image_bake.contains("web_e2e_cache_from =")
+            && web_image_bake.contains("web_e2e_cache_to =")
+            && web_image_bake.contains("target \"web-base\"")
+            && web_image_bake.contains("target \"web-e2e-base\""),
+        "final web/e2e image cache scopes must live next to web-base in web.docker-bake.hcl"
     );
     let platform_docker_tasks = read(root, "nook-app/nook-platform/docker/Taskfile.yml");
     let web_docker_tasks = read(root, "nook-app/nook-web/docker/Taskfile.yml");
@@ -321,7 +332,10 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
         "Main must reject a published WASM cache until a fresh builder restores every dependency layer without --builder"
     );
-    let base_dockerfile = read(root, "nook-app/nook-platform/docker/rust/lineage.Dockerfile");
+    let base_dockerfile = read(
+        root,
+        "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
+    );
     assert!(
         base_dockerfile.contains("ARG RUST_VERSION=")
             && base_dockerfile.contains("ARG DEBIAN_RELEASE=")
@@ -354,8 +368,14 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let rust_bake = read(root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let web_bake = read(root, "nook-app/nook-web/docker/web.docker-bake.hcl");
     for (path, dockerfile) in [
-        ("nook-app/nook-platform/docker/rust/lineage.Dockerfile", base_dockerfile.as_str()),
-        ("nook-app/nook-web/docker/web.Dockerfile", web_dockerfile.as_str()),
+        (
+            "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
+            base_dockerfile.as_str(),
+        ),
+        (
+            "nook-app/nook-web/docker/web.Dockerfile",
+            web_dockerfile.as_str(),
+        ),
     ] {
         assert!(
             dockerfile.contains("NODE_VERSION=")
@@ -371,7 +391,8 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         );
     }
     assert!(
-        rust_bake.contains("dockerfile = \"nook-app/nook-platform/docker/rust/lineage.Dockerfile\"")
+        rust_bake
+            .contains("dockerfile = \"nook-app/nook-platform/docker/rust/lineage.Dockerfile\"")
             && rust_bake.contains("target \"rust-base\"")
             && !rust_bake.contains("web.Dockerfile")
             && web_bake.contains("dockerfile = \"nook-app/nook-web/docker/web.Dockerfile\"")
@@ -434,7 +455,10 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
         "native verification, WASM clippy, package export, and release-test compilation must run as sibling branches, preserve locale rebuilds, and join only small outputs before release-profile Node tests"
     );
-    let dependency_dockerfile = read(root, "nook-app/nook-platform/docker/rust/lineage.Dockerfile");
+    let dependency_dockerfile = read(
+        root,
+        "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
+    );
     let core_dockerfile = read(root, "nook-app/nook-platform/nook-core/Dockerfile");
     assert!(
         !core_dockerfile.contains("wasm-dependency-test")

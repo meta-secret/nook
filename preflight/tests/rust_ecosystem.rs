@@ -51,8 +51,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "Thin rust-ecosystem.yml must keep labeled minds-only PR coverage"
     );
     assert!(
-        !entry.contains("Run dependency policy")
-            && !entry.contains("Bake rust-dependency-policy"),
+        !entry.contains("Run dependency policy") && !entry.contains("Bake rust-dependency-policy"),
         "Thin rust-ecosystem.yml must not duplicate dependency-policy steps"
     );
 
@@ -364,7 +363,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     }
 
     assert!(repository_root().join("deny.toml").is_file());
-    assert!(repository_root().join("nook-app/nook-platform/.insta.yaml").is_file());
+    assert!(
+        repository_root()
+            .join("nook-app/nook-platform/.insta.yaml")
+            .is_file()
+    );
     assert!(workspace.contains("[workspace.metadata.kani.flags]"));
     assert!(workspace.contains("[workspace.metadata.dylint]"));
     assert!(replication.contains("proptest!"));

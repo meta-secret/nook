@@ -302,7 +302,8 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
         "focused test must compile nextest binaries per crate including companion-wasm"
     );
     assert!(
-        lint_dockerfile.contains("COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm")
+        lint_dockerfile
+            .contains("COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm")
             && lint_dockerfile.contains("COPY nook-app/nook-platform/nook-wasm nook-wasm")
             && lint_dockerfile.contains("wasm32-unknown-unknown"),
         "focused lint must clippy wasm crates after native crates"
@@ -313,7 +314,10 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     for (target, dockerfile) in [
         ("_nook-rust-test-common", "nook-rust-test.Dockerfile"),
         ("_nook-rust-lint-common", "nook-rust-lint.Dockerfile"),
-        ("_nook-rust-coverage-common", "nook-rust-coverage.Dockerfile"),
+        (
+            "_nook-rust-coverage-common",
+            "nook-rust-coverage.Dockerfile",
+        ),
     ] {
         let stage = core_bake
             .split(&format!("target \"{target}\" {{\n"))

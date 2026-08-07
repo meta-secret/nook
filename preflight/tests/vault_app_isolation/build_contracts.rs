@@ -31,8 +31,14 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
     let preflight_taskfile = read(&root, "preflight/Taskfile.yml");
     for (label, body) in [
         ("nook-app/Taskfile.yml", app_tasks.as_str()),
-        ("nook-app/nook-platform/docker/Taskfile.yml", platform_docker_taskfile.as_str()),
-        ("nook-app/nook-web/docker/Taskfile.yml", web_docker_taskfile.as_str()),
+        (
+            "nook-app/nook-platform/docker/Taskfile.yml",
+            platform_docker_taskfile.as_str(),
+        ),
+        (
+            "nook-app/nook-web/docker/Taskfile.yml",
+            web_docker_taskfile.as_str(),
+        ),
         ("preflight/Taskfile.yml", preflight_taskfile.as_str()),
     ] {
         assert!(
@@ -53,7 +59,9 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
     let dockerfile = read(&root, "nook-app/nook-platform/nook-wasm/Dockerfile");
     assert!(
         dockerfile.contains("FROM builder-wasm-deps AS nook-rust-fast")
-            && dockerfile.contains("mv /meta-secret/nook/nook-app/nook-platform/target /opt/nook/cargo-target",)
+            && dockerfile.contains(
+                "mv /meta-secret/nook/nook-app/nook-platform/target /opt/nook/cargo-target",
+            )
             && dockerfile.contains("ENV CARGO_TARGET_DIR=/opt/nook/cargo-target"),
         "the fast image must preserve its compiled dependency graph outside /meta-secret/nook"
     );
@@ -234,10 +242,7 @@ fn assert_shared_wasm_build_contract(root: &Path) {
 
     let wasm_dockerfile = read(root, "nook-app/nook-platform/nook-wasm/Dockerfile");
     assert!(
-        wasm_dockerfile
-            .matches("wasm-pack build nook-wasm")
-            .count()
-            == 1,
+        wasm_dockerfile.matches("wasm-pack build nook-wasm").count() == 1,
         "delivery must compile and optimize nook-wasm exactly once"
     );
     assert!(
@@ -261,9 +266,7 @@ fn assert_shared_wasm_build_contract(root: &Path) {
     }
     let wasm_tasks = read(root, "nook-app/nook-platform/nook-wasm/Taskfile.yml");
     assert_eq!(
-        wasm_tasks
-            .matches("wasm-pack build nook-wasm")
-            .count(),
+        wasm_tasks.matches("wasm-pack build nook-wasm").count(),
         1,
         "the fast rebuild path must compile the shared vault WASM package once"
     );
@@ -660,7 +663,10 @@ fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() -> 
 #[test]
 fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Result<()> {
     let root = repository_root();
-    let dependency_dockerfile = read(&root, "nook-app/nook-platform/docker/rust/lineage.Dockerfile");
+    let dependency_dockerfile = read(
+        &root,
+        "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
+    );
     let source_dockerfile = read(&root, "nook-app/nook-platform/nook-core/Dockerfile");
     let warmup = dependency_dockerfile
         .split_once("FROM builder-wasm-deps AS builder-core-deps")

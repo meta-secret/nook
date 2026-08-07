@@ -345,7 +345,8 @@ fn assert_rust_build_cache_boundary() {
     assert!(!bake.contains("secret =") && !bake.contains("SCCACHE_REDIS"));
     assert!(
         sccache_tasks.contains("--set '*.secrets=id=sccache_s3_access_key,src=$access_file'")
-            && sccache_tasks.contains("--set '*.secrets+=id=sccache_s3_secret_key,src=$secret_file'")
+            && sccache_tasks
+                .contains("--set '*.secrets+=id=sccache_s3_secret_key,src=$secret_file'")
             && sccache_tasks.contains("--allow=fs.read=$access_file")
             && sccache_tasks.contains("--allow=fs.read=$secret_file")
             && !sccache_tasks.contains("SCCACHE_REDIS_BAKE_ALLOW"),
@@ -465,7 +466,9 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
 
     let app_bake = read("nook-app/docker-bake.hcl");
     let rust_bake = read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    let bake = format!("{app_bake}\n{rust_bake}");
+    let web_image_bake = read("nook-app/nook-web/docker/web.docker-bake.hcl");
+    let web_toolchain_bake = read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
+    let bake = format!("{app_bake}\n{rust_bake}\n{web_image_bake}\n{web_toolchain_bake}");
     assert!(app_bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
     assert!(app_bake.contains("variable \"GHA_CACHE_FALLBACK_ENABLED\""));
     assert!(app_bake.contains("variable \"GHA_CACHE_SEED_SCOPE_SUFFIX\""));
@@ -474,6 +477,15 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(app_bake.contains(
         "write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != \"\" ? \"nook/remote-buildcache\" : \"nook/buildcache\""
     ));
+    assert!(
+        !app_bake.contains("web_deps_cache_from =")
+            && !app_bake.contains("web_cache_from =")
+            && !app_bake.contains("web_e2e_cache_from =")
+            && web_toolchain_bake.contains("web_deps_cache_from =")
+            && web_image_bake.contains("web_cache_from =")
+            && web_image_bake.contains("web_e2e_cache_from ="),
+        "web Zot cache scope definitions must live under nook-web/docker bake files"
+    );
     assert!(rust_bake.contains("nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache"));
     assert!(rust_bake.contains("rust_wasm_deps_write_scope"));
     assert!(rust_bake.contains(
@@ -610,7 +622,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "WASM dependencies must restore Main's dedicated complete WASM dependency lineage"
     );
     assert!(
-        wasm_dependencies.contains("dockerfile = \"nook-app/nook-platform/docker/rust/lineage.Dockerfile\"")
+        wasm_dependencies
+            .contains("dockerfile = \"nook-app/nook-platform/docker/rust/lineage.Dockerfile\"")
             && !wasm_dependencies.contains("rust-base = \"target:rust-base\""),
         "WASM dependency cache keys must extend rust-base inside one Dockerfile instead of through a volatile named-target image"
     );

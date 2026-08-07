@@ -284,8 +284,12 @@ PR, main, release, AI, scheduled, manual e2e, and research jobs use GitHub-hoste
 - Do not put that boundary behind another named-target image; republishing the parent target can change the downstream cache identity across hosted builders.
 - `nook-app/nook-platform/docker/rust/docker-bake.hcl` owns the Rust Zot
   cache scopes and the direct WASM consumer import.
-- `nook-app/docker-bake.hcl` owns shared GHA/registry variables plus
-  web/preflight scopes.
+- `nook-app/nook-web/docker/web.docker-bake.hcl` owns final web/e2e image
+  cache scopes.
+- `nook-app/nook-web/docker/toolchain.docker-bake.hcl` owns the web-deps
+  cache scope.
+- `nook-app/docker-bake.hcl` owns shared GHA/registry variables plus the
+  preflight cache scope.
 - Main verifies every publication from a fresh BuildKit builder before accepting it.
 - Repository invariants in `preflight/tests/sccache_s3.rs` and `preflight/tests/vault_app_isolation.rs` enforce the topology and proof.
 

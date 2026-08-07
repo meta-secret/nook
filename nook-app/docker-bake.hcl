@@ -1,14 +1,15 @@
-// App bake: shared GHA/registry variables, web/preflight cache scopes, parallel groups,
-// and loadable runtime variants. Platform Rust Zot cache scopes live in
-// nook-app/nook-platform/docker/rust/docker-bake.hcl.
+// App bake: shared GHA/registry variables, preflight cache scopes, parallel groups,
+// and loadable runtime variants.
+// Platform Rust Zot scopes: nook-app/nook-platform/docker/rust/docker-bake.hcl
+// Web Zot scopes: nook-app/nook-web/docker/{web,toolchain}.docker-bake.hcl
 // Every target's build definition (dockerfile/target/contexts) lives next to its Dockerfile and
 // is merged in via multiple -f flags (bake has no `include`):
 //   nook-app/nook-platform/docker/rust/docker-bake.hcl -> rust cache scopes + rust-base/ecosystem
-//   nook-app/nook-web/docker/web.docker-bake.hcl         -> web-base, web-e2e-base
-//   nook-app/nook-platform/nook-core/docker-bake.hcl          -> builder-core-deps, builder-debug
-//   nook-app/nook-platform/nook-wasm/docker-bake.hcl          -> builder-wasm, web-artifacts, on-demand Rust images
-//   nook-app/nook-web/docker/toolchain.docker-bake.hcl   -> web-deps
-//   nook-app/nook-web/nook-web-app/docker-bake.hcl -> slim web runtime and CI targets
+//   nook-app/nook-web/docker/web.docker-bake.hcl       -> web/e2e bases + final-image cache scopes
+//   nook-app/nook-platform/nook-core/docker-bake.hcl   -> builder-core-deps, builder-debug
+//   nook-app/nook-platform/nook-wasm/docker-bake.hcl   -> builder-wasm, web-artifacts, on-demand Rust images
+//   nook-app/nook-web/docker/toolchain.docker-bake.hcl -> web-deps + web-deps cache scope
+//   nook-app/nook-web/nook-web-app/docker-bake.hcl     -> slim web runtime and CI targets
 // Callers (Taskfile `setup` via nook-app/Taskfile.yml) pass all files via the NOOK_BAKE_FILES list.
 //
 // PREPARE PHASE: rust-base -> builder-core-deps -> (builder-debug || builder-wasm) -> web-artifacts, in
@@ -118,45 +119,6 @@ preflight_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED
 
 preflight_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
-] : []
-
-web_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1:buildcache",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-]
-
-web_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true,timeout=10m",
-] : []
-
-web_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-v1:buildcache",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1:buildcache",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-]
-
-web_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true,timeout=10m",
-] : []
-
-web_e2e_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-e2e-v1:buildcache",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1:buildcache",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-]
-
-web_e2e_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true,timeout=10m",
 ] : []
 
 target "_sccache" {
