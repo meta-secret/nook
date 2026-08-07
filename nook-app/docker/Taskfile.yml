@@ -344,24 +344,22 @@ tasks:
   docker:ci:cache:publish:wasm:
     desc: Export verified WASM scopes from local layers without reimporting a thin hosted index.
     cmds:
-      # Always clear cache-from so export uses this job's verified local layers.
-      # Reimporting rust-base/native-deps during publish thin-exports WASM cooks.
-      # PR/Remote write Bake's isolated scope; Main writes the fingerprint scope.
+      # PR/Remote: keep cache-from (wasm scopes only) so remote CACHED verifies
+      # re-export without cold apt/chef. Clearing cache-from after a fully remote
+      # hit rebuilds rust-base from scratch.
+      # Main: clear cache-from for a fat trusted fingerprint export, then verify.
       - |
         set -euo pipefail
         if [ -n "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
-            --set "rust-base.cache-from=" \
-            --set "builder-wasm-deps.cache-from=" \
             rust-base builder-wasm-deps
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
             --set "rust-base.cache-to=" \
             --set "builder-wasm-deps.cache-to=" \
-            --set "wasm-export.cache-from=" \
             wasm-export
         else
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
@@ -427,26 +425,31 @@ tasks:
     cmds:
       # Sequential tools then leaf. Build imports with cache-to off. Publish keeps
       # cache-from so remote CACHED layers re-export without cold tool installs.
+      # Clear rust-base.cache-to: contexts restore it; this job must not rewrite it.
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-ecosystem-policy-tools.cache-to="
+        --set "rust-base.cache-to="
         rust-ecosystem-policy-tools
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
+            --set "rust-base.cache-to=" \
             rust-ecosystem-policy-tools
         fi
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-dependency-policy.cache-to="
+        --set "rust-base.cache-to="
         rust-dependency-policy
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
+            --set "rust-base.cache-to=" \
             rust-dependency-policy
         fi
 
@@ -472,19 +475,23 @@ tasks:
     vars:
       FUZZ_SECONDS: '{{default "20" .FUZZ_SECONDS}}'
     cmds:
+      # Contexts restore nightly→rust-base; clear their cache-to so fuzz never
+      # rewrites shared parents. Keep leaf cache-from on publish for remote hits.
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}"
         --set "rust-fuzz-smoke.cache-to="
+        --set "rust-ecosystem-nightly.cache-to="
+        --set "rust-base.cache-to="
         rust-fuzz-smoke
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
-          # Clear cache-from so the leaf export uses this job's verified layers.
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}" \
-            --set "rust-fuzz-smoke.cache-from=" \
+            --set "rust-ecosystem-nightly.cache-to=" \
+            --set "rust-base.cache-to=" \
             rust-fuzz-smoke
         fi
 
@@ -492,20 +499,25 @@ tasks:
     desc: Bake repository Dylint lints on the sealed nightly ecosystem image.
     deps: [sccache:ensure]
     cmds:
+      # Contexts restore nightly→rust-base. Clear parent cache-to on verify/leaf
+      # publish; nightly publish below is the sole shared nightly writer.
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-dylint.cache-to="
+        --set "rust-ecosystem-nightly.cache-to="
+        --set "rust-base.cache-to="
         rust-dylint
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
+            --set "rust-base.cache-to=" \
             rust-ecosystem-nightly
-          # Clear cache-from so the leaf export uses this job's verified layers.
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
-            --set "rust-dylint.cache-from=" \
+            --set "rust-ecosystem-nightly.cache-to=" \
+            --set "rust-base.cache-to=" \
             rust-dylint
         fi
 

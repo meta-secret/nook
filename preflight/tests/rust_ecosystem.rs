@@ -264,9 +264,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "dylint/fuzz leaf cache-from must be own-scope only (no nightly/rust-base short parents)"
     );
     assert!(
-        docker_tasks.contains("rust-dylint.cache-from=")
-            && docker_tasks.contains("rust-fuzz-smoke.cache-from="),
-        "dylint/fuzz publishers must clear cache-from for fat leaf exports"
+        rust_bake.contains("rust-ecosystem-nightly = \"target:rust-ecosystem-nightly\"")
+            && rust_bake.contains("rust-base = \"target:rust-base\"")
+            && docker_tasks.contains("rust-base.cache-to=")
+            && docker_tasks.contains("rust-ecosystem-nightly.cache-to="),
+        "ecosystem leaves restore parents via Bake contexts and must not rewrite rust-base/nightly cache-to"
     );
     assert!(
         policy_from.contains("nook-rust-ecosystem-policy-tools-v3")

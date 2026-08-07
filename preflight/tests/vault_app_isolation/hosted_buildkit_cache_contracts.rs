@@ -291,7 +291,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("--set \"wasm-export.cache-from=\"")
             && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh")
             && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "producer-owned publishers must export local verified WASM graphs with cache-from cleared, verify Main from a fresh builder, and write PR/Remote isolated scopes"
+        "producer-owned publishers must keep PR WASM cache-from for remote re-export, clear Main WASM cache-from for fat trusted export, verify Main from a fresh builder, and write isolated PR scopes"
     );
     let native_publish = docker_tasks
         .split("docker:ci:cache:publish:native:")

@@ -135,10 +135,11 @@ Use this workflow for quality, CI, and deployment changes.
     - WASM deps/source scopes must not import rust-base or native rust-deps.
     - Their mode=max exports already embed that parent chain.
     - Preflight restores rust-base only via Bake `contexts` (`target:rust-base`).
-    - Ecosystem policy/deterministic jobs verify with cache-to off, then publish
-      with cache-from kept so remote hits re-export without cold rebuilds.
-    - Dylint/fuzz leaf publishers clear cache-from for fat leaf exports.
-    - Product WASM publishers (Main and PR) clear cache-from for fat exports.
+    - Ecosystem nightly/policy/dylint/fuzz restore parents the same way.
+    - Leaf `cache-from` stays own-scope only (no short-parent importers).
+    - Ecosystem jobs verify with cache-to off, then publish with cache-from kept
+      so remote hits re-export without cold apt/toolchain rebuilds.
+    - PR WASM publish keeps wasm-scope cache-from for the same reason.
     - Main product publishers still clear cache-from for fat trusted exports.
     - One CI job writes each shared ecosystem registry ref.
     - The complete Rust/WASM cargo-chef dependency graph uses an immutable scope fingerprinted from manifests, lockfiles, compiler Dockerfiles, Task invocation inputs, and Bake definitions.
