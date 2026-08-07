@@ -54,6 +54,16 @@ scope, and apply the pattern with normal coding workflow and validation.
    same change.
 6. Create or update `.agents/skills/<skill-name>/SKILL.md` (and ensure `.cursor/skills/` and `.claude/skills/` symlinks exist) when the pattern is intended to be invoked directly by future agents.
 
+For a new card scaffold, prefer Loom:
+
+```bash
+task loom:skill-scaffold SLUG=<kebab-case>
+# optional wrappers:
+bun run --cwd agentic-ai/loom loom -- skill-scaffold <slug> --wrappers
+```
+
+Then fill the card content and verify with `task loom:cortex-audit`.
+
 Ask for clarification only when the scope or preferred pattern cannot be inferred
 from the user's example and surrounding code.
 

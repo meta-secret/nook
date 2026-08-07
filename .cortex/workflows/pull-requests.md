@@ -11,15 +11,15 @@ Start by establishing the PR path, then keep ownership until merge or a concrete
 
 1. **Prepare the PR path first** — fetch `origin/main`, create a feature branch, and define the PR title/body/scope before coding.
 2. **Implement functionality** — make the requested code/docs/tests changes on the feature branch. Focused build/test feedback runs on GitHub-hosted workers.
-3. **Push and create/update the PR** — run `task format` (and the UI demo contract when UI paths change), push a coherent commit, and open the PR; later fixes update that same PR.
+3. **Push and create/update the PR** — run `task loom:pre-push`, push a coherent commit, and open the PR; later fixes update that same PR.
 4. **Iterate and validate on GitHub Actions:**
    - Run focused `task remote TASK_NAME=<name>` jobs as useful.
-   - When the head is ready, run `task pr:preflight PR=<number>` and `task pr:validate PR=<number>`.
+   - When the head is ready, run `task loom:pr-land ARGS='validate --pr <number>'` (or Task `pr:preflight` / `pr:validate`).
    - Inspect the path-applicable `PR / Verify and preview` and `Web research / Build and deploy research catalog` workflows.
    - Do **not** run a required local `task check` / `task ci:pr`.
-5. **Fix Nook's failed PR workflow** — inspect failed logs, consult app logs for web/e2e failures, fix, `task format`, and push the completed fix; the agent explicitly triggers complete validation for the replacement head.
+5. **Fix Nook's failed PR workflow** — inspect failed logs, consult app logs for web/e2e failures, fix, `task loom:pre-push`, and push the completed fix; the agent explicitly triggers complete validation for the replacement head.
 6. **Settle existing review feedback** — inspect current comments and reviews, reply to every actionable human or automated finding, and resolve each thread. Do not request or wait for optional reviewers.
-7. **Merge automatically when ready** — after the branch is current with `origin/main`, Nook's applicable repository-owned PR test checks are green, all actionable comments are resolved, and `task pr:ready` succeeds, squash-merge immediately without requesting separate permission.
+7. **Merge automatically when ready** — after the branch is current with `origin/main`, Nook's applicable repository-owned PR test checks are green, all actionable comments are resolved, and `task loom:pr-land ARGS='ready --pr <n>'` / `task pr:ready` succeeds, squash-merge immediately without requesting separate permission.
 
 ## ⛔ SQUASH MERGE ONLY
 
@@ -46,10 +46,10 @@ flowchart TD
   A --> I[2 Implement]
   I --> E[3 Format + push + open/update PR]
   E --> X[4 Focused task remote jobs as useful]
-  X --> V[5 Explicit task pr:validate]
+  X --> V[5 Explicit loom/pr validate]
   V --> F[6 Monitor applicable Nook PR checks on GHA]
   F --> G{Nook PR checks green?}
-  G -->|no| H[7 Read app logs + fix + task format]
+  G -->|no| H[7 Read app logs + fix + loom pre-push]
   H --> PUSH[8 Push completed fix]
   PUSH --> X
   G -->|yes| C[9 Address comments]
@@ -82,13 +82,10 @@ Before editing, decide the branch name and PR scope/title/body. The PR may be op
 
 When the branch has a coherent implementation commit, run pre-push hygiene, then commit and push/open or update the PR. This makes the exact source available to focused hosted tasks; it does not start complete PR validation.
 
-Never run `task check`, a full test suite, build, e2e, or post-fix product validation as a required local gate before or after the push. This is not a license to push half-finished or unformatted work: always run `task format` (host-applied) before the push, and push once the branch is coherent enough to validate.
+Never run `task check`, a full test suite, build, e2e, or post-fix product validation as a required local gate before or after the push. This is not a license to push half-finished or unformatted work: always run `task loom:pre-push` before the push, and push once the branch is coherent enough to validate.
 
 ```bash
-task format   # unconditional — sealed format + apply to host
-git add -u
-# When UI-facing paths change vs origin/main:
-#   .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
+task loom:pre-push
 git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
@@ -104,17 +101,17 @@ The feedback inspection and readiness audit replace any blind review-batching gr
 **GitHub-hosted execution is the normal build/test path.** `remote.yml` runs allowlisted focused tasks repeatedly against an exact pushed branch head. `pr.yml` is the sole merge-validation pipeline and runs only when an agent explicitly applies a validation label through `task pr:validate`.
 
 ```text
-implement/fix → task format → commit → push/update PR → focused task remote jobs
-→ task pr:validate → complete exact-head PR workflow
+implement/fix → task loom:pre-push → commit → push/update PR → focused task remote jobs
+→ task loom:pr-land validate → complete exact-head PR workflow
 ```
 
 **Required local action** (before every push):
 
 ```bash
-task format          # host-applied format — the only required local product action
+task loom:pre-push
 ```
 
-Always run `task format` again before every fix re-push.
+Always run `task loom:pre-push` again before every fix re-push.
 
 Focused hosted commands (never merge gates):
 
@@ -135,10 +132,10 @@ task pr:validate PR=<number> FULL_E2E=1
 
 | When                       | Command                                          | Why                                             |
 | -------------------------- | ------------------------------------------------ | ----------------------------------------------- |
-| Before every push          | `task format`                                    | Only required local product action              |
-| UI-facing path changes     | `ui-demo-contract.sh`                            | Cheap hygiene before hosted execution           |
+| Before every push          | `task loom:pre-push`                             | Only required local product action              |
+| UI-facing path changes     | included in Loom pre-push                        | Cheap hygiene before hosted execution           |
 | Focused build/test feedback| `task remote TASK_NAME=<name>`                   | Use one hosted worker for the selected task     |
-| Final validation boundary  | `task pr:validate PR=<number>`                   | Start the complete exact-head PR gate           |
+| Final validation boundary  | `task loom:pr-land ARGS='validate --pr <n>'`     | Start the complete exact-head PR gate           |
 | After complete CI failure  | fix → format → commit → push → validate again    | A push does not automatically refresh `pr.yml`  |
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci) and [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md).
@@ -196,7 +193,7 @@ Never use an all-check watcher that can remain blocked on external services. If 
 task pr:preflight PR=<number>
 ```
 
-Use `task pr:ready PR=<number>` for a read-only exact-head readiness assertion. The command never merges by itself. Its success is the final signal for the task-owning agent to squash-merge immediately.
+Use `task loom:pr-land ARGS='ready --pr <number>'` (or `task pr:ready`) for a read-only exact-head readiness assertion. The command never merges by itself. Its success is the final signal for the task-owning agent to squash-merge immediately.
 
 Do not request or wait for Codex, Claude, Cursor, CodeRabbit, or any other optional external review/check. Repository-owned checks and exact-head deployment remain required.
 
@@ -265,15 +262,15 @@ Static analysis includes Knip unused findings and jscpd clone/duplicate findings
 1. Read the failed job log: `gh run view <run-id> --log-failed`
 2. For **e2e / web failures**, read persisted app logs before changing code: Playwright attachment `nook-app-logs.json`, local `fetchAppLogs(page)` / `/app-logs`, or `dumpNookLogs(page)`.
 3. Fix the root cause.
-4. Run `task format`, commit, and push the completed fix.
-5. Run useful focused `task remote` jobs, then `task pr:validate` and return to monitoring Nook's complete exact-head PR checks.
+4. Run `task loom:pre-push`, commit, and push the completed fix.
+5. Run useful focused `task remote` jobs, then Loom/Task validate and return to monitoring Nook's complete exact-head PR checks.
 6. Never request or wait for external review services.
 
-If the failure was obviously fmt-only, `task format` before re-push is enough. Broader failures are proven by the refreshed remote `pr.yml` run on the latest head.
+If the failure was obviously fmt-only, `task loom:pre-push` before re-push is enough. Broader failures are proven by the refreshed remote `pr.yml` run on the latest head.
 
 ### 8. Merge and finish
 
-When **Nook's applicable repository-owned PR test checks pass**, the branch is current with `origin/main`, all actionable comments are resolved, and `task pr:ready` succeeds:
+When **Nook's applicable repository-owned PR test checks pass**, the branch is current with `origin/main`, all actionable comments are resolved, and `task loom:pr-land ARGS='ready --pr <n>'` / `task pr:ready` succeeds:
 
 ```bash
 gh pr merge <number> --squash
@@ -352,11 +349,11 @@ Rules:
 See [coding-bro.md](coding-bro.md) for the numbered 0–12 checklist.
 
 1. Fetch `origin/main`; branch from it.
-2. Implement; run `task format` (+ UI demo contract when UI); commit and push/open/update the PR.
-3. Use focused `task remote` jobs, then explicitly run `task pr:validate` on the ready head and monitor its repository-owned checks.
+2. Implement; run `task loom:pre-push`; commit and push/open/update the PR.
+3. Use focused `task remote` jobs, then explicitly run Loom/Task validate on the ready head and monitor its repository-owned checks.
 4. Never request or wait for optional external reviews/checks.
 5. Address and resolve every actionable comment already present.
-6. On failure: fix → `task format` → commit/push → focused remote proof as useful → explicitly trigger complete validation again.
+6. On failure: fix → `task loom:pre-push` → commit/push → focused remote proof as useful → explicitly trigger complete validation again.
 7. **Squash merge** into `main` immediately after the exact-head readiness audit succeeds; green checks alone are insufficient.
 8. Delete the branch (optional).
 9. **Publish** the Workbench issue update, worklog, and statistics; open a separate normal performance PR when the evidence requires a fix.

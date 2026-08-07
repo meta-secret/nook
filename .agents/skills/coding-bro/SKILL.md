@@ -18,7 +18,7 @@ description: >-
 
 **Default workflow for all implementation tasks.** System of record: [`.cortex/workflows/coding-bro.md`](../../.cortex/workflows/coding-bro.md).
 
-Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting. Follow the steps in the cortex doc — fetch, publish the Workbench task plan before implementation, branch, implement, **always `task format`**, commit and push, use `task remote` for focused hosted execution, run `task pr:validate` when the head is ready, address and resolve every actionable comment already present, fix loop until exact-head checks are green, squash merge, publish the Workbench issue update/linked worklog/statistics, and report duration. Never request or wait for external reviews/checks. Never run heavy product work locally.
+Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting. Follow the steps in the cortex doc — fetch, publish the Workbench task plan before implementation, branch, implement, **always `task loom:pre-push`**, commit and push, use `task remote` for focused hosted execution, run `task loom:pr-land` / `task pr:validate` when the head is ready, address and resolve every actionable comment already present, fix loop until exact-head checks are green, squash merge, publish the Workbench issue update/linked worklog/statistics, and report duration. Never request or wait for external reviews/checks. Never run heavy product work locally.
 
 ## Quick reference
 
@@ -28,13 +28,13 @@ Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting. Follow the 
 | 1 | `git fetch origin main` |
 | 2 | Publish `plans/<feature>/<timestamp>-<task>.md`, then branch from `origin/main` |
 | 3 | Implement the published plan |
-| 4 | **Always** `task format` (+ UI demo contract when UI paths change) → `git add -u` |
+| 4 | **Always** `task loom:pre-push` |
 | 5 | Commit + push/open or update PR |
-| 6 | Run focused `task remote` jobs as useful; then `task pr:validate PR=<n>` |
+| 6 | Run focused `task remote` jobs as useful; then `task loom:pr-land ARGS='validate --pr <n>'` |
 | 7 | Watch exact-head repository-owned checks and inspect feedback already present |
-| 8–10 | On failure: CI logs → fix → `task format` → commit/push → focused remote proof → explicit validation |
-| 11 | `gh pr merge --squash` when repository checks are green, threads are resolved, and `task pr:ready` succeeds |
-| 12 | Publish the issue update, plan-linked worklog, and `stats/ai-agent/<pr>.yaml` directly to Nook Workbench; open a separate normal performance PR for actionable waste/regression |
+| 8–10 | On failure: CI logs → fix → `task loom:pre-push` → commit/push → focused remote proof → explicit validation |
+| 11 | `gh pr merge --squash` when repository checks are green, threads are resolved, and Loom/Task readiness succeeds |
+| 12 | Publish the issue update, plan-linked worklog, and Loom AI-agent stats to Nook Workbench; open a separate normal performance PR for actionable waste/regression |
 | 13 | Duration report |
 
 Pre-push format/demo rules: [`.cortex/dynamic-skills/pre-push-hygiene.md`](../../.cortex/dynamic-skills/pre-push-hygiene.md).

@@ -50,19 +50,22 @@ Default PR-first loop:
 
 ### ⛔ Pre-push hygiene — always format (the only required local action)
 
-Before every push, run host-applied formatting **unconditionally**. Do not skip it for "tiny" edits. Sealed Docker images never write the host tree; only `task format` applies the format diff to the files you will commit.
+Before every push, run Loom pre-push **unconditionally**.
 
-**`task format` is the only required local product action.** Do not run `task check`, `task ci:pr`, full suites, builds, or e2e as a merge/handoff gate. Those run exclusively on GitHub Actions.
+Do not skip it for "tiny" edits.
+
+**`task loom:pre-push` is the only required local product action.**
+
+Do not run `task check`, `task ci:pr`, full suites, builds, or e2e as a
+merge/handoff gate. Those run exclusively on GitHub Actions.
 
 ```bash
-task format          # sealed format + apply to host (always)
-git add -u
-# If UI / shared / extension src paths changed vs origin/main:
-git fetch origin main
-.github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
+task loom:pre-push
 ```
 
-Never use `task extension:format` alone before push — it formats inside the sealed image and discards the result. See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
+Never use `task extension:format` alone before push.
+
+See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
 ### ⛔ Format, push, execute on GitHub-hosted workers
 
@@ -72,8 +75,9 @@ Once the current change is coherent and checkable, run pre-push hygiene, then co
 WRONG: implement → local task check / full tests / build → push
 WRONG: implement → push dirty/uncommitted source → remote task tests an older SHA
 WRONG: implement → push → assume complete PR validation started automatically
-RIGHT: implement → task format → commit → push → task remote as useful
-       → task pr:validate when ready → exact-head GitHub Actions
+RIGHT: implement → task loom:pre-push → commit → push → task remote as useful
+       → task loom:pr-land ARGS='validate --pr <n>' when ready
+       → exact-head GitHub Actions
 ```
 
 This ordering applies to the first implementation and every review/CI fix.
@@ -110,14 +114,14 @@ Default agent flow:
 1. **Record the interpreted task first** — fetch `origin/main`, then publish `plans/<feature>/<timestamp>-<task>.md` before implementation edits. Capture synthesized requirements, constraints, initial steps, and completion evidence; raw prompts and transcripts are forbidden.
 2. **Prepare the PR path** — branch from `origin/main` and plan the PR title/scope.
 3. **Implement** — use the focused hosted catalog when build/test feedback is useful.
-4. **Pre-push hygiene** — always `task format` (host-applied); when UI paths change, pass `.github/scripts/ui-demo-contract.sh` against `origin/main`.
+4. **Pre-push hygiene** — always `task loom:pre-push`.
 5. **Push and open/update the PR** — once the branch has a coherent formatted commit, commit, push, and create/update the PR.
 6. **Validate on GitHub Actions:**
    - Dispatch focused `task remote` jobs as useful.
-   - Run `task pr:validate PR=<number>` and monitor `PR / Verify and preview`, plus `Web research / Build and deploy research catalog` for web-research paths.
+   - Run `task loom:pr-land ARGS='validate --pr <number>'` (or `task pr:validate`) and monitor repository-owned PR checks.
    - Green status is necessary, but the full readiness audit must also pass.
    - See [code-review.md](code-review.md).
-7. **On any Nook PR-test failure** — read **app logs** (`nook-app-logs.json` attachment, `fetchAppLogs`, or `/app-logs`) → fix → `task format` → commit and push the completed fix → optionally dispatch a focused remote task → explicitly trigger and monitor the refreshed complete PR checks.
+7. **On any Nook PR-test failure** — read **app logs** → fix → `task loom:pre-push` → commit and push the completed fix → optionally dispatch a focused remote task → explicitly trigger and monitor the refreshed complete PR checks.
 8. **Address actionable PR comments currently present** — reply with the fix, validation, or no-change rationale, and push any needed changes; GitHub events re-evaluate Nook's applicable PR test checks. Do not wait for another review cycle.
 9. **Resolve conflicts and merge** — before merging, verify the PR branch is not stale against `origin/main`; update and push it, then explicitly trigger Nook's complete PR validation for the replacement head. After every push, re-run validation and readiness, then squash-merge automatically when it passes.
 
@@ -143,24 +147,24 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
 3. **Implement** — Make the requested change. Follow [rules.md](../rules.md) and package boundaries in [ARCHITECTURE.md](../ARCHITECTURE.md). If part of the requested functionality is too large, risky, blocked, or out of scope, follow [issues.md](issues.md) before handoff:
    - update or create the Workbench feature
    - add focused Markdown records for the missing work
-4. **Pre-push hygiene** — Always run `task format` (host-applied). When UI-facing paths change, pass the UI demo contract against `origin/main`. Stage the applied format diff before committing. Do not run a required local product gate.
+4. **Pre-push hygiene** — Always run `task loom:pre-push`. Do not run a required local product gate.
 5. **Push and open/update PR** — Commit and push as soon as the branch has a coherent formatted implementation commit. If no PR exists, open it; pushes do not automatically start the complete validation workflow.
 6. **Explicit Nook PR checks:**
-   - Use `task remote` for focused feedback, then run `task pr:validate PR=<number>` at the complete validation boundary.
-   - Monitor `PR / Verify and preview`, plus `Web research / Build and deploy research catalog` when its paths change.
+   - Use `task remote` for focused feedback.
+   - Run `task loom:pr-land ARGS='validate --pr <number>'` at the complete validation boundary.
+   - Monitor repository-owned PR checks.
    - Inspect any feedback already present.
-   - Never request or wait for Codex, Claude, Cursor, CodeRabbit, or another optional external review/check/service.
-   - Before merging, fetch `origin/main` and verify GitHub does not mark the PR branch stale/out-of-date.
-   - If it is stale, merge `origin/main` into the PR branch, push, and explicitly validate the refreshed Nook PR head.
-7. **Fix loop on failure** — If Nook's PR test checks fail: read **app logs** (Playwright `nook-app-logs.json`, `fetchAppLogs`, or `/app-logs`) → fix → `task format` → commit and push the completed fix → optional focused `task remote` run → explicitly trigger and monitor refreshed complete CI.
-8. **Address and resolve PR comments** — Inspect human, Codex, and automated feedback; reply with the fix, validation, or no-change rationale, resolve the targeted thread, and push changes when needed.
+   - Never request or wait for optional external reviewers.
+   - Before merging, fetch `origin/main` and verify the PR branch is not stale.
+   - If it is stale, merge `origin/main`, push, and explicitly validate the refreshed head.
+7. **Fix loop on failure** — If Nook's PR test checks fail: read **app logs** → fix → `task loom:pre-push` → commit and push → optional focused `task remote` → explicitly re-validate.
+8. **Address and resolve PR comments** — Inspect feedback; reply; resolve threads; push when needed.
 9. **Repeat** — Return to step 7 until Nook's applicable PR checks are green and every actionable comment is resolved.
-10. **Squash merge** — run `gh pr merge <n> --squash` immediately after the readiness audit succeeds.
+10. **Squash merge** — run `gh pr merge <n> --squash` immediately after `task loom:pr-land ARGS='ready --pr <n>'` succeeds.
 11. **Publish Workbench completion context and statistics:**
     - Update the associated Workbench issue.
     - Add the required worklog linked to the task plan.
-    - Write `stats/ai-agent/<n>.yaml` and compare it with one or two recent comparable records.
-    - Publish directly to Workbench `main`.
+    - Assemble and publish `stats/ai-agent/<n>.yaml` with Loom.
     - Do not create a Nook bookkeeping PR.
     - Open a separate normal performance PR for actionable waste or regression.
     - See [issues.md](issues.md) and [agent-statistics.md](agent-statistics.md).
@@ -171,13 +175,13 @@ flowchart TD
   P[0 Interpret request] --> F[1 Fetch + publish Workbench task plan]
   F --> B[2 Branch + prepare PR]
   B --> I[3 Implement]
-  I --> H[4 Always task format + demo contract]
+  I --> H[4 Always loom pre-push]
   H --> PU[5 Push + open/update PR]
   PU --> PR[6 Monitor applicable Nook PR checks on GHA]
   PR --> G{Nook PR checks green?}
   G -->|yes| C[8 Address comments]
   C --> M[10 Squash merge]
-  G -->|no| FIX[7 Read app logs + fix + task format]
+  G -->|no| FIX[7 Read app logs + fix + loom pre-push]
   FIX --> PUSH[Push completed fix]
   PUSH --> PR
   M --> S[11 Publish Workbench issue + linked worklog + stats]
@@ -205,20 +209,25 @@ Use a descriptive branch name (`feat/…`, `fix/…`, `chore/…`).
 
 ### 4–6 — Format, push, execute remotely, and validate explicitly
 
-GitHub Actions is the agent execution environment for lint, tests, coverage, builds, and e2e. Format on the host, commit and push, use focused `task remote` jobs, then explicitly run `task pr:validate` when the exact head is ready.
+GitHub Actions is the agent execution environment for lint, tests, coverage,
+builds, and e2e.
 
-Inspect feedback already present after the final push. Do not request or wait for external reviewers. Follow [code-review.md](code-review.md) for handling every finding that already exists.
+Format on the host with Loom, commit and push, use focused `task remote` jobs,
+then explicitly validate when the exact head is ready.
+
+Inspect feedback already present after the final push.
+
+Do not request or wait for external reviewers.
+
+Follow [code-review.md](code-review.md).
 
 **Required local action** (before every push):
 
 ```bash
-task format          # host-applied format — the only required local product action
-git add -u
-# When UI paths change:
-#   .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
+task loom:pre-push
 ```
 
-`task format` itself belongs in **pre-push hygiene**. Run it again after every fix before re-pushing. Do **not** require `task format:check`, `task check`, or `task ci:pr` for merge or handoff.
+Do **not** require `task check` or `task ci:pr` for merge or handoff.
 
 Focused hosted commands (never merge gates):
 
@@ -230,10 +239,10 @@ task remote TASK_NAME=extension:check
 ```
 
 ```text
-implement → task format (+ ui-demo-contract when UI)
+implement → task loom:pre-push
            → commit → push → gh pr create/update
            → focused task remote jobs as useful
-           → task pr:validate
+           → task loom:pr-land ARGS='validate --pr <n>'
            → monitor exact-head GitHub Actions
 ```
 
@@ -242,13 +251,13 @@ implement → task format (+ ui-demo-contract when UI)
 **Mandatory after every red remote build before merge/handoff:**
 
 ```bash
-gh run view <run-id> --log-failed   # CI job output
+gh run view <run-id> --log-failed
 # For e2e failures: read nook-app-logs.json from the Playwright report.
-task format                         # host-apply before the fix push
+task loom:pre-push
 # commit + push completed fix
 task remote TASK_NAME=<focused-task> # optional hosted proof
-task pr:validate PR=<number>         # explicitly validate replacement head
-task pr:ready PR=<number>           # read-only exact-head readiness assertion
+task loom:pr-land ARGS='validate --pr <number>'
+task loom:pr-land ARGS='ready --pr <number>'
 ```
 
 Do not run `task ci:pr` locally. The explicitly triggered remote `pr.yml` run is the product gate.

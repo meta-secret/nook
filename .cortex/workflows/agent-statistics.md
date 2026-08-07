@@ -1,336 +1,141 @@
 # AI Agent PR Statistics
 
 Every task-owning AI agent must measure the work required to land each normal
-pull request. The record is repository evidence for finding slow builds,
-avoidable validation loops, and waste in the agent workflow; it is not a
-free-form task diary.
+pull request.
+
+The record is repository evidence for slow builds, avoidable validation loops,
+and waste in the agent workflow.
+
+It is not a free-form task diary.
 
 ## Lifecycle
 
-1. Start an out-of-tree scratch record when work on a PR-bound task begins.
-   Do not add a partial statistics file to the implementation PR.
-2. Append every local lightweight execution, focused remote-task run, complete
-   PR validation run, retrigger, and merge attempt as it happens. Record failed
-   and cancelled work, not only successful work.
+1. Start an out-of-tree scratch event log when PR-bound work begins.
+2. Append every local lightweight execution, focused remote run, complete
+   validation run, retrigger, and merge attempt as it happens.
 3. Squash-merge the implementation PR through the normal readiness workflow.
-4. Create `stats/ai-agent/<pr-number>.yaml` for
-   [`meta-secret/nook-workbench`](https://github.com/meta-secret/nook-workbench)
-   from current Nook `main` after the implementation PR is merged. Include the
-   repository test inventory for that merged head. Do this immediately. Do not
-   wait for the post-merge Main workflow or deployment.
-5. Compare the completed record with the one or two most recent comparable
-   non-stats PR records. Record the comparison and a waste assessment in the
-   YAML. When fewer records exist, compare all available records and state that
-   the baseline is incomplete.
-6. Publish that YAML directly to Workbench `main` as one immutable commit with
-   `.github/scripts/workbench-publish.cjs`. Do not create a Nook branch or PR.
-7. If the analysis finds an actionable regression or waste, open a separate
-   normal build-performance PR and own it through validation and squash merge.
-   Never mix build or workflow changes into the statistics commit.
+4. Assemble `stats/ai-agent/<pr-number>.yaml` with Loom immediately after merge.
+5. Compare with one or two recent comparable records.
+6. Publish the YAML to Workbench `main` with Loom.
+7. Open a separate build-performance PR when waste or regression is actionable.
 
-Workbench statistics commits do not run Nook product workflows. They do not
-produce another Nook statistics record.
+## Mechanical entrypoint — Loom
+
+Keep judgment in this doc.
+
+Run the mechanical assemble / validate / publish path through Loom:
+
+```bash
+# Scratch JSON must include started_at, change_surface, local_executions,
+# pr_retriggers, merge_attempts, comparison, and waste_assessment.
+task loom:agent-stats ARGS='assemble --pr <n> --scratch /tmp/pr-<n>-events.json --out /tmp/<n>.yaml --inventory'
+task loom:agent-stats ARGS='validate --file /tmp/<n>.yaml'
+task loom:agent-stats ARGS='publish --file /tmp/<n>.yaml'
+```
+
+Equivalent Bun entry:
+
+```bash
+bun run --cwd agentic-ai/loom loom -- agent-stats assemble --pr <n> --scratch <path> --out <path> --inventory
+```
+
+Loom fills PR metadata, Actions runs, optional test inventory, and summary
+derivations.
+
+The agent still owns comparison quality and waste assessment text in the scratch
+log before assemble.
 
 ## What to measure
 
-Use UTC timestamps and integer durations in seconds. Measure wall-clock time,
-including time spent waiting for CI or review when the agent owns that wait.
+Use UTC timestamps and integer durations in seconds.
 
-- **Local executions:** every lightweight host command that formats or validates
-  a required local invariant. Agents normally record `task format` and the UI
-  demo contract; heavy checks/tests/builds belong in GitHub Actions.
-- **GitHub Actions:** every repository-owned workflow run applicable to the PR,
-  including run id, run attempt, head SHA, trigger, timestamps, duration, and
-  conclusion. The post-merge Main run is outside the implementation PR lifecycle
-  and must not be awaited or included merely because the merge triggered it.
-- **Cache telemetry:** for every measured Actions job that publishes a
-  `cache-telemetry-*` artifact, record whether sccache used the persistent remote
-  Redis service or direct compilation without sccache, compiler cache hits and
-  misses, and BuildKit cached/completed target-record steps.
-- **PR retriggers:** count every new complete validation cycle after the first.
-  Distinguish `validation_label`, `full_e2e_label`, `manual_rerun`, and
-  `base_update`. A GitHub `run_attempt` greater than one is a manual rerun;
-  focused `remote.yml` dispatches are recorded as Actions runs but are not
-  complete PR retriggers.
-- **Merge attempts:** count every executed merge command/API call, including
-  blocked or failed attempts. A readiness query is not a merge attempt.
-- **PR elapsed time:** from the first agent investigation/implementation action
-  for the assignment through the implementation PR's `mergedAt`. Also record
-  PR-open-to-merge time separately.
-- **Repository test inventory:** after the implementation PR merges, count the
-  absolute number of test cases on that merged head, broken down by type. This
-  is a codebase snapshot, not a count of local executions. Record every required
-  type even when the count is zero, and ensure `total` equals the sum of
-  `by_type`.
+Measure wall-clock time, including owned wait time.
 
-The implementation PR's `mergedAt` is the terminal measurement boundary. Only
-record later deployment or live-verification work when the user explicitly made
-that work part of the assignment; do not extend ordinary task ownership to Main.
-Completed Main attempts are measured separately and automatically under
-`stats/main-build/**` in Workbench; see
-[main-build-statistics.md](main-build-statistics.md). Those generated commits
-neither extend the source agent's elapsed time nor create another AI-agent
-statistics record.
+- **Local executions:** normally `task format` / Loom pre-push and the UI demo
+  contract. Heavy checks belong in GitHub Actions.
+- **GitHub Actions:** every repository-owned workflow run for the PR head.
+- **Cache telemetry:** flatten `cache-telemetry-*` artifacts into the scratch
+  log when available. Sum counters. Never average job percentages.
+- **PR retriggers:** count complete validation cycles after the first.
+- **Merge attempts:** count executed merge commands, including failures.
+- **PR elapsed time:** first agent action through `mergedAt`.
+- **Repository test inventory:** absolute case counts on the merged head.
 
-Never record secrets, credentials, environment values, vault data, raw logs, or
-prompt/chat contents. Commands must be redacted if an argument contains secret
-material.
+Never record secrets, credentials, vault data, raw logs, or prompt contents.
 
 ## Test inventory counting
 
-Measure on the merged implementation `head_sha` (current `main` after squash
-merge). Count **individual test cases**, not files, suites, or local command
-runs. Prefer runner list output over source greps when the toolchain is
-available; a source scan is acceptable only when it matches the same case
-boundaries the runners use.
+Measure on the merged implementation `head_sha`.
+
+Count individual test cases, not files or suites.
 
 | `by_type` key | What to count |
 |---|---|
-| `rust` | Nextest cases in `nook-app-common`, `nook-core`, `nook-auth2`, `nook-replication`, and `nook-event-log` (unit + integration). |
-| `preflight` | Nextest/cargo cases in the `preflight` crate. |
-| `web_unit` | Vitest cases under `nook-app/nook-web` (app + extension scripts; exclude `node_modules`). |
-| `e2e` | Playwright cases under `nook-app/nook-web` (web app, extension, demos, and live projects). |
+| `rust` | Nextest cases in core domain crates |
+| `preflight` | Nextest/cargo cases in `preflight` |
+| `web_unit` | Vitest cases under `nook-app/nook-web` |
+| `e2e` | Playwright cases under `nook-app/nook-web` |
 
-`total` is the absolute sum of those four counts. Do not invent extra keys, and
-do not omit a key because its suite was not exercised by the PR.
+`total` equals the sum of those four counts.
 
-Suggested host/Docker list commands (adapt to the current Task wrappers when
-present):
-
-```bash
-# rust + preflight
-cargo nextest list -E 'package(nook-app-common) + package(nook-core) + package(nook-auth2) + package(nook-replication) + package(nook-event-log)' --lib --tests
-cargo nextest list -E 'package(preflight)' --lib --tests
-
-# web unit + e2e (from the owning package roots; exclude node_modules)
-bunx vitest list
-bunx playwright test --list
-```
+Loom `--inventory` runs the list commands when the toolchains are available.
 
 ## YAML contract
 
-Files must be valid YAML, use schema version `3`, and follow this shape. Empty
-lists are explicit; required fields must not be omitted. Historical records with
-schema versions `1` and `2` remain valid baselines; they simply lack later
-inventory or cache-telemetry fields.
+Files must be valid YAML with schema version `3`.
 
-```yaml
-schema_version: 3
-source_pr:
-  number: 481
-  url: https://github.com/meta-secret/nook/pull/481
-  title: Example change
-  change_surface: docs_ci
-  head_sha: 0123456789abcdef0123456789abcdef01234567
-  started_at: 2026-07-18T18:10:00Z
-  opened_at: 2026-07-18T18:25:00Z
-  merged_at: 2026-07-18T18:55:00Z
-  elapsed_seconds: 2700
-  open_to_merge_seconds: 1800
-summary:
-  local_execution_count: 1
-  local_check_count: 1
-  local_test_count: 0
-  local_combined_count: 0
-  local_execution_seconds: 40
-  github_actions_run_count: 1
-  github_actions_seconds: 1200
-  pr_retrigger_count: 0
-  agent_requested_rerun_count: 0
-  merge_attempt_count: 1
-test_inventory:
-  measured_at: 2026-07-18T18:56:00Z
-  head_sha: 0123456789abcdef0123456789abcdef01234567
-  by_type:
-    rust: 618
-    preflight: 30
-    web_unit: 205
-    e2e: 175
-  total: 1028
-local_executions:
-  - command: task format
-    category: check
-    started_at: 2026-07-18T18:24:00Z
-    finished_at: 2026-07-18T18:24:40Z
-    duration_seconds: 40
-    outcome: passed
-    reason: pre_push_hygiene
-github_actions_runs:
-  - workflow: PR
-    run_id: 123456789
-    run_attempt: 1
-    head_sha: 0123456789abcdef0123456789abcdef01234567
-    trigger: pull_request
-    started_at: 2026-07-18T18:25:30Z
-    finished_at: 2026-07-18T18:45:30Z
-    duration_seconds: 1200
-    conclusion: success
-cache_telemetry:
-  totals:
-    job_count: 2
-    remote_backend_job_count: 0
-    direct_compile_job_count: 2
-    sccache_compile_requests: 240
-    sccache_cache_hits: 150
-    sccache_cache_misses: 80
-    sccache_hit_rate_percent: 65.22
-    buildkit_completed_steps: 180
-    buildkit_cached_steps: 126
-    buildkit_cache_hit_rate_percent: 70.0
-  jobs:
-    - workflow: PR
-      run_id: 123456789
-      run_attempt: 1
-      job: rust
-      cache_backend: direct_compile
-      cache_backend_reason: credentials_unavailable
-      cache_backend_persistent: false
-      sccache:
-        compile_requests: 240
-        cache_hits: 150
-        cache_misses: 80
-        hit_rate_percent: 65.22
-      buildkit:
-        completed_steps: 120
-        cached_steps: 78
-        cache_hit_rate_percent: 65.0
-        measurement: buildx_target_record_steps
-      collection_complete: true
-      collection_warnings: []
-    - workflow: PR
-      run_id: 123456789
-      run_attempt: 1
-      job: verify
-      cache_backend: direct_compile
-      cache_backend_reason: credentials_unavailable
-      cache_backend_persistent: false
-      sccache:
-        compile_requests: 0
-        cache_hits: 0
-        cache_misses: 0
-      buildkit:
-        completed_steps: 60
-        cached_steps: 48
-        cache_hit_rate_percent: 80.0
-        measurement: buildx_target_record_steps
-      collection_complete: true
-      collection_warnings: []
-pr_retriggers: []
-merge_attempts:
-  - at: 2026-07-18T18:55:00Z
-    method: squash
-    outcome: success
-    reason: readiness_passed
-comparison:
-  baseline_prs: [479, 480]
-  baseline_quality: comparable
-  baseline_note: Similar docs and CI path-filter changes
-  elapsed_seconds_change_percent: 8.2
-  local_execution_seconds_change_percent: -4.0
-  github_actions_seconds_change_percent: 13.5
-  test_inventory_total_change: 12
-  regression: false
-  regression_reasons: []
-waste_assessment:
-  wasteful: false
-  findings: []
-  required_actions: []
-```
+Required top-level keys:
 
-`summary` values must be derivable from the detailed lists. Prefer recording
-`task format` as the normal local execution; do not invent required local
-`task check` / `task ci:pr` local runs under the hosted-execution policy.
-`test_inventory.total`
-must equal the sum of `test_inventory.by_type`, and `test_inventory.head_sha`
-must match `source_pr.head_sha`. Parallel local and remote durations may
-overlap, so never add them together and call the result PR elapsed time.
-Percent changes compare the current value with the median of the selected
-baseline records. Omit comparison fields that cannot be computed from
-available history. When a baseline lacks `test_inventory`, omit
-`test_inventory_total_change` and note the incomplete baseline in
-`baseline_note`.
+- `source_pr`
+- `summary`
+- `test_inventory`
+- `local_executions`
+- `github_actions_runs`
+- `cache_telemetry`
+- `pr_retriggers`
+- `merge_attempts`
+- `comparison`
+- `waste_assessment`
 
-Download cache artifacts for each recorded Actions attempt before writing the
-stats YAML:
+`summary` values must be derivable from the detailed lists.
 
-```bash
-gh run download <run-id> \
-  --pattern 'cache-telemetry-<run-id>-<run-attempt>-*' \
-  --dir <out-of-tree-scratch-directory>
-```
+`test_inventory.total` must equal the sum of `by_type`.
 
-Flatten the artifact summaries into `cache_telemetry.jobs`, then derive
-`cache_telemetry.totals` by summing counters and recomputing percentages from
-the summed numerators and denominators. Never average job percentages. The
-sccache denominator is `cache_hits + cache_misses`; a job with no executed
-cacheable compiler requests omits `hit_rate_percent`. BuildKit's metric is
-explicitly `buildx_target_record_steps`: Bake target records can share dependency
-vertices, so it is a target-step reuse rate, not a byte count or a unique-layer
-count. Keep incomplete telemetry with its warnings instead of inventing zeros.
+`test_inventory.head_sha` must match `source_pr.head_sha`.
+
+Historical schema versions `1` and `2` remain valid baselines.
 
 ## Comparison and required action
 
-Choose the newest one or two records with a similar change surface and gate set
-(for example docs-only, Rust/domain, web, browser-flow, extension, or CI/build).
-Do not use historical bookkeeping-only Nook PRs as baselines. Record
-`baseline_quality: weak` and the reason in `baseline_note` when no genuinely
-comparable record exists.
+Choose the newest one or two records with a similar change surface.
+
+Use `baseline_quality: weak` when no comparable record exists.
 
 Treat a metric as a performance regression when it is both:
 
 - more than 20 percent slower than the baseline median; and
 - at least 60 seconds slower in absolute time.
 
-The threshold is a triage floor, not permission to ignore obvious waste below
-it.
+Inspect repeated full suites, serial local+remote final checks, unjustified
+reruns, premature merge attempts, and unexpected `direct_compile` use.
 
-The assessment must also inspect:
+If waste is actionable, `waste_assessment.required_actions` must name the
+concrete change.
 
-- repeated full suites where a focused test would have isolated the failure;
-- local and remote final checks run serially rather than in parallel;
-- reruns made without a code/configuration change or a documented flaky failure;
-- avoidable merge attempts before readiness or base freshness;
-- cache misses, duplicated builds, repeated dependency setup, and slow steps
-  that dominate otherwise comparable runs; and
-- unexpected `direct_compile` use in a trusted workflow that should have the
-  persistent cache credentials, while recognizing that untrusted pull-request
-  jobs must not receive those secrets.
-
-If a regression or waste is actionable, `waste_assessment.required_actions`
-must name the concrete build/workflow change. The agent must open a separate
-normal PR that implements, validates, and lands it.
-
-An unavoidable scope increase or external outage may be marked non-actionable
-only with specific evidence in `findings`. Do not use a vague “this PR was
-larger” rationale.
+Open a separate normal PR for that change.
 
 ## Workbench publication contract
 
-An AI-agent record is valid only when it contains one completed source PR and
-its filename is `stats/ai-agent/<source-pr-number>.yaml`. The source Nook PR must
-already be merged. The trusted Main collector publishes the parallel
-`stats/main-build/<run-id>-attempt-<run-attempt>.yaml` record defined in
-[main-build-statistics.md](main-build-statistics.md).
+Filename must be `stats/ai-agent/<source-pr-number>.yaml`.
+
+The source Nook PR must already be merged.
 
 Before publishing:
 
 - do not run local product checks or tests;
 - do not create a Nook branch or PR;
-- do not wait for repository-owned checks or deployments;
-- verify the YAML parses, the filename matches `source_pr.number`, the summary
-  matches the detailed events, `test_inventory.total` equals the sum of
-  `by_type`, `test_inventory.head_sha` matches `source_pr.head_sha`, and the
-  comparison/waste assessment is complete;
-- publish with:
+- do not wait for Main or deployment;
+- validate with Loom;
+- publish with Loom (`task loom:agent-stats ARGS='publish --file …'`).
 
-  ```bash
-  node .github/scripts/workbench-publish.cjs \
-    /absolute/path/to/<source-pr>.yaml \
-    stats/ai-agent/<source-pr>.yaml \
-    "stats: record Nook PR <source-pr>"
-  ```
-
-An invalid record (for example a filename/source PR mismatch or inconsistent
-derived summary) must be corrected before publication. Build, workflow, or
-product changes belong in a separate normal Nook PR. Re-open the Workbench file
-on `main` and validate it before handoff.
+Invalid records must be corrected before publication.
