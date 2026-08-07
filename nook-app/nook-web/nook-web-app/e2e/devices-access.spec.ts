@@ -540,19 +540,31 @@ test.describe('devices and access dashboard', () => {
     )
 
     await page.reload()
-    // Wiping the local identity leaves the vault; passkey-first unlock may open
-    // over LoginGate. Dismiss it so Devices & access stays reachable.
+    // The vault tab already pushed /devices-access, so LoginGate opens Access
+    // directly after reload. Passkey-first unlock may cover it briefly.
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
-    if (await passkeyOverlay.isVisible()) {
+    try {
+      await expect(passkeyOverlay).toBeVisible({ timeout: 5_000 })
       await page.getByTestId('passkey-auth-overlay-dismiss').click()
       await expect(passkeyOverlay).toBeHidden()
+    } catch {
+      // Identity metadata is already gone; unlock overlay may never appear.
     }
-    await page.getByTestId('login-devices-access').click()
+    const loginDevicesAccess = page.getByTestId('login-devices-access')
+    if (await loginDevicesAccess.isVisible()) {
+      await loginDevicesAccess.click()
+    } else {
+      await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+    }
     const preview = page.getByTestId('devices-access-chain-preview')
-    await expect(preview).toContainText('Known vaults remain on this browser')
+    await expect(preview).toContainText('Known vaults remain on this browser', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(
       page.getByTestId('devices-access-preview-vaults'),
     ).toContainText('Test vault')
@@ -731,6 +743,20 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('header-lock-vault-btn').click()
     // Locking from /devices-access keeps that URL, so login opens Access directly.
     await expect(page).toHaveURL(/\/devices-access$/)
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
+    try {
+      await expect(passkeyOverlay).toBeVisible({ timeout: 5_000 })
+      await page.getByTestId('passkey-auth-overlay-dismiss').click()
+      await expect(passkeyOverlay).toBeHidden()
+    } catch {
+      // Some lock paths leave Access readable without an unlock overlay.
+    }
+    await expect(page.getByTestId('devices-access-identity-card')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(
       page.getByTestId('devices-access-identity-state'),
     ).toContainText('Identity locked')
