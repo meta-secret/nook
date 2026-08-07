@@ -264,7 +264,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && rust_bake.contains("cache-from = rust_ecosystem_fuzz_cache_from"),
         "nightly alone writes the shared nightly scope; dylint/fuzz write leaf scopes"
     );
-    let docker_bake = read("nook-app/docker-bake.hcl")?;
+    let preflight_bake = read("preflight/docker-bake.hcl")?;
     let nightly_from = rust_bake
         .split("rust_ecosystem_nightly_cache_from =")
         .nth(1)
@@ -280,7 +280,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         .nth(1)
         .and_then(|tail| tail.split("rust_deps_cache_to =").next())
         .unwrap_or("");
-    let preflight_from = docker_bake
+    let preflight_from = preflight_bake
         .split("preflight_cache_from =")
         .nth(1)
         .and_then(|tail| tail.split("preflight_cache_to =").next())

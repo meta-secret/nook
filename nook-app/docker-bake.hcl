@@ -1,7 +1,7 @@
-// App bake: shared GHA/registry variables, preflight cache scopes, parallel groups,
-// and loadable runtime variants.
+// App bake: shared GHA/registry variables, parallel groups, and loadable runtime variants.
 // Platform Rust Zot scopes: nook-app/nook-platform/docker/rust/docker-bake.hcl
 // Web Zot scopes: nook-app/nook-web/docker/{web,toolchain}.docker-bake.hcl
+// Preflight Zot scopes: preflight/docker-bake.hcl
 // Every target's build definition (dockerfile/target/contexts) lives next to its Dockerfile and
 // is merged in via multiple -f flags (bake has no `include`):
 //   nook-app/nook-platform/docker/rust/docker-bake.hcl -> rust cache scopes + rust-base/ecosystem
@@ -10,6 +10,7 @@
 //   nook-app/nook-platform/nook-wasm/docker-bake.hcl   -> builder-wasm, web-artifacts, on-demand Rust images
 //   nook-app/nook-web/docker/toolchain.docker-bake.hcl -> web-deps + web-deps cache scope
 //   nook-app/nook-web/nook-web-app/docker-bake.hcl     -> slim web runtime and CI targets
+//   preflight/docker-bake.hcl                         -> preflight targets + cache scopes
 // Callers (Taskfile `setup` via nook-app/Taskfile.yml) pass all files via the NOOK_BAKE_FILES list.
 //
 // PREPARE PHASE: rust-base -> builder-core-deps -> (builder-debug || builder-wasm) -> web-artifacts, in
@@ -104,22 +105,6 @@ variable "NOOK_REGISTRY_CACHE_HOST" {
 // repositories, not tag prefixes: the remote identity can update nook/remote-buildcache/**
 // while it can only read the trusted nook/buildcache/** lineage published by Main.
 write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook/remote-buildcache" : "nook/buildcache"
-
-// Preflight chef/test graph. Own scope so Native product exports do not need to
-// rebuild preflight cooks on every PR head.
-// Do not cache-from rust-base here: Bake restores it via contexts rust-base =
-// target:rust-base. A shorter rust-base importer on this target orphans chef
-// cooks the same way nightly/policy were orphaned.
-preflight_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1:buildcache,ignore-error=true",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-]
-
-preflight_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
-] : []
 
 target "_sccache" {
   args = {

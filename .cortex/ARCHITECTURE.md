@@ -40,7 +40,7 @@ root/
 └── nook-app/
     ├── Taskfile.yml      (app command surface)
     ├── ci/Taskfile.yml   (ci:* tasks)
-    ├── docker-bake.hcl   (shared vars, preflight scopes, composition root)
+    ├── docker-bake.hcl   (shared vars, composition root)
     ├── nook-platform/    (Rust workspace root and members)
     │   ├── Taskfile.yml  (rust:* tasks)
     │   ├── Cargo.toml

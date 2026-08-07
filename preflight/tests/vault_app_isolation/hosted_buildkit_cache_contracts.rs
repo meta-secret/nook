@@ -13,7 +13,10 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     let rust_toolchain_bake = read(root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let web_image_bake = read(root, "nook-app/nook-web/docker/web.docker-bake.hcl");
     let web_toolchain_bake = read(root, "nook-app/nook-web/docker/toolchain.docker-bake.hcl");
-    let bake = format!("{app_bake}\n{rust_toolchain_bake}\n{web_image_bake}\n{web_toolchain_bake}");
+    let preflight_bake = read(root, "preflight/docker-bake.hcl");
+    let bake = format!(
+        "{app_bake}\n{rust_toolchain_bake}\n{web_image_bake}\n{web_toolchain_bake}\n{preflight_bake}"
+    );
     for required in [
         "GHA_CACHE_ENABLED",
         "GHA_CACHE_WRITE_ENABLED",
@@ -69,11 +72,13 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         rust_toolchain_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),
         "ecosystem deterministic must seed its own hosted cache"
     );
-    let preflight_bake = read(root, "preflight/docker-bake.hcl");
     assert!(
-        preflight_bake.contains("cache-from = preflight_cache_from")
+        !app_bake.contains("preflight_cache_from =")
+            && preflight_bake.contains("preflight_cache_from =")
+            && preflight_bake.contains("preflight_cache_to =")
+            && preflight_bake.contains("cache-from = preflight_cache_from")
             && preflight_bake.contains("cache-to   = preflight_cache_to"),
-        "preflight must seed its own hosted chef/test cache"
+        "preflight must own its hosted chef/test cache scopes in preflight/docker-bake.hcl"
     );
     assert!(
         !bake.contains("type=gha"),
