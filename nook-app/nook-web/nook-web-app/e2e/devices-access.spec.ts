@@ -739,27 +739,31 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    // The dashboard shell renders before passkey protection finishes. Wait for
+    // the identity graph so lock keeps last-known Access evidence, not the
+    // Missing-protection preview that has no identity card.
+    await expect(
+      page.getByTestId('devices-access-identity-state'),
+    ).toContainText('Identity unlocked', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
 
     await page.getByTestId('header-lock-vault-btn').click()
     // Locking from /devices-access keeps that URL, so login opens Access directly.
     await expect(page).toHaveURL(/\/devices-access$/)
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
     const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
     try {
       await expect(passkeyOverlay).toBeVisible({ timeout: 5_000 })
       await page.getByTestId('passkey-auth-overlay-dismiss').click()
       await expect(passkeyOverlay).toBeHidden()
     } catch {
-      // Some lock paths leave Access readable without an unlock overlay.
+      // Access can stay readable without an unlock overlay.
     }
-    await expect(page.getByTestId('devices-access-identity-card')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
     await expect(
       page.getByTestId('devices-access-identity-state'),
-    ).toContainText('Identity locked')
+    ).toContainText('Identity locked', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(
       page.getByTestId('devices-access-identity-card'),
     ).toHaveAttribute('data-identity-state', 'Locked')
