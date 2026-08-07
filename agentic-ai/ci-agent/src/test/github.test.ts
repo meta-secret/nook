@@ -20,7 +20,7 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
     ["Verify and preview"],
   );
   assert.deepEqual(
-    requiredPrCheckNames(["nook-app/.cargo/config.toml"]),
+    requiredPrCheckNames(["nook-app/nook-platform/.cargo/config.toml"]),
     ["Verify and preview"],
   );
   assert.deepEqual(

@@ -486,9 +486,9 @@ unless infra_taskfile.include?("--exclude='agentic-ai/minds/target'")
   raise "Hive source synchronization does not exclude Rust build output"
 end
 unless infra_taskfile.include?(
-         '--build-context "nook-sccache-helpers=$remote_dir/nook-app/docker"'
+         '--build-context "nook-sccache-helpers=$remote_dir/nook-app/nook-platform/docker"'
        ) &&
-       infra_taskfile.include?("nook-app/docker/sccache-wrapper.sh")
+       infra_taskfile.include?("nook-app/nook-platform/docker/sccache-wrapper.sh")
   raise "Hive deployment build is missing its named nook-sccache-helpers context"
 end
 unless infra_taskfile.include?("neo4j-secrets.yaml.hmac") &&

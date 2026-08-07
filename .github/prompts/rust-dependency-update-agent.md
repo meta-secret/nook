@@ -18,7 +18,7 @@ Read `.cortex/AGENTS.md`, `.cortex/rules.md`, and
    safely.
 2. Preserve Nook's exact-version policy: use explicit standard version strings
    in `Cargo.toml`, never `=`, `^`, `~`, `>=`, or `*`. Update the corresponding
-   `Cargo.lock` files (`nook-app/Cargo.lock` and/or `preflight/Cargo.lock`).
+   `Cargo.lock` files (`nook-app/nook-platform/Cargo.lock` and/or `preflight/Cargo.lock`).
 3. Make the smallest required source, feature-flag, or test changes for the
    upgraded APIs. Maintain the Rust/WASM boundary and add behavior-focused Rust
    tests for changed domain behavior.

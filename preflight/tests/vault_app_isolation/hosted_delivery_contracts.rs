@@ -334,7 +334,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
 }
 
 fn assert_preflight_reporter_contract(root: &Path) {
-    let ci_tasks = read(root, "nook-app/.task/ci.yml");
+    let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
     assert!(
         ci_tasks.contains("PREFLIGHT_OUTPUT_DIR: '{{.CI_ARTIFACT_DIR}}/tools'"),
         "native PR CI must export the preflight reporter with its coverage artifact"
@@ -384,7 +384,7 @@ fn assert_preflight_reporter_contract(root: &Path) {
         "preflight-test",
         "PREFLIGHT_BAKE_FILES",
         "preflight/docker-bake.hcl",
-        "nook-app/docker/rust.docker-bake.hcl",
+        "nook-app/nook-platform/docker/rust/docker-bake.hcl",
         "SCCACHE_S3_BUILD_SECRETS",
         "deps:\n      - sccache:ensure",
         "--set \"rust-base.cache-to=\"",
@@ -405,7 +405,7 @@ fn assert_preflight_reporter_contract(root: &Path) {
 
 fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     let pr = read(root, ".github/workflows/pr.yml");
-    let ci_tasks = read(root, "nook-app/.task/ci.yml");
+    let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
     let rust_host = section(&ci_tasks, "  _ci:pr:rust:host:\n", "  ci:pr:wasm:\n");
     let preflight = rust_host
         .find("task: preflight")
@@ -600,7 +600,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         !root.join(".github/scripts/main-post-web-e2e.sh").exists(),
         "same-runner Main suite coordinator was replaced by multi-job consumers"
     );
-    let ci_tasks = read(root, "nook-app/.task/ci.yml");
+    let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
     let web_ci = section(
         &ci_tasks,
         "  ci:main:web-e2e:ci:\n",

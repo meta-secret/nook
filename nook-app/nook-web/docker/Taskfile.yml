@@ -1,0 +1,281 @@
+version: '3'
+
+tasks:
+  docker:build:
+    desc: Alias for setup (build the linux/amd64 nook-web image).
+    cmds:
+      - task: setup
+
+  docker:task:
+    internal: true
+    # The nook-web image already contains the workspace source. Hosted browser
+    # jobs may add test-results-only mounts so failure diagnostics survive.
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_SITE_URL: '{{.VITE_SITE_URL}}'
+      VITE_PUBLIC_APP_URL: '{{.VITE_PUBLIC_APP_URL}}'
+      NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
+      NOOK_EXTENSION_CHANNEL: '{{.NOOK_EXTENSION_CHANNEL}}'
+      NOOK_EXTENSION_VERSION: '{{.NOOK_EXTENSION_VERSION}}'
+      NOOK_EXTENSION_COMMIT: '{{.NOOK_EXTENSION_COMMIT}}'
+      NOOK_EXTENSION_SITE_URL: '{{.NOOK_EXTENSION_SITE_URL}}'
+      VITE_SIMPLE_APP_URL: '{{.VITE_SIMPLE_APP_URL}}'
+      VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        {{.DOCKER_RUN_LIMITS}}
+        --ipc=host
+        -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
+        -e VITE_BASE="{{.VITE_BASE}}"
+        -e VITE_SITE_URL="{{.VITE_SITE_URL}}"
+        -e VITE_PUBLIC_APP_URL="{{.VITE_PUBLIC_APP_URL}}"
+        -e NOOK_SIMPLE_VAULT_URL="{{.NOOK_SIMPLE_VAULT_URL}}"
+        -e NOOK_EXTENSION_CHANNEL="{{.NOOK_EXTENSION_CHANNEL}}"
+        -e NOOK_EXTENSION_VERSION="{{.NOOK_EXTENSION_VERSION}}"
+        -e NOOK_EXTENSION_COMMIT="{{.NOOK_EXTENSION_COMMIT}}"
+        -e NOOK_EXTENSION_SITE_URL="{{.NOOK_EXTENSION_SITE_URL}}"
+        -e VITE_SIMPLE_APP_URL="{{.VITE_SIMPLE_APP_URL}}"
+        -e VITE_SENTINEL_APP_URL="{{.VITE_SENTINEL_APP_URL}}"
+        -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}"
+        -e NOOK_GITHUB_PAT
+        -e CI=1
+        -e NOOK_GITHUB_E2E_REPO
+        -e NOOK_GITHUB_POLL_MS
+        -e NOOK_GITHUB_SYNC_TIMEOUT_MS
+        -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
+        -e CLOUDFLARE_API_TOKEN
+        -e CLOUDFLARE_ACCOUNT_ID
+        -e CF_PAGES_BRANCH
+        -e CF_PAGES_DIST_DIR
+        -e CF_PAGES_PROJECT_NAME
+        -e CF_PAGES_PRODUCTION_BRANCH
+        -e GITHUB_TOKEN
+        -e GITHUB_REPOSITORY
+        -e PR_NUMBER
+        -e PREVIEW_URL
+        -w /meta-secret/nook
+        {{.DOCKER_IMAGE}}
+        task {{.TASK}}
+
+  docker:e2e:run:
+    desc: Run Playwright in Docker — Vite dev server stays on 127.0.0.1:5173 inside the container (no -p publish).
+    internal: true
+    # No bind mount: the nook-web image already contains the workspace source (nook-app/nook-web/nook-web-app/Dockerfile).
+    vars:
+      E2E_ARTIFACT_DIR: '{{default "" .E2E_ARTIFACT_DIR}}'
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+      NOOK_SIMPLE_VAULT_URL: '{{.NOOK_SIMPLE_VAULT_URL}}'
+      NOOK_EXTENSION_CHANNEL: '{{.NOOK_EXTENSION_CHANNEL}}'
+      NOOK_EXTENSION_VERSION: '{{.NOOK_EXTENSION_VERSION}}'
+      NOOK_EXTENSION_COMMIT: '{{.NOOK_EXTENSION_COMMIT}}'
+      NOOK_EXTENSION_SITE_URL: '{{.NOOK_EXTENSION_SITE_URL}}'
+      VITE_SITE_URL: '{{.VITE_SITE_URL}}'
+      VITE_SIMPLE_APP_URL: '{{.VITE_SIMPLE_APP_URL}}'
+      VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+      E2E_SPEC: '{{.E2E_SPEC}}'
+      CHANNEL: '{{default "" .CHANNEL}}'
+      PR: '{{default "" .PR}}'
+      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
+    cmds:
+      - |
+        set -eu
+        set --
+        if [ -n "{{.E2E_ARTIFACT_DIR}}" ]; then
+          artifact_root="{{.E2E_ARTIFACT_DIR}}"
+          case "$artifact_root" in
+            /*) ;;
+            *) artifact_root="{{.REPO_ROOT}}/$artifact_root" ;;
+          esac
+          mkdir -p "$artifact_root/web" "$artifact_root/extension"
+          set -- \
+            -v "$artifact_root/web:/meta-secret/nook/nook-app/nook-web/nook-web-app/test-results" \
+            -v "$artifact_root/extension:/meta-secret/nook/nook-app/nook-web/nook-web-extension/test-results"
+        fi
+        {{.DOCKER}} run --rm \
+        --platform linux/amd64 \
+        {{.DOCKER_RUN_LIMITS}} \
+        --ipc=host \
+        "$@" \
+        -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}" \
+        -e VITE_BASE="{{.VITE_BASE}}" \
+        -e NOOK_SIMPLE_VAULT_URL="{{.NOOK_SIMPLE_VAULT_URL}}" \
+        -e NOOK_EXTENSION_CHANNEL="{{.NOOK_EXTENSION_CHANNEL}}" \
+        -e NOOK_EXTENSION_VERSION="{{.NOOK_EXTENSION_VERSION}}" \
+        -e NOOK_EXTENSION_COMMIT="{{.NOOK_EXTENSION_COMMIT}}" \
+        -e NOOK_EXTENSION_SITE_URL="{{.NOOK_EXTENSION_SITE_URL}}" \
+        -e VITE_SITE_URL="{{.VITE_SITE_URL}}" \
+        -e VITE_SIMPLE_APP_URL="{{.VITE_SIMPLE_APP_URL}}" \
+        -e VITE_SENTINEL_APP_URL="{{.VITE_SENTINEL_APP_URL}}" \
+        -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}" \
+        -e NOOK_GITHUB_PAT \
+        -e CI=1 \
+        -e NOOK_GITHUB_E2E_REPO \
+        -e NOOK_GITHUB_POLL_MS \
+        -e NOOK_GITHUB_SYNC_TIMEOUT_MS \
+        -e NOOK_GITHUB_CONNECT_TIMEOUT_MS \
+        -e NOOK_E2E_SKIP_GITHUB_CLEANUP \
+        -e NOOK_E2E_SYNC_PROVIDER \
+        -e NOOK_GOOGLE_E2E_ACCESS_TOKEN \
+        -e E2E_SPEC \
+        -e CHANNEL \
+        -e PR \
+        -w /meta-secret/nook \
+        {{.DOCKER_E2E_IMAGE}} \
+        task {{.TASK}}
+
+  docker:ui-demo:run:
+    desc: Record Playwright demo videos into a host-mounted artifact directory.
+    internal: true
+    vars:
+      UI_DEMO_OUTPUT_DIR: '{{default (printf "%s/ui-demo-results" .REPO_ROOT) .UI_DEMO_OUTPUT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        out_dir="{{.UI_DEMO_OUTPUT_DIR}}";
+        case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
+        test "$out_dir" != "/";
+        mkdir -p "$out_dir";
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        {{.DOCKER_RUN_LIMITS}}
+        --ipc=host
+        -e CI=1
+        -e PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+        -e NOOK_UI_DEMO_OUTPUT_DIR=/ui-demo-results
+        -e UI_DEMO_SPECS="{{.UI_DEMO_SPECS}}"
+        -v "$out_dir:/ui-demo-results"
+        -w /meta-secret/nook
+        {{.DOCKER_E2E_IMAGE}}
+        task _web:test:ui-demo;
+        find "$out_dir" -type f -name "*.webm" -print -quit | grep -q . || {
+          echo "task ui:demo: no Playwright video was produced" >&2;
+          exit 1;
+        }'
+
+  docker:extract:dist:
+    desc: Copy the landing, Simple Vault, and Sentinel Vault web artifacts to the host.
+    cmds:
+      - >-
+        sh -c 'rm -rf "{{.WEB_ROOT}}/dist" "{{.WEB_GROUP_ROOT}}/nook-vault-simple/dist" "{{.WEB_GROUP_ROOT}}/nook-vault-sentinel/dist";
+        cid="$({{.DOCKER}} create --platform linux/amd64 {{.DOCKER_IMAGE}})";
+        trap "{{.DOCKER}} rm -f \"$cid\" >/dev/null 2>&1 || true" EXIT;
+        {{.DOCKER}} cp "$cid:/meta-secret/nook/nook-app/nook-web/nook-web-app/dist" "{{.WEB_ROOT}}/dist";
+        {{.DOCKER}} cp "$cid:/meta-secret/nook/nook-app/nook-web/nook-vault-simple/dist" "{{.WEB_GROUP_ROOT}}/nook-vault-simple/dist";
+        {{.DOCKER}} cp "$cid:/meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/dist" "{{.WEB_GROUP_ROOT}}/nook-vault-sentinel/dist"'
+
+  docker:extract:extension:
+    desc: Copy the nook-web image's built nook-app/nook-web/nook-web-extension/dist to the host (for manual browser loading).
+    cmds:
+      - >-
+        sh -c 'rm -rf "{{.EXTENSION_ROOT}}/dist";
+        cid="$({{.DOCKER}} create --platform linux/amd64 {{.DOCKER_IMAGE}})";
+        trap "{{.DOCKER}} rm -f \"$cid\" >/dev/null 2>&1 || true" EXIT;
+        {{.DOCKER}} cp "$cid:/meta-secret/nook/nook-app/nook-web/nook-web-extension/dist" "{{.EXTENSION_ROOT}}/dist"'
+
+  docker:ci:cache:publish:web:
+    desc: Export the already-verified web dependency graph from this job's builder.
+    env:
+      GHA_CACHE_WRITE_ENABLED: "1"
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "*.output=type=cacheonly"
+        --set "web-deps.cache-from="
+        web-deps
+
+  docker:ci:web:build:
+    desc: Build the sealed web image from the same-runner CI WASM artifact.
+    deps: [registry-cache:ensure]
+    vars:
+      CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/joined" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        artifacts="{{.CI_ARTIFACT_DIR}}";
+        case "$artifacts" in /*) ;; *) artifacts="{{.REPO_ROOT}}/$artifacts" ;; esac;
+        test -s "$artifacts/nook-wasm/nook_wasm.js";
+        test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
+        mkdir -p "$artifacts/coverage/nook-core";
+        : > "$artifacts/coverage/nook-core/.web-only";
+        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:build" {{.DOCKER}} buildx bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} --set "web-deps.output=type=cacheonly" nook-web-ci web-deps'
+      - task: registry-cache:publish:web
+
+  docker:ci:web:e2e:build:
+    desc: Build the Chromium web image from the same-runner CI WASM artifact.
+    deps: [registry-cache:ensure]
+    vars:
+      CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/joined" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        artifacts="{{.CI_ARTIFACT_DIR}}";
+        case "$artifacts" in /*) ;; *) artifacts="{{.REPO_ROOT}}/$artifacts" ;; esac;
+        test -s "$artifacts/nook-wasm/nook_wasm.js";
+        test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
+        mkdir -p "$artifacts/coverage/nook-core";
+        : > "$artifacts/coverage/nook-core/.web-only";
+        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:e2e:build" {{.DOCKER}} buildx bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web-e2e'
+      - task: registry-cache:publish:web
+
+  # Precise Bake stages. Warm parents alone before leaves so a leaf miss cannot
+  # cold-rebuild apt/nightly. Composites below call these in order.
+  # Ecosystem/preflight callers never write rust-base (clear cache-to).
+  # After a parent warm, clear that parent's cache-from on the next Bake: the
+  # context target:PARENT still imports PARENT's Zot scope, and that shorter
+  # index steals mode=max leaf layers (policy-tools/nightly RUNs go cold).
+
+  docker:web:dev:
+    internal: true
+    # Mounted for Vite hot-reload. The on-demand browser/Rust image contains both toolchains;
+    # node_modules is an anonymous volume and Bun installs current dependencies before startup.
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        {{.SCCACHE_S3_CREDENTIAL_MOUNTS}}
+        {{.DOCKER_RUN_LIMITS}}
+        -e REPO_ROOT=/meta-secret/nook
+        -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
+        -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
+        -e VITE_BASE="{{.VITE_BASE}}"
+        -e NOOK_LOCAL_HTTPS=1
+        -e NOOK_LOCAL_HTTPS_CERT_PATH={{.LOCAL_HTTPS_CONTAINER_DIR}}/localhost.pem
+        -e NOOK_LOCAL_HTTPS_KEY_PATH={{.LOCAL_HTTPS_CONTAINER_DIR}}/localhost-key.pem
+        -p "{{.WEB_DEV_PORT}}:5173"
+        -v "{{.REPO_ROOT}}:/meta-secret/nook"
+        -v "{{.LOCAL_HTTPS_DIR}}:{{.LOCAL_HTTPS_CONTAINER_DIR}}:ro"
+        -v /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
+        -w /meta-secret/nook
+        {{.DOCKER_RUST_BROWSER_IMAGE}}
+        sh -c "(cd nook-app/nook-web/nook-web-app && bun install) && task _web:dev"
+
+  docker:web:dev:fast:
+    internal: true
+    # Fast mounted dev path: same as docker:web:dev, but skips wasm-opt during the initial wasm build.
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        {{.SCCACHE_S3_CREDENTIAL_MOUNTS}}
+        {{.DOCKER_RUN_LIMITS}}
+        -e REPO_ROOT=/meta-secret/nook
+        -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
+        -e WASM_BUILD_MODE=dev
+        -e VITE_BASE="{{.VITE_BASE}}"
+        -e NOOK_LOCAL_HTTPS=1
+        -e NOOK_LOCAL_HTTPS_CERT_PATH={{.LOCAL_HTTPS_CONTAINER_DIR}}/localhost.pem
+        -e NOOK_LOCAL_HTTPS_KEY_PATH={{.LOCAL_HTTPS_CONTAINER_DIR}}/localhost-key.pem
+        -p "{{.WEB_DEV_PORT}}:5173"
+        -v "{{.REPO_ROOT}}:/meta-secret/nook"
+        -v "{{.LOCAL_HTTPS_DIR}}:{{.LOCAL_HTTPS_CONTAINER_DIR}}:ro"
+        -v /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
+        -w /meta-secret/nook
+        {{.DOCKER_RUST_BROWSER_IMAGE}}
+        sh -c "(cd nook-app/nook-web/nook-web-app && bun install) && task _web:dev:fast"

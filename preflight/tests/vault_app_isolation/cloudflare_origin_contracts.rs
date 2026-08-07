@@ -209,13 +209,13 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
         );
     }
 
-    let docker_tasks = read(&root, "nook-app/docker/Taskfile.yml");
+    let docker_tasks = read(&root, "nook-app/nook-web/docker/Taskfile.yml");
     assert!(
         docker_tasks.contains("-e CF_PAGES_DIST_DIR"),
         "the selected Cloudflare artifact directory must reach the sealed deploy container"
     );
 
-    let ci_tasks = read(&root, "nook-app/.task/ci.yml");
+    let ci_tasks = read(&root, "nook-app/ci/Taskfile.yml");
     assert!(
         ci_tasks.contains("*) deploy_dir=\"{{.REPO_ROOT}}/$deploy_dir\" ;;"),
         "repo-relative Cloudflare artifact directories must resolve from the repository root"

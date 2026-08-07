@@ -100,7 +100,7 @@ jobs:
       - name: Derive native validation key
         id: native-key
         run: |
-          echo "value=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'preflight/**', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}" >> "$GITHUB_OUTPUT"
+          echo "value=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'preflight/**', 'nook-app/Taskfile.yml', 'nook-app/ci/Taskfile.yml', 'nook-app/nook-platform/docker/**', 'nook-app/nook-web/docker/**', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**') }}" >> "$GITHUB_OUTPUT"
 
       - name: Locate trusted native handoff
         id: trusted-native
@@ -234,7 +234,7 @@ jobs:
       - name: Derive WASM validation key
         id: wasm-key
         run: |
-          echo "value=nook-trusted-wasm-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}" >> "$GITHUB_OUTPUT"
+          echo "value=nook-trusted-wasm-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/ci/Taskfile.yml', 'nook-app/nook-platform/docker/**', 'nook-app/nook-web/docker/**', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/nook-platform/nook-app-common/**', 'nook-app/nook-platform/nook-core/**', 'nook-app/nook-platform/nook-auth2/**', 'nook-app/nook-platform/nook-replication/**', 'nook-app/nook-platform/nook-event-log/**', 'nook-app/nook-platform/nook-companion-core/**', 'nook-app/nook-platform/nook-companion-wasm/**', 'nook-app/nook-platform/nook-wasm/**', 'nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**') }}" >> "$GITHUB_OUTPUT"
 
       - name: Locate trusted WASM handoff
         id: trusted-wasm
@@ -449,7 +449,9 @@ jobs:
           set -euo pipefail
           dir="${RUNNER_TEMP}/nook-ci-artifacts/joined/nook-wasm"
           test -s "$dir/nook_wasm.js"
+          test -s "$dir/nook_wasm_bg.wasm"
           test -s "$dir/nook-companion-wasm/nook_companion_wasm.js"
+          test -s "$dir/nook-companion-wasm/nook_companion_wasm_bg.wasm"
           test -s "$dir/nook-run-attempt"
 
       - name: Svelte checks, JS unit tests, lint, and preview build (no browser e2e)

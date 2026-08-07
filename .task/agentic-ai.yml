@@ -30,7 +30,7 @@ tasks:
       - sh: test "${HIVE_SEALED_GUEST:-}" = "1"
         msg: hive:guest:format is available only inside a sealed Hive guest
     cmds:
-      - cd nook-app && cargo fmt --all
+      - cd nook-app/nook-platform && cargo fmt --all
       - cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile
       - cd nook-app/nook-web/nook-web-app && bun run format
       - cd nook-app/nook-web/nook-web-extension && bun run format

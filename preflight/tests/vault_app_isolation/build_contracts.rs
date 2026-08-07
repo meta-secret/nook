@@ -4,7 +4,7 @@ use super::*;
 fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
 -> anyhow::Result<()> {
     let root = repository_root();
-    let wasm_tasks = read(&root, "nook-app/nook-web/.task/wasm.yml");
+    let wasm_tasks = read(&root, "nook-app/nook-platform/nook-wasm/Taskfile.yml");
     assert!(
         wasm_tasks.contains("wasm:build:fast:")
             && wasm_tasks.contains("- setup:rust:fast")
@@ -20,15 +20,25 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
     );
 
     let app_tasks = read(&root, "nook-app/Taskfile.yml");
+    let platform_tasks = read(&root, "nook-app/nook-platform/Taskfile.yml");
     assert!(
-        app_tasks.contains("setup:rust:fast:") && app_tasks.contains("nook-rust-fast"),
+        (app_tasks.contains("setup:rust:fast:") || platform_tasks.contains("setup:rust:fast:"))
+            && (app_tasks.contains("nook-rust-fast") || platform_tasks.contains("nook-rust-fast")),
         "the fast setup must load the manifest-keyed development image"
     );
-    let docker_taskfile = read(&root, "nook-app/docker/Taskfile.yml");
+    let platform_docker_taskfile = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
+    let web_docker_taskfile = read(&root, "nook-app/nook-web/docker/Taskfile.yml");
     let preflight_taskfile = read(&root, "preflight/Taskfile.yml");
     for (label, body) in [
         ("nook-app/Taskfile.yml", app_tasks.as_str()),
-        ("nook-app/docker/Taskfile.yml", docker_taskfile.as_str()),
+        (
+            "nook-app/nook-platform/docker/Taskfile.yml",
+            platform_docker_taskfile.as_str(),
+        ),
+        (
+            "nook-app/nook-web/docker/Taskfile.yml",
+            web_docker_taskfile.as_str(),
+        ),
         ("preflight/Taskfile.yml", preflight_taskfile.as_str()),
     ] {
         assert!(
@@ -39,7 +49,7 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
         );
     }
 
-    let docker_tasks = read(&root, "nook-app/docker/Taskfile.yml");
+    let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
     assert!(
         docker_tasks.contains("CARGO_TARGET_DIR=/opt/nook/cargo-target")
             && docker_tasks.contains("{{.DOCKER_RUST_FAST_IMAGE}}"),
@@ -49,7 +59,9 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
     let dockerfile = read(&root, "nook-app/nook-platform/nook-wasm/Dockerfile");
     assert!(
         dockerfile.contains("FROM builder-wasm-deps AS nook-rust-fast")
-            && dockerfile.contains("mv /meta-secret/nook/nook-app/target /opt/nook/cargo-target",)
+            && dockerfile.contains(
+                "mv /meta-secret/nook/nook-app/nook-platform/target /opt/nook/cargo-target",
+            )
             && dockerfile.contains("ENV CARGO_TARGET_DIR=/opt/nook/cargo-target"),
         "the fast image must preserve its compiled dependency graph outside /meta-secret/nook"
     );
@@ -115,7 +127,7 @@ fn ci_agent_docker_builds_are_not_hidden_by_image_existence() -> anyhow::Result<
 #[test]
 fn ui_demo_rebuilds_the_preview_with_test_only_debug_hooks() -> anyhow::Result<()> {
     let root = repository_root();
-    let tasks = read(&root, "nook-app/nook-web/.task/web.yml");
+    let tasks = read(&root, "nook-app/nook-web/Taskfile.yml");
     let ui_demo = section(
         &tasks,
         "  _web:test:ui-demo:\n",
@@ -140,8 +152,8 @@ fn ui_demo_rebuilds_the_preview_with_test_only_debug_hooks() -> anyhow::Result<(
 fn local_https_material_lives_under_home_nook_across_worktrees() -> anyhow::Result<()> {
     let root = repository_root();
     let app_tasks = read(&root, "nook-app/Taskfile.yml");
-    let web_tasks = read(&root, "nook-app/nook-web/.task/web.yml");
-    let docker_tasks = read(&root, "nook-app/docker/Taskfile.yml");
+    let web_tasks = read(&root, "nook-app/nook-web/Taskfile.yml");
+    let docker_tasks = read(&root, "nook-app/nook-web/docker/Taskfile.yml");
 
     for required in [
         "${HOME}/.nook/https",
@@ -219,7 +231,7 @@ fn assert_shared_wasm_build_contract(root: &Path) {
         );
     }
 
-    let workspace = read(root, "nook-app/Cargo.toml");
+    let workspace = read(root, "nook-app/nook-platform/Cargo.toml");
     assert!(
         !workspace.contains("nook-wasm/apps/"),
         "application wrappers must not recompile the shared WASM library"
@@ -230,15 +242,12 @@ fn assert_shared_wasm_build_contract(root: &Path) {
 
     let wasm_dockerfile = read(root, "nook-app/nook-platform/nook-wasm/Dockerfile");
     assert!(
-        wasm_dockerfile
-            .matches("wasm-pack build nook-platform/nook-wasm")
-            .count()
-            == 1,
+        wasm_dockerfile.matches("wasm-pack build nook-wasm").count() == 1,
         "delivery must compile and optimize nook-wasm exactly once"
     );
     assert!(
         wasm_dockerfile
-            .matches("wasm-pack build nook-platform/nook-companion-wasm")
+            .matches("wasm-pack build nook-companion-wasm")
             .count()
             == 1,
         "delivery must compile the tiny companion WASM package exactly once"
@@ -255,17 +264,15 @@ fn assert_shared_wasm_build_contract(root: &Path) {
             "WASM Dockerfile still contains retired artifact {forbidden}"
         );
     }
-    let wasm_tasks = read(root, "nook-app/nook-web/.task/wasm.yml");
+    let wasm_tasks = read(root, "nook-app/nook-platform/nook-wasm/Taskfile.yml");
     assert_eq!(
-        wasm_tasks
-            .matches("wasm-pack build nook-platform/nook-wasm")
-            .count(),
+        wasm_tasks.matches("wasm-pack build nook-wasm").count(),
         1,
         "the fast rebuild path must compile the shared vault WASM package once"
     );
     assert_eq!(
         wasm_tasks
-            .matches("wasm-pack build nook-platform/nook-companion-wasm")
+            .matches("wasm-pack build nook-companion-wasm")
             .count(),
         1,
         "the fast rebuild path must compile the companion WASM package once"
@@ -303,7 +310,7 @@ fn assert_shared_wasm_build_contract(root: &Path) {
 #[test]
 fn focused_playwright_task_runs_only_matching_projects() -> anyhow::Result<()> {
     let root = repository_root();
-    let web_tasks = read(&root, "nook-app/nook-web/.task/web.yml");
+    let web_tasks = read(&root, "nook-app/nook-web/Taskfile.yml");
     let focused = section(
         &web_tasks,
         "  _web:test:e2e:file:",
@@ -403,7 +410,7 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
         "PR workflow must delegate builder health and selection to the wrapper"
     );
 
-    let ci = read(&root, "nook-app/.task/ci.yml");
+    let ci = read(&root, "nook-app/ci/Taskfile.yml");
     for required in [
         "task: _buildx:healthy",
         "vars: { BUILD_TASK: _ci:pr:host }",
@@ -656,13 +663,15 @@ fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() -> 
 #[test]
 fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Result<()> {
     let root = repository_root();
-    let dependency_dockerfile = read(&root, "nook-app/docker/rust.Dockerfile");
-    let source_dockerfile = read(&root, "nook-app/nook-platform/nook-core/Dockerfile");
-    let warmup = section(
-        &dependency_dockerfile,
-        "FROM builder-wasm-deps AS builder-core-deps",
-        "FROM builder-core-deps AS nook-rust-test",
+    let dependency_dockerfile = read(
+        &root,
+        "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
     );
+    let source_dockerfile = read(&root, "nook-app/nook-platform/nook-core/Dockerfile");
+    let warmup = dependency_dockerfile
+        .split_once("FROM builder-wasm-deps AS builder-core-deps")
+        .map(|(_, rest)| rest)
+        .expect("builder-core-deps stage must exist in lineage.Dockerfile");
 
     assert_eq!(
         warmup
@@ -700,17 +709,17 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
             .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only")
     );
 
-    let wasm_task = read(&root, "nook-app/nook-web/.task/wasm.yml");
+    let wasm_task = read(&root, "nook-app/nook-platform/nook-wasm/Taskfile.yml");
     for required in [
         "\"Cargo.toml\" \"Cargo.lock\"",
-        "\"nook-platform/nook-wasm/Cargo.toml\" \"nook-platform/nook-wasm/src\"",
-        "\"nook-platform/nook-companion-wasm/Cargo.toml\" \"nook-platform/nook-companion-wasm/src\"",
-        "\"nook-platform/nook-companion-core/Cargo.toml\" \"nook-platform/nook-companion-core/src\"",
-        "\"nook-platform/nook-app-common/Cargo.toml\" \"nook-platform/nook-app-common/src\" \"nook-platform/nook-app-common/locales\"",
-        "\"nook-platform/nook-core/Cargo.toml\" \"nook-platform/nook-core/src\"",
-        "\"nook-platform/nook-auth2/Cargo.toml\" \"nook-platform/nook-auth2/src\"",
-        "\"nook-platform/nook-replication/Cargo.toml\" \"nook-platform/nook-replication/src\"",
-        "\"nook-platform/nook-event-log/Cargo.toml\" \"nook-platform/nook-event-log/src\"",
+        "\"nook-wasm/Cargo.toml\" \"nook-wasm/src\"",
+        "\"nook-companion-wasm/Cargo.toml\" \"nook-companion-wasm/src\"",
+        "\"nook-companion-core/Cargo.toml\" \"nook-companion-core/src\"",
+        "\"nook-app-common/Cargo.toml\" \"nook-app-common/src\" \"nook-app-common/locales\"",
+        "\"nook-core/Cargo.toml\" \"nook-core/src\"",
+        "\"nook-auth2/Cargo.toml\" \"nook-auth2/src\"",
+        "\"nook-replication/Cargo.toml\" \"nook-replication/src\"",
+        "\"nook-event-log/Cargo.toml\" \"nook-event-log/src\"",
     ] {
         assert!(
             wasm_task.contains(required),
@@ -744,7 +753,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         );
     }
 
-    let ci = read(&root, "nook-app/.task/ci.yml");
+    let ci = read(&root, "nook-app/ci/Taskfile.yml");
     let web_host = section(&ci, "  _ci:pr:web:host:\n", "\n  ci:pr:ui-demo:");
     assert!(
         web_host.contains("task: docker:ci:web:build") && !web_host.contains("task: docker:task"),
@@ -757,7 +766,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
     );
     super::hosted_delivery_contracts::assert_main_web_e2e_core_contract(&ci);
 
-    let web = read(&root, "nook-app/nook-web/.task/web.yml");
+    let web = read(&root, "nook-app/nook-web/Taskfile.yml");
     let e2e = section(
         &web,
         "  _web:test:e2e:parallel:\n",
@@ -771,7 +780,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
 
     super::hosted_delivery_contracts::assert_e2e_build_if_needed_contract(&root);
 
-    let extension = read(&root, "nook-app/nook-web/.task/extension.yml");
+    let extension = read(&root, "nook-app/nook-web/nook-web-extension/Taskfile.yml");
     let extension_check = section(
         &extension,
         "  _extension:check:\n",
@@ -783,7 +792,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "extension setup already sealed a validated build"
     );
 
-    let web_base = read(&root, "nook-app/docker/web.Dockerfile");
+    let web_base = read(&root, "nook-app/nook-web/docker/web.Dockerfile");
     assert!(web_base.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium"));
     assert!(web_base.contains("chromium ffmpeg xvfb"));
     assert!(

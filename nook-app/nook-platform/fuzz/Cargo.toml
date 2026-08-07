@@ -10,7 +10,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-nook-auth2 = { path = "../nook-app/nook-platform/nook-auth2" }
+nook-auth2 = { path = "../nook-auth2" }
 
 [[bin]]
 name = "wire-parsers"

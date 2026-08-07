@@ -67,4 +67,4 @@ junit.xml
 lcov.info
 **/llvm-cov-target/
 
-fuzz/target
+nook-app/nook-platform/fuzz/target

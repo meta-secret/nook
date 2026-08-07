@@ -1,0 +1,482 @@
+version: '3'
+
+tasks:
+  registry-cache:ensure:
+    desc: Log into the remote Zot cache registry for local Bake restore/publish.
+    cmds:
+      - |
+        set -euo pipefail
+        if [ -n "${GITHUB_ACTIONS:-}" ]; then exit 0; fi
+        if [ "${NOOK_REGISTRY_CACHE:-1}" = "0" ]; then exit 0; fi
+        cache="${HOME}/.nook/cache"
+        user_file="$cache/registry-remote-username"
+        pass_file="$cache/registry-remote-password"
+        if [ ! -r "$user_file" ] || [ ! -r "$pass_file" ]; then
+          if [ "${NOOK_REGISTRY_CACHE:-}" = "1" ]; then
+            echo "registry-cache:ensure: missing $user_file / $pass_file" >&2
+            exit 1
+          fi
+          echo "registry-cache:ensure: no remote registry credentials; Bake stays offline" >&2
+          exit 0
+        fi
+        host="${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}"
+        user="$(tr -d '[:space:]' <"$user_file")"
+        tr -d '\n' <"$pass_file" | {{.DOCKER}} login "$host" -u "$user" --password-stdin >/dev/null
+        echo "registry-cache:ensure: local Bake uses remote-buildcache${GHA_CACHE_SCOPE_SUFFIX:-}" >&2
+
+  registry-cache:publish:wasm:
+    internal: true
+    desc: Publish local WASM BuildKit layers to the PR/local remote-buildcache scope.
+    cmds:
+      - |
+        set -euo pipefail
+        if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" != "1" ]; then exit 0; fi
+        task docker:ci:cache:publish:wasm
+
+  registry-cache:publish:native:
+    internal: true
+    desc: Publish local native BuildKit layers to the PR/local remote-buildcache scope.
+    cmds:
+      - |
+        set -euo pipefail
+        if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" != "1" ]; then exit 0; fi
+        task docker:ci:cache:publish:native
+
+  registry-cache:publish:web:
+    internal: true
+    desc: Publish local web BuildKit layers to the PR/local remote-buildcache scope.
+    cmds:
+      - |
+        set -euo pipefail
+        if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" != "1" ]; then exit 0; fi
+        task docker:ci:cache:publish:web
+
+  docker:rust:task:
+    internal: true
+    desc: Run a Task target in the on-demand source-sealed Rust/WASM image.
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        {{.SCCACHE_S3_CREDENTIAL_MOUNTS}}
+        {{.DOCKER_RUN_LIMITS}}
+        --ipc=host
+        -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
+        -e CI=1
+        -w /meta-secret/nook
+        {{.DOCKER_RUST_IMAGE}}
+        task {{.TASK}}
+
+  docker:rust:browser:task:
+    internal: true
+    desc: Run a Task target in the on-demand Rust/WASM image with Chromium.
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        {{.SCCACHE_S3_CREDENTIAL_MOUNTS}}
+        {{.DOCKER_RUN_LIMITS}}
+        --ipc=host
+        -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
+        -e CI=1
+        -w /meta-secret/nook
+        {{.DOCKER_RUST_BROWSER_IMAGE}}
+        task {{.TASK}}
+
+  docker:wasm:build:fast:
+    internal: true
+    # Mounted fast path uses a manifest-keyed image whose Cargo target lives outside the bind mount.
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        {{.SCCACHE_S3_CREDENTIAL_MOUNTS}}
+        {{.DOCKER_RUN_LIMITS}}
+        -e REPO_ROOT=/meta-secret/nook
+        -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
+        -e CI_AGENT_IMAGE=nook-ci-agent:local
+        -e WASM_BUILD_MODE=dev
+        -e CARGO_TARGET_DIR=/opt/nook/cargo-target
+        -v "{{.REPO_ROOT}}:/meta-secret/nook"
+        -w /meta-secret/nook
+        {{.DOCKER_RUST_FAST_IMAGE}}
+        task _wasm:build:fast
+
+  docker:extract:coverage:
+    desc: Copy portable Rust crate coverage artifacts from the sealed Docker image to the host.
+    vars:
+      COVERAGE_OUT_DIR: '{{default (printf "%s/coverage/nook-core" .REPO_ROOT) .COVERAGE_OUT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        out_dir="{{.COVERAGE_OUT_DIR}}";
+        case "$out_dir" in
+          /*) ;;
+          *) out_dir="{{.REPO_ROOT}}/$out_dir" ;;
+        esac;
+        rm -rf "$out_dir";
+        mkdir -p "$out_dir";
+        cid="$({{.DOCKER}} create --platform linux/amd64 {{.DOCKER_IMAGE}})";
+        cleanup() { {{.DOCKER}} rm -f "$cid" >/dev/null 2>&1 || true; };
+        trap cleanup EXIT;
+        {{.DOCKER}} cp "$cid:/opt/nook/coverage/nook-core/." "$out_dir/"'
+
+  docker:coverage:export:
+    desc: Run coverage-gated portable Rust unit tests and export their artifacts (no app image export).
+    deps:
+      - sccache:ensure
+      - registry-cache:ensure
+    vars:
+      COVERAGE_OUT_DIR: '{{default (printf "%s/coverage/nook-core" .REPO_ROOT) .COVERAGE_OUT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        out_dir="{{.COVERAGE_OUT_DIR}}";
+        case "$out_dir" in
+          /*) ;;
+          *) out_dir="{{.REPO_ROOT}}/$out_dir" ;;
+        esac;
+        rm -rf "$out_dir";
+        mkdir -p "$out_dir";
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" coverage-export'
+
+  docker:ci:rust:export:
+    desc: Run native Rust formatting/coverage on one CI runner and export only coverage artifacts.
+    deps: [sccache:ensure, registry-cache:ensure]
+    vars:
+      CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/rust" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        out_dir="{{.CI_ARTIFACT_DIR}}";
+        case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
+        rm -rf "$out_dir"; mkdir -p "$out_dir";
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" --set "builder-core-deps.output=type=cacheonly" --set "rust-base.output=type=cacheonly" ci-rust builder-core-deps rust-base'
+      - task: registry-cache:publish:native
+
+  docker:ci:wasm:export:
+    desc: Run WASM clippy/build on a separate CI runner and export only the generated package.
+    deps: [sccache:ensure, registry-cache:ensure]
+    vars:
+      CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/wasm" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        out_dir="{{.CI_ARTIFACT_DIR}}";
+        case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
+        rm -rf "$out_dir"; mkdir -p "$out_dir";
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" --set "builder-wasm-deps.output=type=cacheonly" wasm-export builder-wasm-deps'
+      - task: registry-cache:publish:wasm
+
+  docker:ci:wasm:node-test:
+    desc: Run WASM Node tests after the exact generated package is available to parallel consumers.
+    deps: [sccache:ensure, registry-cache:ensure]
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "builder-wasm.output=type=cacheonly"
+        builder-wasm
+
+  docker:ci:cache:publish:rust-base:
+    desc: Publish only the shared rust-base toolchain scope from this job's builder.
+    env:
+      GHA_CACHE_WRITE_ENABLED: "1"
+    cmds:
+      - |
+        set -euo pipefail
+        if [ -n "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
+          {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
+            rust-base
+        else
+          {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
+            --set "rust-base.cache-from=" \
+            rust-base
+        fi
+
+  docker:ci:cache:publish:native:
+    desc: Export the already-verified native dependency/source graph from this job's builder.
+    env:
+      GHA_CACHE_WRITE_ENABLED: "1"
+    cmds:
+      # Stage rust-base alone, then deps/debug. Avoids one Bake rewriting parents
+      # while cooking chef leaves.
+      # Main clears cache-from so export uses fully local layers. PR/Remote keep
+      # cache-from so remote hits re-export without cold chef cooks.
+      - task: docker:ci:cache:publish:rust-base
+      - |
+        set -euo pipefail
+        if [ -n "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
+          {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
+            --set "rust-base.cache-to=" \
+            builder-core-deps builder-debug
+        else
+          {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
+            --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
+            --set "builder-core-deps.cache-from=" \
+            --set "builder-debug.cache-from=" \
+            builder-core-deps builder-debug
+        fi
+      # Preflight has its own Bake files and Zot scope; export it with product native.
+      # Clear rust-base.cache-to: native already published rust-base, and a second
+      # writer during the linked contexts bake can thin-export that parent scope.
+      - >-
+        {{.DOCKER}} buildx bake
+        --allow=fs.read={{.REPO_ROOT}}
+        {{.SCCACHE_S3_BUILD_SECRETS}}
+        -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
+        -f {{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/docker-bake.hcl
+        -f {{.REPO_ROOT}}/preflight/docker-bake.hcl
+        --set '*.context={{.REPO_ROOT}}'
+        --set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'
+        --set '*.args.SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}'
+        --set '*.args.SCCACHE_BUCKET={{.SCCACHE_BUCKET}}'
+        --set "*.output=type=cacheonly"
+        --set "rust-base.cache-to="
+        preflight-test
+
+  docker:ci:cache:publish:wasm:
+    desc: Export verified WASM scopes from local layers without reimporting a thin hosted index.
+    env:
+      GHA_CACHE_WRITE_ENABLED: "1"
+    cmds:
+      # Stage rust-base, then wasm-deps, then source export. Keeps each Zot scope
+      # on its own Bake so one miss cannot cold-rebuild the whole chain.
+      # PR/Remote: keep cache-from (wasm scopes only) so remote CACHED verifies
+      # re-export without cold apt/chef. Clearing cache-from after a fully remote
+      # hit rebuilds rust-base from scratch.
+      # Main: clear cache-from for a fat trusted fingerprint export, then verify.
+      - task: docker:ci:cache:publish:rust-base
+      - |
+        set -euo pipefail
+        if [ -n "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
+          {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
+            --set "rust-base.cache-to=" \
+            builder-wasm-deps
+          {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
+            --set "rust-base.cache-to=" \
+            --set "builder-wasm-deps.cache-to=" \
+            wasm-export
+        else
+          {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
+            --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
+            --set "builder-wasm-deps.cache-from=" \
+            --set "builder-wasm-deps.cache-to=type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,timeout=10m" \
+            builder-wasm-deps
+          {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "*.output=type=cacheonly" \
+            --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
+            --set "builder-wasm-deps.cache-to=" \
+            --set "wasm-export.cache-from=" \
+            wasm-export
+          bash "{{.REPO_ROOT}}/.github/scripts/verify-wasm-gha-cache.sh"
+        fi
+
+  docker:rust-base:
+    desc: Bake only rust-base (apt/mold/sccache). Read-only for Zot; never publishes.
+    deps: [sccache:ensure, registry-cache:ensure]
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "rust-base.output=type=cacheonly"
+        --set "rust-base.cache-to="
+        rust-base
+
+  docker:ecosystem:policy-tools:
+    desc: Bake and load rust-ecosystem-policy-tools (pinned deny/audit CLIs).
+    deps: [sccache:ensure, registry-cache:ensure]
+    cmds:
+      - task: docker:rust-base
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "rust-ecosystem-policy-tools.cache-to="
+        --set "rust-base.cache-to="
+        --set "rust-base.cache-from="
+        rust-ecosystem-policy-tools
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          # Publish Zot only. Do not reload type=docker or a thin export can replace
+          # the already-loaded runnable policy-tools tag used by dependency-policy:run.
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
+            --set "rust-ecosystem-policy-tools.output=type=cacheonly" \
+            rust-ecosystem-policy-tools
+        fi
+
+  docker:ecosystem:dependency-policy:run:
+    internal: true
+    desc: Run cargo-deny and cargo-audit for one workspace in the policy-tools image.
+    requires:
+      vars: [WORKSPACE]
+    cmds:
+      # Use bash -c (not -lc): a login shell resets PATH and drops /usr/local/cargo/bin.
+      - >-
+        bash -c 'set -euo pipefail;
+        workspace="{{.WORKSPACE}}";
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        {{.DOCKER_RUN_LIMITS}}
+        -v "{{.REPO_ROOT}}:/meta-secret/nook"
+        -w /meta-secret/nook
+        {{.DOCKER_POLICY_TOOLS_IMAGE}}
+        bash -c "set -euo pipefail;
+        cargo-deny --manifest-path \"$workspace/Cargo.toml\" --log-level error check --hide-inclusion-graph;
+        (cd \"$workspace\" && cargo-audit audit --quiet)"'
+
+  docker:ecosystem:dependency-policy:
+    desc: Run cargo-deny and cargo-audit for every Rust workspace via its Taskfile.
+    deps: [sccache:ensure, registry-cache:ensure]
+    cmds:
+      - task: docker:ecosystem:policy-tools
+      - task: rust:dependency-policy
+      - task: preflight:dependency-policy
+      - task: fuzz:dependency-policy
+      - task: minds:dependency-policy
+
+  docker:ecosystem:nightly:verify:
+    desc: Warm rust-ecosystem-nightly without writing its Zot scope.
+    deps: [sccache:ensure, registry-cache:ensure]
+    cmds:
+      - task: docker:rust-base
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "rust-ecosystem-nightly.cache-to="
+        --set "rust-base.cache-to="
+        --set "rust-base.cache-from="
+        rust-ecosystem-nightly
+
+  docker:ecosystem:nightly:
+    desc: Bake only rust-ecosystem-nightly. Sole shared nightly Zot writer when writes are enabled.
+    deps: [sccache:ensure, registry-cache:ensure]
+    cmds:
+      - task: docker:ecosystem:nightly:verify
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
+            rust-ecosystem-nightly
+        fi
+
+  docker:ecosystem:deterministic:
+    desc: Bake Proptest, Insta, and Loom on the sealed Rust dependency graph.
+    deps: [sccache:ensure, registry-cache:ensure]
+    cmds:
+      # rust-platform → leaf. Clear parent cache-from: context target:rust-platform
+      # (and its builder-core-deps parent) would re-import a shorter Zot index and
+      # orphan the leaf RUN.
+      - task: docker:rust-base
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "rust-ecosystem-deterministic.cache-to="
+        --set "rust-platform.cache-to="
+        --set "rust-platform.cache-from="
+        --set "builder-core-deps.cache-to="
+        --set "builder-core-deps.cache-from="
+        --set "rust-base.cache-to="
+        --set "rust-base.cache-from="
+        rust-ecosystem-deterministic
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "rust-platform.cache-to=" \
+            --set "rust-platform.cache-from=" \
+            --set "builder-core-deps.cache-to=" \
+            --set "builder-core-deps.cache-from=" \
+            --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
+            rust-ecosystem-deterministic
+        fi
+
+  docker:ecosystem:fuzz:
+    desc: Bake the cargo-fuzz smoke target with a bounded runtime.
+    deps: [sccache:ensure, registry-cache:ensure]
+    vars:
+      FUZZ_SECONDS: '{{default "20" .FUZZ_SECONDS}}'
+    cmds:
+      # Warm nightly read-only first. Fuzz never rewrites nightly/rust-base.
+      # Clear parent cache-from: context target:rust-platform-nightly (and its
+      # nightly parent) would re-import a shorter Zot index and orphan the leaf.
+      - task: docker:ecosystem:nightly:verify
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}"
+        --set "rust-fuzz-smoke.cache-to="
+        --set "rust-platform-nightly.cache-to="
+        --set "rust-platform-nightly.cache-from="
+        --set "rust-ecosystem-nightly.cache-to="
+        --set "rust-ecosystem-nightly.cache-from="
+        --set "rust-base.cache-to="
+        --set "rust-base.cache-from="
+        rust-fuzz-smoke
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}" \
+            --set "rust-platform-nightly.cache-to=" \
+            --set "rust-platform-nightly.cache-from=" \
+            --set "rust-ecosystem-nightly.cache-to=" \
+            --set "rust-ecosystem-nightly.cache-from=" \
+            --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
+            rust-fuzz-smoke
+        fi
+
+  docker:ecosystem:dylint:
+    desc: Bake repository Dylint lints on the sealed nightly ecosystem image.
+    deps: [sccache:ensure, registry-cache:ensure]
+    cmds:
+      # Warm/publish nightly first (sole nightly writer), then the dylint leaf.
+      - task: docker:ecosystem:nightly
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "rust-dylint.cache-to="
+        --set "rust-platform-nightly.cache-to="
+        --set "rust-platform-nightly.cache-from="
+        --set "rust-ecosystem-nightly.cache-to="
+        --set "rust-ecosystem-nightly.cache-from="
+        --set "rust-base.cache-to="
+        --set "rust-base.cache-from="
+        rust-dylint
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            --set "rust-platform-nightly.cache-to=" \
+            --set "rust-platform-nightly.cache-from=" \
+            --set "rust-ecosystem-nightly.cache-to=" \
+            --set "rust-ecosystem-nightly.cache-from=" \
+            --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
+            rust-dylint
+        fi
+

@@ -1,0 +1,8 @@
+version: '3'
+
+tasks:
+  minds:dependency-policy:
+    desc: Run cargo-deny and cargo-audit for the minds workspace.
+    cmds:
+      - task: docker:ecosystem:dependency-policy:run
+        vars: { WORKSPACE: agentic-ai/minds }

@@ -291,6 +291,6 @@ whether a value exists.
   dependencies.
 - Check that helper APIs accept typed variants/enums instead of strings or
   optional field bags.
-- Run targeted portable Rust tests plus `cd nook-app && cargo clippy -p
+- Run targeted portable Rust tests plus `cd nook-app/nook-platform && cargo clippy -p
   nook-app-common -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets -- -D warnings`.
 - When exposed to web, regenerate wasm bindings and run the web type check.

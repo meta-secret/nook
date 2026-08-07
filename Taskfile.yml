@@ -3,12 +3,54 @@ version: '3'
 vars:
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
 
+# Local Bake restores/publishes PR-scoped Zot caches when remote registry
+# credentials exist under ~/.nook/cache. CI leaves workflow-owned GHA_CACHE_*.
+# Opt out: NOOK_REGISTRY_CACHE=0.
+env:
+  NOOK_REGISTRY_CACHE_HOST:
+    sh: >-
+      if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '%s' "${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}";
+      elif [ -r "${HOME}/.nook/cache/registry-host" ]; then tr -d '[:space:]' <"${HOME}/.nook/cache/registry-host";
+      else printf 'registry.dev.nokey.sh'; fi
+  GHA_CACHE_ENABLED:
+    sh: >-
+      if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '%s' "${GHA_CACHE_ENABLED:-}";
+      elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ]; then printf '1'; fi
+  GHA_CACHE_WRITE_ENABLED:
+    sh: >-
+      if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '%s' "${GHA_CACHE_WRITE_ENABLED:-}"; fi
+  GHA_CACHE_SCOPE_SUFFIX:
+    sh: >-
+      if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '%s' "${GHA_CACHE_SCOPE_SUFFIX:-}";
+      elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ]; then
+        pr="$(gh pr view --json number -q .number 2>/dev/null || true)";
+        if [ -n "$pr" ] && [ "$pr" -eq "$pr" ] 2>/dev/null; then printf '%s' "-pr-$pr";
+        else printf '%s' "-local-$(git rev-parse --abbrev-ref HEAD | sha256sum | cut -c1-20)"; fi;
+      fi
+  GHA_CACHE_FALLBACK_ENABLED:
+    sh: >-
+      if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '%s' "${GHA_CACHE_FALLBACK_ENABLED:-}";
+      elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ]; then printf '1'; fi
+  GHA_RUST_WASM_DEPS_SCOPE:
+    sh: >-
+      if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '%s' "${GHA_RUST_WASM_DEPS_SCOPE:-}";
+      elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ]; then
+        printf 'nook-rust-wasm-deps-v5-%s' "$(git hash-object nook-app/nook-platform/Cargo.lock)";
+      fi
+  NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:
+    sh: >-
+      if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '%s' "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}";
+      elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ]; then printf '1'; fi
+
 includes:
   preflight:
     taskfile: preflight/Taskfile.yml
     flatten: true
   app:
     taskfile: nook-app/Taskfile.yml
+    flatten: true
+  minds:
+    taskfile: agentic-ai/minds/Taskfile.yml
     flatten: true
   agentic-ai:
     taskfile: .task/agentic-ai.yml

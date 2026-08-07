@@ -4,9 +4,9 @@ Use this workflow for quality, CI, and deployment changes.
 
 1. Keep Taskfile as the source of truth for normal build, lint, test, and check commands.
    - App commands live in `nook-app/Taskfile.yml`.
-   - Cross-package app tasks live in `nook-app/.task/`.
-   - Docker tasks live in `nook-app/docker/Taskfile.yml`.
-   - Web-family tasks live in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`.
+   - App-wide tasks live in `nook-app/Taskfile.yml`; CI tasks in `nook-app/ci/Taskfile.yml`.
+   - Docker tasks live in `nook-app/nook-platform/docker/Taskfile.yml` and `nook-app/nook-web/docker/Taskfile.yml`.
+   - Web-family tasks live in `nook-app/nook-web/Taskfile.yml` and package Taskfiles under `nook-web-extension/` / `nook-platform/`.
    - Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`.
    - `task preflight` Bakes `preflight-test` on the shared `rust-base` target with cargo-chef dependency cooks and SeaweedFS sccache.
    - Preflight uses the dedicated `nook-preflight-v1` Zot scope so chef cooks reuse across PR runs.
@@ -17,7 +17,7 @@ Use this workflow for quality, CI, and deployment changes.
      the shared parent scope.
    - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
    - Reusable GitHub workflow shell lives in `.task/ci-workflows.yml` and `.github/scripts/`; workflows stay thin `task` wrappers around Actions-only glue.
-   - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as separate Bake images/stages in `nook-app/docker/rust.Dockerfile` (off `rust-base`, not inside it).
+   - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as sibling Dockerfiles under `nook-app/nook-platform/docker/rust/` (Bake images off `rust-base`, not inside product `lineage.Dockerfile`).
    - They run through `task docker:ecosystem:*`.
    - Precise stage tasks warm parents alone before leaves:
      - `task docker:rust-base` (read-only; never publishes Zot)
@@ -33,7 +33,14 @@ Use this workflow for quality, CI, and deployment changes.
    - Prefer pinned release binaries on dedicated ecosystem stages (`rust-ecosystem-policy-tools`, `rust-ecosystem-nightly`) over `cargo install` on the runner.
    - Keep those tools out of `rust-base`.
    - Keep ecosystem Bake jobs exact-head merge gates and pin every compiler-coupled version.
-3. Build Docker images with Docker Buildx Bake through `nook-app/docker-bake.hcl`.
+3. Build Docker images with Docker Buildx Bake.
+   - `nook-app/docker-bake.hcl` is a thin shared fragment:
+     GHA/registry/sccache vars, `_sccache`, and cross-lineage prepare groups.
+   - Platform Rust Zot scopes, ecosystem targets, and loadable `nook-rust*`
+     images live under `nook-app/nook-platform/**/docker-bake.hcl`.
+   - Web Zot scopes and loadable `nook-web*` images live under
+     `nook-app/nook-web/**/docker-bake.hcl`.
+   - Preflight Zot scopes live in `preflight/docker-bake.hcl`.
    - Do **not** use Docker named volumes for `target/`, Cargo registries, `node_modules`, or other build outputs.
    - The Rust dep cache and warm `target/` are baked into normal image layers.
    - Workspace source is copied into the nook-web image (sealed image, no runtime mount).
@@ -42,10 +49,10 @@ Use this workflow for quality, CI, and deployment changes.
 4. Use Bun for web tooling. Do not introduce npm commands or Node-only command flows.
 5. Prefer official prebuilt release archives downloaded with `curl` for standalone Docker image tools. Avoid `cargo install` when a release archive is available.
 6. Preserve these gates unless the task explicitly changes them:
-   - `cd nook-app && cargo fmt --all -- --check`
+   - `cd nook-app/nook-platform && cargo fmt --all -- --check`
    - `clippy::all` and `clippy::pedantic` are enabled in every Rust project's
-     manifest; `cd nook-app && cargo clippy -p nook-app-common -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets`,
-     `cd nook-app && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm`,
+     manifest; `cd nook-app/nook-platform && cargo clippy -p nook-app-common -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets`,
+     `cd nook-app/nook-platform && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm`,
      and the standalone `preflight` Clippy pass enforce them with `-D warnings`
    - `task rust:coverage:check` — combined `nook-app-common`, `nook-core`,
      `nook-auth2`, `nook-replication`, and `nook-event-log` coverage vs the **90%** line floor
@@ -70,19 +77,12 @@ Use this workflow for quality, CI, and deployment changes.
    - `vite build`
    - `task preflight` — repository-wide Rust invariant tests, before app setup
    - `PR / Rust ecosystem / Dependency policy and RustSec` —
-     `task docker:ecosystem:dependency-policy` runs
-     `docker:ecosystem:policy-tools` then `rust-dependency-policy`
-     from `nook-app/docker/rust.Dockerfile` (pinned `cargo-deny` + `cargo-audit`;
-     not installed into `rust-base`). Tools and deny/audit leaf use separate
-     Zot scopes.
-     Each stage imports with cache-to cleared.
-     Then it publishes with leaf cache-from kept.
-     That re-exports remote hits without cold tool or chef rebuilds.
-     After warming a parent, clear that parent's cache-from on the next Bake.
-     `target:PARENT` still imports the parent's Zot scope.
-     That shorter index orphans leaf RUNs.
-     Tools, nightly, and preflight scopes must not list `rust-base` in their
-     own cache-from.
+     `task docker:ecosystem:dependency-policy` loads pinned `cargo-deny` +
+     `cargo-audit` via `docker:ecosystem:policy-tools`, then runs each
+     workspace task (`rust:dependency-policy`, `preflight:dependency-policy`,
+     `fuzz:dependency-policy`, `minds:dependency-policy`) in that image.
+     Never aggregate multiple workspaces into one Dockerfile RUN.
+     Tools Bake must not list `rust-base` in its own cache-from.
      Never `cargo install` those tools on the runner host. Advisory exceptions
      must name the RustSec IDs, identify the exact pinned upstream graph, and
      state the dependency upgrade that removes them in both `deny.toml` and
@@ -92,13 +92,19 @@ Use this workflow for quality, CI, and deployment changes.
      when upstream moves from `hickory-proto` 0.25.2 to 0.26.1 or later.
    - `PR / Rust ecosystem / Proptest, Insta, and Loom` —
      `task docker:ecosystem:deterministic` warms `docker:rust-base`, then Bakes
-     `rust-ecosystem-deterministic` on `builder-core-deps` so
+     `rust-ecosystem-deterministic` on `rust-platform` (platform sources over
+     cooked `builder-core-deps`) so
      [`proptest`](https://proptest-rs.github.io/proptest/),
      [`insta`](https://insta.rs/), and [`loom`](https://github.com/tokio-rs/loom)
      reuse the sealed Rust dependency graph instead of a host toolchain.
+     Lineage stays manifest-stable through `builder-*-deps`; `rust-platform` is
+     the shared source overlay for bulk leaves that do not need per-crate layers
+     (e.g. deterministic). Focused test/lint/coverage and `builder-debug` keep
+     per-crate COPY+RUN layering so one crate edit reuses earlier compile layers.
    - `PR / Rust ecosystem / Cargo fuzz smoke` —
      `task docker:ecosystem:fuzz` warms `docker:ecosystem:nightly:verify`, then
-     Bakes `rust-fuzz-smoke` with pinned
+     Bakes `rust-fuzz-smoke` on `rust-platform-nightly` (platform sources over
+     toolchain-only `rust-ecosystem-nightly`) with pinned
      [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html).
      Fuzz restores nightly read-only and writes `nook-rust-ecosystem-fuzz-v2`.
    - `PR / Rust ecosystem / Kani bounded proofs` —
@@ -107,10 +113,12 @@ Use this workflow for quality, CI, and deployment changes.
    - `PR / Rust ecosystem / Dylint repository lints` —
      `task docker:ecosystem:dylint` runs `docker:ecosystem:nightly` first
      (sole nightly writer when writes are enabled), then Bakes `rust-dylint`
-     with pinned
+     on `rust-platform-nightly` with pinned
      [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
      `dylint-link` release binaries (no host `cargo install`).
      The dylint leaf scope is `nook-rust-ecosystem-dylint-v2`.
+     Nightly stays toolchain-stable; `rust-platform-nightly` is the shared
+     source overlay for dylint/fuzz leaves.
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.

@@ -17,19 +17,18 @@ on:
       - .github/workflows/rust-ecosystem.yml
       - .github/workflows/rust-ecosystem-checks.yml
       - deny.toml
-      - nook-app/.insta.yaml
-      - nook-app/.cargo/**
-      - nook-app/docker/rust.Dockerfile
-      - nook-app/docker/rust.docker-bake.hcl
-      - nook-app/docker/Taskfile.yml
+      - nook-app/nook-platform/.insta.yaml
+      - nook-app/nook-platform/.cargo/**
+      - nook-app/nook-platform/docker/rust/**
+      - nook-app/nook-platform/docker/Taskfile.yml
       - nook-app/docker-bake.hcl
       - nook-app/Taskfile.yml
-      - fuzz/**
+      - nook-app/nook-platform/fuzz/**
       - preflight/**
       - agentic-ai/minds/**
       - nook-app/**/*.rs
       - nook-app/**/Cargo.toml
-      - nook-app/Cargo.lock
+      - nook-app/nook-platform/Cargo.lock
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:

@@ -243,8 +243,8 @@ tasks:
           -cf - \
           infra/k0s \
           agentic-ai/minds \
-          nook-app/docker/sccache-wrapper.sh \
-          nook-app/docker/sccache-report.sh |
+          nook-app/nook-platform/docker/sccache-wrapper.sh \
+          nook-app/nook-platform/docker/sccache-report.sh |
           ssh -o BatchMode=yes "$ssh_target" \
             "tar -xf - -C '$remote_dir'"
         BASH

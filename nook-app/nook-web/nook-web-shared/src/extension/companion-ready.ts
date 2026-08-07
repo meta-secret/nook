@@ -13,6 +13,13 @@ type NodePathJoin = {
   join: (...parts: string[]) => string;
 };
 
+type BunFileApi = {
+  file: (path: string) => {
+    exists: () => boolean | Promise<boolean>;
+    arrayBuffer: () => Promise<ArrayBuffer>;
+  };
+};
+
 enum CompanionWasmBytesKind {
   Absent = "absent",
   Present = "present",
@@ -27,6 +34,9 @@ type CompanionWasmBytes =
  * Must stay free of `import.meta` so classic content-script bundles can parse.
  */
 declare const __NOOK_COMPANION_WASM_BYTES__: string;
+
+const SEALED_COMPANION_WASM_PATH =
+  "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm";
 
 function runningUnderNode(): boolean {
   const nodeProcess = (
@@ -67,41 +77,73 @@ function embeddedCompanionWasmBytes(): CompanionWasmBytes {
 async function importNodeModule<TModule>(specifier: string): Promise<TModule> {
   // Keep `import()` out of the classic content-script parse tree; Chrome rejects
   // bare dynamic import syntax even when the Node branch never runs.
-  const loader = new Function(
-    "specifier",
-    "return import(specifier);",
-  ) as (specifier: string) => Promise<TModule>;
-  return loader(specifier);
+  try {
+    const loader = new Function(
+      "specifier",
+      "return import(specifier);",
+    ) as (specifier: string) => Promise<TModule>;
+    return await loader(specifier);
+  } catch {
+    // vitest/vite-node can block Function-constructed import(); eval keeps the
+    // static source free of `import()` while still loading Node builtins.
+    return await (
+      0,
+      eval
+    )(`import(${JSON.stringify(specifier)})`) as Promise<TModule>;
+  }
+}
+
+async function companionWasmDiskCandidates(): Promise<string[]> {
+  const nodeProcess = (
+    globalThis as { process?: { cwd?: () => string; env?: Record<string, string> } }
+  ).process;
+  const fromEnv = nodeProcess?.env?.NOOK_COMPANION_WASM_PATH?.trim() ?? "";
+  const cwd = nodeProcess?.cwd?.() ?? "";
+  let join: NodePathJoin["join"] = (...parts: string[]) => parts.join("/");
+  try {
+    const nodePath = await importNodeModule<NodePathJoin>("node:path");
+    join = nodePath.join.bind(nodePath);
+  } catch {
+    // Path joins below still work with the POSIX fallback.
+  }
+  return [
+    fromEnv,
+    SEALED_COMPANION_WASM_PATH,
+    join(
+      cwd,
+      "nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm",
+    ),
+    join(cwd, "src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm"),
+    join(
+      cwd,
+      "../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm",
+    ),
+  ].filter((candidate) => candidate.length > 0);
 }
 
 async function readCompanionWasmFromDisk(): Promise<CompanionWasmBytes> {
   if (!runningUnderNode()) {
     return { kind: CompanionWasmBytesKind.Absent };
   }
+  const candidates = await companionWasmDiskCandidates();
+  const bun = (globalThis as { Bun?: BunFileApi }).Bun;
+  if (bun) {
+    for (const candidate of candidates) {
+      try {
+        const file = bun.file(candidate);
+        if (await file.exists()) {
+          return {
+            kind: CompanionWasmBytesKind.Present,
+            bytes: await file.arrayBuffer(),
+          };
+        }
+      } catch {
+        // Try the next candidate / Node fs fallback.
+      }
+    }
+  }
   try {
-    const [nodeFs, nodePath] = await Promise.all([
-      importNodeModule<NodeFsReadFileSync>("node:fs"),
-      importNodeModule<NodePathJoin>("node:path"),
-    ]);
-    const nodeProcess = (
-      globalThis as { process?: { cwd?: () => string; env?: Record<string, string> } }
-    ).process;
-    const fromEnv = nodeProcess?.env?.NOOK_COMPANION_WASM_PATH?.trim() ?? "";
-    const candidates = [
-      fromEnv,
-      nodePath.join(
-        nodeProcess?.cwd?.() ?? "",
-        "nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm",
-      ),
-      nodePath.join(
-        nodeProcess?.cwd?.() ?? "",
-        "src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm",
-      ),
-      nodePath.join(
-        nodeProcess?.cwd?.() ?? "",
-        "../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm",
-      ),
-    ].filter((candidate) => candidate.length > 0);
+    const nodeFs = await importNodeModule<NodeFsReadFileSync>("node:fs");
     for (const candidate of candidates) {
       if (!nodeFs.existsSync(candidate)) {
         continue;
@@ -155,6 +197,14 @@ async function companionWasmModuleOrPath(): Promise<CompanionWasmModule> {
     };
   }
 
+  const diskBytes = await readCompanionWasmFromDisk();
+  if (diskBytes.kind === CompanionWasmBytesKind.Present) {
+    return {
+      kind: CompanionWasmModuleKind.Present,
+      moduleOrPath: diskBytes.bytes,
+    };
+  }
+
   const chromeGlobal = (globalThis as { chrome?: ChromeRuntime }).chrome;
   if (chromeGlobal?.runtime?.getURL) {
     const packaged = chromeGlobal.runtime.getURL(
@@ -167,15 +217,12 @@ async function companionWasmModuleOrPath(): Promise<CompanionWasmModule> {
         moduleOrPath: packagedBytes.bytes,
       };
     }
-    return { kind: CompanionWasmModuleKind.Present, moduleOrPath: packaged };
-  }
-
-  const diskBytes = await readCompanionWasmFromDisk();
-  if (diskBytes.kind === CompanionWasmBytesKind.Present) {
-    return {
-      kind: CompanionWasmModuleKind.Present,
-      moduleOrPath: diskBytes.bytes,
-    };
+    // Node/Bun unit tests often stub chrome.runtime.getURL without a fetchable
+    // packaged WASM. Do not hand wasm-bindgen a chrome-extension: URL there —
+    // Bun's fetch only accepts http(s)/s3 and the stub would fail the suite.
+    if (!runningUnderNode()) {
+      return { kind: CompanionWasmModuleKind.Present, moduleOrPath: packaged };
+    }
   }
 
   // Node/Vite unit tests: let wasm-bindgen resolve via import.meta.url next to
@@ -188,6 +235,9 @@ async function startCompanionWasm(): Promise<unknown> {
   if (resolved.kind === CompanionWasmModuleKind.Present) {
     return initCompanionWasm({ module_or_path: resolved.moduleOrPath });
   }
+  // Node/Bun last resort: wasm-bindgen resolves via import.meta.url. Extension
+  // bun tests need on-disk bytes (or they hit Bun's file: fetch rejection).
+  // Web-app vitest installs a fetch mock in setup-wasm for this path.
   return initCompanionWasm();
 }
 

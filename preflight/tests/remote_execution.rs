@@ -171,14 +171,24 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
 #[test]
 fn frequent_remote_checks_use_narrow_source_sealed_images() {
     let app_tasks = read("nook-app/Taskfile.yml");
-    let core_tasks = read("nook-app/.task/core.yml");
-    let web_tasks = read("nook-app/nook-web/.task/web.yml");
-    let extension_tasks = read("nook-app/nook-web/.task/extension.yml");
-    let base_dockerfile = read("nook-app/docker/rust.Dockerfile");
-    let base_dockerignore = read("nook-app/docker/rust.Dockerfile.dockerignore");
+    let core_tasks = read("nook-app/nook-platform/Taskfile.yml");
+    let web_tasks = read("nook-app/nook-web/Taskfile.yml");
+    let extension_tasks = read("nook-app/nook-web/nook-web-extension/Taskfile.yml");
+    let lineage_dockerfile = read("nook-app/nook-platform/docker/rust/lineage.Dockerfile");
+    let test_dockerfile = read("nook-app/nook-platform/docker/rust/nook-rust-test.Dockerfile");
+    let lint_dockerfile = read("nook-app/nook-platform/docker/rust/nook-rust-lint.Dockerfile");
+    let coverage_dockerfile =
+        read("nook-app/nook-platform/docker/rust/nook-rust-coverage.Dockerfile");
+    let base_dockerignore =
+        read("nook-app/nook-platform/docker/rust/nook-rust-test.Dockerfile.dockerignore");
+    let lineage_dockerignore =
+        read("nook-app/nook-platform/docker/rust/lineage.Dockerfile.dockerignore");
     let core_bake = read("nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let wasm_bake = read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
+    let web_app_bake = read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
     let wasm_dockerfile = read("nook-app/nook-platform/nook-wasm/Dockerfile");
-    let bake = read("nook-app/docker-bake.hcl");
+    let shared_bake = read("nook-app/docker-bake.hcl");
+    let bake = format!("{shared_bake}\n{core_bake}\n{wasm_bake}\n{web_app_bake}");
 
     for required in [
         "setup:rust:test:",
@@ -188,7 +198,9 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
         "nook-web-focused",
     ] {
         assert!(
-            app_tasks.contains(required) || bake.contains(required),
+            app_tasks.contains(required)
+                || core_tasks.contains(required)
+                || bake.contains(required),
             "focused sealed-image contract missing: {required}"
         );
     }
@@ -198,12 +210,16 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     assert!(web_tasks.contains("remote:web:check:"));
     assert!(web_tasks.contains("remote:web:test:"));
     assert!(extension_tasks.contains("remote:extension:check:"));
-    assert!(base_dockerfile.contains("FROM builder-core-deps AS nook-rust-test"));
-    assert!(base_dockerfile.contains("-type f -name '*.rs' -exec touch {} +"));
-    assert!(base_dockerfile.contains("focused-native-test-compile"));
-    assert!(base_dockerfile.contains("focused-rust-lint-compile"));
-    assert!(base_dockerfile.contains("focused-rust-coverage-compile"));
-    assert!(base_dockerfile.contains("--no-run"));
+    assert!(
+        lineage_dockerfile.contains("FROM rust-base AS chef-deps")
+            && lineage_dockerfile.contains("FROM builder-wasm-deps AS builder-core-deps")
+            && lineage_dockerfile.contains("FROM builder-core-deps AS rust-platform")
+            && lineage_dockerfile.contains("COPY nook-app/nook-platform/ nook-app/nook-platform/")
+            && !lineage_dockerfile.contains("AS nook-rust-test")
+            && !lineage_dockerfile.contains("AS nook-rust-lint")
+            && !lineage_dockerfile.contains("AS nook-rust-coverage"),
+        "lineage.Dockerfile must own deps + rust-platform without focused leaves"
+    );
     for ignored in [
         "**/docker-bake.hcl",
         "nook-app/nook-platform/nook-core/Dockerfile",
@@ -216,55 +232,118 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
             "focused Rust context must ignore non-compiler input: {ignored}"
         );
     }
-    for (target, compile_marker) in [
-        ("nook-rust-test", "focused-native-test-compile"),
-        ("nook-rust-lint", "focused-rust-lint-compile"),
-        ("nook-rust-coverage", "focused-rust-coverage-compile"),
+    for ignored in [
+        "nook-app/nook-platform/docker/rust",
+        "nook-app/nook-platform/docker/Taskfile.yml",
+        "nook-app/nook-platform/Taskfile.yml",
+        "**/target",
     ] {
-        let stage = base_dockerfile
-            .split(&format!("AS {target}\n"))
-            .nth(1)
-            .and_then(|remainder| remainder.split("\nFROM ").next())
-            .unwrap_or_else(|| panic!("focused Dockerfile stage must exist: {target}"));
-        let compile = stage
-            .find(compile_marker)
-            .unwrap_or_else(|| panic!("focused compile marker must exist: {compile_marker}"));
-        let full_checkout = stage
-            .find("COPY . .")
-            .unwrap_or_else(|| panic!("focused stage must seal the full checkout: {target}"));
         assert!(
-            compile < full_checkout,
-            "{target} must compile from narrow Rust inputs before copying the full checkout"
-        );
-        assert!(
-            stage[..compile].contains("COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/")
-        );
-        assert!(stage[..compile].contains("COPY nook-app/.cargo nook-app/.cargo"));
-        assert!(stage[..compile].contains("COPY nook-app/.config nook-app/.config"));
-        assert!(
-            stage[..compile]
-                .contains("COPY nook-app/nook-platform/nook-core nook-app/nook-platform/nook-core")
+            lineage_dockerignore.lines().any(|line| line == ignored),
+            "rust-platform COPY context must ignore non-source input: {ignored}"
         );
     }
+    assert!(
+        core_bake.contains("target \"rust-platform\"")
+            && core_bake.contains("builder-core-deps = \"target:builder-core-deps\""),
+        "rust-platform Bake target must restore builder-core-deps via named context"
+    );
+    for (label, stage, compile_marker) in [
+        (
+            "test",
+            test_dockerfile.as_str(),
+            "focused-native-test-compile",
+        ),
+        (
+            "lint",
+            lint_dockerfile.as_str(),
+            "focused-rust-lint-compile",
+        ),
+        (
+            "coverage",
+            coverage_dockerfile.as_str(),
+            "focused-rust-coverage-compile",
+        ),
+    ] {
+        assert!(
+            stage.contains(&format!("FROM builder-core-deps AS nook-rust-{label}"))
+                && stage.contains(compile_marker)
+                && stage.contains("COPY nook-app/nook-platform/nook-app-common nook-app-common")
+                && stage.contains("COPY nook-app/nook-platform/nook-auth2 nook-auth2")
+                && stage.contains("COPY nook-app/nook-platform/nook-replication nook-replication")
+                && stage.contains("COPY nook-app/nook-platform/nook-event-log nook-event-log")
+                && stage.contains(
+                    "COPY nook-app/nook-platform/nook-companion-core nook-companion-core"
+                )
+                && stage.contains("COPY nook-app/nook-platform/nook-core nook-core"),
+            "focused {label} must COPY+RUN per crate from builder-core-deps for layer cache"
+        );
+        let compile = stage
+            .find(compile_marker)
+            .unwrap_or_else(|| panic!("focused {label} compile marker must exist"));
+        let full_checkout = stage
+            .find("COPY . .")
+            .unwrap_or_else(|| panic!("focused {label} must seal the full checkout"));
+        assert!(
+            compile < full_checkout,
+            "nook-rust-{label} must finish per-crate work before copying the full checkout"
+        );
+        let common_copy = stage
+            .find("COPY nook-app/nook-platform/nook-app-common nook-app-common")
+            .unwrap_or_else(|| panic!("{label} must copy nook-app-common before its RUN"));
+        let core_copy = stage
+            .find("COPY nook-app/nook-platform/nook-core nook-core")
+            .unwrap_or_else(|| panic!("{label} must copy nook-core before its RUN"));
+        assert!(
+            common_copy < core_copy && core_copy < compile,
+            "{label} crate COPY order must follow the dependency edge"
+        );
+    }
+    assert!(
+        test_dockerfile.contains("--no-run")
+            && test_dockerfile
+                .contains("COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm"),
+        "focused test must compile nextest binaries per crate including companion-wasm"
+    );
+    assert!(
+        lint_dockerfile
+            .contains("COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm")
+            && lint_dockerfile.contains("COPY nook-app/nook-platform/nook-wasm nook-wasm")
+            && lint_dockerfile.contains("wasm32-unknown-unknown"),
+        "focused lint must clippy wasm crates after native crates"
+    );
     assert!(wasm_dockerfile.contains("FROM builder-wasm-build AS focused-web-artifacts-source"));
     assert!(wasm_dockerfile.contains("FROM scratch AS focused-web-artifacts"));
-    assert!(bake.contains("inherits = [\"_nook-rust-test-common\"]"));
-    for target in [
-        "_nook-rust-test-common",
-        "_nook-rust-lint-common",
-        "_nook-rust-coverage-common",
+    assert!(core_bake.contains("inherits = [\"_nook-rust-test-common\"]"));
+    for (target, dockerfile) in [
+        ("_nook-rust-test-common", "nook-rust-test.Dockerfile"),
+        ("_nook-rust-lint-common", "nook-rust-lint.Dockerfile"),
+        (
+            "_nook-rust-coverage-common",
+            "nook-rust-coverage.Dockerfile",
+        ),
     ] {
         let stage = core_bake
             .split(&format!("target \"{target}\" {{\n"))
             .nth(1)
             .and_then(|remainder| remainder.split("\n}").next())
             .unwrap_or_else(|| panic!("focused Bake target must exist: {target}"));
-        assert!(stage.contains("dockerfile = \"nook-app/docker/rust.Dockerfile\""));
-        assert!(!stage.contains("builder-core-deps = \"target:builder-core-deps\""));
+        assert!(stage.contains(&format!(
+            "dockerfile = \"nook-app/nook-platform/docker/rust/{dockerfile}\""
+        )));
+        assert!(
+            stage.contains("builder-core-deps = \"target:builder-core-deps\""),
+            "{target} must take builder-core-deps via Bake named context"
+        );
     }
-    assert!(bake.contains("inherits = [\"_nook-web-focused-common\"]"));
-    assert!(!bake.contains("target \"nook-rust-test\" {\n  inherits = [\"_nook-rust-common\"]"));
-    assert!(!bake.contains("target \"nook-web-focused\" {\n  inherits = [\"_nook-web-common\"]"));
+    assert!(web_app_bake.contains("inherits   = [\"_nook-web-focused-common\"]"));
+    assert!(
+        !core_bake.contains("target \"nook-rust-test\" {\n  inherits = [\"_nook-rust-common\"]")
+    );
+    assert!(
+        !web_app_bake
+            .contains("target \"nook-web-focused\" {\n  inherits = [\"_nook-web-common\"]")
+    );
 }
 
 #[test]
@@ -362,5 +441,6 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() {
 
 fn workflow_or_remote_tasks(required: &str) -> bool {
     read(".github/workflows/remote.yml").contains(required)
-        || read("nook-app/docker/Taskfile.yml").contains(required)
+        || read("nook-app/nook-platform/docker/Taskfile.yml").contains(required)
+        || read("nook-app/nook-web/docker/Taskfile.yml").contains(required)
 }
