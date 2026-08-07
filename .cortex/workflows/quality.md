@@ -101,7 +101,7 @@ Use this workflow for quality, CI, and deployment changes.
      [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
      `dylint-link` release binaries (no host `cargo install`).
      When writes are enabled, the Task publishes nightly (sole nightly writer)
-     and the dylint leaf scope `nook-rust-ecosystem-dylint-v1`.
+     and the dylint leaf scope `nook-rust-ecosystem-dylint-v2`.
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
@@ -131,11 +131,13 @@ Use this workflow for quality, CI, and deployment changes.
     - They must not import PR-isolated rust-base parents.
     - Ecosystem nightly/policy-tools/policy and preflight scopes must not
       import rust-base at all.
+    - Dylint/fuzz leaf scopes must not import nightly (or rust-base).
     - WASM deps/source scopes must not import rust-base or native rust-deps.
     - Their mode=max exports already embed that parent chain.
     - Preflight restores rust-base only via Bake `contexts` (`target:rust-base`).
-    - Ecosystem jobs verify with cache-to off, then publish with cache-from kept
-      so remote hits re-export without cold chef/toolchain rebuilds.
+    - Ecosystem policy/deterministic jobs verify with cache-to off, then publish
+      with cache-from kept so remote hits re-export without cold rebuilds.
+    - Dylint/fuzz leaf publishers clear cache-from for fat leaf exports.
     - Product WASM publishers (Main and PR) clear cache-from for fat exports.
     - Main product publishers still clear cache-from for fat trusted exports.
     - One CI job writes each shared ecosystem registry ref.

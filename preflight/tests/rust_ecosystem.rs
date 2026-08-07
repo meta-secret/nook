@@ -228,6 +228,16 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         .nth(1)
         .and_then(|tail| tail.split("preflight_cache_to =").next())
         .unwrap_or("");
+    let dylint_from = docker_bake
+        .split("rust_ecosystem_dylint_cache_from =")
+        .nth(1)
+        .and_then(|tail| tail.split("rust_ecosystem_dylint_cache_to =").next())
+        .unwrap_or("");
+    let fuzz_from = docker_bake
+        .split("rust_ecosystem_fuzz_cache_from =")
+        .nth(1)
+        .and_then(|tail| tail.split("rust_ecosystem_fuzz_cache_to =").next())
+        .unwrap_or("");
     let pr_isolated_rust_base =
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true";
     let trusted_rust_base = "nook/buildcache/nook-rust-base-v1:buildcache";
@@ -243,6 +253,20 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && deps_from.contains(trusted_rust_base)
             && !deps_from.contains(pr_isolated_rust_base),
         "ecosystem/preflight scopes must not import rust-base; product deps keep trusted rust-base only"
+    );
+    assert!(
+        dylint_from.contains("nook-rust-ecosystem-dylint-v2")
+            && fuzz_from.contains("nook-rust-ecosystem-fuzz-v2")
+            && !dylint_from.contains("nook-rust-ecosystem-nightly")
+            && !fuzz_from.contains("nook-rust-ecosystem-nightly")
+            && !dylint_from.contains("nook-rust-base-v1")
+            && !fuzz_from.contains("nook-rust-base-v1"),
+        "dylint/fuzz leaf cache-from must be own-scope only (no nightly/rust-base short parents)"
+    );
+    assert!(
+        docker_tasks.contains("rust-dylint.cache-from=")
+            && docker_tasks.contains("rust-fuzz-smoke.cache-from="),
+        "dylint/fuzz publishers must clear cache-from for fat leaf exports"
     );
     assert!(
         policy_from.contains("nook-rust-ecosystem-policy-tools-v3")

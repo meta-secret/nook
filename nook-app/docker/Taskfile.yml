@@ -480,9 +480,11 @@ tasks:
         rust-fuzz-smoke
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
+          # Clear cache-from so the leaf export uses this job's verified layers.
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}" \
+            --set "rust-fuzz-smoke.cache-from=" \
             rust-fuzz-smoke
         fi
 
@@ -500,8 +502,10 @@ tasks:
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
             rust-ecosystem-nightly
+          # Clear cache-from so the leaf export uses this job's verified layers.
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
+            --set "rust-dylint.cache-from=" \
             rust-dylint
         fi
 
