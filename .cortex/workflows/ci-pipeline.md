@@ -612,7 +612,9 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 
 - PR verification, main, and release use GitHub-hosted runners.
 - Main verifies each native/WASM/web lane read-only, then serially exports its already-solved graph from the same job-scoped builder.
-- The WASM dependency export clears `cache-from` and forces zstd recompression so a thin reimported index cannot replace the complete cook lineage.
+- The WASM dependency export keeps configured `cache-from` and publishes with `mode=max`.
+- Main then verifies the fingerprint from a fresh builder.
+- Empty `cache-from=` overrides are prohibited across Taskfiles and scripts.
 - Main thereby exports protected default-branch refs that PR jobs restore from private Zot.
 - Same-repository PR jobs authenticate with the Remote registry identity; Zot ACLs deny that identity write access to `nook/buildcache/**`.
 - PR Bake exporters write only PR-scoped refs under `nook/remote-buildcache/**` (Main fallback restore stays enabled).

@@ -304,16 +304,15 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("docker:ci:cache:publish:web:")
             && docker_tasks.contains("task: docker:ci:cache:publish:rust-base")
             && docker_tasks.contains("preflight-test")
-            && docker_tasks.contains("--set \"builder-wasm-deps.cache-from=\"")
             && docker_tasks.contains(
                 "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}/nook/buildcache/"
             )
             && docker_tasks.contains("--set \"builder-wasm-deps.cache-to=\"")
-            && docker_tasks.contains("--set \"wasm-export.cache-from=\"")
             && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh")
             && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "producer-owned publishers must stage rust-base before deps, keep PR WASM cache-from for remote re-export, clear Main WASM cache-from for fat trusted export, verify Main from a fresh builder, and write isolated PR scopes"
+        "producer-owned publishers must stage rust-base before deps, keep configured cache-from, verify Main WASM from a fresh builder, and write isolated PR scopes"
     );
+    assert_no_empty_cache_from_overrides(&docker_tasks);
     let native_publish = docker_tasks
         .split("docker:ci:cache:publish:native:")
         .nth(1)
@@ -490,4 +489,41 @@ fn assert_parallel_web_pipeline(root: &Path) {
             && web_dockerfile.contains("COPY --from=nook-web-verify /opt/nook/web-verified"),
         "hosted PR web checks and production builds must be sibling stages joined by the CI target"
     );
+}
+
+#[test]
+fn bake_callers_never_clear_cache_from() {
+    let root = repository_root();
+    let paths = [
+        "nook-app/nook-platform/docker/Taskfile.yml",
+        "nook-app/nook-web/docker/Taskfile.yml",
+        "preflight/Taskfile.yml",
+        ".github/scripts/verify-wasm-gha-cache.sh",
+        ".github/scripts/bake-with-frontend-flake-retry.sh",
+    ];
+    for path in paths {
+        let text = read(&root, path);
+        assert_no_empty_cache_from_overrides_in(path, &text);
+    }
+}
+
+fn assert_no_empty_cache_from_overrides(text: &str) {
+    assert_no_empty_cache_from_overrides_in("docker Taskfiles", text);
+}
+
+fn assert_no_empty_cache_from_overrides_in(path: &str, text: &str) {
+    for (index, line) in text.lines().enumerate() {
+        let Some(after) = line.split("cache-from=").nth(1) else {
+            continue;
+        };
+        let rest = after.trim_start();
+        let empty = rest.is_empty()
+            || rest.starts_with('\\')
+            || matches!(rest.chars().next(), Some('"' | '\''));
+        assert!(
+            !empty,
+            "{path}:{} clears Bake cache-from; empty cache-from overrides are prohibited",
+            index + 1
+        );
+    }
 }

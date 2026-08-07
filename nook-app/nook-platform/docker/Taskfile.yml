@@ -183,20 +183,11 @@ tasks:
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
-      - |
-        set -euo pipefail
-        if [ -n "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
-          {{.DOCKER}} buildx bake \
-            {{.NOOK_BAKE_FILES}} \
-            --set "*.output=type=cacheonly" \
-            rust-base
-        else
-          {{.DOCKER}} buildx bake \
-            {{.NOOK_BAKE_FILES}} \
-            --set "*.output=type=cacheonly" \
-            --set "rust-base.cache-from=" \
-            rust-base
-        fi
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "*.output=type=cacheonly"
+        rust-base
 
   docker:ci:cache:publish:native:
     desc: Export the already-verified native dependency/source graph from this job's builder.
@@ -204,28 +195,14 @@ tasks:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
       # Stage rust-base alone, then deps/debug. Avoids one Bake rewriting parents
-      # while cooking chef leaves.
-      # Main clears cache-from so export uses fully local layers. PR/Remote keep
-      # cache-from so remote hits re-export without cold chef cooks.
+      # while cooking chef leaves. Keep cache-from so remote hits re-export.
       - task: docker:ci:cache:publish:rust-base
-      - |
-        set -euo pipefail
-        if [ -n "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
-          {{.DOCKER}} buildx bake \
-            {{.NOOK_BAKE_FILES}} \
-            --set "*.output=type=cacheonly" \
-            --set "rust-base.cache-to=" \
-            builder-core-deps builder-debug
-        else
-          {{.DOCKER}} buildx bake \
-            {{.NOOK_BAKE_FILES}} \
-            --set "*.output=type=cacheonly" \
-            --set "rust-base.cache-to=" \
-            --set "rust-base.cache-from=" \
-            --set "builder-core-deps.cache-from=" \
-            --set "builder-debug.cache-from=" \
-            builder-core-deps builder-debug
-        fi
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "*.output=type=cacheonly"
+        --set "rust-base.cache-to="
+        builder-core-deps builder-debug
       # Preflight has its own Bake files and Zot scope; export it with product native.
       # Clear rust-base.cache-to: native already published rust-base, and a second
       # writer during the linked contexts bake can thin-export that parent scope.
@@ -251,10 +228,8 @@ tasks:
     cmds:
       # Stage rust-base, then wasm-deps, then source export. Keeps each Zot scope
       # on its own Bake so one miss cannot cold-rebuild the whole chain.
-      # PR/Remote: keep cache-from (wasm scopes only) so remote CACHED verifies
-      # re-export without cold apt/chef. Clearing cache-from after a fully remote
-      # hit rebuilds rust-base from scratch.
-      # Main: clear cache-from for a fat trusted fingerprint export, then verify.
+      # Keep cache-from so remote CACHED verifies re-export without cold apt/chef.
+      # Main still verifies the published fingerprint from a fresh builder.
       - task: docker:ci:cache:publish:rust-base
       - |
         set -euo pipefail
@@ -275,17 +250,13 @@ tasks:
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
             --set "rust-base.cache-to=" \
-            --set "rust-base.cache-from=" \
-            --set "builder-wasm-deps.cache-from=" \
             --set "builder-wasm-deps.cache-to=type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,timeout=10m" \
             builder-wasm-deps
           {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
             --set "rust-base.cache-to=" \
-            --set "rust-base.cache-from=" \
             --set "builder-wasm-deps.cache-to=" \
-            --set "wasm-export.cache-from=" \
             wasm-export
           bash "{{.REPO_ROOT}}/.github/scripts/verify-wasm-gha-cache.sh"
         fi
@@ -311,7 +282,6 @@ tasks:
         {{.NOOK_BAKE_FILES}}
         --set "rust-ecosystem-policy-tools.cache-to="
         --set "rust-base.cache-to="
-        --set "rust-base.cache-from="
         rust-ecosystem-policy-tools
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
@@ -320,7 +290,6 @@ tasks:
           GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-base.cache-to=" \
-            --set "rust-base.cache-from=" \
             --set "rust-ecosystem-policy-tools.output=type=cacheonly" \
             rust-ecosystem-policy-tools
         fi
@@ -365,7 +334,6 @@ tasks:
         {{.NOOK_BAKE_FILES}}
         --set "rust-ecosystem-nightly.cache-to="
         --set "rust-base.cache-to="
-        --set "rust-base.cache-from="
         rust-ecosystem-nightly
 
   docker:ecosystem:nightly:
@@ -378,7 +346,6 @@ tasks:
           GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-base.cache-to=" \
-            --set "rust-base.cache-from=" \
             rust-ecosystem-nightly
         fi
 
@@ -386,31 +353,24 @@ tasks:
     desc: Bake Proptest, Insta, and Loom on the sealed Rust dependency graph.
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
-      # rust-platform → leaf. Clear parent cache-from: context target:rust-platform
-      # (and its builder-core-deps parent) would re-import a shorter Zot index and
-      # orphan the leaf RUN.
+      # rust-platform → leaf. Leaf cache-from stays own-scope only; mode=max embeds
+      # parents. Never clear parent cache-from.
       - task: docker:rust-base
       - >-
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-ecosystem-deterministic.cache-to="
         --set "rust-platform.cache-to="
-        --set "rust-platform.cache-from="
         --set "builder-core-deps.cache-to="
-        --set "builder-core-deps.cache-from="
         --set "rust-base.cache-to="
-        --set "rust-base.cache-from="
         rust-ecosystem-deterministic
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
           GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-platform.cache-to=" \
-            --set "rust-platform.cache-from=" \
             --set "builder-core-deps.cache-to=" \
-            --set "builder-core-deps.cache-from=" \
             --set "rust-base.cache-to=" \
-            --set "rust-base.cache-from=" \
             rust-ecosystem-deterministic
         fi
 
@@ -421,8 +381,7 @@ tasks:
       FUZZ_SECONDS: '{{default "20" .FUZZ_SECONDS}}'
     cmds:
       # Warm nightly read-only first. Fuzz never rewrites nightly/rust-base.
-      # Clear parent cache-from: context target:rust-platform-nightly (and its
-      # nightly parent) would re-import a shorter Zot index and orphan the leaf.
+      # Leaf cache-from stays own-scope only; keep parent cache-from enabled.
       - task: docker:ecosystem:nightly:verify
       - >-
         {{.DOCKER}} buildx bake
@@ -430,11 +389,8 @@ tasks:
         --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}"
         --set "rust-fuzz-smoke.cache-to="
         --set "rust-platform-nightly.cache-to="
-        --set "rust-platform-nightly.cache-from="
         --set "rust-ecosystem-nightly.cache-to="
-        --set "rust-ecosystem-nightly.cache-from="
         --set "rust-base.cache-to="
-        --set "rust-base.cache-from="
         rust-fuzz-smoke
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
@@ -442,11 +398,8 @@ tasks:
             {{.NOOK_BAKE_FILES}} \
             --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}" \
             --set "rust-platform-nightly.cache-to=" \
-            --set "rust-platform-nightly.cache-from=" \
             --set "rust-ecosystem-nightly.cache-to=" \
-            --set "rust-ecosystem-nightly.cache-from=" \
             --set "rust-base.cache-to=" \
-            --set "rust-base.cache-from=" \
             rust-fuzz-smoke
         fi
 
@@ -461,22 +414,16 @@ tasks:
         {{.NOOK_BAKE_FILES}}
         --set "rust-dylint.cache-to="
         --set "rust-platform-nightly.cache-to="
-        --set "rust-platform-nightly.cache-from="
         --set "rust-ecosystem-nightly.cache-to="
-        --set "rust-ecosystem-nightly.cache-from="
         --set "rust-base.cache-to="
-        --set "rust-base.cache-from="
         rust-dylint
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
           GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-platform-nightly.cache-to=" \
-            --set "rust-platform-nightly.cache-from=" \
             --set "rust-ecosystem-nightly.cache-to=" \
-            --set "rust-ecosystem-nightly.cache-from=" \
             --set "rust-base.cache-to=" \
-            --set "rust-base.cache-from=" \
             rust-dylint
         fi
 

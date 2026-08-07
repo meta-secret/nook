@@ -13,6 +13,9 @@ Use this workflow for quality, CI, and deployment changes.
    - Restore `rust-base` only through Bake `contexts` (`target:rust-base`).
    - Do not also cache-from `rust-base` on the preflight target.
    - That shorter parent importer orphans chef cook layers.
+   - Never clear `cache-from` with an empty Bake override.
+   - Empty `cache-from=` is an architectural failure, not a cache hygiene tool.
+   - Redesign scopes or Dockerfile lineage instead.
    - Preflight Bake callers clear `rust-base.cache-to` so they never rewrite
      the shared parent scope.
    - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
@@ -155,17 +158,22 @@ Use this workflow for quality, CI, and deployment changes.
     - Their mode=max exports already embed that parent chain.
     - Preflight restores rust-base only via Bake `contexts` (`target:rust-base`).
     - Ecosystem nightly/policy/dylint/fuzz restore parents the same way.
-    - After a parent warm, Tasks clear that parent's cache-from so the context
-      target cannot re-import a short Zot index during leaf verify/publish.
     - Leaf `cache-from` stays own-scope only (no short-parent importers).
+    - `mode=max` leaf exports already embed the parent chain.
+    - Empty `cache-from=` overrides are prohibited.
+    - Clearing `cache-from` after a remote hit forces cold apt/toolchain rebuilds.
+    - If a short parent index orphans a leaf RUN, redesign the Bake graph.
+    - Do not wipe cache to paper over a short-chain import.
+    - Prefer own-scope leaf `cache-from`, same-Dockerfile stage lineage, or a
+      dedicated parent scope that is never thin.
     - PR FALLBACK for nightly/policy-tools is PR-scope only.
     - A thin trusted Main index steals fat PR mode=max layers.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
     - Native/WASM publishers stage `docker:ci:cache:publish:rust-base` before
       deps/source scopes so one Bake cannot rewrite apt while cooking chef.
-    - PR WASM publish keeps wasm-scope cache-from for the same reason.
-    - Main product publishers still clear cache-from for fat trusted exports.
+    - Publishers keep configured `cache-from` on every Bake.
+    - Main verifies published WASM fingerprints from a fresh builder.
     - One CI job writes each shared ecosystem registry ref.
     - The complete Rust/WASM cargo-chef dependency graph uses an immutable scope fingerprinted from manifests, lockfiles, compiler Dockerfiles, Task invocation inputs, and Bake definitions.
     - Hosted builds never attach Redis credentials.

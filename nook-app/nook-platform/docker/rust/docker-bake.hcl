@@ -6,9 +6,10 @@
 // isolated remote-buildcache refs.
 // Nightly: rust-ecosystem-nightly is the sole writer for the shared nightly ref.
 // Dylint/fuzz write leaf scopes only (no nightly/rust-base in cache-from).
-// Parents restore via Bake contexts (same pattern as preflight). Tasks must clear
-// parent cache-from after warming that parent: target:PARENT still imports the
-// parent's Zot scope, and that shorter index orphans leaf RUNs on verify/publish.
+// Parents restore via Bake contexts (same pattern as preflight).
+// Leaf cache-from stays own-scope only so short parent indexes cannot orphan leaf
+// RUNs. Empty cache-from overrides are prohibited: clearing cache-from after a
+// remote hit forces cold apt/toolchain rebuilds.
 // Ecosystem Tasks import with cache-to cleared, then publish with leaf cache-from
 // kept so remote hits re-export without cold chef/toolchain rebuilds.
 // Shared GHA_CACHE_* / NOOK_REGISTRY_CACHE_HOST / write_cache_repository live in

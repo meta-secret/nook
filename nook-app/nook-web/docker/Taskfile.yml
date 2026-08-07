@@ -187,7 +187,6 @@ tasks:
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
-        --set "web-deps.cache-from="
         web-deps
 
   docker:ci:web:build:
@@ -225,11 +224,8 @@ tasks:
       - task: registry-cache:publish:web
 
   # Precise Bake stages. Warm parents alone before leaves so a leaf miss cannot
-  # cold-rebuild apt/nightly. Composites below call these in order.
-  # Ecosystem/preflight callers never write rust-base (clear cache-to).
-  # After a parent warm, clear that parent's cache-from on the next Bake: the
-  # context target:PARENT still imports PARENT's Zot scope, and that shorter
-  # index steals mode=max leaf layers (policy-tools/nightly RUNs go cold).
+  # cold-rebuild the toolchain. Composites below call these in order.
+  # Keep configured cache-from; empty cache-from overrides are prohibited.
 
   docker:web:dev:
     internal: true

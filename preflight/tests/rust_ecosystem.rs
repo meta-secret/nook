@@ -122,8 +122,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "rust-ecosystem-deterministic.cache-to=",
         "rust-dylint.cache-to=",
         "rust-fuzz-smoke.cache-to=",
-        "rust-base.cache-from=",
-        "rust-ecosystem-nightly.cache-from=",
         "task: docker:rust-base",
         "task: docker:ecosystem:policy-tools",
         "task: docker:ecosystem:nightly:verify",
@@ -336,10 +334,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && rust_bake.contains("rust-base = \"target:rust-base\"")
             && docker_tasks.contains("rust-base.cache-to=")
             && docker_tasks.contains("rust-ecosystem-nightly.cache-to=")
-            && docker_tasks.contains("builder-core-deps.cache-from=")
-            && docker_tasks.contains("rust-platform.cache-from=")
-            && docker_tasks.contains("rust-platform-nightly.cache-from="),
-        "ecosystem leaves restore parents via Bake contexts and must not rewrite rust-base/nightly cache-to"
+            && !docker_tasks.contains("cache-from=\"")
+            && !docker_tasks.contains("cache-from='"),
+        "ecosystem leaves restore parents via Bake contexts, keep cache-from, and only clear cache-to on verify"
     );
     assert!(
         rust_bake.contains("nook-rust-ecosystem-policy-tools-v4")

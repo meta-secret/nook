@@ -135,6 +135,23 @@ tests first when the fault is reproducible at the typed boundary, then keep the
 Playwright test for the user-visible flow. Full policy:
 [rules.md §4](rules.md#4-testing-requirements).
 
+## ⛔ Non-negotiable: never clear Bake `cache-from`
+
+Empty Bake `cache-from=` overrides are prohibited.
+
+Clearing `cache-from` after a remote cache hit forces cold rebuilds from apt
+and toolchain install upward.
+
+If a short parent index orphans a leaf RUN, redesign the Bake graph:
+
+- keep leaf `cache-from` own-scope only;
+- embed parents with `mode=max`;
+- or put the stage lineage in one Dockerfile.
+
+Do not wipe cache to hide a graph mistake.
+
+Full policy: [workflows/quality.md](workflows/quality.md) § BuildKit cache (Zot).
+
 ## ⛔ Non-negotiable: Rust domain absence must be explicit
 
 Before adding or preserving `Option<T>` in authored Rust, determine what
