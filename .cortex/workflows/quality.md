@@ -75,10 +75,14 @@ Use this workflow for quality, CI, and deployment changes.
      from `nook-app/docker/rust.Dockerfile` (pinned `cargo-deny` + `cargo-audit`;
      not installed into `rust-base`). Tools and deny/audit leaf use separate
      Zot scopes.
-     Each stage imports with cache-to cleared, then publishes with cache-from
-     kept so remote hits re-export without cold tool or chef rebuilds.
-     Tools, nightly, and preflight scopes must not also import `rust-base`.
-     That shorter parent importer orphans the toolchain or chef RUN layers.
+     Each stage imports with cache-to cleared.
+     Then it publishes with leaf cache-from kept.
+     That re-exports remote hits without cold tool or chef rebuilds.
+     After warming a parent, clear that parent's cache-from on the next Bake.
+     `target:PARENT` still imports the parent's Zot scope.
+     That shorter index orphans leaf RUNs.
+     Tools, nightly, and preflight scopes must not list `rust-base` in their
+     own cache-from.
      Never `cargo install` those tools on the runner host. Advisory exceptions
      must name the RustSec IDs, identify the exact pinned upstream graph, and
      state the dependency upgrade that removes them in both `deny.toml` and
@@ -143,9 +147,11 @@ Use this workflow for quality, CI, and deployment changes.
     - Their mode=max exports already embed that parent chain.
     - Preflight restores rust-base only via Bake `contexts` (`target:rust-base`).
     - Ecosystem nightly/policy/dylint/fuzz restore parents the same way.
+    - After a parent warm, Tasks clear that parent's cache-from so the context
+      target cannot re-import a short Zot index during leaf verify/publish.
     - Leaf `cache-from` stays own-scope only (no short-parent importers).
-    - Ecosystem jobs verify with cache-to off, then publish with cache-from kept
-      so remote hits re-export without cold apt/toolchain rebuilds.
+    - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
+      kept so remote hits re-export without cold apt/toolchain rebuilds.
     - Native/WASM publishers stage `docker:ci:cache:publish:rust-base` before
       deps/source scopes so one Bake cannot rewrite apt while cooking chef.
     - PR WASM publish keeps wasm-scope cache-from for the same reason.

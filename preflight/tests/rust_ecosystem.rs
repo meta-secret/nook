@@ -105,6 +105,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "rust-ecosystem-deterministic.cache-to=",
         "rust-dylint.cache-to=",
         "rust-fuzz-smoke.cache-to=",
+        "rust-base.cache-from=",
+        "rust-ecosystem-nightly.cache-from=",
         "task: docker:rust-base",
         "task: docker:ecosystem:policy-tools",
         "task: docker:ecosystem:nightly:verify",

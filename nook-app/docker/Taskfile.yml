@@ -451,6 +451,9 @@ tasks:
   # Precise Bake stages. Warm parents alone before leaves so a leaf miss cannot
   # cold-rebuild apt/nightly. Composites below call these in order.
   # Ecosystem/preflight callers never write rust-base (clear cache-to).
+  # After a parent warm, clear that parent's cache-from on the next Bake: the
+  # context target:PARENT still imports PARENT's Zot scope, and that shorter
+  # index steals mode=max leaf layers (policy-tools/nightly RUNs go cold).
 
   docker:rust-base:
     desc: Bake only rust-base (apt/mold/sccache). Read-only for Zot; never publishes.
@@ -473,12 +476,14 @@ tasks:
         {{.NOOK_BAKE_FILES}}
         --set "rust-ecosystem-policy-tools.cache-to="
         --set "rust-base.cache-to="
+        --set "rust-base.cache-from="
         rust-ecosystem-policy-tools
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
           {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
             rust-ecosystem-policy-tools
         fi
 
@@ -492,6 +497,7 @@ tasks:
         {{.NOOK_BAKE_FILES}}
         --set "rust-ecosystem-nightly.cache-to="
         --set "rust-base.cache-to="
+        --set "rust-base.cache-from="
         rust-ecosystem-nightly
 
   docker:ecosystem:nightly:
@@ -504,6 +510,7 @@ tasks:
           {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
             rust-ecosystem-nightly
         fi
 
@@ -519,12 +526,14 @@ tasks:
         {{.NOOK_BAKE_FILES}}
         --set "rust-dependency-policy.cache-to="
         --set "rust-base.cache-to="
+        --set "rust-base.cache-from="
         rust-dependency-policy
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
           {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
             rust-dependency-policy
         fi
 
@@ -538,12 +547,14 @@ tasks:
         {{.NOOK_BAKE_FILES}}
         --set "rust-ecosystem-deterministic.cache-to="
         --set "rust-base.cache-to="
+        --set "rust-base.cache-from="
         rust-ecosystem-deterministic
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
           {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
             rust-ecosystem-deterministic
         fi
 
@@ -554,6 +565,8 @@ tasks:
       FUZZ_SECONDS: '{{default "20" .FUZZ_SECONDS}}'
     cmds:
       # Warm nightly read-only first. Fuzz never rewrites nightly/rust-base.
+      # Clear parent cache-from: context target:nightly would re-import the
+      # shorter nightly Zot index and orphan the fuzz leaf RUN.
       - task: docker:ecosystem:nightly:verify
       - >-
         {{.DOCKER}} buildx bake
@@ -561,7 +574,9 @@ tasks:
         --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}"
         --set "rust-fuzz-smoke.cache-to="
         --set "rust-ecosystem-nightly.cache-to="
+        --set "rust-ecosystem-nightly.cache-from="
         --set "rust-base.cache-to="
+        --set "rust-base.cache-from="
         rust-fuzz-smoke
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
@@ -569,7 +584,9 @@ tasks:
             {{.NOOK_BAKE_FILES}} \
             --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}" \
             --set "rust-ecosystem-nightly.cache-to=" \
+            --set "rust-ecosystem-nightly.cache-from=" \
             --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
             rust-fuzz-smoke
         fi
 
@@ -584,14 +601,18 @@ tasks:
         {{.NOOK_BAKE_FILES}}
         --set "rust-dylint.cache-to="
         --set "rust-ecosystem-nightly.cache-to="
+        --set "rust-ecosystem-nightly.cache-from="
         --set "rust-base.cache-to="
+        --set "rust-base.cache-from="
         rust-dylint
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
           {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-ecosystem-nightly.cache-to=" \
+            --set "rust-ecosystem-nightly.cache-from=" \
             --set "rust-base.cache-to=" \
+            --set "rust-base.cache-from=" \
             rust-dylint
         fi
 
