@@ -424,6 +424,15 @@ export async function authorizeDeviceProtection(
   const isAuthenticatedWorkspace = async () =>
     (await workspacePanel.isVisible()) && !(await loginGate.isVisible())
 
+  const authorizeButtonReady = async () => {
+    if (!(await button.isVisible())) return false
+    try {
+      return await button.isEnabled({ timeout: 0 })
+    } catch {
+      return false
+    }
+  }
+
   // Locked /devices-access keeps Access inside LoginGate with no Unlock.
   // Multi-vault lock shows the vault picker before Unlock. Wait for a real
   // unlock affordance, locked Access (leave via back), or true auth.
@@ -446,12 +455,16 @@ export async function authorizeDeviceProtection(
     return
   }
 
+  // Unlock is unavailable on locked Access; leave to the login card, then
+  // restore /devices-access after auth so deep links survive the detour.
+  let restoreDevicesAccess = false
   if (
     (await lockedAccessDashboard.isVisible()) &&
     !(await unlockVaultButton.isVisible()) &&
     !(await vaultPicker.isVisible()) &&
     !(await overlay.isVisible())
   ) {
+    restoreDevicesAccess = true
     await page.getByTestId('devices-access-back').click()
     await expect
       .poll(
@@ -487,25 +500,30 @@ export async function authorizeDeviceProtection(
     .poll(
       async () => {
         if (await isAuthenticatedWorkspace()) return 'unlocked'
-        if ((await button.isVisible()) && (await button.isEnabled())) {
-          return 'authorize'
-        }
+        if (await authorizeButtonReady()) return 'authorize'
         return 'waiting'
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .not.toBe('waiting')
-  if (await isAuthenticatedWorkspace()) {
-    await waitForVaultOperationsIdle(page)
-    return
+  if (!(await isAuthenticatedWorkspace())) {
+    await button.click()
+    await expect(loginGate).toBeHidden({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(workspacePanel).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
   }
-  await button.click()
-  await expect(loginGate).toBeHidden({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await expect(workspacePanel).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
+
+  if (restoreDevicesAccess) {
+    await page.getByTestId('vault-devices-access-tab').click()
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page).toHaveURL(/\/devices-access$/)
+  }
+
   await waitForVaultOperationsIdle(page)
 }
 
