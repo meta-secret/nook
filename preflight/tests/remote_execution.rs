@@ -184,8 +184,11 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     let lineage_dockerignore =
         read("nook-app/nook-platform/docker/rust/lineage.Dockerfile.dockerignore");
     let core_bake = read("nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let wasm_bake = read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
+    let web_app_bake = read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
     let wasm_dockerfile = read("nook-app/nook-platform/nook-wasm/Dockerfile");
-    let bake = read("nook-app/docker-bake.hcl");
+    let shared_bake = read("nook-app/docker-bake.hcl");
+    let bake = format!("{shared_bake}\n{core_bake}\n{wasm_bake}\n{web_app_bake}");
 
     for required in [
         "setup:rust:test:",
@@ -230,7 +233,8 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
         );
     }
     for ignored in [
-        "nook-app/nook-platform/docker",
+        "nook-app/nook-platform/docker/rust",
+        "nook-app/nook-platform/docker/Taskfile.yml",
         "nook-app/nook-platform/Taskfile.yml",
         "**/target",
     ] {
@@ -310,7 +314,7 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     );
     assert!(wasm_dockerfile.contains("FROM builder-wasm-build AS focused-web-artifacts-source"));
     assert!(wasm_dockerfile.contains("FROM scratch AS focused-web-artifacts"));
-    assert!(bake.contains("inherits = [\"_nook-rust-test-common\"]"));
+    assert!(core_bake.contains("inherits = [\"_nook-rust-test-common\"]"));
     for (target, dockerfile) in [
         ("_nook-rust-test-common", "nook-rust-test.Dockerfile"),
         ("_nook-rust-lint-common", "nook-rust-lint.Dockerfile"),
@@ -332,9 +336,14 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
             "{target} must take builder-core-deps via Bake named context"
         );
     }
-    assert!(bake.contains("inherits = [\"_nook-web-focused-common\"]"));
-    assert!(!bake.contains("target \"nook-rust-test\" {\n  inherits = [\"_nook-rust-common\"]"));
-    assert!(!bake.contains("target \"nook-web-focused\" {\n  inherits = [\"_nook-web-common\"]"));
+    assert!(web_app_bake.contains("inherits   = [\"_nook-web-focused-common\"]"));
+    assert!(
+        !core_bake.contains("target \"nook-rust-test\" {\n  inherits = [\"_nook-rust-common\"]")
+    );
+    assert!(
+        !web_app_bake
+            .contains("target \"nook-web-focused\" {\n  inherits = [\"_nook-web-common\"]")
+    );
 }
 
 #[test]

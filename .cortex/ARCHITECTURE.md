@@ -40,7 +40,7 @@ root/
 └── nook-app/
     ├── Taskfile.yml      (app command surface)
     ├── ci/Taskfile.yml   (ci:* tasks)
-    ├── docker-bake.hcl   (shared vars, composition root)
+    ├── docker-bake.hcl   (thin shared vars + cross-lineage prepare groups)
     ├── nook-platform/    (Rust workspace root and members)
     │   ├── Taskfile.yml  (rust:* tasks)
     │   ├── Cargo.toml
@@ -871,11 +871,13 @@ Fork, release, and other arbitrary-ref jobs receive no S3 credentials.
 
 **Docker bake orchestration**
 
-- App-owned: `nook-app/Taskfile.yml` passes `nook-app/docker-bake.hcl`,
-  `nook-app/nook-platform/docker/rust/docker-bake.hcl` (Rust Zot scopes and
-  ecosystem targets), `nook-app/nook-web/docker/*.docker-bake.hcl` (web Zot
-  scopes and bases), and package-local bake files under
-  `nook-app/**/docker-bake.hcl` to `docker buildx bake`.
+- App-owned: `nook-app/Taskfile.yml` passes a thin shared
+  `nook-app/docker-bake.hcl` plus package-local bake files under
+  `nook-app/**/docker-bake.hcl` and `preflight/docker-bake.hcl` to
+  `docker buildx bake`.
+- Loadable runtime tags live next to their package commons:
+  `nook-web*` under `nook-web/nook-web-app`, `nook-rust*` under platform
+  core/wasm.
 - Root `Taskfile.yml` includes those app commands for repo-root usage.
 - The Taskfile passes bake files as absolute paths.
 - It grants buildx read access to the repo root.

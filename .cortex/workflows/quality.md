@@ -34,11 +34,12 @@ Use this workflow for quality, CI, and deployment changes.
    - Keep those tools out of `rust-base`.
    - Keep ecosystem Bake jobs exact-head merge gates and pin every compiler-coupled version.
 3. Build Docker images with Docker Buildx Bake.
-   - Shared GHA/registry variables live in `nook-app/docker-bake.hcl`.
-   - Platform Rust Zot scopes and ecosystem targets live in
-     `nook-app/nook-platform/docker/rust/docker-bake.hcl`.
-   - Web Zot scopes live in
-     `nook-app/nook-web/docker/{web,toolchain}.docker-bake.hcl`.
+   - `nook-app/docker-bake.hcl` is a thin shared fragment:
+     GHA/registry/sccache vars, `_sccache`, and cross-lineage prepare groups.
+   - Platform Rust Zot scopes, ecosystem targets, and loadable `nook-rust*`
+     images live under `nook-app/nook-platform/**/docker-bake.hcl`.
+   - Web Zot scopes and loadable `nook-web*` images live under
+     `nook-app/nook-web/**/docker-bake.hcl`.
    - Preflight Zot scopes live in `preflight/docker-bake.hcl`.
    - Do **not** use Docker named volumes for `target/`, Cargo registries, `node_modules`, or other build outputs.
    - The Rust dep cache and warm `target/` are baked into normal image layers.

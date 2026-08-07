@@ -18,6 +18,10 @@ variable "FUZZ_SECONDS" {
   default = "20"
 }
 
+variable "DOCKER_POLICY_TOOLS_IMAGE" {
+  default = "nook-rust-policy-tools:local"
+}
+
 // Main and pull requests derive this immutable scope from every file that defines the WASM
 // dependency graph and compiler environment. A new graph gets a new registry ref instead of
 // overwriting the last complete dependency export with a different lineage.

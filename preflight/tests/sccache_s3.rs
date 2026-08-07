@@ -468,7 +468,9 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     let rust_bake = read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let web_image_bake = read("nook-app/nook-web/docker/web.docker-bake.hcl");
     let web_toolchain_bake = read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
-    let bake = format!("{app_bake}\n{rust_bake}\n{web_image_bake}\n{web_toolchain_bake}");
+    let web_app_bake = read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
+    let bake =
+        format!("{app_bake}\n{rust_bake}\n{web_image_bake}\n{web_toolchain_bake}\n{web_app_bake}");
     assert!(app_bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
     assert!(app_bake.contains("variable \"GHA_CACHE_FALLBACK_ENABLED\""));
     assert!(app_bake.contains("variable \"GHA_CACHE_SEED_SCOPE_SUFFIX\""));
@@ -600,9 +602,9 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         .0;
     assert!(focused_artifacts.contains("cache-to   = rust_wasm_source_cache_to"));
 
-    let focused_web = bake
+    let focused_web = web_app_bake
         .split_once("target \"nook-web-focused\"")
-        .context("focused web target must exist")?
+        .context("focused web target must exist in nook-web-app bake")?
         .1
         .split_once("\n}")
         .context("focused web target must terminate")?

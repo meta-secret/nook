@@ -116,3 +116,27 @@ target "_nook-rust-coverage-common" {
   cache-from = rust_native_source_cache_from
   cache-to   = rust_native_source_cache_to
 }
+
+// Focused native leaves load sealed dependency-plus-source images.
+// The regular DOCKER_RUST_IMAGE tag keeps the existing runtime command surface.
+target "nook-rust-test" {
+  inherits = ["_nook-rust-test-common"]
+  tags     = [DOCKER_RUST_IMAGE]
+  output   = ["type=docker"]
+}
+
+target "nook-rust-lint" {
+  inherits = ["_nook-rust-lint-common"]
+  tags     = [DOCKER_RUST_IMAGE]
+  output   = ["type=docker"]
+}
+
+target "nook-rust-coverage" {
+  inherits = ["_nook-rust-coverage-common"]
+  tags     = [DOCKER_RUST_IMAGE]
+  output   = ["type=docker"]
+}
+
+group "ci-rust" {
+  targets = ["coverage-export", "rust-format-check"]
+}

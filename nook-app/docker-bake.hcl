@@ -1,57 +1,14 @@
-// App bake: shared GHA/registry variables, parallel groups, and loadable runtime variants.
-// Platform Rust Zot scopes: nook-app/nook-platform/docker/rust/docker-bake.hcl
-// Web Zot scopes: nook-app/nook-web/docker/{web,toolchain}.docker-bake.hcl
-// Preflight Zot scopes: preflight/docker-bake.hcl
-// Every target's build definition (dockerfile/target/contexts) lives next to its Dockerfile and
-// is merged in via multiple -f flags (bake has no `include`):
+// Thin shared Bake fragment: GHA/registry/sccache variables, _sccache inherit target,
+// and cross-lineage prepare groups that span Rust + web solves.
+// Package-owned targets and Zot scopes live next to their Dockerfiles:
 //   nook-app/nook-platform/docker/rust/docker-bake.hcl -> rust cache scopes + rust-base/ecosystem
 //   nook-app/nook-web/docker/web.docker-bake.hcl       -> web/e2e bases + final-image cache scopes
-//   nook-app/nook-platform/nook-core/docker-bake.hcl   -> builder-core-deps, builder-debug
-//   nook-app/nook-platform/nook-wasm/docker-bake.hcl   -> builder-wasm, web-artifacts, on-demand Rust images
+//   nook-app/nook-platform/nook-core/docker-bake.hcl   -> builder-core-deps, focused rust leaves
+//   nook-app/nook-platform/nook-wasm/docker-bake.hcl   -> builder-wasm, web-artifacts, nook-rust*
 //   nook-app/nook-web/docker/toolchain.docker-bake.hcl -> web-deps + web-deps cache scope
-//   nook-app/nook-web/nook-web-app/docker-bake.hcl     -> slim web runtime and CI targets
+//   nook-app/nook-web/nook-web-app/docker-bake.hcl     -> loadable nook-web* images
 //   preflight/docker-bake.hcl                         -> preflight targets + cache scopes
-// Callers (Taskfile `setup` via nook-app/Taskfile.yml) pass all files via the NOOK_BAKE_FILES list.
-//
-// PREPARE PHASE: rust-base -> builder-core-deps -> (builder-debug || builder-wasm) -> web-artifacts, in
-// parallel with web-base -> web-deps. web-artifacts joins only small outputs and is exported to a commit-scoped,
-// invocation-isolated host directory.
-// WEB PHASE: nook-web consumes web-base + web-deps + only that host artifact directory. The heavy
-// Rust snapshot never becomes a context or parent of the final image. Local builds reuse the
-// selected builder's content store; GitHub-hosted CI additionally imports/exports distinct
-// registry.dev.nokey.sh BuildKit cache refs for Rust, web dependencies, and the two final web-image
-// variants.
-
-variable "DOCKER_IMAGE" {
-  default = "nook-web:local"
-}
-
-variable "DOCKER_RUST_IMAGE" {
-  default = "nook-rust:local"
-}
-
-variable "DOCKER_RUST_FAST_IMAGE" {
-  default = "nook-rust-fast:local"
-}
-
-variable "DOCKER_RUST_BROWSER_IMAGE" {
-  default = "nook-rust-browser:local"
-}
-
-variable "DOCKER_POLICY_TOOLS_IMAGE" {
-  default = "nook-rust-policy-tools:local"
-}
-
-variable "DOCKER_E2E_IMAGE" {
-  default = "nook-web-e2e:local"
-}
-
-// Passed to every target that reaches the internal builder-wasm Dockerfile stage. Setting only the
-// standalone `builder-wasm` bake target is insufficient for scratch exports such as web-artifacts,
-// because each final target owns its own Dockerfile solve.
-variable "WASM_BUILD_MODE" {
-  default = "dev"
-}
+// Callers pass all files via NOOK_BAKE_FILES / PREFLIGHT_BAKE_FILES (bake has no `include`).
 
 variable "SCCACHE_ENDPOINT" {
   default = "https://sccache.dev.nokey.sh"
@@ -108,15 +65,10 @@ write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook/remote-buildcache"
 
 target "_sccache" {
   args = {
-    SCCACHE_S3_MODE    = SCCACHE_S3_MODE
-    SCCACHE_ENDPOINT   = SCCACHE_ENDPOINT
-    SCCACHE_BUCKET     = SCCACHE_BUCKET
+    SCCACHE_S3_MODE  = SCCACHE_S3_MODE
+    SCCACHE_ENDPOINT = SCCACHE_ENDPOINT
+    SCCACHE_BUCKET   = SCCACHE_BUCKET
   }
-}
-
-// Default: build the nook-web image (source-in-image) that `task` runs.
-group "default" {
-  targets = ["nook-web"]
 }
 
 // Phase one of `task setup`: Rust/WASM validation + tiny artifact export runs concurrently with
@@ -133,91 +85,4 @@ group "prepare-with-unformatted-rust" {
 // Pre-build both independent local lineages in parallel.
 group "builders" {
   targets = ["builder-wasm", "web-deps"]
-}
-
-group "ci-rust" {
-  targets = ["coverage-export", "rust-format-check"]
-}
-
-// --- nook-web image (source-in-image; loaded as nook-web:local, what `task` runs) ---
-// _nook-web-common lives in nook-app/nook-web/nook-web-app/docker-bake.hcl.
-target "nook-web" {
-  inherits = ["_nook-web-common"]
-  tags     = [DOCKER_IMAGE]
-  output   = ["type=docker"]
-  cache-from = web_cache_from
-  cache-to   = web_cache_to
-}
-
-// PR CI joins production builds with the sibling lint/check/test stage, allowing BuildKit to run
-// both branches in parallel while loading the same sealed image and deployable artifacts.
-target "nook-web-ci" {
-  inherits = ["_nook-web-ci-common"]
-  tags     = [DOCKER_IMAGE]
-  output   = ["type=docker"]
-  cache-from = web_cache_from
-  cache-to   = web_cache_to
-}
-
-# Main/manual-e2e image. It has the same sealed app as nook-web, but swaps in the Chromium base.
-# Tag it as DOCKER_IMAGE too so the existing deploy/extract tasks consume the already-tested image.
-target "nook-web-e2e" {
-  inherits = ["_nook-web-common"]
-  contexts = {
-    web-base = "target:web-e2e-base"
-  }
-  tags       = [DOCKER_IMAGE, DOCKER_E2E_IMAGE]
-  output     = ["type=docker"]
-  cache-from = web_e2e_cache_from
-  cache-to   = web_e2e_cache_to
-}
-
-// Explicit Rust/WASM commands load this source-sealed image on demand. Normal setup/CI does not.
-target "nook-rust" {
-  inherits = ["_nook-rust-common"]
-  tags     = [DOCKER_RUST_IMAGE]
-  output   = ["type=docker"]
-}
-
-// Focused native tests load a sealed dependency-plus-source image without the general Rust/WASM
-// join. The regular DOCKER_RUST_IMAGE tag keeps the existing runtime command surface unchanged.
-target "nook-rust-test" {
-  inherits = ["_nook-rust-test-common"]
-  tags     = [DOCKER_RUST_IMAGE]
-  output   = ["type=docker"]
-}
-
-target "nook-rust-lint" {
-  inherits = ["_nook-rust-lint-common"]
-  tags     = [DOCKER_RUST_IMAGE]
-  output   = ["type=docker"]
-}
-
-target "nook-rust-coverage" {
-  inherits = ["_nook-rust-coverage-common"]
-  tags     = [DOCKER_RUST_IMAGE]
-  output   = ["type=docker"]
-}
-
-target "nook-rust-fast" {
-  inherits = ["_nook-rust-fast-common"]
-  tags     = [DOCKER_RUST_FAST_IMAGE]
-  output   = ["type=docker"]
-}
-
-// Focused web/type-check tasks stop at the sealed source image. They do not build production
-// artifacts or re-run the complete in-image verification graph.
-target "nook-web-focused" {
-  inherits = ["_nook-web-focused-common"]
-  tags     = [DOCKER_IMAGE]
-  output   = ["type=docker"]
-  cache-from = web_cache_from
-  cache-to   = web_cache_to
-}
-
-// Manual browser-wasm tests install Chromium only in this on-demand image.
-target "nook-rust-browser" {
-  inherits = ["_nook-rust-browser-common"]
-  tags     = [DOCKER_RUST_BROWSER_IMAGE]
-  output   = ["type=docker"]
 }

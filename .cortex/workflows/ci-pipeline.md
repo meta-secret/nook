@@ -289,7 +289,11 @@ PR, main, release, AI, scheduled, manual e2e, and research jobs use GitHub-hoste
 - `nook-app/nook-web/docker/toolchain.docker-bake.hcl` owns the web-deps
   cache scope.
 - `preflight/docker-bake.hcl` owns the preflight Zot cache scope.
-- `nook-app/docker-bake.hcl` owns shared GHA/registry variables.
+- Loadable `nook-web*` tags live in
+  `nook-app/nook-web/nook-web-app/docker-bake.hcl`.
+- Loadable `nook-rust*` tags live in the platform core/wasm bake files.
+- `nook-app/docker-bake.hcl` stays thin: shared GHA/registry/sccache
+  variables, `_sccache`, and cross-lineage prepare groups.
 - Main verifies every publication from a fresh BuildKit builder before accepting it.
 - Repository invariants in `preflight/tests/sccache_s3.rs` and `preflight/tests/vault_app_isolation.rs` enforce the topology and proof.
 

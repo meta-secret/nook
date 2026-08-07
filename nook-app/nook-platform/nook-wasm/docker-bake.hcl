@@ -3,6 +3,24 @@
 // so the Node-test join reuses the test unit graph instead of rebuilding after `wasm-pack build --lib`.
 // The WASM branch starts from builder-wasm-deps; native verification extends it as builder-core-deps. Hosted BuildKit
 // runs them concurrently; only their small generated outputs join at web-artifacts.
+// Loadable nook-rust / nook-rust-fast / nook-rust-browser tags live here next to their commons.
+
+variable "DOCKER_RUST_IMAGE" {
+  default = "nook-rust:local"
+}
+
+variable "DOCKER_RUST_FAST_IMAGE" {
+  default = "nook-rust-fast:local"
+}
+
+variable "DOCKER_RUST_BROWSER_IMAGE" {
+  default = "nook-rust-browser:local"
+}
+
+// Passed to every target that reaches the internal builder-wasm Dockerfile stage.
+variable "WASM_BUILD_MODE" {
+  default = "dev"
+}
 
 target "builder-wasm" {
   inherits   = ["_sccache"]
@@ -123,4 +141,23 @@ target "_nook-rust-browser-common" {
   }
   cache-from = rust_wasm_source_cache_from
   cache-to   = rust_wasm_source_cache_to
+}
+
+// Explicit Rust/WASM commands load this source-sealed image on demand.
+target "nook-rust" {
+  inherits = ["_nook-rust-common"]
+  tags     = [DOCKER_RUST_IMAGE]
+  output   = ["type=docker"]
+}
+
+target "nook-rust-fast" {
+  inherits = ["_nook-rust-fast-common"]
+  tags     = [DOCKER_RUST_FAST_IMAGE]
+  output   = ["type=docker"]
+}
+
+target "nook-rust-browser" {
+  inherits = ["_nook-rust-browser-common"]
+  tags     = [DOCKER_RUST_BROWSER_IMAGE]
+  output   = ["type=docker"]
 }
