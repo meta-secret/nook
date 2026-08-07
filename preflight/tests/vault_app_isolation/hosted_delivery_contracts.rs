@@ -388,6 +388,11 @@ fn assert_preflight_reporter_contract(root: &Path) {
         "SCCACHE_S3_BUILD_SECRETS",
         "deps:\n      - sccache:ensure",
         "--set \"rust-base.cache-to=\"",
+        "PREFLIGHT_OUTPUT_PARENT:",
+        "dirname \"{{.PREFLIGHT_OUTPUT_DIR}}\"",
+        "--allow=\"fs.write={{.PREFLIGHT_OUTPUT_PARENT}}\"",
+        "--allow=\"fs.write={{.PREFLIGHT_OUTPUT_DIR}}\"",
+        "mkdir -p '{{.PREFLIGHT_OUTPUT_DIR}}'",
     ] {
         assert!(
             preflight_tasks.contains(required),
