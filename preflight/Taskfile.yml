@@ -70,10 +70,17 @@ tasks:
       - sccache:ensure
     requires:
       vars: [PREFLIGHT_OUTPUT_DIR]
+    vars:
+      # Nested local outputs need fs.write on the parent so Bake can create the
+      # tools directory under an already-populated CI artifact root.
+      PREFLIGHT_OUTPUT_PARENT:
+        sh: 'dirname "{{.PREFLIGHT_OUTPUT_DIR}}"'
     cmds:
+      - mkdir -p '{{.PREFLIGHT_OUTPUT_DIR}}'
       - >-
         {{.DOCKER}} buildx bake
         {{.PREFLIGHT_BAKE_FILES}}
+        --allow="fs.write={{.PREFLIGHT_OUTPUT_PARENT}}"
         --allow="fs.write={{.PREFLIGHT_OUTPUT_DIR}}"
         --set "preflight-cli-export.output=type=local,dest={{.PREFLIGHT_OUTPUT_DIR}}"
         --set "rust-base.cache-to="
