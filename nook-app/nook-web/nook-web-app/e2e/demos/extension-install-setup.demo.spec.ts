@@ -1,6 +1,8 @@
 import { expect, test } from '../fixtures'
 import { connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
 
+// Companion WASM must resolve from the sealed shared path under Node/Bun so
+// extension install discovery can run during web verification (companion-ready).
 const DEMO_BEAT_MS = 700
 
 async function demoBeat(page: Parameters<typeof connectLocalVault>[0]) {
@@ -17,6 +19,8 @@ test('offer browser extension install on vault home and in Devices', async ({
   await expect(setupCard).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await expect(setupCard).toHaveAttribute('data-status', 'not_installed')
   await expect(page.getByTestId('extension-install-setup-cta')).toBeVisible()
+  // Install CTA stays offered until the companion reports a paired vault.
+  await expect(page.getByTestId('extension-install-setup-cta')).toBeEnabled()
   await demoBeat(page)
 
   await page.evaluate(() => {
