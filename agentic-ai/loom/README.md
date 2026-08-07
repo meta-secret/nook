@@ -34,16 +34,27 @@ bun run --cwd agentic-ai/loom loom -- pr-land status --pr <n>
 
 ## Commands
 
-| Command | Role |
-|---|---|
-| `pre-push` | Host `task format`, then UI demo contract vs `origin/main` |
-| `cortex-audit` | Broken `.cortex` links, skill index sync, optional prose density |
-| `skill-scaffold` | Create a dynamic-skill card (+ optional executable wrappers) |
-| `agent-stats` | Assemble, validate, or publish AI-agent stats YAML |
-| `pr-land` | Status / validate / ready / merge-check helpers over Task + `gh` |
+| Command          | Role                                                             |
+| ---------------- | ---------------------------------------------------------------- |
+| `pre-push`       | Host `task format`, then UI demo contract vs `origin/main`       |
+| `cortex-audit`   | Broken `.cortex` links, skill index sync, optional prose density |
+| `skill-scaffold` | Create a dynamic-skill card (+ optional executable wrappers)     |
+| `agent-stats`    | Assemble, validate, or publish AI-agent stats YAML               |
+| `pr-land`        | Status / validate / ready / merge-check helpers over Task + `gh` |
 
-## Tests
+## Quality bar
+
+Loom holds the same authored-TypeScript invariants as the rest of the repo:
+
+- Prettier format (`task loom:format` / `task loom:format:check`)
+- `tsc --noEmit` (`task loom:check`)
+- unit tests (`task loom:test`)
+- preflight TypeScript state scanners (`task preflight:typescript-state`)
+
+Aggregate:
 
 ```bash
-bun test
+task loom:verify
 ```
+
+`task format` also runs `task loom:format` on the host after product/Hive format.

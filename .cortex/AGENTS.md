@@ -393,11 +393,15 @@ Preferred Task surface:
 
 | Command | Role |
 |---|---|
-| `task loom:pre-push` | Format + UI demo contract |
+| `task loom:pre-push` | Format Loom + product format + UI demo contract |
+| `task loom:verify` | Prettier check + `tsc` + unit tests |
 | `task loom:cortex-audit` | Broken links / skill index sync |
 | `task loom:skill-scaffold SLUG=<name>` | New dynamic-skill card |
 | `task loom:agent-stats ARGS='…'` | Assemble / validate / publish AI stats |
 | `task loom:pr-land ARGS='…'` | Status / validate / ready / merge-check |
+
+Loom holds the same authored-TypeScript quality bar as other TS packages:
+Prettier, `tsc --noEmit`, unit tests, and preflight TypeScript state scanners.
 
 Policy and judgment stay in `.cortex`. Loom only runs deterministic steps.
 

@@ -1,53 +1,62 @@
-import { MaybeKind, ResultKind, absent, err, ok, present, type Maybe, type Result } from '../result.ts'
+import {
+  MaybeKind,
+  ResultKind,
+  absent,
+  err,
+  ok,
+  present,
+  type Maybe,
+  type Result,
+} from '../result.ts';
 
 export function flagPresent(args: readonly string[], name: string): boolean {
-  return args.includes(name)
+  return args.includes(name);
 }
 
 export function readOption(
   args: readonly string[],
   name: string,
 ): Result<Maybe<string>> {
-  const index = args.indexOf(name)
+  const index = args.indexOf(name);
   if (index < 0) {
-    return ok(absent())
+    return ok(absent());
   }
-  const value = args[index + 1]
+  const value = args[index + 1];
   if (typeof value !== 'string' || value.startsWith('--')) {
-    return err(`Missing value for ${name}`)
+    return err(`Missing value for ${name}`);
   }
-  return ok(present(value))
+  return ok(present(value));
 }
 
 export function requireOption(
   args: readonly string[],
   name: string,
 ): Result<string> {
-  const option = readOption(args, name)
+  const option = readOption(args, name);
   if (option.kind === ResultKind.Err) {
-    return option
+    return option;
   }
   if (option.value.kind === MaybeKind.Absent) {
-    return err(`Required option ${name} is missing`)
+    return err(`Required option ${name} is missing`);
   }
-  return ok(option.value.value)
+  return ok(option.value.value);
 }
 
 export function positionalArgs(args: readonly string[]): string[] {
-  const out: string[] = []
+  const out: string[] = [];
   for (let i = 0; i < args.length; i += 1) {
-    const token = args[i]
+    const token = args[i];
     if (typeof token !== 'string') {
-      continue
+      continue;
     }
     if (token.startsWith('--')) {
-      const next = args[i + 1]
+      const next = args[i + 1];
       if (typeof next === 'string' && !next.startsWith('--')) {
-        i += 1
+        i += 1;
       }
-      continue
+      continue;
     }
-    out.push(token)
+    out.push(token);
   }
-  return out
+  return out;
 }

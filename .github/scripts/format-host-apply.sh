@@ -41,4 +41,5 @@ else
 fi
 
 task hive:format
+task loom:format
 git status --short --untracked-files=no

@@ -1,64 +1,65 @@
-import { existsSync } from 'node:fs'
-import path from 'node:path'
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 
 export type BrokenLink = {
-  readonly file: string
-  readonly line: number
-  readonly target: string
-}
+  readonly file: string;
+  readonly line: number;
+  readonly target: string;
+};
 
-const LINK_RE = /\[([^\]]+)\]\(([^)]+)\)/g
+const LINK_RE = /\[([^\]]+)\]\(([^)]+)\)/g;
 
 export function findBrokenRelativeLinks(
   filePath: string,
   content: string,
   repoRoot: string,
 ): BrokenLink[] {
-  const broken: BrokenLink[] = []
-  const lines = content.split(/\r?\n/)
-  const fileDir = path.dirname(filePath)
+  const broken: BrokenLink[] = [];
+  const lines = content.split(/\r?\n/);
+  const fileDir = path.dirname(filePath);
 
   for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i] ?? ''
-    LINK_RE.lastIndex = 0
+    const line = lines[i] ?? '';
+    LINK_RE.lastIndex = 0;
     for (;;) {
-      const match = LINK_RE.exec(line)
+      const match = LINK_RE.exec(line);
       if (!match) {
-        break
+        break;
       }
-      const target = typeof match[2] === 'string' ? match[2] : ''
+      const target = typeof match[2] === 'string' ? match[2] : '';
       if (shouldCheckLink(target)) {
-        const hashParts = target.split('#')
-        const withoutHash = typeof hashParts[0] === 'string' ? hashParts[0] : ''
+        const hashParts = target.split('#');
+        const withoutHash =
+          typeof hashParts[0] === 'string' ? hashParts[0] : '';
         if (withoutHash.length > 0) {
-          const resolved = path.resolve(fileDir, withoutHash)
+          const resolved = path.resolve(fileDir, withoutHash);
           if (!existsSync(resolved)) {
             broken.push({
               file: path.relative(repoRoot, filePath),
               line: i + 1,
               target,
-            })
+            });
           }
         }
       }
     }
   }
 
-  return broken
+  return broken;
 }
 
 function shouldCheckLink(target: string): boolean {
   if (target.length === 0) {
-    return false
+    return false;
   }
   if (target.startsWith('http://') || target.startsWith('https://')) {
-    return false
+    return false;
   }
   if (target.startsWith('mailto:')) {
-    return false
+    return false;
   }
   if (target.startsWith('#')) {
-    return false
+    return false;
   }
-  return true
+  return true;
 }

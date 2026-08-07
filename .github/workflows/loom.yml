@@ -1,0 +1,49 @@
+name: Loom
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/loom.yml
+      - .task/agentic-ai.yml
+      - agentic-ai/loom/**
+      - preflight/**
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/loom.yml
+      - .task/agentic-ai.yml
+      - agentic-ai/loom/**
+      - preflight/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: loom-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Loom TypeScript verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Task
+        uses: go-task/setup-task@v2
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify Loom package quality
+        run: task loom:verify
+
+      - name: Enforce authored TypeScript state invariants
+        run: task preflight:typescript-state

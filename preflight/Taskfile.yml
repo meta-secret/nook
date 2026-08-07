@@ -99,3 +99,14 @@ tasks:
         --locked
         --manifest-path preflight/Cargo.toml
         --test source_file_size
+
+  preflight:typescript-state:
+    desc: Enforce authored TypeScript absence, enum, and state-modeling invariants.
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - >-
+        cargo test
+        --locked
+        --manifest-path preflight/Cargo.toml
+        --test core_ownership
+        typescript_

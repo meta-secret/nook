@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
-import { runAgentStats } from './commands/agent-stats.ts'
-import { runCortexAudit } from './commands/cortex-audit.ts'
-import { runPrLand } from './commands/pr-land.ts'
-import { runPrePush } from './commands/pre-push.ts'
-import { runSkillScaffold } from './commands/skill-scaffold.ts'
-import { requireBun } from './lib/repo.ts'
-import { ResultKind, type Result } from './result.ts'
+import { runAgentStats } from './commands/agent-stats.ts';
+import { runCortexAudit } from './commands/cortex-audit.ts';
+import { runPrLand } from './commands/pr-land.ts';
+import { runPrePush } from './commands/pre-push.ts';
+import { runSkillScaffold } from './commands/skill-scaffold.ts';
+import { requireBun } from './lib/repo.ts';
+import { ResultKind, type Result } from './result.ts';
 
 const HELP = `Loom — mechanical cortex rites as Bun CLIs
 
@@ -26,53 +26,57 @@ Task wrappers (from repo root):
   task loom:skill-scaffold SLUG=<slug>
   task loom:agent-stats ARGS='...'
   task loom:pr-land ARGS='...'
-`
+`;
 
 async function main(): Promise<number> {
-  const bun = requireBun()
+  const bun = requireBun();
   if (bun.kind === ResultKind.Err) {
-    console.error(bun.message)
-    return 2
+    console.error(bun.message);
+    return 2;
   }
 
-  const argv = process.argv.slice(2)
-  const command = argv[0]
-  const args = argv.slice(1)
+  const argv = process.argv.slice(2);
+  const command = argv[0];
+  const args = argv.slice(1);
 
-  if (typeof command !== 'string' || command === 'help' || command === '--help') {
-    console.log(HELP)
-    return typeof command === 'string' ? 0 : 2
+  if (
+    typeof command !== 'string' ||
+    command === 'help' ||
+    command === '--help'
+  ) {
+    console.log(HELP);
+    return typeof command === 'string' ? 0 : 2;
   }
 
-  let result: Result<unknown>
+  let result: Result<unknown>;
   switch (command) {
     case 'pre-push':
-      result = await runPrePush(args)
-      break
+      result = await runPrePush(args);
+      break;
     case 'cortex-audit':
-      result = await runCortexAudit(args)
-      break
+      result = await runCortexAudit(args);
+      break;
     case 'skill-scaffold':
-      result = await runSkillScaffold(args)
-      break
+      result = await runSkillScaffold(args);
+      break;
     case 'agent-stats':
-      result = await runAgentStats(args)
-      break
+      result = await runAgentStats(args);
+      break;
     case 'pr-land':
-      result = await runPrLand(args)
-      break
+      result = await runPrLand(args);
+      break;
     default:
-      console.error(`Unknown command: ${command}`)
-      console.log(HELP)
-      return 2
+      console.error(`Unknown command: ${command}`);
+      console.log(HELP);
+      return 2;
   }
 
   if (result.kind === ResultKind.Err) {
-    console.error(result.message)
-    return 1
+    console.error(result.message);
+    return 1;
   }
 
-  console.log(stringifyReport(result.value))
+  console.log(stringifyReport(result.value));
 
   if (
     command === 'cortex-audit' &&
@@ -81,15 +85,15 @@ async function main(): Promise<number> {
     'ok' in result.value &&
     result.value.ok === false
   ) {
-    return 1
+    return 1;
   }
 
-  return 0
+  return 0;
 }
 
 function stringifyReport(value: unknown): string {
-  return JSON.stringify(value, (_key, entry) => entry, 2)
+  return JSON.stringify(value, (_key, entry) => entry, 2);
 }
 
-const exitCode = await main()
-process.exit(exitCode)
+const exitCode = await main();
+process.exit(exitCode);

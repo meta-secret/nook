@@ -25,6 +25,20 @@ tasks:
     cmds:
       - bun install --frozen-lockfile
 
+  loom:format:
+    desc: Format Loom TypeScript sources with Prettier.
+    dir: agentic-ai/loom
+    deps: [loom:install]
+    cmds:
+      - bun run format
+
+  loom:format:check:
+    desc: Check Loom Prettier formatting.
+    dir: agentic-ai/loom
+    deps: [loom:install]
+    cmds:
+      - bun run format:check
+
   loom:test:
     desc: Run Loom unit tests.
     dir: agentic-ai/loom
@@ -39,9 +53,17 @@ tasks:
     cmds:
       - bun run check
 
-  loom:pre-push:
-    desc: Host-apply task format and enforce the UI demo contract via Loom.
+  loom:verify:
+    desc: Format-check, typecheck, and unit-test Loom.
     deps: [loom:install]
+    cmds:
+      - task: loom:format:check
+      - task: loom:check
+      - task: loom:test
+
+  loom:pre-push:
+    desc: Format Loom, host-apply product format, and enforce the UI demo contract.
+    deps: [loom:format]
     cmds:
       - bun run --cwd agentic-ai/loom loom -- pre-push {{.CLI_ARGS}}
 

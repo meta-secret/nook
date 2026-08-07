@@ -1,20 +1,20 @@
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-import { isRecord, type UnknownRecord } from './guards.ts'
-import { runCommand } from './run.ts'
-import { ResultKind, err, ok, type Result } from '../result.ts'
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { isRecord, type UnknownRecord } from './guards.ts';
+import { runCommand } from './run.ts';
+import { ResultKind, err, ok, type Result } from '../result.ts';
 
 export type ScratchEventLog = {
-  readonly started_at: string
-  readonly change_surface: string
-  readonly local_executions: UnknownRecord[]
-  readonly pr_retriggers: UnknownRecord[]
-  readonly merge_attempts: UnknownRecord[]
-  readonly comparison: UnknownRecord
-  readonly waste_assessment: UnknownRecord
-  readonly cache_telemetry: OptionalRecord
-  readonly test_inventory: OptionalRecord
-}
+  readonly started_at: string;
+  readonly change_surface: string;
+  readonly local_executions: UnknownRecord[];
+  readonly pr_retriggers: UnknownRecord[];
+  readonly merge_attempts: UnknownRecord[];
+  readonly comparison: UnknownRecord;
+  readonly waste_assessment: UnknownRecord;
+  readonly cache_telemetry: OptionalRecord;
+  readonly test_inventory: OptionalRecord;
+};
 
 export enum OptionalRecordKind {
   Present = 'present',
@@ -23,54 +23,56 @@ export enum OptionalRecordKind {
 
 type OptionalRecord =
   | { readonly kind: OptionalRecordKind.Present; readonly value: UnknownRecord }
-  | { readonly kind: OptionalRecordKind.Missing }
+  | { readonly kind: OptionalRecordKind.Missing };
 
 export type AssembleOptions = {
-  readonly repoRoot: string
-  readonly prNumber: number
-  readonly scratchPath: string
-  readonly includeInventory: boolean
-}
+  readonly repoRoot: string;
+  readonly prNumber: number;
+  readonly scratchPath: string;
+  readonly includeInventory: boolean;
+};
 
 export type AssembledStats = {
-  readonly yaml: string
-  readonly record: UnknownRecord
-}
+  readonly yaml: string;
+  readonly record: UnknownRecord;
+};
 
-export function loadScratchEventLog(scratchPath: string): Result<ScratchEventLog> {
-  let parsed: unknown
+export function loadScratchEventLog(
+  scratchPath: string,
+): Result<ScratchEventLog> {
+  let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(scratchPath, 'utf8'))
+    parsed = JSON.parse(readFileSync(scratchPath, 'utf8'));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return err(`Failed to read scratch event log: ${message}`)
+    const message = error instanceof Error ? error.message : String(error);
+    return err(`Failed to read scratch event log: ${message}`);
   }
   if (!isRecord(parsed)) {
-    return err('Scratch event log must be a JSON object')
+    return err('Scratch event log must be a JSON object');
   }
   if (typeof parsed.started_at !== 'string' || parsed.started_at.length === 0) {
-    return err('scratch.started_at must be a non-empty string')
+    return err('scratch.started_at must be a non-empty string');
   }
   if (
     typeof parsed.change_surface !== 'string' ||
     parsed.change_surface.length === 0
   ) {
-    return err('scratch.change_surface must be a non-empty string')
+    return err('scratch.change_surface must be a non-empty string');
   }
   if (!Array.isArray(parsed.local_executions)) {
-    return err('scratch.local_executions must be an array')
+    return err('scratch.local_executions must be an array');
   }
   if (!Array.isArray(parsed.pr_retriggers)) {
-    return err('scratch.pr_retriggers must be an array')
+    return err('scratch.pr_retriggers must be an array');
   }
   if (!Array.isArray(parsed.merge_attempts)) {
-    return err('scratch.merge_attempts must be an array')
+    return err('scratch.merge_attempts must be an array');
   }
   if (!isRecord(parsed.comparison)) {
-    return err('scratch.comparison must be an object')
+    return err('scratch.comparison must be an object');
   }
   if (!isRecord(parsed.waste_assessment)) {
-    return err('scratch.waste_assessment must be an object')
+    return err('scratch.waste_assessment must be an object');
   }
 
   return ok({
@@ -87,15 +89,15 @@ export function loadScratchEventLog(scratchPath: string): Result<ScratchEventLog
     test_inventory: isRecord(parsed.test_inventory)
       ? { kind: OptionalRecordKind.Present, value: parsed.test_inventory }
       : { kind: OptionalRecordKind.Missing },
-  })
+  });
 }
 
 export async function assembleAgentStats(
   options: AssembleOptions,
 ): Promise<Result<AssembledStats>> {
-  const scratch = loadScratchEventLog(options.scratchPath)
+  const scratch = loadScratchEventLog(options.scratchPath);
   if (scratch.kind === ResultKind.Err) {
-    return scratch
+    return scratch;
   }
 
   const prJson = runCommand(
@@ -108,63 +110,69 @@ export async function assembleAgentStats(
       'number,url,title,mergedAt,createdAt,mergeCommit,baseRefName,state',
     ],
     options.repoRoot,
-  )
+  );
   if (prJson.kind === ResultKind.Err) {
-    return prJson
+    return prJson;
   }
   if (prJson.value.exitCode !== 0) {
-    return err(`gh pr view failed: ${prJson.value.stderr || prJson.value.stdout}`)
+    return err(
+      `gh pr view failed: ${prJson.value.stderr || prJson.value.stdout}`,
+    );
   }
 
-  let pr: UnknownRecord
+  let pr: UnknownRecord;
   try {
-    const parsed = JSON.parse(prJson.value.stdout) as unknown
+    const parsed = JSON.parse(prJson.value.stdout) as unknown;
     if (!isRecord(parsed)) {
-      return err('gh pr view returned a non-object')
+      return err('gh pr view returned a non-object');
     }
-    pr = parsed
+    pr = parsed;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return err(`Failed to parse gh pr view JSON: ${message}`)
+    const message = error instanceof Error ? error.message : String(error);
+    return err(`Failed to parse gh pr view JSON: ${message}`);
   }
 
   if (pr.state !== 'MERGED') {
-    return err('AI-agent stats require a merged source PR')
+    return err('AI-agent stats require a merged source PR');
   }
   if (typeof pr.mergedAt !== 'string' || pr.mergedAt.length === 0) {
-    return err('Merged PR is missing mergedAt')
+    return err('Merged PR is missing mergedAt');
   }
-  const mergeCommit = isRecord(pr.mergeCommit) ? pr.mergeCommit : {}
-  const headSha = typeof mergeCommit.oid === 'string' ? mergeCommit.oid : ''
+  const mergeCommit = isRecord(pr.mergeCommit) ? pr.mergeCommit : {};
+  const headSha = typeof mergeCommit.oid === 'string' ? mergeCommit.oid : '';
   if (!/^[0-9a-f]{40}$/.test(headSha)) {
-    return err('Merged PR is missing mergeCommit.oid')
+    return err('Merged PR is missing mergeCommit.oid');
   }
 
-  const runs = collectGithubActionsRuns(options.repoRoot, options.prNumber, headSha)
+  const runs = collectGithubActionsRuns(
+    options.repoRoot,
+    options.prNumber,
+    headSha,
+  );
   if (runs.kind === ResultKind.Err) {
-    return runs
+    return runs;
   }
 
-  const localExecutions = scratch.value.local_executions
-  const localSeconds = sumDurationSeconds(localExecutions)
-  const actionsSeconds = sumDurationSeconds(runs.value)
+  const localExecutions = scratch.value.local_executions;
+  const localSeconds = sumDurationSeconds(localExecutions);
+  const actionsSeconds = sumDurationSeconds(runs.value);
 
-  let inventory: UnknownRecord
+  let inventory: UnknownRecord;
   if (scratch.value.test_inventory.kind === OptionalRecordKind.Present) {
-    inventory = scratch.value.test_inventory.value
+    inventory = scratch.value.test_inventory.value;
   } else if (options.includeInventory) {
-    const counted = countTestInventory(options.repoRoot, headSha)
+    const counted = countTestInventory(options.repoRoot, headSha);
     if (counted.kind === ResultKind.Err) {
-      return counted
+      return counted;
     }
-    inventory = counted.value
+    inventory = counted.value;
   } else {
     inventory = {
       measured_at: new Date().toISOString(),
       head_sha: headSha,
       by_type: { rust: 0, preflight: 0, web_unit: 0, e2e: 0 },
       total: 0,
-    }
+    };
   }
 
   const cacheTelemetry =
@@ -182,15 +190,19 @@ export async function assembleAgentStats(
             buildkit_cached_steps: 0,
           },
           jobs: [],
-        }
+        };
 
   const openedAt =
-    typeof pr.createdAt === 'string' ? pr.createdAt : scratch.value.started_at
-  const startedMs = Date.parse(scratch.value.started_at)
-  const openedMs = Date.parse(openedAt)
-  const mergedMs = Date.parse(pr.mergedAt)
-  if (Number.isNaN(startedMs) || Number.isNaN(openedMs) || Number.isNaN(mergedMs)) {
-    return err('Could not parse started_at / opened_at / merged_at timestamps')
+    typeof pr.createdAt === 'string' ? pr.createdAt : scratch.value.started_at;
+  const startedMs = Date.parse(scratch.value.started_at);
+  const openedMs = Date.parse(openedAt);
+  const mergedMs = Date.parse(pr.mergedAt);
+  if (
+    Number.isNaN(startedMs) ||
+    Number.isNaN(openedMs) ||
+    Number.isNaN(mergedMs)
+  ) {
+    return err('Could not parse started_at / opened_at / merged_at timestamps');
   }
 
   const record: UnknownRecord = {
@@ -205,7 +217,10 @@ export async function assembleAgentStats(
       opened_at: openedAt,
       merged_at: pr.mergedAt,
       elapsed_seconds: Math.max(0, Math.round((mergedMs - startedMs) / 1000)),
-      open_to_merge_seconds: Math.max(0, Math.round((mergedMs - openedMs) / 1000)),
+      open_to_merge_seconds: Math.max(
+        0,
+        Math.round((mergedMs - openedMs) / 1000),
+      ),
     },
     summary: {
       local_execution_count: localExecutions.length,
@@ -217,7 +232,8 @@ export async function assembleAgentStats(
       github_actions_seconds: actionsSeconds,
       pr_retrigger_count: scratch.value.pr_retriggers.length,
       agent_requested_rerun_count: scratch.value.pr_retriggers.filter(
-        (item) => item.kind === 'agent_requested' || item.trigger === 'manual_rerun',
+        (item) =>
+          item.kind === 'agent_requested' || item.trigger === 'manual_rerun',
       ).length,
       merge_attempt_count: scratch.value.merge_attempts.length,
     },
@@ -229,12 +245,12 @@ export async function assembleAgentStats(
     merge_attempts: scratch.value.merge_attempts,
     comparison: scratch.value.comparison,
     waste_assessment: scratch.value.waste_assessment,
-  }
+  };
 
   return ok({
     yaml: Bun.YAML.stringify(record),
     record,
-  })
+  });
 }
 
 function collectGithubActionsRuns(
@@ -253,41 +269,44 @@ function collectGithubActionsRuns(
       'databaseId,workflowName,headSha,event,status,conclusion,createdAt,updatedAt,attempt',
     ],
     repoRoot,
-  )
+  );
   if (listed.kind === ResultKind.Err) {
-    return listed
+    return listed;
   }
   if (listed.value.exitCode !== 0) {
-    return err(`gh run list failed: ${listed.value.stderr || listed.value.stdout}`)
+    return err(
+      `gh run list failed: ${listed.value.stderr || listed.value.stdout}`,
+    );
   }
 
-  let runs: unknown
+  let runs: unknown;
   try {
-    runs = JSON.parse(listed.value.stdout)
+    runs = JSON.parse(listed.value.stdout);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return err(`Failed to parse gh run list JSON: ${message}`)
+    const message = error instanceof Error ? error.message : String(error);
+    return err(`Failed to parse gh run list JSON: ${message}`);
   }
   if (!Array.isArray(runs)) {
-    return err('gh run list returned a non-array')
+    return err('gh run list returned a non-array');
   }
 
-  const out: UnknownRecord[] = []
+  const out: UnknownRecord[] = [];
   for (const run of runs) {
     if (!isRecord(run)) {
-      continue
+      continue;
     }
     if (run.headSha !== headSha) {
-      continue
+      continue;
     }
-    const createdAt = typeof run.createdAt === 'string' ? run.createdAt : ''
-    const updatedAt = typeof run.updatedAt === 'string' ? run.updatedAt : createdAt
-    const startedMs = Date.parse(createdAt)
-    const finishedMs = Date.parse(updatedAt)
+    const createdAt = typeof run.createdAt === 'string' ? run.createdAt : '';
+    const updatedAt =
+      typeof run.updatedAt === 'string' ? run.updatedAt : createdAt;
+    const startedMs = Date.parse(createdAt);
+    const finishedMs = Date.parse(updatedAt);
     const durationSeconds =
       Number.isNaN(startedMs) || Number.isNaN(finishedMs)
         ? 0
-        : Math.max(0, Math.round((finishedMs - startedMs) / 1000))
+        : Math.max(0, Math.round((finishedMs - startedMs) / 1000));
     out.push({
       workflow: run.workflowName,
       run_id: run.databaseId,
@@ -298,37 +317,39 @@ function collectGithubActionsRuns(
       finished_at: updatedAt,
       duration_seconds: durationSeconds,
       conclusion:
-        typeof run.conclusion === 'string' ? run.conclusion : String(run.status),
+        typeof run.conclusion === 'string'
+          ? run.conclusion
+          : String(run.status),
       source_pr: prNumber,
-    })
+    });
   }
-  return ok(out)
+  return ok(out);
 }
 
 function countTestInventory(
   repoRoot: string,
   headSha: string,
 ): Result<UnknownRecord> {
-  const measuredAt = new Date().toISOString()
+  const measuredAt = new Date().toISOString();
   const rust = countNextest(
     repoRoot,
     'package(nook-app-common) + package(nook-core) + package(nook-auth2) + package(nook-replication) + package(nook-event-log)',
-  )
-  const preflight = countNextest(repoRoot, 'package(preflight)')
-  const webUnit = countVitest(repoRoot)
-  const e2e = countPlaywright(repoRoot)
+  );
+  const preflight = countNextest(repoRoot, 'package(preflight)');
+  const webUnit = countVitest(repoRoot);
+  const e2e = countPlaywright(repoRoot);
   const byType = {
     rust: rust.kind === ResultKind.Ok ? rust.value : 0,
     preflight: preflight.kind === ResultKind.Ok ? preflight.value : 0,
     web_unit: webUnit.kind === ResultKind.Ok ? webUnit.value : 0,
     e2e: e2e.kind === ResultKind.Ok ? e2e.value : 0,
-  }
+  };
   return ok({
     measured_at: measuredAt,
     head_sha: headSha,
     by_type: byType,
     total: byType.rust + byType.preflight + byType.web_unit + byType.e2e,
-  })
+  });
 }
 
 function countNextest(repoRoot: string, filter: string): Result<number> {
@@ -336,62 +357,62 @@ function countNextest(repoRoot: string, filter: string): Result<number> {
     'cargo',
     ['nextest', 'list', '-E', filter, '--lib', '--tests'],
     path.join(repoRoot, 'nook-app'),
-  )
+  );
   if (listed.kind === ResultKind.Err) {
-    return listed
+    return listed;
   }
   if (listed.value.exitCode !== 0) {
-    return err(listed.value.stderr || listed.value.stdout)
+    return err(listed.value.stderr || listed.value.stdout);
   }
-  const matches = listed.value.stdout.match(/^[^\s].*:/gm)
+  const matches = listed.value.stdout.match(/^[^\s].*:/gm);
   if (!matches) {
-    return ok(0)
+    return ok(0);
   }
-  return ok(matches.length)
+  return ok(matches.length);
 }
 
 function countVitest(repoRoot: string): Result<number> {
-  const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app')
-  const listed = runCommand('bunx', ['vitest', 'list'], appRoot)
+  const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
+  const listed = runCommand('bunx', ['vitest', 'list'], appRoot);
   if (listed.kind === ResultKind.Err) {
-    return listed
+    return listed;
   }
   if (listed.value.exitCode !== 0) {
-    return ok(0)
+    return ok(0);
   }
   const lines = listed.value.stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-  return ok(lines.length)
+    .filter((line) => line.length > 0);
+  return ok(lines.length);
 }
 
 function countPlaywright(repoRoot: string): Result<number> {
-  const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app')
-  const listed = runCommand('bunx', ['playwright', 'test', '--list'], appRoot)
+  const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
+  const listed = runCommand('bunx', ['playwright', 'test', '--list'], appRoot);
   if (listed.kind === ResultKind.Err) {
-    return listed
+    return listed;
   }
   if (listed.value.exitCode !== 0) {
-    return ok(0)
+    return ok(0);
   }
-  const matches = listed.value.stdout.match(/^\s+\d+/gm)
+  const matches = listed.value.stdout.match(/^\s+\d+/gm);
   if (!matches) {
-    return ok(0)
+    return ok(0);
   }
-  return ok(matches.length)
+  return ok(matches.length);
 }
 
 function sumDurationSeconds(items: UnknownRecord[]): number {
-  let total = 0
+  let total = 0;
   for (const item of items) {
     if (typeof item.duration_seconds === 'number') {
-      total += item.duration_seconds
+      total += item.duration_seconds;
     }
   }
-  return total
+  return total;
 }
 
 function countByCategory(items: UnknownRecord[], category: string): number {
-  return items.filter((item) => item.category === category).length
+  return items.filter((item) => item.category === category).length;
 }
