@@ -150,17 +150,20 @@ Use this workflow for quality, CI, and deployment changes.
       - web dependencies
       - browser-free web
       - e2e web
-    - Product deps cache-from use trusted `nook-rust-base-v1` only.
-    - They must not import PR-isolated rust-base parents.
+    - Product native deps scopes must not import rust-base at all.
+    - Native source may import cooked native deps.
+    - Native source must not import rust-base.
     - Ecosystem nightly/policy-tools/policy and preflight scopes must not
       import rust-base at all.
     - Dylint/fuzz leaf scopes must not import nightly (or rust-base).
     - WASM deps/source scopes must not import rust-base or native rust-deps.
     - Their mode=max exports already embed that parent chain.
     - Preflight restores rust-base only via Bake `contexts` (`target:rust-base`).
-    - Ecosystem nightly/policy/dylint/fuzz restore parents the same way.
+    - Native deps and ecosystem leaves restore parents the same way.
     - Leaf `cache-from` stays own-scope only (no short-parent importers).
     - `mode=max` leaf exports already embed the parent chain.
+    - Native deps/source use `nook-rust-deps-v3` and
+      `nook-rust-native-source-v3` after leaving short-chain rust-base.
     - Empty `cache-from=` and `cache-to=` overrides are prohibited.
     - Clearing `cache-from` after a remote hit forces cold apt/toolchain rebuilds.
     - Clearing `cache-to` on a linked parent is banned.

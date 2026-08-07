@@ -507,7 +507,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     );
     assert!(
         !wasm_source_cache.contains("nook-rust-base-v1")
-            && !wasm_source_cache.contains("nook-rust-deps-v2"),
+            && !wasm_source_cache.contains("nook-rust-deps-v3"),
         "WASM source cache-from must not import shorter rust-base or native rust-deps parents"
     );
     let docker_tasks = read("nook-app/nook-platform/docker/Taskfile.yml");
@@ -551,8 +551,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(!bake.contains("type=gha"));
     for fallback in [
         "nook/buildcache/nook-rust-base-v1:buildcache",
-        "nook/buildcache/nook-rust-deps-v2:buildcache",
-        "nook/buildcache/nook-rust-native-source-v2:buildcache",
+        "nook/buildcache/nook-rust-deps-v3:buildcache",
+        "nook/buildcache/nook-rust-native-source-v3:buildcache",
         "nook/buildcache/nook-rust-wasm-source-v2:buildcache",
         "nook/buildcache/nook-web-v1:buildcache",
     ] {
@@ -563,8 +563,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     }
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}",
     ] {
@@ -575,8 +575,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     }
     for write_scope in [
         "${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
         "${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
         "${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
         "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
@@ -589,8 +589,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     }
     for cold_isolated_import in [
         "${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
@@ -615,8 +615,30 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     );
     assert!(
         !wasm_deps_from.contains("nook-rust-base-v1")
-            && !wasm_deps_from.contains("nook-rust-deps-v2"),
+            && !wasm_deps_from.contains("nook-rust-deps-v3"),
         "WASM deps cache-from must not import shorter rust-base or native rust-deps parents"
+    );
+    let deps_from = rust_bake
+        .split_once("rust_deps_cache_from =")
+        .context("platform bake must define the native deps cache inputs")?
+        .1
+        .split_once("rust_deps_cache_to =")
+        .context("platform bake must delimit the native deps cache inputs")?
+        .0;
+    let native_source_from = rust_bake
+        .split_once("rust_native_source_cache_from =")
+        .context("platform bake must define the native source cache inputs")?
+        .1
+        .split_once("rust_native_source_cache_to =")
+        .context("platform bake must delimit the native source cache inputs")?
+        .0;
+    assert!(
+        !deps_from.contains("nook-rust-base-v1")
+            && !native_source_from.contains("nook-rust-base-v1")
+            && deps_from.contains("nook-rust-deps-v3")
+            && native_source_from.contains("nook-rust-native-source-v3")
+            && native_source_from.contains("nook-rust-deps-v3"),
+        "native deps must be own-scope v3; native source may import deps but never rust-base"
     );
     assert!(
         wasm_deps_from.contains("nook-rust-wasm-deps-v5")
