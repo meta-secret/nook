@@ -106,6 +106,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "docker:ecosystem:nightly:verify:",
         "docker:ecosystem:dependency-policy:",
         "docker:ecosystem:dependency-policy:run:",
+        "bash -c \"set -euo pipefail;",
+        "rust-ecosystem-policy-tools.output=type=cacheonly",
         "docker:ecosystem:deterministic:",
         "docker:ecosystem:fuzz:",
         "docker:ecosystem:dylint:",
@@ -142,6 +144,10 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             "docker Taskfile is missing ecosystem marker {marker}"
         );
     }
+    assert!(
+        !docker_tasks.contains("bash -lc \""),
+        "policy-tools docker run must not use a login shell that resets PATH"
+    );
     assert!(
         platform_tasks.contains("rust:dependency-policy:")
             && platform_tasks.contains("fuzz:dependency-policy:")

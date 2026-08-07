@@ -256,10 +256,13 @@ tasks:
         rust-ecosystem-policy-tools
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
+          # Publish Zot only. Do not reload type=docker or a thin export can replace
+          # the already-loaded runnable policy-tools tag used by dependency-policy:run.
           {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-base.cache-to=" \
             --set "rust-base.cache-from=" \
+            --set "rust-ecosystem-policy-tools.output=type=cacheonly" \
             rust-ecosystem-policy-tools
         fi
 
@@ -269,6 +272,7 @@ tasks:
     requires:
       vars: [WORKSPACE]
     cmds:
+      # Use bash -c (not -lc): a login shell resets PATH and drops /usr/local/cargo/bin.
       - >-
         bash -c 'set -euo pipefail;
         workspace="{{.WORKSPACE}}";
@@ -278,7 +282,7 @@ tasks:
         -v "{{.REPO_ROOT}}:/meta-secret/nook"
         -w /meta-secret/nook
         {{.DOCKER_POLICY_TOOLS_IMAGE}}
-        bash -lc "set -euo pipefail;
+        bash -c "set -euo pipefail;
         cargo-deny --manifest-path \"$workspace/Cargo.toml\" --log-level error check --hide-inclusion-graph;
         (cd \"$workspace\" && cargo-audit audit --quiet)"'
 
