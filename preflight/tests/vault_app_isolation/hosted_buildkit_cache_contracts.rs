@@ -310,11 +310,13 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
         cache_verifier.contains("docker-container")
+            && cache_verifier.contains("--use")
+            && !cache_verifier.contains("--builder")
             && cache_verifier.contains("builder-wasm-deps.cache-from=type=registry")
             && cache_verifier.contains("nook-sccache-report chef-wasm-release")
             && cache_verifier.contains("nook-sccache-report chef-wasm-clippy")
             && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "Main must reject a published WASM cache until a fresh builder restores every dependency layer"
+        "Main must reject a published WASM cache until a fresh builder restores every dependency layer without --builder"
     );
     let base_dockerfile = read(root, "nook-app/docker/rust.Dockerfile");
     assert!(

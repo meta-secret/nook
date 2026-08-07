@@ -47,9 +47,10 @@ for attempt in 1 2 3; do
   "$docker_bin" buildx create \
     --name "$proof_builder" \
     --driver docker-container \
+    --use \
     --bootstrap >/dev/null
 
-  if "$docker_bin" buildx --builder "$proof_builder" bake \
+  if "$docker_bin" buildx bake \
     --progress=plain \
     "${bake_args[@]}" \
     builder-wasm-deps 2>&1 | tee "$proof_log" \

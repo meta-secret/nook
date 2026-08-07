@@ -15,8 +15,8 @@ cleanup_timeout="${NOOK_BUILDKIT_CLEANUP_TIMEOUT_SECONDS:-15}"
 # `nook-pr` across local and self-hosted runs; one wedged or concurrent build
 # could exhaust the host. Hosted CI must pass a job-scoped builder from
 # docker/setup-buildx-action. Local optional CI uses the daemon-embedded
-# BuildKit builder for the active Docker context so layer cache stays warm
-# without a separate BuildKit container.
+# BuildKit default. Taskfiles must never pass --builder; this wrapper selects
+# the active default with `docker buildx use` when a job builder is present.
 builder="${NOOK_PR_BUILDX_BUILDER:-}"
 
 case "$builder" in
@@ -34,19 +34,8 @@ case "$health_timeout:$cleanup_timeout" in
 esac
 
 run_with_daemon_builder() {
-  local daemon_builder="${BUILDX_BUILDER:-}"
-  if [ -z "$daemon_builder" ]; then
-    daemon_builder="$("$docker_bin" context show 2>/dev/null || echo default)"
-  fi
-  case "$daemon_builder" in
-    ''|*[!a-zA-Z0-9_.-]*|nook-pr)
-      echo "invalid daemon BuildKit builder name: $daemon_builder" >&2
-      exit 2
-      ;;
-  esac
-
-  echo "Using daemon BuildKit builder $daemon_builder (no shared docker-container)" >&2
-  BUILDX_BUILDER="$daemon_builder" "$@"
+  echo "Using default docker buildx builder (Taskfiles must not pass --builder)" >&2
+  "$@"
 }
 
 if [ -z "$builder" ]; then
@@ -134,8 +123,8 @@ rm -rf "$probe_context"
 
 if [ "$probe_status" -eq 0 ]; then
   # Within one hosted job this reuses the ephemeral setup-buildx builder so
-  # GHA cache restores and later Bake targets keep warm layers. It must never
-  # fall back to a cross-job shared name.
+  # registry cache restores and later Bake targets keep warm layers. It must
+  # never fall back to a cross-job shared name.
   echo "Using healthy job-scoped BuildKit builder $builder" >&2
 else
   if [ "$probe_status" -eq 124 ]; then
@@ -163,4 +152,5 @@ else
   fi
 fi
 
-BUILDX_BUILDER="$builder" "$@"
+"$docker_bin" buildx use "$builder"
+"$@"

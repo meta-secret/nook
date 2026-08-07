@@ -115,10 +115,9 @@ Use this workflow for quality, CI, and deployment changes.
     #### Workflows and runners
 
     - `.github/workflows/pr.yml`, `.github/workflows/main.yml`, and `.github/workflows/release.yml` run on GitHub-hosted `ubuntu-latest`.
-    - Delivery cache-only Bake (Zot publishers, ecosystem gates) uses the hosted
-      `docker-container` builder for registry cache export.
-    - Image-load tasks (`setup:rust*`) use `DOCKER_LOAD_BUILDER` (docker driver).
-    - They must not keep a sidecar BuildKit container just to load `nook-rust:*`.
+    - Delivery cache-only Bake may use a job-scoped `docker-container` Buildx
+      instance selected with `docker buildx use` before Task runs.
+    - Taskfiles and Bake callers must never pass `--builder`.
     - Delivery does not depend on the daemon's default image store and never restarts Docker.
     - E2e uses `127.0.0.1:5173` inside each container — no host `-p 5173`.
 

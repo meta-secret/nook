@@ -264,7 +264,7 @@ tasks:
         esac;
         rm -rf "$out_dir";
         mkdir -p "$out_dir";
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" coverage-export'
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" coverage-export'
 
   docker:ci:rust:export:
     desc: Run native Rust formatting/coverage on one CI runner and export only coverage artifacts.
@@ -277,7 +277,7 @@ tasks:
         out_dir="{{.CI_ARTIFACT_DIR}}";
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" --set "builder-core-deps.output=type=cacheonly" --set "rust-base.output=type=cacheonly" ci-rust builder-core-deps rust-base'
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" --set "builder-core-deps.output=type=cacheonly" --set "rust-base.output=type=cacheonly" ci-rust builder-core-deps rust-base'
 
   docker:ci:wasm:export:
     desc: Run WASM clippy/build on a separate CI runner and export only the generated package.
@@ -290,14 +290,14 @@ tasks:
         out_dir="{{.CI_ARTIFACT_DIR}}";
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" --set "builder-wasm-deps.output=type=cacheonly" wasm-export builder-wasm-deps'
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" --set "builder-wasm-deps.output=type=cacheonly" wasm-export builder-wasm-deps'
 
   docker:ci:wasm:node-test:
     desc: Run WASM Node tests after the exact generated package is available to parallel consumers.
     deps: [sccache:ensure]
     cmds:
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "builder-wasm.output=type=cacheonly"
         builder-wasm
@@ -308,12 +308,12 @@ tasks:
       - |
         set -euo pipefail
         if [ -n "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
             rust-base
         else
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
             --set "rust-base.cache-from=" \
@@ -331,13 +331,13 @@ tasks:
       - |
         set -euo pipefail
         if [ -n "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
             --set "rust-base.cache-to=" \
             builder-core-deps builder-debug
         else
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
             --set "rust-base.cache-to=" \
@@ -350,7 +350,7 @@ tasks:
       # Clear rust-base.cache-to: native already published rust-base, and a second
       # writer during the linked contexts bake can thin-export that parent scope.
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         --allow=fs.read={{.REPO_ROOT}}
         {{.SCCACHE_S3_BUILD_SECRETS}}
         -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
@@ -377,19 +377,19 @@ tasks:
       - |
         set -euo pipefail
         if [ -n "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
             --set "rust-base.cache-to=" \
             builder-wasm-deps
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
             --set "rust-base.cache-to=" \
             --set "builder-wasm-deps.cache-to=" \
             wasm-export
         else
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
             --set "rust-base.cache-to=" \
@@ -397,7 +397,7 @@ tasks:
             --set "builder-wasm-deps.cache-from=" \
             --set "builder-wasm-deps.cache-to=type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,timeout=10m" \
             builder-wasm-deps
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
             --set "rust-base.cache-to=" \
@@ -412,7 +412,7 @@ tasks:
     desc: Export the already-verified web dependency graph from this job's builder.
     cmds:
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
         --set "web-deps.cache-from="
@@ -431,7 +431,7 @@ tasks:
         test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
-        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:build" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} --set "web-deps.output=type=cacheonly" nook-web-ci web-deps'
+        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:build" {{.DOCKER}} buildx bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} --set "web-deps.output=type=cacheonly" nook-web-ci web-deps'
 
   docker:ci:web:e2e:build:
     desc: Build the Chromium web image from the same-runner CI WASM artifact.
@@ -446,7 +446,7 @@ tasks:
         test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
-        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:e2e:build" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web-e2e'
+        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:e2e:build" {{.DOCKER}} buildx bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web-e2e'
 
   # Precise Bake stages. Warm parents alone before leaves so a leaf miss cannot
   # cold-rebuild apt/nightly. Composites below call these in order.
@@ -457,7 +457,7 @@ tasks:
     deps: [sccache:ensure]
     cmds:
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-base.output=type=cacheonly"
         --set "rust-base.cache-to="
@@ -469,14 +469,14 @@ tasks:
     cmds:
       - task: docker:rust-base
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-ecosystem-policy-tools.cache-to="
         --set "rust-base.cache-to="
         rust-ecosystem-policy-tools
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-base.cache-to=" \
             rust-ecosystem-policy-tools
@@ -488,7 +488,7 @@ tasks:
     cmds:
       - task: docker:rust-base
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-ecosystem-nightly.cache-to="
         --set "rust-base.cache-to="
@@ -501,7 +501,7 @@ tasks:
       - task: docker:ecosystem:nightly:verify
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-base.cache-to=" \
             rust-ecosystem-nightly
@@ -515,14 +515,14 @@ tasks:
       # cache-from kept so remote hits re-export without cold tool installs.
       - task: docker:ecosystem:policy-tools
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-dependency-policy.cache-to="
         --set "rust-base.cache-to="
         rust-dependency-policy
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-base.cache-to=" \
             rust-dependency-policy
@@ -534,14 +534,14 @@ tasks:
     cmds:
       - task: docker:rust-base
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-ecosystem-deterministic.cache-to="
         --set "rust-base.cache-to="
         rust-ecosystem-deterministic
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-base.cache-to=" \
             rust-ecosystem-deterministic
@@ -556,7 +556,7 @@ tasks:
       # Warm nightly read-only first. Fuzz never rewrites nightly/rust-base.
       - task: docker:ecosystem:nightly:verify
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}"
         --set "rust-fuzz-smoke.cache-to="
@@ -565,7 +565,7 @@ tasks:
         rust-fuzz-smoke
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-fuzz-smoke.args.FUZZ_SECONDS={{.FUZZ_SECONDS}}" \
             --set "rust-ecosystem-nightly.cache-to=" \
@@ -580,7 +580,7 @@ tasks:
       # Warm/publish nightly first (sole nightly writer), then the dylint leaf.
       - task: docker:ecosystem:nightly
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-dylint.cache-to="
         --set "rust-ecosystem-nightly.cache-to="
@@ -588,7 +588,7 @@ tasks:
         rust-dylint
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ]; then
-          {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
+          {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             --set "rust-ecosystem-nightly.cache-to=" \
             --set "rust-base.cache-to=" \

@@ -44,7 +44,6 @@ fn assert_docker_setup_contract(root: &Path) {
         "registry-password",
         "registry.dev.nokey.sh",
         "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
-        "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
         "GHA_CACHE_ENABLED=1",
         "NOOK_REGISTRY_CACHE_HOST=${{ inputs.registry-host }}",
         "cache_write_enabled=1",

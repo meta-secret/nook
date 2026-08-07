@@ -4,8 +4,6 @@ vars:
   REPO_ROOT:
     sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
   DOCKER: '{{default "docker" .DOCKER}}'
-  BUILDX_BUILDER:
-    sh: 'echo "${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"'
   SCCACHE_S3_MODE: '{{default "external" .SCCACHE_S3_MODE}}'
   SCCACHE_ENDPOINT: '{{default "https://sccache.dev.nokey.sh" .SCCACHE_ENDPOINT}}'
   SCCACHE_BUCKET: '{{default "nook-sccache" .SCCACHE_BUCKET}}'
@@ -60,7 +58,7 @@ tasks:
     cmds:
       # rust-base is restored via Bake contexts; never let this target write it.
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.PREFLIGHT_BAKE_FILES}}
         --set "rust-base.cache-to="
         preflight-test
@@ -74,7 +72,7 @@ tasks:
       vars: [PREFLIGHT_OUTPUT_DIR]
     cmds:
       - >-
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.DOCKER}} buildx bake
         {{.PREFLIGHT_BAKE_FILES}}
         --allow="fs.write={{.PREFLIGHT_OUTPUT_DIR}}"
         --set "preflight-cli-export.output=type=local,dest={{.PREFLIGHT_OUTPUT_DIR}}"

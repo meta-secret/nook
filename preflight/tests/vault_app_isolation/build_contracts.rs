@@ -24,35 +24,18 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
         app_tasks.contains("setup:rust:fast:") && app_tasks.contains("nook-rust-fast"),
         "the fast setup must load the manifest-keyed development image"
     );
-    assert!(
-        app_tasks.contains("DOCKER_LOAD_BUILDER:")
-            && app_tasks
-                .matches("--builder {{.DOCKER_LOAD_BUILDER}}")
-                .count()
-                >= 6,
-        "setup:rust* must load via DOCKER_LOAD_BUILDER, not a sidecar BUILDX_BUILDER container"
-    );
-    for task_name in [
-        "setup:rust:",
-        "setup:rust:test:",
-        "setup:rust:lint:",
-        "setup:rust:coverage:",
-        "setup:rust:fast:",
-        "setup:rust:browser:",
+    let docker_taskfile = read(&root, "nook-app/docker/Taskfile.yml");
+    let preflight_taskfile = read(&root, "preflight/Taskfile.yml");
+    for (label, body) in [
+        ("nook-app/Taskfile.yml", app_tasks.as_str()),
+        ("nook-app/docker/Taskfile.yml", docker_taskfile.as_str()),
+        ("preflight/Taskfile.yml", preflight_taskfile.as_str()),
     ] {
-        let section = app_tasks
-            .split(task_name)
-            .nth(1)
-            .and_then(|tail| {
-                tail.split("\n  setup:")
-                    .next()
-                    .or_else(|| tail.split("\n  docker:").next())
-            })
-            .unwrap_or("");
         assert!(
-            section.contains("DOCKER_LOAD_BUILDER")
-                && !section.contains("BUILDX_BUILDER"),
-            "{task_name} must bake with DOCKER_LOAD_BUILDER only"
+            !body.contains("buildx --builder")
+                && !body.contains("BUILDX_BUILDER")
+                && !body.contains("DOCKER_LOAD_BUILDER"),
+            "{label} must never pass buildx --builder or keep BUILDX_BUILDER/DOCKER_LOAD_BUILDER vars"
         );
     }
 
@@ -440,7 +423,8 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     for required in [
         "builder=\"${NOOK_PR_BUILDX_BUILDER:-}\"",
         "refusing shared BuildKit builder name 'nook-pr'",
-        "Using daemon BuildKit builder",
+        "Using default docker buildx builder",
+        "Taskfiles must not pass --builder",
         "NOOK_BUILDKIT_HEALTH_TIMEOUT_SECONDS:-60",
         "buildx inspect \"$builder\" --bootstrap",
         "buildx build",
@@ -454,7 +438,7 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
         "--driver docker-container",
         "--bootstrap",
         "Using healthy job-scoped BuildKit builder",
-        "BUILDX_BUILDER=\"$builder\" \"$@\"",
+        "buildx use \"$builder\"",
     ] {
         assert!(
             wrapper.contains(required),
@@ -463,8 +447,9 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     }
     assert!(
         !wrapper.contains("NOOK_PR_BUILDX_BUILDER:-nook-pr")
-            && !wrapper.contains("trap cleanup EXIT"),
-        "delivery must not default to or persist a shared nook-pr BuildKit container"
+            && !wrapper.contains("trap cleanup EXIT")
+            && !wrapper.contains("BUILDX_BUILDER="),
+        "delivery must not default to shared nook-pr or export BUILDX_BUILDER for Taskfiles"
     );
     Ok(())
 }
@@ -541,6 +526,7 @@ fi
         "buildx rm --force nook-pr-timeout-test",
         "volume rm --force buildx_buildkit_nook-pr-timeout-test0_state",
         "buildx create --name nook-pr-timeout-test --driver docker-container --bootstrap",
+        "buildx use nook-pr-timeout-test",
     ] {
         assert!(
             calls.contains(required),
@@ -565,15 +551,12 @@ fn local_delivery_uses_daemon_buildkit_instead_of_a_shared_container() -> anyhow
     let fake_docker = temp.join("docker");
     let docker_log = temp.join("docker.log");
     let command_marker = temp.join("command-ran");
+    fs::write(&docker_log, "")?;
     fs::write(
         &fake_docker,
         r#"#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
-if [ "${1:-}" = context ] && [ "${2:-}" = show ]; then
-  printf 'desktop-linux\n'
-  exit 0
-fi
 "#,
     )?;
     let mut permissions = fs::metadata(&fake_docker)?.permissions();
@@ -582,12 +565,7 @@ fi
 
     let output = Command::new("bash")
         .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
-        .args([
-            "bash",
-            "-c",
-            "printf '%s' \"$BUILDX_BUILDER\" > \"$1\"",
-            "nook-test",
-        ])
+        .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
         .arg(&command_marker)
         .env("DOCKER", &fake_docker)
         .env("FAKE_DOCKER_LOG", &docker_log)
@@ -600,19 +578,17 @@ fi
         "wrapper failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(fs::read_to_string(&command_marker)?, "desktop-linux");
+    assert_eq!(fs::read_to_string(&command_marker)?, "ok");
     let calls = fs::read_to_string(&docker_log)?;
     assert!(
-        calls.contains("context show"),
-        "local delivery must resolve the active docker-context builder"
+        !calls.contains("buildx create")
+            && !calls.contains("buildx inspect")
+            && !calls.contains("buildx use"),
+        "local delivery must not create, probe, or switch a docker-container BuildKit"
     );
     assert!(
-        !calls.contains("buildx create") && !calls.contains("buildx inspect"),
-        "local delivery must not create or probe a docker-container BuildKit"
-    );
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("Using daemon BuildKit builder"),
-        "local delivery must advertise the daemon builder path"
+        String::from_utf8_lossy(&output.stderr).contains("Using default docker buildx builder"),
+        "local delivery must advertise the default builder path"
     );
 
     let refused = Command::new("bash")
