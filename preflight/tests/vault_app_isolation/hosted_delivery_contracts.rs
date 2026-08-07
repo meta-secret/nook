@@ -399,8 +399,7 @@ fn assert_preflight_reporter_contract(root: &Path) {
         );
     }
     assert!(
-        !preflight_tasks.contains("cache-to=\"")
-            && !preflight_tasks.contains("cache-from=\""),
+        !preflight_tasks.contains("cache-to=\"") && !preflight_tasks.contains("cache-from=\""),
         "preflight Tasks must not clear Bake cache-to/cache-from; rust-base context has no cache-to"
     );
 }
