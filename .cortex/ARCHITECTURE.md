@@ -39,17 +39,16 @@ root/
 │   └── agentic-ai.yml    (repo-level agent tooling)
 └── nook-app/
     ├── Taskfile.yml      (app command surface)
-    ├── .task/            (cross-package app and CI task includes)
-    ├── docker/
-    │   └── Taskfile.yml  (Docker orchestration task include)
-    ├── .task/            (app build/check/dev task fragments)
-    ├── Cargo.toml
-    ├── Cargo.lock
-    ├── docker-bake.hcl
-    ├── .cargo/
-    ├── .config/
-    ├── docker/              (shared app/toolchain image definitions)
-    ├── nook-platform/       (Rust workspace members)
+    ├── ci/Taskfile.yml   (ci:* tasks)
+    ├── docker-bake.hcl   (shared vars, web/preflight scopes, composition root)
+    ├── nook-platform/    (Rust workspace root and members)
+    │   ├── Taskfile.yml  (rust:* tasks)
+    │   ├── Cargo.toml
+    │   ├── Cargo.lock
+    │   ├── clippy.toml
+    │   ├── .cargo/
+    │   ├── .config/
+    │   ├── docker/       (Rust Dockerfiles, rust/docker-bake.hcl Zot scopes, sccache, docker:* tasks)
     │   ├── nook-app-common/ (shared leaf primitives and localization)
     │   ├── nook-auth2/
     │   ├── nook-replication/
@@ -57,14 +56,15 @@ root/
     │   ├── nook-companion-core/
     │   ├── nook-core/
     │   ├── nook-companion-wasm/
-    │   └── nook-wasm/
+    │   ├── nook-wasm/    (includes wasm:* Taskfile.yml)
+    │   └── fuzz/         (cargo-fuzz workspace for auth2 wire parsers; not a workspace member)
     ├── nook-web/
-    │   ├── Taskfile.yml  (web-family task include)
-    │   ├── .task/        (web, extension, and wasm task includes)
+    │   ├── Taskfile.yml  (web:* tasks; includes extension)
+    │   ├── docker/       (web Dockerfiles/bake + docker:* web tasks)
     │   ├── nook-web-app/
     │   ├── nook-vault-simple/
     │   ├── nook-vault-sentinel/
-    │   ├── nook-web-extension/
+    │   ├── nook-web-extension/  (extension:* Taskfile.yml)
     │   └── nook-web-shared/
 +-------------------------------------------------------------+
 |      nook-vault-simple       |      nook-vault-sentinel     |
@@ -568,10 +568,13 @@ All development tasks run containerized via `Taskfile`.
 
 - Root `Taskfile.yml` is the repo entrypoint.
 - App commands live in `nook-app/Taskfile.yml` and are included into the root surface.
-- Cross-package app/CI tasks stay under `nook-app/.task/`.
-- Docker orchestration lives in `nook-app/docker/Taskfile.yml`.
-- Web-family commands are owned by `nook-app/nook-web/Taskfile.yml`.
-- Web includes live under `nook-app/nook-web/.task/`.
+- CI tasks live in `nook-app/ci/Taskfile.yml`.
+- Rust tasks live in `nook-app/nook-platform/Taskfile.yml`.
+- Docker tasks live beside each package under `docker/Taskfile.yml`.
+- Web tasks live in `nook-app/nook-web/Taskfile.yml`.
+- Extension tasks live in `nook-web-extension/Taskfile.yml`.
+- Wasm tasks live in `nook-platform/nook-wasm/Taskfile.yml`.
+- Task namespaces match directories: `docker:*` under `docker/`, `ci:*` under `ci/`.
 - `infra/Taskfile.yml` is the infrastructure composition root.
 - It flattens domain-owned command modules under `infra/tasks/` into one public surface.
 - Every infrastructure Taskfile must be reachable from that root.
@@ -868,7 +871,10 @@ Fork, release, and other arbitrary-ref jobs receive no S3 credentials.
 
 **Docker bake orchestration**
 
-- App-owned: `nook-app/Taskfile.yml` passes `nook-app/docker-bake.hcl` plus package-local bake files under `nook-app/**/docker-bake.hcl` to `docker buildx bake`.
+- App-owned: `nook-app/Taskfile.yml` passes `nook-app/docker-bake.hcl`,
+  `nook-app/nook-platform/docker/rust/docker-bake.hcl` (Rust Zot scopes and
+  ecosystem targets), and package-local bake files under
+  `nook-app/**/docker-bake.hcl` to `docker buildx bake`.
 - Root `Taskfile.yml` includes those app commands for repo-root usage.
 - The Taskfile passes bake files as absolute paths.
 - It grants buildx read access to the repo root.
@@ -1030,7 +1036,7 @@ SeaweedFS compiler-cache rules:
 
 Regenerate chef inputs after dependency changes:
 
-- Commit **`nook-app/Cargo.lock`** when dependencies change.
+- Commit **`nook-app/nook-platform/Cargo.lock`** when dependencies change.
 - `recipe.json` is produced during `docker build`.
 
 ### Sealed-image consequences
@@ -1062,7 +1068,8 @@ Regenerate chef inputs after dependency changes:
 
 **Native linking**
 
-- `nook-app/.cargo/config.toml` uses **mold** for `x86_64-unknown-linux-gnu` only.
+- `nook-app/nook-platform/.cargo/config.toml` uses **mold** for
+  `x86_64-unknown-linux-gnu` only.
 - Mold is installed in `rust-base`.
 - wasm32 targets keep the default linker.
 

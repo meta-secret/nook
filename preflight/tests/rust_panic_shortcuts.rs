@@ -67,10 +67,10 @@ fn rust_test_sources_are_classified_without_exempting_production_modules() {
 fn every_rust_workspace_denies_panic_shortcut_lints() -> Result<()> {
     let root = repository_root();
     for relative in [
-        "nook-app/Cargo.toml",
+        "nook-app/nook-platform/Cargo.toml",
         "agentic-ai/minds/Cargo.toml",
         "preflight/Cargo.toml",
-        "fuzz/Cargo.toml",
+        "nook-app/nook-platform/fuzz/Cargo.toml",
     ] {
         let manifest =
             fs::read_to_string(root.join(relative)).with_context(|| format!("read {relative}"))?;
@@ -87,10 +87,10 @@ fn every_rust_workspace_denies_panic_shortcut_lints() -> Result<()> {
 fn every_rust_workspace_keeps_panic_shortcuts_denied_in_tests() -> Result<()> {
     let root = repository_root();
     for relative in [
-        "nook-app/clippy.toml",
+        "nook-app/nook-platform/clippy.toml",
         "agentic-ai/minds/clippy.toml",
         "preflight/clippy.toml",
-        "fuzz/clippy.toml",
+        "nook-app/nook-platform/fuzz/clippy.toml",
     ] {
         let config =
             fs::read_to_string(root.join(relative)).with_context(|| format!("read {relative}"))?;

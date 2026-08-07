@@ -280,9 +280,12 @@ PR, main, release, AI, scheduled, manual e2e, and research jobs use GitHub-hoste
 - Cache records imported by a named target are local to that target's solve.
 - They do not propagate through a named build context into the outer source, export, or application solve.
 - Every outer WASM solve must list the fingerprinted WASM dependency scope directly in its `cache-from` inputs, even when it also consumes `builder-wasm-deps` as a named context.
-- The dependency producer extends `rust-base` inside `nook-app/docker/rust.Dockerfile`.
+- The dependency producer extends `rust-base` inside `nook-app/nook-platform/docker/rust/lineage.Dockerfile`.
 - Do not put that boundary behind another named-target image; republishing the parent target can change the downstream cache identity across hosted builders.
-- `nook-app/docker-bake.hcl` owns the direct consumer import.
+- `nook-app/nook-platform/docker/rust/docker-bake.hcl` owns the Rust Zot
+  cache scopes and the direct WASM consumer import.
+- `nook-app/docker-bake.hcl` owns shared GHA/registry variables plus
+  web/preflight scopes.
 - Main verifies every publication from a fresh BuildKit builder before accepting it.
 - Repository invariants in `preflight/tests/sccache_s3.rs` and `preflight/tests/vault_app_isolation.rs` enforce the topology and proof.
 
@@ -478,7 +481,7 @@ The `test:e2e` script runs `stable` then `unstable`; `test:e2e:local` runs `stab
 
 ## Task commands (Docker)
 
-All commands run containerized via Taskfile. The root `Taskfile.yml` is the repo entrypoint; app commands are included through `nook-app/Taskfile.yml`, with cross-package app tasks in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`:
+All commands run containerized via Taskfile. The root `Taskfile.yml` is the repo entrypoint; app commands are included through `nook-app/Taskfile.yml`, with cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in `nook-app/nook-platform/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` and package Taskfiles under `nook-web-extension/` / `nook-platform/`:
 
 ```bash
 # Agent-required local action before every push

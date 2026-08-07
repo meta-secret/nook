@@ -10,6 +10,9 @@ includes:
   app:
     taskfile: nook-app/Taskfile.yml
     flatten: true
+  minds:
+    taskfile: agentic-ai/minds/Taskfile.yml
+    flatten: true
   agentic-ai:
     taskfile: .task/agentic-ai.yml
     flatten: true

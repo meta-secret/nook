@@ -4,6 +4,7 @@ vars:
   REPO_ROOT:
     sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
   APP_ROOT: '{{.REPO_ROOT}}/nook-app'
+  PLATFORM_ROOT: '{{.APP_ROOT}}/nook-platform'
   WEB_GROUP_ROOT: '{{.APP_ROOT}}/nook-web'
   WEB_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-app'
   EXTENSION_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-extension'
@@ -21,6 +22,7 @@ vars:
   DOCKER_RUST_IMAGE: '{{default "nook-rust:local" .DOCKER_RUST_IMAGE}}'
   DOCKER_RUST_FAST_IMAGE: '{{default "nook-rust-fast:local" .DOCKER_RUST_FAST_IMAGE}}'
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
+  DOCKER_POLICY_TOOLS_IMAGE: '{{default "nook-rust-policy-tools:local" .DOCKER_POLICY_TOOLS_IMAGE}}'
   DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
   DOCKER_MKCERT_IMAGE: '{{default "nook-mkcert:local" .DOCKER_MKCERT_IMAGE}}'
   # Shared across git worktrees. Credentials and other machine-local config live under ~/.nook.
@@ -83,11 +85,11 @@ vars:
     --allow=fs.read={{.REPO_ROOT}}
     {{.SCCACHE_S3_BUILD_SECRETS}}
     -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
-    -f {{.REPO_ROOT}}/nook-app/docker/rust.docker-bake.hcl
-    -f {{.REPO_ROOT}}/nook-app/docker/web.docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/nook-web/docker/web.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-platform/nook-core/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-platform/nook-wasm/docker-bake.hcl
-    -f {{.REPO_ROOT}}/nook-app/docker/toolchain.docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/nook-web/docker/toolchain.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/docker-bake.hcl
     --set '*.context={{.REPO_ROOT}}'
     --set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'
@@ -109,121 +111,171 @@ vars:
   WEB_DEV_PORT: '{{default "5173" .WEB_DEV_PORT}}'
 
 includes:
-  docker:
-    taskfile: docker/Taskfile.yml
+  platform:
+    taskfile: nook-platform/Taskfile.yml
     dir: '{{.REPO_ROOT}}'
     flatten: true
-  ci:
-    taskfile: .task/ci.yml
+  platform-docker:
+    taskfile: nook-platform/docker/Taskfile.yml
     dir: '{{.REPO_ROOT}}'
     flatten: true
-  core:
-    taskfile: .task/core.yml
+  wasm:
+    taskfile: nook-platform/nook-wasm/Taskfile.yml
     dir: '{{.REPO_ROOT}}'
     flatten: true
   web:
     taskfile: nook-web/Taskfile.yml
     dir: '{{.REPO_ROOT}}'
     flatten: true
+  web-docker:
+    taskfile: nook-web/docker/Taskfile.yml
+    dir: '{{.REPO_ROOT}}'
+    flatten: true
+  ci:
+    taskfile: ci/Taskfile.yml
+    dir: '{{.REPO_ROOT}}'
+    flatten: true
 
 tasks:
+  build:
+    desc: Build Rust crates, wasm package, and web app in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _build }
+
+  test:
+    desc: Run all test suites in Docker.
+    cmds:
+      - task: preflight
+      - task: setup
+      - task: docker:task
+        vars: { TASK: _test }
+
+  lint:
+    desc: Run all linters in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _lint }
+
+  check:
+    desc: Run formatting, linting, tests, and builds in Docker.
+    cmds:
+      - task: preflight
+      - task: setup
+      - task: docker:task
+        vars: { TASK: _check }
+
+  format:
+    desc: >-
+      Format all projects in sealed Docker images and apply the diff to the host
+      working tree. Always run before every commit/push — formatting is cheap and
+      unconditional.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/format-host-apply.sh"
+
+  format:diff:
+    desc: >-
+      Format in sealed Docker images and print the unified diff without applying
+      it to the host (debug only). Agents should use `task format` instead.
+    cmds:
+      - task: setup:rust
+      - task: docker:rust:task
+        vars: { TASK: _rust:format }
+      - task: setup
+        vars: { PREPARE_GROUP: prepare-with-unformatted-rust }
+      - task: docker:task
+        vars: { TASK: _format }
+
+  format:check:
+    desc: Check formatting for all projects in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _format:check }
+
+  _build:
+    desc: Build web app and browser extension after Rust/WASM succeeded in the image build.
+    cmds:
+      - task: _web:build:parallel
+      - task: _extension:build
+
+  _test:
+    desc: Run all test suites.
+    cmds:
+      # Native Rust coverage/tests and wasm-bindgen Node tests run in the Rust image-build branch.
+      - task: _web:check
+      - task: _web:test
+      - task: _extension:check
+
+  _lint:
+    desc: Run web linters after Rust/WASM clippy succeeded in the image build.
+    cmds:
+      - task: _web:lint
+      - task: _extension:format:check
+
+  _check:
+    desc: Run formatting, linting, tests, and builds.
+    cmds:
+      - task: _format:check
+      - task: _lint
+      - task: _test
+      - task: _build
+
+  _verify:
+    desc: Format, lint, and test without production web build.
+    cmds:
+      - task: _format:check
+      - task: _lint
+      - task: _test
+
+  _verify:parallel:
+    desc: Lint ‖ tests when wasm is already built (ci:pr parallel track).
+    deps:
+      - _lint:parallel
+      - _test:parallel
+
+  _lint:parallel:
+    desc: Web and extension linters only — Rust clippy already runs in the Rust image branch.
+    cmds:
+      - task: _web:lint:parallel
+      - task: _extension:format:check
+
+  _test:parallel:
+    desc: Svelte check, Vitest, and extension type-check after Rust/WASM and web builds ran at image build.
+    deps:
+      - _web:check:parallel
+      - _web:test:parallel
+      - _extension:check
+
+  _format:
+    desc: Format web projects, then print a host-applicable git diff (sealed image).
+    cmds:
+      - cd "{{.WEB_ROOT}}" && bun run format
+      - cd "{{.EXTENSION_ROOT}}" && bun run format
+      - >-
+        sh -c 'if git diff --quiet; then
+          echo "==> Web/extension already formatted; no changes." >&2;
+        else
+          echo "==> Web/extension formatting changes (host apply via task format):" >&2;
+          git --no-pager diff;
+        fi'
+
+  _format:check:
+    desc: Check web formatting after Rust fmt succeeded in the image-build branch.
+    cmds:
+      - cd "{{.WEB_ROOT}}" && bun run format:check
+      - cd "{{.EXTENSION_ROOT}}" && bun run format:check
+
+
   default:
     desc: Build every project.
     cmds:
       - task: build
-
-  sccache:ensure:
-    desc: Require a healthy SeaweedFS S3 sccache backend before Rust/WASM builds.
-    dir: '{{.REPO_ROOT}}'
-    cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
-        secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
-        optional="${SCCACHE_OPTIONAL:-}";
-        if [ -z "$access_file" ] || [ ! -r "$access_file" ] ||
-           [ -z "$secret_file" ] || [ ! -r "$secret_file" ]; then
-          if [ "$optional" = "1" ]; then
-            echo "task sccache:ensure: SCCACHE_OPTIONAL=1; continuing without sccache" >&2;
-            exit 0;
-          fi;
-          echo "task sccache:ensure: missing S3 credentials" >&2;
-          echo "Expected readable files:" >&2;
-          echo "  $access_file" >&2;
-          echo "  $secret_file" >&2;
-          echo "Refusing to compile without sccache (silent cold builds destroy shared cache reuse)." >&2;
-          echo "Restore credentials under ~/.nook/cache/, or set SCCACHE_OPTIONAL=1 only for an intentional cold build." >&2;
-          exit 1;
-        fi;
-        if ! {{.DOCKER}} run --rm \
-          -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
-          -e AWS_SECRET_ACCESS_KEY="$(cat "$secret_file")" \
-          -e AWS_DEFAULT_REGION=auto \
-          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
-          --endpoint-url "{{.SCCACHE_ENDPOINT}}" \
-          s3api head-bucket --bucket "{{.SCCACHE_BUCKET}}" >/dev/null 2>&1; then
-          if [ "$optional" = "1" ]; then
-            echo "task sccache:ensure: SCCACHE_OPTIONAL=1; SeaweedFS S3 unavailable, continuing without remote sccache" >&2;
-            exit 0;
-          fi;
-          echo "task sccache:ensure: SeaweedFS S3 is unavailable at {{.SCCACHE_ENDPOINT}} bucket {{.SCCACHE_BUCKET}}" >&2;
-          echo "Refusing to compile without a healthy remote sccache backend." >&2;
-          exit 1;
-        fi;
-        echo "task sccache:ensure: SeaweedFS S3 sccache is healthy"'
-
-  sccache:stats:
-    desc: Show shared Rust compiler-cache object count and bytes on SeaweedFS.
-    deps:
-      - sccache:ensure
-    cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
-        secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
-        if [ -z "$access_file" ] || [ ! -r "$access_file" ] ||
-           [ -z "$secret_file" ] || [ ! -r "$secret_file" ]; then
-          echo "task sccache:stats: missing S3 credentials" >&2;
-          exit 1;
-        fi;
-        page_file="$(mktemp)";
-        trap '"'"'rm -f "$page_file"'"'"' EXIT;
-        continuation_token="";
-        total_objects=0;
-        total_bytes=0;
-        while true; do
-          if [ -n "$continuation_token" ]; then
-            {{.DOCKER}} run --rm \
-              -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
-              -e AWS_SECRET_ACCESS_KEY="$(cat "$secret_file")" \
-              -e AWS_DEFAULT_REGION=auto \
-              amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
-              --endpoint-url "{{.SCCACHE_ENDPOINT}}" \
-              s3api list-objects-v2 --bucket "{{.SCCACHE_BUCKET}}" \
-              --no-paginate --max-keys 1000 \
-              --continuation-token "$continuation_token" > "$page_file";
-          else
-            {{.DOCKER}} run --rm \
-              -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
-              -e AWS_SECRET_ACCESS_KEY="$(cat "$secret_file")" \
-              -e AWS_DEFAULT_REGION=auto \
-              amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
-              --endpoint-url "{{.SCCACHE_ENDPOINT}}" \
-              s3api list-objects-v2 --bucket "{{.SCCACHE_BUCKET}}" \
-              --no-paginate --max-keys 1000 > "$page_file";
-          fi;
-          page_objects="$(jq '"'"'(.Contents // []) | length'"'"' "$page_file")";
-          page_bytes="$(jq '"'"'[.Contents[]?.Size] | add // 0'"'"' "$page_file")";
-          total_objects=$((total_objects + page_objects));
-          total_bytes=$((total_bytes + page_bytes));
-          echo "Scanned $total_objects compiler-cache objects ($total_bytes bytes)";
-          continuation_token="$(jq -r '"'"'.NextContinuationToken // empty'"'"' "$page_file")";
-          if [ -z "$continuation_token" ]; then
-            break;
-          fi;
-        done;
-        echo "Total Objects: $total_objects";
-        echo "Total Size: $total_bytes"'
 
   setup:
     desc: Build the slim linux/amd64 nook-web image via parallel Rust/WASM + web preparation.
@@ -311,82 +363,3 @@ tasks:
         };
         WEB_ARTIFACTS_CONTEXT="$artifacts_dir" {{.DOCKER}} buildx bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} nook-web-focused'
 
-  setup:rust:
-    desc: Build and load the source-sealed Rust/WASM image for explicit rust/wasm commands.
-    dir: '{{.REPO_ROOT}}'
-    deps:
-      - sccache:ensure
-    env:
-      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
-      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
-    cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        for attempt in 1 2 3; do
-          if {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} nook-rust; then
-            exit 0;
-          fi;
-          if [ "$attempt" -eq 3 ]; then exit 1; fi;
-          echo "task setup:rust: bake attempt $attempt failed; retrying in 5s..." >&2;
-          sleep 5;
-        done'
-
-  setup:rust:test:
-    desc: Build the narrow source-sealed native Rust test image without unrelated WASM or coverage branches.
-    dir: '{{.REPO_ROOT}}'
-    deps:
-      - sccache:ensure
-    cmds:
-      - >-
-        {{.DOCKER}} buildx bake
-        {{.NOOK_BAKE_FILES}} nook-rust-test
-
-  setup:rust:lint:
-    desc: Build the source-sealed Rust lint image and export its compiled graph.
-    dir: '{{.REPO_ROOT}}'
-    deps:
-      - sccache:ensure
-    cmds:
-      - >-
-        {{.DOCKER}} buildx bake
-        {{.NOOK_BAKE_FILES}} nook-rust-lint
-
-  setup:rust:coverage:
-    desc: Build the source-sealed Rust coverage image and export its compiled graph.
-    dir: '{{.REPO_ROOT}}'
-    deps:
-      - sccache:ensure
-    cmds:
-      - >-
-        {{.DOCKER}} buildx bake
-        {{.NOOK_BAKE_FILES}} nook-rust-coverage
-
-  setup:rust:fast:
-    desc: Build the manifest-keyed Rust/WASM development image for mounted source builds.
-    dir: '{{.REPO_ROOT}}'
-    deps:
-      - sccache:ensure
-    cmds:
-      - >-
-        {{.DOCKER}} buildx bake
-        {{.NOOK_BAKE_FILES}} nook-rust-fast
-
-  setup:rust:browser:
-    desc: Build and load the on-demand Rust image with Chromium for browser-wasm tests.
-    dir: '{{.REPO_ROOT}}'
-    deps:
-      - sccache:ensure
-    env:
-      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
-      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
-    cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        for attempt in 1 2 3; do
-          if {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} nook-rust-browser; then
-            exit 0;
-          fi;
-          if [ "$attempt" -eq 3 ]; then exit 1; fi;
-          echo "task setup:rust:browser: bake attempt $attempt failed; retrying in 5s..." >&2;
-          sleep 5;
-        done'

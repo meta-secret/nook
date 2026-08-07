@@ -13,8 +13,8 @@ prepare_nook_sccache_helpers_context() {
   repo_root="$(git rev-parse --show-toplevel)"
   helpers="$(mktemp -d "${TMPDIR:-/tmp}/nook-sccache-helpers.XXXXXX")"
   cp \
-    "$repo_root/nook-app/docker/sccache-wrapper.sh" \
-    "$repo_root/nook-app/docker/sccache-report.sh" \
+    "$repo_root/nook-app/nook-platform/docker/sccache-wrapper.sh" \
+    "$repo_root/nook-app/nook-platform/docker/sccache-report.sh" \
     "$helpers/"
   chmod 0755 "$helpers/sccache-wrapper.sh" "$helpers/sccache-report.sh"
   kib="$(du -sk "$helpers" | awk '{print $1}')"

@@ -39,9 +39,9 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - **Task runner as the API:** We use Taskfile as the single interface for all development tasks.
 - Root `Taskfile.yml` is the repo entrypoint.
 - App tasks live in `nook-app/Taskfile.yml`.
-- Cross-package app tasks live in `nook-app/.task/`.
-- Docker tasks live in `nook-app/docker/Taskfile.yml`.
-- Web-family tasks live in `nook-app/nook-web/.task/`.
+- App-wide tasks live in `nook-app/Taskfile.yml`; CI tasks in `nook-app/ci/Taskfile.yml`.
+- Docker tasks live in `nook-app/nook-platform/docker/Taskfile.yml` and `nook-app/nook-web/docker/Taskfile.yml`.
+- Web-family tasks live in `nook-app/nook-web/Taskfile.yml` and `nook-web-extension/Taskfile.yml`.
 - Agents do not run raw compiler, bundler, or environment commands.
 - They use `task format` locally.
 - They use `task remote TASK_NAME=<name>` for focused hosted execution.

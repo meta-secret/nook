@@ -457,10 +457,12 @@ remote transaction rather than retained as a reusable host-side file.
 
 Labeled PR validation runs the shared **Rust ecosystem** gates through
 `pr.yml` so they appear on the same Actions run as the product checks.
-`task docker:ecosystem:*` Bakes dependency policy, RustSec, Proptest/Insta/Loom,
-cargo-fuzz, and Dylint from stages in `nook-app/docker/rust.Dockerfile` as
-separate images off `rust-base` (`rust-ecosystem-policy-tools`,
-`rust-ecosystem-nightly`) so the product base stays lean. Kani stays on its
+`task docker:ecosystem:*` runs dependency policy (per-workspace Taskfile
+checks in the loaded `rust-ecosystem-policy-tools` image), RustSec,
+Proptest/Insta/Loom, cargo-fuzz, and Dylint from sibling Dockerfiles under
+`nook-app/nook-platform/docker/rust/` as separate images off `rust-base`
+(`rust-ecosystem-policy-tools`, `rust-ecosystem-nightly`) so the product base
+stays lean. Kani stays on its
 official action. Also covered: generated and snapshot tests (Proptest and Insta),
 bounded concurrency exploration (Loom), parser fuzzing (`cargo-fuzz`), model
 checking (Kani), and repository-selected Rust lints (Dylint). Fast
@@ -546,8 +548,8 @@ Docker cache migration, and the registry remains intentionally unused by CI toda
 After changing Rust dependencies, commit the updated lockfile:
 
 ```sh
-cd nook-app && cargo generate-lockfile
-git add nook-app/Cargo.lock
+cd nook-app/nook-platform && cargo generate-lockfile
+git add nook-app/nook-platform/Cargo.lock
 ```
 
 ## License

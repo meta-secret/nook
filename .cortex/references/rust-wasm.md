@@ -1,14 +1,15 @@
 # Reference: Rust + WebAssembly (wasm-bindgen)
 
 ## 1. Wasm Bindgen Setup
-- Use `wasm-bindgen = "0.2.125"` (see workspace `nook-app/Cargo.toml`).
+- Use `wasm-bindgen = "0.2.125"` (see workspace
+  `nook-app/nook-platform/Cargo.toml`).
 - Export functions with `#[wasm_bindgen]`. Domain logic stays in `nook-core`; WASM wraps I/O and session state.
 - Examples: `connect`, `add_secret`, `filter_secrets`, `generate_password`.
 
 ## 2. Compiling for the web
 
 - `task wasm:build` invokes wasm-pack from the **Rust workspace root**
-  (`nook-app`) for two packages:
+  (`nook-app/nook-platform`) for two packages:
   - the featureless `nook-wasm` vault bridge (Unified/Simple/Sentinel/extension
     background); and
   - tiny `nook-companion-wasm` (content-script heuristics + host policy).

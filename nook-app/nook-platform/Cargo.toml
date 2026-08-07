@@ -1,13 +1,13 @@
 [workspace]
 members = [
-    "nook-platform/nook-app-common",
-    "nook-platform/nook-auth2",
-    "nook-platform/nook-replication",
-    "nook-platform/nook-event-log",
-    "nook-platform/nook-companion-core",
-    "nook-platform/nook-core",
-    "nook-platform/nook-companion-wasm",
-    "nook-platform/nook-wasm",
+    "nook-app-common",
+    "nook-auth2",
+    "nook-replication",
+    "nook-event-log",
+    "nook-companion-core",
+    "nook-core",
+    "nook-companion-wasm",
+    "nook-wasm",
 ]
 resolver = "3"
 

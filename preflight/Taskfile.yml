@@ -37,7 +37,7 @@ vars:
     --allow=fs.read={{.REPO_ROOT}}
     {{.SCCACHE_S3_BUILD_SECRETS}}
     -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
-    -f {{.REPO_ROOT}}/nook-app/docker/rust.docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/docker-bake.hcl
     -f {{.REPO_ROOT}}/preflight/docker-bake.hcl
     --set '*.context={{.REPO_ROOT}}'
     --set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'
@@ -78,6 +78,12 @@ tasks:
         --set "preflight-cli-export.output=type=local,dest={{.PREFLIGHT_OUTPUT_DIR}}"
         --set "rust-base.cache-to="
         preflight-cli-export
+
+  preflight:dependency-policy:
+    desc: Run cargo-deny and cargo-audit for the preflight workspace.
+    cmds:
+      - task: docker:ecosystem:dependency-policy:run
+        vars: { WORKSPACE: preflight }
 
   preflight:source-architecture:
     desc: Enforce authored source size limits and Rust unit-test colocation.

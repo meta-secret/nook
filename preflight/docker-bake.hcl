@@ -1,6 +1,6 @@
 // Standalone preflight Bake targets. Callers merge rust-base via:
 //   -f nook-app/docker-bake.hcl
-//   -f nook-app/docker/rust.docker-bake.hcl
+//   -f nook-app/nook-platform/docker/rust/docker-bake.hcl
 //   -f preflight/docker-bake.hcl
 
 target "_preflight-common" {

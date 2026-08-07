@@ -235,7 +235,7 @@ fn is_coverage_input(path: &Path) -> bool {
         || path == Path::new("nook-app/nook-platform/nook-core/Dockerfile")
         || path == Path::new("nook-app/nook-platform/nook-core/docker-bake.hcl")
         || path
-            .strip_prefix("nook-app/docker")
+            .strip_prefix("nook-app/nook-platform/docker")
             .ok()
             .and_then(Path::file_name)
             .and_then(OsStr::to_str)
@@ -249,9 +249,9 @@ fn is_coverage_input(path: &Path) -> bool {
 }
 
 fn is_base_coverage_input(path: &Path) -> bool {
-    path.starts_with("nook-app/.cargo")
-        || path == Path::new("nook-app/Cargo.lock")
-        || path == Path::new("nook-app/Cargo.toml")
+    path.starts_with("nook-app/nook-platform/.cargo")
+        || path == Path::new("nook-app/nook-platform/Cargo.lock")
+        || path == Path::new("nook-app/nook-platform/Cargo.toml")
         || path.starts_with("nook-app/nook-platform/nook-app-common")
         || path.starts_with("nook-app/nook-platform/nook-auth2")
         || path.starts_with("nook-app/nook-platform/nook-replication")

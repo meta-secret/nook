@@ -58,7 +58,7 @@ Does not apply to:
 
 - Before: fix code, push, call `resolveReviewThread`, no agent reply.
 - After: fix code, push, reply to the specific thread: "Fixed by moving the
-  parser check into Rust and validated with `cd nook-app && cargo test -p nook-core parser_conflict`."
+  parser check into Rust and validated with `cd nook-app/nook-platform && cargo test -p nook-core parser_conflict`."
   Resolve only after that reply is visible.
 - Before: resolve an outdated formatting comment because it looks obsolete.
 - After: reply "This was addressed by commit `<sha>`; current file is

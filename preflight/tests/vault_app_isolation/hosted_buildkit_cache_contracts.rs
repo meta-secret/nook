@@ -9,7 +9,9 @@ fn delivery_ci_scopes_buildkit_caches() -> anyhow::Result<()> {
 }
 
 fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
-    let bake = read(root, "nook-app/docker-bake.hcl");
+    let app_bake = read(root, "nook-app/docker-bake.hcl");
+    let rust_toolchain_bake = read(root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let bake = format!("{app_bake}\n{rust_toolchain_bake}");
     for required in [
         "GHA_CACHE_ENABLED",
         "GHA_CACHE_WRITE_ENABLED",
@@ -21,7 +23,6 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-fuzz-v2",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1",
         "nook-rust-ecosystem-policy-tools-v4",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-policy-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}",
@@ -38,23 +39,19 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
             "hosted BuildKit cache contract is missing: {required}"
         );
     }
-    let rust_toolchain_bake = read(root, "nook-app/docker/rust.docker-bake.hcl");
     assert!(
         rust_toolchain_bake.contains("cache-to   = rust_base_cache_to"),
         "the Rust toolchain base must seed its own hosted cache before dependency scopes consume it"
     );
     assert!(
         rust_toolchain_bake.contains("cache-to   = rust_ecosystem_policy_tools_cache_to")
-            && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_policy_cache_to")
             && rust_toolchain_bake
                 .matches("cache-to   = rust_ecosystem_policy_tools_cache_to")
                 .count()
                 == 1
-            && rust_toolchain_bake
-                .matches("cache-to   = rust_ecosystem_policy_cache_to")
-                .count()
-                == 1,
-        "ecosystem policy-tools and dependency-policy must seed separate hosted caches"
+            && !rust_toolchain_bake.contains("rust_ecosystem_policy_cache_to")
+            && !rust_toolchain_bake.contains("target \"rust-dependency-policy\""),
+        "ecosystem policy-tools must seed its hosted cache without an aggregate deny/audit Bake leaf"
     );
     assert!(
         rust_toolchain_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
@@ -82,7 +79,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
-        15,
+        14,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
     assert_rust_cache_export_hardening(&bake);
@@ -105,12 +102,14 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_release_wasm_cache_contract(root);
     assert_parallel_web_pipeline(root);
-    let web_bake = read(root, "nook-app/docker/toolchain.docker-bake.hcl");
+    let web_bake = read(root, "nook-app/nook-web/docker/toolchain.docker-bake.hcl");
     assert!(
         web_bake.contains("cache-to   = web_deps_cache_to"),
         "web dependencies need an independent cache scope"
     );
-    let docker_tasks = read(root, "nook-app/docker/Taskfile.yml");
+    let platform_docker_tasks = read(root, "nook-app/nook-platform/docker/Taskfile.yml");
+    let web_docker_tasks = read(root, "nook-app/nook-web/docker/Taskfile.yml");
+    let docker_tasks = format!("{platform_docker_tasks}\n{web_docker_tasks}");
     assert!(
         docker_tasks.contains("bake-with-frontend-flake-retry.sh")
             && docker_tasks.contains("nook-web-ci")
@@ -262,7 +261,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !main.contains("task ci:main:publish-gha-cache"),
         "Main producers must verify read-only, serialize native before WASM, and publish from their warm builders only after all lane validation succeeds"
     );
-    let ci_tasks = read(root, "nook-app/.task/ci.yml");
+    let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
     assert!(
         !ci_tasks.contains("warm-gha-cache")
             && !ci_tasks.contains("publish-gha-cache")
@@ -274,7 +273,11 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
                 .exists(),
         "obsolete deferred cache reconstruction commands and scripts must stay removed"
     );
-    let docker_tasks = read(root, "nook-app/docker/Taskfile.yml");
+    let docker_tasks = format!(
+        "{}{}",
+        read(root, "nook-app/nook-platform/docker/Taskfile.yml"),
+        read(root, "nook-app/nook-web/docker/Taskfile.yml")
+    );
     assert!(
         docker_tasks.contains("ci-rust builder-core-deps rust-base")
             && docker_tasks.contains("wasm-export builder-wasm-deps")
@@ -318,7 +321,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
         "Main must reject a published WASM cache until a fresh builder restores every dependency layer without --builder"
     );
-    let base_dockerfile = read(root, "nook-app/docker/rust.Dockerfile");
+    let base_dockerfile = read(root, "nook-app/nook-platform/docker/rust/lineage.Dockerfile");
     assert!(
         base_dockerfile.contains("ARG RUST_VERSION=")
             && base_dockerfile.contains("ARG DEBIAN_RELEASE=")
@@ -347,12 +350,12 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !base_dockerfile.contains("rust:1."),
         "Rust dependency stages must use a digest-pinned rust base and a single chef-deps prepare/cook stage"
     );
-    let web_dockerfile = read(root, "nook-app/docker/web.Dockerfile");
-    let rust_bake = read(root, "nook-app/docker/rust.docker-bake.hcl");
-    let web_bake = read(root, "nook-app/docker/web.docker-bake.hcl");
+    let web_dockerfile = read(root, "nook-app/nook-web/docker/web.Dockerfile");
+    let rust_bake = read(root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let web_bake = read(root, "nook-app/nook-web/docker/web.docker-bake.hcl");
     for (path, dockerfile) in [
-        ("nook-app/docker/rust.Dockerfile", base_dockerfile.as_str()),
-        ("nook-app/docker/web.Dockerfile", web_dockerfile.as_str()),
+        ("nook-app/nook-platform/docker/rust/lineage.Dockerfile", base_dockerfile.as_str()),
+        ("nook-app/nook-web/docker/web.Dockerfile", web_dockerfile.as_str()),
     ] {
         assert!(
             dockerfile.contains("NODE_VERSION=")
@@ -368,10 +371,10 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         );
     }
     assert!(
-        rust_bake.contains("dockerfile = \"nook-app/docker/rust.Dockerfile\"")
+        rust_bake.contains("dockerfile = \"nook-app/nook-platform/docker/rust/lineage.Dockerfile\"")
             && rust_bake.contains("target \"rust-base\"")
             && !rust_bake.contains("web.Dockerfile")
-            && web_bake.contains("dockerfile = \"nook-app/docker/web.Dockerfile\"")
+            && web_bake.contains("dockerfile = \"nook-app/nook-web/docker/web.Dockerfile\"")
             && web_bake.contains("target \"web-base\"")
             && web_bake.contains("target \"web-e2e-base\"")
             && !web_bake.contains("rust.Dockerfile")
@@ -424,14 +427,14 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile.contains(
                 "cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm -p nook-companion-wasm",
             )
-            && wasm_dockerfile.contains("wasm-pack test --node --release nook-platform/nook-wasm")
-            && wasm_dockerfile.contains("wasm-pack build nook-platform/nook-companion-wasm")
+            && wasm_dockerfile.contains("wasm-pack test --node --release nook-wasm")
+            && wasm_dockerfile.contains("wasm-pack build nook-companion-wasm")
             && wasm_dockerfile.contains("COPY --from=builder-wasm-build")
-            && wasm_dockerfile.contains("touch nook-platform/nook-app-common/src/i18n.rs")
+            && wasm_dockerfile.contains("touch nook-app-common/src/i18n.rs")
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
         "native verification, WASM clippy, package export, and release-test compilation must run as sibling branches, preserve locale rebuilds, and join only small outputs before release-profile Node tests"
     );
-    let dependency_dockerfile = read(root, "nook-app/docker/rust.Dockerfile");
+    let dependency_dockerfile = read(root, "nook-app/nook-platform/docker/rust/lineage.Dockerfile");
     let core_dockerfile = read(root, "nook-app/nook-platform/nook-core/Dockerfile");
     assert!(
         !core_dockerfile.contains("wasm-dependency-test")
@@ -443,8 +446,8 @@ fn assert_release_wasm_cache_contract(root: &Path) {
         "the manifest-only WASM boundary must prewarm release tests without compiling a second debug graph"
     );
     assert!(
-        read(root, "nook-app/nook-web/.task/wasm.yml")
-            .contains("wasm-pack test --node --release nook-platform/nook-wasm"),
+        read(root, "nook-app/nook-platform/nook-wasm/Taskfile.yml")
+            .contains("wasm-pack test --node --release nook-wasm"),
         "the documented manual WASM test task must use the same release profile as hosted CI"
     );
 }

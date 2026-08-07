@@ -7,14 +7,14 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 
 ## 2. Core Requirements
 
-- **Unified Command Interface**: The root `Taskfile.yml` is the repo entrypoint. App workflows are included from `nook-app/Taskfile.yml`; cross-package app tasks live in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`.
+- **Unified Command Interface**: The root `Taskfile.yml` is the repo entrypoint. App workflows are included from `nook-app/Taskfile.yml`; cross-package app tasks live in `nook-app/ci/Taskfile.yml`, Docker tasks in `nook-app/nook-platform/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` and package Taskfiles under `nook-web-extension/` / `nook-platform/`.
 - **Zero-Config Host**: No local installations of Rust toolchains, Bun, or wasm-pack should be required on the host system for builds.
 - **Docker-Safe Dev Server**: Vite dev server must run in a container, bind ports correctly, and use the ignored locally trusted certificate to be accessible at `https://localhost:5173`.
 - **Pinned Dependencies**: All packages (Cargo, package.json) must use exact version pinning to guarantee reproducibility.
 
 ## 3. Toolchain & Runtime Specs
 
-- **Rust Version**: `1.97` (using digest-pinned `rust:1.97-trixie` in `nook-app/docker/rust.Dockerfile`; web uses `DEBIAN_RELEASE` in `nook-app/docker/web.Dockerfile`).
+- **Rust Version**: `1.97` (using digest-pinned `rust:1.97-trixie` in `nook-app/nook-platform/docker/rust/lineage.Dockerfile`; web uses `DEBIAN_RELEASE` in `nook-app/nook-web/docker/web.Dockerfile`).
 - **Bun Version**: `1.3.14`.
 - **Task**: `3.42.1` ([official install script](https://taskfile.dev/docs/installation) → `/usr/local/bin`).
 - **Wasm Pack**: `0.15.0` ([official init script](https://wasm-bindgen.github.io/wasm-pack/installer/); pinned with `VERSION`, not `cargo install`). Installs matching `wasm-bindgen-cli` automatically during `wasm-pack build`.

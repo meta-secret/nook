@@ -177,7 +177,7 @@ runs:
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
         echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
         echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
-        wasm_deps_fingerprint="${{ hashFiles('nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/**/Cargo.toml', 'nook-app/.cargo/**', 'nook-app/.config/**', 'nook-app/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/**/docker-bake.hcl', 'nook-app/docker/*.docker-bake.hcl', 'nook-app/docker/rust.Dockerfile', 'nook-app/docker/Taskfile.yml', 'nook-app/docker/sccache-wrapper.sh', 'nook-app/docker/sccache-report.sh', 'nook-app/nook-platform/nook-core/Dockerfile') }}"
+        wasm_deps_fingerprint="${{ hashFiles('nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/**/Cargo.toml', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**', 'nook-app/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/**/docker-bake.hcl', 'nook-app/nook-platform/docker/rust/docker-bake.hcl', 'nook-app/nook-web/docker/*.docker-bake.hcl', 'nook-app/nook-platform/docker/rust/**', 'nook-app/nook-web/docker/web.Dockerfile', 'nook-app/nook-web/docker/toolchain.Dockerfile', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/nook-web/docker/Taskfile.yml', 'nook-app/nook-platform/docker/sccache-wrapper.sh', 'nook-app/nook-platform/docker/sccache-report.sh', 'nook-app/nook-platform/nook-core/Dockerfile') }}"
         if [[ ! "$wasm_deps_fingerprint" =~ ^[0-9a-f]{64}$ ]]; then
           echo "Could not fingerprint the hosted WASM dependency graph" >&2
           exit 1

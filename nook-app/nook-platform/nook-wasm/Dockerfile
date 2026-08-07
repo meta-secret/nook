@@ -6,7 +6,7 @@
 FROM builder-wasm-deps AS nook-rust-fast
 
 RUN mkdir -p /opt/nook \
-    && mv /meta-secret/nook/nook-app/target /opt/nook/cargo-target
+    && mv /meta-secret/nook/nook-app/nook-platform/target /opt/nook/cargo-target
 
 ENV CARGO_TARGET_DIR=/opt/nook/cargo-target
 WORKDIR /meta-secret/nook
@@ -18,20 +18,21 @@ FROM builder-wasm-deps AS builder-wasm-source
 
 ARG WASM_BUILD_MODE=dev
 
-COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
-COPY nook-app/.config .config
-COPY nook-app/nook-platform/nook-app-common nook-platform/nook-app-common
-COPY nook-app/nook-platform/nook-auth2 nook-platform/nook-auth2
-COPY nook-app/nook-platform/nook-replication nook-platform/nook-replication
-COPY nook-app/nook-platform/nook-event-log nook-platform/nook-event-log
-COPY nook-app/nook-platform/nook-companion-core nook-platform/nook-companion-core
-COPY nook-app/nook-platform/nook-core nook-platform/nook-core
-COPY nook-app/nook-platform/nook-companion-wasm nook-platform/nook-companion-wasm
-COPY nook-app/nook-platform/nook-wasm nook-platform/nook-wasm
+COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
+COPY nook-app/nook-platform/.config .config
+COPY nook-app/nook-platform/clippy.toml clippy.toml
+COPY nook-app/nook-platform/nook-app-common nook-app-common
+COPY nook-app/nook-platform/nook-auth2 nook-auth2
+COPY nook-app/nook-platform/nook-replication nook-replication
+COPY nook-app/nook-platform/nook-event-log nook-event-log
+COPY nook-app/nook-platform/nook-companion-core nook-companion-core
+COPY nook-app/nook-platform/nook-core nook-core
+COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
+COPY nook-app/nook-platform/nook-wasm nook-wasm
 
 # Docker COPY preserves source mtimes while the inherited dependency target can be newer. Touch
 # the module that embeds locale JSON so locale-only changes cannot reuse stale WASM outputs.
-RUN touch nook-platform/nook-app-common/src/i18n.rs
+RUN touch nook-app-common/src/i18n.rs
 
 # Clippy, package export, and release-test compilation are siblings from the shared source snapshot.
 # wasm-pack build uses `cargo build --lib`, while wasm-pack test uses `cargo build --tests` and
@@ -57,32 +58,32 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       dev) wasm_opt_flag="--no-opt" && stamp_mode="no-opt" ;; \
       *) echo "Unsupported WASM_BUILD_MODE=$WASM_BUILD_MODE (expected dev or prod)" >&2; exit 1 ;; \
     esac \
-    && wasm-pack build nook-platform/nook-wasm --target web \
+    && wasm-pack build nook-wasm --target web \
          --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm" \
          --out-name nook_wasm $wasm_opt_flag \
-    && wasm-pack build nook-platform/nook-companion-wasm --target web \
+    && wasm-pack build nook-companion-wasm --target web \
          --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm" \
          --out-name nook_companion_wasm $wasm_opt_flag \
     && ( current="$(find Cargo.toml Cargo.lock \
-           nook-platform/nook-wasm/Cargo.toml nook-platform/nook-wasm/src \
-           nook-platform/nook-companion-wasm/Cargo.toml nook-platform/nook-companion-wasm/src \
-           nook-platform/nook-companion-core/Cargo.toml nook-platform/nook-companion-core/src \
-           nook-platform/nook-app-common/Cargo.toml nook-platform/nook-app-common/src nook-platform/nook-app-common/locales \
-           nook-platform/nook-core/Cargo.toml nook-platform/nook-core/src \
-           nook-platform/nook-auth2/Cargo.toml nook-platform/nook-auth2/src \
-           nook-platform/nook-replication/Cargo.toml nook-platform/nook-replication/src \
-           nook-platform/nook-event-log/Cargo.toml nook-platform/nook-event-log/src \
+           nook-wasm/Cargo.toml nook-wasm/src \
+           nook-companion-wasm/Cargo.toml nook-companion-wasm/src \
+           nook-companion-core/Cargo.toml nook-companion-core/src \
+           nook-app-common/Cargo.toml nook-app-common/src nook-app-common/locales \
+           nook-core/Cargo.toml nook-core/src \
+           nook-auth2/Cargo.toml nook-auth2/src \
+           nook-replication/Cargo.toml nook-replication/src \
+           nook-event-log/Cargo.toml nook-event-log/src \
            \( -name '*.rs' -o -name '*.json' -o -name 'Cargo.toml' -o -name 'Cargo.lock' \) -print0 \
          | LC_ALL=C sort -z \
          | xargs -0 sha256sum \
          | sha256sum \
          | cut -d' ' -f1)" \
-         && echo "$current $stamp_mode" > nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/.wasm-source-sha256 \
-         && echo "$current $stamp_mode" > nook-web/nook-web-shared/src/extension/nook-companion-wasm/.wasm-source-sha256 \
+         && echo "$current $stamp_mode" > ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/.wasm-source-sha256 \
+         && echo "$current $stamp_mode" > ../nook-web/nook-web-shared/src/extension/nook-companion-wasm/.wasm-source-sha256 \
          && mkdir -p /opt/nook/wasm-handoff \
-         && cp -a nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/. /opt/nook/wasm-handoff/ \
+         && cp -a ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/. /opt/nook/wasm-handoff/ \
          && mkdir -p /opt/nook/wasm-handoff/nook-companion-wasm \
-         && cp -a nook-web/nook-web-shared/src/extension/nook-companion-wasm/. \
+         && cp -a ../nook-web/nook-web-shared/src/extension/nook-companion-wasm/. \
               /opt/nook/wasm-handoff/nook-companion-wasm/ ) \
     && nook-sccache-report wasm-build
 
@@ -109,7 +110,7 @@ COPY --from=builder-wasm-build /opt/nook/wasm-handoff /opt/nook/wasm-handoff
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    wasm-pack test --node --release nook-platform/nook-wasm \
+    wasm-pack test --node --release nook-wasm \
     && nook-sccache-report wasm-node-test
 
 FROM scratch AS wasm-export

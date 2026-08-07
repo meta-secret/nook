@@ -251,10 +251,10 @@ function isRustEcosystemPath(path: string): boolean {
     path === ".github/workflows/rust-ecosystem.yml" ||
     path === ".github/workflows/rust-ecosystem-checks.yml" ||
     path === "deny.toml" ||
-    path === "nook-app/Cargo.lock" ||
-    path === "nook-app/.insta.yaml" ||
-    path.startsWith("nook-app/.cargo/") ||
-    path.startsWith("fuzz/") ||
+    path === "nook-app/nook-platform/Cargo.lock" ||
+    path === "nook-app/nook-platform/.insta.yaml" ||
+    path.startsWith("nook-app/nook-platform/.cargo/") ||
+    path.startsWith("nook-app/nook-platform/fuzz/") ||
     path.startsWith("preflight/") ||
     path.startsWith("agentic-ai/minds/") ||
     (path.startsWith("nook-app/") &&

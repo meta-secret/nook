@@ -1,0 +1,328 @@
+version: '3'
+
+tasks:
+  rust:build:
+    desc: Build the Rust workspace in Docker.
+    deps:
+      - setup:rust
+    cmds:
+      - task: docker:rust:task
+        vars: { TASK: _rust:build }
+
+  rust:test:
+    desc: Test the Rust workspace in Docker.
+    deps:
+      - setup:rust
+    cmds:
+      - task: docker:rust:task
+        vars: { TASK: _rust:test }
+
+  remote:rust:test:
+    desc: Run native Rust tests in the narrow source-sealed remote image.
+    deps:
+      - setup:rust:test
+    cmds:
+      - task: docker:rust:task
+        vars: { TASK: _rust:test }
+
+  remote:rust:lint:
+    desc: Run Rust lint in the source-sealed Remote image whose compiled graph is exported to Zot.
+    deps:
+      - setup:rust:lint
+    cmds:
+      - task: docker:rust:task
+        vars: { TASK: _rust:lint }
+
+  remote:rust:coverage:
+    desc: Run Rust coverage in the source-sealed Remote image whose compiled graph is exported to Zot.
+    deps:
+      - setup:rust:coverage
+    cmds:
+      - task: docker:rust:task
+        vars: { TASK: _rust:coverage }
+
+  rust:coverage:
+    desc: Report portable Rust crate line coverage (cargo llvm-cov + nextest).
+    deps:
+      - setup:rust
+    cmds:
+      - task: docker:rust:task
+        vars: { TASK: _rust:coverage }
+
+  rust:coverage:check:
+    desc: Enforce portable Rust crate 90% line coverage threshold.
+    deps:
+      - setup:rust
+    cmds:
+      - task: docker:rust:task
+        vars: { TASK: _rust:coverage:check }
+
+  rust:coverage:update:
+    desc: Rewrite coverage-floor.json to measured % (user approval only).
+    deps:
+      - setup:rust
+    cmds:
+      - task: docker:rust:task
+        vars: { TASK: _rust:coverage:update }
+
+  rust:coverage:export:
+    desc: Export portable Rust crate coverage summary, JSON, and LCOV artifacts from Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:extract:coverage
+        vars: { COVERAGE_OUT_DIR: '{{default (printf "%s/coverage/nook-core" .REPO_ROOT) .COVERAGE_OUT_DIR}}' }
+
+  rust:lint:
+    desc: Lint the Rust workspace in Docker.
+    deps:
+      - setup:rust
+    cmds:
+      - task: docker:rust:task
+        vars: { TASK: _rust:lint }
+
+  rust:dependency-policy:
+    desc: Run cargo-deny and cargo-audit for the nook-platform workspace.
+    cmds:
+      - task: docker:ecosystem:dependency-policy:run
+        vars: { WORKSPACE: nook-app/nook-platform }
+
+  fuzz:dependency-policy:
+    desc: Run cargo-deny and cargo-audit for the platform fuzz workspace.
+    cmds:
+      - task: docker:ecosystem:dependency-policy:run
+        vars: { WORKSPACE: nook-app/nook-platform/fuzz }
+
+  _rust:test:parallel:
+    desc: Run portable Rust crate tests when deps are already built (ci:pr parallel track).
+    cmds:
+      - task: _rust:test:run
+
+  _rust:test:run:
+    internal: true
+    desc: Run portable Rust crate tests via cargo-nextest (ci profile, no coverage gate).
+    cmds:
+      - cd "{{.PLATFORM_ROOT}}" && cargo nextest run -p nook-app-common -p nook-companion-core -p nook-companion-wasm -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --profile ci
+
+  _rust:coverage:
+    desc: Print portable Rust crate line coverage summary (no floor enforcement).
+    cmds:
+      - cd "{{.PLATFORM_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --summary-only
+
+  _rust:coverage:check:
+    desc: Run portable Rust crate coverage in Docker and let cargo-llvm-cov enforce the line floor.
+    vars:
+      FLOOR:
+        sh: jq -r '.lines_percent' {{.APP_ROOT}}/nook-platform/nook-core/coverage-floor.json
+    cmds:
+      # Same cargo-llvm-cov subcommand warmed in nook-app/nook-platform/nook-core/Dockerfile (builder-debug), so the coverage
+      # build is a cache hit — no dep recompile at runtime. cargo-llvm-cov enforces the threshold
+      # itself via --fail-under-lines (non-zero exit if below); no output parsing.
+      - cd "{{.PLATFORM_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --summary-only --fail-under-lines {{.FLOOR}}
+
+  _rust:coverage:update:
+    desc: Print measured portable Rust crate line coverage as JSON so the floor can be bumped (apply on host).
+    cmds:
+      # Emit machine-readable coverage; --fail-under-lines with the current floor still gates, while
+      # the JSON summary gives the exact measured line% to copy into {{.APP_ROOT}}/nook-platform/nook-core/coverage-floor.json.
+      - cd "{{.PLATFORM_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --json --summary-only
+
+  _rust:format:
+    desc: Format Rust projects, then print a host-applicable git diff (sealed image).
+    cmds:
+      - bash -c 'cd "{{.PLATFORM_ROOT}}" && cargo fmt --all'
+      - >-
+        sh -c 'if git diff --quiet; then
+          echo "==> Rust already formatted; no changes." >&2;
+        else
+          echo "==> Rust formatting changes (host apply via task format):" >&2;
+          git --no-pager diff;
+        fi'
+
+  _rust:build:
+    desc: Build the native Rust crates (wasm is built via _wasm:build).
+    cmds:
+      - cd "{{.PLATFORM_ROOT}}" && cargo build -p nook-app-common -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log
+
+  _rust:test:
+    desc: Test portable Rust crates (wasm is covered by web e2e).
+    cmds:
+      - task: _rust:test:run
+
+  _rust:lint:
+    desc: Lint portable Rust crates on host and nook-wasm for wasm32.
+    cmds:
+      - cd "{{.PLATFORM_ROOT}}" && cargo clippy -p nook-app-common -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets -- -D warnings
+      - cd "{{.PLATFORM_ROOT}}" && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -p nook-companion-wasm -- -D warnings
+  sccache:ensure:
+    desc: Require a healthy SeaweedFS S3 sccache backend before Rust/WASM builds.
+    dir: '{{.REPO_ROOT}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
+        secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
+        optional="${SCCACHE_OPTIONAL:-}";
+        if [ -z "$access_file" ] || [ ! -r "$access_file" ] ||
+           [ -z "$secret_file" ] || [ ! -r "$secret_file" ]; then
+          if [ "$optional" = "1" ]; then
+            echo "task sccache:ensure: SCCACHE_OPTIONAL=1; continuing without sccache" >&2;
+            exit 0;
+          fi;
+          echo "task sccache:ensure: missing S3 credentials" >&2;
+          echo "Expected readable files:" >&2;
+          echo "  $access_file" >&2;
+          echo "  $secret_file" >&2;
+          echo "Refusing to compile without sccache (silent cold builds destroy shared cache reuse)." >&2;
+          echo "Restore credentials under ~/.nook/cache/, or set SCCACHE_OPTIONAL=1 only for an intentional cold build." >&2;
+          exit 1;
+        fi;
+        if ! {{.DOCKER}} run --rm \
+          -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
+          -e AWS_SECRET_ACCESS_KEY="$(cat "$secret_file")" \
+          -e AWS_DEFAULT_REGION=auto \
+          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          --endpoint-url "{{.SCCACHE_ENDPOINT}}" \
+          s3api head-bucket --bucket "{{.SCCACHE_BUCKET}}" >/dev/null 2>&1; then
+          if [ "$optional" = "1" ]; then
+            echo "task sccache:ensure: SCCACHE_OPTIONAL=1; SeaweedFS S3 unavailable, continuing without remote sccache" >&2;
+            exit 0;
+          fi;
+          echo "task sccache:ensure: SeaweedFS S3 is unavailable at {{.SCCACHE_ENDPOINT}} bucket {{.SCCACHE_BUCKET}}" >&2;
+          echo "Refusing to compile without a healthy remote sccache backend." >&2;
+          exit 1;
+        fi;
+        echo "task sccache:ensure: SeaweedFS S3 sccache is healthy"'
+
+  sccache:stats:
+    desc: Show shared Rust compiler-cache object count and bytes on SeaweedFS.
+    deps:
+      - sccache:ensure
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
+        secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
+        if [ -z "$access_file" ] || [ ! -r "$access_file" ] ||
+           [ -z "$secret_file" ] || [ ! -r "$secret_file" ]; then
+          echo "task sccache:stats: missing S3 credentials" >&2;
+          exit 1;
+        fi;
+        page_file="$(mktemp)";
+        trap '"'"'rm -f "$page_file"'"'"' EXIT;
+        continuation_token="";
+        total_objects=0;
+        total_bytes=0;
+        while true; do
+          if [ -n "$continuation_token" ]; then
+            {{.DOCKER}} run --rm \
+              -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
+              -e AWS_SECRET_ACCESS_KEY="$(cat "$secret_file")" \
+              -e AWS_DEFAULT_REGION=auto \
+              amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+              --endpoint-url "{{.SCCACHE_ENDPOINT}}" \
+              s3api list-objects-v2 --bucket "{{.SCCACHE_BUCKET}}" \
+              --no-paginate --max-keys 1000 \
+              --continuation-token "$continuation_token" > "$page_file";
+          else
+            {{.DOCKER}} run --rm \
+              -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
+              -e AWS_SECRET_ACCESS_KEY="$(cat "$secret_file")" \
+              -e AWS_DEFAULT_REGION=auto \
+              amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+              --endpoint-url "{{.SCCACHE_ENDPOINT}}" \
+              s3api list-objects-v2 --bucket "{{.SCCACHE_BUCKET}}" \
+              --no-paginate --max-keys 1000 > "$page_file";
+          fi;
+          page_objects="$(jq '"'"'(.Contents // []) | length'"'"' "$page_file")";
+          page_bytes="$(jq '"'"'[.Contents[]?.Size] | add // 0'"'"' "$page_file")";
+          total_objects=$((total_objects + page_objects));
+          total_bytes=$((total_bytes + page_bytes));
+          echo "Scanned $total_objects compiler-cache objects ($total_bytes bytes)";
+          continuation_token="$(jq -r '"'"'.NextContinuationToken // empty'"'"' "$page_file")";
+          if [ -z "$continuation_token" ]; then
+            break;
+          fi;
+        done;
+        echo "Total Objects: $total_objects";
+        echo "Total Size: $total_bytes"'
+
+  setup:rust:
+    desc: Build and load the source-sealed Rust/WASM image for explicit rust/wasm commands.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    env:
+      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
+      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        for attempt in 1 2 3; do
+          if {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} nook-rust; then
+            exit 0;
+          fi;
+          if [ "$attempt" -eq 3 ]; then exit 1; fi;
+          echo "task setup:rust: bake attempt $attempt failed; retrying in 5s..." >&2;
+          sleep 5;
+        done'
+
+  setup:rust:test:
+    desc: Build the narrow source-sealed native Rust test image without unrelated WASM or coverage branches.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}} nook-rust-test
+
+  setup:rust:lint:
+    desc: Build the source-sealed Rust lint image and export its compiled graph.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}} nook-rust-lint
+
+  setup:rust:coverage:
+    desc: Build the source-sealed Rust coverage image and export its compiled graph.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}} nook-rust-coverage
+
+  setup:rust:fast:
+    desc: Build the manifest-keyed Rust/WASM development image for mounted source builds.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}} nook-rust-fast
+
+  setup:rust:browser:
+    desc: Build and load the on-demand Rust image with Chromium for browser-wasm tests.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    env:
+      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
+      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        for attempt in 1 2 3; do
+          if {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} nook-rust-browser; then
+            exit 0;
+          fi;
+          if [ "$attempt" -eq 3 ]; then exit 1; fi;
+          echo "task setup:rust:browser: bake attempt $attempt failed; retrying in 5s..." >&2;
+          sleep 5;
+        done'

@@ -2,7 +2,7 @@
 // selected builder locally and in its own private Zot ref on hosted CI. No Rust target is merged here.
 target "web-deps" {
   context    = "."
-  dockerfile = "nook-app/docker/toolchain.Dockerfile"
+  dockerfile = "nook-app/nook-web/docker/toolchain.Dockerfile"
   target     = "web-deps"
   platforms  = ["linux/amd64"]
   contexts = {
