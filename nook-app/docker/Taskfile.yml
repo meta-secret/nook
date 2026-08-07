@@ -344,20 +344,24 @@ tasks:
   docker:ci:cache:publish:wasm:
     desc: Export verified WASM scopes from local layers without reimporting a thin hosted index.
     cmds:
-      # Main clears cache-from, writes the trusted fingerprint scope, and verifies
-      # restore. PR/Remote keep cache-from and Bake's isolated cache-to.
+      # Always clear cache-from so export uses this job's verified local layers.
+      # Reimporting rust-base/native-deps during publish thin-exports WASM cooks.
+      # PR/Remote write Bake's isolated scope; Main writes the fingerprint scope.
       - |
         set -euo pipefail
         if [ -n "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
+            --set "rust-base.cache-from=" \
+            --set "builder-wasm-deps.cache-from=" \
             rust-base builder-wasm-deps
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \
             {{.NOOK_BAKE_FILES}} \
             --set "*.output=type=cacheonly" \
             --set "rust-base.cache-to=" \
             --set "builder-wasm-deps.cache-to=" \
+            --set "wasm-export.cache-from=" \
             wasm-export
         else
           {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake \

@@ -131,12 +131,13 @@ Use this workflow for quality, CI, and deployment changes.
     - They must not import PR-isolated rust-base parents.
     - Ecosystem nightly/policy-tools/policy and preflight scopes must not
       import rust-base at all.
+    - WASM deps/source scopes must not import rust-base or native rust-deps.
     - Their mode=max exports already embed that parent chain.
     - Preflight restores rust-base only via Bake `contexts` (`target:rust-base`).
     - Ecosystem jobs verify with cache-to off, then publish with cache-from kept
       so remote hits re-export without cold chef/toolchain rebuilds.
+    - Product WASM publishers (Main and PR) clear cache-from for fat exports.
     - Main product publishers still clear cache-from for fat trusted exports.
-    - PR product publishers keep cache-from for the same reason as ecosystem.
     - One CI job writes each shared ecosystem registry ref.
     - The complete Rust/WASM cargo-chef dependency graph uses an immutable scope fingerprinted from manifests, lockfiles, compiler Dockerfiles, Task invocation inputs, and Bake definitions.
     - Hosted builds never attach Redis credentials.

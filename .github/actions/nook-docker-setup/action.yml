@@ -182,7 +182,7 @@ runs:
           echo "Could not fingerprint the hosted WASM dependency graph" >&2
           exit 1
         fi
-        echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v4-$wasm_deps_fingerprint" >> "$GITHUB_ENV"
+        echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$wasm_deps_fingerprint" >> "$GITHUB_ENV"
         cache_write_enabled=""
         if [ "$isolated_cache_write" = "true" ]; then
           cache_write_enabled=1
