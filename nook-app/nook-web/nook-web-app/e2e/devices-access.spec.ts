@@ -334,8 +334,15 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('vault-devices-section').locator('button').first(),
     ).toBeFocused()
     await page.getByTestId('vault-devices-access-tab').click()
-    await vaultsNode.click()
-    await panel.getByRole('button', { name: 'Manage backup passwords' }).click()
+    // Remount after leaving Access invalidates the earlier vaultsNode locator.
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.getByTestId('devices-access-node-vaults').click()
+    await page
+      .getByTestId('devices-access-panel')
+      .getByRole('button', { name: 'Manage backup passwords' })
+      .click()
     await expect(
       page.getByTestId('vault-unlock-section').locator('button').first(),
     ).toBeFocused()
@@ -751,19 +758,34 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('header-lock-vault-btn').click()
     // Locking from /devices-access keeps that URL, so login opens Access directly.
     await expect(page).toHaveURL(/\/devices-access$/)
-    const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
-    try {
-      await expect(passkeyOverlay).toBeVisible({ timeout: 5_000 })
-      await page.getByTestId('passkey-auth-overlay-dismiss').click()
-      await expect(passkeyOverlay).toBeHidden()
-    } catch {
-      // Access can stay readable without an unlock overlay.
-    }
-    await expect(
-      page.getByTestId('devices-access-identity-state'),
-    ).toContainText('Identity locked', {
+    await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
+    const identityState = page.getByTestId('devices-access-identity-state')
+    // Passkey-first unlock may cover Access; dismiss when it appears so the
+    // locked identity card stays readable.
+    await expect
+      .poll(
+        async () => {
+          if (
+            (await identityState.isVisible()) &&
+            (await identityState.innerText()).includes('Identity locked')
+          ) {
+            return 'locked'
+          }
+          if (await passkeyOverlay.isVisible()) {
+            const dismiss = page.getByTestId('passkey-auth-overlay-dismiss')
+            if (await dismiss.isVisible()) {
+              await dismiss.click()
+            }
+            return 'dismissing'
+          }
+          return 'waiting'
+        },
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .toBe('locked')
     await expect(
       page.getByTestId('devices-access-identity-card'),
     ).toHaveAttribute('data-identity-state', 'Locked')
