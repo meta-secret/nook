@@ -24,7 +24,6 @@ import type {
   AuthProvidersSnapshot,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { MutableExternalValue } from '../lib/provider-credential-staging'
 import type {
   AuthenticationPageObservationView,
   AuthenticationWorkflowSnapshotView,
@@ -303,12 +302,11 @@ export async function importExtensionEventLog(
 
 export async function decodeExtensionStorageProviders(
   providers: object,
-): Promise<MutableExternalValue[]> {
+): Promise<StorageProvider[]> {
   await ensureExtensionWasm()
   const snapshot: AuthProvidersSnapshot = {
     providers: providers as StorageProvider[],
-    activeVaultStoreId: { state: 'unscoped' },
+    activeVaultStoreId: { state: 'unselected' },
   }
-  return wasmDecodeStorageProviders(snapshot)
-    .providers as MutableExternalValue[]
+  return wasmDecodeStorageProviders(snapshot).providers
 }

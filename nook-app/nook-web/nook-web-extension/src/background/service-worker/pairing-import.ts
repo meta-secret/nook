@@ -1,9 +1,9 @@
 import type { ExtensionPairingApprovedMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import type { StorageProvider } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   ProviderCredentialStagingKind,
   scrubProviderCredentials,
   stageProviderCredentials,
-  type MutableExternalValue,
 } from '../../lib/provider-credential-staging'
 import {
   extensionPairingGrantStorageItems,
@@ -52,7 +52,7 @@ async function restorePairingStorage(
 
 type ImportDecodedApprovedPairingArgs = {
   message: ExtensionPairingApprovedMessage
-  providers: MutableExternalValue[]
+  providers: StorageProvider[]
 }
 
 async function importDecodedApprovedPairing(

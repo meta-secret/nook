@@ -49,9 +49,7 @@ function isExternalValueArray(
   return Array.isArray(value) && value.every(isExternalValue)
 }
 
-export function scrubProviderCredentials(
-  providers: MutableExternalValue,
-): void {
+export function scrubProviderCredentials(providers: object): void {
   if (!Array.isArray(providers)) return
   for (const provider of providers) {
     if (!isRecord(provider)) continue

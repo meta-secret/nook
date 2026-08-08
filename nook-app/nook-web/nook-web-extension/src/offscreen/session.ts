@@ -445,7 +445,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       const activeManager = await getManager()
       const providerSnapshot: AuthProvidersSnapshot = {
         providers: providers as StorageProvider[],
-        activeVaultStoreId: { state: 'unscoped' },
+        activeVaultStoreId: { state: 'unselected' },
       }
       const grantedProviders =
         decodeStorageProviders(providerSnapshot).providers
