@@ -106,13 +106,19 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
 
     assert_eq!(
         workflow.matches("if: inputs.task == '").count(),
-        task_catalog.len(),
-        "every selected remote job must correspond to exactly one Taskfile allowlist entry"
+        task_catalog.len() + 1,
+        "Remote has the public Taskfile catalog plus one internal cache-promotion broker"
     );
     assert_eq!(
         workflow.matches("runs-on: ubuntu-latest").count(),
-        task_catalog.len(),
-        "every catalog task must run on its own GitHub-hosted job"
+        task_catalog.len() + 1,
+        "every catalog task and the internal cache promoter need a GitHub-hosted job"
+    );
+    assert!(
+        workflow.contains("if: inputs.task == 'rust-cache:promote'")
+            && workflow.contains("Remote / rust-cache:promote")
+            && !remote_tasks.contains("rust-cache:promote"),
+        "cache promotion must remain an internal parameterized broker, not an agent task"
     );
     assert!(!workflow.contains("runs-on: nook"));
     assert!(
