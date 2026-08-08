@@ -33,9 +33,9 @@ describe('ExtensionSessionMessageDispatcher', () => {
     await expect(response).resolves.toEqual({ pin: '123456' })
   })
 
-  test('rejects invalid providers before dispatching a vault import', async () => {
+  test('rejects non-serialized providers before dispatching a vault import', async () => {
     const payload: Record<string, unknown> = {
-      providers: [{ foo: 'bar' }],
+      providers: [{ metadata: new Date() }],
     }
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({

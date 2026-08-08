@@ -3,6 +3,7 @@ import initNookWasm, {
   currentCodeFromOtpauthUri,
   DeviceMode,
   DeviceProtectionStatus,
+  decodeStorageProviders,
   NookExternalEventLogRecords,
   NookWebsiteLoginSaveDecision,
   NookVaultManager,
@@ -442,6 +443,12 @@ async function handleMessage(message: unknown): Promise<unknown> {
         throw new Error('Extension session received an invalid vault import.')
       }
       const activeManager = await getManager()
+      const providerSnapshot: AuthProvidersSnapshot = {
+        providers: providers as StorageProvider[],
+        activeVaultStoreId: { state: 'unscoped' },
+      }
+      const grantedProviders =
+        decodeStorageProviders(providerSnapshot).providers
       const recordValues = NookExternalEventLogRecords.fromArray(records)
       const statusValue = await activeManager.importExtensionEventLogRecords(
         grant.vaultStoreId,
@@ -453,13 +460,6 @@ async function handleMessage(message: unknown): Promise<unknown> {
       const status = statusValue.toObject()
       statusValue.free()
       const protection = await activeManager.deviceProtectionStatus()
-      const grantedProviders = providers.filter(
-        (provider): provider is StorageProvider =>
-          !!provider &&
-          typeof provider === 'object' &&
-          'id' in provider &&
-          typeof provider.id === 'string',
-      )
       if (protection === DeviceProtectionStatus.Unlocked) {
         await activeManager.replaceAuthProvidersForVault({
           providers: grantedProviders,

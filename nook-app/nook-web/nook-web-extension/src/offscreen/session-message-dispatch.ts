@@ -1,6 +1,5 @@
 import {
   ProviderCredentialStagingKind,
-  isStorageProviderCollection,
   scrubProviderCredentials,
   stageProviderCredentials,
 } from '../lib/provider-credential-staging'
@@ -279,10 +278,7 @@ export class ExtensionSessionMessageDispatcher {
     payload.providers = []
     // Pairing imports are one-shot and may run against a cold offscreen WASM
     // runtime. Never expire them with the short interactive probe budget.
-    if (
-      staging.kind === ProviderCredentialStagingKind.InvalidInput ||
-      !isStorageProviderCollection(staging.providers)
-    ) {
+    if (staging.kind === ProviderCredentialStagingKind.InvalidInput) {
       const response = {
         ok: false,
         error: 'invalid-provider-payload',

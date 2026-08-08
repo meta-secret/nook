@@ -15,6 +15,8 @@ mod provider_labels;
 pub use provider_labels::*;
 mod provider_state;
 pub use provider_state::*;
+mod provider_import;
+pub use provider_import::*;
 mod companion_heuristics;
 pub use companion_heuristics::*;
 

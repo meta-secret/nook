@@ -19,24 +19,59 @@ function unwrapTypeScriptExpression(expression) {
   return current
 }
 
-const noRawObjectArgumentsRule = {
+export const noRawObjectArgumentsRule = {
   meta: {
     type: 'problem',
     schema: [],
     messages: {
       namedArgument:
         'Nook web forbids raw object-literal call and constructor arguments, including nested TypeScript wrappers. Assign a named typed value first, then pass that name.',
+      typedArgument:
+        'Nook web requires object-literal arguments to use an explicitly typed named declaration.',
     },
   },
   create(context) {
+    const sourceCode = context.sourceCode
+
+    function declaredVariable(identifier) {
+      let scope = sourceCode.getScope(identifier)
+      while (scope) {
+        const variable = scope.set.get(identifier.name)
+        if (variable) return variable
+        scope = scope.upper
+      }
+      return undefined
+    }
+
+    function inspectNamedObjectArgument(argument) {
+      if (argument.type !== 'Identifier') return
+      const variable = declaredVariable(argument)
+      if (!variable) return
+      for (const definition of variable.defs) {
+        if (
+          definition.type !== 'Variable' ||
+          definition.node.type !== 'VariableDeclarator' ||
+          !definition.node.init ||
+          unwrapTypeScriptExpression(definition.node.init).type !==
+            'ObjectExpression'
+        ) {
+          continue
+        }
+        if (!definition.name.typeAnnotation) {
+          context.report({ node: argument, messageId: 'typedArgument' })
+        }
+        return
+      }
+    }
+
     function inspectArguments(node) {
       for (const argument of node.arguments) {
-        if (
-          argument.type !== 'SpreadElement' &&
-          unwrapTypeScriptExpression(argument).type === 'ObjectExpression'
-        ) {
+        if (argument.type === 'SpreadElement') continue
+        if (unwrapTypeScriptExpression(argument).type === 'ObjectExpression') {
           context.report({ node: argument, messageId: 'namedArgument' })
+          continue
         }
+        inspectNamedObjectArgument(argument)
       }
     }
     return {

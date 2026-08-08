@@ -4,6 +4,7 @@ import initNookWasm, {
   classifyAuthenticationOutcome as wasmClassifyAuthenticationOutcome,
   classifyAuthenticationOutcomeWithDefaultTimeout as wasmClassifyAuthenticationOutcomeWithDefaultTimeout,
   configureVaultApplication,
+  decodeStorageProviders as wasmDecodeStorageProviders,
   defaultPasswordGenerationOptions as wasmDefaultPasswordGenerationOptions,
   generatePassword as wasmGeneratePassword,
   readExtensionPairingState as wasmReadExtensionPairingState,
@@ -19,6 +20,11 @@ import initNookWasm, {
   NookVaultManager,
   VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type {
+  AuthProvidersSnapshot,
+  StorageProvider,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type { MutableExternalValue } from '../lib/provider-credential-staging'
 import type {
   AuthenticationPageObservationView,
   AuthenticationWorkflowSnapshotView,
@@ -293,4 +299,16 @@ export async function importExtensionEventLog(
   } finally {
     manager.free()
   }
+}
+
+export async function decodeExtensionStorageProviders(
+  providers: object,
+): Promise<MutableExternalValue[]> {
+  await ensureExtensionWasm()
+  const snapshot: AuthProvidersSnapshot = {
+    providers: providers as StorageProvider[],
+    activeVaultStoreId: { state: 'unscoped' },
+  }
+  return wasmDecodeStorageProviders(snapshot)
+    .providers as MutableExternalValue[]
 }
