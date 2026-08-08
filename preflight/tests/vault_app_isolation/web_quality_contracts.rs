@@ -27,7 +27,11 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         );
     }
 
-    let eslint = read(&root, "nook-app/nook-web/eslint.config.js");
+    let eslint = format!(
+        "{}\n{}",
+        read(&root, "nook-app/nook-web/eslint.config.js"),
+        read(&root, "nook-app/nook-web/typed-api-analysis.js")
+    );
     for required in [
         "'max-params': ['error', { max: 1 }]",
         "'@typescript-eslint/no-restricted-types'",
