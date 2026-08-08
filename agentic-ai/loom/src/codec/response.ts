@@ -1,6 +1,6 @@
+import { MaybeKind, absent, type Maybe } from '../result.ts';
+import { ResponsePhase } from './enums.ts';
 import type { FieldError } from './field-error.ts';
-
-export type ResponsePhase = 'decode' | 'unknown-tool' | 'arguments' | 'execute';
 
 export type RecoverHint = {
   readonly toolsListRequest: string;
@@ -17,7 +17,7 @@ export type ErrorResponse = {
   readonly ok: false;
   readonly isError: true;
   readonly phase: ResponsePhase;
-  readonly name?: string;
+  readonly name: Maybe<string>;
   readonly errors: readonly FieldError[];
   readonly recover: RecoverHint;
 };
@@ -35,25 +35,22 @@ export function successResponse(
 export function errorResponse(
   phase: ResponsePhase,
   errors: readonly FieldError[],
-  name?: string,
-  hint?: string,
+  name: Maybe<string>,
+  hint: Maybe<string> = absent(),
 ): ErrorResponse {
-  const response: ErrorResponse = {
+  const defaultHint =
+    'run loom with a tools-list request, then retry with a valid arguments object';
+  return {
     ok: false,
     isError: true,
     phase,
+    name,
     errors,
     recover: {
       toolsListRequest: TOOLS_LIST_REQUEST_PATH,
-      hint:
-        hint ??
-        'run loom with a tools-list request, then retry with a valid arguments object',
+      hint: hint.kind === MaybeKind.Present ? hint.value : defaultHint,
     },
   };
-  if (typeof name === 'string') {
-    return { ...response, name };
-  }
-  return response;
 }
 
 export function encodeResponse(
@@ -79,8 +76,8 @@ export function encodeResponse(
       hint: response.recover.hint,
     },
   };
-  if (typeof response.name === 'string') {
-    encoded.name = response.name;
+  if (response.name.kind === MaybeKind.Present) {
+    encoded.name = response.name.value;
   }
   return encoded;
 }

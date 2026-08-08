@@ -26,18 +26,26 @@ import {
   TOOLS_LIST_INPUT_SCHEMA,
   decodeToolsListArgs,
 } from '../codec/args/tools-list.ts';
+import { ToolName } from '../codec/enums.ts';
 import type { DecodeResult } from '../codec/field-error.ts';
 import { runAgentStats } from '../commands/agent-stats.ts';
 import { runCortexAudit } from '../commands/cortex-audit.ts';
 import { runPrLand } from '../commands/pr-land.ts';
 import { runPrePush } from '../commands/pre-push.ts';
 import { runSkillScaffold } from '../commands/skill-scaffold.ts';
-import { err, ok, type Result } from '../result.ts';
+import {
+  absent,
+  err,
+  ok,
+  present,
+  type Maybe,
+  type Result,
+} from '../result.ts';
 
 export type JsonSchema = Readonly<Record<string, unknown>>;
 
 export type ToolDefinition = {
-  readonly name: string;
+  readonly name: ToolName;
   readonly description: string;
   readonly exampleRequest: string;
   readonly inputSchema: JsonSchema;
@@ -53,7 +61,7 @@ function wrapDecode<T>(
 
 const TOOLS: readonly ToolDefinition[] = [
   {
-    name: 'tools-list',
+    name: ToolName.ToolsList,
     description: 'List Loom tools with schemas and example request paths.',
     exampleRequest: 'agentic-ai/loom/params/tools-list/default.yaml',
     inputSchema: TOOLS_LIST_INPUT_SCHEMA,
@@ -61,7 +69,7 @@ const TOOLS: readonly ToolDefinition[] = [
     run: async () => ok({ tools: listDiscoverableTools() }),
   },
   {
-    name: 'tools-call',
+    name: ToolName.ToolsCall,
     description: 'Nested tools/call helper with name plus arguments.',
     exampleRequest: 'agentic-ai/loom/params/tools-call/request.example.yaml',
     inputSchema: TOOLS_CALL_INPUT_SCHEMA,
@@ -69,7 +77,7 @@ const TOOLS: readonly ToolDefinition[] = [
     run: async () => err('tools-call is handled by the dispatcher'),
   },
   {
-    name: 'pre-push',
+    name: ToolName.PrePush,
     description: 'Host-apply task format and enforce the UI demo contract.',
     exampleRequest: 'agentic-ai/loom/params/pre-push/default.yaml',
     inputSchema: PRE_PUSH_INPUT_SCHEMA,
@@ -77,7 +85,7 @@ const TOOLS: readonly ToolDefinition[] = [
     run: async (args) => runPrePush(args as Parameters<typeof runPrePush>[0]),
   },
   {
-    name: 'cortex-audit',
+    name: ToolName.CortexAudit,
     description: 'Audit .cortex links and dynamic-skill index sync.',
     exampleRequest: 'agentic-ai/loom/params/cortex-audit/default.yaml',
     inputSchema: CORTEX_AUDIT_INPUT_SCHEMA,
@@ -86,7 +94,7 @@ const TOOLS: readonly ToolDefinition[] = [
       runCortexAudit(args as Parameters<typeof runCortexAudit>[0]),
   },
   {
-    name: 'skill-scaffold',
+    name: ToolName.SkillScaffold,
     description:
       'Create a dynamic-skill card and optional executable wrappers.',
     exampleRequest:
@@ -97,7 +105,7 @@ const TOOLS: readonly ToolDefinition[] = [
       runSkillScaffold(args as Parameters<typeof runSkillScaffold>[0]),
   },
   {
-    name: 'agent-stats',
+    name: ToolName.AgentStats,
     description: 'Assemble, validate, or publish AI-agent stats YAML.',
     exampleRequest: 'agentic-ai/loom/params/agent-stats/assemble.example.yaml',
     inputSchema: AGENT_STATS_INPUT_SCHEMA,
@@ -106,7 +114,7 @@ const TOOLS: readonly ToolDefinition[] = [
       runAgentStats(args as Parameters<typeof runAgentStats>[0]),
   },
   {
-    name: 'pr-land',
+    name: ToolName.PrLand,
     description: 'PR status, validate, ready, and merge-check helpers.',
     exampleRequest: 'agentic-ai/loom/params/pr-land/request.example.yaml',
     inputSchema: PR_LAND_INPUT_SCHEMA,
@@ -115,8 +123,12 @@ const TOOLS: readonly ToolDefinition[] = [
   },
 ];
 
-export function getTool(name: string): ToolDefinition | undefined {
-  return TOOLS.find((tool) => tool.name === name);
+export function getTool(name: string): Maybe<ToolDefinition> {
+  const tool = TOOLS.find((entry) => entry.name === name);
+  if (tool) {
+    return present(tool);
+  }
+  return absent();
 }
 
 export function listDiscoverableTools(): readonly {
@@ -125,12 +137,14 @@ export function listDiscoverableTools(): readonly {
   inputSchema: JsonSchema;
   exampleRequest: string;
 }[] {
-  return TOOLS.filter((tool) => tool.name !== 'tools-call').map((tool) => ({
-    name: tool.name,
-    description: tool.description,
-    inputSchema: tool.inputSchema,
-    exampleRequest: tool.exampleRequest,
-  }));
+  return TOOLS.filter((tool) => tool.name !== ToolName.ToolsCall).map(
+    (tool) => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+      exampleRequest: tool.exampleRequest,
+    }),
+  );
 }
 
 export function listAllToolNames(): readonly string[] {

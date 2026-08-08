@@ -1,5 +1,6 @@
 import { isRecord, type UnknownRecord } from '../lib/guards.ts';
-import { ResultKind } from '../result.ts';
+import { ResultKind, absent, present, type Maybe } from '../result.ts';
+import { isExternalNull } from './external.ts';
 import {
   decodeErr,
   decodeOk,
@@ -100,25 +101,22 @@ export function expectStringEnum<T extends string>(
   return decodeOk(value as T);
 }
 
-export function expectOptionalStringOrNull(
+export function expectOptionalString(
   record: UnknownRecord,
   key: string,
   path: string,
-): DecodeResult<string | undefined> {
+): DecodeResult<Maybe<string>> {
   const fieldPath = joinPath(path, key);
-  if (!(key in record)) {
-    return decodeOk(undefined);
+  if (!(key in record) || isExternalNull(record[key])) {
+    return decodeOk(absent());
   }
   const value = record[key];
-  if (value === null) {
-    return decodeOk(undefined);
-  }
   if (typeof value !== 'string') {
     return decodeErr([
-      fieldError(fieldPath, 'expected string, null, or omitted'),
+      fieldError(fieldPath, 'expected string, YAML null, or omitted'),
     ]);
   }
-  return decodeOk(value);
+  return decodeOk(present(value));
 }
 
 export function collectDecode<T>(

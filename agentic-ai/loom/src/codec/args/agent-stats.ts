@@ -1,4 +1,5 @@
 import { ResultKind } from '../../result.ts';
+import { AgentStatsAction } from '../enums.ts';
 import {
   decodeErr,
   decodeOk,
@@ -14,10 +15,8 @@ import {
   expectStringEnum,
 } from '../object.ts';
 
-export type AgentStatsAction = 'assemble' | 'validate' | 'publish';
-
 export type AgentStatsAssembleArgs = {
-  readonly action: 'assemble';
+  readonly action: AgentStatsAction.Assemble;
   readonly pr: number;
   readonly scratch: string;
   readonly out: string;
@@ -25,13 +24,17 @@ export type AgentStatsAssembleArgs = {
 };
 
 export type AgentStatsFileArgs = {
-  readonly action: 'validate' | 'publish';
+  readonly action: AgentStatsAction.Validate | AgentStatsAction.Publish;
   readonly file: string;
 };
 
 export type AgentStatsArgs = AgentStatsAssembleArgs | AgentStatsFileArgs;
 
-const ACTIONS = ['assemble', 'validate', 'publish'] as const;
+const ACTIONS = [
+  AgentStatsAction.Assemble,
+  AgentStatsAction.Validate,
+  AgentStatsAction.Publish,
+] as const;
 
 export function decodeAgentStatsArgs(
   value: unknown,
@@ -45,7 +48,7 @@ export function decodeAgentStatsArgs(
     return action;
   }
 
-  if (action.value === 'assemble') {
+  if (action.value === AgentStatsAction.Assemble) {
     const allowed = new Set(['action', 'pr', 'scratch', 'out', 'inventory']);
     const unknown = denyUnknownKeys(object.value, allowed, 'arguments');
     const pr = expectPositiveInt(object.value, 'pr', 'arguments');
@@ -63,7 +66,7 @@ export function decodeAgentStatsArgs(
       return decodeErr(errors);
     }
     return decodeOk({
-      action: 'assemble',
+      action: AgentStatsAction.Assemble,
       pr: (pr as { value: number }).value,
       scratch: (scratch as { value: string }).value,
       out: (out as { value: string }).value,
@@ -95,7 +98,14 @@ export const AGENT_STATS_INPUT_SCHEMA = {
   additionalProperties: false,
   required: ['action'],
   properties: {
-    action: { type: 'string', enum: ['assemble', 'validate', 'publish'] },
+    action: {
+      type: 'string',
+      enum: [
+        AgentStatsAction.Assemble,
+        AgentStatsAction.Validate,
+        AgentStatsAction.Publish,
+      ],
+    },
     pr: { type: 'integer', minimum: 1 },
     scratch: { type: 'string' },
     out: { type: 'string' },

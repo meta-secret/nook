@@ -1,11 +1,12 @@
 import path from 'node:path';
 import type { PrLandArgs } from '../codec/args/pr-land.ts';
+import { PrLandAction } from '../codec/enums.ts';
 import { MaybeKind, ResultKind, err, ok, type Result } from '../result.ts';
 import { findRepoRoot } from '../lib/repo.ts';
 import { runCommand } from '../lib/run.ts';
 
 export type PrLandReport = {
-  readonly action: string;
+  readonly action: PrLandAction;
   readonly prNumber: number;
   readonly nextStep: string;
   readonly messages: string[];
@@ -21,13 +22,13 @@ export async function runPrLand(
   }
 
   switch (args.action) {
-    case 'status':
+    case PrLandAction.Status:
       return status(repo.value, args.pr);
-    case 'validate':
+    case PrLandAction.Validate:
       return validate(repo.value, args);
-    case 'ready':
+    case PrLandAction.Ready:
       return ready(repo.value, args.pr);
-    case 'merge-check':
+    case PrLandAction.MergeCheck:
       return mergeCheck(repo.value, args.pr);
   }
 }
@@ -55,7 +56,7 @@ async function status(
   }
 
   return ok({
-    action: 'status',
+    action: PrLandAction.Status,
     prNumber,
     nextStep: 'run loom with a pr-land validate request when the head is ready',
     ready: false,
@@ -116,7 +117,7 @@ async function validate(
   }
 
   return ok({
-    action: 'validate',
+    action: PrLandAction.Validate,
     prNumber: args.pr,
     nextStep: 'watch repository-owned checks, then run a pr-land ready request',
     ready: false,
@@ -137,7 +138,7 @@ async function ready(
   }
   const passed = result.value.exitCode === 0;
   return ok({
-    action: 'ready',
+    action: PrLandAction.Ready,
     prNumber,
     ready: passed,
     nextStep: passed
@@ -162,7 +163,7 @@ async function mergeCheck(
     return readiness;
   }
   return ok({
-    action: 'merge-check',
+    action: PrLandAction.MergeCheck,
     prNumber,
     ready: readiness.value.ready,
     nextStep: readiness.value.ready

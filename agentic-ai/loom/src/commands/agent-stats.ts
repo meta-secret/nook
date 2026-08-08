@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { AgentStatsArgs } from '../codec/args/agent-stats.ts';
+import { AgentStatsAction } from '../codec/enums.ts';
 import { assembleAgentStats } from '../lib/agent-stats-assemble.ts';
 import { validateAgentStatsYaml } from '../lib/agent-stats-schema.ts';
 import { findRepoRoot } from '../lib/repo.ts';
@@ -8,7 +9,7 @@ import { runCommand } from '../lib/run.ts';
 import { ResultKind, err, ok, type Result } from '../result.ts';
 
 export type AgentStatsReport = {
-  readonly action: string;
+  readonly action: AgentStatsAction;
   readonly messages: string[];
   readonly outputPath: string;
 };
@@ -17,17 +18,17 @@ export async function runAgentStats(
   args: AgentStatsArgs,
 ): Promise<Result<AgentStatsReport>> {
   switch (args.action) {
-    case 'assemble':
+    case AgentStatsAction.Assemble:
       return assemble(args);
-    case 'validate':
-      return validate(args.file);
-    case 'publish':
+    case AgentStatsAction.Validate:
+      return validateFile(AgentStatsAction.Validate, args.file);
+    case AgentStatsAction.Publish:
       return publish(args.file);
   }
 }
 
 async function assemble(
-  args: Extract<AgentStatsArgs, { action: 'assemble' }>,
+  args: Extract<AgentStatsArgs, { action: AgentStatsAction.Assemble }>,
 ): Promise<Result<AgentStatsReport>> {
   const repo = findRepoRoot();
   if (repo.kind === ResultKind.Err) {
@@ -59,7 +60,7 @@ async function assemble(
   }
 
   return ok({
-    action: 'assemble',
+    action: AgentStatsAction.Assemble,
     outputPath: outPath,
     messages: [
       `wrote ${outPath}`,
@@ -69,7 +70,10 @@ async function assemble(
   });
 }
 
-async function validate(file: string): Promise<Result<AgentStatsReport>> {
+async function validateFile(
+  action: AgentStatsAction.Validate,
+  file: string,
+): Promise<Result<AgentStatsReport>> {
   const prFromName = path.basename(file).replace(/\.ya?ml$/, '');
   const prNumber = Number.parseInt(prFromName, 10);
   if (!Number.isInteger(prNumber) || prNumber <= 0) {
@@ -84,7 +88,7 @@ async function validate(file: string): Promise<Result<AgentStatsReport>> {
     return err(validation.value.errors.join('\n'));
   }
   return ok({
-    action: 'validate',
+    action,
     outputPath: path.resolve(file),
     messages: ['schema validation passed'],
   });
@@ -132,7 +136,7 @@ async function publish(file: string): Promise<Result<AgentStatsReport>> {
   }
 
   return ok({
-    action: 'publish',
+    action: AgentStatsAction.Publish,
     outputPath: absolute,
     messages: [
       `published ${remotePath}`,

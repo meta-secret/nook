@@ -1,4 +1,5 @@
-import { fieldError, type FieldError } from '../codec/field-error.ts';
+import { ResponsePhase, ToolName } from '../codec/enums.ts';
+import { fieldError } from '../codec/field-error.ts';
 import { decodeLoomRequest } from '../codec/request.ts';
 import {
   encodeResponse,
@@ -8,7 +9,7 @@ import {
   type SuccessResponse,
 } from '../codec/response.ts';
 import { parseYamlFile } from '../codec/yaml.ts';
-import { ResultKind } from '../result.ts';
+import { MaybeKind, ResultKind, absent, present } from '../result.ts';
 import { getTool, listAllToolNames } from './registry.ts';
 
 export type DispatchOutcome = {
@@ -23,7 +24,7 @@ export async function dispatchRequestFile(
   if (parsed.kind === ResultKind.Err) {
     return {
       exitCode: 2,
-      body: errorResponse('decode', parsed.errors),
+      body: errorResponse(ResponsePhase.Decode, parsed.errors, absent()),
     };
   }
   return dispatchValue(parsed.value);
@@ -34,36 +35,47 @@ export async function dispatchValue(value: unknown): Promise<DispatchOutcome> {
   if (request.kind === ResultKind.Err) {
     return {
       exitCode: 2,
-      body: errorResponse('decode', request.errors),
+      body: errorResponse(ResponsePhase.Decode, request.errors, absent()),
     };
   }
+  return dispatchNamed(request.value.name, request.value.arguments);
+}
 
-  const tool = getTool(request.value.name);
-  if (!tool) {
+async function dispatchNamed(
+  name: string,
+  argsValue: unknown,
+): Promise<DispatchOutcome> {
+  const toolLookup = getTool(name);
+  if (toolLookup.kind === MaybeKind.Absent) {
     return {
       exitCode: 2,
       body: errorResponse(
-        'unknown-tool',
+        ResponsePhase.UnknownTool,
         [
           fieldError(
             'name',
             `unknown tool; known: ${listAllToolNames().join(', ')}`,
           ),
         ],
-        request.value.name,
+        present(name),
       ),
     };
   }
+  const tool = toolLookup.value;
 
-  if (tool.name === 'tools-call') {
-    return dispatchToolsCall(request.value.arguments, request.value.name);
+  if (tool.name === ToolName.ToolsCall) {
+    return dispatchToolsCall(argsValue, name);
   }
 
-  const args = tool.decodeArgs(request.value.arguments);
+  const args = tool.decodeArgs(argsValue);
   if (args.kind === ResultKind.Err) {
     return {
       exitCode: 2,
-      body: errorResponse('arguments', args.errors, tool.name),
+      body: errorResponse(
+        ResponsePhase.Arguments,
+        args.errors,
+        present(tool.name),
+      ),
     };
   }
 
@@ -72,16 +84,18 @@ export async function dispatchValue(value: unknown): Promise<DispatchOutcome> {
     return {
       exitCode: 1,
       body: errorResponse(
-        'execute',
+        ResponsePhase.Execute,
         [fieldError('result', result.message)],
-        tool.name,
-        'fix the underlying gate, then retry the same request envelope',
+        present(tool.name),
+        present(
+          'fix the underlying gate, then retry the same request envelope',
+        ),
       ),
     };
   }
 
   if (
-    tool.name === 'cortex-audit' &&
+    tool.name === ToolName.CortexAudit &&
     typeof result.value === 'object' &&
     result.value instanceof Object &&
     'auditOk' in result.value &&
@@ -103,41 +117,32 @@ async function dispatchToolsCall(
   nestedValue: unknown,
   outerName: string,
 ): Promise<DispatchOutcome> {
-  const tool = getTool('tools-call');
-  if (!tool) {
+  const toolLookup = getTool(ToolName.ToolsCall);
+  if (toolLookup.kind === MaybeKind.Absent) {
     return {
       exitCode: 2,
       body: errorResponse(
-        'unknown-tool',
+        ResponsePhase.UnknownTool,
         [fieldError('name', 'tools-call missing from registry')],
-        outerName,
+        present(outerName),
       ),
     };
   }
-  const nested = tool.decodeArgs(nestedValue);
+  const nested = toolLookup.value.decodeArgs(nestedValue);
   if (nested.kind === ResultKind.Err) {
     return {
       exitCode: 2,
-      body: errorResponse('arguments', nested.errors, outerName),
+      body: errorResponse(
+        ResponsePhase.Arguments,
+        nested.errors,
+        present(outerName),
+      ),
     };
   }
   const callArgs = nested.value as { name: string; arguments: unknown };
-  return dispatchValue({
-    name: callArgs.name,
-    arguments: callArgs.arguments,
-  });
-}
-
-export function outcomeYamlValue(
-  outcome: DispatchOutcome,
-): SuccessResponse | ErrorResponse {
-  return outcome.body;
+  return dispatchNamed(callArgs.name, callArgs.arguments);
 }
 
 export function encodedOutcome(outcome: DispatchOutcome): unknown {
   return encodeResponse(outcome.body);
-}
-
-export function decodeErrorsOf(errors: readonly FieldError[]): ErrorResponse {
-  return errorResponse('decode', errors);
 }

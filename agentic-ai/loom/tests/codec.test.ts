@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { decodeAgentStatsArgs } from '../src/codec/args/agent-stats.ts';
 import { decodePrePushArgs } from '../src/codec/args/pre-push.ts';
+import { ResponsePhase } from '../src/codec/enums.ts';
 import { decodeLoomRequest } from '../src/codec/request.ts';
 import { ResultKind } from '../src/result.ts';
 import { dispatchValue } from '../src/tools/dispatch.ts';
@@ -92,7 +93,7 @@ describe('loom dispatch protocol', () => {
     expect(outcome.exitCode).toBe(2);
     expect(outcome.body.ok).toBe(false);
     if (!outcome.body.ok) {
-      expect(outcome.body.phase).toBe('unknown-tool');
+      expect(outcome.body.phase).toBe(ResponsePhase.UnknownTool);
       expect(outcome.body.recover.toolsListRequest).toContain('tools-list');
     }
   });
@@ -108,7 +109,7 @@ describe('loom dispatch protocol', () => {
     expect(outcome.exitCode).toBe(2);
     expect(outcome.body.ok).toBe(false);
     if (!outcome.body.ok) {
-      expect(outcome.body.phase).toBe('arguments');
+      expect(outcome.body.phase).toBe(ResponsePhase.Arguments);
       expect(
         outcome.body.errors.some((entry) => entry.path === 'arguments.fetch'),
       ).toBe(true);

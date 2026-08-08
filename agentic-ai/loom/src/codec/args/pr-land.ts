@@ -1,15 +1,14 @@
-import { ResultKind, absent, present, type Maybe } from '../../result.ts';
+import { ResultKind, type Maybe } from '../../result.ts';
+import { PrLandAction } from '../enums.ts';
 import { decodeErr, decodeOk, type DecodeResult } from '../field-error.ts';
 import {
   denyUnknownKeys,
   expectBoolean,
   expectObject,
-  expectOptionalStringOrNull,
+  expectOptionalString,
   expectPositiveInt,
   expectStringEnum,
 } from '../object.ts';
-
-export type PrLandAction = 'status' | 'validate' | 'ready' | 'merge-check';
 
 export type PrLandArgs = {
   readonly action: PrLandAction;
@@ -18,7 +17,12 @@ export type PrLandArgs = {
   readonly fullE2e: boolean;
 };
 
-const ACTIONS = ['status', 'validate', 'ready', 'merge-check'] as const;
+const ACTIONS = [
+  PrLandAction.Status,
+  PrLandAction.Validate,
+  PrLandAction.Ready,
+  PrLandAction.MergeCheck,
+] as const;
 const ALLOWED = new Set(['action', 'pr', 'remote', 'full_e2e']);
 
 export function decodePrLandArgs(value: unknown): DecodeResult<PrLandArgs> {
@@ -29,11 +33,7 @@ export function decodePrLandArgs(value: unknown): DecodeResult<PrLandArgs> {
   const unknown = denyUnknownKeys(object.value, ALLOWED, 'arguments');
   const action = expectStringEnum(object.value, 'action', 'arguments', ACTIONS);
   const pr = expectPositiveInt(object.value, 'pr', 'arguments');
-  const remote = expectOptionalStringOrNull(
-    object.value,
-    'remote',
-    'arguments',
-  );
+  const remote = expectOptionalString(object.value, 'remote', 'arguments');
   const fullE2e = expectBoolean(object.value, 'full_e2e', 'arguments');
   const errors = [
     ...unknown,
@@ -45,14 +45,10 @@ export function decodePrLandArgs(value: unknown): DecodeResult<PrLandArgs> {
   if (errors.length > 0) {
     return decodeErr(errors);
   }
-  const remoteValue =
-    remote.kind === ResultKind.Ok && typeof remote.value === 'string'
-      ? present(remote.value)
-      : absent();
   return decodeOk({
     action: (action as { value: PrLandAction }).value,
     pr: (pr as { value: number }).value,
-    remote: remoteValue,
+    remote: (remote as { value: Maybe<string> }).value,
     fullE2e: (fullE2e as { value: boolean }).value,
   });
 }
@@ -64,10 +60,15 @@ export const PR_LAND_INPUT_SCHEMA = {
   properties: {
     action: {
       type: 'string',
-      enum: ['status', 'validate', 'ready', 'merge-check'],
+      enum: [
+        PrLandAction.Status,
+        PrLandAction.Validate,
+        PrLandAction.Ready,
+        PrLandAction.MergeCheck,
+      ],
     },
     pr: { type: 'integer', minimum: 1 },
-    remote: { type: ['string', 'null'] },
+    remote: { type: 'string' },
     full_e2e: { type: 'boolean' },
   },
 } as const;
