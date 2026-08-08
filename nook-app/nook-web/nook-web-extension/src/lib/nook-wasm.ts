@@ -102,8 +102,12 @@ function runtimeMessage(message: ExternalValue): Promise<ExternalValue> {
   })
 }
 
+function isResponseObject(value: ExternalValue): value is ExternalObject {
+  return typeof value === 'object' && !Array.isArray(value)
+}
+
 function responseObject(value: ExternalValue): ExternalObject {
-  if (typeof value !== 'object' || Array.isArray(value)) {
+  if (!isResponseObject(value)) {
     throw new Error('Extension session returned a malformed response.')
   }
   return value
