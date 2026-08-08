@@ -98,15 +98,19 @@ export function bindingPatternHasTypeAnnotation(identifier) {
 export function objectPropertyValueExpressions(property) {
   if (property.kind === 'init') return [property.value]
   if (property.kind !== 'get' || property.value.type !== 'FunctionExpression') return []
+  return functionReturnExpressions(property.value)
+}
+
+export function functionReturnExpressions(callable) {
+  if (callable.body.type !== 'BlockStatement') return [callable.body]
   const expressions = []
-  const getter = property.value
   function visit(node) {
     if (node.type === 'ReturnStatement') {
       if (node.argument) expressions.push(node.argument)
       return
     }
     if (
-      node !== getter.body &&
+      node !== callable.body &&
       ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(
         node.type,
       )
@@ -123,8 +127,31 @@ export function objectPropertyValueExpressions(property) {
       }
     }
   }
-  visit(getter.body)
+  visit(callable.body)
   return expressions
+}
+
+export function inlineCallReturnExpressions(expression) {
+  if (
+    expression.type !== 'CallExpression' ||
+    !['ArrowFunctionExpression', 'FunctionExpression'].includes(expression.callee.type)
+  ) {
+    return []
+  }
+  return functionReturnExpressions(expression.callee)
+}
+
+export function arrayCallbackConsumesElements(method) {
+  return [
+    'every',
+    'filter',
+    'find',
+    'findIndex',
+    'flatMap',
+    'forEach',
+    'map',
+    'some',
+  ].includes(method)
 }
 
 export function writeBindingPattern(identifier) {

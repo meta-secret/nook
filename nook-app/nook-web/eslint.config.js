@@ -5,9 +5,11 @@ import globals from 'globals'
 import ts from 'typescript-eslint'
 import {
   ActiveCallScopeKind,
+  arrayCallbackConsumesElements,
   bindingPatternHasTypeAnnotation,
   concatenateArraySummaries,
   executionScope,
+  inlineCallReturnExpressions,
   objectPropertyValueExpressions,
   isObjectRestBinding,
   mergeArraySummaries,
@@ -136,15 +138,7 @@ export const noRawObjectArgumentsRule = {
           seenVariables: new Set(),
         }).flatMap(inlineObjectExpressions)
       }
-      if (
-        unwrapped.type === 'CallExpression' &&
-        (unwrapped.callee.type === 'ArrowFunctionExpression' ||
-          unwrapped.callee.type === 'FunctionExpression') &&
-        unwrapped.callee.body.type !== 'BlockStatement'
-      ) {
-        return inlineObjectExpressions(unwrapped.callee.body)
-      }
-      return []
+      return inlineCallReturnExpressions(unwrapped).flatMap(inlineObjectExpressions)
     }
     function staticPropertyKey(member) {
       if (!member.computed && member.property.type === 'Identifier') {
@@ -394,7 +388,7 @@ export const noRawObjectArgumentsRule = {
         call?.type !== 'CallExpression' ||
         call.arguments[0] !== callback ||
         call.callee.type !== 'MemberExpression' ||
-        staticPropertyKey(call.callee).value !== 'forEach' ||
+        !arrayCallbackConsumesElements(staticPropertyKey(call.callee).value) ||
         callback.params.indexOf(definition.name) !== 0
       ) {
         return []
@@ -822,8 +816,10 @@ export const noRawObjectArgumentsRule = {
           limit,
         })
       }
+      const namedValues = namedArrayValues({ expression: unwrapped, seenVariables })
+      if (namedValues.length === 0) return { lengths: new Set([0]), values: new Map() }
       return mergeArraySummaries(
-        namedArrayValues({ expression: unwrapped, seenVariables }).map((entry) =>
+        namedValues.map((entry) =>
           arrayProjectionSummary({
             expression: entry.value,
             seenVariables: entry.seenVariables,

@@ -379,6 +379,19 @@ describe('typed API named arguments', () => {
     ])
   })
 
+  test('preserves the empty layout of unresolved array spreads', () => {
+    const messages = lint(`
+      declare function consume(value: number | { name: string }): void
+      function forward(values: number[]): void {
+        consume(([...values, { name: 'Nook' }])[0])
+      }
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
   test('analyzes many conditional spreads without enumerating layouts', () => {
     const spreads = Array.from(
       { length: 30 },
@@ -527,8 +540,10 @@ describe('typed API named arguments', () => {
       declare function consume(value: { name: string }): void
       for (const args of [{ name: 'Nook' }]) consume(args)
       ;[{ name: 'Vault' }].forEach((args) => consume(args))
+      ;[{ name: 'Sentinel' }].map((args) => consume(args))
     `)
     expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
       'typedArgument',
       'typedArgument',
     ])
@@ -551,8 +566,10 @@ describe('typed API named arguments', () => {
     const messages = lint(`
       declare function consume(value: { name: string }): void
       consume((() => ({ name: 'Nook' }))())
+      consume((() => { return { name: 'Vault' } })())
     `)
     expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
       'namedArgument',
     ])
   })

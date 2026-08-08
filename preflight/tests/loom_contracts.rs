@@ -39,6 +39,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "CallExpression > ObjectExpression",
         "CallExpression > :matches(TSAsExpression, TSSatisfiesExpression, TSTypeAssertion, TSNonNullExpression) ObjectExpression",
         "NewExpression > :matches(TSAsExpression, TSSatisfiesExpression, TSTypeAssertion, TSNonNullExpression) ObjectExpression",
+        ":matches(CallExpression, NewExpression) > :matches(ConditionalExpression, LogicalExpression, SequenceExpression) ObjectExpression",
         "named typed value first",
         "files: ['src/**/*.ts', 'tests/**/*.ts']",
         "Model a concrete domain type",

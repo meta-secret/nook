@@ -61,6 +61,12 @@ export default tseslint.config(
           message:
             'Loom forbids raw object-literal constructor arguments hidden by TypeScript wrappers. Assign a named typed value first, then pass that name.',
         },
+        {
+          selector:
+            ':matches(CallExpression, NewExpression) > :matches(ConditionalExpression, LogicalExpression, SequenceExpression) ObjectExpression',
+          message:
+            'Loom forbids raw object literals hidden in conditional, logical, or sequence arguments. Assign a named typed value first, then pass that name.',
+        },
       ],
       'no-unused-vars': 'off',
       'no-undef': 'off',

@@ -91,4 +91,30 @@ describe('Loom ESLint contracts', () => {
       'no-restricted-syntax',
     ]);
   });
+
+  test('rejects object literals hidden in result expressions', async () => {
+    const eslint = new ESLint();
+    const options: LintTextOptions = { filePath: 'src/cli.ts' };
+    const results = await eslint.lintText(
+      `
+        type WidgetArgs = { name: string };
+        declare const flag: boolean;
+        declare const typedArgs: WidgetArgs;
+        declare function consume(args: WidgetArgs): void;
+        declare class Widget { constructor(args: WidgetArgs); }
+        consume(flag ? { name: 'Nook' } : typedArgs);
+        consume(flag && { name: 'Vault' });
+        consume((typedArgs, { name: 'Key' }));
+        new Widget(flag ? typedArgs : { name: 'Sentinel' });
+      `,
+      options,
+    );
+
+    expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
+      'no-restricted-syntax',
+      'no-restricted-syntax',
+      'no-restricted-syntax',
+      'no-restricted-syntax',
+    ]);
+  });
 });
