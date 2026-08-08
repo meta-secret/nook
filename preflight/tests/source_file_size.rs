@@ -94,9 +94,41 @@ fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result
         workflow.contains("task preflight:source-architecture"),
         "the source-architecture workflow must invoke the Taskfile gate"
     );
+    assert_hosted_preflight_rust_cache(&workflow, "source-architecture")?;
+
+    let loom_workflow =
+        fs::read_to_string(repository_root().join(".github/workflows/loom.yml"))?;
+    assert_hosted_preflight_rust_cache(&loom_workflow, "loom")?;
     assert!(
         taskfile.contains("--test source_file_size"),
         "preflight:source-architecture must run the source_file_size test"
     );
+    Ok(())
+}
+
+fn assert_hosted_preflight_rust_cache(workflow: &str, name: &str) -> anyhow::Result<()> {
+    let toolchain = workflow
+        .find("uses: dtolnay/rust-toolchain@stable")
+        .ok_or_else(|| anyhow::anyhow!("{name} must install the pinned stable Rust channel"))?;
+    let cache = workflow
+        .find("uses: Swatinem/rust-cache@v2")
+        .ok_or_else(|| anyhow::anyhow!("{name} must restore its hosted Rust dependency cache"))?;
+    let first_preflight_task = workflow
+        .find("task preflight:")
+        .ok_or_else(|| anyhow::anyhow!("{name} must run a preflight Rust task"))?;
+
+    assert!(
+        toolchain < cache && cache < first_preflight_task,
+        "{name} must restore Rust dependencies after toolchain setup and before Cargo work"
+    );
+    for marker in [
+        "shared-key: pr-preflight",
+        "workspaces: preflight -> target",
+    ] {
+        assert!(
+            workflow.contains(marker),
+            "{name} Rust cache is missing `{marker}`"
+        );
+    }
     Ok(())
 }
