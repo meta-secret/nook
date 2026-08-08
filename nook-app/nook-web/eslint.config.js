@@ -37,6 +37,11 @@ const StaticKeyLookupKind = Object.freeze({
   Found: 'found',
 })
 
+const ProjectionPathLookupKind = Object.freeze({
+  NotFound: 'not-found',
+  Found: 'found',
+})
+
 const maximumArrayIndex = 2 ** 32 - 2
 
 export const noRawObjectArgumentsRule = {
@@ -252,29 +257,43 @@ export const noRawObjectArgumentsRule = {
     }
 
     function bindingProjectionPath(pattern, target) {
-      if (pattern === target) return []
+      if (pattern === target) {
+        return { kind: ProjectionPathLookupKind.Found, path: [] }
+      }
       if (pattern.type === 'AssignmentPattern') {
         return bindingProjectionPath(pattern.left, target)
       }
-      if (pattern.type === 'RestElement') return undefined
+      if (pattern.type === 'RestElement') {
+        return { kind: ProjectionPathLookupKind.NotFound }
+      }
       if (pattern.type === 'ObjectPattern') {
         for (const property of pattern.properties) {
           if (property.type !== 'Property') continue
-          const childPath = bindingProjectionPath(property.value, target)
-          if (!childPath) continue
+          const childLookup = bindingProjectionPath(property.value, target)
+          if (childLookup.kind === ProjectionPathLookupKind.NotFound) continue
           const keyLookup = staticObjectKey(property)
-          if (keyLookup.kind === StaticKeyLookupKind.NotFound) return undefined
-          return [keyLookup.value, ...childPath]
+          if (keyLookup.kind === StaticKeyLookupKind.NotFound) {
+            return { kind: ProjectionPathLookupKind.NotFound }
+          }
+          return {
+            kind: ProjectionPathLookupKind.Found,
+            path: [keyLookup.value, ...childLookup.path],
+          }
         }
       }
       if (pattern.type === 'ArrayPattern') {
         for (const [index, element] of pattern.elements.entries()) {
           if (!element) continue
-          const childPath = bindingProjectionPath(element, target)
-          if (childPath) return [String(index), ...childPath]
+          const childLookup = bindingProjectionPath(element, target)
+          if (childLookup.kind === ProjectionPathLookupKind.Found) {
+            return {
+              kind: ProjectionPathLookupKind.Found,
+              path: [String(index), ...childLookup.path],
+            }
+          }
         }
       }
-      return undefined
+      return { kind: ProjectionPathLookupKind.NotFound }
     }
 
     function variableDefinitionValues(args) {
@@ -286,13 +305,16 @@ export const noRawObjectArgumentsRule = {
       ) {
         return []
       }
-      const path = bindingProjectionPath(definition.node.id, definition.name)
-      if (!path) return []
+      const pathLookup = bindingProjectionPath(
+        definition.node.id,
+        definition.name,
+      )
+      if (pathLookup.kind === ProjectionPathLookupKind.NotFound) return []
       let values = possibleExpressionValues({
         expression: definition.node.init,
         seenVariables,
       })
-      for (const selectedKey of path) {
+      for (const selectedKey of pathLookup.path) {
         values = values.flatMap((container) =>
           projectedContainerValues({
             container,
