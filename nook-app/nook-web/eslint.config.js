@@ -43,6 +43,11 @@ const ProjectionPathLookupKind = Object.freeze({
   Found: 'found',
 })
 
+const ActiveCallScopeKind = Object.freeze({
+  Inactive: 'inactive',
+  Active: 'active',
+})
+
 const maximumArrayIndex = 2 ** 32 - 2
 
 export const noRawObjectArgumentsRule = {
@@ -59,7 +64,7 @@ export const noRawObjectArgumentsRule = {
   create(context) {
     const sourceCode = context.sourceCode
     let activeValueFlowCutoff = Number.POSITIVE_INFINITY
-    let activeCallExecutionScope
+    let activeCallScope = { kind: ActiveCallScopeKind.Inactive }
 
     function nodeStart(node) {
       return node.range?.[0] ?? sourceCode.getIndexFromLoc(node.loc.start)
@@ -97,11 +102,11 @@ export const noRawObjectArgumentsRule = {
     }
 
     function referenceCanReachActiveCall(reference) {
-      if (!activeCallExecutionScope) return true
+      if (activeCallScope.kind === ActiveCallScopeKind.Inactive) return true
       const referenceExecutionScope = executionScope(reference.from)
       const args = {
         possibleAncestor: referenceExecutionScope,
-        scope: activeCallExecutionScope,
+        scope: activeCallScope.scope,
       }
       return scopeContains(args)
     }
@@ -744,7 +749,10 @@ export const noRawObjectArgumentsRule = {
     function inspectArguments(node) {
       for (const argument of node.arguments) {
         activeValueFlowCutoff = nodeStart(argument)
-        activeCallExecutionScope = executionScope(sourceCode.getScope(argument))
+        activeCallScope = {
+          kind: ActiveCallScopeKind.Active,
+          scope: executionScope(sourceCode.getScope(argument)),
+        }
         try {
           if (argument.type === 'SpreadElement') {
             inspectSpreadArgument(argument)
@@ -756,7 +764,7 @@ export const noRawObjectArgumentsRule = {
           inspectNamedObjectArgument(unwrapResultExpression(argument))
         } finally {
           activeValueFlowCutoff = Number.POSITIVE_INFINITY
-          activeCallExecutionScope = undefined
+          activeCallScope = { kind: ActiveCallScopeKind.Inactive }
         }
       }
     }
