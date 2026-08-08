@@ -167,7 +167,9 @@
       bind:value={query}
       maxlength="200"
       autocomplete="off"
-      placeholder={translatePlain(I18N_KEYS.ExtensionLoginPickerSearchPlaceholder)}
+      placeholder={translatePlain(
+        I18N_KEYS.ExtensionLoginPickerSearchPlaceholder,
+      )}
     />
   </div>
   <p class="filter-chip">

@@ -27,9 +27,7 @@ export interface MutableExternalObject {
   [key: string]: MutableExternalValue
 }
 
-function isRecord(
-  value: MutableExternalValue,
-): value is MutableExternalObject {
+function isRecord(value: MutableExternalValue): value is MutableExternalObject {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
@@ -51,7 +49,9 @@ function isExternalValueArray(
   return Array.isArray(value) && value.every(isExternalValue)
 }
 
-export function scrubProviderCredentials(providers: MutableExternalValue): void {
+export function scrubProviderCredentials(
+  providers: MutableExternalValue,
+): void {
   if (!Array.isArray(providers)) return
   for (const provider of providers) {
     if (!isRecord(provider)) continue

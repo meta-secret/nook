@@ -272,7 +272,9 @@
 
 {#if showCompanionHome}
   <main class="companion-home" data-testid="extension-companion-home">
-    <p class="step-label">{translatePlain(I18N_KEYS.ExtensionCompanionStepLabel)}</p>
+    <p class="step-label">
+      {translatePlain(I18N_KEYS.ExtensionCompanionStepLabel)}
+    </p>
     <NookIcon
       src="../icons/nook.png"
       alt=""
@@ -361,7 +363,9 @@
   </main>
 {:else}
   <main class="device-setup" data-testid="extension-device-setup">
-    <p class="step-label">{translatePlain(I18N_KEYS.DeviceProtectionStepLabel)}</p>
+    <p class="step-label">
+      {translatePlain(I18N_KEYS.DeviceProtectionStepLabel)}
+    </p>
     <div class="shield-icon" aria-hidden="true">
       {#if needsSetup || status === DeviceProtectionStatus.PinSetup}
         <ShieldCheck size={26} />
@@ -442,7 +446,11 @@
 
       <div class="divider">
         <span></span>
-        <small>{translatePlain(I18N_KEYS.DeviceProtectionNewPasskeyAlternative)}</small>
+        <small
+          >{translatePlain(
+            I18N_KEYS.DeviceProtectionNewPasskeyAlternative,
+          )}</small
+        >
         <span></span>
       </div>
       <button
@@ -515,7 +523,9 @@
       <div class="divider">
         <span></span>
         <small
-          >{translatePlain(I18N_KEYS.DeviceProtectionExistingPasskeyAlternative)}</small
+          >{translatePlain(
+            I18N_KEYS.DeviceProtectionExistingPasskeyAlternative,
+          )}</small
         >
         <span></span>
       </div>
