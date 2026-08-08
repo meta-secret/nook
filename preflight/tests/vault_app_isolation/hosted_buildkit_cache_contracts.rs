@@ -29,9 +29,9 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1",
         "nook-rust-ecosystem-policy-tools-v4",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v1",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v3",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v2",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v3",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v2",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-v1",
@@ -237,7 +237,7 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
 fn assert_rust_cache_export_hardening(bake: &str) {
     assert!(
         !bake.contains(
-            "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true"
+            "nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true"
         ) && !bake.contains("${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,ignore-error=true",),
         "Rust dependency cache exporters must not ignore upload failures"
     );

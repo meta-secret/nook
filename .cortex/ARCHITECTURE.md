@@ -827,8 +827,8 @@ It restores the independent lineages from `registry.dev.nokey.sh`.
 - A follow-up publish Bake exports fat scopes from local layers.
 - Opt out with `NOOK_REGISTRY_CACHE=0`.
 - Hosted CI first stabilizes the shared Rust toolchain parent in `nook-rust-base-v1`.
-- It exports native and WASM dependency boundaries to `nook-rust-deps-v2` and the fingerprinted WASM deps ref with `mode=max`.
-- Source-sensitive native coverage and WASM outputs use separate `nook-rust-native-source-v2` and `nook-rust-wasm-source-v2` refs.
+- It exports native and WASM dependency boundaries to `nook-rust-deps-v3` and the fingerprinted WASM deps ref with `mode=max`.
+- Source-sensitive native coverage and WASM outputs use separate `nook-rust-native-source-v3` and `nook-rust-wasm-source-v2` refs.
 - A workflow-only or web-only push does not recompile unchanged Rust on a fresh hosted runner.
 - Same-repository PR jobs restore Main plus the git-commit remote-buildcache scope.
 - PR exporters write only those git-commit remote-buildcache refs.
