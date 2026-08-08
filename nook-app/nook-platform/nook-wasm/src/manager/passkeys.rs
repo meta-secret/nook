@@ -19,7 +19,11 @@ impl Drop for DecryptedPasskeys {
 }
 
 fn passkey_error(error: &nook_core::PasskeyAuthenticatorError) -> JsError {
-    let code = match error {
+    JsError::new(passkey_error_code(error))
+}
+
+fn passkey_error_code(error: &nook_core::PasskeyAuthenticatorError) -> &'static str {
+    match error {
         nook_core::PasskeyAuthenticatorError::InvalidRequest(_) => "passkey-invalid-request",
         nook_core::PasskeyAuthenticatorError::RpOriginMismatch => "passkey-rp-origin-mismatch",
         nook_core::PasskeyAuthenticatorError::UnsupportedAlgorithm => {
@@ -36,8 +40,20 @@ fn passkey_error(error: &nook_core::PasskeyAuthenticatorError) -> JsError {
             "passkey-randomness-unavailable"
         }
         nook_core::PasskeyAuthenticatorError::Serialization => "passkey-serialization-failed",
-    };
-    JsError::new(code)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::passkey_error_code;
+
+    #[test]
+    fn randomness_failure_has_a_distinct_browser_error_code() {
+        assert_eq!(
+            passkey_error_code(&nook_core::PasskeyAuthenticatorError::RandomnessUnavailable),
+            "passkey-randomness-unavailable"
+        );
+    }
 }
 
 fn ensure_ceremony_active(ceremony_active: &js_sys::Function) -> Result<(), JsError> {
