@@ -27,8 +27,15 @@ Loom follows [typescript-domain-structure.md](../dynamic-skills/typescript-domai
 - forbidden: generic TypeScript `Result<T>` / `Maybe<T>`, and
   `new Set(['field', ...])` allow-lists
 
-Enforced by `task preflight:typescript-state` across the repository, including
-`agentic-ai/loom`.
+Loom also follows
+[typescript-single-parameter.md](../dynamic-skills/typescript-single-parameter.md):
+
+- every authored function/method takes at most one parameter
+- multi-value inputs use a typed object argument
+- enforced by ESLint `max-params: 1` in `agentic-ai/loom`
+
+Enforced by `task preflight:typescript-state` across the repository, plus
+`task loom:verify` (includes ESLint) for Loom-local rules.
 
 ## Domain request rule
 

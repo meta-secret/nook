@@ -60,7 +60,7 @@ async function main(): Promise<number> {
 
   let requestPath: string;
   try {
-    requestPath = resolveRequestPath(token);
+    requestPath = resolveRequestPath({ requestPath: token });
   } catch (error) {
     console.error(error instanceof LoomFailure ? error.message : String(error));
     return 2;

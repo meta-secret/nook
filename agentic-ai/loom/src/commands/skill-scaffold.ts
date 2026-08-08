@@ -33,16 +33,16 @@ export async function runSkillScaffold(
   const indexPath = path.join(skillsDir, 'index.md');
 
   if (!existsSync(templatePath)) {
-    loomFailureDetail(
-      LoomFailureCode.SkillScaffoldFailed,
-      'Missing .cortex/dynamic-skills/_template.md',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.SkillScaffoldFailed,
+      text: 'Missing .cortex/dynamic-skills/_template.md',
+    });
   }
   if (existsSync(cardPath)) {
-    loomFailureDetail(
-      LoomFailureCode.SkillScaffoldFailed,
-      `Skill card already exists: ${path.relative(repoRoot, cardPath)}`,
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.SkillScaffoldFailed,
+      text: `Skill card already exists: ${path.relative(repoRoot, cardPath)}`,
+    });
   }
 
   const title = slug
@@ -60,10 +60,10 @@ export async function runSkillScaffold(
     const marker = '\n## How To Add One\n';
     const markerIndex = indexContent.indexOf(marker);
     if (markerIndex < 0) {
-      loomFailureDetail(
-        LoomFailureCode.SkillScaffoldFailed,
-        'Could not find "## How To Add One" in dynamic-skills/index.md',
-      );
+      loomFailureDetail({
+        code: LoomFailureCode.SkillScaffoldFailed,
+        text: 'Could not find "## How To Add One" in dynamic-skills/index.md',
+      });
     }
     const before = indexContent.slice(0, markerIndex).trimEnd();
     const after = indexContent.slice(markerIndex);

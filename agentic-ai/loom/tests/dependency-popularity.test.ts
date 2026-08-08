@@ -15,8 +15,8 @@ const thresholds = {
 
 describe('evaluatePopularity', () => {
   test('passes a popular npm package', () => {
-    const finding = evaluatePopularity(
-      {
+    const finding = evaluatePopularity({
+      metrics: {
         ecosystem: DependencyEcosystem.Npm,
         name: 'diff',
         weeklyDownloads: 135_000_000,
@@ -26,14 +26,14 @@ describe('evaluatePopularity', () => {
         },
       },
       thresholds,
-    );
+    });
     expect(finding.verdict).toBe(PopularityVerdict.Pass);
     expect(finding.reasons).toHaveLength(0);
   });
 
   test('fails a low-download npm package', () => {
-    const finding = evaluatePopularity(
-      {
+    const finding = evaluatePopularity({
+      metrics: {
         ecosystem: DependencyEcosystem.Npm,
         name: 'obscure-lib',
         weeklyDownloads: 12,
@@ -43,14 +43,14 @@ describe('evaluatePopularity', () => {
         },
       },
       thresholds,
-    );
+    });
     expect(finding.verdict).toBe(PopularityVerdict.Fail);
     expect(finding.reasons.length).toBeGreaterThan(0);
   });
 
   test('fails crates below recent-download threshold', () => {
-    const finding = evaluatePopularity(
-      {
+    const finding = evaluatePopularity({
+      metrics: {
         ecosystem: DependencyEcosystem.CratesIo,
         name: 'tiny-crate',
         downloads: 1_000_000,
@@ -58,7 +58,7 @@ describe('evaluatePopularity', () => {
         githubStars: { presence: GitHubStarsPresence.Unavailable },
       },
       thresholds,
-    );
+    });
     expect(finding.verdict).toBe(PopularityVerdict.Fail);
   });
 });

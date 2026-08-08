@@ -9,10 +9,14 @@ const MAX_SENTENCE_CHARS = 180;
 const MAX_SEMICOLONS = 1;
 const MAX_AND_JOINS = 2;
 
-export function lintProseDensity(
-  filePath: string,
-  content: string,
-): DensityFinding[] {
+export type LintProseDensityArgs = {
+  readonly filePath: string;
+  readonly content: string;
+};
+
+export function lintProseDensity(args: LintProseDensityArgs): DensityFinding[] {
+  const { filePath, content } = args;
+
   const findings: DensityFinding[] = [];
   const lines = content.split(/\r?\n/);
   let inFence = false;

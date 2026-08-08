@@ -34,40 +34,40 @@ const ROOT = RequestFamily.DependencyPopularity;
 export function decodeDependencyPopularityRequest(
   value: unknown,
 ): DecodeOutcome<DependencyPopularityRequest> {
-  const object = expectObject(value, ROOT);
+  const object = expectObject({ value, path: ROOT });
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(
-    object.value,
-    DependencyPopularityField,
-    ROOT,
-  );
-  const includeRepositoryManifests = expectBoolean(
-    object.value,
-    DependencyPopularityField.IncludeRepositoryManifests,
-    ROOT,
-  );
-  const minNpmWeeklyDownloads = expectPositiveInt(
-    object.value,
-    DependencyPopularityField.MinNpmWeeklyDownloads,
-    ROOT,
-  );
-  const minGitHubStars = expectPositiveInt(
-    object.value,
-    DependencyPopularityField.MinGitHubStars,
-    ROOT,
-  );
-  const minCratesIoDownloads = expectPositiveInt(
-    object.value,
-    DependencyPopularityField.MinCratesIoDownloads,
-    ROOT,
-  );
-  const minCratesIoRecentDownloads = expectPositiveInt(
-    object.value,
-    DependencyPopularityField.MinCratesIoRecentDownloads,
-    ROOT,
-  );
+  const unknown = denyUnknownKeys({
+    record: object.value,
+    fields: DependencyPopularityField,
+    path: ROOT,
+  });
+  const includeRepositoryManifests = expectBoolean({
+    record: object.value,
+    key: DependencyPopularityField.IncludeRepositoryManifests,
+    path: ROOT,
+  });
+  const minNpmWeeklyDownloads = expectPositiveInt({
+    record: object.value,
+    key: DependencyPopularityField.MinNpmWeeklyDownloads,
+    path: ROOT,
+  });
+  const minGitHubStars = expectPositiveInt({
+    record: object.value,
+    key: DependencyPopularityField.MinGitHubStars,
+    path: ROOT,
+  });
+  const minCratesIoDownloads = expectPositiveInt({
+    record: object.value,
+    key: DependencyPopularityField.MinCratesIoDownloads,
+    path: ROOT,
+  });
+  const minCratesIoRecentDownloads = expectPositiveInt({
+    record: object.value,
+    key: DependencyPopularityField.MinCratesIoRecentDownloads,
+    path: ROOT,
+  });
   const errors = [
     ...unknown,
     ...(includeRepositoryManifests.status === DecodeStatus.Failed
@@ -89,15 +89,15 @@ export function decodeDependencyPopularityRequest(
   if (errors.length > 0) {
     return decodeErr(errors);
   }
-  return collectDecode(
-    [
+  return collectDecode({
+    results: [
       includeRepositoryManifests,
       minNpmWeeklyDownloads,
       minGitHubStars,
       minCratesIoDownloads,
       minCratesIoRecentDownloads,
     ],
-    () => ({
+    build: () => ({
       includeRepositoryManifests: (
         includeRepositoryManifests as { value: boolean }
       ).value,
@@ -108,7 +108,7 @@ export function decodeDependencyPopularityRequest(
         minCratesIoRecentDownloads as { value: number }
       ).value,
     }),
-  );
+  });
 }
 
 export const DEPENDENCY_POPULARITY_INPUT_SCHEMA = {

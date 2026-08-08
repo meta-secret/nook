@@ -9,11 +9,17 @@ export type BrokenLink = {
 
 const LINK_RE = /\[([^\]]+)\]\(([^)]+)\)/g;
 
+export type FindBrokenRelativeLinksArgs = {
+  readonly filePath: string;
+  readonly content: string;
+  readonly repoRoot: string;
+};
+
 export function findBrokenRelativeLinks(
-  filePath: string,
-  content: string,
-  repoRoot: string,
+  args: FindBrokenRelativeLinksArgs,
 ): BrokenLink[] {
+  const { filePath, content, repoRoot } = args;
+
   const broken: BrokenLink[] = [];
   const lines = content.split(/\r?\n/);
   const fileDir = path.dirname(filePath);

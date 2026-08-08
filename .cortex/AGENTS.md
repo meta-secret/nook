@@ -399,6 +399,11 @@ and [workflows/remote-execution.md](workflows/remote-execution.md).
 [`agentic-ai/loom`](../agentic-ai/loom/README.md) runs mechanical agent
 procedures through a strict YAML tool protocol.
 
+Loom TypeScript functions and methods take at most one parameter. Multi-value
+inputs use a typed object argument. Enforced by ESLint `max-params` in
+`agentic-ai/loom` (`task loom:verify`). Full contract:
+[dynamic-skills/typescript-single-parameter.md](dynamic-skills/typescript-single-parameter.md).
+
 Bun must be installed. Stop and ask for Bun if `bun --version` fails.
 
 Single invoke form:
@@ -425,7 +430,7 @@ Preferred Task aliases:
 |---|---|
 | `task loom:pre-push` | Default pre-push request |
 | `task loom:tools-list` | Discover tools and schemas |
-| `task loom:verify` | Prettier check + `tsc` + unit tests |
+| `task loom:verify` | Prettier check + ESLint + `tsc` + unit tests |
 | `task loom:cortex-audit` | Default cortex-audit request |
 | `task loom:skill-scaffold CONFIG=…` | Skill card request YAML |
 | `task loom:agent-stats CONFIG=…` | Stats assemble/validate/publish request |
@@ -599,6 +604,7 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 - [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; run focused tasks and complete gates explicitly on GitHub-hosted workers**.
 - [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Load `design-taste-frontend` for user-visible UI work; Impeccable is explicit opt-in only**.
 - [dynamic-skills/prefer-popular-libraries.md](dynamic-skills/prefer-popular-libraries.md) — **Prefer mature high-adoption libraries over hand-rolled boilerplate; reject obscure deps**.
+- [dynamic-skills/typescript-single-parameter.md](dynamic-skills/typescript-single-parameter.md) — **Loom only: max one function parameter; wrap the rest in a typed object**.
 - [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 - [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.
 - [workflows/remote-execution.md](workflows/remote-execution.md) — **Main agent execution path** (allowlisted focused hosted tasks, label-gated exact-head PR validation, and failure loops).

@@ -31,10 +31,10 @@ describe('blueprint explanation', () => {
   });
 
   test('syntax failures include parse message and unified diff', () => {
-    const explanation = explainSyntaxFailure(
-      'prePush: [\n',
-      'unexpected end of stream',
-    );
+    const explanation = explainSyntaxFailure({
+      receivedYaml: 'prePush: [\n',
+      parseMessage: 'unexpected end of stream',
+    });
     expect(explanation.kind).toBe(BlueprintExplanationKind.Syntax);
     if (explanation.kind === BlueprintExplanationKind.Syntax) {
       expect(explanation.parseMessage).toBe('unexpected end of stream');
@@ -66,16 +66,16 @@ describe('decode error encoding', () => {
       prePush: { stageHostUpdates: true },
     });
     const encoded = encodeResponse(
-      decodeErrorResponse(
-        ResponsePhase.Decode,
-        [
-          fieldError(
-            'prePush.fetchOriginMain',
-            FieldIssue.MissingRequiredField,
-          ),
+      decodeErrorResponse({
+        phase: ResponsePhase.Decode,
+        errors: [
+          fieldError({
+            path: 'prePush.fetchOriginMain',
+            issue: FieldIssue.MissingRequiredField,
+          }),
         ],
         explanation,
-      ),
+      }),
     ) as {
       errors: readonly { issue: FieldIssue; message: string }[];
       explanation: { unifiedDiff: string };

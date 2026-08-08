@@ -26,7 +26,7 @@ export async function fetchNpmPackageMetrics(
   }
   const downloadsJson: unknown = await downloadsResponse.json();
   const metadataJson: unknown = await metadataResponse.json();
-  const weeklyDownloads = readWeeklyDownloads(downloadsJson, name);
+  const weeklyDownloads = readWeeklyDownloads({ value: downloadsJson, name });
   const githubStars = await resolveGitHubStars(metadataJson);
   return {
     ecosystem: DependencyEcosystem.Npm,
@@ -36,7 +36,14 @@ export async function fetchNpmPackageMetrics(
   };
 }
 
-function readWeeklyDownloads(value: unknown, name: string): number {
+type ReadWeeklyDownloadsArgs = {
+  readonly value: unknown;
+  readonly name: string;
+};
+
+function readWeeklyDownloads(args: ReadWeeklyDownloadsArgs): number {
+  const { value, name } = args;
+
   if (!isRecord(value) || typeof value.downloads !== 'number') {
     throw new Error(`npm downloads payload invalid for ${name}`);
   }

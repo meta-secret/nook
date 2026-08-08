@@ -37,12 +37,15 @@ export async function runAgentStatsAssemble(
   mkdirSync(path.dirname(outPath), { recursive: true });
   writeFileSync(outPath, assembled.yaml, 'utf8');
 
-  const validation = validateAgentStatsYaml(assembled.yaml, request.prNumber);
+  const validation = validateAgentStatsYaml({
+    content: assembled.yaml,
+    expectedPrNumber: request.prNumber,
+  });
   if (!validation.ok) {
-    loomFailureDetail(
-      LoomFailureCode.ValidationFailed,
-      `Assembled YAML failed validation:\n${validation.errors.join('\n')}`,
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ValidationFailed,
+      text: `Assembled YAML failed validation:\n${validation.errors.join('\n')}`,
+    });
   }
 
   return {
@@ -60,7 +63,10 @@ export async function runAgentStatsAssemble(
 export async function runAgentStatsValidate(
   request: AgentStatsFileRequest,
 ): Promise<AgentStatsReport> {
-  return validateFile(AgentStatsOperation.Validate, request.statsFile);
+  return validateFile({
+    operation: AgentStatsOperation.Validate,
+    file: request.statsFile,
+  });
 }
 
 export async function runAgentStatsPublish(
@@ -75,30 +81,33 @@ export async function runAgentStatsPublish(
   }
 
   const content = readFileSync(absolute, 'utf8');
-  const validation = validateAgentStatsYaml(content, prNumber);
+  const validation = validateAgentStatsYaml({
+    content,
+    expectedPrNumber: prNumber,
+  });
   if (!validation.ok) {
-    loomFailureDetail(
-      LoomFailureCode.ValidationFailed,
-      validation.errors.join('\n'),
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ValidationFailed,
+      text: validation.errors.join('\n'),
+    });
   }
 
   const remotePath = `stats/ai-agent/${prNumber}.yaml`;
-  const published = runCommand(
-    'node',
-    [
+  const published = runCommand({
+    command: 'node',
+    args: [
       '.github/scripts/workbench-publish.cjs',
       absolute,
       remotePath,
       `stats: record Nook PR ${prNumber}`,
     ],
-    repoRoot,
-  );
+    cwd: repoRoot,
+  });
   if (published.exitCode !== 0) {
-    loomFailureDetail(
-      LoomFailureCode.CommandFailed,
-      `workbench-publish failed: ${published.stderr || published.stdout}`,
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.CommandFailed,
+      text: `workbench-publish failed: ${published.stderr || published.stdout}`,
+    });
   }
 
   return {
@@ -109,22 +118,29 @@ export async function runAgentStatsPublish(
   };
 }
 
-function validateFile(
-  operation: AgentStatsOperation.Validate,
-  file: string,
-): AgentStatsReport {
+type ValidateFileArgs = {
+  readonly operation: AgentStatsOperation.Validate;
+  readonly file: string;
+};
+
+function validateFile(args: ValidateFileArgs): AgentStatsReport {
+  const { operation, file } = args;
+
   const prFromName = path.basename(file).replace(/\.ya?ml$/, '');
   const prNumber = Number.parseInt(prFromName, 10);
   if (!Number.isInteger(prNumber) || prNumber <= 0) {
     loomFailure(LoomFailureCode.StatsFilenameInvalid);
   }
   const content = readFileSync(file, 'utf8');
-  const validation = validateAgentStatsYaml(content, prNumber);
+  const validation = validateAgentStatsYaml({
+    content,
+    expectedPrNumber: prNumber,
+  });
   if (!validation.ok) {
-    loomFailureDetail(
-      LoomFailureCode.ValidationFailed,
-      validation.errors.join('\n'),
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ValidationFailed,
+      text: validation.errors.join('\n'),
+    });
   }
   return {
     family: RequestFamily.AgentStats,

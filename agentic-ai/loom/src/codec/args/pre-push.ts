@@ -23,21 +23,25 @@ const ROOT = RequestFamily.PrePush;
 export function decodePrePushRequest(
   value: unknown,
 ): DecodeOutcome<PrePushRequest> {
-  const object = expectObject(value, ROOT);
+  const object = expectObject({ value, path: ROOT });
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, PrePushField, ROOT);
-  const stageHostUpdates = expectBoolean(
-    object.value,
-    PrePushField.StageHostUpdates,
-    ROOT,
-  );
-  const fetchOriginMain = expectBoolean(
-    object.value,
-    PrePushField.FetchOriginMain,
-    ROOT,
-  );
+  const unknown = denyUnknownKeys({
+    record: object.value,
+    fields: PrePushField,
+    path: ROOT,
+  });
+  const stageHostUpdates = expectBoolean({
+    record: object.value,
+    key: PrePushField.StageHostUpdates,
+    path: ROOT,
+  });
+  const fetchOriginMain = expectBoolean({
+    record: object.value,
+    key: PrePushField.FetchOriginMain,
+    path: ROOT,
+  });
   if (unknown.length > 0) {
     return decodeErr([
       ...unknown,
@@ -49,10 +53,13 @@ export function decodePrePushRequest(
         : []),
     ]);
   }
-  return collectDecode([stageHostUpdates, fetchOriginMain], () => ({
-    stageHostUpdates: (stageHostUpdates as { value: boolean }).value,
-    fetchOriginMain: (fetchOriginMain as { value: boolean }).value,
-  }));
+  return collectDecode({
+    results: [stageHostUpdates, fetchOriginMain],
+    build: () => ({
+      stageHostUpdates: (stageHostUpdates as { value: boolean }).value,
+      fetchOriginMain: (fetchOriginMain as { value: boolean }).value,
+    }),
+  });
 }
 
 export const PRE_PUSH_INPUT_SCHEMA = {

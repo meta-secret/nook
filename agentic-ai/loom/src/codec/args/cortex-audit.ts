@@ -21,16 +21,20 @@ const ROOT = RequestFamily.CortexAudit;
 export function decodeCortexAuditRequest(
   value: unknown,
 ): DecodeOutcome<CortexAuditRequest> {
-  const object = expectObject(value, ROOT);
+  const object = expectObject({ value, path: ROOT });
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, CortexAuditField, ROOT);
-  const includeDensityLint = expectBoolean(
-    object.value,
-    CortexAuditField.IncludeDensityLint,
-    ROOT,
-  );
+  const unknown = denyUnknownKeys({
+    record: object.value,
+    fields: CortexAuditField,
+    path: ROOT,
+  });
+  const includeDensityLint = expectBoolean({
+    record: object.value,
+    key: CortexAuditField.IncludeDensityLint,
+    path: ROOT,
+  });
   if (unknown.length > 0) {
     return decodeErr([
       ...unknown,
@@ -39,9 +43,12 @@ export function decodeCortexAuditRequest(
         : []),
     ]);
   }
-  return collectDecode([includeDensityLint], () => ({
-    includeDensityLint: (includeDensityLint as { value: boolean }).value,
-  }));
+  return collectDecode({
+    results: [includeDensityLint],
+    build: () => ({
+      includeDensityLint: (includeDensityLint as { value: boolean }).value,
+    }),
+  });
 }
 
 export const CORTEX_AUDIT_INPUT_SCHEMA = {

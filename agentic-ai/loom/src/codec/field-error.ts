@@ -52,23 +52,36 @@ export function decodeErr(errors: readonly FieldError[]): DecodeOutcome<never> {
   return { status: DecodeStatus.Failed, errors };
 }
 
-export function fieldError(
-  path: string,
-  issue: FieldIssue,
-  detail: FieldDetail = { kind: FieldDetailKind.None },
-): FieldError {
-  return { path, issue, detail };
+export type FieldErrorArgs =
+  | { readonly path: string; readonly issue: FieldIssue }
+  | {
+      readonly path: string;
+      readonly issue: FieldIssue;
+      readonly detail: FieldDetail;
+    };
+
+export function fieldError(args: FieldErrorArgs): FieldError {
+  return {
+    path: args.path,
+    issue: args.issue,
+    detail: 'detail' in args ? args.detail : { kind: FieldDetailKind.None },
+  };
 }
 
 export function fieldDetailText(text: string): FieldDetail {
   return { kind: FieldDetailKind.Text, text };
 }
 
-export function joinPath(base: string, key: string): string {
-  if (base.length === 0) {
-    return key;
+export type JoinPathArgs = {
+  readonly base: string;
+  readonly key: string;
+};
+
+export function joinPath(args: JoinPathArgs): string {
+  if (args.base.length === 0) {
+    return args.key;
   }
-  return `${base}.${key}`;
+  return `${args.base}.${args.key}`;
 }
 
 export function fieldIssueMessage(error: FieldError): string {

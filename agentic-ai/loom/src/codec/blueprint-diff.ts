@@ -115,21 +115,27 @@ const BLUEPRINTS: readonly BlueprintRef[] = [
   },
 ];
 
+export type ExplainSyntaxFailureArgs = {
+  readonly receivedYaml: string;
+  readonly parseMessage: string;
+};
+
 export function explainSyntaxFailure(
-  receivedYaml: string,
-  parseMessage: string,
+  args: ExplainSyntaxFailureArgs,
 ): BlueprintExplanation {
+  const { receivedYaml, parseMessage } = args;
+
   const blueprint = loadBlueprint(DEFAULT_BLUEPRINT.blueprintPath);
   return {
     kind: BlueprintExplanationKind.Syntax,
     blueprintPath: blueprint.blueprintPath,
     blueprintYaml: blueprint.blueprintYaml,
     receivedYaml,
-    unifiedDiff: yamlUnifiedDiff(
-      blueprint.blueprintPath,
-      blueprint.blueprintYaml,
+    unifiedDiff: yamlUnifiedDiff({
+      blueprintPath: blueprint.blueprintPath,
+      blueprintYaml: blueprint.blueprintYaml,
       receivedYaml,
-    ),
+    }),
     parseMessage,
   };
 }
@@ -145,19 +151,23 @@ export function explainAgainstBlueprint(
     blueprintPath: blueprint.blueprintPath,
     blueprintYaml: blueprint.blueprintYaml,
     receivedYaml,
-    unifiedDiff: yamlUnifiedDiff(
-      blueprint.blueprintPath,
-      blueprint.blueprintYaml,
+    unifiedDiff: yamlUnifiedDiff({
+      blueprintPath: blueprint.blueprintPath,
+      blueprintYaml: blueprint.blueprintYaml,
       receivedYaml,
-    ),
+    }),
   };
 }
 
-function yamlUnifiedDiff(
-  blueprintPath: string,
-  blueprintYaml: string,
-  receivedYaml: string,
-): string {
+type YamlUnifiedDiffArgs = {
+  readonly blueprintPath: string;
+  readonly blueprintYaml: string;
+  readonly receivedYaml: string;
+};
+
+function yamlUnifiedDiff(args: YamlUnifiedDiffArgs): string {
+  const { blueprintPath, blueprintYaml, receivedYaml } = args;
+
   return createTwoFilesPatch(
     blueprintPath,
     'received.yaml',

@@ -24,7 +24,10 @@ describe('decode outcome helpers', () => {
 
   test('decodeErr carries field errors', () => {
     const outcome = decodeErr([
-      fieldError('prePush.stageHostUpdates', FieldIssue.ExpectedBoolean),
+      fieldError({
+        path: 'prePush.stageHostUpdates',
+        issue: FieldIssue.ExpectedBoolean,
+      }),
     ]);
     expect(outcome.status).toBe(DecodeStatus.Failed);
     if (outcome.status === DecodeStatus.Failed) {
@@ -38,9 +41,12 @@ describe('decode outcome helpers', () => {
 
 describe('LoomFailure', () => {
   test('carries failure code and detail', () => {
-    const failure = new LoomFailure(LoomFailureCode.RepoRootNotFound, {
-      kind: LoomFailureDetailKind.Text,
-      text: 'missing root',
+    const failure = new LoomFailure({
+      code: LoomFailureCode.RepoRootNotFound,
+      detail: {
+        kind: LoomFailureDetailKind.Text,
+        text: 'missing root',
+      },
     });
     expect(failure.code).toBe(LoomFailureCode.RepoRootNotFound);
     expect(failure.detail.kind).toBe(LoomFailureDetailKind.Text);
@@ -53,13 +59,16 @@ describe('LoomFailure', () => {
 describe('resolveRequestPath', () => {
   test('keeps absolute paths', () => {
     const absolute = '/tmp/request.yaml';
-    expect(resolveRequestPath(absolute)).toBe(absolute);
+    expect(resolveRequestPath({ requestPath: absolute })).toBe(absolute);
   });
 
   test('resolves relative paths from repository root', () => {
     const root = findRepoRoot();
     const relative = 'agentic-ai/loom/params/pre-push/default.yaml';
-    const resolved = resolveRequestPath(relative, `${root}/agentic-ai/loom`);
+    const resolved = resolveRequestPath({
+      requestPath: relative,
+      startDir: `${root}/agentic-ai/loom`,
+    });
     expect(resolved.endsWith(relative)).toBe(true);
   });
 });

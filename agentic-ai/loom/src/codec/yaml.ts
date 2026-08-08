@@ -23,11 +23,11 @@ export function parseYamlFile(
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     return decodeErr([
-      fieldError(
-        '',
-        FieldIssue.RequestFileReadFailed,
-        fieldDetailText(message),
-      ),
+      fieldError({
+        path: '',
+        issue: FieldIssue.RequestFileReadFailed,
+        detail: fieldDetailText(message),
+      }),
     ]);
   }
   return parseYamlText(text);
@@ -39,7 +39,11 @@ export function parseYamlText(text: string): DecodeOutcome<YamlParseSuccess> {
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     return decodeErr([
-      fieldError('', FieldIssue.InvalidYaml, fieldDetailText(message)),
+      fieldError({
+        path: '',
+        issue: FieldIssue.InvalidYaml,
+        detail: fieldDetailText(message),
+      }),
     ]);
   }
 }
@@ -49,6 +53,9 @@ export function stringifyYaml(value: unknown): string {
     return `${Bun.YAML.stringify(value).trimEnd()}\n`;
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
-    loomFailureDetail(LoomFailureCode.YamlStringifyFailed, message);
+    loomFailureDetail({
+      code: LoomFailureCode.YamlStringifyFailed,
+      text: message,
+    });
   }
 }

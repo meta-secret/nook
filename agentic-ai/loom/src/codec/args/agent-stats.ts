@@ -34,35 +34,45 @@ export type AgentStatsFileRequest = {
   readonly statsFile: string;
 };
 
+export type DecodeAgentStatsAssemblePayloadArgs = {
+  readonly value: unknown;
+  readonly path: string;
+};
+
 export function decodeAgentStatsAssemblePayload(
-  value: unknown,
-  path: string,
+  args: DecodeAgentStatsAssemblePayloadArgs,
 ): DecodeOutcome<AgentStatsAssembleRequest> {
-  const object = expectObject(value, path);
+  const { value, path } = args;
+
+  const object = expectObject({ value, path });
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, AgentStatsAssembleField, path);
-  const prNumber = expectPositiveInt(
-    object.value,
-    AgentStatsAssembleField.PrNumber,
+  const unknown = denyUnknownKeys({
+    record: object.value,
+    fields: AgentStatsAssembleField,
     path,
-  );
-  const scratchPath = expectString(
-    object.value,
-    AgentStatsAssembleField.ScratchPath,
+  });
+  const prNumber = expectPositiveInt({
+    record: object.value,
+    key: AgentStatsAssembleField.PrNumber,
     path,
-  );
-  const outputPath = expectString(
-    object.value,
-    AgentStatsAssembleField.OutputPath,
+  });
+  const scratchPath = expectString({
+    record: object.value,
+    key: AgentStatsAssembleField.ScratchPath,
     path,
-  );
-  const includeTestInventory = expectBoolean(
-    object.value,
-    AgentStatsAssembleField.IncludeTestInventory,
+  });
+  const outputPath = expectString({
+    record: object.value,
+    key: AgentStatsAssembleField.OutputPath,
     path,
-  );
+  });
+  const includeTestInventory = expectBoolean({
+    record: object.value,
+    key: AgentStatsAssembleField.IncludeTestInventory,
+    path,
+  });
   const errors = [
     ...unknown,
     ...(prNumber.status === DecodeStatus.Failed ? prNumber.errors : []),
@@ -83,20 +93,30 @@ export function decodeAgentStatsAssemblePayload(
   });
 }
 
+export type DecodeAgentStatsFilePayloadArgs = {
+  readonly value: unknown;
+  readonly path: string;
+};
+
 export function decodeAgentStatsFilePayload(
-  value: unknown,
-  path: string,
+  args: DecodeAgentStatsFilePayloadArgs,
 ): DecodeOutcome<AgentStatsFileRequest> {
-  const object = expectObject(value, path);
+  const { value, path } = args;
+
+  const object = expectObject({ value, path });
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, AgentStatsFileField, path);
-  const statsFile = expectString(
-    object.value,
-    AgentStatsFileField.StatsFile,
+  const unknown = denyUnknownKeys({
+    record: object.value,
+    fields: AgentStatsFileField,
     path,
-  );
+  });
+  const statsFile = expectString({
+    record: object.value,
+    key: AgentStatsFileField.StatsFile,
+    path,
+  });
   const errors = [
     ...unknown,
     ...(statsFile.status === DecodeStatus.Failed ? statsFile.errors : []),

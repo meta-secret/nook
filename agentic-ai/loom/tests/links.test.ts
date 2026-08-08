@@ -15,7 +15,11 @@ describe('findBrokenRelativeLinks', () => {
       'utf8',
     );
     const content = readFileSync(filePath, 'utf8');
-    const broken = findBrokenRelativeLinks(filePath, content, root);
+    const broken = findBrokenRelativeLinks({
+      filePath,
+      content,
+      repoRoot: root,
+    });
     expect(broken).toEqual([
       {
         file: path.join('.cortex', 'demo.md'),

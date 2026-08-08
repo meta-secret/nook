@@ -46,10 +46,10 @@ function readNpmPackages(packageJsonPath: string): readonly string[] {
 function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
   const cargo = Bun.which('cargo');
   if (typeof cargo !== 'string' || cargo.length === 0) {
-    loomFailureDetail(
-      LoomFailureCode.CommandFailedToStart,
-      'cargo is required to scan Rust workspace dependencies',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.CommandFailedToStart,
+      text: 'cargo is required to scan Rust workspace dependencies',
+    });
   }
   const result = Bun.spawnSync({
     cmd: [cargo, 'metadata', '--format-version', '1'],
@@ -59,23 +59,23 @@ function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
   });
   if (result.exitCode !== 0) {
     const stderr = new TextDecoder().decode(result.stderr).trim();
-    loomFailureDetail(
-      LoomFailureCode.CommandFailed,
-      `cargo metadata failed while scanning crates: ${stderr}`,
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.CommandFailed,
+      text: `cargo metadata failed while scanning crates: ${stderr}`,
+    });
   }
   const metadata: unknown = JSON.parse(new TextDecoder().decode(result.stdout));
   if (!isRecord(metadata) || !Array.isArray(metadata.packages)) {
-    loomFailureDetail(
-      LoomFailureCode.ValidationFailed,
-      'cargo metadata returned an unexpected packages payload',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ValidationFailed,
+      text: 'cargo metadata returned an unexpected packages payload',
+    });
   }
   if (!Array.isArray(metadata.workspace_members)) {
-    loomFailureDetail(
-      LoomFailureCode.ValidationFailed,
-      'cargo metadata returned an unexpected workspace_members payload',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ValidationFailed,
+      text: 'cargo metadata returned an unexpected workspace_members payload',
+    });
   }
   const workspaceMembers = new Set(
     metadata.workspace_members.filter(

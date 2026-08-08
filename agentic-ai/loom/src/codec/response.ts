@@ -98,37 +98,61 @@ const DEFAULT_HINT =
 const EXECUTE_HINT =
   'fix the underlying gate, then retry the same domain request object';
 
-export function successResponseForFamily(
-  family:
+export type SuccessResponseForFamilyArgs = {
+  readonly family:
     | RequestFamily.PrePush
     | RequestFamily.CortexAudit
     | RequestFamily.SkillScaffold
     | RequestFamily.DependencyPopularity
-    | RequestFamily.ToolsList,
-  result: unknown,
+    | RequestFamily.ToolsList;
+  readonly result: unknown;
+};
+
+export function successResponseForFamily(
+  args: SuccessResponseForFamilyArgs,
 ): SuccessResponse {
+  const { family, result } = args;
+
   return { ok: true, family, result };
 }
 
+export type SuccessResponseForAgentStatsArgs = {
+  readonly operation: AgentStatsOperation;
+  readonly result: unknown;
+};
+
 export function successResponseForAgentStats(
-  operation: AgentStatsOperation,
-  result: unknown,
+  args: SuccessResponseForAgentStatsArgs,
 ): SuccessResponse {
+  const { operation, result } = args;
+
   return { ok: true, family: RequestFamily.AgentStats, operation, result };
 }
 
+export type SuccessResponseForPrLandArgs = {
+  readonly operation: PrLandOperation;
+  readonly result: unknown;
+};
+
 export function successResponseForPrLand(
-  operation: PrLandOperation,
-  result: unknown,
+  args: SuccessResponseForPrLandArgs,
 ): SuccessResponse {
+  const { operation, result } = args;
+
   return { ok: true, family: RequestFamily.PrLand, operation, result };
 }
 
+export type DecodeErrorResponseArgs = {
+  readonly phase: ResponsePhase.Decode | ResponsePhase.UnknownRequest;
+  readonly errors: readonly FieldError[];
+  readonly explanation: BlueprintExplanation;
+};
+
 export function decodeErrorResponse(
-  phase: ResponsePhase.Decode | ResponsePhase.UnknownRequest,
-  errors: readonly FieldError[],
-  explanation: BlueprintExplanation,
+  args: DecodeErrorResponseArgs,
 ): DecodeErrorResponse {
+  const { phase, errors, explanation } = args;
+
   return {
     ok: false,
     isError: true,
@@ -142,16 +166,22 @@ export function decodeErrorResponse(
   };
 }
 
-export function executeErrorResponseForFamily(
-  family:
+export type ExecuteErrorResponseForFamilyArgs = {
+  readonly family:
     | RequestFamily.PrePush
     | RequestFamily.CortexAudit
     | RequestFamily.SkillScaffold
     | RequestFamily.DependencyPopularity
     | RequestFamily.ToolsList
-    | RequestFamily.ToolsCall,
-  errors: readonly FieldError[],
+    | RequestFamily.ToolsCall;
+  readonly errors: readonly FieldError[];
+};
+
+export function executeErrorResponseForFamily(
+  args: ExecuteErrorResponseForFamilyArgs,
 ): ExecuteErrorResponse {
+  const { family, errors } = args;
+
   return {
     ok: false,
     isError: true,
@@ -165,10 +195,16 @@ export function executeErrorResponseForFamily(
   };
 }
 
+export type ExecuteErrorResponseForAgentStatsArgs = {
+  readonly operation: AgentStatsOperation;
+  readonly errors: readonly FieldError[];
+};
+
 export function executeErrorResponseForAgentStats(
-  operation: AgentStatsOperation,
-  errors: readonly FieldError[],
+  args: ExecuteErrorResponseForAgentStatsArgs,
 ): ExecuteErrorResponse {
+  const { operation, errors } = args;
+
   return {
     ok: false,
     isError: true,
@@ -183,10 +219,16 @@ export function executeErrorResponseForAgentStats(
   };
 }
 
+export type ExecuteErrorResponseForPrLandArgs = {
+  readonly operation: PrLandOperation;
+  readonly errors: readonly FieldError[];
+};
+
 export function executeErrorResponseForPrLand(
-  operation: PrLandOperation,
-  errors: readonly FieldError[],
+  args: ExecuteErrorResponseForPrLandArgs,
 ): ExecuteErrorResponse {
+  const { operation, errors } = args;
+
   return {
     ok: false,
     isError: true,
@@ -259,9 +301,9 @@ export function encodeResponse(
 }
 
 export function executionFieldError(detail: string): FieldError {
-  return fieldError(
-    'result',
-    FieldIssue.ExecuteFailed,
-    fieldDetailText(detail),
-  );
+  return fieldError({
+    path: 'result',
+    issue: FieldIssue.ExecuteFailed,
+    detail: fieldDetailText(detail),
+  });
 }

@@ -47,61 +47,61 @@ export function loadScratchEventLog(scratchPath: string): ScratchEventLog {
     parsed = JSON.parse(readFileSync(scratchPath, 'utf8'));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    loomFailureDetail(
-      LoomFailureCode.ScratchLogInvalid,
-      `Failed to read scratch event log: ${message}`,
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ScratchLogInvalid,
+      text: `Failed to read scratch event log: ${message}`,
+    });
   }
   if (!isRecord(parsed)) {
-    loomFailureDetail(
-      LoomFailureCode.ScratchLogInvalid,
-      'Scratch event log must be a JSON object',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ScratchLogInvalid,
+      text: 'Scratch event log must be a JSON object',
+    });
   }
   if (typeof parsed.started_at !== 'string' || parsed.started_at.length === 0) {
-    loomFailureDetail(
-      LoomFailureCode.ScratchLogInvalid,
-      'scratch.started_at must be a non-empty string',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ScratchLogInvalid,
+      text: 'scratch.started_at must be a non-empty string',
+    });
   }
   if (
     typeof parsed.change_surface !== 'string' ||
     parsed.change_surface.length === 0
   ) {
-    loomFailureDetail(
-      LoomFailureCode.ScratchLogInvalid,
-      'scratch.change_surface must be a non-empty string',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ScratchLogInvalid,
+      text: 'scratch.change_surface must be a non-empty string',
+    });
   }
   if (!Array.isArray(parsed.local_executions)) {
-    loomFailureDetail(
-      LoomFailureCode.ScratchLogInvalid,
-      'scratch.local_executions must be an array',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ScratchLogInvalid,
+      text: 'scratch.local_executions must be an array',
+    });
   }
   if (!Array.isArray(parsed.pr_retriggers)) {
-    loomFailureDetail(
-      LoomFailureCode.ScratchLogInvalid,
-      'scratch.pr_retriggers must be an array',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ScratchLogInvalid,
+      text: 'scratch.pr_retriggers must be an array',
+    });
   }
   if (!Array.isArray(parsed.merge_attempts)) {
-    loomFailureDetail(
-      LoomFailureCode.ScratchLogInvalid,
-      'scratch.merge_attempts must be an array',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ScratchLogInvalid,
+      text: 'scratch.merge_attempts must be an array',
+    });
   }
   if (!isRecord(parsed.comparison)) {
-    loomFailureDetail(
-      LoomFailureCode.ScratchLogInvalid,
-      'scratch.comparison must be an object',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ScratchLogInvalid,
+      text: 'scratch.comparison must be an object',
+    });
   }
   if (!isRecord(parsed.waste_assessment)) {
-    loomFailureDetail(
-      LoomFailureCode.ScratchLogInvalid,
-      'scratch.waste_assessment must be an object',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.ScratchLogInvalid,
+      text: 'scratch.waste_assessment must be an object',
+    });
   }
 
   return {
@@ -126,68 +126,68 @@ export async function assembleAgentStats(
 ): Promise<AssembledStats> {
   const scratch = loadScratchEventLog(options.scratchPath);
 
-  const prJson = runCommand(
-    'gh',
-    [
+  const prJson = runCommand({
+    command: 'gh',
+    args: [
       'pr',
       'view',
       String(options.prNumber),
       '--json',
       'number,url,title,mergedAt,createdAt,mergeCommit,baseRefName,state',
     ],
-    options.repoRoot,
-  );
+    cwd: options.repoRoot,
+  });
   if (prJson.exitCode !== 0) {
-    loomFailureDetail(
-      LoomFailureCode.CommandFailed,
-      `gh pr view failed: ${prJson.stderr || prJson.stdout}`,
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.CommandFailed,
+      text: `gh pr view failed: ${prJson.stderr || prJson.stdout}`,
+    });
   }
 
   let pr: UnknownRecord;
   try {
     const parsed = JSON.parse(prJson.stdout) as unknown;
     if (!isRecord(parsed)) {
-      loomFailureDetail(
-        LoomFailureCode.PrMetadataInvalid,
-        'gh pr view returned a non-object',
-      );
+      loomFailureDetail({
+        code: LoomFailureCode.PrMetadataInvalid,
+        text: 'gh pr view returned a non-object',
+      });
     }
     pr = parsed;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    loomFailureDetail(
-      LoomFailureCode.PrMetadataInvalid,
-      `Failed to parse gh pr view JSON: ${message}`,
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.PrMetadataInvalid,
+      text: `Failed to parse gh pr view JSON: ${message}`,
+    });
   }
 
   if (pr.state !== 'MERGED') {
-    loomFailureDetail(
-      LoomFailureCode.PrMetadataInvalid,
-      'AI-agent stats require a merged source PR',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.PrMetadataInvalid,
+      text: 'AI-agent stats require a merged source PR',
+    });
   }
   if (typeof pr.mergedAt !== 'string' || pr.mergedAt.length === 0) {
-    loomFailureDetail(
-      LoomFailureCode.PrMetadataInvalid,
-      'Merged PR is missing mergedAt',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.PrMetadataInvalid,
+      text: 'Merged PR is missing mergedAt',
+    });
   }
   const mergeCommit = isRecord(pr.mergeCommit) ? pr.mergeCommit : {};
   const headSha = typeof mergeCommit.oid === 'string' ? mergeCommit.oid : '';
   if (!/^[0-9a-f]{40}$/.test(headSha)) {
-    loomFailureDetail(
-      LoomFailureCode.PrMetadataInvalid,
-      'Merged PR is missing mergeCommit.oid',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.PrMetadataInvalid,
+      text: 'Merged PR is missing mergeCommit.oid',
+    });
   }
 
-  const runs = collectGithubActionsRuns(
-    options.repoRoot,
-    options.prNumber,
+  const runs = collectGithubActionsRuns({
+    repoRoot: options.repoRoot,
+    prNumber: options.prNumber,
     headSha,
-  );
+  });
 
   const localExecutions = scratch.local_executions;
   const localSeconds = sumDurationSeconds(localExecutions);
@@ -197,7 +197,7 @@ export async function assembleAgentStats(
   if (scratch.test_inventory.kind === OptionalRecordKind.Present) {
     inventory = scratch.test_inventory.value;
   } else if (options.includeInventory) {
-    inventory = countTestInventory(options.repoRoot, headSha);
+    inventory = countTestInventory({ repoRoot: options.repoRoot, headSha });
   } else {
     inventory = {
       measured_at: new Date().toISOString(),
@@ -234,10 +234,10 @@ export async function assembleAgentStats(
     Number.isNaN(openedMs) ||
     Number.isNaN(mergedMs)
   ) {
-    loomFailureDetail(
-      LoomFailureCode.PrMetadataInvalid,
-      'Could not parse started_at / opened_at / merged_at timestamps',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.PrMetadataInvalid,
+      text: 'Could not parse started_at / opened_at / merged_at timestamps',
+    });
   }
 
   const record: UnknownRecord = {
@@ -259,9 +259,18 @@ export async function assembleAgentStats(
     },
     summary: {
       local_execution_count: localExecutions.length,
-      local_check_count: countByCategory(localExecutions, 'check'),
-      local_test_count: countByCategory(localExecutions, 'test'),
-      local_combined_count: countByCategory(localExecutions, 'combined'),
+      local_check_count: countByCategory({
+        items: localExecutions,
+        category: 'check',
+      }),
+      local_test_count: countByCategory({
+        items: localExecutions,
+        category: 'test',
+      }),
+      local_combined_count: countByCategory({
+        items: localExecutions,
+        category: 'combined',
+      }),
       local_execution_seconds: localSeconds,
       github_actions_run_count: runs.length,
       github_actions_seconds: actionsSeconds,
@@ -288,14 +297,20 @@ export async function assembleAgentStats(
   };
 }
 
+type CollectGithubActionsRunsArgs = {
+  readonly repoRoot: string;
+  readonly prNumber: number;
+  readonly headSha: string;
+};
+
 function collectGithubActionsRuns(
-  repoRoot: string,
-  prNumber: number,
-  headSha: string,
+  args: CollectGithubActionsRunsArgs,
 ): UnknownRecord[] {
-  const listed = runCommand(
-    'gh',
-    [
+  const { repoRoot, prNumber, headSha } = args;
+
+  const listed = runCommand({
+    command: 'gh',
+    args: [
       'run',
       'list',
       '--limit',
@@ -303,13 +318,13 @@ function collectGithubActionsRuns(
       '--json',
       'databaseId,workflowName,headSha,event,status,conclusion,createdAt,updatedAt,attempt',
     ],
-    repoRoot,
-  );
+    cwd: repoRoot,
+  });
   if (listed.exitCode !== 0) {
-    loomFailureDetail(
-      LoomFailureCode.CommandFailed,
-      `gh run list failed: ${listed.stderr || listed.stdout}`,
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.CommandFailed,
+      text: `gh run list failed: ${listed.stderr || listed.stdout}`,
+    });
   }
 
   let runs: unknown;
@@ -317,16 +332,16 @@ function collectGithubActionsRuns(
     runs = JSON.parse(listed.stdout);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    loomFailureDetail(
-      LoomFailureCode.CommandFailed,
-      `Failed to parse gh run list JSON: ${message}`,
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.CommandFailed,
+      text: `Failed to parse gh run list JSON: ${message}`,
+    });
   }
   if (!Array.isArray(runs)) {
-    loomFailureDetail(
-      LoomFailureCode.CommandFailed,
-      'gh run list returned a non-array',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.CommandFailed,
+      text: 'gh run list returned a non-array',
+    });
   }
 
   const out: UnknownRecord[] = [];
@@ -365,13 +380,21 @@ function collectGithubActionsRuns(
   return out;
 }
 
-function countTestInventory(repoRoot: string, headSha: string): UnknownRecord {
+type CountTestInventoryArgs = {
+  readonly repoRoot: string;
+  readonly headSha: string;
+};
+
+function countTestInventory(args: CountTestInventoryArgs): UnknownRecord {
+  const { repoRoot, headSha } = args;
+
   const measuredAt = new Date().toISOString();
-  const rust = countNextest(
+  const rust = countNextest({
     repoRoot,
-    'package(nook-app-common) + package(nook-core) + package(nook-auth2) + package(nook-replication) + package(nook-event-log)',
-  );
-  const preflight = countNextest(repoRoot, 'package(preflight)');
+    filter:
+      'package(nook-app-common) + package(nook-core) + package(nook-auth2) + package(nook-replication) + package(nook-event-log)',
+  });
+  const preflight = countNextest({ repoRoot, filter: 'package(preflight)' });
   const webUnit = countVitest(repoRoot);
   const e2e = countPlaywright(repoRoot);
   const byType = {
@@ -388,12 +411,19 @@ function countTestInventory(repoRoot: string, headSha: string): UnknownRecord {
   };
 }
 
-function countNextest(repoRoot: string, filter: string): number {
-  const listed = runCommand(
-    'cargo',
-    ['nextest', 'list', '-E', filter, '--lib', '--tests'],
-    path.join(repoRoot, 'nook-app'),
-  );
+type CountNextestArgs = {
+  readonly repoRoot: string;
+  readonly filter: string;
+};
+
+function countNextest(args: CountNextestArgs): number {
+  const { repoRoot, filter } = args;
+
+  const listed = runCommand({
+    command: 'cargo',
+    args: ['nextest', 'list', '-E', filter, '--lib', '--tests'],
+    cwd: path.join(repoRoot, 'nook-app'),
+  });
   if (listed.exitCode !== 0) {
     return 0;
   }
@@ -406,7 +436,11 @@ function countNextest(repoRoot: string, filter: string): number {
 
 function countVitest(repoRoot: string): number {
   const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
-  const listed = runCommand('bunx', ['vitest', 'list'], appRoot);
+  const listed = runCommand({
+    command: 'bunx',
+    args: ['vitest', 'list'],
+    cwd: appRoot,
+  });
   if (listed.exitCode !== 0) {
     return 0;
   }
@@ -419,7 +453,11 @@ function countVitest(repoRoot: string): number {
 
 function countPlaywright(repoRoot: string): number {
   const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
-  const listed = runCommand('bunx', ['playwright', 'test', '--list'], appRoot);
+  const listed = runCommand({
+    command: 'bunx',
+    args: ['playwright', 'test', '--list'],
+    cwd: appRoot,
+  });
   if (listed.exitCode !== 0) {
     return 0;
   }
@@ -440,6 +478,13 @@ function sumDurationSeconds(items: UnknownRecord[]): number {
   return total;
 }
 
-function countByCategory(items: UnknownRecord[], category: string): number {
+type CountByCategoryArgs = {
+  readonly items: UnknownRecord[];
+  readonly category: string;
+};
+
+function countByCategory(args: CountByCategoryArgs): number {
+  const { items, category } = args;
+
   return items.filter((item) => item.category === category).length;
 }

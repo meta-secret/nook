@@ -67,13 +67,19 @@ waste_assessment:
 
 describe('validateAgentStatsYaml', () => {
   test('accepts a schema-v3 record', () => {
-    const result = validateAgentStatsYaml(validYaml, 481);
+    const result = validateAgentStatsYaml({
+      content: validYaml,
+      expectedPrNumber: 481,
+    });
     expect(result.ok).toBe(true);
     expect(result.errors).toEqual([]);
   });
 
   test('rejects filename/source PR mismatch', () => {
-    const result = validateAgentStatsYaml(validYaml, 999);
+    const result = validateAgentStatsYaml({
+      content: validYaml,
+      expectedPrNumber: 999,
+    });
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) => item.includes('source_pr.number')),

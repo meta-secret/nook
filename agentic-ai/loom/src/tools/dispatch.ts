@@ -47,11 +47,11 @@ export async function dispatchRequestFile(
         : 'failed to read or parse request YAML';
     return {
       exitCode: 2,
-      body: decodeErrorResponse(
-        ResponsePhase.Decode,
-        parsed.errors,
-        explainSyntaxFailure(receivedYaml, parseMessage),
-      ),
+      body: decodeErrorResponse({
+        phase: ResponsePhase.Decode,
+        errors: parsed.errors,
+        explanation: explainSyntaxFailure({ receivedYaml, parseMessage }),
+      }),
     };
   }
   return dispatchValue(parsed.value.value);
@@ -62,11 +62,11 @@ export async function dispatchValue(value: unknown): Promise<DispatchOutcome> {
   if (request.status === DecodeStatus.Failed) {
     return {
       exitCode: 2,
-      body: decodeErrorResponse(
-        ResponsePhase.Decode,
-        request.errors,
-        explainAgainstBlueprint(value),
-      ),
+      body: decodeErrorResponse({
+        phase: ResponsePhase.Decode,
+        errors: request.errors,
+        explanation: explainAgainstBlueprint(value),
+      }),
     };
   }
   return dispatchDecoded(request.value);
@@ -80,8 +80,11 @@ async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
   if (request.family === RequestFamily.ToolsList) {
     return {
       exitCode: 0,
-      body: successResponseForFamily(RequestFamily.ToolsList, {
-        requests: listDiscoverableRequests(),
+      body: successResponseForFamily({
+        family: RequestFamily.ToolsList,
+        result: {
+          requests: listDiscoverableRequests(),
+        },
       }),
     };
   }
@@ -97,7 +100,10 @@ async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
     ) {
       return {
         exitCode: 1,
-        body: successResponseForFamily(RequestFamily.CortexAudit, result),
+        body: successResponseForFamily({
+          family: RequestFamily.CortexAudit,
+          result,
+        }),
       };
     }
     if (
@@ -109,20 +115,23 @@ async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
     ) {
       return {
         exitCode: 1,
-        body: successResponseForFamily(
-          RequestFamily.DependencyPopularity,
+        body: successResponseForFamily({
+          family: RequestFamily.DependencyPopularity,
           result,
-        ),
+        }),
       };
     }
     return {
       exitCode: 0,
-      body: buildSuccessResponse(request, result),
+      body: buildSuccessResponse({ request, result }),
     };
   } catch (error) {
     return {
       exitCode: 1,
-      body: buildExecuteErrorResponse(request, failureDetail(error)),
+      body: buildExecuteErrorResponse({
+        request,
+        detail: failureDetail(error),
+      }),
     };
   }
 }
@@ -148,56 +157,99 @@ function failureDetail(error: unknown): string {
   return String(error);
 }
 
-function buildSuccessResponse(
-  request: LoomRequest,
-  result: unknown,
-): SuccessResponse {
+type BuildSuccessResponseArgs = {
+  readonly request: LoomRequest;
+  readonly result: unknown;
+};
+
+function buildSuccessResponse(args: BuildSuccessResponseArgs): SuccessResponse {
+  const { request, result } = args;
+
   switch (request.family) {
     case RequestFamily.PrePush:
-      return successResponseForFamily(RequestFamily.PrePush, result);
-    case RequestFamily.CortexAudit:
-      return successResponseForFamily(RequestFamily.CortexAudit, result);
-    case RequestFamily.SkillScaffold:
-      return successResponseForFamily(RequestFamily.SkillScaffold, result);
-    case RequestFamily.AgentStats:
-      return successResponseForAgentStats(request.operation, result);
-    case RequestFamily.PrLand:
-      return successResponseForPrLand(request.operation, result);
-    case RequestFamily.DependencyPopularity:
-      return successResponseForFamily(
-        RequestFamily.DependencyPopularity,
+      return successResponseForFamily({
+        family: RequestFamily.PrePush,
         result,
-      );
+      });
+    case RequestFamily.CortexAudit:
+      return successResponseForFamily({
+        family: RequestFamily.CortexAudit,
+        result,
+      });
+    case RequestFamily.SkillScaffold:
+      return successResponseForFamily({
+        family: RequestFamily.SkillScaffold,
+        result,
+      });
+    case RequestFamily.AgentStats:
+      return successResponseForAgentStats({
+        operation: request.operation,
+        result,
+      });
+    case RequestFamily.PrLand:
+      return successResponseForPrLand({ operation: request.operation, result });
+    case RequestFamily.DependencyPopularity:
+      return successResponseForFamily({
+        family: RequestFamily.DependencyPopularity,
+        result,
+      });
     case RequestFamily.ToolsList:
     case RequestFamily.ToolsCall:
-      return successResponseForFamily(RequestFamily.ToolsList, result);
+      return successResponseForFamily({
+        family: RequestFamily.ToolsList,
+        result,
+      });
   }
 }
 
+type BuildExecuteErrorResponseArgs = {
+  readonly request: LoomRequest;
+  readonly detail: string;
+};
+
 function buildExecuteErrorResponse(
-  request: LoomRequest,
-  detail: string,
+  args: BuildExecuteErrorResponseArgs,
 ): ErrorResponse {
+  const { request, detail } = args;
+
   const errors = [executionFieldError(detail)];
   switch (request.family) {
     case RequestFamily.PrePush:
-      return executeErrorResponseForFamily(RequestFamily.PrePush, errors);
-    case RequestFamily.CortexAudit:
-      return executeErrorResponseForFamily(RequestFamily.CortexAudit, errors);
-    case RequestFamily.SkillScaffold:
-      return executeErrorResponseForFamily(RequestFamily.SkillScaffold, errors);
-    case RequestFamily.AgentStats:
-      return executeErrorResponseForAgentStats(request.operation, errors);
-    case RequestFamily.PrLand:
-      return executeErrorResponseForPrLand(request.operation, errors);
-    case RequestFamily.DependencyPopularity:
-      return executeErrorResponseForFamily(
-        RequestFamily.DependencyPopularity,
+      return executeErrorResponseForFamily({
+        family: RequestFamily.PrePush,
         errors,
-      );
+      });
+    case RequestFamily.CortexAudit:
+      return executeErrorResponseForFamily({
+        family: RequestFamily.CortexAudit,
+        errors,
+      });
+    case RequestFamily.SkillScaffold:
+      return executeErrorResponseForFamily({
+        family: RequestFamily.SkillScaffold,
+        errors,
+      });
+    case RequestFamily.AgentStats:
+      return executeErrorResponseForAgentStats({
+        operation: request.operation,
+        errors,
+      });
+    case RequestFamily.PrLand:
+      return executeErrorResponseForPrLand({
+        operation: request.operation,
+        errors,
+      });
+    case RequestFamily.DependencyPopularity:
+      return executeErrorResponseForFamily({
+        family: RequestFamily.DependencyPopularity,
+        errors,
+      });
     case RequestFamily.ToolsList:
     case RequestFamily.ToolsCall:
-      return executeErrorResponseForFamily(RequestFamily.ToolsList, errors);
+      return executeErrorResponseForFamily({
+        family: RequestFamily.ToolsList,
+        errors,
+      });
   }
 }
 

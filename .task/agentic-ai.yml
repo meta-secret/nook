@@ -53,11 +53,19 @@ tasks:
     cmds:
       - bun run check
 
+  loom:lint:
+    desc: 'ESLint Loom (includes max-params: 1).'
+    dir: agentic-ai/loom
+    deps: [loom:install]
+    cmds:
+      - bun run lint
+
   loom:verify:
-    desc: Format-check, typecheck, and unit-test Loom.
+    desc: Format-check, lint, typecheck, and unit-test Loom.
     deps: [loom:install]
     cmds:
       - task: loom:format:check
+      - task: loom:lint
       - task: loom:check
       - task: loom:test
 

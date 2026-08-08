@@ -17,11 +17,15 @@ const ROOT = RequestFamily.ToolsList;
 export function decodeToolsListRequest(
   value: unknown,
 ): DecodeOutcome<ToolsListRequest> {
-  const object = expectObject(value, ROOT);
+  const object = expectObject({ value, path: ROOT });
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, ToolsListField, ROOT);
+  const unknown = denyUnknownKeys({
+    record: object.value,
+    fields: ToolsListField,
+    path: ROOT,
+  });
   if (unknown.length > 0) {
     return decodeErr(unknown);
   }

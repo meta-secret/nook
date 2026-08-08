@@ -41,20 +41,30 @@ export type PrLandValidateRequest = {
   readonly runFullE2e: boolean;
 };
 
+export type DecodePrLandPrPayloadArgs = {
+  readonly value: unknown;
+  readonly path: string;
+};
+
 export function decodePrLandPrPayload(
-  value: unknown,
-  path: string,
+  args: DecodePrLandPrPayloadArgs,
 ): DecodeOutcome<PrLandPrRequest> {
-  const object = expectObject(value, path);
+  const { value, path } = args;
+
+  const object = expectObject({ value, path });
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, PrLandPrField, path);
-  const prNumber = expectPositiveInt(
-    object.value,
-    PrLandPrField.PrNumber,
+  const unknown = denyUnknownKeys({
+    record: object.value,
+    fields: PrLandPrField,
     path,
-  );
+  });
+  const prNumber = expectPositiveInt({
+    record: object.value,
+    key: PrLandPrField.PrNumber,
+    path,
+  });
   const errors = [
     ...unknown,
     ...(prNumber.status === DecodeStatus.Failed ? prNumber.errors : []),
@@ -67,30 +77,40 @@ export function decodePrLandPrPayload(
   });
 }
 
+export type DecodePrLandValidatePayloadArgs = {
+  readonly value: unknown;
+  readonly path: string;
+};
+
 export function decodePrLandValidatePayload(
-  value: unknown,
-  path: string,
+  args: DecodePrLandValidatePayloadArgs,
 ): DecodeOutcome<PrLandValidateRequest> {
-  const object = expectObject(value, path);
+  const { value, path } = args;
+
+  const object = expectObject({ value, path });
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, PrLandValidateField, path);
-  const prNumber = expectPositiveInt(
-    object.value,
-    PrLandValidateField.PrNumber,
+  const unknown = denyUnknownKeys({
+    record: object.value,
+    fields: PrLandValidateField,
     path,
-  );
-  const remoteTask = expectRemoteTask(
-    object.value,
-    PrLandValidateField.RemoteTask,
+  });
+  const prNumber = expectPositiveInt({
+    record: object.value,
+    key: PrLandValidateField.PrNumber,
     path,
-  );
-  const runFullE2e = expectBoolean(
-    object.value,
-    PrLandValidateField.RunFullE2e,
+  });
+  const remoteTask = expectRemoteTask({
+    record: object.value,
+    key: PrLandValidateField.RemoteTask,
     path,
-  );
+  });
+  const runFullE2e = expectBoolean({
+    record: object.value,
+    key: PrLandValidateField.RunFullE2e,
+    path,
+  });
   const errors = [
     ...unknown,
     ...(prNumber.status === DecodeStatus.Failed ? prNumber.errors : []),

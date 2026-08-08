@@ -64,29 +64,29 @@ describe('loom domain request codec', () => {
   });
 
   test('decodes agentStats assemble payload', () => {
-    const decoded = decodeAgentStatsAssemblePayload(
-      {
+    const decoded = decodeAgentStatsAssemblePayload({
+      value: {
         prNumber: 12,
         scratchPath: '/tmp/a.json',
         outputPath: '/tmp/12.yaml',
         includeTestInventory: false,
       },
-      'agentStats.assemble',
-    );
+      path: 'agentStats.assemble',
+    });
     expect(decoded.status).toBe(DecodeStatus.Ok);
   });
 
   test('rejects unknown agentStats assemble fields', () => {
-    const decoded = decodeAgentStatsAssemblePayload(
-      {
+    const decoded = decodeAgentStatsAssemblePayload({
+      value: {
         prNumber: 12,
         scratchPath: '/tmp/a.json',
         outputPath: '/tmp/12.yaml',
         includeTestInventory: false,
         action: 'assemble',
       },
-      'agentStats.assemble',
-    );
+      path: 'agentStats.assemble',
+    });
     expect(decoded.status).toBe(DecodeStatus.Failed);
     if (decoded.status === DecodeStatus.Failed) {
       expect(

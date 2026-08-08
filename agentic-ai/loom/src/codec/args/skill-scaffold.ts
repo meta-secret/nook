@@ -30,21 +30,25 @@ const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export function decodeSkillScaffoldRequest(
   value: unknown,
 ): DecodeOutcome<SkillScaffoldRequest> {
-  const object = expectObject(value, ROOT);
+  const object = expectObject({ value, path: ROOT });
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, SkillScaffoldField, ROOT);
-  const skillSlug = expectString(
-    object.value,
-    SkillScaffoldField.SkillSlug,
-    ROOT,
-  );
-  const createExecutableWrappers = expectBoolean(
-    object.value,
-    SkillScaffoldField.CreateExecutableWrappers,
-    ROOT,
-  );
+  const unknown = denyUnknownKeys({
+    record: object.value,
+    fields: SkillScaffoldField,
+    path: ROOT,
+  });
+  const skillSlug = expectString({
+    record: object.value,
+    key: SkillScaffoldField.SkillSlug,
+    path: ROOT,
+  });
+  const createExecutableWrappers = expectBoolean({
+    record: object.value,
+    key: SkillScaffoldField.CreateExecutableWrappers,
+    path: ROOT,
+  });
   const errors = [
     ...unknown,
     ...(skillSlug.status === DecodeStatus.Failed ? skillSlug.errors : []),
@@ -54,10 +58,10 @@ export function decodeSkillScaffoldRequest(
   ];
   if (skillSlug.status === DecodeStatus.Ok && !SLUG_RE.test(skillSlug.value)) {
     errors.push(
-      fieldError(
-        `${ROOT}.${SkillScaffoldField.SkillSlug}`,
-        FieldIssue.ExpectedKebabCaseSlug,
-      ),
+      fieldError({
+        path: `${ROOT}.${SkillScaffoldField.SkillSlug}`,
+        issue: FieldIssue.ExpectedKebabCaseSlug,
+      }),
     );
   }
   if (errors.length > 0) {

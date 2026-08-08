@@ -25,10 +25,10 @@ export async function runCortexAudit(
   const repoRoot = findRepoRoot();
   const cortexRoot = path.join(repoRoot, '.cortex');
   if (!existsSync(cortexRoot)) {
-    loomFailureDetail(
-      LoomFailureCode.CortexAuditFailed,
-      '.cortex directory is missing',
-    );
+    loomFailureDetail({
+      code: LoomFailureCode.CortexAuditFailed,
+      text: '.cortex directory is missing',
+    });
   }
 
   const mdFiles = listMarkdownFiles(cortexRoot);
@@ -37,10 +37,15 @@ export async function runCortexAudit(
 
   for (const filePath of mdFiles) {
     const content = readFileSync(filePath, 'utf8');
-    brokenLinks.push(...findBrokenRelativeLinks(filePath, content, repoRoot));
+    brokenLinks.push(
+      ...findBrokenRelativeLinks({ filePath, content, repoRoot }),
+    );
     if (request.includeDensityLint) {
       densityFindings.push(
-        ...lintProseDensity(path.relative(repoRoot, filePath), content),
+        ...lintProseDensity({
+          filePath: path.relative(repoRoot, filePath),
+          content,
+        }),
       );
     }
   }

@@ -38,11 +38,11 @@ export async function runDependencyPopularity(
   const findings: PopularityFinding[] = [];
   for (const name of npmPackages) {
     const metrics = await fetchNpmPackageMetrics(name);
-    findings.push(evaluatePopularity(metrics, thresholds));
+    findings.push(evaluatePopularity({ metrics, thresholds }));
   }
   for (const name of rustCrates) {
     const metrics = await fetchCrateMetrics(name);
-    findings.push(evaluatePopularity(metrics, thresholds));
+    findings.push(evaluatePopularity({ metrics, thresholds }));
   }
 
   return {

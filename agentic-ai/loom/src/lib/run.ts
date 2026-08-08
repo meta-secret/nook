@@ -11,20 +11,26 @@ export type CommandOutput = {
   readonly stderr: string;
 };
 
-export function runCommand(
-  command: string,
-  args: readonly string[],
-  cwd: string,
-): CommandOutput {
+export type RunCommandArgs = {
+  readonly command: string;
+  readonly args: readonly string[];
+  readonly cwd: string;
+};
+
+export function runCommand(input: RunCommandArgs): CommandOutput {
+  const { command, args, cwd } = input;
   const result = spawnSync(command, [...args], {
     cwd,
     encoding: 'utf8',
     env: process.env,
   });
   if (result.error) {
-    throw new LoomFailure(LoomFailureCode.CommandFailedToStart, {
-      kind: LoomFailureDetailKind.Text,
-      text: `${command} failed to start: ${result.error.message}`,
+    throw new LoomFailure({
+      code: LoomFailureCode.CommandFailedToStart,
+      detail: {
+        kind: LoomFailureDetailKind.Text,
+        text: `${command} failed to start: ${result.error.message}`,
+      },
     });
   }
   const exitCode = typeof result.status === 'number' ? result.status : 1;

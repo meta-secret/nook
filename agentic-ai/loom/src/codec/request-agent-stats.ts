@@ -34,52 +34,70 @@ export type AgentStatsLoomRequest =
       readonly publish: AgentStatsFileRequest;
     };
 
+export type DecodeAgentStatsFamilyArgs = {
+  readonly value: unknown;
+  readonly path: string;
+};
+
 export function decodeAgentStatsFamily(
-  value: unknown,
-  path: string,
+  args: DecodeAgentStatsFamilyArgs,
 ): DecodeOutcome<AgentStatsLoomRequest> {
-  const basePath = joinPath(path, RequestFamily.AgentStats);
-  const object = expectObject(value, basePath);
+  const { value, path } = args;
+
+  const basePath = joinPath({ base: path, key: RequestFamily.AgentStats });
+  const object = expectObject({ value, path: basePath });
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const selected = decodeExactlyOneOperation(
-    object.value,
-    basePath,
-    AGENT_STATS_OPERATIONS,
-  );
+  const selected = decodeExactlyOneOperation({
+    record: object.value,
+    path: basePath,
+    operations: AGENT_STATS_OPERATIONS,
+  });
   if (selected.status === DecodeStatus.Failed) {
     return selected;
   }
-  const operationPath = joinPath(basePath, selected.value.operation);
+  const operationPath = joinPath({
+    base: basePath,
+    key: selected.value.operation,
+  });
   switch (selected.value.operation) {
     case AgentStatsOperation.Assemble:
-      return mapDecode(
-        decodeAgentStatsAssemblePayload(selected.value.payload, operationPath),
-        (assemble) => ({
+      return mapDecode({
+        outcome: decodeAgentStatsAssemblePayload({
+          value: selected.value.payload,
+          path: operationPath,
+        }),
+        build: (assemble) => ({
           family: RequestFamily.AgentStats,
           operation: AgentStatsOperation.Assemble,
           assemble,
         }),
-      );
+      });
     case AgentStatsOperation.Validate:
-      return mapDecode(
-        decodeAgentStatsFilePayload(selected.value.payload, operationPath),
-        (validate) => ({
+      return mapDecode({
+        outcome: decodeAgentStatsFilePayload({
+          value: selected.value.payload,
+          path: operationPath,
+        }),
+        build: (validate) => ({
           family: RequestFamily.AgentStats,
           operation: AgentStatsOperation.Validate,
           validate,
         }),
-      );
+      });
     case AgentStatsOperation.Publish:
-      return mapDecode(
-        decodeAgentStatsFilePayload(selected.value.payload, operationPath),
-        (publish) => ({
+      return mapDecode({
+        outcome: decodeAgentStatsFilePayload({
+          value: selected.value.payload,
+          path: operationPath,
+        }),
+        build: (publish) => ({
           family: RequestFamily.AgentStats,
           operation: AgentStatsOperation.Publish,
           publish,
         }),
-      );
+      });
   }
 }
 

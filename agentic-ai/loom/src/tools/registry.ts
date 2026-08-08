@@ -145,7 +145,7 @@ export async function executeRequest(request: LoomRequest): Promise<unknown> {
       return runCortexAudit(request.cortexAudit);
     case RequestFamily.SkillScaffold:
       return runSkillScaffold(request.skillScaffold);
-    case RequestFamily.AgentStats:
+    case RequestFamily.AgentStats: {
       switch (request.operation) {
         case AgentStatsOperation.Assemble:
           return runAgentStatsAssemble(request.assemble);
@@ -154,7 +154,9 @@ export async function executeRequest(request: LoomRequest): Promise<unknown> {
         case AgentStatsOperation.Publish:
           return runAgentStatsPublish(request.publish);
       }
-    case RequestFamily.PrLand:
+      break;
+    }
+    case RequestFamily.PrLand: {
       switch (request.operation) {
         case PrLandOperation.Status:
           return runPrLandStatus(request.status);
@@ -165,13 +167,15 @@ export async function executeRequest(request: LoomRequest): Promise<unknown> {
         case PrLandOperation.MergeCheck:
           return runPrLandMergeCheck(request.mergeCheck);
       }
+      break;
+    }
     case RequestFamily.DependencyPopularity:
       return runDependencyPopularity(request.dependencyPopularity);
     case RequestFamily.ToolsList:
     case RequestFamily.ToolsCall:
-      loomFailureDetail(
-        LoomFailureCode.ValidationFailed,
-        `${request.family} is handled by the dispatcher`,
-      );
+      loomFailureDetail({
+        code: LoomFailureCode.ValidationFailed,
+        text: `${request.family} is handled by the dispatcher`,
+      });
   }
 }

@@ -5,10 +5,16 @@ export type AgentStatsValidation = {
   readonly errors: string[];
 };
 
+export type ValidateAgentStatsYamlArgs = {
+  readonly content: string;
+  readonly expectedPrNumber: number;
+};
+
 export function validateAgentStatsYaml(
-  content: string,
-  expectedPrNumber: number,
+  args: ValidateAgentStatsYamlArgs,
 ): AgentStatsValidation {
+  const { content, expectedPrNumber } = args;
+
   let parsed: unknown;
   try {
     parsed = Bun.YAML.parse(content);
