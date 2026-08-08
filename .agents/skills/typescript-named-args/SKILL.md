@@ -1,14 +1,14 @@
 ---
 name: typescript-named-args
 description: >-
-  Loom and linted Nook web TypeScript: ban passing raw object literals into calls. Assign a
+  Loom and migrated Nook web TypeScript: ban passing raw object literals into calls. Assign a
   named typed args value first. Enforced by ESLint no-restricted-syntax in
   the shared ESLint configurations.
 ---
 
 # TypeScript Named Call Arguments
 
-Use this skill when editing Loom or linted Nook web TypeScript.
+Use this skill when editing Loom or migrated Nook web TypeScript.
 
 Read `.cortex/dynamic-skills/typescript-named-args.md` and apply it:
 

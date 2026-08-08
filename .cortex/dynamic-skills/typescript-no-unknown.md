@@ -11,7 +11,9 @@ Untrusted input uses a named external-value model instead.
 Applies to:
 
 - `agentic-ai/loom` authored TypeScript;
-- linted `nook-app/nook-web` TypeScript and Svelte scripts.
+- migrated `nook-app/nook-web` paths selected by the shared ESLint config.
+
+Nook web expands enforcement one green package slice at a time.
 
 Generated bindings are excluded.
 

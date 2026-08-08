@@ -10,7 +10,9 @@ Build a named, typed argument value first.
 Applies to:
 
 - `agentic-ai/loom` authored TypeScript;
-- linted `nook-app/nook-web` TypeScript and Svelte scripts.
+- migrated `nook-app/nook-web` paths selected by the shared ESLint config.
+
+Nook web expands enforcement one green package slice at a time.
 
 Generated bindings are excluded.
 

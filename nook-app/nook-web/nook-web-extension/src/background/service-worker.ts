@@ -1,3 +1,4 @@
+import type { ExternalValue } from '../lib/external-value'
 import {
   isBeginExtensionPairingMessage,
   isExtensionIdentityHandoffRequestMessage,
@@ -122,7 +123,7 @@ import {
 } from './vault-runtime'
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (isExtensionPairingStateQueryMessage(message)) {
+  if (isExtensionPairingStateQueryMessage(message as ExternalValue)) {
     if (sender.id !== chrome.runtime.id) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
@@ -137,7 +138,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteLoginPickerOpenMessage(message)) {
+  if (isWebsiteLoginPickerOpenMessage(message as ExternalValue)) {
     void openWebsiteLoginPicker(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -146,7 +147,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isLoginPickerQueryMessage(message)) {
+  if (isLoginPickerQueryMessage(message as ExternalValue)) {
     void queryLoginPicker(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -158,7 +159,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isLoginPickerSelectMessage(message)) {
+  if (isLoginPickerSelectMessage(message as ExternalValue)) {
     void selectLoginPicker(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -170,7 +171,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isLoginPickerCancelMessage(message)) {
+  if (isLoginPickerCancelMessage(message as ExternalValue)) {
     void cancelLoginPicker(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -182,7 +183,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorPickerOpenMessage(message)) {
+  if (isWebsiteAuthenticatorPickerOpenMessage(message as ExternalValue)) {
     void openWebsiteAuthenticatorPicker(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -191,7 +192,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isAuthenticatorPickerQueryMessage(message)) {
+  if (isAuthenticatorPickerQueryMessage(message as ExternalValue)) {
     void queryAuthenticatorPicker(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -203,7 +204,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isAuthenticatorPickerSelectMessage(message)) {
+  if (isAuthenticatorPickerSelectMessage(message as ExternalValue)) {
     void selectAuthenticatorPicker(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -215,7 +216,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isAuthenticatorPickerCancelMessage(message)) {
+  if (isAuthenticatorPickerCancelMessage(message as ExternalValue)) {
     void cancelAuthenticatorPicker(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -227,7 +228,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isAuthenticationWorkflowSnapshotMessage(message)) {
+  if (isAuthenticationWorkflowSnapshotMessage(message as ExternalValue)) {
     if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
       sendResponse({ ok: false, reason: 'workflow-forbidden-origin' })
       return false
@@ -263,7 +264,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isAuthenticationOutcomeClassifyMessage(message)) {
+  if (isAuthenticationOutcomeClassifyMessage(message as ExternalValue)) {
     void classifyAuthenticationOutcome(
       message.payload.observation,
       message.payload.timeoutMs,
@@ -303,7 +304,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsitePasskeyOptionsMessage(message)) {
+  if (isWebsitePasskeyOptionsMessage(message as ExternalValue)) {
     void websitePasskeyOptions(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -312,7 +313,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsitePasskeyPerformMessage(message)) {
+  if (isWebsitePasskeyPerformMessage(message as ExternalValue)) {
     void performWebsitePasskey(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -321,28 +322,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsitePasskeyCancelMessage(message)) {
+  if (isWebsitePasskeyCancelMessage(message as ExternalValue)) {
     void cancelWebsitePasskey(message, sender)
       .then(sendResponse)
       .catch(() => sendResponse({ ok: false, reason: 'passkey-cancel-failed' }))
     return true
   }
 
-  if (isWebsiteLoginOptionsMessage(message)) {
+  if (isWebsiteLoginOptionsMessage(message as ExternalValue)) {
     void websiteLoginOptions(message, sender)
       .then(sendResponse)
       .catch(() => sendResponse({ ok: false, reason: 'login-options-failed' }))
     return true
   }
 
-  if (isWebsiteLoginRevealMessage(message)) {
+  if (isWebsiteLoginRevealMessage(message as ExternalValue)) {
     void websiteLoginFill(message, sender)
       .then(sendResponse)
       .catch(() => sendResponse({ ok: false, reason: 'login-fill-failed' }))
     return true
   }
 
-  if (isWebsiteLoginSaveOfferMessage(message)) {
+  if (isWebsiteLoginSaveOfferMessage(message as ExternalValue)) {
     void websiteLoginSaveOffer(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -351,7 +352,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteLoginSavePendingMessage(message)) {
+  if (isWebsiteLoginSavePendingMessage(message as ExternalValue)) {
     void websiteLoginSavePending(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -360,7 +361,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteLoginSaveCommitMessage(message)) {
+  if (isWebsiteLoginSaveCommitMessage(message as ExternalValue)) {
     void websiteLoginSaveCommit(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -369,7 +370,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteLoginSaveDismissMessage(message)) {
+  if (isWebsiteLoginSaveDismissMessage(message as ExternalValue)) {
     void websiteLoginSaveDismiss(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -378,7 +379,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorOptionsMessage(message)) {
+  if (isWebsiteAuthenticatorOptionsMessage(message as ExternalValue)) {
     void websiteAuthenticatorOptions(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -387,7 +388,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorFillMessage(message)) {
+  if (isWebsiteAuthenticatorFillMessage(message as ExternalValue)) {
     void websiteAuthenticatorFill(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -396,7 +397,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorEnrollPreviewMessage(message)) {
+  if (isWebsiteAuthenticatorEnrollPreviewMessage(message as ExternalValue)) {
     void websiteAuthenticatorEnrollPreview(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -405,7 +406,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorEnrollStageMessage(message)) {
+  if (isWebsiteAuthenticatorEnrollStageMessage(message as ExternalValue)) {
     void websiteAuthenticatorEnrollStage(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -414,7 +415,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorEnrollCodeMessage(message)) {
+  if (isWebsiteAuthenticatorEnrollCodeMessage(message as ExternalValue)) {
     void websiteAuthenticatorEnrollCode(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -423,7 +424,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorEnrollConfirmMessage(message)) {
+  if (isWebsiteAuthenticatorEnrollConfirmMessage(message as ExternalValue)) {
     void websiteAuthenticatorEnrollConfirm(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -432,7 +433,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorEnrollDismissMessage(message)) {
+  if (isWebsiteAuthenticatorEnrollDismissMessage(message as ExternalValue)) {
     void websiteAuthenticatorEnrollDismiss(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -441,7 +442,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorEnrollPendingMessage(message)) {
+  if (isWebsiteAuthenticatorEnrollPendingMessage(message as ExternalValue)) {
     void websiteAuthenticatorEnrollPending(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -450,7 +451,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorBackupAttachMessage(message)) {
+  if (isWebsiteAuthenticatorBackupAttachMessage(message as ExternalValue)) {
     void websiteAuthenticatorBackupAttach(message, sender)
       .then(sendResponse)
       .catch(() =>
@@ -459,7 +460,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isExtensionSessionEnsureMessage(message)) {
+  if (isExtensionSessionEnsureMessage(message as ExternalValue)) {
     if (sender.id !== chrome.runtime.id) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
@@ -472,7 +473,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isExtensionSessionLockMessage(message)) {
+  if (isExtensionSessionLockMessage(message as ExternalValue)) {
     const senderUrlAllowed =
       !('url' in sender) ||
       (typeof sender.url === 'string' &&
@@ -488,7 +489,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isExtensionSessionExpiryMessage(message)) {
+  if (isExtensionSessionExpiryMessage(message as ExternalValue)) {
     if (
       sender.id !== chrome.runtime.id ||
       !sender.url?.endsWith(`/${extensionSessionDocument}`)
@@ -502,13 +503,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (
     hasPairingApprovedType(message) &&
-    !isExtensionPairingApprovedMessage(message)
+    !isExtensionPairingApprovedMessage(message as ExternalValue)
   ) {
     sendResponse({ ok: false, reason: 'invalid-pairing-grant' })
     return false
   }
 
-  if (isExtensionPairingApprovedMessage(message)) {
+  if (isExtensionPairingApprovedMessage(message as ExternalValue)) {
     if (sender.id !== chrome.runtime.id) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
@@ -518,7 +519,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isExtensionLocalEventLogUpdatedMessage(message)) {
+  if (isExtensionLocalEventLogUpdatedMessage(message as ExternalValue)) {
     if (sender.id !== chrome.runtime.id || !isNokeySender(sender)) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
@@ -530,7 +531,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isQueryActiveTabLoginDetectionMessage(message)) {
+  if (isQueryActiveTabLoginDetectionMessage(message as ExternalValue)) {
     if (sender.id !== chrome.runtime.id) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
@@ -546,7 +547,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isOpenSimpleVaultMessage(message)) {
+  if (isOpenSimpleVaultMessage(message as ExternalValue)) {
     if (sender.id !== chrome.runtime.id) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
@@ -556,7 +557,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false
   }
 
-  if (isOpenCompanionLauncherMessage(message)) {
+  if (isOpenCompanionLauncherMessage(message as ExternalValue)) {
     if (sender.id !== chrome.runtime.id) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
@@ -567,7 +568,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (isBeginExtensionPairingMessage(message)) {
+  if (isBeginExtensionPairingMessage(message as ExternalValue)) {
     if (sender.id !== chrome.runtime.id) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
@@ -583,7 +584,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onMessageExternal.addListener(
   (message, sender, sendResponse) => {
-    if (isOpenCompanionLauncherMessage(message)) {
+    if (isOpenCompanionLauncherMessage(message as ExternalValue)) {
       if (!isNokeySender(sender)) {
         sendResponse({ ok: false, reason: 'forbidden-sender' })
         return false
@@ -594,7 +595,9 @@ chrome.runtime.onMessageExternal.addListener(
       return true
     }
 
-    if (isExtensionPairedVaultIdentityDiscoveryMessage(message)) {
+    if (
+      isExtensionPairedVaultIdentityDiscoveryMessage(message as ExternalValue)
+    ) {
       if (!isNokeySender(sender)) {
         sendResponse({ ok: false, reason: 'forbidden-sender' })
         return false
@@ -603,7 +606,7 @@ chrome.runtime.onMessageExternal.addListener(
       return true
     }
 
-    if (isExtensionPairedVaultUnlockRequestMessage(message)) {
+    if (isExtensionPairedVaultUnlockRequestMessage(message as ExternalValue)) {
       if (!isNokeySender(sender)) {
         sendResponse({ ok: false, reason: 'forbidden-sender' })
         return false
@@ -621,7 +624,7 @@ chrome.runtime.onMessageExternal.addListener(
       return true
     }
 
-    if (isExtensionIdentityHandoffRequestMessage(message)) {
+    if (isExtensionIdentityHandoffRequestMessage(message as ExternalValue)) {
       if (!isNokeySender(sender)) {
         sendResponse({ ok: false, reason: 'forbidden-sender' })
         return false
@@ -630,7 +633,11 @@ chrome.runtime.onMessageExternal.addListener(
       return true
     }
 
-    if (isExtensionPairedVaultIdentityHandoffRequestMessage(message)) {
+    if (
+      isExtensionPairedVaultIdentityHandoffRequestMessage(
+        message as ExternalValue,
+      )
+    ) {
       if (!isNokeySender(sender)) {
         sendResponse({ ok: false, reason: 'forbidden-sender' })
         return false
@@ -639,7 +646,10 @@ chrome.runtime.onMessageExternal.addListener(
       return true
     }
 
-    if (!isExtensionPairingApprovedMessage(message) || !isNokeySender(sender)) {
+    if (
+      !isExtensionPairingApprovedMessage(message as ExternalValue) ||
+      !isNokeySender(sender)
+    ) {
       sendResponse({ ok: false, reason: 'invalid-pairing-grant' })
       return false
     }

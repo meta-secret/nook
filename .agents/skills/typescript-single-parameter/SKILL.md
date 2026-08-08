@@ -1,14 +1,14 @@
 ---
 name: typescript-single-parameter
 description: >-
-  Loom and linted Nook web TypeScript: every function or method may take at most one
+  Loom and migrated Nook web TypeScript: every function or method may take at most one
   parameter. Wrap multi-value inputs in a named object type. Enforced by ESLint
   max-params in the shared ESLint configurations.
 ---
 
 # TypeScript Single Parameter
 
-Use this skill when editing Loom or linted Nook web TypeScript.
+Use this skill when editing Loom or migrated Nook web TypeScript.
 
 Read `.cortex/dynamic-skills/typescript-single-parameter.md` and apply it:
 

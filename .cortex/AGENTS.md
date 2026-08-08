@@ -399,17 +399,17 @@ and [workflows/remote-execution.md](workflows/remote-execution.md).
 [`agentic-ai/loom`](../agentic-ai/loom/README.md) runs mechanical agent
 procedures through a strict YAML tool protocol.
 
-Loom and linted Nook web TypeScript functions and methods take at most one
-parameter. Multi-value inputs use a typed object argument. Enforced by ESLint
-`max-params`. Full contract:
+Loom and migrated Nook web TypeScript functions and methods take at most one
+parameter. Multi-value inputs use a typed object argument. Nook web expands
+the shared ESLint scope one migrated package slice at a time. Full contract:
 [dynamic-skills/typescript-single-parameter.md](dynamic-skills/typescript-single-parameter.md).
 
-Loom and linted Nook web TypeScript must not author the `unknown` type.
+Loom and migrated Nook web TypeScript must not author the `unknown` type.
 Untrusted payloads use a named external-value model. Enforced by ESLint
 `@typescript-eslint/no-restricted-types`. Full contract:
 [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md).
 
-Loom and linted Nook web TypeScript must not pass raw object literals into
+Loom and migrated Nook web TypeScript must not pass raw object literals into
 calls. Assign a named typed argument value first. Enforced by ESLint
 `no-restricted-syntax`. Full contract:
 [dynamic-skills/typescript-named-args.md](dynamic-skills/typescript-named-args.md).

@@ -1,3 +1,4 @@
+import type { ExternalValue } from '../../lib/external-value'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import { summarizeAuthenticationWorkflowForms } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
@@ -38,7 +39,7 @@ export function removeScannedWidget(): void {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (
     sender.id === chrome.runtime.id &&
-    isQueryLoginDetectionMessage(message)
+    isQueryLoginDetectionMessage(message as ExternalValue)
   ) {
     const detected = summarizeAuthenticationWorkflowForms().length > 0
     sendResponse({
@@ -51,7 +52,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (
     sender.id === chrome.runtime.id &&
-    isWebsiteLoginCanceledMessage(message) &&
+    isWebsiteLoginCanceledMessage(message as ExternalValue) &&
     message.payload.origin === location.origin &&
     pickerState.login.kind === LoginPickerKind.Open &&
     message.payload.requestId === pickerState.login.request.requestId
@@ -73,7 +74,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (
     sender.id === chrome.runtime.id &&
-    isWebsiteLoginSelectedMessage(message) &&
+    isWebsiteLoginSelectedMessage(message as ExternalValue) &&
     message.payload.origin === location.origin &&
     pickerState.login.kind === LoginPickerKind.Open &&
     message.payload.requestId === pickerState.login.request.requestId
@@ -104,7 +105,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (
     sender.id === chrome.runtime.id &&
-    isWebsiteAuthenticatorCanceledMessage(message) &&
+    isWebsiteAuthenticatorCanceledMessage(message as ExternalValue) &&
     message.payload.origin === location.origin &&
     pickerState.authenticator.kind === AuthenticatorPickerKind.Open &&
     message.payload.requestId === pickerState.authenticator.request.requestId
@@ -126,7 +127,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (
     sender.id !== chrome.runtime.id ||
-    !isWebsiteAuthenticatorSelectedMessage(message) ||
+    !isWebsiteAuthenticatorSelectedMessage(message as ExternalValue) ||
     message.payload.origin !== location.origin ||
     pickerState.authenticator.kind !== AuthenticatorPickerKind.Open ||
     message.payload.requestId !== pickerState.authenticator.request.requestId

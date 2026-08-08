@@ -99,6 +99,8 @@ test('offer browser extension install on vault home and in Devices', async ({
     /nook:extension-paired-vault-identity-discovery/,
   )
   await page.getByTestId('extension-install-setup-connect').click()
+  // The extension TypeScript API migration must preserve the exact companion
+  // message envelope consumed by the browser runtime boundary.
   await expect(page.locator('html')).toHaveAttribute(
     'data-demo-extension-message',
     JSON.stringify({

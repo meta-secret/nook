@@ -35,6 +35,7 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         "'no-restricted-syntax'",
         "CallExpression[arguments.length=1] > ObjectExpression",
         "named typed value first",
+        "nook-web-extension/src/lib/**/*.ts",
         "'@typescript-eslint/await-thenable': 'error'",
         "'@typescript-eslint/no-floating-promises': 'error'",
         "'@typescript-eslint/no-misused-promises': 'error'",

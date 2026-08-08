@@ -1,14 +1,14 @@
 ---
 name: typescript-no-unknown
 description: >-
-  Loom and linted Nook web TypeScript: ban the authored unknown type. Model untrusted YAML/JSON
+  Loom and migrated Nook web TypeScript: ban the authored unknown type. Model untrusted YAML/JSON
   as ExternalValue / ExternalObject. Enforced by ESLint no-restricted-types in
   the shared ESLint configurations.
 ---
 
 # TypeScript No Unknown
 
-Use this skill when editing Loom or linted Nook web TypeScript.
+Use this skill when editing Loom or migrated Nook web TypeScript.
 
 Read `.cortex/dynamic-skills/typescript-no-unknown.md` and apply it:
 
