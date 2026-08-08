@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ESLint, type LintResult } from 'eslint';
+import { ESLint } from 'eslint';
 
 type LintTextOptions = {
   filePath: string;
@@ -9,7 +9,7 @@ describe('Loom ESLint contracts', () => {
   test('rejects cast-wrapped constructor object arguments', async () => {
     const eslint = new ESLint();
     const options: LintTextOptions = { filePath: 'src/eslint-fixture.ts' };
-    const results: LintResult[] = await eslint.lintText(
+    const results = await eslint.lintText(
       `
         type WidgetArgs = { name: string };
         declare class Widget {
