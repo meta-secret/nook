@@ -96,8 +96,7 @@ fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result
     );
     assert_hosted_preflight_rust_cache(&workflow, "source-architecture")?;
 
-    let loom_workflow =
-        fs::read_to_string(repository_root().join(".github/workflows/loom.yml"))?;
+    let loom_workflow = fs::read_to_string(repository_root().join(".github/workflows/loom.yml"))?;
     assert_hosted_preflight_rust_cache(&loom_workflow, "loom")?;
     assert!(
         taskfile.contains("--test source_file_size"),
