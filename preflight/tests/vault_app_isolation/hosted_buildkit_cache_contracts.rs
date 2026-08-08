@@ -23,7 +23,6 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "NOOK_REGISTRY_CACHE_HOST",
         "default = \"registry.dev.nokey.sh\"",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1",
-        "nook-rust-ecosystem-nightly-v4",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-dylint-v3",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-fuzz-v3",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1",
@@ -66,15 +65,10 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "ecosystem policy-tools must seed its hosted cache without an aggregate deny/audit Bake leaf"
     );
     assert!(
-        rust_toolchain_bake.contains("target \"rust-ecosystem-nightly-publish\"")
-            && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
-            && rust_toolchain_bake
-                .matches("cache-to   = rust_ecosystem_nightly_cache_to")
-                .count()
-                == 1
+        !rust_toolchain_bake.contains("rust_ecosystem_nightly_cache_")
             && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_dylint_cache_to")
             && rust_toolchain_bake.contains("cache-to   = rust_ecosystem_fuzz_cache_to"),
-        "nightly-publish writes the shared nightly cache; dylint/fuzz write leaf caches"
+        "dylint/fuzz own full-graph leaf caches with no standalone nightly cache"
     );
     assert!(
         rust_toolchain_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),
@@ -94,7 +88,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
-        14,
+        13,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
     assert_rust_cache_export_hardening(&bake);

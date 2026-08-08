@@ -311,29 +311,6 @@ tasks:
       - task: fuzz:dependency-policy
       - task: minds:dependency-policy
 
-  docker:ecosystem:nightly:verify:
-    desc: Warm rust-ecosystem-nightly-restore without writing its Zot scope.
-    deps: [sccache:ensure, registry-cache:ensure]
-    cmds:
-      - task: docker:rust-base
-      - >-
-        GHA_CACHE_WRITE_ENABLED=
-        {{.DOCKER}} buildx bake
-        {{.NOOK_BAKE_FILES}}
-        rust-ecosystem-nightly-restore
-
-  docker:ecosystem:nightly:
-    desc: Bake only rust-ecosystem-nightly. Sole shared nightly Zot writer when writes are enabled.
-    deps: [sccache:ensure, registry-cache:ensure]
-    cmds:
-      - task: docker:ecosystem:nightly:verify
-      - |
-        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
-          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
-            {{.NOOK_BAKE_FILES}} \
-            rust-ecosystem-nightly-publish
-        fi
-
   docker:ecosystem:deterministic:
     desc: Bake Proptest, Insta, and Loom on the sealed Rust dependency graph.
     deps: [sccache:ensure, registry-cache:ensure]
@@ -359,9 +336,7 @@ tasks:
     vars:
       FUZZ_SECONDS: '{{default "20" .FUZZ_SECONDS}}'
     cmds:
-      # Warm the shared nightly stage read-only first. The leaf is a later stage
-      # in the same Dockerfile, so it keeps the exact warmed tool lineage.
-      - task: docker:ecosystem:nightly:verify
+      - task: docker:rust-base
       - >-
         GHA_CACHE_WRITE_ENABLED=
         {{.DOCKER}} buildx bake
@@ -380,9 +355,7 @@ tasks:
     desc: Bake repository Dylint lints on the sealed nightly ecosystem image.
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
-      # Warm the shared nightly stage through its read-only restore target. The
-      # leaf is a later stage in the same Dockerfile, not a linked Bake context.
-      - task: docker:ecosystem:nightly:verify
+      - task: docker:rust-base
       - >-
         GHA_CACHE_WRITE_ENABLED=
         {{.DOCKER}} buildx bake
@@ -390,10 +363,6 @@ tasks:
         rust-dylint
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
-          # Sole shared nightly writer: export only after leaf nested restore.
-          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
-            {{.NOOK_BAKE_FILES}} \
-            rust-ecosystem-nightly-publish
           GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             rust-dylint

@@ -1,6 +1,6 @@
 // Rust toolchain base + ecosystem gates + platform Zot cache scopes.
 // Hosted CI seeds rust_base_cache_* before dependency scopes consume it.
-// Ecosystem Bake targets seed their own scopes so policy-tools, nightly/fuzz/dylint,
+// Ecosystem Bake targets seed their own scopes so policy-tools, fuzz/dylint,
 // and deterministic compiles are reused without folding that tooling into product rust-base.
 // Main seeds those scopes with the trusted registry writer; PRs only write
 // isolated remote-buildcache refs.
@@ -38,24 +38,6 @@ rust_base_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED
 
 rust_base_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
-] : []
-
-// Nightly + cargo-fuzz + cargo-dylint. Kept out of rust-base so product builds do
-// not inherit a second toolchain, while fuzz/dylint jobs can still reuse it.
-// Do not cache-from rust-base here: a shorter parent importer wins and orphans the
-// nightly RUN even when this scope's mode=max export already embeds rust-base.
-// v4 rotates past thin indexes. Isolated FALLBACK restores the fat Main nightly
-// index first, then git-scope. A thin PR publish written before layers are
-// materialized must not win over Main and cold `cargo install`.
-rust_ecosystem_nightly_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-nightly-v4:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-nightly-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-nightly-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-]
-
-rust_ecosystem_nightly_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-nightly-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
 ] : []
 
 // Source-sensitive cargo-dylint leaf. Own scope only.
@@ -230,27 +212,6 @@ target "rust-ecosystem-policy-tools" {
   cache-from = rust_ecosystem_policy_tools_cache_from
   cache-to   = rust_ecosystem_policy_tools_cache_to
   output     = ["type=docker"]
-}
-
-target "rust-ecosystem-nightly" {
-  context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/nightly.Dockerfile"
-  target     = "rust-ecosystem-nightly"
-  platforms  = ["linux/amd64"]
-  contexts = {
-    rust-base = "target:rust-base"
-  }
-  output     = ["type=cacheonly"]
-}
-
-target "rust-ecosystem-nightly-restore" {
-  inherits = ["rust-ecosystem-nightly"]
-  cache-from = rust_ecosystem_nightly_cache_from
-}
-
-target "rust-ecosystem-nightly-publish" {
-  inherits = ["rust-ecosystem-nightly-restore"]
-  cache-to   = rust_ecosystem_nightly_cache_to
 }
 
 target "rust-fuzz-smoke" {

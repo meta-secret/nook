@@ -30,7 +30,6 @@ Use this workflow for quality, CI, and deployment changes.
    - Precise stage tasks warm parents alone before leaves:
      - `task docker:rust-base` (read-only; never publishes Zot)
      - `task docker:ecosystem:policy-tools`
-     - `task docker:ecosystem:nightly` / `nightly:verify`
    - Composites call those stages in order so a leaf miss cannot cold-rebuild apt.
    - Labeled product PRs call the shared jobs from `pr.yml` via `rust-ecosystem-checks.yml`.
    - Thin `rust-ecosystem.yml` keeps schedule, main-path, manual, and labeled minds-only PR entry points.
@@ -110,7 +109,7 @@ Use this workflow for quality, CI, and deployment changes.
      (e.g. deterministic). Focused test/lint/coverage and `builder-debug` keep
      per-crate COPY+RUN layering so one crate edit reuses earlier compile layers.
    - `PR / Rust ecosystem / Cargo fuzz smoke` —
-     `task docker:ecosystem:fuzz` warms `docker:ecosystem:nightly:verify`, then
+     `task docker:ecosystem:fuzz` warms `docker:rust-base`, then
      Bakes the `rust-fuzz-smoke` stage from the same Dockerfile as the
      toolchain-only `rust-ecosystem-nightly` stage with pinned
      [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html).
@@ -120,9 +119,9 @@ Use this workflow for quality, CI, and deployment changes.
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
      bounded proof harnesses via the official action (specialized toolchain).
    - `PR / Rust ecosystem / Dylint repository lints` —
-     `task docker:ecosystem:dylint` warms `docker:ecosystem:nightly:verify`,
+     `task docker:ecosystem:dylint` warms `docker:rust-base`,
      Bakes `rust-dylint` from the same Dockerfile as `rust-ecosystem-nightly`,
-     then publishes nightly and dylint when writes are enabled.
+     then publishes only the full-graph dylint leaf when writes are enabled.
      The leaf `mode=max` scope embeds the exact nightly tool lineage it consumes.
      There is no linked nightly Bake context whose identity can change.
      Pinned [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
@@ -150,7 +149,7 @@ Use this workflow for quality, CI, and deployment changes.
     - GitHub Actions cache is forbidden.
     - Delivery Bake restores private Zot registry scopes for:
       - Rust toolchain
-      - Rust ecosystem nightly, dylint leaf, fuzz leaf, policy-tools, policy leaf, and deterministic
+      - Rust ecosystem dylint leaf, fuzz leaf, policy-tools, policy leaf, and deterministic
       - preflight chef/test
       - stable Rust dependencies
       - source-sensitive native/WASM snapshots

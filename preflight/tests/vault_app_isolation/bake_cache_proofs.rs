@@ -85,13 +85,6 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
     )?;
     assert_scope_arms(
         &rust_bake,
-        "rust_ecosystem_nightly_cache_from",
-        &["nook-rust-ecosystem-nightly-v4"],
-        &[],
-        &["nook-rust-base-v1"],
-    )?;
-    assert_scope_arms(
-        &rust_bake,
         "rust_ecosystem_policy_tools_cache_from",
         &["nook-rust-ecosystem-policy-tools-v4"],
         &[],
@@ -126,11 +119,6 @@ fn theorem_ecosystem_parent_fallback_restores_main() -> anyhow::Result<()> {
     let root = repository_root();
     let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
     for (name, main_ref, git_marker) in [
-        (
-            "rust_ecosystem_nightly_cache_from",
-            "nook/buildcache/nook-rust-ecosystem-nightly-v4",
-            "nook-rust-ecosystem-nightly-v4${GHA_CACHE_SCOPE_SUFFIX}",
-        ),
         (
             "rust_ecosystem_policy_tools_cache_from",
             "nook/buildcache/nook-rust-ecosystem-policy-tools-v4",
@@ -172,31 +160,21 @@ fn theorem_ecosystem_parent_fallback_restores_main() -> anyhow::Result<()> {
 }
 
 #[test]
-fn theorem_dylint_publishes_nightly_after_leaf_materialize() -> anyhow::Result<()> {
+fn theorem_nightly_leaves_publish_only_their_full_graphs() -> anyhow::Result<()> {
     let root = repository_root();
     let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
-    let dylint = taskfile_task_body(&docker_tasks, "docker:ecosystem:dylint")?;
-    let verify_idx = dylint
-        .find("docker:ecosystem:nightly:verify")
-        .context("dylint must warm nightly:verify")?;
-    let leaf_idx = dylint
-        .find("rust-dylint")
-        .context("dylint must bake rust-dylint")?;
-    let publish_idx = dylint
-        .find("rust-ecosystem-nightly-publish")
-        .context("dylint must publish nightly after leaf materialize")?;
-    assert!(
-        verify_idx < leaf_idx && leaf_idx < publish_idx,
-        "dylint must verify, bake leaf, then publish nightly (not publish-before-leaf)"
-    );
-    assert!(
-        !dylint.lines().any(|line| {
-            let trimmed = line.trim();
-            trimmed == "task: docker:ecosystem:nightly"
-                || trimmed == "- task: docker:ecosystem:nightly"
-        }),
-        "dylint must not call full docker:ecosystem:nightly (publishes before leaf)"
-    );
+    for (task, leaf) in [
+        ("docker:ecosystem:dylint", "rust-dylint"),
+        ("docker:ecosystem:fuzz", "rust-fuzz-smoke"),
+    ] {
+        let body = taskfile_task_body(&docker_tasks, task)?;
+        assert!(
+            body.contains("task: docker:rust-base")
+                && body.matches(leaf).count() >= 2
+                && !body.contains("rust-ecosystem-nightly"),
+            "{task} must restore/publish only its own full-graph {leaf} scope"
+        );
+    }
     Ok(())
 }
 
@@ -234,23 +212,13 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
         "rust-base-restore must declare cache-from without cache-to"
     );
 
-    let nightly_restore =
-        bake_target_body(rust_bake.as_str(), "rust-ecosystem-nightly-restore");
-    assert!(
-        nightly_restore.contains("cache-from = rust_ecosystem_nightly_cache_from")
-            && !bake_target_assigns_cache_to(
-                rust_bake.as_str(),
-                "rust-ecosystem-nightly-restore",
-            ),
-        "nightly restore must import its own scope without writing"
-    );
     assert!(
         !rust_bake.contains("rust-platform-nightly")
             && !rust_bake.contains("rust-ecosystem-nightly = \"target:rust-ecosystem-nightly\"")
             && rust_bake
                 .matches("dockerfile = \"nook-app/nook-platform/docker/rust/nightly.Dockerfile\"")
                 .count()
-                == 3,
+                == 2,
         "nightly/dylint/fuzz must share one Dockerfile with no linked nightly context"
     );
 
@@ -280,11 +248,6 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
             rust_bake.as_str(),
             "rust-base-publish",
             "rust_base_cache_to",
-        ),
-        (
-            rust_bake.as_str(),
-            "rust-ecosystem-nightly-publish",
-            "rust_ecosystem_nightly_cache_to",
         ),
         (
             core_bake.as_str(),
