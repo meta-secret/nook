@@ -244,7 +244,9 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
         "remote workflow may only use the Zot and scoped SeaweedFS cache credentials"
     );
     assert!(!workflow.contains("${{ inputs.command }}"));
-    assert!(workflow.contains("group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}"));
+    assert!(
+        workflow.contains("group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}")
+    );
     assert!(workflow.contains("remote-task-batch.sh --run \"$REQUESTED_REMOTE_TASKS\""));
     let docker_setup = read(".github/actions/nook-docker-setup/action.yml");
     assert!(docker_setup.contains(
