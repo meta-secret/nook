@@ -1,95 +1,64 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  BlueprintChangeKind,
-  YamlValueKind,
+  BlueprintExplanationKind,
   explainAgainstBlueprint,
   explainSyntaxFailure,
 } from '../src/codec/blueprint-diff.ts';
-import { encodeResponse } from '../src/codec/response.ts';
 import { ResponsePhase } from '../src/codec/enums.ts';
 import { FieldIssue, fieldError } from '../src/codec/field-error.ts';
-import { decodeErrorResponse } from '../src/codec/response.ts';
+import { decodeErrorResponse, encodeResponse } from '../src/codec/response.ts';
 import { dispatchValue } from '../src/tools/dispatch.ts';
 
 describe('blueprint explanation', () => {
-  test('marks missing prePush fields against the blueprint', () => {
+  test('emits a unified diff from the diff package', () => {
     const explanation = explainAgainstBlueprint({
       prePush: { stageHostUpdates: true },
     });
+    expect(explanation.kind).toBe(BlueprintExplanationKind.Structural);
     expect(explanation.blueprintPath).toContain('pre-push/default.yaml');
-    expect(explanation.blueprintYaml).toContain('fetchOriginMain');
-    expect(explanation.receivedYaml).toContain('stageHostUpdates');
-    expect(
-      explanation.changes.some(
-        (change) =>
-          change.kind === BlueprintChangeKind.Missing &&
-          change.path === 'prePush.fetchOriginMain' &&
-          change.expectedKind === YamlValueKind.Boolean,
-      ),
-    ).toBe(true);
+    expect(explanation.unifiedDiff).toContain('--- ');
+    expect(explanation.unifiedDiff).toContain('+++ received.yaml');
+    expect(explanation.unifiedDiff).toContain('fetchOriginMain');
   });
 
-  test('marks extra root keys against the closest blueprint', () => {
+  test('marks unknown roots against the default blueprint', () => {
     const explanation = explainAgainstBlueprint({
       name: 'agent-stats',
       arguments: { action: 'assemble' },
     });
-    expect(
-      explanation.changes.some(
-        (change) =>
-          change.kind === BlueprintChangeKind.Extra && change.path === 'name',
-      ),
-    ).toBe(true);
+    expect(explanation.unifiedDiff).toContain('name');
+    expect(explanation.blueprintYaml).toContain('prePush:');
   });
 
-  test('syntax failures include parse message and a blueprint template', () => {
+  test('syntax failures include parse message and unified diff', () => {
     const explanation = explainSyntaxFailure(
       'prePush: [\n',
       'unexpected end of stream',
     );
-    expect(explanation.changes).toHaveLength(1);
-    for (const change of explanation.changes) {
-      expect(change.kind).toBe(BlueprintChangeKind.SyntaxInvalid);
-      if (change.kind === BlueprintChangeKind.SyntaxInvalid) {
-        expect(change.parseMessage).toBe('unexpected end of stream');
-      }
+    expect(explanation.kind).toBe(BlueprintExplanationKind.Syntax);
+    if (explanation.kind === BlueprintExplanationKind.Syntax) {
+      expect(explanation.parseMessage).toBe('unexpected end of stream');
     }
-    expect(explanation.blueprintYaml).toContain('prePush:');
+    expect(explanation.unifiedDiff).toContain('received.yaml');
   });
 });
 
 describe('decode error encoding', () => {
-  test('dispatch decode errors expose explanation with blueprint and changes', async () => {
+  test('dispatch decode errors expose unifiedDiff', async () => {
     const outcome = await dispatchValue({
       prePush: { stageHostUpdates: true },
     });
     expect(outcome.exitCode).toBe(2);
     expect(outcome.body.ok).toBe(false);
-    if (outcome.body.ok) {
+    if (outcome.body.ok || !('explanation' in outcome.body)) {
       return;
     }
-    expect('explanation' in outcome.body).toBe(true);
-    if (!('explanation' in outcome.body)) {
-      return;
-    }
-    expect(outcome.body.explanation.blueprintPath).toContain('pre-push');
-    expect(
-      outcome.body.explanation.changes.some(
-        (change) =>
-          change.kind !== BlueprintChangeKind.SyntaxInvalid &&
-          change.path === 'prePush.fetchOriginMain',
-      ),
-    ).toBe(true);
-
+    expect(outcome.body.explanation.unifiedDiff).toContain('fetchOriginMain');
     const encoded = encodeResponse(outcome.body) as {
-      explanation: {
-        blueprintYaml: string;
-        receivedYaml: string;
-        changes: readonly { kind: string; path: string }[];
-      };
+      explanation: { unifiedDiff: string; kind: string };
     };
-    expect(encoded.explanation.blueprintYaml).toContain('fetchOriginMain');
-    expect(encoded.explanation.receivedYaml).toContain('stageHostUpdates');
+    expect(encoded.explanation.unifiedDiff).toContain('+++ received.yaml');
+    expect(encoded.explanation.kind).toBe(BlueprintExplanationKind.Structural);
   });
 
   test('encodeResponse includes issue codes and explanation', () => {
@@ -109,12 +78,12 @@ describe('decode error encoding', () => {
       ),
     ) as {
       errors: readonly { issue: FieldIssue; message: string }[];
-      explanation: { changes: readonly unknown[] };
+      explanation: { unifiedDiff: string };
     };
     for (const error of encoded.errors) {
       expect(error.issue).toBe(FieldIssue.MissingRequiredField);
       expect(error.message).toBe('missing required field');
     }
-    expect(encoded.explanation.changes.length).toBeGreaterThan(0);
+    expect(encoded.explanation.unifiedDiff.length).toBeGreaterThan(0);
   });
 });

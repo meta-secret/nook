@@ -3,6 +3,10 @@ import {
   decodeCortexAuditRequest,
   type CortexAuditRequest,
 } from './args/cortex-audit.ts';
+import {
+  decodeDependencyPopularityRequest,
+  type DependencyPopularityRequest,
+} from './args/dependency-popularity.ts';
 import { decodePrePushRequest, type PrePushRequest } from './args/pre-push.ts';
 import {
   decodeSkillScaffoldRequest,
@@ -45,6 +49,10 @@ export type LoomRequest =
   | AgentStatsLoomRequest
   | PrLandLoomRequest
   | {
+      readonly family: RequestFamily.DependencyPopularity;
+      readonly dependencyPopularity: DependencyPopularityRequest;
+    }
+  | {
       readonly family: RequestFamily.ToolsList;
       readonly toolsList: ToolsListRequest;
     }
@@ -59,6 +67,7 @@ const ROOT_FAMILIES: readonly RequestFamily[] = [
   RequestFamily.SkillScaffold,
   RequestFamily.AgentStats,
   RequestFamily.PrLand,
+  RequestFamily.DependencyPopularity,
   RequestFamily.ToolsList,
   RequestFamily.ToolsCall,
 ];
@@ -133,6 +142,13 @@ function decodeFamily(
       return decodeAgentStatsFamily(payload, path);
     case RequestFamily.PrLand:
       return decodePrLandFamily(payload, path);
+    case RequestFamily.DependencyPopularity: {
+      const decoded = decodeDependencyPopularityRequest(payload);
+      return mapDecode(decoded, (dependencyPopularity) => ({
+        family,
+        dependencyPopularity,
+      }));
+    }
     case RequestFamily.ToolsList: {
       const decoded = decodeToolsListRequest(payload);
       return mapDecode(decoded, (toolsList) => ({ family, toolsList }));

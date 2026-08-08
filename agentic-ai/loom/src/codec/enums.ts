@@ -5,6 +5,7 @@ export enum RequestFamily {
   SkillScaffold = 'skillScaffold',
   AgentStats = 'agentStats',
   PrLand = 'prLand',
+  DependencyPopularity = 'dependencyPopularity',
   ToolsList = 'toolsList',
   ToolsCall = 'toolsCall',
 }

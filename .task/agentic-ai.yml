@@ -131,6 +131,16 @@ tasks:
         vars:
           CONFIG: '{{.CONFIG}}'
 
+  loom:dependency-popularity:
+    desc: Check npm/crates.io dependency popularity against thresholds.
+    deps: [loom:install]
+    vars:
+      CONFIG: '{{default "agentic-ai/loom/params/dependency-popularity/default.yaml" .CONFIG}}'
+    cmds:
+      - task: loom:run
+        vars:
+          CONFIG: '{{.CONFIG}}'
+
   hive:format:
     desc: Format the Hive Rust workspace.
     cmds:

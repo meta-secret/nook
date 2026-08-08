@@ -100,6 +100,21 @@ async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
         body: successResponseForFamily(RequestFamily.CortexAudit, result),
       };
     }
+    if (
+      request.family === RequestFamily.DependencyPopularity &&
+      typeof result === 'object' &&
+      result instanceof Object &&
+      'ok' in result &&
+      result.ok === false
+    ) {
+      return {
+        exitCode: 1,
+        body: successResponseForFamily(
+          RequestFamily.DependencyPopularity,
+          result,
+        ),
+      };
+    }
     return {
       exitCode: 0,
       body: buildSuccessResponse(request, result),
@@ -148,6 +163,11 @@ function buildSuccessResponse(
       return successResponseForAgentStats(request.operation, result);
     case RequestFamily.PrLand:
       return successResponseForPrLand(request.operation, result);
+    case RequestFamily.DependencyPopularity:
+      return successResponseForFamily(
+        RequestFamily.DependencyPopularity,
+        result,
+      );
     case RequestFamily.ToolsList:
     case RequestFamily.ToolsCall:
       return successResponseForFamily(RequestFamily.ToolsList, result);
@@ -170,6 +190,11 @@ function buildExecuteErrorResponse(
       return executeErrorResponseForAgentStats(request.operation, errors);
     case RequestFamily.PrLand:
       return executeErrorResponseForPrLand(request.operation, errors);
+    case RequestFamily.DependencyPopularity:
+      return executeErrorResponseForFamily(
+        RequestFamily.DependencyPopularity,
+        errors,
+      );
     case RequestFamily.ToolsList:
     case RequestFamily.ToolsCall:
       return executeErrorResponseForFamily(RequestFamily.ToolsList, errors);

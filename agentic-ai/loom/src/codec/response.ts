@@ -1,4 +1,7 @@
-import type { BlueprintExplanation } from './blueprint-diff.ts';
+import {
+  BlueprintExplanationKind,
+  type BlueprintExplanation,
+} from './blueprint-diff.ts';
 import {
   AgentStatsOperation,
   PrLandOperation,
@@ -29,6 +32,7 @@ export type SuccessResponse =
         | RequestFamily.PrePush
         | RequestFamily.CortexAudit
         | RequestFamily.SkillScaffold
+        | RequestFamily.DependencyPopularity
         | RequestFamily.ToolsList;
     })
   | (SuccessResponseBase & {
@@ -58,6 +62,7 @@ export type ExecuteErrorResponse =
         | RequestFamily.PrePush
         | RequestFamily.CortexAudit
         | RequestFamily.SkillScaffold
+        | RequestFamily.DependencyPopularity
         | RequestFamily.ToolsList
         | RequestFamily.ToolsCall;
       readonly errors: readonly FieldError[];
@@ -98,6 +103,7 @@ export function successResponseForFamily(
     | RequestFamily.PrePush
     | RequestFamily.CortexAudit
     | RequestFamily.SkillScaffold
+    | RequestFamily.DependencyPopularity
     | RequestFamily.ToolsList,
   result: unknown,
 ): SuccessResponse {
@@ -141,6 +147,7 @@ export function executeErrorResponseForFamily(
     | RequestFamily.PrePush
     | RequestFamily.CortexAudit
     | RequestFamily.SkillScaffold
+    | RequestFamily.DependencyPopularity
     | RequestFamily.ToolsList
     | RequestFamily.ToolsCall,
   errors: readonly FieldError[],
@@ -227,12 +234,17 @@ export function encodeResponse(
     },
   };
   if ('explanation' in response) {
-    encoded.explanation = {
+    const explanation: Record<string, unknown> = {
+      kind: response.explanation.kind,
       blueprintPath: response.explanation.blueprintPath,
       blueprintYaml: response.explanation.blueprintYaml,
       receivedYaml: response.explanation.receivedYaml,
-      changes: response.explanation.changes,
+      unifiedDiff: response.explanation.unifiedDiff,
     };
+    if (response.explanation.kind === BlueprintExplanationKind.Syntax) {
+      explanation.parseMessage = response.explanation.parseMessage;
+    }
+    encoded.explanation = explanation;
   }
   if (response.phase === ResponsePhase.Execute) {
     encoded.family = response.family;

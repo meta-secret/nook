@@ -3,6 +3,7 @@ import {
   AGENT_STATS_FILE_INPUT_SCHEMA,
 } from '../codec/args/agent-stats.ts';
 import { CORTEX_AUDIT_INPUT_SCHEMA } from '../codec/args/cortex-audit.ts';
+import { DEPENDENCY_POPULARITY_INPUT_SCHEMA } from '../codec/args/dependency-popularity.ts';
 import { PRE_PUSH_INPUT_SCHEMA } from '../codec/args/pre-push.ts';
 import {
   PR_LAND_PR_INPUT_SCHEMA,
@@ -22,6 +23,7 @@ import {
   runAgentStatsValidate,
 } from '../commands/agent-stats.ts';
 import { runCortexAudit } from '../commands/cortex-audit.ts';
+import { runDependencyPopularity } from '../commands/dependency-popularity.ts';
 import {
   runPrLandMergeCheck,
   runPrLandReady,
@@ -30,11 +32,7 @@ import {
 } from '../commands/pr-land.ts';
 import { runPrePush } from '../commands/pre-push.ts';
 import { runSkillScaffold } from '../commands/skill-scaffold.ts';
-import {
-  LoomFailureCode,
-  loomFailure,
-  loomFailureDetail,
-} from '../loom-failure.ts';
+import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
 
 export type JsonSchema = Readonly<Record<string, unknown>>;
 
@@ -122,6 +120,13 @@ const DISCOVERABLE: readonly DiscoverableRequest[] = [
     exampleRequest: 'agentic-ai/loom/params/pr-land/merge-check.example.yaml',
     inputSchema: PR_LAND_PR_INPUT_SCHEMA,
   },
+  {
+    family: RequestFamily.DependencyPopularity,
+    description:
+      'Reject low-popularity npm packages and crates.io crates against thresholds.',
+    exampleRequest: 'agentic-ai/loom/params/dependency-popularity/default.yaml',
+    inputSchema: DEPENDENCY_POPULARITY_INPUT_SCHEMA,
+  },
 ];
 
 export function listDiscoverableRequests(): readonly DiscoverableRequest[] {
@@ -160,6 +165,8 @@ export async function executeRequest(request: LoomRequest): Promise<unknown> {
         case PrLandOperation.MergeCheck:
           return runPrLandMergeCheck(request.mergeCheck);
       }
+    case RequestFamily.DependencyPopularity:
+      return runDependencyPopularity(request.dependencyPopularity);
     case RequestFamily.ToolsList:
     case RequestFamily.ToolsCall:
       loomFailureDetail(

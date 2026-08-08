@@ -86,8 +86,13 @@ Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/
 - codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation
 - runtime failures throw `LoomFailure` with `LoomFailureCode`
 - no generic TypeScript `Result<T>` or `Maybe<T>` utilities
+- prefer popular libraries over hand-rolled commodity helpers
+  ([prefer-popular-libraries.md](../../.cortex/dynamic-skills/prefer-popular-libraries.md))
 
 Enforced by `task preflight:typescript-state` / Loom CI.
+
+Decode errors include `explanation.unifiedDiff` from the `diff` (jsdiff)
+package so agents can compare the closest blueprint with the received YAML.
 
 ## Agent entrypoints
 
@@ -95,6 +100,7 @@ Enforced by `task preflight:typescript-state` / Loom CI.
 task loom:pre-push
 task loom:tools-list
 task loom:cortex-audit
+task loom:dependency-popularity
 task loom:run CONFIG=agentic-ai/loom/params/skill-scaffold/request.example.yaml
 task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 task loom:pr-land CONFIG=path/to/validate-request.yaml

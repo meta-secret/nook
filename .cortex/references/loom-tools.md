@@ -69,11 +69,31 @@ task loom:tools-list
 On decode errors:
 
 1. Read `errors[].path` and `errors[].issue`.
-2. Read `explanation` — it compares the closest blueprint template with the
-   received YAML and lists `changes` (`missing`, `extra`, `typeMismatch`, or
-   `syntaxInvalid`).
-3. Fix the request to match `explanation.blueprintYaml`, then retry.
-4. Run `toolsList` when the root family is unclear.
+2. Read `explanation.unifiedDiff` — a `diff` (jsdiff) patch of the closest
+   blueprint template versus the received YAML.
+3. For syntax failures, also read `explanation.parseMessage`.
+4. Fix the request to match `explanation.blueprintYaml`, then retry.
+5. Run `toolsList` when the root family is unclear.
+
+### dependencyPopularity
+
+Reject low-adoption npm packages and crates.io crates:
+
+```yaml
+dependencyPopularity:
+  includeRepositoryManifests: true
+  minNpmWeeklyDownloads: 10000
+  minGitHubStars: 100
+  minCratesIoDownloads: 50000
+  minCratesIoRecentDownloads: 1000
+```
+
+```bash
+task loom:dependency-popularity
+```
+
+Prefer libraries over boilerplate:
+[prefer-popular-libraries.md](../dynamic-skills/prefer-popular-libraries.md).
 
 ## Common requests
 
