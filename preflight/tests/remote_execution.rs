@@ -77,10 +77,7 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
     let valid = remote_batch_command(&["--validate", "rust:test,web:check"])?;
     assert!(valid.status.success());
-    assert_eq!(
-        String::from_utf8(valid.stdout)?,
-        "rust:test,web:check\n"
-    );
+    assert_eq!(String::from_utf8(valid.stdout)?, "rust:test,web:check\n");
 
     for invalid in [
         "",
