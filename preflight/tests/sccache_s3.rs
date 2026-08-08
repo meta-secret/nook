@@ -420,6 +420,25 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "nook-app/**/Cargo.toml",
         "nook-app/nook-platform/.cargo/**",
         "nook-app/nook-platform/.config/**",
+        "nook-app/nook-platform/clippy.toml",
+        "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
+        "nook-app/nook-platform/docker/rust/lineage.Dockerfile.dockerignore",
+        "nook-app/nook-platform/docker/sccache-wrapper.sh",
+        "nook-app/nook-platform/docker/sccache-report.sh",
+    ] {
+        assert!(
+            setup.contains(fingerprint_input),
+            "WASM dependency scope fingerprint is missing {fingerprint_input}"
+        );
+    }
+    let fingerprint_call = setup
+        .split_once("wasm_deps_fingerprint=\"${{ hashFiles(")
+        .context("docker setup must compute wasm_deps_fingerprint via hashFiles")?
+        .1
+        .split_once(") }}\"")
+        .context("docker setup hashFiles call must terminate")?
+        .0;
+    for non_cook_fingerprint_input in [
         "nook-app/Taskfile.yml",
         "nook-app/docker-bake.hcl",
         "nook-app/**/docker-bake.hcl",
@@ -427,13 +446,14 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "nook-app/nook-web/docker/*.docker-bake.hcl",
         "nook-app/nook-platform/docker/rust/**",
         "nook-app/nook-platform/docker/Taskfile.yml",
-        "nook-app/nook-platform/docker/sccache-wrapper.sh",
-        "nook-app/nook-platform/docker/sccache-report.sh",
+        "nook-app/nook-web/docker/Taskfile.yml",
+        "nook-app/nook-web/docker/web.Dockerfile",
+        "nook-app/nook-web/docker/toolchain.Dockerfile",
         "nook-app/nook-platform/nook-core/Dockerfile",
     ] {
         assert!(
-            setup.contains(fingerprint_input),
-            "WASM dependency scope fingerprint is missing {fingerprint_input}"
+            !fingerprint_call.contains(non_cook_fingerprint_input),
+            "WASM deps fingerprint must not rotate on non-cook input {non_cook_fingerprint_input}"
         );
     }
     assert!(
@@ -507,7 +527,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     );
     assert!(
         !wasm_source_cache.contains("nook-rust-base-v1")
-            && !wasm_source_cache.contains("nook-rust-deps-v2"),
+            && !wasm_source_cache.contains("nook-rust-deps-v3"),
         "WASM source cache-from must not import shorter rust-base or native rust-deps parents"
     );
     let docker_tasks = read("nook-app/nook-platform/docker/Taskfile.yml");
@@ -551,8 +571,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(!bake.contains("type=gha"));
     for fallback in [
         "nook/buildcache/nook-rust-base-v1:buildcache",
-        "nook/buildcache/nook-rust-deps-v2:buildcache",
-        "nook/buildcache/nook-rust-native-source-v2:buildcache",
+        "nook/buildcache/nook-rust-deps-v3:buildcache",
+        "nook/buildcache/nook-rust-native-source-v3:buildcache",
         "nook/buildcache/nook-rust-wasm-source-v2:buildcache",
         "nook/buildcache/nook-web-v1:buildcache",
     ] {
@@ -563,8 +583,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     }
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}",
     ] {
@@ -575,8 +595,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     }
     for write_scope in [
         "${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
         "${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
         "${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
         "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
@@ -589,8 +609,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     }
     for cold_isolated_import in [
         "${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
@@ -615,8 +635,31 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     );
     assert!(
         !wasm_deps_from.contains("nook-rust-base-v1")
-            && !wasm_deps_from.contains("nook-rust-deps-v2"),
-        "WASM deps cache-from must not import shorter rust-base or native rust-deps parents"
+            && !wasm_deps_from.contains("nook-rust-deps-v3")
+            && wasm_deps_from.contains("nook-rust-wasm-source-v2"),
+        "WASM deps cache-from must not import shorter rust-base or native rust-deps parents; longer source-v2 is the empty-fingerprint bootstrap"
+    );
+    let deps_from = rust_bake
+        .split_once("rust_deps_cache_from =")
+        .context("platform bake must define the native deps cache inputs")?
+        .1
+        .split_once("rust_deps_cache_to =")
+        .context("platform bake must delimit the native deps cache inputs")?
+        .0;
+    let native_source_from = rust_bake
+        .split_once("rust_native_source_cache_from =")
+        .context("platform bake must define the native source cache inputs")?
+        .1
+        .split_once("rust_native_source_cache_to =")
+        .context("platform bake must delimit the native source cache inputs")?
+        .0;
+    assert!(
+        !deps_from.contains("nook-rust-base-v1")
+            && !native_source_from.contains("nook-rust-base-v1")
+            && deps_from.contains("nook-rust-deps-v3")
+            && native_source_from.contains("nook-rust-native-source-v3")
+            && native_source_from.contains("nook-rust-deps-v3"),
+        "native deps must be own-scope v3; native source may import deps but never rust-base"
     );
     assert!(
         wasm_deps_from.contains("nook-rust-wasm-deps-v5")

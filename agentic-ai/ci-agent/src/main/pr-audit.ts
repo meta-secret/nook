@@ -39,12 +39,19 @@ type WorkflowRunStatus =
   | { state: WorkflowRunStatusState.Completed }
   | { state: WorkflowRunStatusState.Other; value: string };
 
+type RequiredJobAudit = {
+  name: string;
+  conclusion?: string;
+  status?: string;
+};
+
 type WorkflowAudit = RequiredPrWorkflow &
   (
     | { state: WorkflowAuditState.NotIndexed }
     | {
         state: WorkflowAuditState.Indexed;
         conclusion: WorkflowConclusion;
+        requiredJobAudits: RequiredJobAudit[];
         runId: number;
         status: WorkflowRunStatus;
         url: string;
@@ -184,6 +191,19 @@ export async function buildPrAudit(
         `${workflow.workflowName} run concluded ${workflow.conclusion.value}`,
       );
     }
+    if (workflow.state === WorkflowAuditState.Indexed) {
+      for (const job of workflow.requiredJobAudits) {
+        if (job.status !== WorkflowRunStatusState.Completed) {
+          reasons.push(
+            `${job.name} is ${job.status ?? "missing"} on the latest ${workflow.workflowName} run`,
+          );
+        } else if (job.conclusion !== GithubWorkflowConclusion.Success) {
+          reasons.push(
+            `${job.name} concluded ${job.conclusion ?? "unknown"} on the latest ${workflow.workflowName} run`,
+          );
+        }
+      }
+    }
   }
   if (
     requiredWorkflows.some((workflow) => workflow.workflowFile === "pr.yml") &&
@@ -246,13 +266,19 @@ async function auditWorkflows(
         head_sha: headSha,
         per_page: 20,
       });
-      const run = data.workflow_runs.find(
-        (candidate) =>
-          candidate.head_sha === headSha &&
-          (candidate.pull_requests ?? []).some(
-            (pullRequest) => pullRequest.number === prNumber,
-          ),
-      );
+      const runs = data.workflow_runs
+        .filter(
+          (candidate) =>
+            candidate.head_sha === headSha &&
+            (candidate.pull_requests ?? []).some(
+              (pullRequest) => pullRequest.number === prNumber,
+            ),
+        )
+        .sort(
+          (left, right) =>
+            Date.parse(right.created_at) - Date.parse(left.created_at),
+        );
+      const run = runs[0];
       if (!run) {
         return { ...workflow, state: WorkflowAuditState.NotIndexed };
       }
@@ -268,16 +294,57 @@ async function auditWorkflows(
           : typeof run.status === "string"
             ? { state: WorkflowRunStatusState.Other, value: run.status }
             : { state: WorkflowRunStatusState.Unavailable };
+      const requiredJobAudits = await auditRequiredJobs(
+        octokit,
+        { owner, repo },
+        run.id,
+        workflow.requiredJobs ?? [],
+      );
       return {
         ...workflow,
         state: WorkflowAuditState.Indexed,
         conclusion,
+        requiredJobAudits,
         runId: run.id,
         status,
         url: run.html_url,
       };
     }),
   );
+}
+
+async function auditRequiredJobs(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  runId: number,
+  requiredJobs: readonly string[],
+): Promise<RequiredJobAudit[]> {
+  if (requiredJobs.length === 0) {
+    return [];
+  }
+  const jobs = await octokit.paginate(
+    octokit.rest.actions.listJobsForWorkflowRun,
+    {
+      owner,
+      repo,
+      run_id: runId,
+      filter: "latest",
+      per_page: 100,
+    },
+  );
+  return requiredJobs.map((name) => {
+    const job = jobs.find((candidate) => candidate.name === name);
+    if (!job) {
+      return { name };
+    }
+    return {
+      name,
+      ...(typeof job.conclusion === "string"
+        ? { conclusion: job.conclusion }
+        : {}),
+      ...(typeof job.status === "string" ? { status: job.status } : {}),
+    };
+  });
 }
 
 async function inspectBranchProtection(

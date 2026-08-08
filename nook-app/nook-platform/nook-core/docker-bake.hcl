@@ -38,9 +38,9 @@ target "builder-wasm-deps" {
   dockerfile = "nook-app/nook-platform/docker/rust/lineage.Dockerfile"
   target     = "builder-wasm-deps"
   platforms  = ["linux/amd64"]
-  // Main owns the fingerprinted WASM lineage. PRs restore that scope (and their
-  // isolated write) only. Do not also cache-from rust-base or native rust-deps:
-  // those shorter parents orphan wasm chef cook layers.
+  // Main owns the fingerprinted WASM lineage. PRs restore that scope, their
+  // isolated write, and longer source-v2 as a soft fallback. Do not cache-from
+  // rust-base or native rust-deps: those shorter parents orphan cook layers.
   //
   // Cache proof: a repeated solve for the same fingerprint must hit CACHED for both chef cooks.
   cache-from = rust_wasm_deps_cache_from

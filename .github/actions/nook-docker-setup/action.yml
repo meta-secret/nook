@@ -183,7 +183,9 @@ runs:
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
         echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
         echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
-        wasm_deps_fingerprint="${{ hashFiles('nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/**/Cargo.toml', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**', 'nook-app/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/**/docker-bake.hcl', 'nook-app/nook-platform/docker/rust/docker-bake.hcl', 'nook-app/nook-web/docker/*.docker-bake.hcl', 'nook-app/nook-platform/docker/rust/**', 'nook-app/nook-web/docker/web.Dockerfile', 'nook-app/nook-web/docker/toolchain.Dockerfile', 'nook-app/nook-platform/docker/Taskfile.yml', 'nook-app/nook-web/docker/Taskfile.yml', 'nook-app/nook-platform/docker/sccache-wrapper.sh', 'nook-app/nook-platform/docker/sccache-report.sh', 'nook-app/nook-platform/nook-core/Dockerfile') }}"
+        # Fingerprint only cook-affecting inputs. Bake cache-from wiring and
+        # Taskfiles must not rotate an empty Main deps scope and force cold chef.
+        wasm_deps_fingerprint="${{ hashFiles('nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/**/Cargo.toml', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**', 'nook-app/nook-platform/clippy.toml', 'nook-app/nook-platform/docker/rust/lineage.Dockerfile', 'nook-app/nook-platform/docker/rust/lineage.Dockerfile.dockerignore', 'nook-app/nook-platform/docker/sccache-wrapper.sh', 'nook-app/nook-platform/docker/sccache-report.sh') }}"
         if [[ ! "$wasm_deps_fingerprint" =~ ^[0-9a-f]{64}$ ]]; then
           echo "Could not fingerprint the hosted WASM dependency graph" >&2
           exit 1

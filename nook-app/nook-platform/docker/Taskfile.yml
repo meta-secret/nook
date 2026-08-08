@@ -226,9 +226,11 @@ tasks:
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
-      # Stage rust-base, then wasm-deps, then source export. Each publisher owns
-      # one scoped Zot ref (Main fingerprint or git-commit remote-buildcache).
-      - task: docker:ci:cache:publish:rust-base
+      # Publish wasm-deps/source before rust-base. Staging rust-base first imports
+      # the shorter parent index and orphans local chef cook layers, so the next
+      # bake cold-cooks even when verify just hit CACHED from source-v2.
+      # Each publisher owns one scoped Zot ref (Main fingerprint or git-commit
+      # remote-buildcache).
       - >-
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
@@ -239,6 +241,7 @@ tasks:
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
         wasm-export
+      - task: docker:ci:cache:publish:rust-base
       - |
         set -euo pipefail
         if [ -z "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then

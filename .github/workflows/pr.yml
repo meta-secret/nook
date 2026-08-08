@@ -583,7 +583,9 @@ jobs:
       github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
-    needs: [verify, wasm-node-test]
+    # Native must succeed before the merge gate check can go green. A green
+    # preview with a failed Native job previously allowed false readiness.
+    needs: [rust, verify, wasm-node-test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

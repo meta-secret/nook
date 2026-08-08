@@ -150,17 +150,24 @@ Use this workflow for quality, CI, and deployment changes.
       - web dependencies
       - browser-free web
       - e2e web
-    - Product deps cache-from use trusted `nook-rust-base-v1` only.
-    - They must not import PR-isolated rust-base parents.
+    - Product native deps scopes must not import rust-base at all.
+    - Native source may import cooked native deps.
+    - Native source must not import rust-base.
     - Ecosystem nightly/policy-tools/policy and preflight scopes must not
       import rust-base at all.
     - Dylint/fuzz leaf scopes must not import nightly (or rust-base).
     - WASM deps/source scopes must not import rust-base or native rust-deps.
     - Their mode=max exports already embed that parent chain.
+    - WASM deps may import longer `nook-rust-wasm-source-v2` after own deps
+      scopes miss.
+    - That longer source index restores cook layers when the fingerprinted deps
+      scope is still empty.
     - Preflight restores rust-base only via Bake `contexts` (`target:rust-base`).
-    - Ecosystem nightly/policy/dylint/fuzz restore parents the same way.
+    - Native deps and ecosystem leaves restore parents the same way.
     - Leaf `cache-from` stays own-scope only (no short-parent importers).
     - `mode=max` leaf exports already embed the parent chain.
+    - Native deps/source use `nook-rust-deps-v3` and
+      `nook-rust-native-source-v3` after leaving short-chain rust-base.
     - Empty `cache-from=` and `cache-to=` overrides are prohibited.
     - Clearing `cache-from` after a remote hit forces cold apt/toolchain rebuilds.
     - Clearing `cache-to` on a linked parent is banned.
@@ -179,12 +186,19 @@ Use this workflow for quality, CI, and deployment changes.
     - A thin trusted Main index steals fat PR mode=max layers.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
-    - Native/WASM publishers stage `docker:ci:cache:publish:rust-base` before
+    - Native publishers stage `docker:ci:cache:publish:rust-base` before
       deps/source scopes so one Bake cannot rewrite apt while cooking chef.
+    - WASM publishers stage deps-publish and source export before rust-base.
+    - Staging rust-base first on WASM imports the shorter parent index and
+      orphans local chef cook layers for the next bake.
     - Publishers keep configured `cache-from` on every Bake.
     - Main verifies published WASM fingerprints from a fresh builder.
     - One CI job writes each shared ecosystem registry ref.
-    - The complete Rust/WASM cargo-chef dependency graph uses an immutable scope fingerprinted from manifests, lockfiles, compiler Dockerfiles, Task invocation inputs, and Bake definitions.
+    - The WASM cargo-chef dependency scope is fingerprinted from cook-affecting
+      inputs only.
+    - Those inputs are Cargo manifests/lockfiles, `.cargo`/`.config`,
+      `clippy.toml`, `lineage.Dockerfile` (+ dockerignore), and sccache scripts.
+    - Bake cache-from wiring and Taskfiles must not rotate that fingerprint.
     - Hosted builds never attach Redis credentials.
     - There is no dedicated cache-reconstruction build.
     - Failed validation publishes nothing.
@@ -218,6 +232,8 @@ Use this workflow for quality, CI, and deployment changes.
     - Main-fix PRs carrying `ci:full-e2e` also feed separate local-provider web and extension browser jobs.
     - `Verify and preview` uses `always()` and fails explicitly when the WASM producer fails.
     - The established required check cannot be skipped by dependency failure.
+    - `Verify and preview` also needs Native Rust verification.
+    - A failed Native job must keep the merge-gate check from going green.
     - `Verify and preview` never waits for native coverage.
     - The preview web solve retries once after the known immediate BuildKit Dockerfile-load flake.
     - Repeated failures still fail the gate.

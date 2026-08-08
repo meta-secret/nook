@@ -29,9 +29,9 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1",
         "nook-rust-ecosystem-policy-tools-v4",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v1",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v3",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v2",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v3",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v2",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-v1",
@@ -237,7 +237,7 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
 fn assert_rust_cache_export_hardening(bake: &str) {
     assert!(
         !bake.contains(
-            "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true"
+            "nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true"
         ) && !bake.contains("${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,ignore-error=true",),
         "Rust dependency cache exporters must not ignore upload failures"
     );
@@ -337,6 +337,24 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && native_publish.contains("task: docker:ci:cache:publish:rust-base")
             && native_publish.contains("builder-core-deps-publish builder-debug"),
         "native cache publish must stage rust-base-publish, then deps-publish/debug, then preflight"
+    );
+    let wasm_publish = docker_tasks
+        .split("docker:ci:cache:publish:wasm:")
+        .nth(1)
+        .and_then(|tail| tail.split("docker:rust-base:").next())
+        .unwrap_or("");
+    let wasm_deps_idx = wasm_publish
+        .find("builder-wasm-deps-publish")
+        .expect("wasm publish must bake builder-wasm-deps-publish");
+    let wasm_source_idx = wasm_publish
+        .find("wasm-export")
+        .expect("wasm publish must bake wasm-export");
+    let wasm_rust_base_idx = wasm_publish
+        .find("task: docker:ci:cache:publish:rust-base")
+        .expect("wasm publish must still seed rust-base after deps/source");
+    assert!(
+        wasm_deps_idx < wasm_source_idx && wasm_source_idx < wasm_rust_base_idx,
+        "wasm cache publish must stage deps-publish, then source export, then rust-base (never rust-base first)"
     );
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(

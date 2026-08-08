@@ -222,16 +222,27 @@ const MAIN_PR_CHECK = "Verify and preview";
 const WEB_RESEARCH_PR_CHECK = "Build and deploy research catalog";
 const RUST_ECOSYSTEM_PR_CHECK = "Rust ecosystem checks";
 
+/** Jobs that must succeed on the latest exact-head PR run before merge. */
+export const REQUIRED_MAIN_PR_JOBS = [
+  "Native Rust verification",
+  "WASM build and artifact",
+  "WASM Node tests",
+  "Web verification",
+  "Verify and preview",
+] as const;
+
 export type RequiredPrWorkflow = {
   checkName: string;
   workflowFile: string;
   workflowName: string;
+  requiredJobs?: readonly string[];
 };
 
 const MAIN_PR_WORKFLOW: RequiredPrWorkflow = {
   checkName: MAIN_PR_CHECK,
   workflowFile: "pr.yml",
   workflowName: "PR",
+  requiredJobs: REQUIRED_MAIN_PR_JOBS,
 };
 
 const WEB_RESEARCH_PR_WORKFLOW: RequiredPrWorkflow = {

@@ -318,7 +318,8 @@ PR, main, release, AI, scheduled, manual e2e, and research jobs use GitHub-hoste
 - On a native producer miss, preflight must finish before the native application Docker solve begins.
 - `Web verification` declares `needs` on the WASM build producer.
 - It downloads the run-stable WASM artifact directly after that job succeeds.
-- `Verify and preview` declares `needs` on web verification and WASM Node tests.
+- `Verify and preview` declares `needs` on Native Rust, web verification, and WASM Node tests.
+- That keeps the merge-gate check red when Native fails.
 - Preview deploys from a host dist handoff with pinned wrangler.
 - No consumer polls GitHub for a sibling producer.
 - Changed inputs must execute and complete the full workflow before a new handoff can be promoted.
@@ -541,7 +542,7 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 - `Web verification` depends on the build job and downloads the package with `actions/download-artifact`.
 - It can run browser-free web validation while Node tests continue.
 - It exports host dist trees for preview deploy.
-- `Verify and preview` depends on web verification and WASM Node tests.
+- `Verify and preview` depends on Native Rust, web verification, and WASM Node tests.
 - Optional web and extension e2e consumers need both WASM jobs and receive only a fully verified handoff.
 - A separate `Rust coverage report` job declares `needs: rust`, downloads the native handoff directly, and performs reporting without occupying or delaying the preview runner.
 

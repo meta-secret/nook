@@ -308,6 +308,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let pr_isolated_rust_base =
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true";
     let trusted_rust_base = "nook/buildcache/nook-rust-base-v1:buildcache";
+    let native_source_from = rust_bake
+        .split("rust_native_source_cache_from =")
+        .nth(1)
+        .and_then(|tail| tail.split("rust_native_source_cache_to =").next())
+        .unwrap_or("");
     assert!(
         !nightly_from.contains(trusted_rust_base)
             && !nightly_from.contains(pr_isolated_rust_base)
@@ -315,9 +320,17 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && !policy_tools_from.contains(pr_isolated_rust_base)
             && !preflight_from.contains(trusted_rust_base)
             && !preflight_from.contains(pr_isolated_rust_base)
-            && deps_from.contains(trusted_rust_base)
-            && !deps_from.contains(pr_isolated_rust_base),
-        "ecosystem/preflight scopes must not import rust-base; product deps keep trusted rust-base only"
+            && !deps_from.contains(trusted_rust_base)
+            && !deps_from.contains(pr_isolated_rust_base)
+            && !deps_from.contains("nook-rust-base-v1")
+            && !native_source_from.contains("nook-rust-base-v1"),
+        "ecosystem/preflight/native deps+source must not import rust-base short parents"
+    );
+    assert!(
+        deps_from.contains("nook-rust-deps-v3")
+            && native_source_from.contains("nook-rust-native-source-v3")
+            && native_source_from.contains("nook-rust-deps-v3"),
+        "native deps/source must restore the v3 own scopes after leaving short-chain rust-base"
     );
     assert!(
         !nightly_from.contains("nook/buildcache/nook-rust-ecosystem-nightly")

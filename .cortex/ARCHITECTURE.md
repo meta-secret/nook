@@ -670,12 +670,14 @@ PR consumer behavior:
 - `Web verification` depends on the WASM build producer through `needs`.
 - It downloads the clippy-clean WASM package with `actions/download-artifact`.
 - `WASM Node tests` can finish in parallel with web verification.
-- `Verify and preview` depends on web verification and WASM Node tests.
+- `Verify and preview` depends on Native Rust, web verification, and WASM Node tests.
 - It deploys from the exported host dist handoff.
 - Rust coverage reporting is a separate native-dependent job.
 - That job downloads the completed handoff directly.
-- Preview never idles on native compilation or sibling-job polling.
-- The overall gate still requires all jobs.
+- Preview waits for Native verification.
+- Preview still does not wait for native coverage.
+- Preview does not poll sibling jobs.
+- The overall gate requires the required producer jobs.
 - Producer failures are reported explicitly.
 
 Hosted CI cache persistence:
@@ -827,8 +829,10 @@ It restores the independent lineages from `registry.dev.nokey.sh`.
 - A follow-up publish Bake exports fat scopes from local layers.
 - Opt out with `NOOK_REGISTRY_CACHE=0`.
 - Hosted CI first stabilizes the shared Rust toolchain parent in `nook-rust-base-v1`.
-- It exports native and WASM dependency boundaries to `nook-rust-deps-v2` and the fingerprinted WASM deps ref with `mode=max`.
-- Source-sensitive native coverage and WASM outputs use separate `nook-rust-native-source-v2` and `nook-rust-wasm-source-v2` refs.
+- It exports native and WASM dependency boundaries to `nook-rust-deps-v3` and the fingerprinted WASM deps ref with `mode=max`.
+- The WASM deps fingerprint covers cook-affecting Cargo and lineage Dockerfile inputs only.
+- WASM deps restore may fall back to longer `nook-rust-wasm-source-v2` when that fingerprint is empty.
+- Source-sensitive native coverage and WASM outputs use separate `nook-rust-native-source-v3` and `nook-rust-wasm-source-v2` refs.
 - A workflow-only or web-only push does not recompile unchanged Rust on a fresh hosted runner.
 - Same-repository PR jobs restore Main plus the git-commit remote-buildcache scope.
 - PR exporters write only those git-commit remote-buildcache refs.
