@@ -5,7 +5,7 @@
   } from '../../../nook-web-shared/src/generated/i18n-keys'
   import { KeyRound, ShieldCheck } from '@lucide/svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
-  import type { ExtensionI18n } from '../lib/i18n'
+  import type { ExtensionI18n, ExtensionTranslationRequest } from '../lib/i18n'
   import { LoginDetectionStatus } from '../lib/login-detection-messages'
   import {
     createExtensionPasskey,
@@ -80,6 +80,14 @@
             ? I18N_KEYS.ExtensionCompanionLoginUnavailable
             : I18N_KEYS.ExtensionCompanionLoginChecking,
   )
+
+  function connectedVaultLabel(vault: string): string {
+    const request: ExtensionTranslationRequest = {
+      key: I18N_KEYS.ExtensionCompanionReadyVault,
+      replacements: { vault },
+    }
+    return i18n.t(request)
+  }
 
   function isOkResponse(response: unknown): boolean {
     return Boolean(
@@ -219,10 +227,10 @@
   }
 
   function createPasskey(): void {
-    void runDeviceAction(
-      () => createExtensionPasskey(passkeyLabel, deviceMode),
-      I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed,
-    )
+    void runDeviceAction(() => {
+      const args = { passkeyLabel, deviceMode }
+      return createExtensionPasskey(args)
+    }, I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed)
   }
 
   function useExistingPasskey(): void {
@@ -280,7 +288,7 @@
       data-connected={showExistingConnection ? 'true' : 'false'}
     >
       {showExistingConnection && vaultName
-        ? i18n.t(I18N_KEYS.ExtensionCompanionReadyVault, { vault: vaultName })
+        ? connectedVaultLabel(vaultName)
         : i18n.t(I18N_KEYS.ExtensionCompanionNotConnected)}
     </p>
     <p

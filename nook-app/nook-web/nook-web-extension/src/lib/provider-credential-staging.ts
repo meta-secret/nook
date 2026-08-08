@@ -1,4 +1,4 @@
-type UnknownRecord = Record<string, unknown>
+import type { ExternalObject, ExternalValue } from './external-value'
 
 export enum ProviderCredentialStagingKind {
   InvalidInput = 'invalid-input',
@@ -7,13 +7,13 @@ export enum ProviderCredentialStagingKind {
 
 export type ProviderCredentialStaging =
   | { kind: ProviderCredentialStagingKind.InvalidInput }
-  | { kind: ProviderCredentialStagingKind.Staged; providers: unknown[] }
+  | { kind: ProviderCredentialStagingKind.Staged; providers: ExternalValue[] }
 
-function isRecord(value: unknown): value is UnknownRecord {
+function isRecord(value: ExternalValue): value is ExternalObject {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
-function cloneProvider(provider: unknown): unknown {
+function cloneProvider(provider: ExternalValue): ExternalValue {
   if (!isRecord(provider)) return provider
   const clone = { ...provider }
   if (isRecord(provider.oauthFile)) {
@@ -27,7 +27,7 @@ function cloneProvider(provider: unknown): unknown {
   return clone
 }
 
-export function scrubProviderCredentials(providers: unknown): void {
+export function scrubProviderCredentials(providers: ExternalValue): void {
   if (!Array.isArray(providers)) return
   for (const provider of providers) {
     if (!isRecord(provider)) continue
@@ -52,7 +52,7 @@ export function scrubProviderCredentials(providers: unknown): void {
 }
 
 export function stageProviderCredentials(
-  providers: unknown,
+  providers: ExternalValue,
 ): ProviderCredentialStaging {
   if (!Array.isArray(providers)) {
     return { kind: ProviderCredentialStagingKind.InvalidInput }

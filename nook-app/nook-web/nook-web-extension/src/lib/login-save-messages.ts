@@ -1,3 +1,4 @@
+import type { ExternalValue } from './external-value'
 import type { AuthenticationOutcomeObservationView } from './outcome-evidence-messages'
 import { NookWebsiteLoginSaveDecision } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
@@ -75,18 +76,16 @@ export type WebsiteLoginSaveDismissMessage = {
   }
 }
 
-function hasOriginPayload(
-  message: unknown,
-  type: string,
-): message is {
+function hasOriginPayload(message: ExternalValue): message is {
   type: string
-  payload: Record<string, unknown> & { origin: string }
+  payload: Record<string, ExternalValue> & { origin: string }
 } {
   return Boolean(
     message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === type &&
+    typeof message.type === 'string' &&
+    message.type.length > 0 &&
     'payload' in message &&
     typeof message.payload === 'object' &&
     message.payload &&
@@ -97,10 +96,10 @@ function hasOriginPayload(
 }
 
 function isOutcomeObservation(
-  value: unknown,
+  value: ExternalValue,
 ): value is AuthenticationOutcomeObservationView {
   if (!value || typeof value !== 'object') return false
-  const view = value as Record<string, unknown>
+  const view = value as Record<string, ExternalValue>
   return (
     typeof view.navigatedAwayFromAuthPath === 'boolean' &&
     typeof view.authFieldsPresent === 'boolean' &&
@@ -115,9 +114,12 @@ function isOutcomeObservation(
 }
 
 export function isWebsiteLoginSaveOfferMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteLoginSaveOfferMessage {
-  if (!hasOriginPayload(message, 'nook:website-login-save-offer')) {
+  if (
+    !hasOriginPayload(message) ||
+    message.type !== WebsiteLoginSaveOfferMessageType.NookWebsiteLoginSaveOffer
+  ) {
     return false
   }
   const payload = message.payload
@@ -130,32 +132,43 @@ export function isWebsiteLoginSaveOfferMessage(
 }
 
 export function isWebsiteLoginSavePendingMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteLoginSavePendingMessage {
-  return hasOriginPayload(message, 'nook:website-login-save-pending')
+  return (
+    hasOriginPayload(message) &&
+    message.type ===
+      WebsiteLoginSavePendingMessageType.NookWebsiteLoginSavePending
+  )
 }
 
 export function isWebsiteLoginSaveCommitMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteLoginSaveCommitMessage {
-  if (!hasOriginPayload(message, 'nook:website-login-save-commit')) {
+  if (
+    !hasOriginPayload(message) ||
+    message.type !==
+      WebsiteLoginSaveCommitMessageType.NookWebsiteLoginSaveCommit
+  ) {
     return false
   }
+  const payload = message.payload
   return (
-    typeof message.payload.offerId === 'string' &&
-    message.payload.offerId.length > 0 &&
-    isOutcomeObservation(message.payload.evidence)
+    typeof payload.offerId === 'string' &&
+    payload.offerId.length > 0 &&
+    isOutcomeObservation(payload.evidence)
   )
 }
 
 export function isWebsiteLoginSaveDismissMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteLoginSaveDismissMessage {
-  if (!hasOriginPayload(message, 'nook:website-login-save-dismiss')) {
+  if (
+    !hasOriginPayload(message) ||
+    message.type !==
+      WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss
+  ) {
     return false
   }
-  return (
-    typeof message.payload.offerId === 'string' &&
-    message.payload.offerId.length > 0
-  )
+  const payload = message.payload
+  return typeof payload.offerId === 'string' && payload.offerId.length > 0
 }

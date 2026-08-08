@@ -92,7 +92,6 @@ export default [
   {
     files: ['**/*.ts', '**/*.svelte.ts'],
     rules: {
-      ...typedApiRules,
       '@typescript-eslint/await-thenable': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',
@@ -112,7 +111,6 @@ export default [
   {
     files: ['**/*.svelte'],
     rules: {
-      ...typedApiRules,
       '@typescript-eslint/await-thenable': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',
@@ -129,6 +127,16 @@ export default [
         tsconfigRootDir: import.meta.dirname,
       },
     },
+  },
+  {
+    // Migrate the extension from reusable boundaries outward. Keep both path
+    // forms because extension lint runs from its package directory while the
+    // application lint runs from the nook-web directory.
+    files: [
+      'nook-web-extension/src/lib/**/*.ts',
+      'src/lib/**/*.ts',
+    ],
+    rules: typedApiRules,
   },
   {
     files: ['**/tests/**', '**/e2e/**'],

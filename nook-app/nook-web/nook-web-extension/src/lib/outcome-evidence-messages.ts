@@ -1,3 +1,4 @@
+import type { ExternalValue } from './external-value'
 import type { AuthenticationOutcomeVerdict } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export type AuthenticationOutcomeObservationView = {
@@ -28,7 +29,7 @@ export type AuthenticationOutcomeClassifyMessage = {
 }
 
 export function isAuthenticationOutcomeClassifyMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is AuthenticationOutcomeClassifyMessage {
   if (
     !message ||
@@ -43,10 +44,10 @@ export function isAuthenticationOutcomeClassifyMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   const observation = payload.observation
   if (!observation || typeof observation !== 'object') return false
-  const view = observation as Record<string, unknown>
+  const view = observation as Record<string, ExternalValue>
   return (
     typeof view.navigatedAwayFromAuthPath === 'boolean' &&
     typeof view.authFieldsPresent === 'boolean' &&

@@ -13,9 +13,13 @@ type BarcodeDetectorLike = {
   ) => Promise<Array<{ rawValue?: string; format?: string }>>
 }
 
-type BarcodeDetectorConstructor = new (options?: {
+type BarcodeDetectorOptions = {
   formats?: string[]
-}) => BarcodeDetectorLike
+}
+
+type BarcodeDetectorConstructor = new (
+  options?: BarcodeDetectorOptions,
+) => BarcodeDetectorLike
 
 enum BarcodeDetectorAvailabilityKind {
   Unsupported = 'unsupported',
@@ -163,10 +167,11 @@ function collectMarkedOtpauthCandidates(): DecodedOtpauthCandidate[] {
     if (!value.startsWith(OTPAUTH_TOTP_PREFIX) || seen.has(value)) continue
     index += 1
     seen.add(value)
-    candidates.push({
+    const candidate: DecodedOtpauthCandidate = {
       sourceLabel: `QR ${index}`,
       otpauthUri: value,
-    })
+    }
+    candidates.push(candidate)
   }
   return candidates
 }
@@ -228,7 +233,8 @@ export async function decodeVisibleOtpauthCandidates(): Promise<{
     }
   }
   const { Detector } = detectorAvailability
-  const detector = new Detector({ formats: ['qr_code'] })
+  const detectorOptions: BarcodeDetectorOptions = { formats: ['qr_code'] }
+  const detector = new Detector(detectorOptions)
   const candidates: DecodedOtpauthCandidate[] = []
   const seen = new Set<string>()
   let index = 0
@@ -243,10 +249,11 @@ export async function decodeVisibleOtpauthCandidates(): Promise<{
         const value = code.rawValue?.trim() ?? ''
         if (!value.startsWith(OTPAUTH_TOTP_PREFIX) || seen.has(value)) continue
         seen.add(value)
-        candidates.push({
+        const candidate: DecodedOtpauthCandidate = {
           sourceLabel: `QR ${index}`,
           otpauthUri: value,
-        })
+        }
+        candidates.push(candidate)
       }
     } catch {
       // Cross-origin or undecodable media is skipped without weakening

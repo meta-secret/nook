@@ -230,8 +230,8 @@ export class ExtensionSessionMessageDispatcher {
       }
       payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
     }
-    return this.operations.enqueue(
-      async () => {
+    return this.operations.enqueue({
+      operation: async () => {
         if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
           throw new Error('Extension session request expired.')
         }
@@ -249,12 +249,12 @@ export class ExtensionSessionMessageDispatcher {
           }
         }
       },
-      {
+      options: {
         priority: SessionOperationPriority.Interactive,
         expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
         onExpire: clearPending,
       },
-    )
+    })
   }
 
   private enqueueVaultImport(
@@ -268,8 +268,8 @@ export class ExtensionSessionMessageDispatcher {
       staging.kind === ProviderCredentialStagingKind.InvalidInput ||
       staging.providers.length === 0
     ) {
-      return this.operations.enqueue(
-        () =>
+      return this.operations.enqueue({
+        operation: () =>
           this.context.handleMessage({
             ...message,
             payload: {
@@ -282,8 +282,8 @@ export class ExtensionSessionMessageDispatcher {
                     : [],
             },
           }),
-        { priority: SessionOperationPriority.Interactive },
-      )
+        options: { priority: SessionOperationPriority.Interactive },
+      })
     }
     const stagedProviders = staging.providers
     payload.providers = []
@@ -297,8 +297,8 @@ export class ExtensionSessionMessageDispatcher {
       scrubProviderCredentials(payloadResidency.payload.providers)
       payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
     }
-    return this.operations.enqueue(
-      async () => {
+    return this.operations.enqueue({
+      operation: async () => {
         if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
           throw new Error('Extension session request expired.')
         }
@@ -314,11 +314,11 @@ export class ExtensionSessionMessageDispatcher {
           operationPayload.providers = []
         }
       },
-      {
+      options: {
         priority: SessionOperationPriority.Interactive,
         onExpire: clearPending,
       },
-    )
+    })
   }
 
   enqueue(message: unknown): Promise<unknown> {
@@ -350,13 +350,16 @@ export class ExtensionSessionMessageDispatcher {
       )
     }
 
-    return this.operations.enqueue(() => this.context.handleMessage(message), {
-      priority,
-      ...(requestedExpiry.kind === RequestedQueueExpiryKind.Requested
-        ? { expiresAt: requestedExpiry.expiresAt }
-        : priority === SessionOperationPriority.Interactive
-          ? { expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS }
-          : {}),
+    return this.operations.enqueue({
+      operation: () => this.context.handleMessage(message),
+      options: {
+        priority,
+        ...(requestedExpiry.kind === RequestedQueueExpiryKind.Requested
+          ? { expiresAt: requestedExpiry.expiresAt }
+          : priority === SessionOperationPriority.Interactive
+            ? { expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS }
+            : {}),
+      },
     })
   }
 

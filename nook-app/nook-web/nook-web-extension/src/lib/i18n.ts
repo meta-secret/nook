@@ -11,9 +11,16 @@ import { translateFromCatalog } from '../../../nook-web-shared/src/vault-app/lib
 
 export const NOOK_LOCALE_STORAGE_KEY = 'nook_locale'
 
+export type ExtensionTranslationRequest =
+  | string
+  | {
+      key: string
+      replacements: Record<string, string>
+    }
+
 export type ExtensionI18n = {
   locale: NookAppLocale
-  t: (key: string, replacements?: Record<string, string>) => string
+  t: (request: ExtensionTranslationRequest) => string
 }
 
 function readSavedLocale(): StoredAppLocaleInput {
@@ -71,7 +78,10 @@ export async function initializeExtensionI18n(): Promise<ExtensionI18n> {
 
   return {
     locale,
-    t(key, replacements) {
+    t(request) {
+      const key = typeof request === 'string' ? request : request.key
+      const replacements =
+        typeof request === 'string' ? false : request.replacements
       let text = translateFromCatalog(catalog, locale, key)
       if (replacements) {
         for (const [name, value] of Object.entries(replacements)) {

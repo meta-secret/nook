@@ -231,7 +231,10 @@ export async function openSimpleVaultConnection(
   await popupPage.getByTestId('connect-simple-vault-btn').click()
   const simplePage = await openedConnectPage
   await expect(simplePage).toHaveURL((url) =>
-    belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
+    belongsToSimpleVault({
+      baseUrl: simpleVaultBaseUrl,
+      candidateUrl: url.toString(),
+    }),
   )
   return simplePage
 }

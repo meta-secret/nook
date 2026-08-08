@@ -4,7 +4,7 @@
   import { onMount } from 'svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
-  import type { ExtensionI18n } from '../lib/i18n'
+  import type { ExtensionI18n, ExtensionTranslationRequest } from '../lib/i18n'
 
   let {
     i18n,
@@ -59,6 +59,14 @@
     const host = account.websiteHost.trim()
     if (host.length > 0) return host
     return i18n.t(I18N_KEYS.ExtensionLoginPickerUnnamed)
+  }
+
+  function destinationLabel(origin: string): string {
+    const request: ExtensionTranslationRequest = {
+      key: I18N_KEYS.ExtensionLoginPickerDestination,
+      replacements: { origin },
+    }
+    return i18n.t(request)
   }
 
   async function loadAccounts(searchQuery: string): Promise<void> {
@@ -132,9 +140,7 @@
   </p>
   {#if destinationOrigin}
     <p class="destination-origin" data-testid="login-destination">
-      {i18n.t(I18N_KEYS.ExtensionLoginPickerDestination, {
-        origin: destinationOrigin,
-      })}
+      {destinationLabel(destinationOrigin)}
     </p>
   {/if}
 

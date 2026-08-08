@@ -47,19 +47,23 @@ describe('SessionOperationQueue', () => {
     const queue = new SessionOperationQueue()
     const blocker = deferred()
     const order: string[] = []
-    const first = queue.enqueue(async () => {
-      order.push('first')
-      await blocker.promise
+    const first = queue.enqueue({
+      operation: async () => {
+        order.push('first')
+        await blocker.promise
+      },
     })
-    const normal = queue.enqueue(async () => {
-      order.push('normal')
+    const normal = queue.enqueue({
+      operation: async () => {
+        order.push('normal')
+      },
     })
-    const interactive = queue.enqueue(
-      async () => {
+    const interactive = queue.enqueue({
+      operation: async () => {
         order.push('interactive')
       },
-      { priority: SessionOperationPriority.Interactive },
-    )
+      options: { priority: SessionOperationPriority.Interactive },
+    })
 
     blocker.release()
     await Promise.all([first, normal, interactive])
@@ -70,13 +74,13 @@ describe('SessionOperationQueue', () => {
   test('expires queued work and clears its sensitive input', async () => {
     const queue = new SessionOperationQueue()
     const blocker = deferred()
-    const first = queue.enqueue(() => blocker.promise)
+    const first = queue.enqueue({ operation: () => blocker.promise })
     let passwordResidency: PasswordResidency = {
       kind: PasswordResidencyKind.Resident,
       password: 'temporary-password',
     }
-    const queued = queue.enqueue(
-      async () => {
+    const queued = queue.enqueue({
+      operation: async () => {
         throw new Error(
           `Unexpected password use: ${
             passwordResidency.kind === PasswordResidencyKind.Resident
@@ -85,14 +89,14 @@ describe('SessionOperationQueue', () => {
           }`,
         )
       },
-      {
+      options: {
         priority: SessionOperationPriority.Interactive,
         expiresAt: Date.now() + 10,
         onExpire: () => {
           passwordResidency = { kind: PasswordResidencyKind.Cleared }
         },
       },
-    )
+    })
 
     await expect(queued).rejects.toThrow('EXTENSION_SESSION_REQUEST_EXPIRED')
     expect(passwordResidency.kind).toBe(PasswordResidencyKind.Cleared)
@@ -102,24 +106,29 @@ describe('SessionOperationQueue', () => {
 
   test('continues after an operation fails', async () => {
     const queue = new SessionOperationQueue()
-    const failed = queue.enqueue(async () => {
-      throw new Error('expected failure')
+    const failed = queue.enqueue({
+      operation: async () => {
+        throw new Error('expected failure')
+      },
     })
     await expect(failed).rejects.toThrow('expected failure')
-    expect(await queue.enqueue(async () => 'ok')).toBe('ok')
+    expect(await queue.enqueue({ operation: async () => 'ok' })).toBe('ok')
   })
 
   test('closes terminally and clears queued sensitive input', async () => {
     const queue = new SessionOperationQueue()
     const blocker = deferred()
-    const first = queue.enqueue(() => blocker.promise)
+    const first = queue.enqueue({ operation: () => blocker.promise })
     let secretResidency: SecretResidency = {
       kind: SecretResidencyKind.Resident,
       secret: 'temporary-secret',
     }
-    const queued = queue.enqueue(async () => {}, {
-      onExpire: () => {
-        secretResidency = { kind: SecretResidencyKind.Cleared }
+    const queued = queue.enqueue({
+      operation: async () => {},
+      options: {
+        onExpire: () => {
+          secretResidency = { kind: SecretResidencyKind.Cleared }
+        },
       },
     })
 
@@ -127,7 +136,7 @@ describe('SessionOperationQueue', () => {
 
     await expect(queued).rejects.toThrow('session expired')
     expect(secretResidency.kind).toBe(SecretResidencyKind.Cleared)
-    await expect(queue.enqueue(async () => {})).rejects.toThrow(
+    await expect(queue.enqueue({ operation: async () => {} })).rejects.toThrow(
       'session expired',
     )
     blocker.release()

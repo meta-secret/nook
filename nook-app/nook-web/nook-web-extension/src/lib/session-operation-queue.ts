@@ -11,16 +11,20 @@ type QueueOptions = {
   onExpire?: () => void
 }
 
-type QueueEntry<T> = {
+type QueueEntry = {
   sequence: number
   priority: number
-  operation: () => Promise<T>
-  resolve: (value: T) => void
+  operation: () => Promise<void>
   reject: (reason: Error) => void
   expiresAt?: number
   onExpire?: () => void
   expiryTimer?: ReturnType<typeof setTimeout>
   settled: boolean
+}
+
+export type EnqueueSessionOperationArgs<T> = {
+  operation: () => Promise<T>
+  options?: QueueOptions
 }
 
 const priorityOrder: Record<SessionOperationPriority, number> = {
@@ -42,7 +46,7 @@ type QueueState =
   | { kind: QueueStateKind.Closed; error: Error }
 
 export class SessionOperationQueue {
-  private entries: QueueEntry<unknown>[] = []
+  private entries: QueueEntry[] = []
   private sequence = 0
   private running = false
   private state: QueueState = { kind: QueueStateKind.Open }
@@ -61,22 +65,24 @@ export class SessionOperationQueue {
     }
   }
 
-  enqueue<T>(
-    operation: () => Promise<T>,
-    options: QueueOptions = {},
-  ): Promise<T> {
+  enqueue<T>(args: EnqueueSessionOperationArgs<T>): Promise<T> {
+    const { operation, options = {} } = args
+    // Promise owns this callback's resolve and reject signature.
+    // eslint-disable-next-line max-params
     return new Promise<T>((resolve, reject) => {
       if (this.state.kind === QueueStateKind.Closed) {
         options.onExpire?.()
         reject(this.state.error)
         return
       }
-      const entry: QueueEntry<T> = {
+      const entry: QueueEntry = {
         sequence: this.sequence++,
         priority:
           priorityOrder[options.priority ?? SessionOperationPriority.Normal],
-        operation,
-        resolve,
+        operation: async () => {
+          const result = await operation()
+          resolve(result)
+        },
         reject,
         expiresAt: options.expiresAt,
         onExpire: options.onExpire,
@@ -98,7 +104,9 @@ export class SessionOperationQueue {
           reject(expiredError())
         }, remaining)
       }
-      this.entries.push(entry as QueueEntry<unknown>)
+      this.entries.push(entry)
+      // Array.sort owns this comparator signature.
+      // eslint-disable-next-line max-params
       this.entries.sort(
         (left, right) =>
           left.priority - right.priority || left.sequence - right.sequence,
@@ -125,9 +133,8 @@ export class SessionOperationQueue {
           } else {
             if (entry.expiryTimer) clearTimeout(entry.expiryTimer)
             try {
-              const result = await entry.operation()
+              await entry.operation()
               entry.settled = true
-              entry.resolve(result)
             } catch (error) {
               entry.settled = true
               entry.reject(

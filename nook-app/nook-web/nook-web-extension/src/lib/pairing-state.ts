@@ -1,3 +1,4 @@
+import type { ExternalValue } from './external-value'
 import {
   isExtensionReadySetupState,
   type ExtensionReadySetupState,
@@ -21,7 +22,7 @@ export type ExtensionSetupLoad =
   | { kind: ExtensionSetupLoadKind.Unavailable }
 
 export function isExtensionPairingStateQueryMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is ExtensionPairingStateQueryMessage {
   return (
     !!message &&
@@ -38,7 +39,7 @@ export function loadExtensionSetupState(): Promise<ExtensionSetupLoad> {
       {
         type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
       },
-      (response: unknown) => {
+      (response: ExternalValue) => {
         if (
           chrome.runtime.lastError ||
           !response ||
@@ -48,10 +49,17 @@ export function loadExtensionSetupState(): Promise<ExtensionSetupLoad> {
           !('setup' in response) ||
           !isExtensionReadySetupState(response.setup)
         ) {
-          resolve({ kind: ExtensionSetupLoadKind.Unavailable })
+          const unavailable: ExtensionSetupLoad = {
+            kind: ExtensionSetupLoadKind.Unavailable,
+          }
+          resolve(unavailable)
           return
         }
-        resolve({ kind: ExtensionSetupLoadKind.Ready, setup: response.setup })
+        const ready: ExtensionSetupLoad = {
+          kind: ExtensionSetupLoadKind.Ready,
+          setup: response.setup,
+        }
+        resolve(ready)
       },
     )
   })
