@@ -33,6 +33,32 @@ describe('ExtensionSessionMessageDispatcher', () => {
     await expect(response).resolves.toEqual({ pin: '123456' })
   })
 
+  test('rejects invalid providers before dispatching a vault import', async () => {
+    const payload: Record<string, unknown> = {
+      providers: [{ metadata: new Date() }],
+    }
+    let handled = false
+    const dispatcher = new ExtensionSessionMessageDispatcher({
+      messagePayload,
+      handleMessage: async () => {
+        handled = true
+        return { ok: true }
+      },
+    })
+
+    const response = await dispatcher.enqueue({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload,
+    })
+
+    expect(response).toEqual({
+      ok: false,
+      error: 'invalid-provider-payload',
+    })
+    expect(handled).toBe(false)
+    expect(payload.providers).toEqual([])
+  })
+
   test('rejects runtime messages from another extension', () => {
     type RuntimeListener = (
       message: unknown,

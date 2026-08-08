@@ -278,20 +278,21 @@ export class ExtensionSessionMessageDispatcher {
     payload.providers = []
     // Pairing imports are one-shot and may run against a cold offscreen WASM
     // runtime. Never expire them with the short interactive probe budget.
-    if (
-      staging.kind === ProviderCredentialStagingKind.InvalidInput ||
-      staging.providers.length === 0
-    ) {
+    if (staging.kind === ProviderCredentialStagingKind.InvalidInput) {
+      const response = {
+        ok: false,
+        error: 'invalid-provider-payload',
+      }
+      return Promise.resolve(response)
+    }
+    if (staging.providers.length === 0) {
       return this.operations.enqueue({
         operation: () =>
           this.context.handleMessage({
             ...message,
             payload: {
               ...payload,
-              providers:
-                staging.kind === ProviderCredentialStagingKind.Staged
-                  ? staging.providers
-                  : [],
+              providers: staging.providers,
             },
           }),
         options: {

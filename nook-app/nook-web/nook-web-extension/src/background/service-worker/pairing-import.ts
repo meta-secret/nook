@@ -52,6 +52,11 @@ export async function importApprovedPairing(
   message: ExtensionPairingApprovedMessage,
 ): Promise<{ ok: boolean; reason?: string; eventCount?: number }> {
   try {
+    const staging = stageProviderCredentials(message.payload.providers)
+    if (staging.kind !== ProviderCredentialStagingKind.Staged) {
+      return { ok: false, reason: 'invalid-provider-payload' }
+    }
+    const providers = staging.providers
     const imported = await importExtensionEventLog(
       message.payload,
       message.eventLogRecords,
@@ -60,11 +65,6 @@ export async function importApprovedPairing(
       return { ok: false, reason: 'event-log-access-not-granted' }
     }
     await ensureExtensionSessionDocument()
-    const staging = stageProviderCredentials(message.payload.providers)
-    if (staging.kind !== ProviderCredentialStagingKind.Staged) {
-      return { ok: false, reason: 'invalid-provider-payload' }
-    }
-    const providers = staging.providers
     const pairingItems = extensionPairingGrantStorageItems(
       message.payload,
       imported,
