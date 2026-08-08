@@ -34,8 +34,14 @@ describe('ExtensionSessionMessageDispatcher', () => {
   })
 
   test('rejects non-serialized providers before dispatching a vault import', async () => {
+    const providers = [
+      {
+        githubPat: 'github_pat_rejected_secret',
+        metadata: new Date(),
+      },
+    ]
     const payload: Record<string, unknown> = {
-      providers: [{ metadata: new Date() }],
+      providers,
     }
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({
@@ -57,6 +63,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     expect(handled).toBe(false)
     expect(payload.providers).toEqual([])
+    expect(providers[0]).not.toHaveProperty('githubPat')
   })
 
   test('rejects runtime messages from another extension', () => {

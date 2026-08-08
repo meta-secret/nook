@@ -70,6 +70,20 @@ describe('typed API named arguments', () => {
     ])
   })
 
+  test('rejects an untyped named argument that aliases an object', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      const original = { name: 'Nook' }
+      const firstAlias = original
+      const args = firstAlias
+      consume(args)
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+    ])
+  })
+
   test('rejects object literals expanded from an inline spread array', () => {
     const messages = lint(`
       declare function consume(...values: { name: string }[]): void

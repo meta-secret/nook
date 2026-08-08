@@ -279,6 +279,9 @@ export class ExtensionSessionMessageDispatcher {
     // Pairing imports are one-shot and may run against a cold offscreen WASM
     // runtime. Never expire them with the short interactive probe budget.
     if (staging.kind === ProviderCredentialStagingKind.InvalidInput) {
+      if (providerCandidate && typeof providerCandidate === 'object') {
+        scrubProviderCredentials(providerCandidate)
+      }
       const response = {
         ok: false,
         error: 'invalid-provider-payload',

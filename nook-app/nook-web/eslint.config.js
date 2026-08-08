@@ -59,11 +59,16 @@ export const noRawObjectArgumentsRule = {
         if (
           definition.type !== 'Variable' ||
           definition.node.type !== 'VariableDeclarator' ||
-          !definition.node.init ||
-          inlineObjectExpressions(definition.node.init).length === 0
+          !definition.node.init
         ) {
           continue
         }
+        const seenVariables = new Set([variable])
+        const producesObject = expressionProducesObject({
+          expression: definition.node.init,
+          seenVariables,
+        })
+        if (!producesObject) continue
         if (!definition.name.typeAnnotation) {
           context.report({ node: argument, messageId: 'typedArgument' })
         }
@@ -92,6 +97,61 @@ export const noRawObjectArgumentsRule = {
         return unwrapped.expressions.flatMap(inlineObjectExpressions)
       }
       return []
+    }
+
+    function expressionProducesObject(args) {
+      const { expression, seenVariables } = args
+      const unwrapped = unwrapTypeScriptExpression(expression)
+      if (unwrapped.type === 'ObjectExpression') return true
+      if (unwrapped.type === 'ConditionalExpression') {
+        return (
+          expressionProducesObject({
+            expression: unwrapped.consequent,
+            seenVariables,
+          }) ||
+          expressionProducesObject({
+            expression: unwrapped.alternate,
+            seenVariables,
+          })
+        )
+      }
+      if (unwrapped.type === 'LogicalExpression') {
+        return (
+          expressionProducesObject({
+            expression: unwrapped.left,
+            seenVariables,
+          }) ||
+          expressionProducesObject({
+            expression: unwrapped.right,
+            seenVariables,
+          })
+        )
+      }
+      if (unwrapped.type === 'SequenceExpression') {
+        return unwrapped.expressions.some((child) =>
+          expressionProducesObject({ expression: child, seenVariables }),
+        )
+      }
+      if (unwrapped.type !== 'Identifier') return false
+      const lookup = declaredVariable(unwrapped)
+      if (lookup.kind === VariableLookupKind.NotFound) return false
+      const { variable } = lookup
+      if (seenVariables.has(variable)) return false
+      seenVariables.add(variable)
+      for (const definition of variable.defs) {
+        if (
+          definition.type === 'Variable' &&
+          definition.node.type === 'VariableDeclarator' &&
+          definition.node.init &&
+          expressionProducesObject({
+            expression: definition.node.init,
+            seenVariables,
+          })
+        ) {
+          return true
+        }
+      }
+      return false
     }
 
     function inspectInlineObjectExpressions(expression) {
