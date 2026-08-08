@@ -222,6 +222,9 @@ Use this workflow for quality, CI, and deployment changes.
     `verify-wasm-gha-cache.sh` on a fresh builder.
     Runtime Bake+Zot parent/leaf proof is `task infra:bake-cache:prove`.
     That sim complements the static `bake_cache_proofs.rs` theorems.
+    It also proves Main vs parallel PR git-scope isolation on ephemeral Zot:
+    PR writes stay under `nook/remote-buildcache/**-git-<sha>`, do not overlap,
+    and do not replace Main `nook/buildcache/**`.
 
     #### SeaweedFS sccache
 

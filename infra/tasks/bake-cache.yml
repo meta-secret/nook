@@ -25,8 +25,13 @@ tasks:
         builder=""
         buildkit_cfg=""
         proof_log=""
+        parent_input="$sim_dir/inputs/parent.txt"
+        parent_input_orig="$(cat "$parent_input")"
+        pr1_suffix="-git-1111111111111111111111111111111111111111"
+        pr2_suffix="-git-2222222222222222222222222222222222222222"
         cleanup() {
           set +e
+          printf '%s\n' "$parent_input_orig" >"$parent_input"
           if [ -n "$builder" ]; then
             "$docker_bin" buildx rm -f "$builder" >/dev/null 2>&1
           fi
@@ -116,6 +121,29 @@ tasks:
             return 0
           fi
           return "$bake_status"
+        }
+
+        # Probe Zot for a BuildKit cache manifest (Main vs remote-buildcache isolation).
+        registry_ref_code() {
+          local repository="$1"
+          "$docker_bin" run --rm --network "$network" curlimages/curl:8.12.1 \
+            -sS -o /dev/null -w "%{http_code}" \
+            -H "Accept: application/vnd.oci.image.manifest.v1+json" \
+            "http://${registry_ref}/v2/${repository}/manifests/buildcache"
+        }
+
+        require_registry_ref() {
+          local repository="$1"
+          local code
+          code="$(registry_ref_code "$repository")"
+          test "$code" = "200"
+        }
+
+        require_no_registry_ref() {
+          local repository="$1"
+          local code
+          code="$(registry_ref_code "$repository")"
+          test "$code" = "404"
         }
 
         buildkit_cfg="$(mktemp)"
@@ -211,5 +239,70 @@ tasks:
         bake_plain "$proof_log" parent
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         echo "scenario E ok"
+
+        echo "== Scenario F: parallel PR1 isolated write (remote-buildcache) =="
+        # Divergent PR fingerprint so PR1 layers are not the Main index content.
+        printf 'pr1-divergent\n' >"$parent_input"
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$pr1_suffix"
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
+        create_builder "nook-bake-sim-f-${suffix}"
+        bake_plain "$proof_log" parent-publish
+        require_uncached_step "$proof_log" "bake-sim-parent-expensive"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-v1${pr1_suffix}"
+        require_registry_ref "nook/buildcache/nook-bake-sim-parent-v1"
+        echo "scenario F ok"
+
+        echo "== Scenario G: PR1 fresh restore from own git scope (CACHED) =="
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$pr1_suffix"
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
+        create_builder "nook-bake-sim-g-${suffix}"
+        bake_plain "$proof_log" parent
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        echo "scenario G ok"
+
+        echo "== Scenario H: parallel PR2 does not see PR1 git scope (cold) =="
+        # Same divergent inputs as PR1, different -git- SHA → empty own scope, no Main FALLBACK.
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$pr2_suffix"
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
+        create_builder "nook-bake-sim-h-${suffix}"
+        bake_plain "$proof_log" parent
+        require_uncached_step "$proof_log" "bake-sim-parent-expensive"
+        require_no_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-v1${pr2_suffix}"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-v1${pr1_suffix}"
+        echo "scenario H ok"
+
+        echo "== Scenario I: Main restore intact after PR1 write (CACHED) =="
+        printf '%s\n' "$parent_input_orig" >"$parent_input"
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
+        create_builder "nook-bake-sim-i-${suffix}"
+        bake_plain "$proof_log" parent
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_registry_ref "nook/buildcache/nook-bake-sim-parent-v1"
+        echo "scenario I ok"
+
+        echo "== Scenario J: PR2 FALLBACK uses Main, not PR1 (CACHED) =="
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$pr2_suffix"
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
+        create_builder "nook-bake-sim-j-${suffix}"
+        bake_plain "$proof_log" parent
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_no_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-v1${pr2_suffix}"
+        echo "scenario J ok"
 
         echo "bake-cache runtime proof passed"

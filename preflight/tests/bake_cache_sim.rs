@@ -80,12 +80,22 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("bake-sim-leaf-expensive")
             && tasks.contains("Scenario D:")
             && tasks.contains("Scenario E:")
+            && tasks.contains("Scenario F:")
+            && tasks.contains("Scenario H:")
+            && tasks.contains("Scenario I:")
+            && tasks.contains("Scenario J:")
             && tasks.contains("parent-pr-cold")
-            && bake.contains("PARENT_OWN_CACHE_ENABLED"),
-        "infra bake-cache prove must cover cold/broken FALLBACK and fixed Main FALLBACK"
+            && tasks.contains("require_registry_ref")
+            && tasks.contains("require_no_registry_ref")
+            && tasks.contains("nook/remote-buildcache/")
+            && bake.contains("PARENT_OWN_CACHE_ENABLED")
+            && bake.contains("write_cache_repository"),
+        "infra bake-cache prove must cover FALLBACK plus Main/PR isolation"
     );
     assert!(
-        quality.contains("task infra:bake-cache:prove") && quality.contains("bake_cache_proofs.rs"),
+        quality.contains("task infra:bake-cache:prove")
+            && quality.contains("bake_cache_proofs.rs")
+            && quality.contains("parallel PR git-scope isolation"),
         "cortex quality must document the runtime sim beside static theorems"
     );
 }
