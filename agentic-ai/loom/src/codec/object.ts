@@ -13,6 +13,10 @@ import {
   type DecodeOutcome,
   type FieldError,
 } from './field-error.ts';
+import {
+  fieldNamesOf,
+  type RequestFieldVocabulary,
+} from './field-vocabulary.ts';
 
 export function expectObject(
   value: unknown,
@@ -24,13 +28,13 @@ export function expectObject(
   return decodeOk(value);
 }
 
-/** Accept a field-name enum object; never a raw string allow-list. */
-export function denyUnknownKeys(
+/** Reject keys outside one request-payload field vocabulary enum. */
+export function denyUnknownKeys<FieldName extends string>(
   record: UnknownRecord,
-  fieldEnum: Record<string, string>,
+  fields: RequestFieldVocabulary<FieldName>,
   path: string,
 ): readonly FieldError[] {
-  const allowed = new Set(Object.values(fieldEnum));
+  const allowed = new Set<string>(fieldNamesOf(fields));
   const errors: FieldError[] = [];
   for (const key of Object.keys(record)) {
     if (!allowed.has(key)) {
@@ -40,9 +44,9 @@ export function denyUnknownKeys(
   return errors;
 }
 
-export function expectBoolean(
+export function expectBoolean<FieldName extends string>(
   record: UnknownRecord,
-  key: string,
+  key: FieldName,
   path: string,
 ): DecodeOutcome<boolean> {
   const fieldPath = joinPath(path, key);
@@ -56,9 +60,9 @@ export function expectBoolean(
   return decodeOk(value);
 }
 
-export function expectString(
+export function expectString<FieldName extends string>(
   record: UnknownRecord,
-  key: string,
+  key: FieldName,
   path: string,
 ): DecodeOutcome<string> {
   const fieldPath = joinPath(path, key);
@@ -72,9 +76,9 @@ export function expectString(
   return decodeOk(value);
 }
 
-export function expectPositiveInt(
+export function expectPositiveInt<FieldName extends string>(
   record: UnknownRecord,
-  key: string,
+  key: FieldName,
   path: string,
 ): DecodeOutcome<number> {
   const fieldPath = joinPath(path, key);
@@ -90,32 +94,9 @@ export function expectPositiveInt(
   return decodeOk(value);
 }
 
-export function expectStringEnum<T extends string>(
+export function expectRemoteTask<FieldName extends string>(
   record: UnknownRecord,
-  key: string,
-  path: string,
-  allowed: readonly T[],
-): DecodeOutcome<T> {
-  const fieldPath = joinPath(path, key);
-  if (!(key in record)) {
-    return decodeErr([fieldError(fieldPath, FieldIssue.MissingRequiredField)]);
-  }
-  const value = record[key];
-  if (typeof value !== 'string' || !allowed.includes(value as T)) {
-    return decodeErr([
-      fieldError(
-        fieldPath,
-        FieldIssue.ExpectedOneOf,
-        fieldDetailText(allowed.join(', ')),
-      ),
-    ]);
-  }
-  return decodeOk(value as T);
-}
-
-export function expectRemoteTask(
-  record: UnknownRecord,
-  key: string,
+  key: FieldName,
   path: string,
 ): DecodeOutcome<RemoteTask> {
   const fieldPath = joinPath(path, key);

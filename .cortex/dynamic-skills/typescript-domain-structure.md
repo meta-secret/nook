@@ -43,9 +43,10 @@ Same-prefix names almost always mean a separate object was flattened. Generic
       includeTestInventory: true
   ```
 
-- Closed field names are enums. Pass the enum object into unknown-key checks
-  (`denyUnknownKeys(record, PrePushField, path)`). Never author string sets of
-  field names.
+- Closed field names are enums typed as `RequestFieldVocabulary<FieldName>`.
+  Pass the enum into unknown-key checks
+  (`denyUnknownKeys(record, PrePushField, path)`). Never author
+  `Record<string, string>` or string-set field allow-lists.
 - Closed failure codes are enums. Freeform detail text may accompany an enum
   code at an I/O boundary; the discriminant itself is never a bare string.
 - Do not invent TypeScript `Result<T>` or `Maybe<T>` / Optional clones.

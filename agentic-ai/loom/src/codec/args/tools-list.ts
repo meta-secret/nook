@@ -7,8 +7,8 @@ import {
 import { RequestFamily } from '../enums.ts';
 import { denyUnknownKeys, expectObject } from '../object.ts';
 
-/** toolsList accepts no fields; empty enum object for deny-unknown checks. */
-export const ToolsListField = {} as const satisfies Record<string, string>;
+/** toolsList accepts no payload fields. */
+export enum ToolsListField {}
 
 export type ToolsListRequest = Record<string, never>;
 
