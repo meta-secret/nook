@@ -18,7 +18,7 @@ tasks:
 
         requested_task="$REQUESTED_REMOTE_TASK"
         case "$requested_task" in
-          preflight|rust:test|rust:lint|rust:coverage|wasm:build|wasm:test|wasm:test:browser|web:check|web:test|web:build|web:e2e|extension:check|extension:e2e|hive:verify|check|ci:pr|ci:pr:e2e) ;;
+          preflight|bake-cache:prove|rust:test|rust:lint|rust:coverage|wasm:build|wasm:test|wasm:test:browser|web:check|web:test|web:build|web:e2e|extension:check|extension:e2e|hive:verify|check|ci:pr|ci:pr:e2e) ;;
           *)
             echo "Unknown remote task: $requested_task" >&2
             echo "Run 'task remote:list' to see the allowlisted catalog." >&2
@@ -70,6 +70,7 @@ tasks:
     cmds:
       - |
         echo "preflight"
+        echo "bake-cache:prove"
         echo "rust:test"
         echo "rust:lint"
         echo "rust:coverage"

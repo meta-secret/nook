@@ -65,3 +65,7 @@ includes:
     taskfile: tasks/operations.yml
     dir: ..
     flatten: true
+  bake-cache:
+    taskfile: tasks/bake-cache.yml
+    dir: ..
+    flatten: true

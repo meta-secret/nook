@@ -182,8 +182,9 @@ Use this workflow for quality, CI, and deployment changes.
     - Do not wipe cache to paper over a short-chain import.
     - Prefer own-scope leaf `cache-from`, same-Dockerfile stage lineage, or a
       dedicated parent scope that is never thin.
-    - Isolated FALLBACK for nightly/policy-tools is git-scope only.
-    - A thin trusted Main index steals fat PR mode=max layers.
+    - Isolated writes still prefer git-scope first.
+    - Main fat nightly and policy-tools indexes are allowed FALLBACK restores.
+    - That keeps PR verify from cold `cargo install` of ecosystem tools.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
     - Native publishers stage `docker:ci:cache:publish:rust-base` before
@@ -211,6 +212,7 @@ Use this workflow for quality, CI, and deployment changes.
 
     - `theorem_empty_cache_overrides_banned_repo_wide`
     - `theorem_short_parent_import_graph`
+    - `theorem_ecosystem_parent_fallback_restores_main`
     - `theorem_context_parents_never_write_publishers_mode_max`
     - `theorem_github_actions_zot_parameter_matrix`
     - `theorem_wasm_fingerprint_closed_allowlist`
@@ -218,6 +220,8 @@ Use this workflow for quality, CI, and deployment changes.
 
     Runtime CACHED proof for published WASM deps remains Main
     `verify-wasm-gha-cache.sh` on a fresh builder.
+    Runtime Bake+Zot parent/leaf proof is `task infra:bake-cache:prove`.
+    That sim complements the static `bake_cache_proofs.rs` theorems.
 
     #### SeaweedFS sccache
 

@@ -1,0 +1,22 @@
+{
+  "distSpecVersion": "1.1.1",
+  "storage": {
+    "rootDirectory": "/var/lib/registry",
+    "dedupe": true
+  },
+  "http": {
+    "address": "0.0.0.0",
+    "port": "5000",
+    "compat": ["docker2s2"],
+    "accessControl": {
+      "repositories": {
+        "**": {
+          "anonymousPolicy": ["read", "create", "update"]
+        }
+      }
+    }
+  },
+  "log": {
+    "level": "warn"
+  }
+}

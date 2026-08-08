@@ -88,20 +88,14 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
         "rust_ecosystem_nightly_cache_from",
         &["nook-rust-ecosystem-nightly-v4"],
         &[],
-        &[
-            "nook-rust-base-v1",
-            "nook/buildcache/nook-rust-ecosystem-nightly",
-        ],
+        &["nook-rust-base-v1"],
     )?;
     assert_scope_arms(
         &rust_bake,
         "rust_ecosystem_policy_tools_cache_from",
         &["nook-rust-ecosystem-policy-tools-v4"],
         &[],
-        &[
-            "nook-rust-base-v1",
-            "nook/buildcache/nook-rust-ecosystem-policy",
-        ],
+        &["nook-rust-base-v1"],
     )?;
     assert_scope_arms(
         &rust_bake,
@@ -124,6 +118,42 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
         &[],
         &["nook-rust-base-v1"],
     )?;
+    Ok(())
+}
+
+#[test]
+fn theorem_ecosystem_parent_fallback_restores_main() -> anyhow::Result<()> {
+    let root = repository_root();
+    let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    for (name, main_ref) in [
+        (
+            "rust_ecosystem_nightly_cache_from",
+            "nook/buildcache/nook-rust-ecosystem-nightly-v4",
+        ),
+        (
+            "rust_ecosystem_policy_tools_cache_from",
+            "nook/buildcache/nook-rust-ecosystem-policy-tools-v4",
+        ),
+        (
+            "rust_ecosystem_dylint_cache_from",
+            "nook/buildcache/nook-rust-ecosystem-dylint-v2",
+        ),
+        (
+            "rust_ecosystem_fuzz_cache_from",
+            "nook/buildcache/nook-rust-ecosystem-fuzz-v2",
+        ),
+    ] {
+        let body = assignment_body(&rust_bake, name)?;
+        let (fallback, non_fallback) = split_fallback_arms(body)?;
+        assert!(
+            fallback.contains(main_ref),
+            "{name} FALLBACK must restore Main {main_ref}"
+        );
+        assert!(
+            !non_fallback.contains(main_ref),
+            "{name} non-FALLBACK must not hardcode Main {main_ref}"
+        );
+    }
     Ok(())
 }
 

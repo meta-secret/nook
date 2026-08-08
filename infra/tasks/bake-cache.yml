@@ -1,0 +1,167 @@
+version: '3'
+
+# Runtime Bake+Zot cache proof. Ephemeral Docker network + anonymous Zot.
+# Fixtures live under infra/sim/bake-cache/.
+
+vars:
+  BAKE_CACHE_ZOT_IMAGE: 'ghcr.io/project-zot/zot-linux-amd64@sha256:34f18f783037f967dba10df02f9d4086c4d626f5643ef9f5e51e4a4547280a0b'
+
+tasks:
+  bake-cache:prove:
+    desc: Prove Bake registry cache hits on a fresh BuildKit builder against ephemeral Zot.
+    silent: true
+    cmds:
+      - |
+        set -euo pipefail
+        docker_bin="${DOCKER:-docker}"
+        repo_root="$(git rev-parse --show-toplevel)"
+        sim_dir="$repo_root/infra/sim/bake-cache"
+        zot_image="{{.BAKE_CACHE_ZOT_IMAGE}}"
+        registry_host="registry.dev.nokey.sh"
+        registry_ref="${registry_host}:5000"
+        suffix="$(date +%s)-$(od -An -N2 -tu2 /dev/urandom | tr -d ' ')"
+        network="nook-bake-sim-${suffix}"
+        zot_name="nook-bake-sim-zot-${suffix}"
+        builder=""
+        buildkit_cfg=""
+        proof_log=""
+        cleanup() {
+          set +e
+          if [ -n "$builder" ]; then
+            "$docker_bin" buildx rm -f "$builder" >/dev/null 2>&1
+          fi
+          "$docker_bin" rm -f "$zot_name" >/dev/null 2>&1
+          "$docker_bin" network rm "$network" >/dev/null 2>&1
+          if [ -n "$buildkit_cfg" ]; then
+            rm -f "$buildkit_cfg"
+          fi
+          if [ -n "$proof_log" ]; then
+            rm -f "$proof_log"
+          fi
+        }
+        trap cleanup EXIT
+
+        require_cached_step() {
+          local log_file="$1"
+          local marker="$2"
+          local step
+          step="$(awk -v marker="$marker" 'index($0, marker) { print $1; exit }' "$log_file")"
+          test -n "$step"
+          grep -Fxq "$step CACHED" "$log_file"
+        }
+
+        require_uncached_step() {
+          local log_file="$1"
+          local marker="$2"
+          local step
+          step="$(awk -v marker="$marker" 'index($0, marker) { print $1; exit }' "$log_file")"
+          test -n "$step"
+          if grep -Fxq "$step CACHED" "$log_file"; then
+            echo "expected uncached step for marker: $marker" >&2
+            return 1
+          fi
+        }
+
+        create_builder() {
+          local name="$1"
+          if [ -n "$builder" ]; then
+            "$docker_bin" buildx rm -f "$builder" >/dev/null 2>&1 || true
+          fi
+          builder="$name"
+          "$docker_bin" buildx create \
+            --name "$builder" \
+            --driver docker-container \
+            --driver-opt "network=${network}" \
+            --config "$buildkit_cfg" \
+            --use \
+            --bootstrap >/dev/null
+        }
+
+        bake_plain() {
+          local log_file="$1"
+          shift
+          env \
+            GHA_CACHE_ENABLED="${BAKE_SIM_CACHE_ENABLED}" \
+            GHA_CACHE_WRITE_ENABLED="${BAKE_SIM_CACHE_WRITE_ENABLED}" \
+            GHA_CACHE_FALLBACK_ENABLED="${BAKE_SIM_CACHE_FALLBACK_ENABLED}" \
+            GHA_CACHE_SCOPE_SUFFIX="${BAKE_SIM_CACHE_SCOPE_SUFFIX}" \
+            NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
+            "$docker_bin" buildx bake \
+            --progress=plain \
+            -f "$sim_dir/docker-bake.hcl" \
+            --set "*.context=$sim_dir" \
+            "$@" 2>&1 | tee "$log_file"
+        }
+
+        buildkit_cfg="$(mktemp)"
+        printf '%s\n' \
+          "[registry.\"${registry_ref}\"]" \
+          "  http = true" \
+          "  insecure = true" \
+          >"$buildkit_cfg"
+
+        "$docker_bin" network create "$network" >/dev/null
+        "$docker_bin" run -d \
+          --name "$zot_name" \
+          --platform linux/amd64 \
+          --network "$network" \
+          --network-alias "$registry_host" \
+          -v "$sim_dir/zot-config.json:/etc/zot/config.json:ro" \
+          "$zot_image" >/dev/null
+
+        ready=0
+        for _ in $(seq 1 60); do
+          if "$docker_bin" run --rm --network "$network" curlimages/curl:8.12.1 \
+            -fsS "http://${registry_ref}/v2/" >/dev/null 2>&1; then
+            ready=1
+            break
+          fi
+          sleep 1
+        done
+        test "$ready" -eq 1
+
+        proof_log="$(mktemp)"
+
+        echo "== Scenario A: Main cold publish =="
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        create_builder "nook-bake-sim-a-${suffix}"
+        bake_plain "$proof_log" parent-publish leaf
+        require_uncached_step "$proof_log" "bake-sim-parent-expensive"
+        require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
+        echo "scenario A ok"
+
+        echo "== Scenario B: Main fresh restore (CACHED) =="
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        create_builder "nook-bake-sim-b-${suffix}"
+        bake_plain "$proof_log" parent leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        echo "scenario B ok"
+
+        echo "== Scenario C: short-chain orphan (leaf not CACHED) =="
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        create_builder "nook-bake-sim-c-${suffix}"
+        bake_plain "$proof_log" leaf-short-chain
+        require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
+        echo "scenario C ok"
+
+        echo "== Scenario D: PR without Main parent fallback (cold) =="
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX=-git-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        create_builder "nook-bake-sim-d-${suffix}"
+        bake_plain "$proof_log" parent-pr-cold
+        require_uncached_step "$proof_log" "bake-sim-parent-expensive"
+        echo "scenario D ok"
+
+        echo "bake-cache runtime proof passed"
