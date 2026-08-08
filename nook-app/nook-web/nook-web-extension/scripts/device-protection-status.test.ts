@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  DeviceProtectionStatus,
   extensionDeviceProtectionStatus,
   extensionSessionDevice,
 } from '../src/lib/nook-wasm'
@@ -26,7 +27,7 @@ describe('extensionDeviceProtectionStatus', () => {
       { ok: true },
       {
         ok: true,
-        status: 'unlocked',
+        status: DeviceProtectionStatus.Unlocked,
         device: { deviceId: 'device-without-public-keys' },
       },
     ]
