@@ -1,4 +1,5 @@
 import { DecodeStatus } from '../field-error.ts';
+import type { ExternalValue } from '../../lib/guards.ts';
 import {
   collectDecode,
   denyUnknownKeys,
@@ -21,7 +22,7 @@ export type PrePushRequest = {
 const ROOT = RequestFamily.PrePush;
 
 export function decodePrePushRequest(
-  value: unknown,
+  value: ExternalValue,
 ): DecodeOutcome<PrePushRequest> {
   const object = expectObject({ value, path: ROOT });
   if (object.status === DecodeStatus.Failed) {

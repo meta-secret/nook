@@ -16,7 +16,7 @@ fn read(root: &Path, path: &str) -> String {
 }
 
 #[test]
-fn loom_verify_enforces_single_parameter_eslint_rule() {
+fn loom_verify_enforces_single_parameter_and_no_unknown_eslint_rules() {
     let root = repository_root();
     let manifest = read(&root, "agentic-ai/loom/package.json");
     for required in [
@@ -33,13 +33,35 @@ fn loom_verify_enforces_single_parameter_eslint_rule() {
     let eslint = read(&root, "agentic-ai/loom/eslint.config.js");
     for required in [
         "'max-params': ['error', { max: 1 }]",
+        "'@typescript-eslint/no-restricted-types'",
+        "unknown:",
         "files: ['src/**/*.ts', 'tests/**/*.ts']",
+        "ExternalValue / ExternalObject",
     ] {
         assert!(
             eslint.contains(required),
             "Loom ESLint config must retain `{required}`"
         );
     }
+
+    let guards = read(&root, "agentic-ai/loom/src/lib/guards.ts");
+    for required in [
+        "export type ExternalValue =",
+        "export type ExternalObject =",
+        "export type ExternalObjectBuilder =",
+        "export function asExternalValue",
+        "export function externalProperty",
+        "export enum ExternalPropertyPresence",
+    ] {
+        assert!(
+            guards.contains(required),
+            "Loom guards must retain `{required}`"
+        );
+    }
+    assert!(
+        !guards.contains("UnknownRecord"),
+        "Loom guards must not keep UnknownRecord after the ExternalObject rename"
+    );
 
     let taskfile = read(&root, ".task/agentic-ai.yml");
     for required in ["loom:lint:", "bun run lint", "task: loom:lint"] {

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { asExternalValue, type ExternalValue } from '../lib/guards.ts';
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
 import {
   FieldIssue,
@@ -10,7 +11,7 @@ import {
 } from './field-error.ts';
 
 export type YamlParseSuccess = {
-  readonly value: unknown;
+  readonly value: ExternalValue;
   readonly text: string;
 };
 
@@ -35,7 +36,10 @@ export function parseYamlFile(
 
 export function parseYamlText(text: string): DecodeOutcome<YamlParseSuccess> {
   try {
-    return decodeOk({ value: Bun.YAML.parse(text), text });
+    return decodeOk({
+      value: asExternalValue(Bun.YAML.parse(text) as ExternalValue),
+      text,
+    });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     return decodeErr([
@@ -48,7 +52,7 @@ export function parseYamlText(text: string): DecodeOutcome<YamlParseSuccess> {
   }
 }
 
-export function stringifyYaml(value: unknown): string {
+export function stringifyYaml(value: ExternalValue): string {
   try {
     return `${Bun.YAML.stringify(value).trimEnd()}\n`;
   } catch (cause) {

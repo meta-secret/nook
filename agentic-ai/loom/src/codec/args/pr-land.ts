@@ -1,3 +1,4 @@
+import type { ExternalValue } from '../../lib/guards.ts';
 import {
   DecodeStatus,
   decodeErr,
@@ -42,7 +43,7 @@ export type PrLandValidateRequest = {
 };
 
 export type DecodePrLandPrPayloadArgs = {
-  readonly value: unknown;
+  readonly value: ExternalValue;
   readonly path: string;
 };
 
@@ -78,7 +79,7 @@ export function decodePrLandPrPayload(
 }
 
 export type DecodePrLandValidatePayloadArgs = {
-  readonly value: unknown;
+  readonly value: ExternalValue;
   readonly path: string;
 };
 

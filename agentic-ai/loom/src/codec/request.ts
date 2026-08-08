@@ -1,4 +1,9 @@
-import { isRecord } from '../lib/guards.ts';
+import {
+  ExternalPropertyPresence,
+  externalProperty,
+  type ExternalValue,
+  isRecord,
+} from '../lib/guards.ts';
 import {
   decodeCortexAuditRequest,
   type CortexAuditRequest,
@@ -72,12 +77,14 @@ const ROOT_FAMILIES: readonly RequestFamily[] = [
   RequestFamily.ToolsCall,
 ];
 
-export function decodeLoomRequest(value: unknown): DecodeOutcome<LoomRequest> {
+export function decodeLoomRequest(
+  value: ExternalValue,
+): DecodeOutcome<LoomRequest> {
   return decodeLoomRequestAt({ value, path: '', allowToolsCall: true });
 }
 
 type DecodeLoomRequestAtArgs = {
-  readonly value: unknown;
+  readonly value: ExternalValue;
   readonly path: string;
   readonly allowToolsCall: boolean;
 };
@@ -128,13 +135,28 @@ function decodeLoomRequestAt(
       }),
     ]);
   }
-  const payload = object.value[family];
-  return decodeFamily({ family, payload, path });
+  const payloadProperty = externalProperty({
+    record: object.value,
+    key: family,
+  });
+  if (payloadProperty.presence === ExternalPropertyPresence.Absent) {
+    return decodeErr([
+      fieldError({
+        path: joinPath({ base: path, key: family }),
+        issue: FieldIssue.MissingRequiredField,
+      }),
+    ]);
+  }
+  return decodeFamily({
+    family,
+    payload: payloadProperty.value,
+    path,
+  });
 }
 
 type DecodeFamilyArgs = {
   readonly family: RequestFamily;
-  readonly payload: unknown;
+  readonly payload: ExternalValue;
   readonly path: string;
 };
 

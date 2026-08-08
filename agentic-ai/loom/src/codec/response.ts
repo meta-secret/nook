@@ -1,3 +1,5 @@
+import type { ExternalObjectBuilder, ExternalValue } from '../lib/guards.ts';
+import { sealExternalObject } from '../lib/guards.ts';
 import {
   BlueprintExplanationKind,
   type BlueprintExplanation,
@@ -23,7 +25,7 @@ export type RecoverHint = {
 
 type SuccessResponseBase = {
   readonly ok: true;
-  readonly result: unknown;
+  readonly result: ExternalValue;
 };
 
 export type SuccessResponse =
@@ -105,7 +107,7 @@ export type SuccessResponseForFamilyArgs = {
     | RequestFamily.SkillScaffold
     | RequestFamily.DependencyPopularity
     | RequestFamily.ToolsList;
-  readonly result: unknown;
+  readonly result: ExternalValue;
 };
 
 export function successResponseForFamily(
@@ -118,7 +120,7 @@ export function successResponseForFamily(
 
 export type SuccessResponseForAgentStatsArgs = {
   readonly operation: AgentStatsOperation;
-  readonly result: unknown;
+  readonly result: ExternalValue;
 };
 
 export function successResponseForAgentStats(
@@ -131,7 +133,7 @@ export function successResponseForAgentStats(
 
 export type SuccessResponseForPrLandArgs = {
   readonly operation: PrLandOperation;
-  readonly result: unknown;
+  readonly result: ExternalValue;
 };
 
 export function successResponseForPrLand(
@@ -245,9 +247,9 @@ export function executeErrorResponseForPrLand(
 
 export function encodeResponse(
   response: SuccessResponse | ErrorResponse,
-): unknown {
+): ExternalValue {
   if (response.ok) {
-    const encoded: Record<string, unknown> = {
+    const encoded: ExternalObjectBuilder = {
       ok: true,
       family: response.family,
       result: response.result,
@@ -258,10 +260,10 @@ export function encodeResponse(
     ) {
       encoded.operation = response.operation;
     }
-    return encoded;
+    return sealExternalObject(encoded);
   }
 
-  const encoded: Record<string, unknown> = {
+  const encoded: ExternalObjectBuilder = {
     ok: false,
     isError: true,
     phase: response.phase,
@@ -276,7 +278,7 @@ export function encodeResponse(
     },
   };
   if ('explanation' in response) {
-    const explanation: Record<string, unknown> = {
+    const explanation: ExternalObjectBuilder = {
       kind: response.explanation.kind,
       blueprintPath: response.explanation.blueprintPath,
       blueprintYaml: response.explanation.blueprintYaml,
@@ -286,7 +288,7 @@ export function encodeResponse(
     if (response.explanation.kind === BlueprintExplanationKind.Syntax) {
       explanation.parseMessage = response.explanation.parseMessage;
     }
-    encoded.explanation = explanation;
+    encoded.explanation = sealExternalObject(explanation);
   }
   if (response.phase === ResponsePhase.Execute) {
     encoded.family = response.family;
@@ -297,7 +299,7 @@ export function encodeResponse(
       encoded.operation = response.operation;
     }
   }
-  return encoded;
+  return sealExternalObject(encoded);
 }
 
 export function executionFieldError(detail: string): FieldError {

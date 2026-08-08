@@ -1,5 +1,12 @@
 import { readFileSync } from 'node:fs';
 import {
+  ExternalPropertyPresence,
+  asExternalValue,
+  externalProperty,
+  isRecord,
+  type ExternalValue,
+} from '../lib/guards.ts';
+import {
   explainAgainstBlueprint,
   explainSyntaxFailure,
 } from '../codec/blueprint-diff.ts';
@@ -57,7 +64,9 @@ export async function dispatchRequestFile(
   return dispatchValue(parsed.value.value);
 }
 
-export async function dispatchValue(value: unknown): Promise<DispatchOutcome> {
+export async function dispatchValue(
+  value: ExternalValue,
+): Promise<DispatchOutcome> {
   const request = decodeLoomRequest(value);
   if (request.status === DecodeStatus.Failed) {
     return {
@@ -82,55 +91,64 @@ async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
       exitCode: 0,
       body: successResponseForFamily({
         family: RequestFamily.ToolsList,
-        result: {
+        result: asExternalValue({
           requests: listDiscoverableRequests(),
-        },
+        } as ExternalValue),
       }),
     };
   }
 
   try {
     const result = await executeRequest(request);
-    if (
-      request.family === RequestFamily.CortexAudit &&
-      typeof result === 'object' &&
-      result instanceof Object &&
-      'auditOk' in result &&
-      result.auditOk === false
-    ) {
-      return {
-        exitCode: 1,
-        body: successResponseForFamily({
-          family: RequestFamily.CortexAudit,
-          result,
-        }),
-      };
+    if (request.family === RequestFamily.CortexAudit && isRecord(result)) {
+      const auditOk = externalProperty({ record: result, key: 'auditOk' });
+      if (
+        auditOk.presence === ExternalPropertyPresence.Present &&
+        auditOk.value === false
+      ) {
+        return {
+          exitCode: 1,
+          body: successResponseForFamily({
+            family: RequestFamily.CortexAudit,
+            result,
+          }),
+        };
+      }
     }
     if (
       request.family === RequestFamily.DependencyPopularity &&
-      typeof result === 'object' &&
-      result instanceof Object &&
-      'ok' in result &&
-      result.ok === false
+      isRecord(result)
     ) {
-      return {
-        exitCode: 1,
-        body: successResponseForFamily({
-          family: RequestFamily.DependencyPopularity,
-          result,
-        }),
-      };
+      const ok = externalProperty({ record: result, key: 'ok' });
+      if (
+        ok.presence === ExternalPropertyPresence.Present &&
+        ok.value === false
+      ) {
+        return {
+          exitCode: 1,
+          body: successResponseForFamily({
+            family: RequestFamily.DependencyPopularity,
+            result,
+          }),
+        };
+      }
     }
     return {
       exitCode: 0,
       body: buildSuccessResponse({ request, result }),
     };
   } catch (error) {
+    const detail =
+      error instanceof LoomFailure || error instanceof Error
+        ? failureDetail(error)
+        : typeof error === 'string'
+          ? failureDetail(error)
+          : failureDetail(String(error));
     return {
       exitCode: 1,
       body: buildExecuteErrorResponse({
         request,
-        detail: failureDetail(error),
+        detail,
       }),
     };
   }
@@ -144,7 +162,7 @@ function readRequestText(requestPath: string): string {
   }
 }
 
-function failureDetail(error: unknown): string {
+function failureDetail(error: LoomFailure | Error | string): string {
   if (error instanceof LoomFailure) {
     if (error.detail.kind === LoomFailureDetailKind.Text) {
       return error.detail.text;
@@ -159,7 +177,7 @@ function failureDetail(error: unknown): string {
 
 type BuildSuccessResponseArgs = {
   readonly request: LoomRequest;
-  readonly result: unknown;
+  readonly result: ExternalValue;
 };
 
 function buildSuccessResponse(args: BuildSuccessResponseArgs): SuccessResponse {
@@ -253,6 +271,6 @@ function buildExecuteErrorResponse(
   }
 }
 
-export function encodedOutcome(outcome: DispatchOutcome): unknown {
+export function encodedOutcome(outcome: DispatchOutcome): ExternalValue {
   return encodeResponse(outcome.body);
 }

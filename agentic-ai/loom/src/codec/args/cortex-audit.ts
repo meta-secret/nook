@@ -1,4 +1,5 @@
 import { DecodeStatus } from '../field-error.ts';
+import type { ExternalValue } from '../../lib/guards.ts';
 import {
   collectDecode,
   denyUnknownKeys,
@@ -19,7 +20,7 @@ export type CortexAuditRequest = {
 const ROOT = RequestFamily.CortexAudit;
 
 export function decodeCortexAuditRequest(
-  value: unknown,
+  value: ExternalValue,
 ): DecodeOutcome<CortexAuditRequest> {
   const object = expectObject({ value, path: ROOT });
   if (object.status === DecodeStatus.Failed) {

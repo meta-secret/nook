@@ -1,3 +1,4 @@
+import type { ExternalValue } from '../../lib/guards.ts';
 import {
   DecodeStatus,
   decodeErr,
@@ -32,7 +33,7 @@ export type DependencyPopularityRequest = {
 const ROOT = RequestFamily.DependencyPopularity;
 
 export function decodeDependencyPopularityRequest(
-  value: unknown,
+  value: ExternalValue,
 ): DecodeOutcome<DependencyPopularityRequest> {
   const object = expectObject({ value, path: ROOT });
   if (object.status === DecodeStatus.Failed) {

@@ -1,4 +1,10 @@
-import { isRecord, type UnknownRecord } from '../lib/guards.ts';
+import {
+  ExternalPropertyPresence,
+  externalProperty,
+  isRecord,
+  type ExternalObject,
+  type ExternalValue,
+} from '../lib/guards.ts';
 import { RemoteTaskPresence, type RemoteTask } from './args/pr-land.ts';
 import { AgentStatsOperation, PrLandOperation } from './enums.ts';
 import { isExternalNull } from './external.ts';
@@ -19,13 +25,13 @@ import {
 } from './field-vocabulary.ts';
 
 export type ExpectObjectArgs = {
-  readonly value: unknown;
+  readonly value: ExternalValue;
   readonly path: string;
 };
 
 export function expectObject(
   args: ExpectObjectArgs,
-): DecodeOutcome<UnknownRecord> {
+): DecodeOutcome<ExternalObject> {
   if (!isRecord(args.value)) {
     return decodeErr([
       fieldError({ path: args.path, issue: FieldIssue.ExpectedObject }),
@@ -35,7 +41,7 @@ export function expectObject(
 }
 
 export type DenyUnknownKeysArgs<FieldName extends string> = {
-  readonly record: UnknownRecord;
+  readonly record: ExternalObject;
   readonly fields: RequestFieldVocabulary<FieldName>;
   readonly path: string;
 };
@@ -60,7 +66,7 @@ export function denyUnknownKeys<FieldName extends string>(
 }
 
 export type ExpectFieldArgs<FieldName extends string> = {
-  readonly record: UnknownRecord;
+  readonly record: ExternalObject;
   readonly key: FieldName;
   readonly path: string;
 };
@@ -69,49 +75,53 @@ export function expectBoolean<FieldName extends string>(
   args: ExpectFieldArgs<FieldName>,
 ): DecodeOutcome<boolean> {
   const fieldPath = joinPath({ base: args.path, key: args.key });
-  if (!(args.key in args.record)) {
+  const property = externalProperty({ record: args.record, key: args.key });
+  if (property.presence === ExternalPropertyPresence.Absent) {
     return decodeErr([
       fieldError({ path: fieldPath, issue: FieldIssue.MissingRequiredField }),
     ]);
   }
-  const value = args.record[args.key];
-  if (typeof value !== 'boolean') {
+  if (typeof property.value !== 'boolean') {
     return decodeErr([
       fieldError({ path: fieldPath, issue: FieldIssue.ExpectedBoolean }),
     ]);
   }
-  return decodeOk(value);
+  return decodeOk(property.value);
 }
 
 export function expectString<FieldName extends string>(
   args: ExpectFieldArgs<FieldName>,
 ): DecodeOutcome<string> {
   const fieldPath = joinPath({ base: args.path, key: args.key });
-  if (!(args.key in args.record)) {
+  const property = externalProperty({ record: args.record, key: args.key });
+  if (property.presence === ExternalPropertyPresence.Absent) {
     return decodeErr([
       fieldError({ path: fieldPath, issue: FieldIssue.MissingRequiredField }),
     ]);
   }
-  const value = args.record[args.key];
-  if (typeof value !== 'string') {
+  if (typeof property.value !== 'string') {
     return decodeErr([
       fieldError({ path: fieldPath, issue: FieldIssue.ExpectedString }),
     ]);
   }
-  return decodeOk(value);
+  return decodeOk(property.value);
 }
 
 export function expectPositiveInt<FieldName extends string>(
   args: ExpectFieldArgs<FieldName>,
 ): DecodeOutcome<number> {
   const fieldPath = joinPath({ base: args.path, key: args.key });
-  if (!(args.key in args.record)) {
+  const property = externalProperty({ record: args.record, key: args.key });
+  if (property.presence === ExternalPropertyPresence.Absent) {
     return decodeErr([
       fieldError({ path: fieldPath, issue: FieldIssue.MissingRequiredField }),
     ]);
   }
-  const value = args.record[args.key];
-  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+  if (
+    typeof property.value !== 'number' ||
+    !Number.isInteger(property.value) ||
+    property.value <= 0
+  ) {
     return decodeErr([
       fieldError({
         path: fieldPath,
@@ -119,18 +129,21 @@ export function expectPositiveInt<FieldName extends string>(
       }),
     ]);
   }
-  return decodeOk(value);
+  return decodeOk(property.value);
 }
 
 export function expectRemoteTask<FieldName extends string>(
   args: ExpectFieldArgs<FieldName>,
 ): DecodeOutcome<RemoteTask> {
   const fieldPath = joinPath({ base: args.path, key: args.key });
-  if (!(args.key in args.record) || isExternalNull(args.record[args.key])) {
+  const property = externalProperty({ record: args.record, key: args.key });
+  if (
+    property.presence === ExternalPropertyPresence.Absent ||
+    isExternalNull(property.value)
+  ) {
     return decodeOk({ presence: RemoteTaskPresence.Omitted });
   }
-  const value = args.record[args.key];
-  if (typeof value !== 'string') {
+  if (typeof property.value !== 'string') {
     return decodeErr([
       fieldError({
         path: fieldPath,
@@ -138,18 +151,21 @@ export function expectRemoteTask<FieldName extends string>(
       }),
     ]);
   }
-  return decodeOk({ presence: RemoteTaskPresence.Specified, task: value });
+  return decodeOk({
+    presence: RemoteTaskPresence.Specified,
+    task: property.value,
+  });
 }
 
 export type DecodeExactlyOneOperationArgs<T extends string> = {
-  readonly record: UnknownRecord;
+  readonly record: ExternalObject;
   readonly path: string;
   readonly operations: readonly T[];
 };
 
 export function decodeExactlyOneOperation<T extends string>(
   args: DecodeExactlyOneOperationArgs<T>,
-): DecodeOutcome<{ readonly operation: T; readonly payload: unknown }> {
+): DecodeOutcome<{ readonly operation: T; readonly payload: ExternalValue }> {
   const keys = Object.keys(args.record);
   const operationKeys = keys.filter((key) =>
     args.operations.includes(key as T),
@@ -177,11 +193,27 @@ export function decodeExactlyOneOperation<T extends string>(
     return decodeErr(errors);
   }
   const operation = operationKeys[0] as T;
-  return decodeOk({ operation, payload: args.record[operation] });
+  const property = externalProperty({ record: args.record, key: operation });
+  if (property.presence === ExternalPropertyPresence.Absent) {
+    return decodeErr([
+      fieldError({
+        path: joinPath({ base: args.path, key: operation }),
+        issue: FieldIssue.MissingRequiredField,
+      }),
+    ]);
+  }
+  return decodeOk({ operation, payload: property.value });
 }
 
+export type DecodeStatusCarrier =
+  | { readonly status: DecodeStatus.Ok }
+  | {
+      readonly status: DecodeStatus.Failed;
+      readonly errors: readonly FieldError[];
+    };
+
 export type CollectDecodeArgs<T> = {
-  readonly results: readonly DecodeOutcome<unknown>[];
+  readonly results: readonly DecodeStatusCarrier[];
   readonly build: () => T;
 };
 

@@ -404,6 +404,11 @@ inputs use a typed object argument. Enforced by ESLint `max-params` in
 `agentic-ai/loom` (`task loom:verify`). Full contract:
 [dynamic-skills/typescript-single-parameter.md](dynamic-skills/typescript-single-parameter.md).
 
+Loom TypeScript must not author the `unknown` type. Untrusted YAML/JSON uses
+`ExternalValue` / `ExternalObject`. Enforced by ESLint
+`@typescript-eslint/no-restricted-types` in `agentic-ai/loom`. Full contract:
+[dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md).
+
 Bun must be installed. Stop and ask for Bun if `bun --version` fails.
 
 Single invoke form:
@@ -605,6 +610,7 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 - [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Load `design-taste-frontend` for user-visible UI work; Impeccable is explicit opt-in only**.
 - [dynamic-skills/prefer-popular-libraries.md](dynamic-skills/prefer-popular-libraries.md) — **Prefer mature high-adoption libraries over hand-rolled boilerplate; reject obscure deps**.
 - [dynamic-skills/typescript-single-parameter.md](dynamic-skills/typescript-single-parameter.md) — **Loom only: max one function parameter; wrap the rest in a typed object**.
+- [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md) — **Loom only: ban authored `unknown`; use `ExternalValue` / `ExternalObject`**.
 - [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 - [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.
 - [workflows/remote-execution.md](workflows/remote-execution.md) — **Main agent execution path** (allowlisted focused hosted tasks, label-gated exact-head PR validation, and failure loops).

@@ -1,3 +1,4 @@
+import type { ExternalValue } from '../lib/guards.ts';
 import {
   AgentStatsOperation,
   PrLandOperation,
@@ -35,7 +36,7 @@ export type AgentStatsLoomRequest =
     };
 
 export type DecodeAgentStatsFamilyArgs = {
-  readonly value: unknown;
+  readonly value: ExternalValue;
   readonly path: string;
 };
 

@@ -92,9 +92,12 @@ Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/
   ([prefer-popular-libraries.md](../../.cortex/dynamic-skills/prefer-popular-libraries.md))
 - at most one function/method parameter; multi-value inputs use a typed object
   ([typescript-single-parameter.md](../../.cortex/dynamic-skills/typescript-single-parameter.md))
+- no authored `unknown`; untrusted YAML/JSON uses `ExternalValue` /
+  `ExternalObject`
+  ([typescript-no-unknown.md](../../.cortex/dynamic-skills/typescript-no-unknown.md))
 
-Enforced by `task preflight:typescript-state`, Loom ESLint `max-params`, and
-`task loom:verify`.
+Enforced by `task preflight:typescript-state`, Loom ESLint (`max-params`,
+`no-restricted-types`), and `task loom:verify`.
 
 Decode errors include `explanation.unifiedDiff` from the `diff` (jsdiff)
 package so agents can compare the closest blueprint with the received YAML.

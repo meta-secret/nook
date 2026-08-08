@@ -1,4 +1,5 @@
 import { RequestFamily } from '../enums.ts';
+import type { ExternalValue } from '../../lib/guards.ts';
 import {
   DecodeStatus,
   FieldIssue,
@@ -28,7 +29,7 @@ const ROOT = RequestFamily.SkillScaffold;
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function decodeSkillScaffoldRequest(
-  value: unknown,
+  value: ExternalValue,
 ): DecodeOutcome<SkillScaffoldRequest> {
   const object = expectObject({ value, path: ROOT });
   if (object.status === DecodeStatus.Failed) {

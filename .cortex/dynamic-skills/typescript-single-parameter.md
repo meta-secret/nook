@@ -19,7 +19,7 @@ Does not apply to:
 
 ```ts
 export function decodeAgentStatsFilePayload(
-  value: unknown,
+  value: ExternalValue,
   path: string,
 ): DecodeOutcome<AgentStatsFileRequest>
 ```
@@ -31,7 +31,7 @@ reordering unsafe.
 
 ```ts
 export type DecodeAgentStatsFilePayloadArgs = {
-  readonly value: unknown;
+  readonly value: ExternalValue;
   readonly path: string;
 };
 

@@ -1,4 +1,5 @@
 import { PrLandOperation, RequestFamily } from './enums.ts';
+import type { ExternalValue } from '../lib/guards.ts';
 import {
   decodePrLandPrPayload,
   decodePrLandValidatePayload,
@@ -36,7 +37,7 @@ export type PrLandLoomRequest =
     };
 
 export type DecodePrLandFamilyArgs = {
-  readonly value: unknown;
+  readonly value: ExternalValue;
   readonly path: string;
 };
 

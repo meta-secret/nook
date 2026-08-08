@@ -54,7 +54,7 @@ tasks:
       - bun run check
 
   loom:lint:
-    desc: 'ESLint Loom (includes max-params: 1).'
+    desc: 'ESLint Loom (max-params: 1, ban unknown).'
     dir: agentic-ai/loom
     deps: [loom:install]
     cmds:

@@ -1,3 +1,4 @@
+import type { ExternalValue } from '../../lib/guards.ts';
 import {
   DecodeStatus,
   decodeErr,
@@ -15,7 +16,7 @@ export type ToolsListRequest = Record<string, never>;
 const ROOT = RequestFamily.ToolsList;
 
 export function decodeToolsListRequest(
-  value: unknown,
+  value: ExternalValue,
 ): DecodeOutcome<ToolsListRequest> {
   const object = expectObject({ value, path: ROOT });
   if (object.status === DecodeStatus.Failed) {

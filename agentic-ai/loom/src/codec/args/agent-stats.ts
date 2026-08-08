@@ -1,3 +1,4 @@
+import type { ExternalValue } from '../../lib/guards.ts';
 import {
   DecodeStatus,
   decodeErr,
@@ -35,7 +36,7 @@ export type AgentStatsFileRequest = {
 };
 
 export type DecodeAgentStatsAssemblePayloadArgs = {
-  readonly value: unknown;
+  readonly value: ExternalValue;
   readonly path: string;
 };
 
@@ -94,7 +95,7 @@ export function decodeAgentStatsAssemblePayload(
 }
 
 export type DecodeAgentStatsFilePayloadArgs = {
-  readonly value: unknown;
+  readonly value: ExternalValue;
   readonly path: string;
 };
 

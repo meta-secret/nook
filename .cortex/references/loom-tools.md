@@ -28,11 +28,14 @@ Loom follows [typescript-domain-structure.md](../dynamic-skills/typescript-domai
   `new Set(['field', ...])` allow-lists
 
 Loom also follows
-[typescript-single-parameter.md](../dynamic-skills/typescript-single-parameter.md):
+[typescript-single-parameter.md](../dynamic-skills/typescript-single-parameter.md)
+and [typescript-no-unknown.md](../dynamic-skills/typescript-no-unknown.md):
 
 - every authored function/method takes at most one parameter
 - multi-value inputs use a typed object argument
-- enforced by ESLint `max-params: 1` in `agentic-ai/loom`
+- no authored `unknown`; untrusted data uses `ExternalValue` / `ExternalObject`
+- enforced by ESLint `max-params: 1` and `no-restricted-types` in
+  `agentic-ai/loom`
 
 Enforced by `task preflight:typescript-state` across the repository, plus
 `task loom:verify` (includes ESLint) for Loom-local rules.
