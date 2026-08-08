@@ -36,10 +36,11 @@ export function removeScannedWidget(): void {
   removeWidget()
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
+  const message = runtimeMessage as ExternalValue
   if (
     sender.id === chrome.runtime.id &&
-    isQueryLoginDetectionMessage(message as ExternalValue)
+    isQueryLoginDetectionMessage(message)
   ) {
     const detected = summarizeAuthenticationWorkflowForms().length > 0
     sendResponse({
@@ -52,7 +53,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (
     sender.id === chrome.runtime.id &&
-    isWebsiteLoginCanceledMessage(message as ExternalValue) &&
+    isWebsiteLoginCanceledMessage(message) &&
     message.payload.origin === location.origin &&
     pickerState.login.kind === LoginPickerKind.Open &&
     message.payload.requestId === pickerState.login.request.requestId
@@ -74,7 +75,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (
     sender.id === chrome.runtime.id &&
-    isWebsiteLoginSelectedMessage(message as ExternalValue) &&
+    isWebsiteLoginSelectedMessage(message) &&
     message.payload.origin === location.origin &&
     pickerState.login.kind === LoginPickerKind.Open &&
     message.payload.requestId === pickerState.login.request.requestId
@@ -105,7 +106,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (
     sender.id === chrome.runtime.id &&
-    isWebsiteAuthenticatorCanceledMessage(message as ExternalValue) &&
+    isWebsiteAuthenticatorCanceledMessage(message) &&
     message.payload.origin === location.origin &&
     pickerState.authenticator.kind === AuthenticatorPickerKind.Open &&
     message.payload.requestId === pickerState.authenticator.request.requestId
@@ -127,7 +128,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (
     sender.id !== chrome.runtime.id ||
-    !isWebsiteAuthenticatorSelectedMessage(message as ExternalValue) ||
+    !isWebsiteAuthenticatorSelectedMessage(message) ||
     message.payload.origin !== location.origin ||
     pickerState.authenticator.kind !== AuthenticatorPickerKind.Open ||
     message.payload.requestId !== pickerState.authenticator.request.requestId
