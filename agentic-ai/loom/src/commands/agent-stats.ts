@@ -38,7 +38,8 @@ export async function runAgentStatsAssemble(
   const assembled = await assembleAgentStats(assembledArgs);
 
   const outPath = path.resolve(request.outputPath);
-  mkdirSync(path.dirname(outPath), { recursive: true });
+  const directoryOptions: { readonly recursive: true } = { recursive: true };
+  mkdirSync(path.dirname(outPath), directoryOptions);
   writeFileSync(outPath, assembled.yaml, 'utf8');
 
   const validationArgs3: ValidateAgentStatsYamlArgs = {
