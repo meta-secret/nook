@@ -5,7 +5,7 @@ import globals from 'globals'
 import ts from 'typescript-eslint'
 import {
   ActiveCallScopeKind,
-  arrayCallbackConsumesElements,
+  arrayCallbackElementParameter,
   bindingPatternHasTypeAnnotation,
   concatenateArraySummaries,
   executionScope,
@@ -384,12 +384,17 @@ export const noRawObjectArgumentsRule = {
       if (bindingPatternHasTypeAnnotation(definition.name)) return []
       const callback = definition.node
       const call = callback.parent
+      const elementParameter =
+        call?.type === 'CallExpression' &&
+        call.callee.type === 'MemberExpression'
+          ? arrayCallbackElementParameter(staticPropertyKey(call.callee).value)
+          : { kind: StaticKeyLookupKind.NotFound }
       if (
         call?.type !== 'CallExpression' ||
         call.arguments[0] !== callback ||
         call.callee.type !== 'MemberExpression' ||
-        !arrayCallbackConsumesElements(staticPropertyKey(call.callee).value) ||
-        callback.params.indexOf(definition.name) !== 0
+        elementParameter.kind === StaticKeyLookupKind.NotFound ||
+        callback.params.indexOf(definition.name) !== elementParameter.value
       ) {
         return []
       }

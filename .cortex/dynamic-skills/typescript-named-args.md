@@ -53,16 +53,17 @@ Rules:
 ## Enforcement
 
 Loom's ESLint `loom/no-raw-object-arguments` rule rejects call arguments that
-are object literals. Its value-flow walk stops at function boundaries, so
-object literals returned by function-valued arguments remain valid.
+are object literals, including statically resolvable spread-array elements and
+literals selected by assignment, conditional, logical, or sequence results.
+Its walk stops at function boundaries, so object literals returned by
+function-valued arguments remain valid.
 
 Nook web's `nook-typed-api/no-raw-object-arguments` rule enforces the same
 contract. It also requires an explicit type on named object-literal arguments.
 
-Nook web also rejects object literals behind TypeScript wrappers and call-site
-conditional, logical, or sequence expressions. Loom rejects direct object
-literals and literals behind `as`, `satisfies`, angle-bracket assertions,
-non-null assertions, and nested combinations of those wrappers.
+Both rules reject object literals behind TypeScript wrappers and call-site
+assignment, conditional, logical, or sequence expressions. Loom also rejects
+statically resolvable object values expanded from spread arrays.
 
 The rule is configured in:
 

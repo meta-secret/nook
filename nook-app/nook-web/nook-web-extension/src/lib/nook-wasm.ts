@@ -1,5 +1,9 @@
 import type { ExternalObject, ExternalValue } from './external-value'
 import {
+  decodePasskeySetupResponse,
+  decodePasskeyUnlockResponse,
+} from './passkey-session-response'
+import {
   default as initNookWasm,
   buildPasskeyCreationOptions,
   buildPasskeyPrfRequestOptions,
@@ -178,50 +182,6 @@ function extensionDevice(
   }
 }
 
-function byteArray(value: ExternalValue): number[] {
-  if (
-    !Array.isArray(value) ||
-    !value.every(
-      (item) =>
-        typeof item === 'number' &&
-        Number.isInteger(item) &&
-        item >= 0 &&
-        item <= 255,
-    )
-  ) {
-    throw new Error('Extension session returned malformed byte material.')
-  }
-  return [...value]
-}
-
-type PasskeySetupMaterial = {
-  userHandle: number[]
-  prfInput: number[]
-}
-
-function passkeySetup(response: ExternalObject): PasskeySetupMaterial {
-  const setup = responseObject(response.setup)
-  return {
-    userHandle: byteArray(setup.userHandle),
-    prfInput: byteArray(setup.prfInput),
-  }
-}
-
-type PasskeyUnlockMaterial = {
-  credentialId: number[]
-  prfInput: number[]
-}
-
-function passkeyUnlockMaterial(
-  response: ExternalObject,
-): PasskeyUnlockMaterial {
-  const material = responseObject(response.material)
-  return {
-    credentialId: byteArray(material.credentialId),
-    prfInput: byteArray(material.prfInput),
-  }
-}
-
 function bytes(value: ArrayBuffer | ArrayBufferView): number[] {
   return Array.from(
     value instanceof ArrayBuffer
@@ -394,7 +354,7 @@ export async function createExtensionPasskey(
   const beginRequest: ExternalObject = {
     type: 'nook:extension-session-begin-passkey-setup',
   }
-  const setup = passkeySetup(await sessionResponse(beginRequest))
+  const setup = decodePasskeySetupResponse(await sessionResponse(beginRequest))
   const creationOptions = buildPasskeyCreationOptions(
     '',
     'Nook Extension',
@@ -444,7 +404,9 @@ export async function unlockExtensionPasskey(): Promise<ExtensionDeviceProtectio
   const optionsRequest: ExternalObject = {
     type: 'nook:extension-session-unlock-options',
   }
-  const material = passkeyUnlockMaterial(await sessionResponse(optionsRequest))
+  const material = decodePasskeyUnlockResponse(
+    await sessionResponse(optionsRequest),
+  )
   const options = buildPasskeyPrfRequestOptions(
     '',
     new Uint8Array(material.credentialId),

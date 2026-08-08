@@ -133,4 +133,41 @@ describe('Loom ESLint contracts', () => {
 
     expect(results[0]?.messages).toEqual([]);
   });
+
+  test('rejects object literals expanded from spread arrays', async () => {
+    const eslint = new ESLint();
+    const options: LintTextOptions = { filePath: 'src/cli.ts' };
+    const results = await eslint.lintText(
+      `
+        declare function consume(...args: { name: string }[]): void;
+        const packed = [{ name: 'Sentinel' }];
+        consume(...[{ name: 'Nook' }]);
+        consume(...[...[{ name: 'Vault' }]]);
+        consume(...packed);
+      `,
+      options,
+    );
+
+    expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
+      'loom/no-raw-object-arguments',
+      'loom/no-raw-object-arguments',
+      'loom/no-raw-object-arguments',
+    ]);
+  });
+
+  test('allows explicitly typed named spread arrays', async () => {
+    const eslint = new ESLint();
+    const options: LintTextOptions = { filePath: 'src/cli.ts' };
+    const results = await eslint.lintText(
+      `
+        type WidgetArgs = { name: string };
+        declare function consume(...args: WidgetArgs[]): void;
+        const packed: WidgetArgs[] = [{ name: 'Nook' }];
+        consume(...packed);
+      `,
+      options,
+    );
+
+    expect(results[0]?.messages).toEqual([]);
+  });
 });

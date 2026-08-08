@@ -299,6 +299,24 @@ describe('typed API named arguments', () => {
     expect(messages).toEqual([])
   })
 
+  test('ignores writes from switch cases that terminate before the call case', () => {
+    const messages = lint(`
+      declare const flag: number
+      declare function consumeCount(value: number): void
+      let value = 1
+      switch (flag) {
+        case 1:
+          value = { name: 'Nook' }
+          break
+        case 2:
+          consumeCount(value)
+          break
+      }
+    `)
+
+    expect(messages).toEqual([])
+  })
+
   test('ignores writes on paths that exit before the call', () => {
     const messages = lint(`
       declare const flag: boolean
@@ -545,6 +563,19 @@ describe('typed API named arguments', () => {
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
       'typedArgument',
+      'typedArgument',
+    ])
+  })
+
+  test('tracks reducer element parameters', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      ;[{ name: 'Nook' }].reduce((count, args) => {
+        consume(args)
+        return count
+      }, 0)
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])
   })

@@ -151,6 +151,55 @@ describe('ExtensionSessionMessageDispatcher', () => {
     ])
   })
 
+  test('scrubs decoded provider credentials when a pending import is canceled', async () => {
+    let finishDecode: (providers: StorageProvider[]) => void = () => {
+      throw new Error('provider decoder was not initialized')
+    }
+    let releaseBlocker: () => void = () => {
+      throw new Error('queue blocker was not initialized')
+    }
+    const decodedProviders = new Promise<StorageProvider[]>((resolve) => {
+      finishDecode = resolve
+    })
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve
+    })
+    const stagedProviders = [
+      { githubPat: 'github_pat_canceled_staged_secret' },
+    ] as object as StorageProvider[]
+    const dispatcher = new ExtensionSessionMessageDispatcher({
+      messagePayload,
+      decodeProviders: () => decodedProviders,
+      handleMessage: async (message) => {
+        const type =
+          message && typeof message === 'object' && 'type' in message
+            ? String(message.type)
+            : ''
+        if (type === ExtensionSessionMessageType.CreatePin) await blocker
+        return { ok: true }
+      },
+    })
+
+    const blockerResponse = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.CreatePin,
+      payload: { pin: '123456' },
+    })
+    const importResponse = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: { providers: [{ githubPat: 'caller-secret' }] },
+    })
+
+    dispatcher.replaceOperations(new Error('reset'))
+    finishDecode(stagedProviders)
+    await expect(importResponse).rejects.toThrow('reset')
+    await decodedProviders
+    await Promise.resolve()
+    expect(stagedProviders[0]).not.toHaveProperty('githubPat')
+
+    releaseBlocker()
+    await expect(blockerResponse).resolves.toEqual({ ok: true })
+  })
+
   test('rejects runtime messages from another extension', () => {
     type RuntimeListener = (
       message: unknown,

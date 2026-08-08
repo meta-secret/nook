@@ -420,7 +420,7 @@ prospectively until the existing debt is migrated. Full contract:
 
 Loom and migrated Nook web TypeScript must not pass raw object literals into
 calls. Assign a named typed argument value first. Loom uses ESLint
-`no-restricted-syntax`. Nook web uses
+`loom/no-raw-object-arguments`. Nook web uses
 `nook-typed-api/no-raw-object-arguments`. Full contract:
 [dynamic-skills/typescript-named-args.md](dynamic-skills/typescript-named-args.md).
 

@@ -2,7 +2,7 @@
 name: typescript-named-args
 description: >-
   Loom and migrated Nook web TypeScript: ban passing raw object literals into calls. Assign a
-  named typed args value first. Enforced by ESLint no-restricted-syntax in Loom and
+  named typed args value first. Enforced by ESLint loom/no-raw-object-arguments in Loom and
   nook-typed-api/no-raw-object-arguments in Nook web.
 ---
 

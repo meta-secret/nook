@@ -613,15 +613,17 @@ test('translates malformed device-action responses in the popup', async ({
           }
         }
         type UnlockPinRuntimeMessage = {
-          type?: ExtensionSessionMessageType
+          type: ExtensionSessionMessageType
         }
         type UnlockPinRuntimeCallback = (
           response: MalformedDeviceResponse,
         ) => void
-        type UnlockPinRuntimeArguments = [
-          UnlockPinRuntimeMessage,
-          UnlockPinRuntimeCallback?,
-        ]
+        type UnlockPinRuntimeArguments =
+          | [message: UnlockPinRuntimeMessage]
+          | [
+              message: UnlockPinRuntimeMessage,
+              callback: UnlockPinRuntimeCallback,
+            ]
         const runtime = globalThis.chrome.runtime
         const originalSendMessage = runtime.sendMessage.bind(runtime)
         const descriptor: PropertyDescriptor = {

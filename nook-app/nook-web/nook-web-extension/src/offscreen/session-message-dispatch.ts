@@ -194,6 +194,12 @@ function clearSensitiveValue(value: unknown): void {
   if (Array.isArray(value) || value instanceof Uint8Array) value.fill(0)
 }
 
+enum StagingOwnership {
+  Queue = 'queue',
+  Operation = 'operation',
+  Cleared = 'cleared',
+}
+
 export class ExtensionSessionMessageDispatcher {
   private operations = new SessionOperationQueue()
 
@@ -280,6 +286,16 @@ export class ExtensionSessionMessageDispatcher {
       decode: this.context.decodeProviders,
     }
     const stagingOperation = stageProviderCredentials(stagingArgs)
+    let stagingOwnership = StagingOwnership.Queue
+    const clearQueuedStaging = () => {
+      if (stagingOwnership !== StagingOwnership.Queue) return
+      stagingOwnership = StagingOwnership.Cleared
+      void stagingOperation.then((staging) => {
+        if (staging.kind === ProviderCredentialStagingKind.Staged) {
+          scrubProviderCredentials(staging.providers)
+        }
+      })
+    }
     payload.providers = []
     if (providerCandidate && typeof providerCandidate === 'object') {
       scrubProviderCredentials(providerCandidate)
@@ -288,14 +304,17 @@ export class ExtensionSessionMessageDispatcher {
     // must remain a terminal barrier after every import accepted before it.
     return this.operations.enqueue({
       operation: async () => {
+        stagingOwnership = StagingOwnership.Operation
         const staging = await stagingOperation
         if (staging.kind === ProviderCredentialStagingKind.InvalidInput) {
+          stagingOwnership = StagingOwnership.Cleared
           return {
             ok: false,
             error: 'invalid-provider-payload',
           }
         }
         if (staging.providers.length === 0) {
+          stagingOwnership = StagingOwnership.Cleared
           return this.context.handleMessage({
             ...message,
             payload: {
@@ -313,12 +332,16 @@ export class ExtensionSessionMessageDispatcher {
         } finally {
           scrubProviderCredentials(stagedProviders)
           payload.providers = []
+          stagingOwnership = StagingOwnership.Cleared
         }
       },
       options: {
         priority: SessionOperationPriority.Interactive,
         expiry: { kind: SessionOperationExpiryKind.None },
-        cleanup: { kind: SessionOperationCleanupKind.None },
+        cleanup: {
+          kind: SessionOperationCleanupKind.OnExpire,
+          run: clearQueuedStaging,
+        },
       },
     })
   }

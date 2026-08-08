@@ -141,8 +141,11 @@ export function inlineCallReturnExpressions(expression) {
   return functionReturnExpressions(expression.callee)
 }
 
-export function arrayCallbackConsumesElements(method) {
-  return [
+export function arrayCallbackElementParameter(method) {
+  if (method === 'reduce' || method === 'reduceRight') {
+    return { kind: StaticKeyLookupKind.Found, value: 1 }
+  }
+  if ([
     'every',
     'filter',
     'find',
@@ -151,7 +154,10 @@ export function arrayCallbackConsumesElements(method) {
     'forEach',
     'map',
     'some',
-  ].includes(method)
+  ].includes(method)) {
+    return { kind: StaticKeyLookupKind.Found, value: 0 }
+  }
+  return { kind: StaticKeyLookupKind.NotFound }
 }
 
 export function writeBindingPattern(identifier) {
@@ -250,7 +256,61 @@ function branchArms(node) {
   return arms
 }
 
+function enclosingSwitchCase(node) {
+  let current = node
+  while (current.parent) {
+    if (
+      current.type === 'SwitchCase' &&
+      current.parent.type === 'SwitchStatement'
+    ) {
+      return { kind: StaticKeyLookupKind.Found, value: current }
+    }
+    current = current.parent
+  }
+  return { kind: StaticKeyLookupKind.NotFound }
+}
+
+function switchArmStatementTerminates(statement) {
+  if (
+    (statement.type === 'BreakStatement' && !statement.label) ||
+    statement.type === 'ReturnStatement' ||
+    statement.type === 'ThrowStatement'
+  ) {
+    return true
+  }
+  if (statement.type === 'BlockStatement') {
+    return statement.body.some(switchArmStatementTerminates)
+  }
+  if (statement.type === 'IfStatement') {
+    return (
+      switchArmStatementTerminates(statement.consequent) &&
+      Boolean(statement.alternate) &&
+      switchArmStatementTerminates(statement.alternate)
+    )
+  }
+  return false
+}
+
+function switchCasesAreExclusive(args) {
+  const first = enclosingSwitchCase(args.first)
+  const second = enclosingSwitchCase(args.second)
+  if (
+    first.kind === StaticKeyLookupKind.NotFound ||
+    second.kind === StaticKeyLookupKind.NotFound ||
+    first.value.parent !== second.value.parent ||
+    first.value === second.value
+  ) {
+    return false
+  }
+  const cases = first.value.parent.cases
+  return (
+    cases.indexOf(first.value) < cases.indexOf(second.value) &&
+    first.value.consequent.some(switchArmStatementTerminates)
+  )
+}
+
 export function nodesUseExclusiveBranches(args) {
+  if (switchCasesAreExclusive(args)) return true
   const firstArms = branchArms(args.first)
   for (const [branch, arm] of branchArms(args.second)) {
     if (firstArms.has(branch) && firstArms.get(branch) !== arm) return true

@@ -46,9 +46,65 @@ const noRawObjectArguments = {
     },
   },
   create(context) {
+    const sourceCode = context.sourceCode;
+
+    function spreadObjectExpressions(args) {
+      const { expression, seenVariables } = args;
+      let current = expression;
+      while (transparentTypeScriptWrappers.has(current.type)) {
+        current = current.expression;
+      }
+      if (current.type === 'Identifier') {
+        let scope = sourceCode.getScope(current);
+        while (scope) {
+          const variable = scope.set.get(current.name);
+          if (variable) {
+            if (seenVariables.has(variable)) return [];
+            const definition = variable.defs.find(
+              (candidate) =>
+                candidate.type === 'Variable' &&
+                candidate.node.type === 'VariableDeclarator' &&
+                candidate.node.init,
+            );
+            if (!definition || definition.name.typeAnnotation) return [];
+            const nextSeen = new Set(seenVariables);
+            nextSeen.add(variable);
+            return spreadObjectExpressions({
+              expression: definition.node.init,
+              seenVariables: nextSeen,
+            });
+          }
+          scope = scope.upper;
+        }
+        return [];
+      }
+      if (current.type !== 'ArrayExpression') return [];
+      return current.elements.flatMap((element) => {
+        if (!element) return [];
+        return element.type === 'SpreadElement'
+          ? spreadObjectExpressions({
+              expression: element.argument,
+              seenVariables,
+            })
+          : rawObjectExpressions(element);
+      });
+    }
+
     function inspectArguments(node) {
       for (const argument of node.arguments) {
-        if (argument.type === 'SpreadElement') continue;
+        if (argument.type === 'SpreadElement') {
+          const spreadArgs = {
+            expression: argument.argument,
+            seenVariables: new Set(),
+          };
+          for (const objectExpression of spreadObjectExpressions(spreadArgs)) {
+            context.report({
+              node: objectExpression,
+              messageId: 'namedArgument',
+            });
+          }
+          continue;
+        }
         for (const objectExpression of rawObjectExpressions(argument)) {
           context.report({
             node: objectExpression,
