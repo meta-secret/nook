@@ -28,10 +28,10 @@ Do not suppress a Nook-authored API.
 ## Problem Pattern
 
 ```ts
-export function decodeAgentStatsFilePayload(
-  value: ExternalValue,
-  path: string,
-): DecodeOutcome<AgentStatsFileRequest>
+export function writeAgentStatsFile(
+  request: AgentStatsFileRequest,
+  sourcePath: string,
+): Promise<AgentStatsFileResult>
 ```
 
 Multiple positional parameters hide argument meaning at call sites and make
@@ -40,20 +40,20 @@ reordering unsafe.
 ## Preferred Pattern
 
 ```ts
-export type DecodeAgentStatsFilePayloadArgs = {
-  readonly value: ExternalValue;
-  readonly path: string;
+export type WriteAgentStatsFileArgs = {
+  readonly request: AgentStatsFileRequest;
+  readonly sourcePath: string;
 };
 
-export function decodeAgentStatsFilePayload(
-  args: DecodeAgentStatsFilePayloadArgs,
-): DecodeOutcome<AgentStatsFileRequest>
+export function writeAgentStatsFile(
+  args: WriteAgentStatsFileArgs,
+): Promise<AgentStatsFileResult>
 ```
 
 Call sites pass a single object:
 
 ```ts
-decodeAgentStatsFilePayload({ value, path })
+writeAgentStatsFile({ request, sourcePath })
 ```
 
 Rules:

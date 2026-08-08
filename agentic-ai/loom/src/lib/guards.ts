@@ -40,7 +40,7 @@ export function isNonEmptyString(value: ExternalValue): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
-/** Narrow a host parse result into the Loom external-value model. */
+/** Boundary-only bridge for a host parse result before immediate decoding. */
 export function asExternalValue(value: ExternalValue): ExternalValue {
   return value;
 }

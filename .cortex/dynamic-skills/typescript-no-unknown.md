@@ -4,7 +4,9 @@
 
 Do not author the `unknown` type in linted TypeScript or Svelte code.
 
-Untrusted input uses a named external-value model instead.
+Do not replace it with another generic value in domain or application code.
+
+Model concrete domain values.
 
 ## Scope
 
@@ -24,39 +26,68 @@ export function decodeDependencyPopularityRequest(value: unknown)
 export type UnknownRecord = Record<string, unknown>
 ```
 
-`unknown` is an unnamed top type. It hides what external data is allowed to be
-and pushes ad hoc narrowing everywhere.
+`unknown` is an unnamed top type.
+
+`ExternalValue` is also generic.
+
+Either type can erase domain meaning when it escapes a parser or transport
+adapter.
 
 ## Preferred Pattern
 
 ```ts
-export type ExternalValue =
-  | string
-  | number
-  | boolean
-  | readonly ExternalValue[]
-  | ExternalObject;
-
-export type ExternalObject = {
-  readonly [key: string]: ExternalValue;
+export type DependencyPopularityRequest = {
+  readonly packageName: string;
+  readonly ecosystem: DependencyEcosystem;
 };
 
-export function decodeDependencyPopularityRequest(value: ExternalValue)
+export function evaluateDependencyPopularity(
+  request: DependencyPopularityRequest,
+): DependencyPopularityResult
 ```
 
 Rules:
 
 1. Do not write the `unknown` type token in enforced sources.
-2. YAML/JSON and other untrusted payloads use `ExternalValue` /
-   `ExternalObject`.
-3. Narrow with `isRecord`, `isExternalNull`, `externalProperty`, and codec
-   helpers — not `value as unknown` ladders.
-4. Catch bindings stay unannotated or use concrete error types (`LoomFailure`,
+2. Do not use `ExternalValue`, `ExternalObject`, `JsonValue`, or equivalent
+   recursive value bags as domain models.
+3. Do not store generic values in application state.
+4. Do not expose generic values through commands, services, or UI APIs.
+5. Define concrete structs, enums, unions, and identifiers for domain data.
+6. Catch bindings stay unannotated or use concrete error types (`LoomFailure`,
    `Error`), never `catch (error: unknown)`.
-5. Command results that are still loosely shaped use `ExternalValue` (or a
-   domain result union), not `Promise<unknown>`.
-6. Host parses (`JSON.parse`, `Bun.YAML.parse`, `response.json`) enter Loom
-   through `asExternalValue(... as ExternalValue)` at the boundary only.
+7. Command results use domain result unions. They must not use
+   `Promise<unknown>` or `Promise<ExternalValue>`.
+
+## Narrow Boundary Exception
+
+A generic transport value is allowed only when a host API provides untyped
+JSON, YAML, WASM, or browser IPC data.
+
+The exception must stay inside a dedicated parser, codec, message guard, or
+contiguous boundary-decoding pipeline.
+
+The adapter must:
+
+- validate the input immediately;
+- return a concrete domain type or a typed decode failure from the completed
+  boundary pipeline;
+- pass a generic value only between adjacent steps in that boundary pipeline;
+- avoid storing the generic value;
+- avoid passing the generic value into domain or application services;
+- keep casts at the host boundary.
+
+Do not treat this exception as the preferred application type.
+
+If a concrete platform input type exists, use it instead.
+
+The generic type may appear only at that boundary:
+
+```ts
+export function decodeDependencyPopularityRequest(
+  value: ExternalValue,
+): DecodeOutcome<DependencyPopularityRequest>
+```
 
 ## Enforcement
 
@@ -73,7 +104,8 @@ bun run --cwd agentic-ai/loom lint
 
 ## Application Checklist
 
-- [ ] Replace `unknown` parameters and fields with an external-value model or a
-      domain type.
-- [ ] Replace `Record<string, unknown>` with `ExternalObject`.
+- [ ] Replace `unknown` parameters and fields with concrete domain types.
+- [ ] Remove generic recursive values from state, results, and service APIs.
+- [ ] Keep any unavoidable external-value use inside a dedicated adapter.
+- [ ] Prove that each adapter returns a concrete domain type or typed failure.
 - [ ] Keep the applicable Loom or web lint task green.

@@ -304,7 +304,7 @@ const typedApiRules = {
       types: {
         unknown: {
           message:
-            'Nook web forbids unknown. Use ExternalValue / ExternalObject for untrusted data or a concrete platform type.',
+            'Nook web forbids unknown. Model a concrete domain type. A generic transport value is allowed only inside a dedicated untrusted-input adapter and must be narrowed immediately.',
         },
       },
     },

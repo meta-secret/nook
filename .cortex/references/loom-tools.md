@@ -33,7 +33,9 @@ and [typescript-no-unknown.md](../dynamic-skills/typescript-no-unknown.md):
 
 - every authored function/method takes at most one parameter
 - multi-value inputs use a typed object argument
-- no authored `unknown`; untrusted data uses `ExternalValue` / `ExternalObject`
+- no authored `unknown`
+- no generic value bags in domain or application code
+- generic transport values stay inside dedicated codecs and narrow immediately
 - toolsList `inputSchema` values are typed `ObjectJsonSchema` (not raw object
   bags); field names come from field enums
 - call sites must not pass raw object literals; name a typed args value first

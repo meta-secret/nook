@@ -32,6 +32,8 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         "'max-params': ['error', { max: 1 }]",
         "'@typescript-eslint/no-restricted-types'",
         "Nook web forbids unknown",
+        "Model a concrete domain type",
+        "must be narrowed immediately",
         "'nook-typed-api/no-raw-object-arguments': 'error'",
         "TSAsExpression",
         "TSTypeAssertion",

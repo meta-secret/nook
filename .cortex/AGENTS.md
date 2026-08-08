@@ -405,8 +405,10 @@ the shared ESLint scope one migrated package slice at a time. Full contract:
 [dynamic-skills/typescript-single-parameter.md](dynamic-skills/typescript-single-parameter.md).
 
 Loom and migrated Nook web TypeScript must not author the `unknown` type.
-Untrusted payloads use a named external-value model. Enforced by ESLint
-`@typescript-eslint/no-restricted-types`. Full contract:
+Generic value bags are also prohibited in domain and application code.
+A generic transport value is allowed only inside a dedicated untrusted-input
+adapter that narrows immediately. Enforced by ESLint
+`@typescript-eslint/no-restricted-types` and review. Full contract:
 [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md).
 
 Loom and migrated Nook web TypeScript must not pass raw object literals into
@@ -616,7 +618,7 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 - [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Load `design-taste-frontend` for user-visible UI work; Impeccable is explicit opt-in only**.
 - [dynamic-skills/prefer-popular-libraries.md](dynamic-skills/prefer-popular-libraries.md) — **Prefer mature high-adoption libraries over hand-rolled boilerplate; reject obscure deps**.
 - [dynamic-skills/typescript-single-parameter.md](dynamic-skills/typescript-single-parameter.md) — **Loom and migrated Nook web: max one function parameter**.
-- [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md) — **Loom and migrated Nook web: ban authored `unknown`**.
+- [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md) — **Loom and migrated Nook web: require domain values; generic transport values are boundary-only exceptions**.
 - [dynamic-skills/typescript-named-args.md](dynamic-skills/typescript-named-args.md) — **Loom and migrated Nook web: name object call arguments**.
 - [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 - [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.

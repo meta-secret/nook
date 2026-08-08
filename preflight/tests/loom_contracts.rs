@@ -39,7 +39,8 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "CallExpression[arguments.length=1] > ObjectExpression",
         "named typed value first",
         "files: ['src/**/*.ts', 'tests/**/*.ts']",
-        "ExternalValue / ExternalObject",
+        "Model a concrete domain type",
+        "must be narrowed immediately",
     ] {
         assert!(
             eslint.contains(required),
