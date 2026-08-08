@@ -61,10 +61,10 @@ export async function importApprovedPairing(
     }
     await ensureExtensionSessionDocument()
     const staging = stageProviderCredentials(message.payload.providers)
-    const providers =
-      staging.kind === ProviderCredentialStagingKind.Staged
-        ? staging.providers
-        : message.payload.providers
+    if (staging.kind !== ProviderCredentialStagingKind.Staged) {
+      return { ok: false, reason: 'invalid-provider-payload' }
+    }
+    const providers = staging.providers
     const pairingItems = extensionPairingGrantStorageItems(
       message.payload,
       imported,

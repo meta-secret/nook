@@ -1,4 +1,9 @@
-import type { ExternalObject, ExternalValue } from './external-value'
+import {
+  isExternalValue,
+  type ExternalObject,
+  type ExternalValue,
+  type ExternalValueCandidate,
+} from './external-value'
 
 export enum ProviderCredentialStagingKind {
   InvalidInput = 'invalid-input',
@@ -27,6 +32,12 @@ function cloneProvider(provider: ExternalValue): ExternalValue {
   return clone
 }
 
+function isExternalValueArray(
+  value: ExternalValueCandidate,
+): value is ExternalValue[] {
+  return Array.isArray(value) && value.every(isExternalValue)
+}
+
 export function scrubProviderCredentials(providers: ExternalValue): void {
   if (!Array.isArray(providers)) return
   for (const provider of providers) {
@@ -52,9 +63,9 @@ export function scrubProviderCredentials(providers: ExternalValue): void {
 }
 
 export function stageProviderCredentials(
-  providers: ExternalValue,
+  providers: ExternalValueCandidate,
 ): ProviderCredentialStaging {
-  if (!Array.isArray(providers)) {
+  if (!isExternalValueArray(providers)) {
     return { kind: ProviderCredentialStagingKind.InvalidInput }
   }
   const staged = providers.map(cloneProvider)

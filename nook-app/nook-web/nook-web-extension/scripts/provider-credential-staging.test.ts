@@ -72,4 +72,12 @@ describe('provider credential staging', () => {
       (staging.providers[0] as { oauthFile?: unknown }).oauthFile,
     ).not.toHaveProperty('refreshToken')
   })
+
+  test('rejects values outside the serialized external model', () => {
+    const staging = stageProviderCredentials([
+      { id: 'drive', metadata: new Date() },
+    ])
+
+    expect(staging.kind).toBe(ProviderCredentialStagingKind.InvalidInput)
+  })
 })

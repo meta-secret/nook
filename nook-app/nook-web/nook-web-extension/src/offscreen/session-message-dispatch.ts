@@ -1,4 +1,3 @@
-import type { ExternalValue } from '../lib/external-value'
 import {
   ProviderCredentialStagingKind,
   scrubProviderCredentials,
@@ -270,7 +269,12 @@ export class ExtensionSessionMessageDispatcher {
     message: Record<string, unknown>,
     payload: Record<string, unknown>,
   ): Promise<unknown> {
-    const staging = stageProviderCredentials(payload.providers as ExternalValue)
+    const providerCandidate = payload.providers
+    const staging = stageProviderCredentials(
+      providerCandidate && typeof providerCandidate === 'object'
+        ? providerCandidate
+        : {},
+    )
     // Pairing imports are one-shot and may run against a cold offscreen WASM
     // runtime. Never expire them with the short interactive probe budget.
     if (
@@ -286,9 +290,7 @@ export class ExtensionSessionMessageDispatcher {
               providers:
                 staging.kind === ProviderCredentialStagingKind.Staged
                   ? staging.providers
-                  : Array.isArray(payload.providers)
-                    ? payload.providers
-                    : [],
+                  : [],
             },
           }),
         options: {
@@ -307,9 +309,7 @@ export class ExtensionSessionMessageDispatcher {
     const clearPending = () => {
       if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared)
         return
-      scrubProviderCredentials(
-        payloadResidency.payload.providers as ExternalValue,
-      )
+      scrubProviderCredentials(stagedProviders)
       payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
     }
     return this.operations.enqueue({
@@ -325,7 +325,7 @@ export class ExtensionSessionMessageDispatcher {
             payload: operationPayload,
           })
         } finally {
-          scrubProviderCredentials(operationPayload.providers as ExternalValue)
+          scrubProviderCredentials(stagedProviders)
           operationPayload.providers = []
         }
       },
