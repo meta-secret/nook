@@ -2,11 +2,9 @@ version: '3'
 
 tasks:
   remote:
-    desc: Run one allowlisted task on a GitHub-hosted runner (TASK_NAME=<name>).
-    requires:
-      vars: [TASK_NAME]
+    desc: Run allowlisted tasks in one GitHub-hosted job (TASK_NAMES=<a,b> or TASK_NAME=<a>).
     env:
-      REQUESTED_REMOTE_TASK: '{{.TASK_NAME}}'
+      REQUESTED_REMOTE_TASKS: '{{.TASK_NAMES | default .TASK_NAME}}'
     preconditions:
       - sh: command -v gh >/dev/null 2>&1
         msg: GitHub CLI is required.
@@ -16,15 +14,7 @@ tasks:
       - |
         set -eu
 
-        requested_task="$REQUESTED_REMOTE_TASK"
-        case "$requested_task" in
-          preflight|bake-cache:prove|rust:test|rust:lint|rust:coverage|wasm:build|wasm:test|wasm:test:browser|web:check|web:test|web:build|web:e2e|extension:check|extension:e2e|hive:verify|check|ci:pr|ci:pr:e2e) ;;
-          *)
-            echo "Unknown remote task: $requested_task" >&2
-            echo "Run 'task remote:list' to see the allowlisted catalog." >&2
-            exit 2
-            ;;
-        esac
+        requested_tasks="$(.github/scripts/remote-task-batch.sh --validate "$REQUESTED_REMOTE_TASKS")"
 
         branch="$(git branch --show-current)"
         if [ -z "$branch" ] || [ "$branch" = "main" ]; then
@@ -50,17 +40,15 @@ tasks:
           exit 2
         fi
 
-        case "$requested_task" in
-          web:e2e|extension:e2e|check|ci:pr|ci:pr:e2e)
-            .github/scripts/require-current-base.sh origin main
-            ;;
-        esac
+        if .github/scripts/remote-task-batch.sh --requires-current-base "$requested_tasks"; then
+          .github/scripts/require-current-base.sh origin main
+        fi
 
         gh workflow run remote.yml \
           --ref "$branch" \
-          --raw-field "task=$requested_task"
+          --raw-field "tasks=$requested_tasks"
 
-        echo "Dispatched '$requested_task' for $branch at $local_sha."
+        echo "Dispatched '$requested_tasks' in one job for $branch at $local_sha."
         echo "Inspect it with:"
         echo "gh run list --workflow=remote.yml --branch=\"$branch\" --commit=\"$local_sha\" --event=workflow_dispatch"
 
@@ -68,25 +56,7 @@ tasks:
     desc: Print the allowlisted GitHub-hosted remote task catalog.
     silent: true
     cmds:
-      - |
-        echo "preflight"
-        echo "bake-cache:prove"
-        echo "rust:test"
-        echo "rust:lint"
-        echo "rust:coverage"
-        echo "wasm:build"
-        echo "wasm:test"
-        echo "wasm:test:browser"
-        echo "web:check"
-        echo "web:test"
-        echo "web:build"
-        echo "web:e2e"
-        echo "extension:check"
-        echo "extension:e2e"
-        echo "hive:verify"
-        echo "check"
-        echo "ci:pr"
-        echo "ci:pr:e2e"
+      - .github/scripts/remote-task-batch.sh --list
 
   pr:validate:
     desc: Trigger required PR validation by re-applying its one-shot label (PR=<number>, FULL_E2E=1 for a Main-fix browser gate).
