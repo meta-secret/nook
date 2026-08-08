@@ -135,6 +135,9 @@ async function sessionResponse(
 }
 
 function deviceProtectionStatus(value: ExternalValue): DeviceProtectionStatus {
+  if (typeof value !== 'string') {
+    throw new Error('Unsupported extension device protection status.')
+  }
   switch (value) {
     case DeviceProtectionStatus.Error:
     case DeviceProtectionStatus.Loading:
