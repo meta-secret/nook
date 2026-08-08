@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { decodeAgentStatsAssembleRequest } from '../src/codec/args/agent-stats.ts';
+import { decodeAgentStatsAssemblePayload } from '../src/codec/args/agent-stats.ts';
 import { decodePrePushRequest } from '../src/codec/args/pre-push.ts';
-import { RequestKind, ResponsePhase } from '../src/codec/enums.ts';
+import { RequestFamily, ResponsePhase } from '../src/codec/enums.ts';
+import { DecodeStatus } from '../src/codec/field-error.ts';
 import { decodeLoomRequest } from '../src/codec/request.ts';
-import { ResultKind } from '../src/result.ts';
 import { dispatchValue } from '../src/tools/dispatch.ts';
 
 describe('loom domain request codec', () => {
@@ -11,9 +11,26 @@ describe('loom domain request codec', () => {
     const decoded = decodeLoomRequest({
       prePush: { stageHostUpdates: true, fetchOriginMain: true },
     });
-    expect(decoded.kind).toBe(ResultKind.Ok);
-    if (decoded.kind === ResultKind.Ok) {
-      expect(decoded.value.kind).toBe(RequestKind.PrePush);
+    expect(decoded.status).toBe(DecodeStatus.Ok);
+    if (decoded.status === DecodeStatus.Ok) {
+      expect(decoded.value.family).toBe(RequestFamily.PrePush);
+    }
+  });
+
+  test('decodes nested agentStats.assemble request', () => {
+    const decoded = decodeLoomRequest({
+      agentStats: {
+        assemble: {
+          prNumber: 12,
+          scratchPath: '/tmp/a.json',
+          outputPath: '/tmp/12.yaml',
+          includeTestInventory: false,
+        },
+      },
+    });
+    expect(decoded.status).toBe(DecodeStatus.Ok);
+    if (decoded.status === DecodeStatus.Ok) {
+      expect(decoded.value.family).toBe(RequestFamily.AgentStats);
     }
   });
 
@@ -22,8 +39,8 @@ describe('loom domain request codec', () => {
       name: 'agent-stats',
       arguments: { action: 'assemble', pr: 123 },
     });
-    expect(decoded.kind).toBe(ResultKind.Err);
-    if (decoded.kind === ResultKind.Err) {
+    expect(decoded.status).toBe(DecodeStatus.Failed);
+    if (decoded.status === DecodeStatus.Failed) {
       expect(decoded.errors.some((entry) => entry.path === 'name')).toBe(true);
       expect(decoded.errors.some((entry) => entry.path === 'arguments')).toBe(
         true,
@@ -36,8 +53,8 @@ describe('loom domain request codec', () => {
       stageHostUpdates: 'yes',
       fetchOriginMain: true,
     });
-    expect(decoded.kind).toBe(ResultKind.Err);
-    if (decoded.kind === ResultKind.Err) {
+    expect(decoded.status).toBe(DecodeStatus.Failed);
+    if (decoded.status === DecodeStatus.Failed) {
       expect(
         decoded.errors.some(
           (entry) => entry.path === 'prePush.stageHostUpdates',
@@ -46,29 +63,35 @@ describe('loom domain request codec', () => {
     }
   });
 
-  test('decodes agentStatsAssemble request', () => {
-    const decoded = decodeAgentStatsAssembleRequest({
-      prNumber: 12,
-      scratchPath: '/tmp/a.json',
-      outputPath: '/tmp/12.yaml',
-      includeTestInventory: false,
-    });
-    expect(decoded.kind).toBe(ResultKind.Ok);
+  test('decodes agentStats assemble payload', () => {
+    const decoded = decodeAgentStatsAssemblePayload(
+      {
+        prNumber: 12,
+        scratchPath: '/tmp/a.json',
+        outputPath: '/tmp/12.yaml',
+        includeTestInventory: false,
+      },
+      'agentStats.assemble',
+    );
+    expect(decoded.status).toBe(DecodeStatus.Ok);
   });
 
-  test('rejects unknown agentStatsAssemble fields', () => {
-    const decoded = decodeAgentStatsAssembleRequest({
-      prNumber: 12,
-      scratchPath: '/tmp/a.json',
-      outputPath: '/tmp/12.yaml',
-      includeTestInventory: false,
-      action: 'assemble',
-    });
-    expect(decoded.kind).toBe(ResultKind.Err);
-    if (decoded.kind === ResultKind.Err) {
+  test('rejects unknown agentStats assemble fields', () => {
+    const decoded = decodeAgentStatsAssemblePayload(
+      {
+        prNumber: 12,
+        scratchPath: '/tmp/a.json',
+        outputPath: '/tmp/12.yaml',
+        includeTestInventory: false,
+        action: 'assemble',
+      },
+      'agentStats.assemble',
+    );
+    expect(decoded.status).toBe(DecodeStatus.Failed);
+    if (decoded.status === DecodeStatus.Failed) {
       expect(
         decoded.errors.some(
-          (entry) => entry.path === 'agentStatsAssemble.action',
+          (entry) => entry.path === 'agentStats.assemble.action',
         ),
       ).toBe(true);
     }
@@ -84,16 +107,14 @@ describe('loom dispatch protocol', () => {
     expect(outcome.body.ok).toBe(true);
     if (outcome.body.ok) {
       const result = outcome.body.result as {
-        requests: readonly { requestKind: RequestKind }[];
+        requests: readonly { family: RequestFamily }[];
       };
       expect(
-        result.requests.some(
-          (entry) => entry.requestKind === RequestKind.PrePush,
-        ),
+        result.requests.some((entry) => entry.family === RequestFamily.PrePush),
       ).toBe(true);
       expect(
         result.requests.some(
-          (entry) => entry.requestKind === RequestKind.ToolsCall,
+          (entry) => entry.family === RequestFamily.ToolsCall,
         ),
       ).toBe(false);
     }

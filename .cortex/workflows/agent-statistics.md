@@ -31,18 +31,19 @@ Scratch JSON must include `started_at`, `change_surface`, `local_executions`,
 Assemble request:
 
 ```yaml
-agentStatsAssemble:
-  prNumber: 123
-  scratchPath: /tmp/pr-123-events.json
-  outputPath: /tmp/123.yaml
-  includeTestInventory: true
+agentStats:
+  assemble:
+    prNumber: 123
+    scratchPath: /tmp/pr-123-events.json
+    outputPath: /tmp/123.yaml
+    includeTestInventory: true
 ```
 
 ```bash
 task loom:agent-stats CONFIG=/tmp/assemble-request.yaml
 ```
 
-Validate / publish use `agentStatsValidate` / `agentStatsPublish` with
+Validate / publish use `agentStats.validate` / `agentStats.publish` with
 `statsFile: /tmp/123.yaml`.
 
 Examples:

@@ -16,13 +16,15 @@ loom <request.yaml>
 task loom:run CONFIG=<request.yaml>
 ```
 
-## TypeScript state rules
+## TypeScript domain structure
 
-Loom follows the same authored TypeScript rules as Nook web:
+Loom follows [typescript-domain-structure.md](../dynamic-skills/typescript-domain-structure.md):
 
-- no authored `null` or `undefined`
-- closed vocabularies use enums / typed unions
-- explicit `Maybe` / `Result` absence instead of optional holes
+- nested same-prefix families (`agentStats`, `prLand`) plus operation enums
+- field-name enums for deny-unknown-key checks
+- codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation
+- runtime failures throw `LoomFailure` with `LoomFailureCode`
+- no generic TypeScript `Result<T>` or `Maybe<T>` utilities
 
 Enforced by `task preflight:typescript-state` across the repository, including
 `agentic-ai/loom`.
@@ -41,18 +43,19 @@ arguments:
   pr: 123
 ```
 
-Use one domain root key and descriptive fields:
+Use one domain root family and descriptive fields. Same-prefix operations nest:
 
 ```yaml
 # right
-agentStatsAssemble:
-  prNumber: 123
-  scratchPath: /tmp/pr-123-events.json
-  outputPath: /tmp/123.yaml
-  includeTestInventory: true
+agentStats:
+  assemble:
+    prNumber: 123
+    scratchPath: /tmp/pr-123-events.json
+    outputPath: /tmp/123.yaml
+    includeTestInventory: true
 ```
 
-Exactly one root key is allowed.
+Exactly one root family key is allowed.
 
 Unknown fields fail closed.
 
@@ -101,26 +104,31 @@ skillScaffold:
 task loom:skill-scaffold CONFIG=path/to/request.yaml
 ```
 
-### agentStatsAssemble / Validate / Publish
+### agentStats (assemble / validate / publish)
 
 ```yaml
-agentStatsAssemble:
-  prNumber: 123
-  scratchPath: /tmp/pr-123-events.json
-  outputPath: /tmp/123.yaml
-  includeTestInventory: true
+agentStats:
+  assemble:
+    prNumber: 123
+    scratchPath: /tmp/pr-123-events.json
+    outputPath: /tmp/123.yaml
+    includeTestInventory: true
 ```
 
 ```bash
 task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 ```
 
-### prLandValidate / Status / Ready / MergeCheck
+Validate and publish use `agentStats.validate` / `agentStats.publish` with
+`statsFile`.
+
+### prLand (status / validate / ready / mergeCheck)
 
 ```yaml
-prLandValidate:
-  prNumber: 123
-  runFullE2e: false
+prLand:
+  validate:
+    prNumber: 948
+    runFullE2e: false
 ```
 
 ```bash
@@ -142,6 +150,7 @@ Prefer a top-level domain key for normal calls.
 
 ## Response
 
-Success includes `requestKind` and `result`.
+Success includes `family`, optional `operation` for nested families, and
+`result`.
 
 Failures include `phase`, `errors[].path`, and `recover.toolsListRequest`.

@@ -4,7 +4,11 @@ import type { CortexAuditRequest } from '../codec/args/cortex-audit.ts';
 import { lintProseDensity, type DensityFinding } from '../lib/density.ts';
 import { findBrokenRelativeLinks, type BrokenLink } from '../lib/links.ts';
 import { findRepoRoot } from '../lib/repo.ts';
-import { ResultKind, err, ok, type Result } from '../result.ts';
+import {
+  LoomFailureCode,
+  loomFailure,
+  loomFailureDetail,
+} from '../loom-failure.ts';
 
 export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[];
@@ -17,15 +21,14 @@ export type CortexAuditReport = {
 
 export async function runCortexAudit(
   request: CortexAuditRequest,
-): Promise<Result<CortexAuditReport>> {
-  const repo = findRepoRoot();
-  if (repo.kind === ResultKind.Err) {
-    return repo;
-  }
-  const repoRoot = repo.value;
+): Promise<CortexAuditReport> {
+  const repoRoot = findRepoRoot();
   const cortexRoot = path.join(repoRoot, '.cortex');
   if (!existsSync(cortexRoot)) {
-    return err('.cortex directory is missing');
+    loomFailureDetail(
+      LoomFailureCode.CortexAuditFailed,
+      '.cortex directory is missing',
+    );
   }
 
   const mdFiles = listMarkdownFiles(cortexRoot);
@@ -84,7 +87,7 @@ export async function runCortexAudit(
     }
   }
 
-  return ok({
+  return {
     brokenLinks,
     missingFromIndex,
     orphanIndexRows,
@@ -96,7 +99,7 @@ export async function runCortexAudit(
       orphanIndexRows.length === 0 &&
       missingExecutableSkills.length === 0 &&
       densityFindings.length === 0,
-  });
+  };
 }
 
 function listMarkdownFiles(root: string): string[] {

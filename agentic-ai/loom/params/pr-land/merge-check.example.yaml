@@ -1,2 +1,3 @@
-prLandMergeCheck:
-  prNumber: 123
+prLand:
+  mergeCheck:
+    prNumber: 123

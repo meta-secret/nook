@@ -1,2 +1,3 @@
-agentStatsPublish:
-  statsFile: /tmp/123.yaml
+agentStats:
+  publish:
+    statsFile: /tmp/123.yaml

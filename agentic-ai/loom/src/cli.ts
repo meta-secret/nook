@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { ResponsePhase } from './codec/enums.ts';
 import { stringifyYaml } from './codec/yaml.ts';
-import { requireBun, resolveRequestPath } from './lib/repo.ts';
-import { ResultKind } from './result.ts';
+import { resolveRequestPath, requireBun } from './lib/repo.ts';
+import { LoomFailure } from './loom-failure.ts';
 import { dispatchRequestFile, encodedOutcome } from './tools/dispatch.ts';
 
 const HELP = `Loom — mechanical cortex rites (domain YAML protocol)
@@ -23,9 +23,10 @@ Stdout is YAML only. On decode errors, exit 2 and read errors[].path.
 `;
 
 async function main(): Promise<number> {
-  const bun = requireBun();
-  if (bun.kind === ResultKind.Err) {
-    console.error(bun.message);
+  try {
+    requireBun();
+  } catch (error) {
+    console.error(error instanceof LoomFailure ? error.message : String(error));
     return 2;
   }
 
@@ -37,41 +38,36 @@ async function main(): Promise<number> {
   }
   if (argv.length !== 1) {
     console.error(HELP);
-    const yaml = stringifyYaml({
-      ok: false,
-      isError: true,
-      phase: ResponsePhase.Decode,
-      errors: [
-        {
-          path: '',
-          message: 'expected exactly one request YAML path argument',
+    console.log(
+      stringifyYaml({
+        ok: false,
+        isError: true,
+        phase: ResponsePhase.Decode,
+        errors: [
+          {
+            path: '',
+            message: 'expected exactly one request YAML path argument',
+          },
+        ],
+        recover: {
+          toolsListRequest: 'agentic-ai/loom/params/tools-list/default.yaml',
+          hint: 'run loom with a toolsList request, then retry with a valid domain request object',
         },
-      ],
-      recover: {
-        toolsListRequest: 'agentic-ai/loom/params/tools-list/default.yaml',
-        hint: 'run loom with a toolsList request, then retry with a valid domain request object',
-      },
-    });
-    if (yaml.kind === ResultKind.Ok) {
-      console.log(yaml.value);
-    }
+      }),
+    );
     return 2;
   }
 
-  const resolved = resolveRequestPath(token);
-  if (resolved.kind === ResultKind.Err) {
-    console.error(resolved.message);
+  let requestPath: string;
+  try {
+    requestPath = resolveRequestPath(token);
+  } catch (error) {
+    console.error(error instanceof LoomFailure ? error.message : String(error));
     return 2;
   }
-  const requestPath = resolved.value;
+
   const outcome = await dispatchRequestFile(requestPath);
-  const encoded = encodedOutcome(outcome);
-  const yaml = stringifyYaml(encoded);
-  if (yaml.kind === ResultKind.Err) {
-    console.error(yaml.message);
-    return 2;
-  }
-  console.log(yaml.value);
+  console.log(stringifyYaml(encodedOutcome(outcome)));
   return outcome.exitCode;
 }
 

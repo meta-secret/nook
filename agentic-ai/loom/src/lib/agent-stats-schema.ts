@@ -1,5 +1,4 @@
 import { isRecord } from './guards.ts';
-import { err, ok, type Result } from '../result.ts';
 
 export type AgentStatsValidation = {
   readonly ok: boolean;
@@ -9,17 +8,17 @@ export type AgentStatsValidation = {
 export function validateAgentStatsYaml(
   content: string,
   expectedPrNumber: number,
-): Result<AgentStatsValidation> {
+): AgentStatsValidation {
   let parsed: unknown;
   try {
     parsed = Bun.YAML.parse(content);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return err(`YAML parse failed: ${message}`);
+    return { ok: false, errors: [`YAML parse failed: ${message}`] };
   }
 
   if (!isRecord(parsed)) {
-    return ok({ ok: false, errors: ['root must be a mapping'] });
+    return { ok: false, errors: ['root must be a mapping'] };
   }
 
   const errors: string[] = [];
@@ -165,7 +164,7 @@ export function validateAgentStatsYaml(
     }
   }
 
-  return ok({ ok: errors.length === 0, errors });
+  return { ok: errors.length === 0, errors };
 }
 
 function isNonNegativeInt(value: unknown): boolean {

@@ -1,25 +1,9 @@
 import { isRecord } from '../lib/guards.ts';
-import { ResultKind } from '../result.ts';
-import {
-  decodeAgentStatsAssembleRequest,
-  decodeAgentStatsPublishRequest,
-  decodeAgentStatsValidateRequest,
-  type AgentStatsAssembleRequest,
-  type AgentStatsFileRequest,
-} from './args/agent-stats.ts';
 import {
   decodeCortexAuditRequest,
   type CortexAuditRequest,
 } from './args/cortex-audit.ts';
 import { decodePrePushRequest, type PrePushRequest } from './args/pre-push.ts';
-import {
-  decodePrLandMergeCheckRequest,
-  decodePrLandReadyRequest,
-  decodePrLandStatusRequest,
-  decodePrLandValidateRequest,
-  type PrLandPrRequest,
-  type PrLandValidateRequest,
-} from './args/pr-land.ts';
 import {
   decodeSkillScaffoldRequest,
   type SkillScaffoldRequest,
@@ -28,79 +12,58 @@ import {
   decodeToolsListRequest,
   type ToolsListRequest,
 } from './args/tools-list.ts';
-import { RequestKind } from './enums.ts';
+import { RequestFamily } from './enums.ts';
 import {
+  DecodeStatus,
+  FieldIssue,
   decodeErr,
-  decodeOk,
+  fieldDetailText,
   fieldError,
-  type DecodeResult,
-  type FieldError,
+  joinPath,
+  type DecodeOutcome,
 } from './field-error.ts';
-import { expectObject } from './object.ts';
+import { expectObject, mapDecode } from './object.ts';
+import {
+  decodeAgentStatsFamily,
+  type AgentStatsLoomRequest,
+} from './request-agent-stats.ts';
+import {
+  decodePrLandFamily,
+  type PrLandLoomRequest,
+} from './request-pr-land.ts';
 
 export type LoomRequest =
-  | { readonly kind: RequestKind.PrePush; readonly prePush: PrePushRequest }
+  | { readonly family: RequestFamily.PrePush; readonly prePush: PrePushRequest }
   | {
-      readonly kind: RequestKind.CortexAudit;
+      readonly family: RequestFamily.CortexAudit;
       readonly cortexAudit: CortexAuditRequest;
     }
   | {
-      readonly kind: RequestKind.SkillScaffold;
+      readonly family: RequestFamily.SkillScaffold;
       readonly skillScaffold: SkillScaffoldRequest;
     }
+  | AgentStatsLoomRequest
+  | PrLandLoomRequest
   | {
-      readonly kind: RequestKind.AgentStatsAssemble;
-      readonly agentStatsAssemble: AgentStatsAssembleRequest;
-    }
-  | {
-      readonly kind: RequestKind.AgentStatsValidate;
-      readonly agentStatsValidate: AgentStatsFileRequest;
-    }
-  | {
-      readonly kind: RequestKind.AgentStatsPublish;
-      readonly agentStatsPublish: AgentStatsFileRequest;
-    }
-  | {
-      readonly kind: RequestKind.PrLandStatus;
-      readonly prLandStatus: PrLandPrRequest;
-    }
-  | {
-      readonly kind: RequestKind.PrLandValidate;
-      readonly prLandValidate: PrLandValidateRequest;
-    }
-  | {
-      readonly kind: RequestKind.PrLandReady;
-      readonly prLandReady: PrLandPrRequest;
-    }
-  | {
-      readonly kind: RequestKind.PrLandMergeCheck;
-      readonly prLandMergeCheck: PrLandPrRequest;
-    }
-  | {
-      readonly kind: RequestKind.ToolsList;
+      readonly family: RequestFamily.ToolsList;
       readonly toolsList: ToolsListRequest;
     }
   | {
-      readonly kind: RequestKind.ToolsCall;
+      readonly family: RequestFamily.ToolsCall;
       readonly toolsCall: LoomRequest;
     };
 
-const ROOT_KEYS: readonly RequestKind[] = [
-  RequestKind.PrePush,
-  RequestKind.CortexAudit,
-  RequestKind.SkillScaffold,
-  RequestKind.AgentStatsAssemble,
-  RequestKind.AgentStatsValidate,
-  RequestKind.AgentStatsPublish,
-  RequestKind.PrLandStatus,
-  RequestKind.PrLandValidate,
-  RequestKind.PrLandReady,
-  RequestKind.PrLandMergeCheck,
-  RequestKind.ToolsList,
-  RequestKind.ToolsCall,
+const ROOT_FAMILIES: readonly RequestFamily[] = [
+  RequestFamily.PrePush,
+  RequestFamily.CortexAudit,
+  RequestFamily.SkillScaffold,
+  RequestFamily.AgentStats,
+  RequestFamily.PrLand,
+  RequestFamily.ToolsList,
+  RequestFamily.ToolsCall,
 ];
 
-export function decodeLoomRequest(value: unknown): DecodeResult<LoomRequest> {
+export function decodeLoomRequest(value: unknown): DecodeOutcome<LoomRequest> {
   return decodeLoomRequestAt(value, '', true);
 }
 
@@ -108,26 +71,29 @@ function decodeLoomRequestAt(
   value: unknown,
   path: string,
   allowToolsCall: boolean,
-): DecodeResult<LoomRequest> {
+): DecodeOutcome<LoomRequest> {
   const object = expectObject(value, path);
-  if (object.kind === ResultKind.Err) {
+  if (object.status === DecodeStatus.Failed) {
     return object;
   }
   const keys = Object.keys(object.value);
   const domainKeys = keys.filter((key) =>
-    ROOT_KEYS.includes(key as RequestKind),
+    ROOT_FAMILIES.includes(key as RequestFamily),
   );
   const unknownKeys = keys.filter(
-    (key) => !ROOT_KEYS.includes(key as RequestKind),
+    (key) => !ROOT_FAMILIES.includes(key as RequestFamily),
   );
-  const errors: FieldError[] = unknownKeys.map((key) =>
-    fieldError(join(path, key), 'unknown field'),
+  const errors = unknownKeys.map((key) =>
+    fieldError(joinPath(path, key), FieldIssue.UnknownField),
   );
   if (domainKeys.length !== 1) {
     errors.push(
       fieldError(
         path.length === 0 ? '' : path,
-        `expected exactly one domain request key; known: ${ROOT_KEYS.join(', ')}`,
+        FieldIssue.ExpectedExactlyOneDomainKey,
+        fieldDetailText(
+          `expected exactly one domain request key; known: ${ROOT_FAMILIES.join(', ')}`,
+        ),
       ),
     );
     return decodeErr(errors);
@@ -135,107 +101,61 @@ function decodeLoomRequestAt(
   if (errors.length > 0) {
     return decodeErr(errors);
   }
-  const kind = domainKeys[0] as RequestKind;
-  if (kind === RequestKind.ToolsCall && !allowToolsCall) {
+  const family = domainKeys[0] as RequestFamily;
+  if (family === RequestFamily.ToolsCall && !allowToolsCall) {
     return decodeErr([
-      fieldError(
-        join(path, kind),
-        'nested toolsCall is not allowed inside toolsCall',
-      ),
+      fieldError(joinPath(path, family), FieldIssue.NestedToolsCallNotAllowed),
     ]);
   }
-  const payload = object.value[kind];
-  return decodeKind(kind, payload, path);
+  const payload = object.value[family];
+  return decodeFamily(family, payload, path);
 }
 
-function decodeKind(
-  kind: RequestKind,
+function decodeFamily(
+  family: RequestFamily,
   payload: unknown,
   path: string,
-): DecodeResult<LoomRequest> {
-  switch (kind) {
-    case RequestKind.PrePush: {
+): DecodeOutcome<LoomRequest> {
+  switch (family) {
+    case RequestFamily.PrePush: {
       const decoded = decodePrePushRequest(payload);
-      return map(decoded, (prePush) => ({ kind, prePush }));
+      return mapDecode(decoded, (prePush) => ({ family, prePush }));
     }
-    case RequestKind.CortexAudit: {
+    case RequestFamily.CortexAudit: {
       const decoded = decodeCortexAuditRequest(payload);
-      return map(decoded, (cortexAudit) => ({ kind, cortexAudit }));
+      return mapDecode(decoded, (cortexAudit) => ({ family, cortexAudit }));
     }
-    case RequestKind.SkillScaffold: {
+    case RequestFamily.SkillScaffold: {
       const decoded = decodeSkillScaffoldRequest(payload);
-      return map(decoded, (skillScaffold) => ({ kind, skillScaffold }));
+      return mapDecode(decoded, (skillScaffold) => ({ family, skillScaffold }));
     }
-    case RequestKind.AgentStatsAssemble: {
-      const decoded = decodeAgentStatsAssembleRequest(payload);
-      return map(decoded, (agentStatsAssemble) => ({
-        kind,
-        agentStatsAssemble,
-      }));
-    }
-    case RequestKind.AgentStatsValidate: {
-      const decoded = decodeAgentStatsValidateRequest(payload);
-      return map(decoded, (agentStatsValidate) => ({
-        kind,
-        agentStatsValidate,
-      }));
-    }
-    case RequestKind.AgentStatsPublish: {
-      const decoded = decodeAgentStatsPublishRequest(payload);
-      return map(decoded, (agentStatsPublish) => ({
-        kind,
-        agentStatsPublish,
-      }));
-    }
-    case RequestKind.PrLandStatus: {
-      const decoded = decodePrLandStatusRequest(payload);
-      return map(decoded, (prLandStatus) => ({ kind, prLandStatus }));
-    }
-    case RequestKind.PrLandValidate: {
-      const decoded = decodePrLandValidateRequest(payload);
-      return map(decoded, (prLandValidate) => ({ kind, prLandValidate }));
-    }
-    case RequestKind.PrLandReady: {
-      const decoded = decodePrLandReadyRequest(payload);
-      return map(decoded, (prLandReady) => ({ kind, prLandReady }));
-    }
-    case RequestKind.PrLandMergeCheck: {
-      const decoded = decodePrLandMergeCheckRequest(payload);
-      return map(decoded, (prLandMergeCheck) => ({ kind, prLandMergeCheck }));
-    }
-    case RequestKind.ToolsList: {
+    case RequestFamily.AgentStats:
+      return decodeAgentStatsFamily(payload, path);
+    case RequestFamily.PrLand:
+      return decodePrLandFamily(payload, path);
+    case RequestFamily.ToolsList: {
       const decoded = decodeToolsListRequest(payload);
-      return map(decoded, (toolsList) => ({ kind, toolsList }));
+      return mapDecode(decoded, (toolsList) => ({ family, toolsList }));
     }
-    case RequestKind.ToolsCall: {
+    case RequestFamily.ToolsCall: {
       if (!isRecord(payload)) {
         return decodeErr([
-          fieldError(join(path, kind), 'expected nested domain request object'),
+          fieldError(
+            joinPath(path, family),
+            FieldIssue.ExpectedNestedDomainRequest,
+          ),
         ]);
       }
-      const nested = decodeLoomRequestAt(payload, join(path, kind), false);
-      return map(nested, (toolsCall) => ({ kind, toolsCall }));
+      const nested = decodeLoomRequestAt(
+        payload,
+        joinPath(path, family),
+        false,
+      );
+      return mapDecode(nested, (toolsCall) => ({ family, toolsCall }));
     }
   }
 }
 
-function map<T, U>(
-  result: DecodeResult<T>,
-  build: (value: T) => U,
-): DecodeResult<U> {
-  if (result.kind === ResultKind.Err) {
-    return result;
-  }
-  return decodeOk(build(result.value));
-}
-
-function join(base: string, key: string): string {
-  if (base.length === 0) {
-    return key;
-  }
-  return `${base}.${key}`;
-}
-
-export function listRequestKinds(): readonly RequestKind[] {
-  return ROOT_KEYS;
+export function listRequestFamilies(): readonly RequestFamily[] {
+  return ROOT_FAMILIES;
 }

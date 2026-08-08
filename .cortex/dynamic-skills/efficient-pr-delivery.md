@@ -17,7 +17,7 @@ requirements are then discovered only at merge time.
 
 ## Preferred Pattern
 
-Write prLand* domain requests as YAML (for example `prLandValidate` with `prNumber`).
+Write `prLand` domain requests as nested YAML (for example `prLand.validate` with `prNumber`).
 
 ```bash
 task loom:pre-push

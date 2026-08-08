@@ -27,6 +27,7 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 | [svelte-state-modeling.md](svelte-state-modeling.md) | Use concise Svelte rune declarations for optional UI state and keep closed domain states in Rust/WASM | |
 | [typescript-serial-operation-queues.md](typescript-serial-operation-queues.md) | Encapsulate serial async work behind enqueue, idle, and reset operations instead of exposing mutable promise chains | |
 | [typescript-explicit-state.md](typescript-explicit-state.md) | Replace authored `undefined`/`null` state with semantic unions while retaining complete `void` unit/effect returns; reject every value-or-void contract, including nested generics and returns | |
+| [typescript-domain-structure.md](typescript-domain-structure.md) | Nest same-prefix closed vocabularies into parent objects + operation enums; use field enums instead of string sets; ban hand-rolled TypeScript `Result`/`Maybe` | |
 | [ui-design-skills.md](ui-design-skills.md) | Load `design-taste-frontend` for user-visible UI work; Impeccable is disabled by default and may be used only when the user explicitly requests it | |
 | [web-unused-code.md](web-unused-code.md) | Enable class-member analysis in every web Knip graph and remove every valid unused-code finding | |
 

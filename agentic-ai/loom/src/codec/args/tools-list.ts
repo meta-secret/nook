@@ -1,21 +1,20 @@
-import { ResultKind } from '../../result.ts';
-import { RequestKind } from '../enums.ts';
-import { decodeErr, decodeOk, type DecodeResult } from '../field-error.ts';
+import { DecodeStatus } from '../field-error.ts';
 import { denyUnknownKeys, expectObject } from '../object.ts';
+import { RequestFamily } from '../enums.ts';
+import { decodeErr, decodeOk, type DecodeOutcome } from '../field-error.ts';
 
 export type ToolsListRequest = Record<string, never>;
 
-const ROOT = RequestKind.ToolsList;
-const ALLOWED = new Set<string>();
+const ROOT = RequestFamily.ToolsList;
 
 export function decodeToolsListRequest(
   value: unknown,
-): DecodeResult<ToolsListRequest> {
+): DecodeOutcome<ToolsListRequest> {
   const object = expectObject(value, ROOT);
-  if (object.kind === ResultKind.Err) {
+  if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, ALLOWED, ROOT);
+  const unknown = denyUnknownKeys(object.value, [], ROOT);
   if (unknown.length > 0) {
     return decodeErr(unknown);
   }

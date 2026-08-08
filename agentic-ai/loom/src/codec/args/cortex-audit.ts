@@ -1,37 +1,44 @@
-import { ResultKind } from '../../result.ts';
-import { RequestKind } from '../enums.ts';
-import { decodeErr, type DecodeResult } from '../field-error.ts';
+import { DecodeStatus } from '../field-error.ts';
 import {
   collectDecode,
   denyUnknownKeys,
   expectBoolean,
   expectObject,
 } from '../object.ts';
+import { RequestFamily } from '../enums.ts';
+import { decodeErr, type DecodeOutcome } from '../field-error.ts';
+
+export enum CortexAuditField {
+  IncludeDensityLint = 'includeDensityLint',
+}
 
 export type CortexAuditRequest = {
   readonly includeDensityLint: boolean;
 };
 
-const ROOT = RequestKind.CortexAudit;
-const ALLOWED = new Set(['includeDensityLint']);
+const ROOT = RequestFamily.CortexAudit;
 
 export function decodeCortexAuditRequest(
   value: unknown,
-): DecodeResult<CortexAuditRequest> {
+): DecodeOutcome<CortexAuditRequest> {
   const object = expectObject(value, ROOT);
-  if (object.kind === ResultKind.Err) {
+  if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, ALLOWED, ROOT);
+  const unknown = denyUnknownKeys(
+    object.value,
+    Object.values(CortexAuditField),
+    ROOT,
+  );
   const includeDensityLint = expectBoolean(
     object.value,
-    'includeDensityLint',
+    CortexAuditField.IncludeDensityLint,
     ROOT,
   );
   if (unknown.length > 0) {
     return decodeErr([
       ...unknown,
-      ...(includeDensityLint.kind === ResultKind.Err
+      ...(includeDensityLint.status === DecodeStatus.Failed
         ? includeDensityLint.errors
         : []),
     ]);

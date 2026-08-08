@@ -1,2 +1,3 @@
-prLandStatus:
-  prNumber: 123
+prLand:
+  status:
+    prNumber: 123

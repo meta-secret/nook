@@ -1,13 +1,27 @@
-import { ResultKind, type Maybe } from '../../result.ts';
-import { RequestKind } from '../enums.ts';
-import { decodeErr, decodeOk, type DecodeResult } from '../field-error.ts';
+import { DecodeStatus } from '../field-error.ts';
 import {
   denyUnknownKeys,
   expectBoolean,
   expectObject,
-  expectOptionalString,
   expectPositiveInt,
+  expectRemoteTask,
 } from '../object.ts';
+import { decodeErr, decodeOk, type DecodeOutcome } from '../field-error.ts';
+
+export enum RemoteTaskPresence {
+  Specified = 'specified',
+  Omitted = 'omitted',
+}
+
+export type RemoteTask =
+  | { readonly presence: RemoteTaskPresence.Specified; readonly task: string }
+  | { readonly presence: RemoteTaskPresence.Omitted };
+
+export enum PrLandField {
+  PrNumber = 'prNumber',
+  RemoteTask = 'remoteTask',
+  RunFullE2e = 'runFullE2e',
+}
 
 export type PrLandPrRequest = {
   readonly prNumber: number;
@@ -15,23 +29,23 @@ export type PrLandPrRequest = {
 
 export type PrLandValidateRequest = {
   readonly prNumber: number;
-  readonly remoteTask: Maybe<string>;
+  readonly remoteTask: RemoteTask;
   readonly runFullE2e: boolean;
 };
 
-function decodePrOnly(
+export function decodePrLandPrPayload(
   value: unknown,
-  root: string,
-): DecodeResult<PrLandPrRequest> {
-  const object = expectObject(value, root);
-  if (object.kind === ResultKind.Err) {
+  path: string,
+): DecodeOutcome<PrLandPrRequest> {
+  const object = expectObject(value, path);
+  if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, new Set(['prNumber']), root);
-  const prNumber = expectPositiveInt(object.value, 'prNumber', root);
+  const unknown = denyUnknownKeys(object.value, [PrLandField.PrNumber], path);
+  const prNumber = expectPositiveInt(object.value, PrLandField.PrNumber, path);
   const errors = [
     ...unknown,
-    ...(prNumber.kind === ResultKind.Err ? prNumber.errors : []),
+    ...(prNumber.status === DecodeStatus.Failed ? prNumber.errors : []),
   ];
   if (errors.length > 0) {
     return decodeErr(errors);
@@ -41,49 +55,38 @@ function decodePrOnly(
   });
 }
 
-export function decodePrLandStatusRequest(
+export function decodePrLandValidatePayload(
   value: unknown,
-): DecodeResult<PrLandPrRequest> {
-  return decodePrOnly(value, RequestKind.PrLandStatus);
-}
-
-export function decodePrLandReadyRequest(
-  value: unknown,
-): DecodeResult<PrLandPrRequest> {
-  return decodePrOnly(value, RequestKind.PrLandReady);
-}
-
-export function decodePrLandMergeCheckRequest(
-  value: unknown,
-): DecodeResult<PrLandPrRequest> {
-  return decodePrOnly(value, RequestKind.PrLandMergeCheck);
-}
-
-export function decodePrLandValidateRequest(
-  value: unknown,
-): DecodeResult<PrLandValidateRequest> {
-  const root = RequestKind.PrLandValidate;
-  const object = expectObject(value, root);
-  if (object.kind === ResultKind.Err) {
+  path: string,
+): DecodeOutcome<PrLandValidateRequest> {
+  const object = expectObject(value, path);
+  if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const allowed = new Set(['prNumber', 'remoteTask', 'runFullE2e']);
-  const unknown = denyUnknownKeys(object.value, allowed, root);
-  const prNumber = expectPositiveInt(object.value, 'prNumber', root);
-  const remoteTask = expectOptionalString(object.value, 'remoteTask', root);
-  const runFullE2e = expectBoolean(object.value, 'runFullE2e', root);
+  const unknown = denyUnknownKeys(
+    object.value,
+    [PrLandField.PrNumber, PrLandField.RemoteTask, PrLandField.RunFullE2e],
+    path,
+  );
+  const prNumber = expectPositiveInt(object.value, PrLandField.PrNumber, path);
+  const remoteTask = expectRemoteTask(
+    object.value,
+    PrLandField.RemoteTask,
+    path,
+  );
+  const runFullE2e = expectBoolean(object.value, PrLandField.RunFullE2e, path);
   const errors = [
     ...unknown,
-    ...(prNumber.kind === ResultKind.Err ? prNumber.errors : []),
-    ...(remoteTask.kind === ResultKind.Err ? remoteTask.errors : []),
-    ...(runFullE2e.kind === ResultKind.Err ? runFullE2e.errors : []),
+    ...(prNumber.status === DecodeStatus.Failed ? prNumber.errors : []),
+    ...(remoteTask.status === DecodeStatus.Failed ? remoteTask.errors : []),
+    ...(runFullE2e.status === DecodeStatus.Failed ? runFullE2e.errors : []),
   ];
   if (errors.length > 0) {
     return decodeErr(errors);
   }
   return decodeOk({
     prNumber: (prNumber as { value: number }).value,
-    remoteTask: (remoteTask as { value: Maybe<string> }).value,
+    remoteTask: (remoteTask as { value: RemoteTask }).value,
     runFullE2e: (runFullE2e as { value: boolean }).value,
   });
 }

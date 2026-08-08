@@ -1,17 +1,25 @@
-/** Root YAML request kind. Each value is the domain object key. */
-export enum RequestKind {
+/** Root YAML request family. Top-level domain object keys. */
+export enum RequestFamily {
   PrePush = 'prePush',
   CortexAudit = 'cortexAudit',
   SkillScaffold = 'skillScaffold',
-  AgentStatsAssemble = 'agentStatsAssemble',
-  AgentStatsValidate = 'agentStatsValidate',
-  AgentStatsPublish = 'agentStatsPublish',
-  PrLandStatus = 'prLandStatus',
-  PrLandValidate = 'prLandValidate',
-  PrLandReady = 'prLandReady',
-  PrLandMergeCheck = 'prLandMergeCheck',
+  AgentStats = 'agentStats',
+  PrLand = 'prLand',
   ToolsList = 'toolsList',
   ToolsCall = 'toolsCall',
+}
+
+export enum AgentStatsOperation {
+  Assemble = 'assemble',
+  Validate = 'validate',
+  Publish = 'publish',
+}
+
+export enum PrLandOperation {
+  Status = 'status',
+  Validate = 'validate',
+  Ready = 'ready',
+  MergeCheck = 'mergeCheck',
 }
 
 export enum ResponsePhase {

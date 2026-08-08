@@ -1,2 +1,3 @@
-prLandReady:
-  prNumber: 123
+prLand:
+  ready:
+    prNumber: 123

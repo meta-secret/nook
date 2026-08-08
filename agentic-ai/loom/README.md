@@ -20,7 +20,8 @@ loom <request.yaml>
 ```
 
 Each request is a **domain-tagged object**. Exactly one root key selects the
-request kind. There is no generic `name` / `arguments` envelope.
+request family. Nested operation keys group same-prefix requests (`agentStats`,
+`prLand`). There is no generic `name` / `arguments` envelope.
 
 ```yaml
 prePush:
@@ -29,11 +30,12 @@ prePush:
 ```
 
 ```yaml
-agentStatsAssemble:
-  prNumber: 123
-  scratchPath: /tmp/pr-123-scratch.json
-  outputPath: /tmp/123.yaml
-  includeTestInventory: true
+agentStats:
+  assemble:
+    prNumber: 123
+    scratchPath: /tmp/pr-123-scratch.json
+    outputPath: /tmp/123.yaml
+    includeTestInventory: true
 ```
 
 Stdout is YAML only.
@@ -42,7 +44,16 @@ Success:
 
 ```yaml
 ok: true
-requestKind: prePush
+family: prePush
+result: { ... }
+```
+
+Nested family success:
+
+```yaml
+ok: true
+family: agentStats
+operation: assemble
 result: { ... }
 ```
 
@@ -66,16 +77,17 @@ Discover request kinds:
 task loom:tools-list
 ```
 
-## TypeScript state rules
+## TypeScript domain structure
 
-Loom authored TypeScript follows the same explicit-state rules as nook-web:
+Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/dynamic-skills/typescript-domain-structure.md):
 
-- no authored `null` / `undefined` sentinels
-- closed vocabularies use enums (`RequestKind`, `ResponsePhase`, …)
-- absence uses `Maybe<T>`
-- request shapes are tagged unions decoded with deny-unknown-fields
+- nested request families (`agentStats.assemble`, `prLand.validate`)
+- field-name enums for deny-unknown-key checks
+- codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation
+- runtime failures throw `LoomFailure` with `LoomFailureCode`
+- no generic TypeScript `Result<T>` or `Maybe<T>` utilities
 
-These are enforced by `task preflight:typescript-state` / Loom CI.
+Enforced by `task preflight:typescript-state` / Loom CI.
 
 ## Agent entrypoints
 
@@ -84,8 +96,8 @@ task loom:pre-push
 task loom:tools-list
 task loom:cortex-audit
 task loom:run CONFIG=agentic-ai/loom/params/skill-scaffold/request.example.yaml
-task loom:agent-stats CONFIG=path/to/agentStatsAssemble.yaml
-task loom:pr-land CONFIG=path/to/prLandValidate.yaml
+task loom:agent-stats CONFIG=path/to/assemble-request.yaml
+task loom:pr-land CONFIG=path/to/validate-request.yaml
 ```
 
 Committed examples live under `params/<domain>/`.

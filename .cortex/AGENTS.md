@@ -513,16 +513,17 @@ After merge, assemble and publish `stats/ai-agent/<pr-number>.yaml` with Loom.
 Write a request YAML, then run it:
 
 ```yaml
-agentStatsAssemble:
-  prNumber: 123
-  scratchPath: /tmp/pr-123-events.json
-  outputPath: /tmp/123.yaml
-  includeTestInventory: true
+agentStats:
+  assemble:
+    prNumber: 123
+    scratchPath: /tmp/pr-123-events.json
+    outputPath: /tmp/123.yaml
+    includeTestInventory: true
 ```
 
 ```bash
 task loom:agent-stats CONFIG=/tmp/assemble-request.yaml
-# then an agentStatsPublish request with statsFile: /tmp/123.yaml
+# then an agentStats.publish request with statsFile: /tmp/123.yaml
 task loom:agent-stats CONFIG=/tmp/publish-request.yaml
 ```
 

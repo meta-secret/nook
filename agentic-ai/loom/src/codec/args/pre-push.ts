@@ -1,42 +1,54 @@
-import { ResultKind } from '../../result.ts';
-import { RequestKind } from '../enums.ts';
-import { decodeErr, type DecodeResult } from '../field-error.ts';
+import { DecodeStatus } from '../field-error.ts';
 import {
   collectDecode,
   denyUnknownKeys,
   expectBoolean,
   expectObject,
 } from '../object.ts';
+import { RequestFamily } from '../enums.ts';
+import { decodeErr, type DecodeOutcome } from '../field-error.ts';
+
+export enum PrePushField {
+  StageHostUpdates = 'stageHostUpdates',
+  FetchOriginMain = 'fetchOriginMain',
+}
 
 export type PrePushRequest = {
   readonly stageHostUpdates: boolean;
   readonly fetchOriginMain: boolean;
 };
 
-const ROOT = RequestKind.PrePush;
-const ALLOWED = new Set(['stageHostUpdates', 'fetchOriginMain']);
+const ROOT = RequestFamily.PrePush;
 
 export function decodePrePushRequest(
   value: unknown,
-): DecodeResult<PrePushRequest> {
+): DecodeOutcome<PrePushRequest> {
   const object = expectObject(value, ROOT);
-  if (object.kind === ResultKind.Err) {
+  if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, ALLOWED, ROOT);
-  const stageHostUpdates = expectBoolean(
+  const unknown = denyUnknownKeys(
     object.value,
-    'stageHostUpdates',
+    Object.values(PrePushField),
     ROOT,
   );
-  const fetchOriginMain = expectBoolean(object.value, 'fetchOriginMain', ROOT);
+  const stageHostUpdates = expectBoolean(
+    object.value,
+    PrePushField.StageHostUpdates,
+    ROOT,
+  );
+  const fetchOriginMain = expectBoolean(
+    object.value,
+    PrePushField.FetchOriginMain,
+    ROOT,
+  );
   if (unknown.length > 0) {
     return decodeErr([
       ...unknown,
-      ...(stageHostUpdates.kind === ResultKind.Err
+      ...(stageHostUpdates.status === DecodeStatus.Failed
         ? stageHostUpdates.errors
         : []),
-      ...(fetchOriginMain.kind === ResultKind.Err
+      ...(fetchOriginMain.status === DecodeStatus.Failed
         ? fetchOriginMain.errors
         : []),
     ]);

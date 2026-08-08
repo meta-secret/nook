@@ -8,7 +8,11 @@ import {
 import path from 'node:path';
 import type { SkillScaffoldRequest } from '../codec/args/skill-scaffold.ts';
 import { findRepoRoot } from '../lib/repo.ts';
-import { ResultKind, err, ok, type Result } from '../result.ts';
+import {
+  LoomFailureCode,
+  loomFailure,
+  loomFailureDetail,
+} from '../loom-failure.ts';
 
 export type SkillScaffoldReport = {
   readonly cardPath: string;
@@ -19,12 +23,8 @@ export type SkillScaffoldReport = {
 
 export async function runSkillScaffold(
   request: SkillScaffoldRequest,
-): Promise<Result<SkillScaffoldReport>> {
-  const repo = findRepoRoot();
-  if (repo.kind === ResultKind.Err) {
-    return repo;
-  }
-  const repoRoot = repo.value;
+): Promise<SkillScaffoldReport> {
+  const repoRoot = findRepoRoot();
   const slug = request.skillSlug;
 
   const skillsDir = path.join(repoRoot, '.cortex', 'dynamic-skills');
@@ -33,10 +33,14 @@ export async function runSkillScaffold(
   const indexPath = path.join(skillsDir, 'index.md');
 
   if (!existsSync(templatePath)) {
-    return err('Missing .cortex/dynamic-skills/_template.md');
+    loomFailureDetail(
+      LoomFailureCode.SkillScaffoldFailed,
+      'Missing .cortex/dynamic-skills/_template.md',
+    );
   }
   if (existsSync(cardPath)) {
-    return err(
+    loomFailureDetail(
+      LoomFailureCode.SkillScaffoldFailed,
       `Skill card already exists: ${path.relative(repoRoot, cardPath)}`,
     );
   }
@@ -56,7 +60,8 @@ export async function runSkillScaffold(
     const marker = '\n## How To Add One\n';
     const markerIndex = indexContent.indexOf(marker);
     if (markerIndex < 0) {
-      return err(
+      loomFailureDetail(
+        LoomFailureCode.SkillScaffoldFailed,
         'Could not find "## How To Add One" in dynamic-skills/index.md',
       );
     }
@@ -111,10 +116,10 @@ export async function runSkillScaffold(
     }
   }
 
-  return ok({
+  return {
     cardPath: path.relative(repoRoot, cardPath),
     indexUpdated,
     wrappersCreated,
     created: true,
-  });
+  };
 }

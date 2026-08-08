@@ -1,3 +1,4 @@
-prLandValidate:
-  prNumber: 123
-  runFullE2e: false
+prLand:
+  validate:
+    prNumber: 948
+    runFullE2e: false

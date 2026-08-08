@@ -1,10 +1,11 @@
-import { ResultKind } from '../../result.ts';
-import { RequestKind } from '../enums.ts';
+import { RequestFamily } from '../enums.ts';
 import {
+  DecodeStatus,
+  FieldIssue,
   decodeErr,
   decodeOk,
   fieldError,
-  type DecodeResult,
+  type DecodeOutcome,
 } from '../field-error.ts';
 import {
   denyUnknownKeys,
@@ -13,39 +14,54 @@ import {
   expectString,
 } from '../object.ts';
 
+export enum SkillScaffoldField {
+  SkillSlug = 'skillSlug',
+  CreateExecutableWrappers = 'createExecutableWrappers',
+}
+
 export type SkillScaffoldRequest = {
   readonly skillSlug: string;
   readonly createExecutableWrappers: boolean;
 };
 
-const ROOT = RequestKind.SkillScaffold;
-const ALLOWED = new Set(['skillSlug', 'createExecutableWrappers']);
+const ROOT = RequestFamily.SkillScaffold;
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function decodeSkillScaffoldRequest(
   value: unknown,
-): DecodeResult<SkillScaffoldRequest> {
+): DecodeOutcome<SkillScaffoldRequest> {
   const object = expectObject(value, ROOT);
-  if (object.kind === ResultKind.Err) {
+  if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, ALLOWED, ROOT);
-  const skillSlug = expectString(object.value, 'skillSlug', ROOT);
+  const unknown = denyUnknownKeys(
+    object.value,
+    Object.values(SkillScaffoldField),
+    ROOT,
+  );
+  const skillSlug = expectString(
+    object.value,
+    SkillScaffoldField.SkillSlug,
+    ROOT,
+  );
   const createExecutableWrappers = expectBoolean(
     object.value,
-    'createExecutableWrappers',
+    SkillScaffoldField.CreateExecutableWrappers,
     ROOT,
   );
   const errors = [
     ...unknown,
-    ...(skillSlug.kind === ResultKind.Err ? skillSlug.errors : []),
-    ...(createExecutableWrappers.kind === ResultKind.Err
+    ...(skillSlug.status === DecodeStatus.Failed ? skillSlug.errors : []),
+    ...(createExecutableWrappers.status === DecodeStatus.Failed
       ? createExecutableWrappers.errors
       : []),
   ];
-  if (skillSlug.kind === ResultKind.Ok && !SLUG_RE.test(skillSlug.value)) {
+  if (skillSlug.status === DecodeStatus.Ok && !SLUG_RE.test(skillSlug.value)) {
     errors.push(
-      fieldError(`${ROOT}.skillSlug`, 'expected kebab-case slug [a-z0-9-]+'),
+      fieldError(
+        `${ROOT}.${SkillScaffoldField.SkillSlug}`,
+        FieldIssue.ExpectedKebabCaseSlug,
+      ),
     );
   }
   if (errors.length > 0) {
