@@ -660,7 +660,7 @@ test('translates malformed device-action responses in the popup', async ({
     await popupPage.getByTestId('device-protection-pin-unlock-btn').click()
     const error = popupPage.getByTestId('device-protection-error')
     await expect(error).toHaveText(
-      'Не удалось настроить passkey до сопряжения расширения.',
+      'PIN или кодовая фраза не разблокировали этот браузер. Проверьте их и повторите попытку.',
     )
     await expect(error).not.toContainText(
       'Extension session returned malformed device identity.',

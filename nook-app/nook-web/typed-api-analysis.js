@@ -132,13 +132,97 @@ export function functionReturnExpressions(callable) {
 }
 
 export function inlineCallReturnExpressions(expression) {
-  if (
-    expression.type !== 'CallExpression' ||
-    !['ArrowFunctionExpression', 'FunctionExpression'].includes(expression.callee.type)
-  ) {
+  if (expression.type !== 'CallExpression') {
     return []
   }
-  return functionReturnExpressions(expression.callee)
+  const callable = unwrapTypeScriptExpression(expression.callee)
+  if (!['ArrowFunctionExpression', 'FunctionExpression'].includes(callable.type)) {
+    return []
+  }
+  return functionReturnExpressions(callable)
+}
+
+export function staticMemberPath(args) {
+  const { expression, staticPropertyKey } = args
+  const path = []
+  let current = expression
+  while (current.type === 'MemberExpression') {
+    const key = staticPropertyKey(current)
+    if (key.kind === StaticKeyLookupKind.NotFound) return key
+    path.unshift(key.value)
+    current = current.object
+  }
+  if (current.type !== 'Identifier') {
+    return { kind: ProjectionPathLookupKind.NotFound }
+  }
+  return { kind: ProjectionPathLookupKind.Found, root: current, path }
+}
+
+export function memberAssignmentPath(args) {
+  const { identifier, staticPropertyKey } = args
+  const path = []
+  let current = identifier
+  while (
+    current.parent?.type === 'MemberExpression' &&
+    current.parent.object === current
+  ) {
+    const member = current.parent
+    const key = staticPropertyKey(member)
+    if (key.kind === StaticKeyLookupKind.NotFound) return key
+    path.push(key.value)
+    current = member
+  }
+  const assignment = current.parent
+  if (
+    assignment?.type !== 'AssignmentExpression' ||
+    assignment.left !== current
+  ) {
+    return { kind: ProjectionPathLookupKind.NotFound }
+  }
+  return {
+    kind: ProjectionPathLookupKind.Found,
+    assignment,
+    path,
+  }
+}
+
+export function staticExpressionKey(args) {
+  const { expression, declaredVariable } = args
+  if (
+    expression.type === 'TemplateLiteral' &&
+    expression.expressions.length === 0
+  ) {
+    return {
+      kind: StaticKeyLookupKind.Found,
+      value: expression.quasis[0].value.raw,
+    }
+  }
+  if (
+    expression.type === 'Literal' &&
+    (typeof expression.value === 'string' ||
+      typeof expression.value === 'number')
+  ) {
+    return { kind: StaticKeyLookupKind.Found, value: String(expression.value) }
+  }
+  if (expression.type !== 'Identifier') {
+    return { kind: StaticKeyLookupKind.NotFound }
+  }
+  const lookup = declaredVariable(expression)
+  if (lookup.kind === VariableLookupKind.NotFound) return lookup
+  for (const definition of lookup.variable.defs) {
+    if (
+      definition.type === 'Variable' &&
+      definition.node.type === 'VariableDeclarator' &&
+      definition.parent?.kind === 'const' &&
+      definition.node.init
+    ) {
+      return staticExpressionKey({
+        expression: definition.node.init,
+        declaredVariable,
+      })
+    }
+  }
+  return { kind: StaticKeyLookupKind.NotFound }
 }
 
 export function arrayCallbackElementParameter(method) {

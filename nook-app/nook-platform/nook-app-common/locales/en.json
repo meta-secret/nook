@@ -966,6 +966,8 @@
     "pin_label": "PIN or passphrase",
     "pin_confirm_label": "Confirm PIN or passphrase",
     "pin_mismatch": "The PINs or passphrases do not match.",
+    "pin_setup_failed": "The PIN or passphrase could not protect this browser. Try again.",
+    "pin_unlock_failed": "The PIN or passphrase did not unlock this browser. Check it and try again.",
     "pin_fallback_ready": "This platform does not support WebAuthn PRF. Use a local PIN or passphrase to protect this browser's key.",
     "passkey_unavailable_pin_fallback_ready": "Passkeys are unavailable in this browser profile. Use a local PIN or passphrase to protect this browser's key.",
     "recovery_pin_fallback_ready": "This passkey cannot recover the existing device identity because WebAuthn PRF is unavailable. Set a local PIN or passphrase to protect a new device identity instead.",

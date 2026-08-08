@@ -519,6 +519,16 @@ describe('typed API named arguments', () => {
     ])
   })
 
+  test('resolves no-substitution template literal member keys', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      consume(({ args: { name: 'Nook' } })[\`args\`])
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
   test('inspects statically resolvable getter results', () => {
     const messages = lint(`
       declare function consume(value: { name: string }): void
@@ -593,13 +603,29 @@ describe('typed API named arguments', () => {
     ])
   })
 
+  test('tracks writes to nested projected member arguments', () => {
+    const messages = lint(`
+      type Holder = { inner: { value: number | { name: string } } }
+      declare function consume(value: Holder['inner']['value']): void
+      const holder: Holder = { inner: { value: 1 } }
+      holder.inner.value = { name: 'Nook' }
+      consume(holder.inner.value)
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
   test('inspects statically resolvable IIFE results', () => {
     const messages = lint(`
       declare function consume(value: { name: string }): void
       consume((() => ({ name: 'Nook' }))())
       consume((() => { return { name: 'Vault' } })())
+      type Factory = () => { name: string }
+      consume(((() => ({ name: 'Sentinel' })) as Factory)())
     `)
     expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
       'namedArgument',
       'namedArgument',
     ])

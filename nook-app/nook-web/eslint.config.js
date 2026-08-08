@@ -12,6 +12,7 @@ import {
   inlineCallReturnExpressions,
   objectPropertyValueExpressions,
   isObjectRestBinding,
+  memberAssignmentPath,
   mergeArraySummaries,
   namedResultAlternatives,
   ProjectionPathLookupKind,
@@ -20,6 +21,8 @@ import {
   VariableLookupKind,
   nodesUseExclusiveBranches,
   staticArrayIndex,
+  staticExpressionKey as resolveStaticExpressionKey,
+  staticMemberPath,
   unwrapResultExpression,
   writeBindingPattern,
   writeExitsBeforeFollowingNode,
@@ -161,29 +164,7 @@ export const noRawObjectArgumentsRule = {
       return staticExpressionKey(property.key)
     }
     function staticExpressionKey(expression) {
-      if (
-        expression.type === 'Literal' &&
-        (typeof expression.value === 'string' ||
-          typeof expression.value === 'number')
-      ) {
-        return { kind: StaticKeyLookupKind.Found, value: String(expression.value) }
-      }
-      if (expression.type !== 'Identifier') {
-        return { kind: StaticKeyLookupKind.NotFound }
-      }
-      const lookup = declaredVariable(expression)
-      if (lookup.kind === VariableLookupKind.NotFound) return lookup
-      for (const definition of lookup.variable.defs) {
-        if (
-          definition.type === 'Variable' &&
-          definition.node.type === 'VariableDeclarator' &&
-          definition.parent?.kind === 'const' &&
-          definition.node.init
-        ) {
-          return staticExpressionKey(definition.node.init)
-        }
-      }
-      return { kind: StaticKeyLookupKind.NotFound }
+      return resolveStaticExpressionKey({ expression, declaredVariable })
     }
     function possibleExpressionValues(args) {
       const { expression, seenVariables } = args
@@ -519,27 +500,29 @@ export const noRawObjectArgumentsRule = {
 
     function projectedMemberWriteValues(args) {
       const { expression, selectedKey, seenVariables } = args
-      if (expression.object.type !== 'Identifier') return []
-      const lookup = declaredVariable(expression.object)
+      const target = staticMemberPath({ expression, staticPropertyKey })
+      if (target.kind === ProjectionPathLookupKind.NotFound) return []
+      const lookup = declaredVariable(target.root)
       if (lookup.kind === VariableLookupKind.NotFound) return []
       const values = []
       for (const reference of lookup.variable.references) {
-        const member = reference.identifier.parent
-        const assignment = member?.parent
+        const write = memberAssignmentPath({
+          identifier: reference.identifier,
+          staticPropertyKey,
+        })
         if (
-          member?.type !== 'MemberExpression' ||
-          member.object !== reference.identifier ||
-          assignment?.type !== 'AssignmentExpression' ||
-          assignment.left !== member ||
-          staticPropertyKey(member).value !== selectedKey ||
-          !occursBeforeActiveCallSite(assignment) ||
+          write.kind === ProjectionPathLookupKind.NotFound ||
+          write.path.length !== target.path.length ||
+          !write.path.every((key, index) => key === target.path[index]) ||
+          target.path.at(-1) !== selectedKey ||
+          !occursBeforeActiveCallSite(write.assignment) ||
           !referenceCanReachActiveCall(reference)
         ) {
           continue
         }
         values.push(
           ...possibleExpressionValues({
-            expression: assignment.right,
+            expression: write.assignment.right,
             seenVariables,
           }),
         )

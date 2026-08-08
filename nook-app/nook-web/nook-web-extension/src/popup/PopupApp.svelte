@@ -262,11 +262,17 @@
       error = translatePlain(I18N_KEYS.DeviceProtectionPinMismatch)
       return
     }
-    void runDeviceAction(() => createExtensionPin(pin))
+    void runDeviceAction(
+      () => createExtensionPin(pin),
+      I18N_KEYS.DeviceProtectionPinSetupFailed,
+    )
   }
 
   function unlockPin(): void {
-    void runDeviceAction(() => unlockExtensionPin(pin))
+    void runDeviceAction(
+      () => unlockExtensionPin(pin),
+      I18N_KEYS.DeviceProtectionPinUnlockFailed,
+    )
   }
 </script>
 
