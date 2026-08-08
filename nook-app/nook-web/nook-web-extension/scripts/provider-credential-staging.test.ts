@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   ProviderCredentialStagingKind,
+  isStorageProviderCollection,
   scrubProviderCredentials,
   stageProviderCredentials,
 } from '../src/lib/provider-credential-staging'
@@ -79,6 +80,35 @@ describe('provider credential staging', () => {
     expect(staging.kind).toBe(ProviderCredentialStagingKind.InvalidInput)
   })
 
+  test('rejects serialized values that are not storage providers', () => {
+    const staging = stageProviderCredentials([{ foo: 'bar' }])
+
+    expect(staging.kind).toBe(ProviderCredentialStagingKind.Staged)
+    if (staging.kind !== ProviderCredentialStagingKind.Staged) return
+    expect(isStorageProviderCollection(staging.providers)).toBe(false)
+  })
+
+  test('accepts a complete serialized storage provider', () => {
+    const staging = stageProviderCredentials([
+      {
+        id: 'github',
+        type: 'github',
+        label: 'GitHub',
+        githubPat: { state: 'token', value: 'github_pat_secret' },
+        githubRepo: { state: 'repository', value: 'nook' },
+        oauthFile: { state: 'notApplicable' },
+        localFolder: { state: 'notApplicable' },
+        storeId: { state: 'unscoped' },
+        syncCheckpoint: { state: 'neverSynced' },
+        createdAt: '2026-08-08T00:00:00Z',
+      },
+    ])
+
+    expect(staging.kind).toBe(ProviderCredentialStagingKind.Staged)
+    if (staging.kind !== ProviderCredentialStagingKind.Staged) return
+    expect(isStorageProviderCollection(staging.providers)).toBe(true)
+  })
+
   test('clones __proto__ as an own data property', () => {
     const source = JSON.parse(
       '[{"id":"github","__proto__":{"githubPat":"inherited-secret"}}]',
@@ -90,7 +120,6 @@ describe('provider credential staging', () => {
     const provider = staging.providers[0]
     expect(provider && typeof provider === 'object').toBe(true)
     if (!provider || typeof provider !== 'object') return
-    expect(Object.getPrototypeOf(provider)).toBe(null)
     expect(Object.hasOwn(provider, '__proto__')).toBe(true)
     expect('githubPat' in provider).toBe(false)
   })

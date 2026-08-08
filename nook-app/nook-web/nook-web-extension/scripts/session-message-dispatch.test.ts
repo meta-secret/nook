@@ -35,7 +35,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
 
   test('rejects invalid providers before dispatching a vault import', async () => {
     const payload: Record<string, unknown> = {
-      providers: [{ metadata: new Date() }],
+      providers: [{ foo: 'bar' }],
     }
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({

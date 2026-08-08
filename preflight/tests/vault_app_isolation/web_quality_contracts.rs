@@ -32,15 +32,12 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         "'max-params': ['error', { max: 1 }]",
         "'@typescript-eslint/no-restricted-types'",
         "Nook web forbids unknown",
-        "'no-restricted-syntax'",
-        "CallExpression > ObjectExpression",
-        "CallExpression > TSAsExpression > ObjectExpression",
-        "CallExpression > TSTypeAssertion > ObjectExpression",
-        "CallExpression > TSSatisfiesExpression > ObjectExpression",
-        "NewExpression > ObjectExpression",
-        "NewExpression > TSAsExpression > ObjectExpression",
-        "NewExpression > TSTypeAssertion > ObjectExpression",
-        "NewExpression > TSSatisfiesExpression > ObjectExpression",
+        "'nook-typed-api/no-raw-object-arguments': 'error'",
+        "TSAsExpression",
+        "TSTypeAssertion",
+        "TSSatisfiesExpression",
+        "TSNonNullExpression",
+        "unwrapTypeScriptExpression(argument).type === 'ObjectExpression'",
         "named typed value first",
         "nook-web-extension/src/lib/**/*.ts",
         "'@typescript-eslint/await-thenable': 'error'",
@@ -57,11 +54,6 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
             "the web static-analysis config must retain `{required}`"
         );
     }
-    assert!(
-        !eslint.contains("[arguments.length=1]"),
-        "the named-argument rule must inspect object literals at every argument position"
-    );
-
     let translation_html = read(
         &root,
         "nook-app/nook-web/nook-web-app/src/landing/translation-html.js",

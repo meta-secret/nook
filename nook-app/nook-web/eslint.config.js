@@ -4,6 +4,54 @@ import svelte from 'eslint-plugin-svelte'
 import globals from 'globals'
 import ts from 'typescript-eslint'
 
+const transparentTypeScriptWrappers = new Set([
+  'TSAsExpression',
+  'TSTypeAssertion',
+  'TSSatisfiesExpression',
+  'TSNonNullExpression',
+])
+
+function unwrapTypeScriptExpression(expression) {
+  let current = expression
+  while (transparentTypeScriptWrappers.has(current.type)) {
+    current = current.expression
+  }
+  return current
+}
+
+const noRawObjectArgumentsRule = {
+  meta: {
+    type: 'problem',
+    schema: [],
+    messages: {
+      namedArgument:
+        'Nook web forbids raw object-literal call and constructor arguments, including nested TypeScript wrappers. Assign a named typed value first, then pass that name.',
+    },
+  },
+  create(context) {
+    function inspectArguments(node) {
+      for (const argument of node.arguments) {
+        if (
+          argument.type !== 'SpreadElement' &&
+          unwrapTypeScriptExpression(argument).type === 'ObjectExpression'
+        ) {
+          context.report({ node: argument, messageId: 'namedArgument' })
+        }
+      }
+    }
+    return {
+      CallExpression: inspectArguments,
+      NewExpression: inspectArguments,
+    }
+  },
+}
+
+const nookTypedApiPlugin = {
+  rules: {
+    'no-raw-object-arguments': noRawObjectArgumentsRule,
+  },
+}
+
 const typedApiRules = {
   'max-params': ['error', { max: 1 }],
   '@typescript-eslint/no-restricted-types': [
@@ -17,49 +65,7 @@ const typedApiRules = {
       },
     },
   ],
-  'no-restricted-syntax': [
-    'error',
-    {
-      selector: 'CallExpression > ObjectExpression',
-      message:
-        'Nook web forbids raw object-literal call arguments. Assign a named typed value first, then pass that name.',
-    },
-    {
-      selector: 'CallExpression > TSAsExpression > ObjectExpression',
-      message:
-        'Nook web forbids raw object-literal call arguments, including casts. Assign a named typed value first, then pass that name.',
-    },
-    {
-      selector: 'CallExpression > TSTypeAssertion > ObjectExpression',
-      message:
-        'Nook web forbids raw object-literal call arguments, including type assertions. Assign a named typed value first, then pass that name.',
-    },
-    {
-      selector: 'CallExpression > TSSatisfiesExpression > ObjectExpression',
-      message:
-        'Nook web forbids raw object-literal call arguments, including satisfies wrappers. Assign a named typed value first, then pass that name.',
-    },
-    {
-      selector: 'NewExpression > ObjectExpression',
-      message:
-        'Nook web forbids raw object-literal constructor arguments. Assign a named typed value first, then pass that name.',
-    },
-    {
-      selector: 'NewExpression > TSAsExpression > ObjectExpression',
-      message:
-        'Nook web forbids raw object-literal constructor arguments, including casts. Assign a named typed value first, then pass that name.',
-    },
-    {
-      selector: 'NewExpression > TSTypeAssertion > ObjectExpression',
-      message:
-        'Nook web forbids raw object-literal constructor arguments, including type assertions. Assign a named typed value first, then pass that name.',
-    },
-    {
-      selector: 'NewExpression > TSSatisfiesExpression > ObjectExpression',
-      message:
-        'Nook web forbids raw object-literal constructor arguments, including satisfies wrappers. Assign a named typed value first, then pass that name.',
-    },
-  ],
+  'nook-typed-api/no-raw-object-arguments': 'error',
 }
 
 export default [
@@ -160,6 +166,9 @@ export default [
       'nook-web-extension/src/lib/**/*.ts',
       'src/lib/**/*.ts',
     ],
+    plugins: {
+      'nook-typed-api': nookTypedApiPlugin,
+    },
     rules: typedApiRules,
   },
   {
