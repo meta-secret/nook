@@ -148,6 +148,11 @@ cleanup_timed_out_daemon_work() {
   return "$cleanup_status"
 }
 
+restore_exact_worktree() {
+  git restore --source=HEAD --staged --worktree -- .
+  git clean -fd
+}
+
 run_task() {
   local artifact_root="${E2E_ARTIFACT_DIR:-${TMPDIR:-/tmp}/nook-e2e-artifacts}"
   local timeout_minutes
@@ -207,6 +212,7 @@ run_batch() {
   local status
   local failures=0
   local daemon_snapshot
+  local timeout_cleanup_status
   local -a tasks
 
   IFS=',' read -r -a tasks <<< "$normalized_tasks"
@@ -221,9 +227,14 @@ run_batch() {
     set +e
     run_task "$task"
     status=$?
-    if (( status == 124 || status == 137 )) && ! cleanup_timed_out_daemon_work "$daemon_snapshot"; then
-      echo "::error::Failed to clean up daemon work after timeout: $task"
-      status=1
+    if (( status == 124 || status == 137 )); then
+      timeout_cleanup_status=0
+      cleanup_timed_out_daemon_work "$daemon_snapshot" || timeout_cleanup_status=1
+      restore_exact_worktree || timeout_cleanup_status=1
+      if (( timeout_cleanup_status != 0 )); then
+        echo "::error::Failed to restore exact runner state after timeout: $task"
+        status=1
+      fi
     fi
     rm -f "$daemon_snapshot"
     if ! restore_hosted_builder; then

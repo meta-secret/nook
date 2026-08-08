@@ -119,6 +119,8 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
     assert!(batch_script.contains("docker rm -f \"$container\""));
     assert!(batch_script.contains("docker restart \"$container\""));
     assert!(batch_script.contains("docker buildx inspect --bootstrap \"$builder\""));
+    assert!(batch_script.contains("git restore --source=HEAD --staged --worktree -- ."));
+    assert!(batch_script.contains("git clean -fd"));
     Ok(())
 }
 
@@ -170,6 +172,80 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     assert!(summary.contains("| `wasm:test` | passed |"));
 
     fs::remove_dir_all(fixture)?;
+    Ok(())
+}
+
+#[test]
+fn remote_task_batch_cleans_up_both_timeout_statuses_and_continues() -> Result<()> {
+    for timeout_status in [124, 137] {
+        let fixture_nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos();
+        let fixture = std::env::temp_dir().join(format!(
+            "nook-remote-timeout-test-{}-{timeout_status}-{fixture_nonce}",
+            std::process::id(),
+        ));
+        fs::create_dir_all(&fixture)?;
+
+        let mock_task = fixture.join("task");
+        fs::write(
+            &mock_task,
+            "#!/usr/bin/env bash\nprintf 'task %s\\n' \"$*\" >> \"$TASK_LOG\"\n",
+        )?;
+        fs::set_permissions(&mock_task, fs::Permissions::from_mode(0o755))?;
+
+        let mock_timeout = fixture.join("timeout");
+        fs::write(
+            &mock_timeout,
+            "#!/usr/bin/env bash\nshift 2\n\"$@\"\nif [[ ! -e \"$TIMEOUT_MARKER\" ]]; then touch \"$TIMEOUT_MARKER\" \"$LEAK_MARKER\"; exit \"$MOCK_TIMEOUT_STATUS\"; fi\n",
+        )?;
+        fs::set_permissions(&mock_timeout, fs::Permissions::from_mode(0o755))?;
+
+        let mock_docker = fixture.join("docker");
+        fs::write(
+            &mock_docker,
+            "#!/usr/bin/env bash\nprintf 'docker %s\\n' \"$*\" >> \"$DAEMON_LOG\"\nif [[ \"$*\" = \"ps -aq\" ]]; then echo existing; [[ -e \"$LEAK_MARKER\" ]] && echo leaked; fi\nif [[ \"$*\" = \"rm -f leaked\" ]]; then rm -f \"$LEAK_MARKER\"; fi\n",
+        )?;
+        fs::set_permissions(&mock_docker, fs::Permissions::from_mode(0o755))?;
+
+        let mock_git = fixture.join("git");
+        fs::write(
+            &mock_git,
+            "#!/usr/bin/env bash\nprintf 'git %s\\n' \"$*\" >> \"$DAEMON_LOG\"\n",
+        )?;
+        fs::set_permissions(&mock_git, fs::Permissions::from_mode(0o755))?;
+
+        let task_log = fixture.join("task.log");
+        let daemon_log = fixture.join("daemon.log");
+        let timeout_marker = fixture.join("timeout.marker");
+        let leak_marker = fixture.join("leak.marker");
+        let system_path = std::env::var("PATH")?;
+        let output = Command::new("bash")
+            .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
+            .args(["--run", "rust:test,wasm:test"])
+            .env("PATH", format!("{}:{system_path}", fixture.display()))
+            .env("TASK_LOG", &task_log)
+            .env("DAEMON_LOG", &daemon_log)
+            .env("TIMEOUT_MARKER", &timeout_marker)
+            .env("LEAK_MARKER", &leak_marker)
+            .env("MOCK_TIMEOUT_STATUS", timeout_status.to_string())
+            .env_remove("NOOK_PR_BUILDX_BUILDER")
+            .output()?;
+
+        assert!(!output.status.success());
+        assert_eq!(
+            fs::read_to_string(&task_log)?,
+            "task remote:rust:test\ntask wasm:test\n",
+            "a timed-out task must not block the next selection"
+        );
+        let daemon_log = fs::read_to_string(&daemon_log)?;
+        assert!(daemon_log.contains("docker rm -f leaked"));
+        assert!(daemon_log.contains("git restore --source=HEAD --staged --worktree -- ."));
+        assert!(daemon_log.contains("git clean -fd"));
+        assert!(!leak_marker.exists());
+
+        fs::remove_dir_all(fixture)?;
+    }
     Ok(())
 }
 

@@ -49,6 +49,8 @@ A timeout also removes Docker containers created by that task.
 
 It restarts the job-scoped BuildKit container to cancel daemon-owned solves.
 
+It restores tracked source and removes non-ignored untracked files.
+
 A timed-out task fails without blocking later selections.
 
 After each task, the runner reselects the job-scoped hosted Buildx builder.
