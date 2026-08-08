@@ -41,6 +41,22 @@ variable "BASE_OWN_CACHE_ENABLED" {
   default = ""
 }
 
+variable "RUST_DEPS_INPUT_FINGERPRINT" {
+  default = ""
+}
+
+variable "INPUT_CACHE_WRITE_ENABLED" {
+  default = ""
+}
+
+variable "LEAF_EXACT_AVAILABLE" {
+  default = ""
+}
+
+variable "NESTED_LEAF_EXACT_AVAILABLE" {
+  default = ""
+}
+
 variable "NOOK_REGISTRY_CACHE_HOST" {
   default = "registry.dev.nokey.sh:5000"
 }
@@ -48,8 +64,8 @@ variable "NOOK_REGISTRY_CACHE_HOST" {
 write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook/remote-buildcache" : "nook/buildcache"
 
 base_cache_from = GHA_CACHE_ENABLED == "" || BASE_OWN_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-base-v1:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-base-v1:buildcache,ignore-error=true",
 ] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]
@@ -58,22 +74,28 @@ base_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
 ] : []
 
-// FALLBACK: fat Main first, then git-scope (mirrors real nightly/policy-tools).
+// FALLBACK: exact git scope first, then content fingerprint, then trusted Main.
 parent_cache_from = GHA_CACHE_ENABLED == "" || PARENT_OWN_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-parent-v1:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v1-${RUST_DEPS_INPUT_FINGERPRINT}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-parent-v1:buildcache,ignore-error=true",
 ] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v1-${RUST_DEPS_INPUT_FINGERPRINT}:buildcache,ignore-error=true",
 ]
 
 parent_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
 ] : []
 
+parent_input_cache_to = INPUT_CACHE_WRITE_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v1-${RUST_DEPS_INPUT_FINGERPRINT}:buildcache,mode=max,timeout=5m",
+] : []
+
 // Nested parent (Bake-context base) uses its own Zot scope.
 parent_nested_cache_from = GHA_CACHE_ENABLED == "" || PARENT_OWN_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-parent-nested-v1:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-nested-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-parent-nested-v1:buildcache,ignore-error=true",
 ] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-nested-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]
@@ -82,7 +104,12 @@ parent_nested_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-nested-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
 ] : []
 
-nested_leaf_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+nested_leaf_cache_from = GHA_CACHE_ENABLED == "" ? [] : NESTED_LEAF_EXACT_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-nested-leaf-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-nested-leaf-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-nested-leaf-v1:buildcache,ignore-error=true",
+] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-nested-leaf-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]
 
@@ -95,9 +122,11 @@ parent_pr_cold_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]
 
-leaf_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-leaf-v1:buildcache,ignore-error=true",
+leaf_cache_from = GHA_CACHE_ENABLED == "" ? [] : LEAF_EXACT_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-leaf-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-leaf-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-leaf-v1:buildcache,ignore-error=true",
 ] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-leaf-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]
@@ -139,6 +168,14 @@ target "parent-publish" {
   dockerfile = "parent.Dockerfile"
   cache-from = parent_cache_from
   cache-to = parent_cache_to
+  output = ["type=cacheonly"]
+}
+
+target "parent-input-publish" {
+  context = "."
+  dockerfile = "parent.Dockerfile"
+  cache-from = parent_cache_from
+  cache-to = parent_input_cache_to
   output = ["type=cacheonly"]
 }
 
@@ -215,9 +252,6 @@ target "combined-leaf" {
   context = "."
   dockerfile = "combined-nightly.Dockerfile"
   target = "leaf"
-  contexts = {
-    base = "target:base"
-  }
   cache-from = nested_leaf_cache_from
   cache-to = nested_leaf_cache_to
   output = ["type=cacheonly"]

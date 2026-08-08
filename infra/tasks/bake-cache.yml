@@ -111,6 +111,10 @@ tasks:
             GHA_CACHE_SCOPE_SUFFIX="${BAKE_SIM_CACHE_SCOPE_SUFFIX}" \
             PARENT_OWN_CACHE_ENABLED="${BAKE_SIM_PARENT_OWN_CACHE_ENABLED}" \
             BASE_OWN_CACHE_ENABLED="${BAKE_SIM_BASE_OWN_CACHE_ENABLED}" \
+            RUST_DEPS_INPUT_FINGERPRINT="${BAKE_SIM_RUST_DEPS_INPUT_FINGERPRINT:-}" \
+            INPUT_CACHE_WRITE_ENABLED="${BAKE_SIM_INPUT_CACHE_WRITE_ENABLED:-}" \
+            LEAF_EXACT_AVAILABLE="${BAKE_SIM_LEAF_EXACT_AVAILABLE:-}" \
+            NESTED_LEAF_EXACT_AVAILABLE="${BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE:-}" \
             NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
             "$docker_bin" buildx bake \
             --progress=plain \
@@ -377,7 +381,7 @@ tasks:
         echo "scenario M ok"
 
         echo "== Scenario N: one-Dockerfile leaf keeps nightly CACHED =="
-        # Fixed graph: parent tools and source leaf are stages in one Dockerfile.
+        # Fixed graph: base, parent tools, and source leaf are stages in one Dockerfile.
         # One cold producer publishes the full mode=max leaf graph. Another fresh
         # builder must restore both parent and leaf from that single scope.
         create_builder "nook-bake-sim-n-${suffix}"
@@ -401,28 +405,127 @@ tasks:
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario O ok"
 
-        echo "== Scenario P: clean local publish feeds fresh PR runner =="
-        # Local and PR builds use the same clean commit SHA. The local producer
-        # writes its isolated remote-buildcache ref. A fresh hosted builder must
-        # restore the expensive graph from that exact ref without executing it.
+        echo "== Scenario P: dirty formatter deps feed fresh PR runner =="
+        # The unavoidable local formatter and a PR can have different commit
+        # SHAs while sharing identical source-free dependency inputs.
         printf 'local-pr-shared-head\n' >"$parent_input"
-        local_pr_suffix="-git-dddddddddddddddddddddddddddddddddddddddd"
+        deps_fingerprint="dddddddddddddddddddddddddddddddddddddddd"
         BAKE_SIM_CACHE_ENABLED=1
-        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=
         BAKE_SIM_CACHE_FALLBACK_ENABLED=1
-        BAKE_SIM_CACHE_SCOPE_SUFFIX="$local_pr_suffix"
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$pr1_suffix"
         BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
         BAKE_SIM_BASE_OWN_CACHE_ENABLED=
+        BAKE_SIM_RUST_DEPS_INPUT_FINGERPRINT="$deps_fingerprint"
+        BAKE_SIM_INPUT_CACHE_WRITE_ENABLED=1
         create_builder "nook-bake-sim-p-local-${suffix}"
-        bake_plain "$proof_log" parent-publish
+        bake_plain "$proof_log" parent-input-publish
         require_uncached_step "$proof_log" "bake-sim-parent-expensive"
-        require_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-v1${local_pr_suffix}"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-input-v1-${deps_fingerprint}"
+        require_no_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-v1${pr2_suffix}"
 
-        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_INPUT_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$pr2_suffix"
         create_builder "nook-bake-sim-p-pr-${suffix}"
         bake_plain "$proof_log" parent
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_registry_ref "nook/buildcache/nook-bake-sim-parent-v1"
         echo "scenario P ok"
+
+        echo "== Scenario Q: inline PR verification publishes Hive-style exact leaf =="
+        # A standalone PR workflow first restores its unchanged dependency/tool
+        # stages from trusted Main. The verified build writes only its isolated
+        # exact-head scope. A fresh retry at that SHA must restore the source
+        # leaf as well as the Main-seeded parent.
+        printf '%s\n' "$parent_input_orig" >"$parent_input"
+        printf 'hive-pr-source-edit\n' >"$leaf_input"
+        hive_pr_suffix="-git-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$hive_pr_suffix"
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=
+        BAKE_SIM_RUST_DEPS_INPUT_FINGERPRINT=
+        BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=
+        create_builder "nook-bake-sim-q-producer-${suffix}"
+        bake_plain "$proof_log" combined-leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${hive_pr_suffix}"
+
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=1
+        create_builder "nook-bake-sim-q-retry-${suffix}"
+        bake_plain "$proof_log" combined-leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        echo "scenario Q ok"
+
+        echo "== Scenario R: exact-only replay works across linked and internal parents =="
+        # Scenario Q proved that merging exact and Main can orphan the exact
+        # leaf. Prove the exact-only selection independently for both a
+        # Bake-linked parent and the production internal-stage architecture.
+        printf '%s\n' "$parent_input_orig" >"$parent_input"
+        printf 'wasm-linked-leaf-source\n' >"$leaf_input"
+        wasm_pr_suffix="-git-ffffffffffffffffffffffffffffffffffffffff"
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$wasm_pr_suffix"
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=
+        BAKE_SIM_LEAF_EXACT_AVAILABLE=
+        create_builder "nook-bake-sim-r-producer-${suffix}"
+        bake_plain "$proof_log" leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-leaf-v1${wasm_pr_suffix}"
+
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_LEAF_EXACT_AVAILABLE=1
+        create_builder "nook-bake-sim-r-retry-${suffix}"
+        bake_plain "$proof_log" leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=
+        create_builder "nook-bake-sim-r-internal-producer-${suffix}"
+        bake_plain "$proof_log" combined-leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${wasm_pr_suffix}"
+
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=1
+        create_builder "nook-bake-sim-r-internal-retry-${suffix}"
+        bake_plain "$proof_log" combined-leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        echo "scenario R ok"
+
+        echo "== Scenario S: Kani-style full graph falls back once then replays exact =="
+        # Kani cannot use ordinary rustc sccache. Its production target therefore
+        # depends on this full-graph BuildKit behavior for both toolchain and proof.
+        printf 'kani-proof-source\n' >"$leaf_input"
+        kani_pr_suffix="-git-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$kani_pr_suffix"
+        BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=
+        create_builder "nook-bake-sim-s-producer-${suffix}"
+        bake_plain "$proof_log" combined-leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${kani_pr_suffix}"
+
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=1
+        create_builder "nook-bake-sim-s-retry-${suffix}"
+        bake_plain "$proof_log" combined-leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        echo "scenario S ok"
 
         echo "bake-cache runtime proof passed"

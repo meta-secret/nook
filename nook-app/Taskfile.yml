@@ -328,7 +328,7 @@ tasks:
         echo "task setup: commit-scoped host WASM/coverage handoff is ${artifact_kib} KiB";
         test "$artifact_kib" -le 262144 || { echo "task setup: refusing oversized Rust/web handoff (${artifact_kib} KiB)" >&2; exit 1; };
         WEB_ARTIFACTS_CONTEXT="$artifacts_dir" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "setup: $setup_target" {{.DOCKER}} buildx bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} "$setup_target"'
-      - task: registry-cache:publish:local-setup
+      - task: registry-cache:publish:local-format-deps
 
   setup:web:focused:
     desc: Build the narrow source-sealed web image for focused checks without full verification or production builds.

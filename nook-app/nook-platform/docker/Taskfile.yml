@@ -54,19 +54,27 @@ tasks:
         bash "{{.REPO_ROOT}}/.github/scripts/git-cache-scope-publish-guard.sh"
         task docker:ci:cache:publish:web
 
-  registry-cache:publish:local-setup:
+  registry-cache:publish:local-format-deps:
     internal: true
-    desc: Publish every Rust/WASM/web dependency graph completed by a clean local setup.
+    desc: Publish source-free Rust dependency graphs completed by sealed local formatting.
     cmds:
       - |
         set -euo pipefail
-        if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" != "1" ]; then exit 0; fi
-        bash "{{.REPO_ROOT}}/.github/scripts/git-cache-scope-publish-guard.sh"
-        # WASM must publish before the shorter rust-base/native graphs. This keeps
-        # its cargo-chef layers attached to the same full source lineage.
-        task docker:ci:cache:publish:wasm
-        task docker:ci:cache:publish:native-product
-        task docker:ci:cache:publish:web
+        if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_DEPS_PUBLISH:-}" != "1" ]; then exit 0; fi
+        if ! bash "{{.REPO_ROOT}}/.github/scripts/rust-deps-cache-publish-guard.sh"; then
+          echo "registry-cache:publish:local-format-deps: unsafe cache recipe; publication skipped" >&2
+          exit 0
+        fi
+        # The two exporters contain only manifests, synthetic crate roots, and
+        # dependency outputs. Real source layers remain hosted/commit-scoped.
+        NOOK_RUST_DEPS_INPUT_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+          {{.NOOK_BAKE_FILES}} \
+          --set "*.output=type=cacheonly" \
+          builder-wasm-deps-input-publish
+        NOOK_RUST_DEPS_INPUT_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+          {{.NOOK_BAKE_FILES}} \
+          --set "*.output=type=cacheonly" \
+          builder-core-deps-input-publish
 
   docker:rust:task:
     internal: true
@@ -168,7 +176,7 @@ tasks:
         out_dir="{{.CI_ARTIFACT_DIR}}";
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
-        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" --set "builder-core-deps.output=type=cacheonly" --set "rust-base-restore.output=type=cacheonly" ci-rust builder-core-deps rust-base-restore'
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" ci-rust'
       - task: registry-cache:publish:native
 
   docker:ci:wasm:export:
@@ -182,7 +190,7 @@ tasks:
         out_dir="{{.CI_ARTIFACT_DIR}}";
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
-        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" --set "builder-wasm-deps.output=type=cacheonly" wasm-export builder-wasm-deps'
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" wasm-export'
       - task: registry-cache:publish:wasm
 
   docker:ci:wasm:node-test:
@@ -208,8 +216,8 @@ tasks:
         --set "*.output=type=cacheonly"
         rust-base-publish
 
-  docker:ci:cache:publish:native-product:
-    desc: Export the already-verified native product dependency/source graph from this job's builder.
+  docker:ci:cache:publish:native:
+    desc: Export the already-verified native dependency/source graph from this job's builder.
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
@@ -220,14 +228,12 @@ tasks:
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
-        builder-core-deps-publish builder-debug
-
-  docker:ci:cache:publish:native:
-    desc: Export the verified native product and preflight graphs from this job's builder.
-    env:
-      GHA_CACHE_WRITE_ENABLED: "1"
-    cmds:
-      - task: docker:ci:cache:publish:native-product
+        builder-core-deps-publish
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "*.output=type=cacheonly"
+        builder-debug
       - >-
         {{.DOCKER}} buildx bake
         --allow=fs.read={{.REPO_ROOT}}
@@ -349,6 +355,23 @@ tasks:
           GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             rust-ecosystem-deterministic
+        fi
+
+  docker:ecosystem:kani:
+    desc: Run Kani bounded proofs in a full-graph BuildKit cache scope.
+    deps: [sccache:ensure, registry-cache:ensure]
+    cmds:
+      - task: docker:rust-base
+      - >-
+        GHA_CACHE_WRITE_ENABLED=
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        rust-kani
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            rust-kani
         fi
 
   docker:ecosystem:fuzz:

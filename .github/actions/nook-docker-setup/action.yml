@@ -13,7 +13,7 @@ inputs:
   isolated-cache-write:
     description: >-
       Publish only an isolated remote-buildcache ref keyed by git commit SHA
-      (-git-<sha>) while retaining Main as fallback. Never writes Main's
+      (-git-<sha>) while using Main when that exact ref is absent. Never writes Main's
       nook/buildcache refs.
     required: false
     default: "false"
@@ -154,6 +154,7 @@ runs:
 
         scope_suffix=""
         fallback_enabled=""
+        hive_remote_ref=""
         if [ "$isolated_cache_write" = "true" ]; then
           fallback_enabled=1
           if [ "$event_name" = "pull_request" ]; then
@@ -172,25 +173,76 @@ runs:
             exit 1
           fi
           scope_suffix="-git-$scope_sha"
-          if [ "$event_name" != "pull_request" ]; then
-            hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v1$scope_suffix:buildcache"
-            echo "HIVE_CACHE_FROM=$hive_remote_ref" >> "$GITHUB_ENV"
-            echo "HIVE_CACHE_SEED_FROM=type=registry,ref=${{ inputs.registry-host }}/nook/buildcache/nook-hive-linux-amd64-v1:buildcache" >> "$GITHUB_ENV"
-            echo "HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m" >> "$GITHUB_ENV"
-          fi
+          hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v1$scope_suffix:buildcache"
           echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
         echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
         echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
-        # Fingerprint only cook-affecting inputs. Bake cache-from wiring and
-        # Taskfiles must not rotate an empty Main deps scope and force cold chef.
-        wasm_deps_fingerprint="${{ hashFiles('nook-app/nook-platform/Cargo.toml', 'nook-app/nook-platform/Cargo.lock', 'nook-app/**/Cargo.toml', 'nook-app/nook-platform/.cargo/**', 'nook-app/nook-platform/.config/**', 'nook-app/nook-platform/clippy.toml', 'nook-app/nook-platform/docker/rust/lineage.Dockerfile', 'nook-app/nook-platform/docker/rust/lineage.Dockerfile.dockerignore', 'nook-app/nook-platform/docker/sccache-wrapper.sh', 'nook-app/nook-platform/docker/sccache-report.sh') }}"
-        if [[ ! "$wasm_deps_fingerprint" =~ ^[0-9a-f]{64}$ ]]; then
-          echo "Could not fingerprint the hosted WASM dependency graph" >&2
+        # Use the same worktree-content fingerprint as local sealed formatting.
+        # Bake cache wiring and source files do not rotate this dependency scope.
+        rust_deps_fingerprint="$(bash .github/scripts/rust-deps-cache-fingerprint.sh)"
+        if [[ ! "$rust_deps_fingerprint" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "Could not fingerprint the hosted Rust dependency graph" >&2
           exit 1
         fi
-        echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$wasm_deps_fingerprint" >> "$GITHUB_ENV"
+        echo "NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint" >> "$GITHUB_ENV"
+        echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$rust_deps_fingerprint" >> "$GITHUB_ENV"
+
+        # cache-from entries are merged, not ordered. Importing exact and Main
+        # together can select Main's parent and orphan an exact source leaf.
+        # Probe each full-graph ref and use Main only while that exact ref is absent.
+        registry_host="${{ inputs.registry-host }}"
+        exact_repository="nook/buildcache"
+        if [ -n "$scope_suffix" ]; then
+          exact_repository="nook/remote-buildcache"
+        fi
+        cache_ref_exists() {
+          docker buildx imagetools inspect "$1" >/dev/null 2>&1
+        }
+        publish_exact_availability() {
+          local env_name="$1"
+          local scope="$2"
+          local ref="$registry_host/$exact_repository/$scope:buildcache"
+          local available=""
+          if cache_ref_exists "$ref"; then
+            available=1
+            echo "Exact cache available: $scope"
+          else
+            echo "Exact cache absent; Main/fingerprint fallback enabled: $scope"
+          fi
+          echo "$env_name=$available" >> "$GITHUB_ENV"
+        }
+
+        wasm_deps_exact_scope="nook-rust-wasm-deps-v5-$rust_deps_fingerprint"
+        if [ -n "$scope_suffix" ]; then
+          wasm_deps_exact_scope="nook-rust-wasm-deps-v5$scope_suffix"
+        fi
+        publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v1$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v3$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v3$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v4$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v1$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v1$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v3$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE "$wasm_deps_exact_scope"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v3$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v2$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
+
+        if [ -n "$hive_remote_ref" ]; then
+          hive_ref="${hive_remote_ref#type=registry,ref=}"
+          hive_seed="type=registry,ref=$registry_host/nook/buildcache/nook-hive-linux-amd64-v1:buildcache"
+          if cache_ref_exists "$hive_ref"; then
+            hive_seed=""
+            echo "Exact Hive cache available; Main seed suppressed"
+          else
+            echo "Exact Hive cache absent; trusted Main seed enabled"
+          fi
+          echo "HIVE_CACHE_FROM=$hive_remote_ref" >> "$GITHUB_ENV"
+          echo "HIVE_CACHE_SEED_FROM=$hive_seed" >> "$GITHUB_ENV"
+          echo "HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m" >> "$GITHUB_ENV"
+        fi
         cache_write_enabled=""
         if [ "$isolated_cache_write" = "true" ]; then
           cache_write_enabled=1

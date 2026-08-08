@@ -51,6 +51,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("target \"base-publish\"")
             && bake.contains("target \"parent\"")
             && bake.contains("target \"parent-publish\"")
+            && bake.contains("target \"parent-input-publish\"")
             && bake.contains("target \"parent-nested\"")
             && bake.contains("target \"parent-nested-restore\"")
             && bake.contains("target \"parent-nested-importing\"")
@@ -73,6 +74,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
     );
     let nested_parent = target_body(&bake, "parent-nested");
     let nested_restore = target_body(&bake, "parent-nested-restore");
+    let combined_leaf = target_body(&bake, "combined-leaf");
     assert!(
         !nested_parent.lines().any(|line| {
             let line = line.trim_start();
@@ -80,7 +82,13 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         }) && nested_restore.contains("cache-from = parent_nested_cache_from"),
         "nested context parent must be cache-free and its restore target must import the scope"
     );
+    assert!(
+        !combined_leaf.contains("contexts =")
+            && read(&format!("{sim}/combined-nightly.Dockerfile")).contains("AS base"),
+        "fixed control must keep base, parent, and leaf in one Dockerfile lineage"
+    );
     let leaf_from = assignment_body(&bake, "leaf_cache_from");
+    let nested_leaf_from = assignment_body(&bake, "nested_leaf_cache_from");
     let short_from = assignment_body(&bake, "leaf_short_chain_cache_from");
     assert!(
         !leaf_from.contains("nook-bake-sim-parent-v1"),
@@ -90,6 +98,13 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         short_from.contains("nook-bake-sim-parent-v1")
             && !short_from.contains("nook-bake-sim-leaf-v1"),
         "short-chain leaf must cache-from only parent scope (no leaf own-scope)"
+    );
+    assert!(
+        leaf_from.contains("LEAF_EXACT_AVAILABLE")
+            && nested_leaf_from.contains("NESTED_LEAF_EXACT_AVAILABLE")
+            && tasks.contains("BAKE_SIM_LEAF_EXACT_AVAILABLE=1")
+            && tasks.contains("BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=1"),
+        "source-leaf retries must import exact alone instead of merging exact with Main"
     );
     assert!(
         !bake.contains("cache-from=\"\"")
@@ -116,7 +131,12 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("Scenario M:")
             && tasks.contains("Scenario N:")
             && tasks.contains("Scenario O:")
-            && tasks.contains("Scenario P: clean local publish feeds fresh PR runner")
+            && tasks.contains("Scenario P: dirty formatter deps feed fresh PR runner")
+            && tasks.contains("Scenario Q: inline PR verification publishes Hive-style exact leaf")
+            && tasks
+                .contains("Scenario R: exact-only replay works across linked and internal parents")
+            && tasks
+                .contains("Scenario S: Kani-style full graph falls back once then replays exact")
             && tasks.contains("bake-sim-base-layer")
             && tasks.contains("leaf-via-platform-broken")
             && tasks.contains("combined-leaf")
@@ -127,18 +147,13 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("PARENT_OWN_CACHE_ENABLED")
             && bake.contains("BASE_OWN_CACHE_ENABLED")
             && bake.contains("write_cache_repository"),
-        "infra proof must cover FALLBACK, base orphan, PR isolation, local-to-PR reuse, and the broken/fixed nightly leaf graph"
+        "infra proof must cover FALLBACK, base orphan, PR isolation, local-to-PR reuse, Kani, and the broken/fixed nightly leaf graph"
     );
     let parent_from = assignment_body(&bake, "parent_cache_from");
-    let main_idx = parent_from
-        .find("nook/buildcache/nook-bake-sim-parent-v1")
-        .expect("sim parent FALLBACK must list Main");
-    let git_idx = parent_from
-        .find("nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}")
-        .expect("sim parent FALLBACK must list git-scope");
     assert!(
-        main_idx < git_idx,
-        "sim parent FALLBACK must restore fat Main before git-scope"
+        parent_from.contains("nook/buildcache/nook-bake-sim-parent-v1")
+            && parent_from.contains("nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}"),
+        "sim cold parent scope must model exact and trusted Main candidates"
     );
     assert!(
         quality.contains("task infra:bake-cache:prove")

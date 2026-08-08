@@ -19,10 +19,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let pr = read(".github/workflows/pr.yml")?;
     let quality = read(".cortex/workflows/quality.md")?;
     let workspace = read("nook-app/nook-platform/Cargo.toml")?;
-    let rust_lineage_dockerfile = read("nook-app/nook-platform/docker/rust/lineage.Dockerfile")?;
+    let rust_lineage_dockerfile = read("nook-app/nook-platform/docker/rust/product.Dockerfile")?;
     let rust_dockerfile = [
-        "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
-        "nook-app/nook-platform/docker/rust/deterministic.Dockerfile",
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
         "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile",
         "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
     ]
@@ -58,20 +57,14 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "Bake rust-ecosystem-deterministic",
         "Bake rust-fuzz-smoke",
         "Bake rust-dylint",
+        "Bake Kani bounded proofs",
         "task docker:ecosystem:dependency-policy",
         "task docker:ecosystem:deterministic",
         "task docker:ecosystem:fuzz",
         "task docker:ecosystem:dylint",
+        "task docker:ecosystem:kani",
         "nook-docker-setup",
         "NOOK_SCCACHE_ACCESS_KEY",
-        "Restore pinned Kani toolchain",
-        "actions/cache@v5",
-        "KANI_VERSION: 0.67.0",
-        "key: kani-toolchain-ubuntu-24.04-${{ runner.arch }}-v${{ env.KANI_VERSION }}",
-        "if: steps.kani-cache.outputs.cache-hit != 'true'",
-        "cargo +stable install --locked --version \"$KANI_VERSION\" kani-verifier",
-        "cargo kani setup",
-        "cargo kani --package nook-replication",
         "FUZZ_SECONDS",
         "isolated-cache-write: ${{ inputs.isolated_cache_write }}",
         "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}",
@@ -96,7 +89,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
                 "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}"
             )
             .count(),
-        4,
+        5,
         "every Bake-backed ecosystem job must seed Main and isolate PR cache writes"
     );
     let docker_tasks = read("nook-app/nook-platform/docker/Taskfile.yml")?;
@@ -113,11 +106,13 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "bash -c \"set -euo pipefail;",
         "rust-ecosystem-policy-tools.output=type=cacheonly",
         "docker:ecosystem:deterministic:",
+        "docker:ecosystem:kani:",
         "docker:ecosystem:fuzz:",
         "docker:ecosystem:dylint:",
         "docker:ci:cache:publish:rust-base:",
         "rust-ecosystem-policy-tools",
         "rust-ecosystem-deterministic",
+        "rust-kani",
         "rust-fuzz-smoke",
         "rust-dylint",
         "sccache:ensure",
@@ -166,8 +161,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "cargo-deny-action",
         "cargo install cargo-audit",
         "cargo install cargo-dylint",
+        "cargo kani",
+        "kani-verifier",
         "Swatinem/rust-cache",
         "taiki-e/install-action",
+        "actions/cache",
+        "dtolnay/rust-toolchain",
     ] {
         assert!(
             !checks.contains(forbidden),
@@ -176,21 +175,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     }
     assert!(
         !checks.contains("model-checking/kani-github-action")
-            && checks.matches("cargo +stable install").count() == 1,
-        "Kani must restore its pinned toolchain before its cache-miss-only installation"
-    );
-    let kani_restore = checks
-        .find("Restore pinned Kani toolchain")
-        .ok_or_else(|| anyhow::anyhow!("Kani toolchain cache restore is missing"))?;
-    let kani_install = checks
-        .find("Install pinned Kani toolchain on cache miss")
-        .ok_or_else(|| anyhow::anyhow!("Kani cache-miss installer is missing"))?;
-    let kani_proof = checks
-        .find("Run Kani bounded proofs")
-        .ok_or_else(|| anyhow::anyhow!("Kani proof step is missing"))?;
-    assert!(
-        kani_restore < kani_install && kani_install < kani_proof,
-        "Kani must restore before the guarded install and run proofs afterward"
+            && checks.contains("task docker:ecosystem:kani"),
+        "Kani proof compilation must run through the BuildKit-cached Task target"
     );
 
     for marker in [
@@ -199,6 +185,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "AS rust-fuzz-smoke",
         "AS rust-dylint",
         "AS rust-ecosystem-deterministic",
+        "AS rust-kani-toolchain",
+        "AS rust-kani",
         "CARGO_DENY_SHA256=",
         "CARGO_AUDIT_SHA256=",
         "CARGO_FUZZ_SHA256=",
@@ -207,6 +195,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "COPY nook-app/nook-platform/ nook-app/nook-platform/",
         "cargo fuzz run",
         "cargo dylint --all",
+        "KANI_VERSION=0.67.0",
+        "cargo kani setup",
+        "cargo kani --package nook-replication",
     ] {
         assert!(
             rust_dockerfile.contains(marker),
@@ -238,7 +229,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     ] {
         assert!(
             !rust_lineage_dockerfile.contains(forbidden),
-            "lineage.Dockerfile/rust-base must not install ecosystem CLI {forbidden}"
+            "product.Dockerfile/rust-base must not install ecosystem CLI {forbidden}"
         );
     }
 
@@ -247,6 +238,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "rust-fuzz-smoke",
         "rust-dylint",
         "rust-ecosystem-deterministic",
+        "rust-kani",
     ] {
         assert!(
             rust_bake.contains(&format!("target \"{target}\"")),
@@ -344,15 +336,18 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
                 .matches("dockerfile = \"nook-app/nook-platform/docker/rust/nightly.Dockerfile\"")
                 .count()
                 == 2
-            && rust_bake.contains("rust-platform = \"target:rust-platform\"")
-            && rust_bake.contains("rust-base = \"target:rust-base\"")
+            && !rust_bake.contains("rust-platform = \"target:rust-platform\"")
+            && rust_bake
+                .matches("rust-base = \"target:rust-base\"")
+                .count()
+                == 3
             && rust_bake.contains("target \"rust-base-publish\"")
             && docker_tasks.contains("rust-base-publish")
             && !docker_tasks.contains("cache-from=\"")
             && !docker_tasks.contains("cache-from='")
             && !docker_tasks.contains("cache-to=\"")
             && !docker_tasks.contains("cache-to='"),
-        "ecosystem leaves restore context parents without cache-to; scoped *-publish targets own writes"
+        "external ecosystem Dockerfiles link read-only rust-base, product stages stay internal, and scoped publishers own writes"
     );
     assert!(
         rust_bake.contains("nook-rust-ecosystem-policy-tools-v4")
@@ -364,6 +359,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         rust_bake.contains("cache-from = rust_ecosystem_deterministic_cache_from")
             && rust_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),
         "ecosystem deterministic must seed its own hosted cache above rust-deps"
+    );
+    assert!(
+        rust_bake.contains("nook-rust-ecosystem-kani-v1")
+            && rust_bake.contains("cache-from = rust_ecosystem_kani_cache_from")
+            && rust_bake.contains("cache-to   = rust_ecosystem_kani_cache_to"),
+        "Kani proof compilation must own a complete hosted BuildKit cache scope"
     );
 
     for capability in [

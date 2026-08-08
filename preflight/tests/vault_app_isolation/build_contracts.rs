@@ -56,7 +56,10 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
         "the mounted build must use the dependency image target directory outside the bind mount"
     );
 
-    let dockerfile = read(&root, "nook-app/nook-platform/nook-wasm/Dockerfile");
+    let dockerfile = read(
+        &root,
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    );
     assert!(
         dockerfile.contains("FROM builder-wasm-deps AS nook-rust-fast")
             && dockerfile.contains(
@@ -240,7 +243,10 @@ fn assert_shared_wasm_build_contract(root: &Path) {
     assert!(application.contains("compiles and optimizes one shared WASM library"));
     assert!(application.contains("cannot change it"));
 
-    let wasm_dockerfile = read(root, "nook-app/nook-platform/nook-wasm/Dockerfile");
+    let wasm_dockerfile = read(
+        root,
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    );
     assert!(
         wasm_dockerfile.matches("wasm-pack build nook-wasm").count() == 1,
         "delivery must compile and optimize nook-wasm exactly once"
@@ -665,13 +671,13 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
     let root = repository_root();
     let dependency_dockerfile = read(
         &root,
-        "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
     );
-    let source_dockerfile = read(&root, "nook-app/nook-platform/nook-core/Dockerfile");
+    let source_dockerfile = dependency_dockerfile.as_str();
     let warmup = dependency_dockerfile
         .split_once("FROM builder-wasm-deps AS builder-core-deps")
         .map(|(_, rest)| rest)
-        .expect("builder-core-deps stage must exist in lineage.Dockerfile");
+        .expect("builder-core-deps stage must exist in product.Dockerfile");
 
     assert_eq!(
         warmup

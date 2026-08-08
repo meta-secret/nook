@@ -15,9 +15,9 @@ Use this workflow for quality, CI, and deployment changes.
    - That shorter parent importer orphans chef cook layers.
    - Never clear `cache-from` or `cache-to` with an empty Bake override.
    - Empty cache overrides are an architectural failure, not cache hygiene.
-   - Most context parents keep `cache-from` and declare no `cache-to`.
-   - Context `rust-base` omits both.
-   - `rust-base-restore` / `rust-base-publish` own its Zot scope.
+   - Product Rust dependencies and source leaves live in `product.Dockerfile`.
+   - They use internal Dockerfile stages, not Bake-linked dependency contexts.
+   - Standalone `*-restore` and `*-publish` targets own dependency cache I/O.
    - Keep expensive tools in the same Dockerfile as source-sensitive leaves.
    - Put source COPY steps after the shared tool stage.
    - Importing short rust-base during a nested leaf bake orphans nightly RUNs.
@@ -25,7 +25,8 @@ Use this workflow for quality, CI, and deployment changes.
    - Redesign scopes or Dockerfile lineage instead of wiping cache.
    - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
    - Reusable GitHub workflow shell lives in `.task/ci-workflows.yml` and `.github/scripts/`; workflows stay thin `task` wrappers around Actions-only glue.
-   - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as sibling Dockerfiles under `nook-app/nook-platform/docker/rust/` (Bake images off `rust-base`, not inside product `lineage.Dockerfile`).
+   - Cargo-deny, cargo-audit, cargo-fuzz, and Dylint live in sibling Dockerfiles under `nook-app/nook-platform/docker/rust/`.
+   - Proptest, Insta, and Loom use the internal `rust-platform` stage in `product.Dockerfile`.
    - They run through `task docker:ecosystem:*`.
    - Precise stage tasks warm parents alone before leaves:
      - `task docker:rust-base` (read-only; never publishes Zot)
@@ -34,8 +35,9 @@ Use this workflow for quality, CI, and deployment changes.
    - Labeled product PRs call the shared jobs from `pr.yml` via `rust-ecosystem-checks.yml`.
    - Thin `rust-ecosystem.yml` keeps schedule, main-path, manual, and labeled minds-only PR entry points.
    - Do not duplicate those commands in bespoke preflight scanners, call Bake helpers directly from the workflow, or compile their CLIs on the GitHub-hosted runner host.
-   - Kani pins its specialized model-checking toolchain and restores the CLI plus release bundle from an exact-version GitHub Actions cache.
-   - The expensive Kani installation runs only on a proven cache miss.
+   - Kani pins its specialized model-checking toolchain in `product.Dockerfile`.
+   - `task docker:ecosystem:kani` restores and publishes the complete
+     toolchain-plus-proof graph through its own BuildKit scope.
 2. Public Taskfile commands must run project builds/checks inside Docker.
    - CI may install host orchestration tools such as Task, but should call Taskfile tasks for normal repo behavior.
    - Prefer pinned release binaries on dedicated ecosystem stages (`rust-ecosystem-policy-tools`, `rust-ecosystem-nightly`) over `cargo install` on the runner.
@@ -118,9 +120,10 @@ Use this workflow for quality, CI, and deployment changes.
      Fuzz restores nightly read-only and writes `nook-rust-ecosystem-fuzz-v3`.
    - `PR / Rust ecosystem / Kani bounded proofs` —
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
-     bounded proof harnesses with a pinned specialized toolchain. The job
-     restores `cargo-kani`, `kani`, and the matching release bundle before a
-     cache-miss-only installation step.
+     bounded proof harnesses with a pinned specialized toolchain.
+     `task docker:ecosystem:kani` Bakes the `rust-kani` internal stage.
+     `nook-rust-ecosystem-kani-v1` caches both installation and proof
+     compilation because Kani's compiler cannot use ordinary rustc sccache.
    - `PR / Rust ecosystem / Dylint repository lints` —
      `task docker:ecosystem:dylint` warms `docker:rust-base`,
      Bakes `rust-dylint` from the same Dockerfile as `rust-ecosystem-nightly`,
@@ -152,7 +155,8 @@ Use this workflow for quality, CI, and deployment changes.
     - GitHub Actions cache is forbidden.
     - Delivery Bake restores private Zot registry scopes for:
       - Rust toolchain
-      - Rust ecosystem dylint leaf, fuzz leaf, policy-tools, policy leaf, and deterministic
+      - Rust ecosystem dylint leaf, fuzz leaf, policy-tools, policy leaf,
+        deterministic, and Kani proof graph
       - preflight chef/test
       - stable Rust dependencies
       - source-sensitive native/WASM snapshots
@@ -182,23 +186,34 @@ Use this workflow for quality, CI, and deployment changes.
     - Empty `cache-from=` and `cache-to=` overrides are prohibited.
     - Clearing `cache-from` after a remote hit forces cold apt/toolchain rebuilds.
     - Clearing `cache-to` on a linked parent is banned.
-    - Context parents declare no `cache-to`.
+    - Linked context parents declare no `cache-from` or `cache-to`.
+    - Product source leaves use internal stages in `product.Dockerfile`.
     - `*-publish` targets write `mode=max` under `write_cache_repository` plus
       `GHA_CACHE_SCOPE_SUFFIX`.
     - Main uses `nook/buildcache` with stable unsuffixed names.
-    - PR/Remote/local use `nook/remote-buildcache` with `-git-<40-char-sha>`.
+    - PR/Remote and ordinary local builds use `nook/remote-buildcache` with
+      `-git-<40-char-sha>`.
     - PR jobs key that SHA by pull-request head, not the merge `GITHUB_SHA`.
-    - Local publish is disabled on a dirty worktree.
-    - A successful clean local `task setup` publishes its completed WASM,
-      native product, and web dependency graphs into that exact head scope.
-    - A fresh PR runner restores the same head scope before Main fallback.
+    - Ordinary commit-scoped local publish is disabled on a dirty worktree.
+    - The unavoidable local formatter publishes only source-free native and
+      WASM dependency stages under a cook-input fingerprint.
+    - Dirty local source never enters that fingerprinted dependency scope.
+    - Dirty cache recipes disable formatter publication.
+    - A fresh PR runner restores that scope even when its commit SHA differs.
     - If a short parent index orphans a leaf RUN, redesign the Bake graph.
     - Do not wipe cache to paper over a short-chain import.
     - Prefer own-scope leaf `cache-from`, same-Dockerfile stage lineage, or a
       dedicated parent scope that is never thin.
-    - Isolated FALLBACK restores fat Main indexes before git-scope.
-    - Thin PR publishes must not orphan Main and cold `cargo install`.
-    - That keeps PR verify from cold `cargo install` of ecosystem tools.
+    - BuildKit merges cache importers. List order is not fallback precedence.
+    - Hosted setup probes every full-graph exact scope separately.
+    - A present exact scope is the only importer for that graph.
+    - Exact PR writers publish `mode=max`, so replay keeps the full leaf lineage.
+    - A missing exact scope falls back to source-free dependencies and Main
+      without cold `cargo install`.
+    - Hive PR verification imports exact SHA alone when present.
+    - A missing Hive exact SHA uses trusted Main.
+    - Its verified solve publishes only the isolated exact-SHA Hive leaf.
+    - Main remains the only writer of the shared Hive seed.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
     - Native publishers stage `docker:ci:cache:publish:rust-base` before
@@ -212,7 +227,7 @@ Use this workflow for quality, CI, and deployment changes.
     - The WASM cargo-chef dependency scope is fingerprinted from cook-affecting
       inputs only.
     - Those inputs are Cargo manifests/lockfiles, `.cargo`/`.config`,
-      `clippy.toml`, `lineage.Dockerfile` (+ dockerignore), and sccache scripts.
+      `clippy.toml`, `product.Dockerfile` (+ dockerignore), and sccache scripts.
     - Bake cache-from wiring and Taskfiles must not rotate that fingerprint.
     - Hosted builds never attach Redis credentials.
     - There is no dedicated cache-reconstruction build.
@@ -226,9 +241,12 @@ Use this workflow for quality, CI, and deployment changes.
 
     - `theorem_empty_cache_overrides_banned_repo_wide`
     - `theorem_short_parent_import_graph`
-    - `theorem_ecosystem_parent_fallback_restores_main`
+    - `theorem_exact_scope_excludes_main_then_cold_scope_falls_back`
     - `theorem_context_parents_never_write_publishers_mode_max`
     - `theorem_github_actions_zot_parameter_matrix`
+    - `theorem_hive_pr_publishes_only_exact_head_cache`
+    - `theorem_local_formatter_and_pr_share_input_cache`
+    - `theorem_source_leaf_solves_do_not_duplicate_linked_dependency_targets`
     - `theorem_wasm_fingerprint_closed_allowlist`
     - `theorem_wasm_and_native_publish_staging`
 
@@ -241,8 +259,15 @@ Use this workflow for quality, CI, and deployment changes.
     It also proves Main vs parallel PR git-scope isolation on ephemeral Zot:
     PR writes stay under `nook/remote-buildcache/**-git-<sha>`, do not overlap,
     and do not replace Main `nook/buildcache/**`.
-    Scenario P proves a clean local producer and a fresh PR runner share the
-    same git-scoped graph without rerunning the expensive dependency step.
+    Scenario P proves a dirty local formatter and a fresh PR runner share the
+    same source-free dependency graph without sharing a commit SHA.
+    Scenario Q proves standalone Hive-style verification restores Main,
+    publishes only its exact PR leaf, and replays that leaf on a fresh runner.
+    Scenario R proves exact-only selection replays the leaf across both a bare
+    Bake-linked parent and the production internal-stage architecture on fresh
+    builders.
+    Scenario S applies the same cold-Main then exact-replay contract to the
+    full-graph Kani model, where compiler-object sccache is unavailable.
 
     #### SeaweedFS sccache
 

@@ -43,9 +43,56 @@ variable "GHA_CACHE_SCOPE_SUFFIX" {
   default = ""
 }
 
-// Isolated git-scoped writes restore their commit ref first (ignore-error when cold) and then
-// fall back to Main. Ordinary Main validation keeps this empty and consumes only trusted refs.
+// Isolated git-scoped writes use this to enable cold-scope Main fallback.
+// Per-scope exact probes suppress that fallback when an exact ref is present.
 variable "GHA_CACHE_FALLBACK_ENABLED" {
+  default = ""
+}
+
+// BuildKit merges cache importers; their list order is not fallback precedence.
+// Hosted setup probes each exact ref. A present exact ref must be imported alone,
+// while a missing exact ref may fall back to dependency fingerprints and Main.
+variable "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_EXACT_RUST_KANI_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE" {
   default = ""
 }
 

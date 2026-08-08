@@ -155,7 +155,7 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
     assert!(!bake.contains("extra-hosts"));
     assert!(!bake.contains("SCCACHE_REDIS"));
 
-    let rust_base = read("nook-app/nook-platform/docker/rust/lineage.Dockerfile");
+    let rust_base = read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     assert!(rust_base.contains("ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh"));
     assert!(rust_base.contains("ENV SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT}"));
     assert!(rust_base.contains("ENV SCCACHE_BUCKET=${SCCACHE_BUCKET}"));
@@ -166,7 +166,7 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
         "nook-app/Taskfile.yml",
         "nook-app/nook-platform/docker/Taskfile.yml",
         "nook-app/docker-bake.hcl",
-        "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
     ] {
         assert!(
             !read(path).contains("host.docker.internal")
@@ -333,6 +333,8 @@ fn assert_workflows_scope_cache_credentials() {
     let hive = read(".github/workflows/hive.yml");
     assert!(hive.contains("NOOK_SCCACHE_ACCESS_KEY"));
     assert!(hive.contains("NOOK_SCCACHE_SECRET_KEY"));
+    assert!(hive.contains("uses: ./.github/actions/nook-docker-setup"));
+    assert!(hive.contains("isolated-cache-write: \"true\""));
     assert!(!hive.contains("NOOK_CACHE_REDIS_PASSWORD"));
 }
 
@@ -373,7 +375,7 @@ fn assert_rust_build_cache_boundary() {
     assert!(wrapper.contains("exec /usr/local/bin/sccache \"$@\""));
     assert!(!wrapper.contains("REDIS"));
 
-    let rust_base = read("nook-app/nook-platform/docker/rust/lineage.Dockerfile");
+    let rust_base = read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     assert!(rust_base.contains("RUSTC_WRAPPER=/usr/local/bin/nook-sccache"));
     assert!(rust_base.contains("NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}"));
     assert!(rust_base.contains("SCCACHE_IGNORE_SERVER_IO_ERROR=1"));
@@ -381,28 +383,23 @@ fn assert_rust_build_cache_boundary() {
     assert!(bake.contains("SCCACHE_S3_MODE") && bake.contains("= SCCACHE_S3_MODE"));
     assert!(app_tasks.contains("--set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'"));
 
-    for path in [
-        "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
-        "nook-app/nook-platform/nook-core/Dockerfile",
-        "nook-app/nook-platform/nook-wasm/Dockerfile",
-    ] {
-        let dockerfile = read(path);
-        let reports = dockerfile.matches("nook-sccache-report ").count();
-        assert!(
-            reports > 0
-                && dockerfile
-                    .matches("--mount=type=secret,id=sccache_s3_access_key,required=false")
-                    .count()
-                    == reports
-                && dockerfile
-                    .matches("--mount=type=secret,id=sccache_s3_secret_key,required=false")
-                    .count()
-                    == reports,
-            "every reported compiler vertex in {path} must use the same two optional secret mounts"
-        );
-        assert!(!dockerfile.contains("ARG SCCACHE_S3_ACCESS_KEY"));
-        assert!(!dockerfile.contains("ARG SCCACHE_S3_SECRET_KEY"));
-    }
+    let path = "nook-app/nook-platform/docker/rust/product.Dockerfile";
+    let dockerfile = read(path);
+    let reports = dockerfile.matches("nook-sccache-report ").count();
+    assert!(
+        reports > 0
+            && dockerfile
+                .matches("--mount=type=secret,id=sccache_s3_access_key,required=false")
+                .count()
+                == reports
+            && dockerfile
+                .matches("--mount=type=secret,id=sccache_s3_secret_key,required=false")
+                .count()
+                == reports,
+        "every reported compiler vertex in {path} must use the same two optional secret mounts"
+    );
+    assert!(!dockerfile.contains("ARG SCCACHE_S3_ACCESS_KEY"));
+    assert!(!dockerfile.contains("ARG SCCACHE_S3_SECRET_KEY"));
 }
 
 fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
@@ -414,30 +411,25 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX="));
     assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED="));
     assert!(setup.contains("GHA_CACHE_SEED_SCOPE_SUFFIX="));
+    let fingerprint = read(".github/scripts/rust-deps-cache-fingerprint.sh");
     for fingerprint_input in [
+        ".github/scripts/rust-deps-cache-fingerprint.sh",
         "nook-app/nook-platform/Cargo.toml",
         "nook-app/nook-platform/Cargo.lock",
-        "nook-app/**/Cargo.toml",
-        "nook-app/nook-platform/.cargo/**",
-        "nook-app/nook-platform/.config/**",
+        "'nook-app/**/Cargo.toml'",
+        "'nook-app/nook-platform/.cargo/**'",
+        "'nook-app/nook-platform/.config/**'",
         "nook-app/nook-platform/clippy.toml",
-        "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
-        "nook-app/nook-platform/docker/rust/lineage.Dockerfile.dockerignore",
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
+        "nook-app/nook-platform/docker/rust/product.Dockerfile.dockerignore",
         "nook-app/nook-platform/docker/sccache-wrapper.sh",
         "nook-app/nook-platform/docker/sccache-report.sh",
     ] {
         assert!(
-            setup.contains(fingerprint_input),
-            "WASM dependency scope fingerprint is missing {fingerprint_input}"
+            fingerprint.contains(fingerprint_input),
+            "Rust dependency scope fingerprint is missing {fingerprint_input}"
         );
     }
-    let fingerprint_call = setup
-        .split_once("wasm_deps_fingerprint=\"${{ hashFiles(")
-        .context("docker setup must compute wasm_deps_fingerprint via hashFiles")?
-        .1
-        .split_once(") }}\"")
-        .context("docker setup hashFiles call must terminate")?
-        .0;
     for non_cook_fingerprint_input in [
         "nook-app/Taskfile.yml",
         "nook-app/docker-bake.hcl",
@@ -449,15 +441,18 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "nook-app/nook-web/docker/Taskfile.yml",
         "nook-app/nook-web/docker/web.Dockerfile",
         "nook-app/nook-web/docker/toolchain.Dockerfile",
-        "nook-app/nook-platform/nook-core/Dockerfile",
     ] {
         assert!(
-            !fingerprint_call.contains(non_cook_fingerprint_input),
-            "WASM deps fingerprint must not rotate on non-cook input {non_cook_fingerprint_input}"
+            !fingerprint.contains(non_cook_fingerprint_input),
+            "Rust deps fingerprint must not rotate on non-cook input {non_cook_fingerprint_input}"
         );
     }
     assert!(
-        setup.contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$wasm_deps_fingerprint")
+        setup.contains(
+            "rust_deps_fingerprint=\"$(bash .github/scripts/rust-deps-cache-fingerprint.sh)\""
+        ) && setup.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint")
+            && setup
+                .contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$rust_deps_fingerprint")
     );
     assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
     assert!(setup.contains("[ -z \"$read_only\" ]"));
@@ -476,7 +471,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
     assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
     assert!(setup.contains("HIVE_CACHE_FROM=$hive_remote_ref"));
-    assert!(setup.contains("HIVE_CACHE_SEED_FROM=type=registry"));
+    assert!(setup.contains("HIVE_CACHE_SEED_FROM=$hive_seed"));
+    assert!(setup.contains("docker buildx imagetools inspect"));
     assert!(setup.contains("HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m"));
     assert!(!setup.contains("cache_total_count()"));
 
@@ -544,19 +540,33 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             && root_tasks.contains("NOOK_REGISTRY_CACHE:-1")
             && root_tasks.contains("registry-remote-password")
             && root_tasks.contains("NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:")
+            && root_tasks.contains("NOOK_REGISTRY_CACHE_LOCAL_DEPS_PUBLISH:")
+            && root_tasks.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT:")
             && root_tasks.contains("git-cache-scope.sh")
+            && root_tasks.contains("rust-deps-cache-fingerprint.sh")
             && root_tasks.contains("git status --porcelain")
             && !root_tasks.contains("-pr-$pr")
             && !root_tasks.contains("-local-")
             && docker_tasks.contains("registry-cache:ensure")
             && docker_tasks.contains("registry-cache:publish:wasm")
             && docker_tasks.contains("git-cache-scope-publish-guard.sh")
+            && docker_tasks.contains("rust-deps-cache-publish-guard.sh")
+            && docker_tasks.contains("unsafe cache recipe; publication skipped")
+            && docker_tasks.contains("builder-wasm-deps-input-publish")
+            && docker_tasks.contains("builder-core-deps-input-publish")
             && docker_tasks.contains("login \"$host\"")
             && docker_tasks.contains("task: registry-cache:publish:wasm"),
-        "Task Bake must enable local git-commit remote-buildcache restore/publish from root env + registry-cache tasks"
+        "Task Bake must enable clean git-commit publication plus dirty-safe formatter dependency publication"
     );
     let git_scope = read(".github/scripts/git-cache-scope.sh");
     let publish_guard = read(".github/scripts/git-cache-scope-publish-guard.sh");
+    let deps_publish_guard = read(".github/scripts/rust-deps-cache-publish-guard.sh");
+    assert!(
+        deps_publish_guard.contains("git -C \"$repo_root\" diff --quiet HEAD")
+            && deps_publish_guard.contains("cache recipe is dirty")
+            && deps_publish_guard.contains("fingerprint must be $expected"),
+        "dirty-safe dependency publication must reject dirty cache infrastructure"
+    );
     assert!(
         git_scope.contains("-git-$sha")
             && git_scope.contains("--require-clean")
@@ -612,6 +622,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "${write_cache_repository}/nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-rust-ecosystem-kani-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
@@ -662,9 +673,13 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "native deps must be own-scope v3; native source may import deps but never rust-base"
     );
     assert!(
-        wasm_deps_from.contains("nook-rust-wasm-deps-v5")
-            && wasm_deps_from.contains("${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true"),
-        "WASM deps must restore the v5 PR scope and fingerprinted Main scope with ignore-error"
+        rust_bake.contains(
+            "rust_wasm_deps_write_scope = GHA_CACHE_SCOPE_SUFFIX != \"\" ? \"nook-rust-wasm-deps-v5${GHA_CACHE_SCOPE_SUFFIX}\""
+        ) && wasm_deps_from.contains("GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE")
+            && wasm_deps_from.contains("${rust_wasm_deps_write_scope}:buildcache")
+            && wasm_deps_from
+                .contains("${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true"),
+        "WASM deps must use the exact v5 scope alone when present and the fingerprinted Main scope only in cold fallback"
     );
 
     let wasm_bake = read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
@@ -700,7 +715,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     );
     assert!(
         wasm_dependencies
-            .contains("dockerfile = \"nook-app/nook-platform/docker/rust/lineage.Dockerfile\"")
+            .contains("dockerfile = \"nook-app/nook-platform/docker/rust/product.Dockerfile\"")
             && !wasm_dependencies.contains("rust-base = \"target:rust-base\""),
         "WASM dependency cache keys must extend rust-base inside one Dockerfile instead of through a volatile named-target image"
     );
@@ -758,26 +773,21 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
         );
     }
 
-    let rust_base = read("nook-app/nook-platform/docker/rust/lineage.Dockerfile");
+    let rust_base = read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     assert!(rust_base.contains("sccache-report.sh /usr/local/bin/nook-sccache-report"));
-    for path in [
-        "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
-        "nook-app/nook-platform/nook-core/Dockerfile",
-        "nook-app/nook-platform/nook-wasm/Dockerfile",
-    ] {
-        assert!(
-            read(path).contains("nook-sccache-report"),
-            "{path} must report compiler cache outcomes"
-        );
-    }
+    let product = read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     assert!(
-        read("nook-app/nook-platform/docker/rust/lineage.Dockerfile")
+        product.contains("nook-sccache-report"),
+        "product.Dockerfile must report compiler cache outcomes"
+    );
+    assert!(
+        read("nook-app/nook-platform/docker/rust/product.Dockerfile")
             .matches("nook-sccache-report")
             .count()
             >= 12
     );
     assert!(
-        read("nook-app/nook-platform/nook-wasm/Dockerfile")
+        read("nook-app/nook-platform/docker/rust/product.Dockerfile")
             .matches("nook-sccache-report")
             .count()
             >= 3

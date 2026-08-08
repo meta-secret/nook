@@ -14,7 +14,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 
 ## 3. Toolchain & Runtime Specs
 
-- **Rust Version**: `1.97` (using digest-pinned `rust:1.97-trixie` in `nook-app/nook-platform/docker/rust/lineage.Dockerfile`; web uses `DEBIAN_RELEASE` in `nook-app/nook-web/docker/web.Dockerfile`).
+- **Rust Version**: `1.97` (using digest-pinned `rust:1.97-trixie` in `nook-app/nook-platform/docker/rust/product.Dockerfile`; web uses `DEBIAN_RELEASE` in `nook-app/nook-web/docker/web.Dockerfile`).
 - **Bun Version**: `1.3.14`.
 - **Task**: `3.42.1` ([official install script](https://taskfile.dev/docs/installation) → `/usr/local/bin`).
 - **Wasm Pack**: `0.15.0` ([official init script](https://wasm-bindgen.github.io/wasm-pack/installer/); pinned with `VERSION`, not `cargo install`). Installs matching `wasm-bindgen-cli` automatically during `wasm-pack build`.
@@ -48,14 +48,21 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Rust/WASM, web dependencies, browser-free web, and e2e web use separate versioned refs.
   - Parallel targets cannot overwrite one another.
   - Main seeds the default-branch cache visible to new PRs.
-  - Remote writes git-commit refs (`-git-<sha>`) with Main fallback.
+  - Remote writes git-commit refs (`-git-<sha>`).
+  - Hosted setup probes each exact ref before selecting its restore inputs.
+  - A present exact ref is imported alone. A missing exact ref uses the
+    source-free fingerprint and trusted Main as seeds.
   - Local Bake restores those git-commit refs when Remote credentials exist.
-  - Local publish also requires a clean worktree.
+  - Commit-scoped local publish requires a clean worktree.
+  - Local formatting may publish source-free dependency stages by content
+    fingerprint when cache recipes are clean.
   - Opt out with `NOOK_REGISTRY_CACHE=0`.
-- **Main owns the complete hosted BuildKit lineage.**
+- **Main owns the shared hosted BuildKit lineage.**
   - Main exports the Rust, WASM, web, and e2e caches.
-  - Every PR job restores them read-only.
-  - PR jobs never publish branch-local generations.
+  - Every PR job restores its exact SHA alone when that scope exists.
+  - A new exact scope restores source-free dependencies and trusted Main.
+  - PR jobs publish only isolated exact-SHA generations under
+    `nook/remote-buildcache`.
   - `web-deps` runs `bun install --frozen-lockfile` directly in its Dockerfile layer.
   - There is no host/daemon cache mount for `web-deps`.
   - Debian's single `chromium` package is installed only in the main/manual `web-e2e-base`.
@@ -81,7 +88,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**
   - PR, main delivery, production release, long-running AI agents, and scheduled/manual validation use GitHub-hosted `ubuntu-latest`.
-  - Delivery jobs restore scoped BuildKit layers through GitHub's cache service.
+  - Delivery jobs restore scoped BuildKit layers through private Zot.
   - The self-hosted `nook` label remains only for maintenance cleanup.
   - Do not use Blacksmith or other third-party runner labels.
 - **PR workflow cancellation:**
@@ -94,7 +101,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - It runs on an ephemeral GitHub-hosted runner.
   - Its frequent Rust test and web/extension check routes use narrow source-sealed images.
   - Those images stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.
-  - Remote restores git-commit Zot refs first and Main second.
+  - Remote restores a present git-commit Zot ref alone.
+  - A missing git-commit ref falls back to source-free dependencies and Main.
   - Remote exports only those Remote refs.
   - Remote reads trusted compiler objects through the read-only SeaweedFS identity.
   - New commit dependency results persist in Zot.

@@ -31,7 +31,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 **`remote.yml`**
 
 - One selected focused Taskfile command on an independent GitHub-hosted runner.
-- Git-commit-scoped Zot writes (`-git-<sha>`) with Main fallback.
+- Git-commit-scoped Zot writes (`-git-<sha>`), with Main used only while the
+  exact scope is absent.
 - Read-only SeaweedFS compiler-object access.
 - No merge authorization.
 
@@ -257,14 +258,19 @@ PR, main, release, AI, scheduled, manual e2e, and research jobs use GitHub-hoste
 
 - Delivery builds restore distinct private Zot BuildKit cache refs.
 - Main refreshes the default-branch scopes that new PRs may access.
-- Every PR job restores only this trusted Main lineage and disables cache export.
-- Exact-input handoffs own repeat-run acceleration; PR jobs do not need mutable branch-local cache generations.
+- Every PR job writes only immutable git-commit scopes and cannot replace Main.
+- A cold PR scope restores trusted Main or a dependency-fingerprint scope.
+- Once an exact PR scope exists, setup imports that scope alone.
+- BuildKit merges cache importers; list order is not fallback precedence.
+- Exact-input handoffs own repeat-run acceleration without mutable branch refs.
 - The WASM dependency target reads Main's dedicated, complete WASM dependency export instead of competing with the larger native dependency lineage.
 - Main's preparation selects both dependency targets and the native source target as explicit cache-only outputs.
 - Consuming them as named build contexts is not sufficient to run their dedicated exporters.
 - Only a `push` event on `refs/heads/main` may write the shared scopes.
-- Release, agent, manual, and PR workflows are read-only.
-- Remote workflow dispatches are the one branch exception: they write git-commit refs, fall back to Main on restore, and cannot replace shared Main manifests.
+- Release, agent, and manual workflows are read-only unless they use an
+  explicitly isolated git-commit publisher.
+- PR and Remote jobs write git-commit refs, use Main only while their exact
+  scope is absent, and cannot replace shared Main manifests.
 - The self-hosted `nook` label is reserved for runner cleanup while that machine remains registered.
 
 **Focused remote jobs:**
@@ -278,10 +284,15 @@ PR, main, release, AI, scheduled, manual e2e, and research jobs use GitHub-hoste
 **BuildKit cache propagation:**
 
 - Cache records imported by a named target are local to that target's solve.
-- They do not propagate through a named build context into the outer source, export, or application solve.
-- Every outer WASM solve must list the fingerprinted WASM dependency scope directly in its `cache-from` inputs, even when it also consumes `builder-wasm-deps` as a named context.
-- The dependency producer extends `rust-base` inside `nook-app/nook-platform/docker/rust/lineage.Dockerfile`.
-- Do not put that boundary behind another named-target image; republishing the parent target can change the downstream cache identity across hosted builders.
+- They do not propagate through a named build context into an outer source leaf.
+- Importing exact and Main together can select Main's parent and orphan an exact
+  source leaf, even when the exact importer is listed first.
+- An exact-only importer replays the leaf across both linked and internal parents.
+- Product dependency and source stages therefore live together in
+  `nook-app/nook-platform/docker/rust/product.Dockerfile`.
+- Product source Bake targets must not override those internal stages with
+  `target:` contexts.
+- Standalone dependency restore and publisher targets use the same Dockerfile.
 - `nook-app/nook-platform/docker/rust/docker-bake.hcl` owns the Rust Zot
   cache scopes and the direct WASM consumer import.
 - `nook-app/nook-web/docker/web.docker-bake.hcl` owns final web/e2e image
@@ -524,7 +535,7 @@ task web:test:e2e:github            # → sync-live
 
 ## Portable Rust crate coverage export
 
-The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-log` coverage gate runs during the Docker image build in `nook-app/nook-platform/nook-core/Dockerfile` (`builder-debug`).
+The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-log` coverage gate runs during the `builder-debug` stage in `nook-app/nook-platform/docker/rust/product.Dockerfile`.
 
 **Image build:**
 
@@ -618,7 +629,10 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 - Empty `cache-from=` and `cache-to=` overrides are prohibited across Taskfiles and scripts.
 - Main thereby exports protected default-branch refs that PR jobs restore from private Zot.
 - Same-repository PR jobs authenticate with the Remote registry identity; Zot ACLs deny that identity write access to `nook/buildcache/**`.
-- PR Bake exporters write only git-commit refs under `nook/remote-buildcache/**` (Main fallback restore stays enabled).
+- PR Bake exporters write only git-commit refs under `nook/remote-buildcache/**`.
+- Hosted setup probes each full-graph exact ref separately.
+- Existing exact refs are imported alone. Missing refs use dependency
+  fingerprints and trusted Main.
 - Fork pull requests receive no registry credentials.
 - Native coverage and WASM source-sensitive layers have separate Zot refs in addition to the manifest-only dependency refs, so non-Rust pushes do not repeat unchanged Cargo compilation.
 
@@ -657,16 +671,23 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 
 - Delivery BuildKit caches use authenticated `type=registry` refs on `registry.dev.nokey.sh` (Zot behind Traefik HTTPS + htpasswd), not GitHub Actions cache storage.
 - Local Task Bake restores git-commit remote-buildcache scopes when remote registry credentials exist.
-- A successful clean local setup publishes its completed Rust, WASM, and web
-  dependency graphs into the same git-commit scope consumed by PR jobs.
+- The sealed local formatter publishes source-free Rust/WASM dependency stages
+  under a content fingerprint also computed by PR jobs.
+- Agents still run build, test, proof, and validation tasks remotely. Local
+  execution remains available only for explicit rare-case debugging.
 - Local publish requires a clean worktree. Dirty builds remain local and cannot
-  poison the committed PR scope.
+  poison the committed PR scope. The formatter dependency publisher is the
+  exception because its targets contain no authored source. It still skips
+  publication whenever the Dockerfile, Bake graph, publisher, or guard is dirty.
 - Opt out with `NOOK_REGISTRY_CACHE=0`.
 - Cache restoration is an optimization: an unavailable cache falls back to a correct cold build.
 - Main publishes shared cache manifests after lane verification.
-- Explicit Remote tasks restore their git-commit refs first and Main second, then export only those Remote refs.
+- Explicit Remote tasks import a present git-commit ref alone.
+- If that scope is absent, they seed it from source-free dependencies and Main.
+- They export only Remote refs.
 - The Remote credential can update only `nook/remote-buildcache/**` and has read-only access to Main's `nook/buildcache/**` repository path.
-- Same-repository pull requests use that same Remote registry identity for git-commit exporters under `nook/remote-buildcache/**` and keep Main restore as fallback.
+- Same-repository pull requests use that same Remote registry identity for
+  git-commit exporters under `nook/remote-buildcache/**`.
 - Release and label-gated browser e2e jobs remain BuildKit-read-only.
 - Fork pull requests do not receive credentials.
 - Hive images also publish and pull through Zot.

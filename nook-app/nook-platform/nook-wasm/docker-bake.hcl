@@ -25,12 +25,9 @@ variable "WASM_BUILD_MODE" {
 target "builder-wasm" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "builder-wasm"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-wasm-deps = "target:builder-wasm-deps"
-  }
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
@@ -39,35 +36,26 @@ target "builder-wasm" {
 
 target "_nook-rust-fast-common" {
   context    = "."
-  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "nook-rust-fast"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-wasm-deps = "target:builder-wasm-deps"
-  }
   cache-from = rust_wasm_deps_cache_from
 }
 
 target "rust-format-check" {
   context    = "."
-  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "rust-format-check"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-debug = "target:builder-debug"
-  }
   cache-from = rust_native_source_cache_from
 }
 
 target "wasm-export" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "wasm-export"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-wasm-deps = "target:builder-wasm-deps"
-  }
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
@@ -78,12 +66,9 @@ target "wasm-export" {
 target "focused-web-artifacts" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "focused-web-artifacts"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-wasm-deps = "target:builder-wasm-deps"
-  }
   cache-from = rust_wasm_source_cache_from
   cache-to   = rust_wasm_source_cache_to
 }
@@ -92,13 +77,9 @@ target "focused-web-artifacts" {
 target "web-artifacts" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "web-artifacts"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-debug = "target:builder-debug"
-    builder-wasm-deps = "target:builder-wasm-deps"
-  }
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
@@ -110,12 +91,9 @@ target "web-artifacts" {
 target "_nook-rust-common" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "nook-rust"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-wasm-deps = "target:builder-wasm-deps"
-  }
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
@@ -130,12 +108,9 @@ target "_nook-rust-common" {
 target "_nook-rust-browser-common" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/nook-wasm/Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "nook-rust-browser"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-wasm-deps = "target:builder-wasm-deps"
-  }
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }

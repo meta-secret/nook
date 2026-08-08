@@ -97,35 +97,24 @@ jobs:
 
   kani:
     name: Kani bounded proofs
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    env:
-      KANI_VERSION: 0.67.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Restore pinned Kani toolchain
-        id: kani-cache
-        uses: actions/cache@v5
+      - uses: ./.github/actions/nook-docker-setup
         with:
-          path: |
-            ~/.cargo/bin/cargo-kani
-            ~/.cargo/bin/kani
-            ~/.kani/kani-${{ env.KANI_VERSION }}
-          key: kani-toolchain-ubuntu-24.04-${{ runner.arch }}-v${{ env.KANI_VERSION }}
-
-      - name: Install pinned Kani toolchain on cache miss
-        if: steps.kani-cache.outputs.cache-hit != 'true'
-        run: |
-          cargo +stable install --locked --version "$KANI_VERSION" kani-verifier
-          cargo kani setup
-
-      - name: Run Kani bounded proofs
-        working-directory: nook-app/nook-platform
-        run: cargo kani --package nook-replication
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
+          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
+          isolated-cache-write: ${{ inputs.isolated_cache_write }}
+      - name: Bake Kani bounded proofs
+        run: task docker:ecosystem:kani
 
   dylint:
     name: Dylint repository lints

@@ -8,6 +8,9 @@ on:
   pull_request:
     paths:
       - .github/workflows/hive.yml
+      - .github/actions/nook-cache-connect/**
+      - .github/actions/nook-docker-setup/**
+      - .github/scripts/rust-deps-cache-fingerprint.sh
       - .github/scripts/hive-manifest-contract.rb
       - .github/scripts/hive-reaper-controller-test.py
       - .github/scripts/k0s-firewall-rollback-test.py
@@ -27,6 +30,9 @@ on:
     branches: [main]
     paths:
       - .github/workflows/hive.yml
+      - .github/actions/nook-cache-connect/**
+      - .github/actions/nook-docker-setup/**
+      - .github/scripts/rust-deps-cache-fingerprint.sh
       - .github/scripts/hive-manifest-contract.rb
       - .github/scripts/hive-reaper-controller-test.py
       - .github/scripts/k0s-firewall-rollback-test.py
@@ -95,7 +101,22 @@ jobs:
       - name: Verify Hive Control Center journeys
         run: task hive:console:e2e
 
-      - name: Configure persistent Rust compiler cache
+      - name: Docker setup for isolated PR cache
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+          isolated-cache-write: "true"
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+
+      - name: Configure persistent Rust compiler cache on Main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: ./.github/actions/nook-cache-connect
         with:
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
@@ -110,13 +131,15 @@ jobs:
           (${NOOK_SCCACHE_BACKEND_REASON})"
 
       - name: Login to Nook OCI registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           registry: registry.dev.nokey.sh
           username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
 
-      - name: Docker setup
+      - name: Docker setup on Main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/setup-buildx-action@v4
 
       - name: Validate Taskfile command surface
