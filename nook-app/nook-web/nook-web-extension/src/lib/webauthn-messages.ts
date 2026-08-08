@@ -91,7 +91,8 @@ export function isWebsitePasskeyPerformMessage(
     typeof message.payload.vaultStoreId === 'string' &&
     message.payload.vaultStoreId.length > 0 &&
     (!('credentialId' in message.payload) ||
-      typeof message.payload.credentialId === 'string')
+      (typeof message.payload.credentialId === 'string' &&
+        message.payload.credentialId.length > 0))
   )
 }
 
@@ -194,24 +195,40 @@ export function parsedWebsitePasskeyRequest(
 
 export type WebsitePasskeyRequestJsonArgs = {
   request: WebsitePasskeyRequest
-  credentialId?: string
+  credentialSelection: WebsitePasskeyCredentialSelection
 }
+
+export enum WebsitePasskeyCredentialSelectionKind {
+  RequestDefaults = 'request-defaults',
+  Selected = 'selected',
+}
+
+export type WebsitePasskeyCredentialSelection =
+  | { kind: WebsitePasskeyCredentialSelectionKind.RequestDefaults }
+  | {
+      kind: WebsitePasskeyCredentialSelectionKind.Selected
+      credentialId: string
+    }
 
 export function websitePasskeyRequestJson(
   args: WebsitePasskeyRequestJsonArgs,
 ): string {
   if (
     args.request.ceremony !== WebsitePasskeyCeremony.Get ||
-    !args.credentialId
+    args.credentialSelection.kind ===
+      WebsitePasskeyCredentialSelectionKind.RequestDefaults
   ) {
     return args.request.requestJson
+  }
+  if (args.credentialSelection.credentialId.length === 0) {
+    throw new Error('Selected passkey credential ID must not be empty.')
   }
   const parsed: ExternalValue = JSON.parse(args.request.requestJson)
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('Validated passkey request could not be reconstructed.')
   }
   const descriptor: PropertyDescriptor = {
-    value: [{ id: args.credentialId }],
+    value: [{ id: args.credentialSelection.credentialId }],
     enumerable: true,
     configurable: true,
     writable: true,

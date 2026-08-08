@@ -45,14 +45,10 @@ export default tseslint.config(
             'Loom forbids raw object-literal call arguments. Assign a named typed value first, then pass that name.',
         },
         {
-          selector: 'CallExpression > TSAsExpression > ObjectExpression',
+          selector:
+            'CallExpression > :matches(TSAsExpression, TSSatisfiesExpression, TSTypeAssertion, TSNonNullExpression) ObjectExpression',
           message:
-            'Loom forbids raw object-literal call arguments (including `as` casts). Assign a named typed value first, then pass that name.',
-        },
-        {
-          selector: 'CallExpression > TSSatisfiesExpression > ObjectExpression',
-          message:
-            'Loom forbids raw object-literal call arguments (including `satisfies`). Assign a named typed value first, then pass that name.',
+            'Loom forbids raw object-literal call arguments hidden by TypeScript wrappers. Assign a named typed value first, then pass that name.',
         },
         {
           selector: 'NewExpression > ObjectExpression',
@@ -60,14 +56,10 @@ export default tseslint.config(
             'Loom forbids raw object-literal constructor arguments. Assign a named typed value first, then pass that name.',
         },
         {
-          selector: 'NewExpression > TSAsExpression > ObjectExpression',
+          selector:
+            'NewExpression > :matches(TSAsExpression, TSSatisfiesExpression, TSTypeAssertion, TSNonNullExpression) ObjectExpression',
           message:
-            'Loom forbids raw object-literal constructor arguments (including `as` casts). Assign a named typed value first, then pass that name.',
-        },
-        {
-          selector: 'NewExpression > TSSatisfiesExpression > ObjectExpression',
-          message:
-            'Loom forbids raw object-literal constructor arguments (including `satisfies`). Assign a named typed value first, then pass that name.',
+            'Loom forbids raw object-literal constructor arguments hidden by TypeScript wrappers. Assign a named typed value first, then pass that name.',
         },
       ],
       'no-unused-vars': 'off',

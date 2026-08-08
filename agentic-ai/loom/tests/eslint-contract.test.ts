@@ -67,4 +67,28 @@ describe('Loom ESLint contracts', () => {
       'no-restricted-syntax',
     ]);
   });
+
+  test('rejects angle assertions and nested TypeScript wrappers', async () => {
+    const eslint = new ESLint();
+    const options: LintTextOptions = { filePath: 'src/cli.ts' };
+    const results = await eslint.lintText(
+      `
+        type WidgetArgs = { name: string };
+        declare function consume(args: WidgetArgs): void;
+        declare class Widget {
+          constructor(args: WidgetArgs);
+        }
+        consume(<WidgetArgs>{ name: 'Nook' });
+        consume(({ name: 'Vault' } as WidgetArgs)!);
+        new Widget((({ name: 'Key' } satisfies WidgetArgs) as WidgetArgs)!);
+      `,
+      options,
+    );
+
+    expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
+      'no-restricted-syntax',
+      'no-restricted-syntax',
+      'no-restricted-syntax',
+    ]);
+  });
 });

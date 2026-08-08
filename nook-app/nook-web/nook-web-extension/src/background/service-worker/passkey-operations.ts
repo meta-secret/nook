@@ -3,7 +3,10 @@ import {
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
   websitePasskeyRequestJson,
+  type WebsitePasskeyCredentialSelection,
+  WebsitePasskeyCredentialSelectionKind,
   WebsitePasskeyCeremony,
+  type WebsitePasskeyRequestJsonArgs,
 } from '../../lib/webauthn-messages'
 import {
   isAuthorizedWebsiteSender,
@@ -204,9 +207,16 @@ export async function performWebsitePasskey(
       (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
     )
     if (!grant) return { ok: false, reason: 'passkey-vault-not-granted' }
-    const requestJsonArgs = {
+    const credentialSelection: WebsitePasskeyCredentialSelection = message
+      .payload.credentialId
+      ? {
+          kind: WebsitePasskeyCredentialSelectionKind.Selected,
+          credentialId: message.payload.credentialId,
+        }
+      : { kind: WebsitePasskeyCredentialSelectionKind.RequestDefaults }
+    const requestJsonArgs: WebsitePasskeyRequestJsonArgs = {
       request: context.request,
-      credentialId: message.payload.credentialId,
+      credentialSelection,
     }
     await ensureExtensionSessionDocument()
     return sendSessionMessage({
