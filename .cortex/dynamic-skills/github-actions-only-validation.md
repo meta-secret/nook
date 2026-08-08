@@ -24,15 +24,28 @@ focused jobs with `task remote TASK_NAME=<name>`.
 
 **Required remotely:** explicitly trigger complete exact-head PR validation.
 
+Validate request example:
+
+```yaml
+name: pr-land
+arguments:
+  action: validate
+  pr: 123
+  remote: null
+  full_e2e: false
+```
+
 ```bash
 task loom:pre-push
 git commit …
 git push -u origin HEAD
 task remote TASK_NAME=rust:test
-task loom:pr-land ARGS='validate --pr <number>'
-# Main-fix PR:
-# task loom:pr-land ARGS='validate --pr <number> --full-e2e'
+task loom:pr-land CONFIG=/tmp/pr-land-validate.yaml
 ```
+
+For Main-fix PRs, set `full_e2e: true` in the request.
+
+See [loom-tools.md](../references/loom-tools.md).
 
 Expensive remote tasks and complete PR validation refresh their base branch and
 refuse dispatch when the local head is stale.

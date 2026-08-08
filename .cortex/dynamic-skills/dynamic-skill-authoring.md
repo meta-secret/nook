@@ -50,10 +50,10 @@ Does not apply to:
 
 - [ ] Read `.cortex/workflows/dynamic-skills.md`.
 - [ ] Decide whether to update an existing skill card or create a new one.
-- [ ] Scaffold with `task loom:skill-scaffold SLUG=<kebab-case>` when creating.
+- [ ] Scaffold with `task loom:skill-scaffold CONFIG=<skill-scaffold-request.yaml>` when creating.
 - [ ] Keep the card concrete: problem, preferred pattern, scope, examples,
       validation.
-- [ ] Create wrappers with `--wrappers` only when direct invocation is useful.
+- [ ] Set `wrappers: true` in the Loom request only when direct invocation is useful.
 - [ ] Update `.cortex/dynamic-skills/index.md` if Loom did not.
 - [ ] Run `task loom:cortex-audit`.
 

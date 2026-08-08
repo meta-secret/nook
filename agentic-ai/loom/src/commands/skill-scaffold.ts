@@ -6,7 +6,7 @@ import {
   symlinkSync,
 } from 'node:fs';
 import path from 'node:path';
-import { flagPresent, positionalArgs } from '../lib/args.ts';
+import type { SkillScaffoldArgs } from '../codec/args/skill-scaffold.ts';
 import { findRepoRoot } from '../lib/repo.ts';
 import { ResultKind, err, ok, type Result } from '../result.ts';
 
@@ -18,24 +18,19 @@ export type SkillScaffoldReport = {
 };
 
 export async function runSkillScaffold(
-  args: readonly string[],
+  args: SkillScaffoldArgs,
 ): Promise<Result<SkillScaffoldReport>> {
   const repo = findRepoRoot();
   if (repo.kind === ResultKind.Err) {
     return repo;
   }
   const repoRoot = repo.value;
-  const positionals = positionalArgs(args);
-  const slug = positionals[0];
-  if (typeof slug !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-    return err('Usage: loom skill-scaffold <kebab-case-slug> [--wrappers]');
-  }
+  const slug = args.slug;
 
   const skillsDir = path.join(repoRoot, '.cortex', 'dynamic-skills');
   const templatePath = path.join(skillsDir, '_template.md');
   const cardPath = path.join(skillsDir, `${slug}.md`);
   const indexPath = path.join(skillsDir, 'index.md');
-  const createWrappers = flagPresent(args, '--wrappers');
 
   if (!existsSync(templatePath)) {
     return err('Missing .cortex/dynamic-skills/_template.md');
@@ -73,7 +68,7 @@ export async function runSkillScaffold(
   }
 
   const wrappersCreated: string[] = [];
-  if (createWrappers) {
+  if (args.wrappers) {
     const agentsDir = path.join(repoRoot, '.agents', 'skills', slug);
     mkdirSync(agentsDir, { recursive: true });
     const skillMd = path.join(agentsDir, 'SKILL.md');

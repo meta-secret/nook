@@ -1,10 +1,12 @@
-import { flagPresent, positionalArgs, requireOption } from '../lib/args.ts';
+import path from 'node:path';
+import type { PrLandArgs } from '../codec/args/pr-land.ts';
+import { PrLandAction } from '../codec/enums.ts';
+import { MaybeKind, ResultKind, err, ok, type Result } from '../result.ts';
 import { findRepoRoot } from '../lib/repo.ts';
 import { runCommand } from '../lib/run.ts';
-import { ResultKind, err, ok, type Result } from '../result.ts';
 
 export type PrLandReport = {
-  readonly action: string;
+  readonly action: PrLandAction;
   readonly prNumber: number;
   readonly nextStep: string;
   readonly messages: string[];
@@ -12,39 +14,22 @@ export type PrLandReport = {
 };
 
 export async function runPrLand(
-  args: readonly string[],
+  args: PrLandArgs,
 ): Promise<Result<PrLandReport>> {
-  const action = positionalArgs(args)[0];
-  if (typeof action !== 'string') {
-    return err(
-      'Usage: loom pr-land <status|validate|ready|merge-check> --pr <n> [--remote TASK] [--full-e2e]',
-    );
-  }
-
   const repo = findRepoRoot();
   if (repo.kind === ResultKind.Err) {
     return repo;
   }
-  const prRaw = requireOption(args, '--pr');
-  if (prRaw.kind === ResultKind.Err) {
-    return prRaw;
-  }
-  const prNumber = Number.parseInt(prRaw.value, 10);
-  if (!Number.isInteger(prNumber) || prNumber <= 0) {
-    return err('--pr must be a positive integer');
-  }
 
-  switch (action) {
-    case 'status':
-      return status(repo.value, prNumber);
-    case 'validate':
-      return validate(repo.value, prNumber, args);
-    case 'ready':
-      return ready(repo.value, prNumber);
-    case 'merge-check':
-      return mergeCheck(repo.value, prNumber);
-    default:
-      return err(`Unknown pr-land action: ${action}`);
+  switch (args.action) {
+    case PrLandAction.Status:
+      return status(repo.value, args.pr);
+    case PrLandAction.Validate:
+      return validate(repo.value, args);
+    case PrLandAction.Ready:
+      return ready(repo.value, args.pr);
+    case PrLandAction.MergeCheck:
+      return mergeCheck(repo.value, args.pr);
   }
 }
 
@@ -71,9 +56,9 @@ async function status(
   }
 
   return ok({
-    action: 'status',
+    action: PrLandAction.Status,
     prNumber,
-    nextStep: 'run loom pr-land validate --pr <n> when the head is ready',
+    nextStep: 'run loom with a pr-land validate request when the head is ready',
     ready: false,
     messages: [view.value.stdout.trim()],
   });
@@ -81,25 +66,15 @@ async function status(
 
 async function validate(
   repoRoot: string,
-  prNumber: number,
-  args: readonly string[],
+  args: PrLandArgs,
 ): Promise<Result<PrLandReport>> {
-  const forbiddenLocal = ['check', 'ci:pr', 'test', 'build'];
-  for (const token of args) {
-    if (
-      forbiddenLocal.some(
-        (name) => token === name || token.endsWith(`:${name}`),
-      )
-    ) {
-      return err(
-        `Refusing local heavy gate token "${token}". Use task remote / task pr:validate instead.`,
-      );
-    }
-  }
-
+  const prePushRequest = path.join(
+    repoRoot,
+    'agentic-ai/loom/params/pre-push/default.yaml',
+  );
   const prePush = runCommand(
     'bun',
-    ['run', '--cwd', 'agentic-ai/loom', 'loom', '--', 'pre-push'],
+    ['run', '--cwd', 'agentic-ai/loom', 'loom', '--', prePushRequest],
     repoRoot,
   );
   if (prePush.kind === ResultKind.Err) {
@@ -111,11 +86,10 @@ async function validate(
     );
   }
 
-  const remoteTask = requireOption(args, '--remote');
-  if (remoteTask.kind === ResultKind.Ok) {
+  if (args.remote.kind === MaybeKind.Present) {
     const remote = runCommand(
       'task',
-      ['remote', `TASK_NAME=${remoteTask.value}`],
+      ['remote', `TASK_NAME=${args.remote.value}`],
       repoRoot,
     );
     if (remote.kind === ResultKind.Err) {
@@ -128,8 +102,8 @@ async function validate(
     }
   }
 
-  const validateArgs = ['pr:validate', `PR=${prNumber}`];
-  if (flagPresent(args, '--full-e2e')) {
+  const validateArgs = ['pr:validate', `PR=${args.pr}`];
+  if (args.fullE2e) {
     validateArgs.push('FULL_E2E=1');
   }
   const validated = runCommand('task', validateArgs, repoRoot);
@@ -143,9 +117,9 @@ async function validate(
   }
 
   return ok({
-    action: 'validate',
-    prNumber,
-    nextStep: 'watch repository-owned checks, then loom pr-land ready --pr <n>',
+    action: PrLandAction.Validate,
+    prNumber: args.pr,
+    nextStep: 'watch repository-owned checks, then run a pr-land ready request',
     ready: false,
     messages: [
       'pre-push passed',
@@ -164,12 +138,12 @@ async function ready(
   }
   const passed = result.value.exitCode === 0;
   return ok({
-    action: 'ready',
+    action: PrLandAction.Ready,
     prNumber,
     ready: passed,
     nextStep: passed
       ? 'squash-merge with gh pr merge --squash when policy allows'
-      : 'fix readiness gaps, then re-run loom pr-land ready',
+      : 'fix readiness gaps, then re-run a pr-land ready request',
     messages: [
       (
         result.value.stdout ||
@@ -189,7 +163,7 @@ async function mergeCheck(
     return readiness;
   }
   return ok({
-    action: 'merge-check',
+    action: PrLandAction.MergeCheck,
     prNumber,
     ready: readiness.value.ready,
     nextStep: readiness.value.ready

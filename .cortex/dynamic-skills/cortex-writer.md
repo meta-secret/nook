@@ -51,8 +51,14 @@ Checklist for every new or edited `.cortex` sentence:
 
 Use Loom for a heuristic density pass over `.cortex`:
 
+```yaml
+name: cortex-audit
+arguments:
+  density: true
+```
+
 ```bash
-bun run --cwd agentic-ai/loom loom -- cortex-audit --density
+task loom:run CONFIG=path/to/cortex-audit-density.yaml
 ```
 
 Loom flags long sentences and heavy semicolon / "and" joins.

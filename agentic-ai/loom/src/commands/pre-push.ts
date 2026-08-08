@@ -1,4 +1,4 @@
-import { flagPresent } from '../lib/args.ts';
+import type { PrePushArgs } from '../codec/args/pre-push.ts';
 import { findRepoRoot, requireBun } from '../lib/repo.ts';
 import { runCommand } from '../lib/run.ts';
 import { ResultKind, err, ok, type Result } from '../result.ts';
@@ -12,7 +12,7 @@ export type PrePushReport = {
 };
 
 export async function runPrePush(
-  args: readonly string[],
+  args: PrePushArgs,
 ): Promise<Result<PrePushReport>> {
   const bun = requireBun();
   if (bun.kind === ResultKind.Err) {
@@ -24,8 +24,6 @@ export async function runPrePush(
     return repo;
   }
   const repoRoot = repo.value;
-  const skipStage = flagPresent(args, '--no-stage');
-  const skipFetch = flagPresent(args, '--no-fetch');
   const messages: string[] = [];
 
   const format = runCommand('task', ['format'], repoRoot);
@@ -39,7 +37,7 @@ export async function runPrePush(
   }
   messages.push('task format passed');
 
-  if (!skipFetch) {
+  if (args.fetch) {
     const fetch = runCommand('git', ['fetch', 'origin', 'main'], repoRoot);
     if (fetch.kind === ResultKind.Err) {
       return fetch;
@@ -79,7 +77,7 @@ export async function runPrePush(
   messages.push((contract.value.stdout || 'ui-demo-contract passed').trim());
 
   let staged = false;
-  if (!skipStage) {
+  if (args.stage) {
     const stage = runCommand('git', ['add', '-u'], repoRoot);
     if (stage.kind === ResultKind.Err) {
       return stage;

@@ -1,0 +1,6 @@
+name: pr-land
+arguments:
+  action: validate
+  pr: 123
+  remote: null
+  full_e2e: false

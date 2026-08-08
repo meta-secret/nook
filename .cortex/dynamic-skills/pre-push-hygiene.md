@@ -22,28 +22,41 @@ These show up in Workbench `stats/ai-agent` records as waste.
 
 ## Preferred Pattern
 
-Run Loom before every push:
+Call Loom `pre-push` before every push.
+
+Request:
+
+```yaml
+name: pre-push
+arguments:
+  stage: true
+  fetch: true
+```
+
+Invoke:
 
 ```bash
 task loom:pre-push
 ```
 
-Equivalent Bun entry:
+Committed default:
+[`agentic-ai/loom/params/pre-push/default.yaml`](../../agentic-ai/loom/params/pre-push/default.yaml).
 
-```bash
-bun run --cwd agentic-ai/loom loom -- pre-push
-```
+Success means `ok: true` and `result.formatOk` / `result.uiDemoOk` are true.
+
+On YAML decode errors, run `task loom:tools-list` and fix the request.
 
 Loom always:
 
 1. Runs host-applied `task format`
-2. Fetches `origin/main`
+2. Fetches `origin/main` when `fetch: true`
 3. Runs `.github/scripts/ui-demo-contract.sh` against that base
-4. Stages host format updates with `git add -u`
+4. Stages host format updates when `stage: true`
 
-Then commit → push → focused `task remote` → explicit `task pr:validate`.
+Then commit → push → focused `task remote` → explicit validate.
 
-See [remote-execution.md](../workflows/remote-execution.md).
+See [remote-execution.md](../workflows/remote-execution.md)
+and [loom-tools.md](../references/loom-tools.md).
 
 ### Sealed-image rule
 
