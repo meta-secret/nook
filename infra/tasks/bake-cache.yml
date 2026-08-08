@@ -101,6 +101,7 @@ tasks:
             GHA_CACHE_WRITE_ENABLED="${BAKE_SIM_CACHE_WRITE_ENABLED}" \
             GHA_CACHE_FALLBACK_ENABLED="${BAKE_SIM_CACHE_FALLBACK_ENABLED}" \
             GHA_CACHE_SCOPE_SUFFIX="${BAKE_SIM_CACHE_SCOPE_SUFFIX}" \
+            PARENT_OWN_CACHE_ENABLED="${BAKE_SIM_PARENT_OWN_CACHE_ENABLED}" \
             NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
             "$docker_bin" buildx bake \
             --progress=plain \
@@ -151,9 +152,12 @@ tasks:
         BAKE_SIM_CACHE_WRITE_ENABLED=1
         BAKE_SIM_CACHE_FALLBACK_ENABLED=
         BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
         create_builder "nook-bake-sim-a-${suffix}"
         bake_plain "$proof_log" parent-publish
         require_uncached_step "$proof_log" "bake-sim-parent-expensive"
+        # Publish leaf with parent own-cache off so mode=max embeds a full parent chain.
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
         bake_plain "$proof_log" leaf
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario A ok"
@@ -163,9 +167,12 @@ tasks:
         BAKE_SIM_CACHE_WRITE_ENABLED=
         BAKE_SIM_CACHE_FALLBACK_ENABLED=
         BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
         create_builder "nook-bake-sim-b-${suffix}"
         bake_plain "$proof_log" parent
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        # Leaf restore must not import a shorter parent scope (orphans leaf RUN).
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
         create_builder "nook-bake-sim-b2-${suffix}"
         bake_plain "$proof_log" leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
@@ -177,6 +184,7 @@ tasks:
         BAKE_SIM_CACHE_WRITE_ENABLED=
         BAKE_SIM_CACHE_FALLBACK_ENABLED=
         BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
         create_builder "nook-bake-sim-c-${suffix}"
         bake_plain "$proof_log" leaf-short-chain
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
@@ -187,9 +195,21 @@ tasks:
         BAKE_SIM_CACHE_WRITE_ENABLED=
         BAKE_SIM_CACHE_FALLBACK_ENABLED=1
         BAKE_SIM_CACHE_SCOPE_SUFFIX=-git-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
         create_builder "nook-bake-sim-d-${suffix}"
         bake_plain "$proof_log" parent-pr-cold
         require_uncached_step "$proof_log" "bake-sim-parent-expensive"
         echo "scenario D ok"
+
+        echo "== Scenario E: PR with Main parent FALLBACK (CACHED) =="
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX=-git-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
+        create_builder "nook-bake-sim-e-${suffix}"
+        bake_plain "$proof_log" parent
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        echo "scenario E ok"
 
         echo "bake-cache runtime proof passed"

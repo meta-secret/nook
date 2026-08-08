@@ -77,8 +77,12 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("network create")
             && tasks.contains("require_cached_step")
             && tasks.contains("bake-sim-parent-expensive")
-            && tasks.contains("bake-sim-leaf-expensive"),
-        "infra bake-cache prove must create network/builder and assert CACHED markers"
+            && tasks.contains("bake-sim-leaf-expensive")
+            && tasks.contains("Scenario D:")
+            && tasks.contains("Scenario E:")
+            && tasks.contains("parent-pr-cold")
+            && bake.contains("PARENT_OWN_CACHE_ENABLED"),
+        "infra bake-cache prove must cover cold/broken FALLBACK and fixed Main FALLBACK"
     );
     assert!(
         quality.contains("task infra:bake-cache:prove") && quality.contains("bake_cache_proofs.rs"),

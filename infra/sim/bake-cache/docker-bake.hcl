@@ -4,6 +4,9 @@
 // leaf ≈ rust-dylint (own-scope leaf; mode=max embeds parent).
 // leaf-short-chain ≈ short-parent import bug (parent scope in cache-from).
 // parent-pr-cold ≈ broken nightly FALLBACK (git-scope only, no Main).
+//
+// PARENT_OWN_CACHE_ENABLED: when empty, context parent has no cache-from so a
+// leaf own-scope mode=max restore is not orphaned by a shorter parent importer.
 
 variable "GHA_CACHE_ENABLED" {
   default = "1"
@@ -21,13 +24,17 @@ variable "GHA_CACHE_SCOPE_SUFFIX" {
   default = ""
 }
 
+variable "PARENT_OWN_CACHE_ENABLED" {
+  default = "1"
+}
+
 variable "NOOK_REGISTRY_CACHE_HOST" {
   default = "registry.dev.nokey.sh:5000"
 }
 
 write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook/remote-buildcache" : "nook/buildcache"
 
-parent_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+parent_cache_from = GHA_CACHE_ENABLED == "" || PARENT_OWN_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-parent-v1:buildcache,ignore-error=true",
 ] : [
