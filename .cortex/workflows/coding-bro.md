@@ -107,7 +107,11 @@ If Actions fails:
 - GitHub Actions cache storage is forbidden for BuildKit layers.
 - A failing fmt, clippy, unit test, or e2e spec still burns a remote validation cycle, so unconditional `task format` before push exists specifically to stop the most common avoidable Verify failures.
 
-**Focused Task commands run remotely.** Use `task remote:list` and `task remote TASK_NAME=<name>`. Interactive local servers/browser sessions remain appropriate only when the investigation intrinsically needs retained local state. See [remote-execution.md](remote-execution.md).
+**Focused Task commands run remotely.** Use `task remote:list` first. Use
+`task remote TASK_NAME=<name>` for one task. Use
+`task remote TASK_NAMES=<name>,<name>` to reuse one hosted job for a batch.
+Interactive local servers remain appropriate when the investigation needs
+retained local state. See [remote-execution.md](remote-execution.md).
 
 Default agent flow:
 
@@ -232,10 +236,8 @@ Do **not** require `task check` or `task ci:pr` for merge or handoff.
 Focused hosted commands (never merge gates):
 
 ```bash
-task remote TASK_NAME=web:check
-task remote TASK_NAME=web:test
+task remote TASK_NAMES=web:check,web:test,extension:check
 task remote TASK_NAME=rust:test
-task remote TASK_NAME=extension:check
 ```
 
 ```text

@@ -25,7 +25,46 @@ Dispatch one task:
 task remote TASK_NAME=rust:test
 ```
 
-The command accepts only catalog names. The workflow contains the corresponding literal Taskfile command; user input is never evaluated as arbitrary shell.
+Dispatch several tasks in one hosted job:
+
+```bash
+task remote TASK_NAMES=rust:test,web:check,web:test
+```
+
+The batch provisions one runner and performs Docker setup once.
+
+Tasks run sequentially in the requested order.
+
+One batch accepts at most eight tasks.
+
+The batch continues after a task fails. Its final status fails when any selected
+task failed.
+
+Each task keeps its former 15-to-45-minute timeout.
+
+A timed-out task and its process group receive `TERM` followed by forced
+termination after a one-minute grace period.
+
+A timeout also removes Docker containers created by that task.
+
+It restarts the job-scoped BuildKit container to cancel daemon-owned solves.
+
+It restores tracked source and removes non-ignored untracked files.
+
+A timed-out task fails without blocking later selections.
+
+After each task, the runner reselects the job-scoped hosted Buildx builder.
+This prevents temporary builders created by one task from affecting later
+selections.
+
+The GitHub job summary reports every task result.
+
+The command accepts only catalog names.
+
+Each name maps to a literal Taskfile command in
+`.github/scripts/remote-task-batch.sh`.
+
+User input is never evaluated as shell.
 
 Remote jobs receive read-only repository and Actions permissions.
 
@@ -97,15 +136,23 @@ gh run list \
 gh run watch <run-id> --compact --exit-status
 ```
 
-Dispatch independent catalog tasks separately when they can run in parallel; GitHub assigns each workflow to an available hosted worker:
+Prefer one batch when several tasks need the same pushed head:
 
 ```bash
-task remote TASK_NAME=rust:test
-task remote TASK_NAME=wasm:test
-task remote TASK_NAME=web:test
+task remote TASK_NAMES=rust:test,wasm:test,web:test
 ```
 
-The workflow deliberately does not accept arbitrary environment variables or commands. Its only credentials are the reviewed Zot login and scoped SeaweedFS build identity. Add a reviewed catalog entry when another stable remote capability is needed.
+This avoids repeated checkout, Docker setup, and cache connection work.
+
+Use separate dispatches when true parallel compute is more valuable than runner
+startup cost.
+
+The workflow does not accept arbitrary environment variables or commands.
+
+Its only credentials are the reviewed Zot login and scoped SeaweedFS build
+identity.
+
+Add a reviewed catalog entry when another stable remote capability is needed.
 
 ## Explicit complete PR validation
 
@@ -138,7 +185,11 @@ Agents must use the Task command so an already-present label is toggled and prod
 
 When `ci:full-e2e` remains on a Main-fix PR, every later validation request keeps the browser and extension gates active. A normal `ci:validate` event cannot downgrade a PR that is already marked for Main-equivalent coverage.
 
-Remote browser jobs preserve Playwright `test-results`, including traces, screenshots, videos, and attached `nook-app-logs.json`, as run artifacts even when the selected task fails.
+Remote browser tasks preserve Playwright `test-results` as run artifacts.
+
+These include traces, screenshots, videos, and attached `nook-app-logs.json`.
+
+The artifacts remain available when a selected task fails.
 
 Before dispatching `web:e2e`, `extension:e2e`, `check`, `ci:pr`, or `ci:pr:e2e`, the Task command refreshes `origin/main` and fails closed unless the local exact head contains it.
 

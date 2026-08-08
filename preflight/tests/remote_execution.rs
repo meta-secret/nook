@@ -1,4 +1,8 @@
-use std::{collections::BTreeSet, fs, path::PathBuf, process::Command};
+use std::{
+    collections::BTreeSet, fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Command,
+};
+
+use anyhow::Result;
 
 fn repository_root() -> PathBuf {
     std::env::var_os("NOOK_REPO_ROOT").map_or_else(
@@ -26,18 +30,20 @@ fn docker_stage<'a>(dockerfile: &'a str, stage: &str) -> &'a str {
         .map_or(remainder, |(body, _)| body)
 }
 
-fn catalog_from_taskfile(taskfile: &str) -> BTreeSet<&str> {
-    taskfile
-        .split("case \"$requested_task\" in")
-        .nth(1)
-        .and_then(|content| content.split(") ;;").next())
-        .unwrap_or_else(|| panic!("remote Taskfile must contain an allowlist case"))
+fn remote_batch_command(args: &[&str]) -> std::io::Result<std::process::Output> {
+    Command::new("bash")
+        .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
+        .args(args)
+        .output()
+}
+
+fn remote_catalog() -> Result<BTreeSet<String>> {
+    let output = remote_batch_command(&["--list"])?;
+    assert!(output.status.success(), "remote catalog must be readable");
+    Ok(String::from_utf8(output.stdout)?
         .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .unwrap_or_else(|| panic!("remote Taskfile allowlist must not be empty"))
-        .split('|')
-        .collect()
+        .map(str::to_owned)
+        .collect())
 }
 
 #[test]
@@ -47,14 +53,14 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 
     assert!(root_tasks.contains("taskfile: .task/remote-execution.yml"));
     for required in [
-        "requires:\n      vars: [TASK_NAME]",
-        "requested_task=\"$REQUESTED_REMOTE_TASK\"",
+        "TASK_NAMES=<a,b> or TASK_NAME=<a>",
+        "remote-task-batch.sh --validate",
         "git status --porcelain",
         "git ls-remote --refs origin",
         "if [ \"$remote_sha\" != \"$local_sha\" ]",
         "gh workflow run remote.yml",
-        "--raw-field \"task=$requested_task\"",
-        "task remote:list",
+        "--raw-field \"tasks=$requested_tasks\"",
+        "remote:list:",
     ] {
         assert!(
             remote_tasks.contains(required),
@@ -68,9 +74,199 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 }
 
 #[test]
-fn expensive_remote_validation_requires_the_current_base() -> std::io::Result<()> {
+fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
+    let valid = remote_batch_command(&["--validate", "rust:test,web:check"])?;
+    assert!(valid.status.success());
+    assert_eq!(String::from_utf8(valid.stdout)?, "rust:test,web:check\n");
+
+    for invalid in [
+        "",
+        "rust:test,",
+        "rust:test,,web:check",
+        "rust:test,rust:test",
+        "rust:test,arbitrary:command",
+        "rust:test, web:check",
+        "preflight,rust:test,rust:lint,rust:coverage,wasm:build,wasm:test,web:check,web:test,web:build",
+    ] {
+        assert!(
+            !remote_batch_command(&["--validate", invalid])?
+                .status
+                .success(),
+            "invalid remote batch must be rejected: {invalid:?}"
+        );
+    }
+
+    let commands = remote_batch_command(&["--commands", "rust:test,web:check,wasm:test"])?;
+    assert!(commands.status.success());
+    assert_eq!(
+        String::from_utf8(commands.stdout)?,
+        "task remote:rust:test\ntask remote:web:check\ntask wasm:test\n"
+    );
+    for task in remote_catalog()? {
+        let timeout = remote_batch_command(&["--timeout", &task])?;
+        assert!(timeout.status.success(), "task timeout must exist: {task}");
+        let minutes = String::from_utf8(timeout.stdout)?.trim().parse::<u8>()?;
+        assert!(
+            (15..=45).contains(&minutes),
+            "task timeout must preserve the former bounded range: {task}"
+        );
+    }
+    let batch_script = read(".github/scripts/remote-task-batch.sh");
+    assert!(batch_script.contains("timeout --kill-after=1m"));
+    assert!(!batch_script.contains("timeout --foreground"));
+    assert!(batch_script.contains("snapshot_daemon_containers > \"$daemon_snapshot\""));
+    assert!(batch_script.contains("status == 124 || status == 137"));
+    assert!(batch_script.contains("docker rm -f \"$container\""));
+    assert!(batch_script.contains("docker restart \"$container\""));
+    assert!(batch_script.contains("docker buildx inspect --bootstrap \"$builder\""));
+    assert!(batch_script.contains("git restore --source=HEAD --staged --worktree -- ."));
+    assert!(batch_script.contains("git clean -fd"));
+    Ok(())
+}
+
+#[test]
+fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
+    let fixture_nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let fixture = std::env::temp_dir().join(format!(
+        "nook-remote-task-batch-test-{}-{fixture_nonce}",
+        std::process::id(),
+    ));
+    fs::create_dir_all(&fixture)?;
+
+    let mock_task = fixture.join("task");
+    fs::write(
+        &mock_task,
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"$TASK_LOG\"\n[[ \"$1\" != \"remote:web:check\" ]]\n",
+    )?;
+    fs::set_permissions(&mock_task, fs::Permissions::from_mode(0o755))?;
+
+    let mock_docker = fixture.join("docker");
+    fs::write(&mock_docker, "#!/usr/bin/env bash\n[[ \"$1\" = \"ps\" ]]\n")?;
+    fs::set_permissions(&mock_docker, fs::Permissions::from_mode(0o755))?;
+
+    let task_log = fixture.join("task.log");
+    let summary = fixture.join("summary.md");
+    let system_path = std::env::var("PATH")?;
+    let output = Command::new("bash")
+        .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
+        .args(["--run", "rust:test,web:check,wasm:test"])
+        .env("PATH", format!("{}:{system_path}", fixture.display()))
+        .env("TASK_LOG", &task_log)
+        .env("GITHUB_STEP_SUMMARY", &summary)
+        .output()?;
+
+    assert!(
+        !output.status.success(),
+        "one failed task must fail the batch"
+    );
+    assert_eq!(
+        fs::read_to_string(&task_log)?,
+        "remote:rust:test\nremote:web:check\nwasm:test\n",
+        "a failed task must not prevent later selections from running"
+    );
+    let summary = fs::read_to_string(&summary)?;
+    assert!(summary.contains("| `rust:test` | passed |"));
+    assert!(summary.contains("| `web:check` | failed (exit 1) |"));
+    assert!(summary.contains("| `wasm:test` | passed |"));
+
+    fs::remove_dir_all(fixture)?;
+    Ok(())
+}
+
+#[test]
+fn remote_task_batch_cleans_up_both_timeout_statuses_and_continues() -> Result<()> {
+    for timeout_status in [124, 137] {
+        let fixture_nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos();
+        let fixture = std::env::temp_dir().join(format!(
+            "nook-remote-timeout-test-{}-{timeout_status}-{fixture_nonce}",
+            std::process::id(),
+        ));
+        fs::create_dir_all(&fixture)?;
+
+        let mock_task = fixture.join("task");
+        fs::write(
+            &mock_task,
+            "#!/usr/bin/env bash\nprintf 'task %s\\n' \"$*\" >> \"$TASK_LOG\"\n",
+        )?;
+        fs::set_permissions(&mock_task, fs::Permissions::from_mode(0o755))?;
+
+        let mock_timeout = fixture.join("timeout");
+        fs::write(
+            &mock_timeout,
+            "#!/usr/bin/env bash\nshift 2\n\"$@\"\nif [[ ! -e \"$TIMEOUT_MARKER\" ]]; then touch \"$TIMEOUT_MARKER\" \"$LEAK_MARKER\"; exit \"$MOCK_TIMEOUT_STATUS\"; fi\n",
+        )?;
+        fs::set_permissions(&mock_timeout, fs::Permissions::from_mode(0o755))?;
+
+        let mock_docker = fixture.join("docker");
+        fs::write(
+            &mock_docker,
+            "#!/usr/bin/env bash\nprintf 'docker %s\\n' \"$*\" >> \"$DAEMON_LOG\"\nif [[ \"$*\" = \"ps -aq\" ]]; then echo existing; [[ -e \"$LEAK_MARKER\" ]] && echo leaked; fi\nif [[ \"$*\" = \"rm -f leaked\" ]]; then rm -f \"$LEAK_MARKER\"; fi\n",
+        )?;
+        fs::set_permissions(&mock_docker, fs::Permissions::from_mode(0o755))?;
+
+        let mock_git = fixture.join("git");
+        fs::write(
+            &mock_git,
+            "#!/usr/bin/env bash\nprintf 'git %s\\n' \"$*\" >> \"$DAEMON_LOG\"\n",
+        )?;
+        fs::set_permissions(&mock_git, fs::Permissions::from_mode(0o755))?;
+
+        let task_log = fixture.join("task.log");
+        let daemon_log = fixture.join("daemon.log");
+        let timeout_marker = fixture.join("timeout.marker");
+        let leak_marker = fixture.join("leak.marker");
+        let system_path = std::env::var("PATH")?;
+        let output = Command::new("bash")
+            .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
+            .args(["--run", "rust:test,wasm:test"])
+            .env("PATH", format!("{}:{system_path}", fixture.display()))
+            .env("TASK_LOG", &task_log)
+            .env("DAEMON_LOG", &daemon_log)
+            .env("TIMEOUT_MARKER", &timeout_marker)
+            .env("LEAK_MARKER", &leak_marker)
+            .env("MOCK_TIMEOUT_STATUS", timeout_status.to_string())
+            .env_remove("NOOK_PR_BUILDX_BUILDER")
+            .output()?;
+
+        assert!(!output.status.success());
+        assert_eq!(
+            fs::read_to_string(&task_log)?,
+            "task remote:rust:test\ntask wasm:test\n",
+            "a timed-out task must not block the next selection"
+        );
+        let daemon_log = fs::read_to_string(&daemon_log)?;
+        assert!(daemon_log.contains("docker rm -f leaked"));
+        assert!(daemon_log.contains("git restore --source=HEAD --staged --worktree -- ."));
+        assert!(daemon_log.contains("git clean -fd"));
+        assert!(!leak_marker.exists());
+
+        fs::remove_dir_all(fixture)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
-    assert!(remote_tasks.contains("web:e2e|extension:e2e|check|ci:pr|ci:pr:e2e)"));
+    assert!(remote_tasks.contains("remote-task-batch.sh --requires-current-base"));
+    for tasks in ["web:e2e", "rust:test,extension:e2e", "web:test,ci:pr"] {
+        assert!(
+            remote_batch_command(&["--requires-current-base", tasks])?
+                .status
+                .success(),
+            "expensive batch must require current base: {tasks}"
+        );
+    }
+    assert!(
+        !remote_batch_command(&["--requires-current-base", "rust:test,web:check"])?
+            .status
+            .success(),
+        "cheap batch must remain available on a stale base"
+    );
     assert_eq!(
         remote_tasks
             .matches(".github/scripts/require-current-base.sh")
@@ -88,31 +284,23 @@ fn expensive_remote_validation_requires_the_current_base() -> std::io::Result<()
 }
 
 #[test]
-fn hosted_workflow_matches_the_taskfile_catalog() {
+fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     let workflow = read(".github/workflows/remote.yml");
-    let task_catalog = catalog_from_taskfile(&remote_tasks);
+    let batch_script = read(".github/scripts/remote-task-batch.sh");
+    let task_catalog = remote_catalog()?;
 
     for task in &task_catalog {
         assert!(
-            workflow.contains(&format!("          - {task}\n")),
-            "remote workflow input is missing catalog task: {task}"
-        );
-        assert!(
-            workflow.contains(&format!("if: inputs.task == '{task}'")),
-            "remote workflow has no selected job for task: {task}"
+            batch_script.contains(&format!("    {task})")),
+            "remote batch helper has no literal command mapping for task: {task}"
         );
     }
 
     assert_eq!(
-        workflow.matches("if: inputs.task == '").count(),
-        task_catalog.len() + 1,
-        "Remote has the public Taskfile catalog plus one internal cache-promotion broker"
-    );
-    assert_eq!(
         workflow.matches("runs-on: ubuntu-latest").count(),
-        task_catalog.len() + 1,
-        "every catalog task and the internal cache promoter need a GitHub-hosted job"
+        2,
+        "Remote must use one reusable batch job plus one internal cache promoter"
     );
     assert!(
         workflow.contains("if: inputs.task == 'rust-cache:promote'")
@@ -154,13 +342,23 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
         "remote workflow may only use the Zot and scoped SeaweedFS cache credentials"
     );
     assert!(!workflow.contains("${{ inputs.command }}"));
-    assert!(workflow.contains("group: remote-${{ github.ref }}-${{ inputs.task }}"));
+    assert!(
+        workflow.contains("group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}")
+    );
+    assert!(workflow.contains("remote-task-batch.sh --run \"$REQUESTED_REMOTE_TASKS\""));
+    assert!(batch_script.contains("docker buildx use \"$builder\""));
+    assert!(batch_script.contains("if ! restore_hosted_builder; then"));
+    let docker_setup = read(".github/actions/nook-docker-setup/action.yml");
+    assert!(docker_setup.contains(
+        "NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}"
+    ));
+    assert!(docker_setup.contains("if [ -z \"$NOOK_REMOTE_TASK_SELECTION\" ]"));
     assert!(workflow.contains("cache-write: \"false\""));
     assert!(workflow.contains("main-cache-only: \"true\""));
     assert_eq!(
         workflow.matches("isolated-cache-write: \"true\"").count(),
-        task_catalog.len(),
-        "every Remote task must write only its git-commit Zot namespace"
+        1,
+        "the Remote batch must write only its git-commit Zot namespace"
     );
     for (requested, focused) in [
         ("rust:test", "remote:rust:test"),
@@ -171,21 +369,27 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
         ("extension:check", "remote:extension:check"),
     ] {
         assert!(
-            workflow.contains(&format!("- run: task {focused}")),
+            batch_script.contains(&format!("{requested}) echo \"task {focused}\""))
+                && batch_script.contains(&format!(
+                    "{requested}) run_with_timeout \"$timeout_minutes\" task {focused}"
+                )),
             "frequent remote task {requested} must use its narrow source-sealed route"
         );
     }
     assert_eq!(
-        workflow.matches("- run: task remote:").count(),
+        batch_script
+            .matches(") run_with_timeout \"$timeout_minutes\" task remote:")
+            .count(),
         6,
         "only the mechanically reviewed focused routes may bypass their full local task"
     );
-    assert!(!workflow.contains("- run: task rust:test\n"));
-    assert!(!workflow.contains("- run: task rust:lint\n"));
-    assert!(!workflow.contains("- run: task rust:coverage\n"));
-    assert!(!workflow.contains("- run: task web:check\n"));
-    assert!(!workflow.contains("- run: task web:test\n"));
-    assert!(!workflow.contains("- run: task extension:check\n"));
+    assert!(!batch_script.contains("rust:test) task rust:test"));
+    assert!(!batch_script.contains("rust:lint) task rust:lint"));
+    assert!(!batch_script.contains("rust:coverage) task rust:coverage"));
+    assert!(!batch_script.contains("web:check) task web:check"));
+    assert!(!batch_script.contains("web:test) task web:test"));
+    assert!(!batch_script.contains("extension:check) task extension:check"));
+    Ok(())
 }
 
 #[test]
@@ -410,7 +614,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() {
         "a persistent Main-fix label must keep both full e2e jobs active"
     );
     for required in [
-        "E2E_ARTIFACT_DIR=${{ runner.temp }}/nook-e2e-artifacts",
+        "E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts",
         "name: Preserve Playwright diagnostics",
         "if: always()",
         "uses: actions/upload-artifact@v7",

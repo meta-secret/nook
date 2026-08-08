@@ -20,7 +20,8 @@ wastes hosted concurrency before the branch is ready.
 **Required locally:** `task loom:pre-push` only.
 
 **Iterative execution:** after pushing an exact branch head, run allowlisted
-focused jobs with `task remote TASK_NAME=<name>`.
+focused work with `task remote TASK_NAME=<name>`. Batch several commands with
+`task remote TASK_NAMES=<name>,<name>`.
 
 **Required remotely:** explicitly trigger complete exact-head PR validation.
 
