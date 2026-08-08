@@ -64,7 +64,14 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "task docker:ecosystem:dylint",
         "nook-docker-setup",
         "NOOK_SCCACHE_ACCESS_KEY",
-        "kani-github-action",
+        "Restore pinned Kani toolchain",
+        "actions/cache@v5",
+        "KANI_VERSION: 0.67.0",
+        "key: kani-toolchain-ubuntu-24.04-${{ runner.arch }}-v${{ env.KANI_VERSION }}",
+        "if: steps.kani-cache.outputs.cache-hit != 'true'",
+        "cargo +stable install --locked --version \"$KANI_VERSION\" kani-verifier",
+        "cargo kani setup",
+        "cargo kani --package nook-replication",
         "FUZZ_SECONDS",
         "isolated-cache-write: ${{ inputs.isolated_cache_write }}",
         "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}",
@@ -159,7 +166,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "cargo-deny-action",
         "cargo install cargo-audit",
         "cargo install cargo-dylint",
-        "dtolnay/rust-toolchain",
         "Swatinem/rust-cache",
         "taiki-e/install-action",
     ] {
@@ -168,6 +174,24 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             "Rust ecosystem checks must not use host-toolchain path: {forbidden}"
         );
     }
+    assert!(
+        !checks.contains("model-checking/kani-github-action")
+            && checks.matches("cargo +stable install").count() == 1,
+        "Kani must restore its pinned toolchain before its cache-miss-only installation"
+    );
+    let kani_restore = checks
+        .find("Restore pinned Kani toolchain")
+        .ok_or_else(|| anyhow::anyhow!("Kani toolchain cache restore is missing"))?;
+    let kani_install = checks
+        .find("Install pinned Kani toolchain on cache miss")
+        .ok_or_else(|| anyhow::anyhow!("Kani cache-miss installer is missing"))?;
+    let kani_proof = checks
+        .find("Run Kani bounded proofs")
+        .ok_or_else(|| anyhow::anyhow!("Kani proof step is missing"))?;
+    assert!(
+        kani_restore < kani_install && kani_install < kani_proof,
+        "Kani must restore before the guarded install and run proofs afterward"
+    );
 
     for marker in [
         "AS rust-ecosystem-policy-tools",

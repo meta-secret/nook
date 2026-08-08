@@ -34,7 +34,8 @@ Use this workflow for quality, CI, and deployment changes.
    - Labeled product PRs call the shared jobs from `pr.yml` via `rust-ecosystem-checks.yml`.
    - Thin `rust-ecosystem.yml` keeps schedule, main-path, manual, and labeled minds-only PR entry points.
    - Do not duplicate those commands in bespoke preflight scanners, call Bake helpers directly from the workflow, or compile their CLIs on the GitHub-hosted runner host.
-   - Kani remains on its official action because it provisions a specialized model-checking toolchain.
+   - Kani pins its specialized model-checking toolchain and restores the CLI plus release bundle from an exact-version GitHub Actions cache.
+   - The expensive Kani installation runs only on a proven cache miss.
 2. Public Taskfile commands must run project builds/checks inside Docker.
    - CI may install host orchestration tools such as Task, but should call Taskfile tasks for normal repo behavior.
    - Prefer pinned release binaries on dedicated ecosystem stages (`rust-ecosystem-policy-tools`, `rust-ecosystem-nightly`) over `cargo install` on the runner.
@@ -117,7 +118,9 @@ Use this workflow for quality, CI, and deployment changes.
      Fuzz restores nightly read-only and writes `nook-rust-ecosystem-fuzz-v3`.
    - `PR / Rust ecosystem / Kani bounded proofs` —
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
-     bounded proof harnesses via the official action (specialized toolchain).
+     bounded proof harnesses with a pinned specialized toolchain. The job
+     restores `cargo-kani`, `kani`, and the matching release bundle before a
+     cache-miss-only installation step.
    - `PR / Rust ecosystem / Dylint repository lints` —
      `task docker:ecosystem:dylint` warms `docker:rust-base`,
      Bakes `rust-dylint` from the same Dockerfile as `rust-ecosystem-nightly`,

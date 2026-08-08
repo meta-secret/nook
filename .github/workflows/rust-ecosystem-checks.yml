@@ -99,12 +99,35 @@ jobs:
     name: Kani bounded proofs
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      KANI_VERSION: 0.67.0
     steps:
       - uses: actions/checkout@v7
-      - uses: model-checking/kani-github-action@v1.1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore pinned Kani toolchain
+        id: kani-cache
+        uses: actions/cache@v5
         with:
-          working-directory: nook-app/nook-platform
-          args: --package nook-replication
+          path: |
+            ~/.cargo/bin/cargo-kani
+            ~/.cargo/bin/kani
+            ~/.kani/kani-${{ env.KANI_VERSION }}
+          key: kani-toolchain-ubuntu-24.04-${{ runner.arch }}-v${{ env.KANI_VERSION }}
+
+      - name: Install pinned Kani toolchain on cache miss
+        if: steps.kani-cache.outputs.cache-hit != 'true'
+        run: |
+          cargo +stable install --locked --version "$KANI_VERSION" kani-verifier
+          cargo kani setup
+
+      - name: Run Kani bounded proofs
+        working-directory: nook-app/nook-platform
+        run: |
+          test "$(kani --version | awk '{print $4}')" = "$KANI_VERSION"
+          cargo kani --package nook-replication
 
   dylint:
     name: Dylint repository lints
