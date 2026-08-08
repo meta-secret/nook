@@ -126,16 +126,15 @@ Run the mechanical link and index audit:
 Request:
 
 ```yaml
-name: cortex-audit
-arguments:
-  density: false
+cortexAudit:
+  includeDensityLint: false
 ```
 
 ```bash
 task loom:cortex-audit
 ```
 
-For density findings, set `density: true` in the request YAML.
+For density findings, set `includeDensityLint: true` in the cortexAudit request.
 
 See [loom-tools.md](../references/loom-tools.md).
 

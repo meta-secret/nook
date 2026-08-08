@@ -1,24 +1,25 @@
 #!/usr/bin/env bun
-import path from 'node:path';
+import { ResponsePhase } from './codec/enums.ts';
 import { stringifyYaml } from './codec/yaml.ts';
-import { requireBun } from './lib/repo.ts';
+import { requireBun, resolveRequestPath } from './lib/repo.ts';
 import { ResultKind } from './result.ts';
 import { dispatchRequestFile, encodedOutcome } from './tools/dispatch.ts';
 
-const HELP = `Loom — mechanical cortex rites (YAML tool protocol)
+const HELP = `Loom — mechanical cortex rites (domain YAML protocol)
 
 Usage:
   loom <request.yaml>
   loom help
 
-Request envelope:
-  name: <tool>
-  arguments: { ... }
+Domain request example:
+  prePush:
+    stageHostUpdates: true
+    fetchOriginMain: true
 
-Discover tools:
+Discover request kinds:
   loom agentic-ai/loom/params/tools-list/default.yaml
 
-Stdout is YAML only. On decode/argument errors, exit 2 and read errors[].path.
+Stdout is YAML only. On decode errors, exit 2 and read errors[].path.
 `;
 
 async function main(): Promise<number> {
@@ -39,7 +40,7 @@ async function main(): Promise<number> {
     const yaml = stringifyYaml({
       ok: false,
       isError: true,
-      phase: 'decode',
+      phase: ResponsePhase.Decode,
       errors: [
         {
           path: '',
@@ -48,7 +49,7 @@ async function main(): Promise<number> {
       ],
       recover: {
         toolsListRequest: 'agentic-ai/loom/params/tools-list/default.yaml',
-        hint: 'run loom with a tools-list request, then retry with a valid request envelope',
+        hint: 'run loom with a toolsList request, then retry with a valid domain request object',
       },
     });
     if (yaml.kind === ResultKind.Ok) {
@@ -57,7 +58,12 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  const requestPath = path.resolve(token);
+  const resolved = resolveRequestPath(token);
+  if (resolved.kind === ResultKind.Err) {
+    console.error(resolved.message);
+    return 2;
+  }
+  const requestPath = resolved.value;
   const outcome = await dispatchRequestFile(requestPath);
   const encoded = encodedOutcome(outcome);
   const yaml = stringifyYaml(encoded);

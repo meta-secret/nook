@@ -32,11 +32,11 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 
 ## How To Add One
 
-1. Scaffold with Loom using a request YAML (`name: skill-scaffold`).
+1. Scaffold with Loom using a `skillScaffold` domain request YAML.
 2. Fill in the problem pattern, preferred pattern, scope, examples, and
    validation.
 3. Confirm the new card is in the table above.
-4. If the user wants direct invocation, set `wrappers: true` in the request or
+4. If the user wants direct invocation, set `createExecutableWrappers: true` or
    create `.agents/skills/<skill-name>/SKILL.md` (with `.cursor` / `.claude`
    symlinks) pointing back to the `.cortex` card, then link it from the table.
 5. Verify with `task loom:cortex-audit`.

@@ -1,4 +1,4 @@
-# Reference: Loom YAML tool protocol
+# Reference: Loom domain YAML protocol
 
 Loom is the Bun tool runner for mechanical cortex rites.
 
@@ -16,138 +16,132 @@ loom <request.yaml>
 task loom:run CONFIG=<request.yaml>
 ```
 
-## Request envelope
+## TypeScript state rules
+
+Loom follows the same authored TypeScript rules as Nook web:
+
+- no authored `null` or `undefined`
+- closed vocabularies use enums / typed unions
+- explicit `Maybe` / `Result` absence instead of optional holes
+
+Enforced by `task preflight:typescript-state` across the repository, including
+`agentic-ai/loom`.
+
+## Domain request rule
+
+YAML must be a full domain representation.
+
+Do **not** use a generic envelope:
 
 ```yaml
-name: pre-push
+# wrong
+name: agent-stats
 arguments:
-  stage: true
-  fetch: true
+  action: assemble
+  pr: 123
 ```
 
-`name` selects the tool.
+Use one domain root key and descriptive fields:
 
-`arguments` must match that tool’s schema.
+```yaml
+# right
+agentStatsAssemble:
+  prNumber: 123
+  scratchPath: /tmp/pr-123-events.json
+  outputPath: /tmp/123.yaml
+  includeTestInventory: true
+```
 
-Unknown fields fail.
+Exactly one root key is allowed.
 
-Wrong types fail.
+Unknown fields fail closed.
 
-## Discover tools
-
-Request file: [`params/tools-list/default.yaml`](../../agentic-ai/loom/params/tools-list/default.yaml)
+## Discover request kinds
 
 ```bash
 task loom:tools-list
 ```
 
-On any decode error, read `errors[].path` in the YAML response.
-
-Then run `tools-list` and retry.
-
-## Response
-
-Stdout is YAML only.
-
-Success:
-
-```yaml
-ok: true
-name: pre-push
-result: { ... }
-```
-
-Failure (exit `2` for decode / unknown tool / bad arguments; exit `1` for execute):
-
-```yaml
-ok: false
-isError: true
-phase: decode
-errors:
-  - path: arguments.stage
-    message: expected boolean
-recover:
-  toolsListRequest: agentic-ai/loom/params/tools-list/default.yaml
-  hint: run loom with a tools-list request, then retry with a valid arguments object
-```
+On decode errors, read `errors[].path`, then run `toolsList`.
 
 ## Common requests
 
-### pre-push
+### prePush
 
-File: [`params/pre-push/default.yaml`](../../agentic-ai/loom/params/pre-push/default.yaml)
+```yaml
+prePush:
+  stageHostUpdates: true
+  fetchOriginMain: true
+```
 
 ```bash
 task loom:pre-push
 ```
 
-### cortex-audit
+### cortexAudit
 
-File: [`params/cortex-audit/default.yaml`](../../agentic-ai/loom/params/cortex-audit/default.yaml)
+```yaml
+cortexAudit:
+  includeDensityLint: false
+```
 
 ```bash
 task loom:cortex-audit
 ```
 
-### skill-scaffold
-
-Example: [`params/skill-scaffold/request.example.yaml`](../../agentic-ai/loom/params/skill-scaffold/request.example.yaml)
+### skillScaffold
 
 ```yaml
-name: skill-scaffold
-arguments:
-  slug: example-skill
-  wrappers: false
+skillScaffold:
+  skillSlug: example-skill
+  createExecutableWrappers: false
 ```
 
 ```bash
 task loom:skill-scaffold CONFIG=path/to/request.yaml
 ```
 
-### agent-stats
-
-Examples under [`params/agent-stats/`](../../agentic-ai/loom/params/agent-stats/).
+### agentStatsAssemble / Validate / Publish
 
 ```yaml
-name: agent-stats
-arguments:
-  action: assemble
-  pr: 123
-  scratch: /tmp/pr-123-scratch.json
-  out: /tmp/123.yaml
-  inventory: true
+agentStatsAssemble:
+  prNumber: 123
+  scratchPath: /tmp/pr-123-events.json
+  outputPath: /tmp/123.yaml
+  includeTestInventory: true
 ```
 
 ```bash
 task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 ```
 
-### pr-land
-
-Example: [`params/pr-land/request.example.yaml`](../../agentic-ai/loom/params/pr-land/request.example.yaml)
+### prLandValidate / Status / Ready / MergeCheck
 
 ```yaml
-name: pr-land
-arguments:
-  action: validate
-  pr: 123
-  remote: null
-  full_e2e: false
+prLandValidate:
+  prNumber: 123
+  runFullE2e: false
 ```
 
 ```bash
-task loom:pr-land CONFIG=path/to/request.yaml
+task loom:pr-land CONFIG=path/to/validate-request.yaml
 ```
 
-## Nested call helper
+### toolsCall
+
+Wraps another domain request:
 
 ```yaml
-name: tools-call
-arguments:
-  name: pre-push
-  arguments:
-    stage: true
-    fetch: true
+toolsCall:
+  prePush:
+    stageHostUpdates: true
+    fetchOriginMain: true
 ```
 
-Prefer a top-level `name` for the target tool.
+Prefer a top-level domain key for normal calls.
+
+## Response
+
+Success includes `requestKind` and `result`.
+
+Failures include `phase`, `errors[].path`, and `recover.toolsListRequest`.

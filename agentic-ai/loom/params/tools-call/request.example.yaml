@@ -1,6 +1,4 @@
-name: tools-call
-arguments:
-  name: pre-push
-  arguments:
-    stage: true
-    fetch: true
+toolsCall:
+  prePush:
+    stageHostUpdates: true
+    fetchOriginMain: true

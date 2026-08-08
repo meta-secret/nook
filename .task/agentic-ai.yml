@@ -62,7 +62,7 @@ tasks:
       - task: loom:test
 
   loom:run:
-    desc: Run Loom with a YAML request envelope (CONFIG=<request.yaml>).
+    desc: Run Loom with a domain YAML request (CONFIG=<request.yaml>).
     deps: [loom:install]
     vars:
       CONFIG: '{{.CONFIG}}'

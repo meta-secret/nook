@@ -57,10 +57,9 @@ scope, and apply the pattern with normal coding workflow and validation.
 For a new card scaffold, prefer Loom:
 
 ```yaml
-name: skill-scaffold
-arguments:
-  slug: example-skill
-  wrappers: false
+skillScaffold:
+  skillSlug: example-skill
+  createExecutableWrappers: false
 ```
 
 ```bash

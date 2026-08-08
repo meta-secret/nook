@@ -1,0 +1,3 @@
+prLandValidate:
+  prNumber: 123
+  runFullE2e: false

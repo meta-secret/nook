@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { err, ok, type Result } from '../result.ts';
+import { ResultKind, err, ok, type Result } from '../result.ts';
 
 export function findRepoRoot(startDir: string = process.cwd()): Result<string> {
   let current = path.resolve(startDir);
@@ -16,6 +16,21 @@ export function findRepoRoot(startDir: string = process.cwd()): Result<string> {
     }
     current = parent;
   }
+}
+
+/** Resolve request YAML paths against the repository root (Task CONFIG convention). */
+export function resolveRequestPath(
+  requestPath: string,
+  startDir: string = process.cwd(),
+): Result<string> {
+  if (path.isAbsolute(requestPath)) {
+    return ok(requestPath);
+  }
+  const root = findRepoRoot(startDir);
+  if (root.kind === ResultKind.Err) {
+    return root;
+  }
+  return ok(path.resolve(root.value, requestPath));
 }
 
 export function requireBun(): Result<string> {

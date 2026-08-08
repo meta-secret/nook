@@ -1,5 +1,6 @@
 import { ResultKind } from '../../result.ts';
-import { decodeErr, decodeOk, type DecodeResult } from '../field-error.ts';
+import { RequestKind } from '../enums.ts';
+import { decodeErr, type DecodeResult } from '../field-error.ts';
 import {
   collectDecode,
   denyUnknownKeys,
@@ -7,41 +8,51 @@ import {
   expectObject,
 } from '../object.ts';
 
-export type PrePushArgs = {
-  readonly stage: boolean;
-  readonly fetch: boolean;
+export type PrePushRequest = {
+  readonly stageHostUpdates: boolean;
+  readonly fetchOriginMain: boolean;
 };
 
-const ALLOWED = new Set(['stage', 'fetch']);
+const ROOT = RequestKind.PrePush;
+const ALLOWED = new Set(['stageHostUpdates', 'fetchOriginMain']);
 
-export function decodePrePushArgs(value: unknown): DecodeResult<PrePushArgs> {
-  const object = expectObject(value, 'arguments');
+export function decodePrePushRequest(
+  value: unknown,
+): DecodeResult<PrePushRequest> {
+  const object = expectObject(value, ROOT);
   if (object.kind === ResultKind.Err) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, ALLOWED, 'arguments');
-  const stage = expectBoolean(object.value, 'stage', 'arguments');
-  const fetch = expectBoolean(object.value, 'fetch', 'arguments');
+  const unknown = denyUnknownKeys(object.value, ALLOWED, ROOT);
+  const stageHostUpdates = expectBoolean(
+    object.value,
+    'stageHostUpdates',
+    ROOT,
+  );
+  const fetchOriginMain = expectBoolean(object.value, 'fetchOriginMain', ROOT);
   if (unknown.length > 0) {
-    const errors = [
+    return decodeErr([
       ...unknown,
-      ...(stage.kind === ResultKind.Err ? stage.errors : []),
-      ...(fetch.kind === ResultKind.Err ? fetch.errors : []),
-    ];
-    return decodeErr(errors);
+      ...(stageHostUpdates.kind === ResultKind.Err
+        ? stageHostUpdates.errors
+        : []),
+      ...(fetchOriginMain.kind === ResultKind.Err
+        ? fetchOriginMain.errors
+        : []),
+    ]);
   }
-  return collectDecode([stage, fetch], () => ({
-    stage: (stage as { value: boolean }).value,
-    fetch: (fetch as { value: boolean }).value,
+  return collectDecode([stageHostUpdates, fetchOriginMain], () => ({
+    stageHostUpdates: (stageHostUpdates as { value: boolean }).value,
+    fetchOriginMain: (fetchOriginMain as { value: boolean }).value,
   }));
 }
 
 export const PRE_PUSH_INPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['stage', 'fetch'],
+  required: ['stageHostUpdates', 'fetchOriginMain'],
   properties: {
-    stage: { type: 'boolean' },
-    fetch: { type: 'boolean' },
+    stageHostUpdates: { type: 'boolean' },
+    fetchOriginMain: { type: 'boolean' },
   },
 } as const;

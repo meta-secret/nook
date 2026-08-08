@@ -17,7 +17,7 @@ requirements are then discovered only at merge time.
 
 ## Preferred Pattern
 
-Write pr-land requests as YAML (`name: pr-land`, `arguments.action`, `arguments.pr`).
+Write prLand* domain requests as YAML (for example `prLandValidate` with `prNumber`).
 
 ```bash
 task loom:pre-push

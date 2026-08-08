@@ -1,5 +1,5 @@
 import { MaybeKind, absent, type Maybe } from '../result.ts';
-import { ResponsePhase } from './enums.ts';
+import { RequestKind, ResponsePhase } from './enums.ts';
 import type { FieldError } from './field-error.ts';
 
 export type RecoverHint = {
@@ -9,7 +9,7 @@ export type RecoverHint = {
 
 export type SuccessResponse = {
   readonly ok: true;
-  readonly name: string;
+  readonly requestKind: RequestKind;
   readonly result: unknown;
 };
 
@@ -17,7 +17,7 @@ export type ErrorResponse = {
   readonly ok: false;
   readonly isError: true;
   readonly phase: ResponsePhase;
-  readonly name: Maybe<string>;
+  readonly requestKind: Maybe<RequestKind>;
   readonly errors: readonly FieldError[];
   readonly recover: RecoverHint;
 };
@@ -26,25 +26,25 @@ export const TOOLS_LIST_REQUEST_PATH =
   'agentic-ai/loom/params/tools-list/default.yaml';
 
 export function successResponse(
-  name: string,
+  requestKind: RequestKind,
   result: unknown,
 ): SuccessResponse {
-  return { ok: true, name, result };
+  return { ok: true, requestKind, result };
 }
 
 export function errorResponse(
   phase: ResponsePhase,
   errors: readonly FieldError[],
-  name: Maybe<string>,
+  requestKind: Maybe<RequestKind> = absent(),
   hint: Maybe<string> = absent(),
 ): ErrorResponse {
   const defaultHint =
-    'run loom with a tools-list request, then retry with a valid arguments object';
+    'run loom with a toolsList request, then retry with a valid domain request object';
   return {
     ok: false,
     isError: true,
     phase,
-    name,
+    requestKind,
     errors,
     recover: {
       toolsListRequest: TOOLS_LIST_REQUEST_PATH,
@@ -59,7 +59,7 @@ export function encodeResponse(
   if (response.ok) {
     return {
       ok: true,
-      name: response.name,
+      requestKind: response.requestKind,
       result: response.result,
     };
   }
@@ -76,8 +76,8 @@ export function encodeResponse(
       hint: response.recover.hint,
     },
   };
-  if (response.name.kind === MaybeKind.Present) {
-    encoded.name = response.name.value;
+  if (response.requestKind.kind === MaybeKind.Present) {
+    encoded.requestKind = response.requestKind.value;
   }
   return encoded;
 }

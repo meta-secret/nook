@@ -6,7 +6,7 @@ import {
   symlinkSync,
 } from 'node:fs';
 import path from 'node:path';
-import type { SkillScaffoldArgs } from '../codec/args/skill-scaffold.ts';
+import type { SkillScaffoldRequest } from '../codec/args/skill-scaffold.ts';
 import { findRepoRoot } from '../lib/repo.ts';
 import { ResultKind, err, ok, type Result } from '../result.ts';
 
@@ -18,14 +18,14 @@ export type SkillScaffoldReport = {
 };
 
 export async function runSkillScaffold(
-  args: SkillScaffoldArgs,
+  request: SkillScaffoldRequest,
 ): Promise<Result<SkillScaffoldReport>> {
   const repo = findRepoRoot();
   if (repo.kind === ResultKind.Err) {
     return repo;
   }
   const repoRoot = repo.value;
-  const slug = args.slug;
+  const slug = request.skillSlug;
 
   const skillsDir = path.join(repoRoot, '.cortex', 'dynamic-skills');
   const templatePath = path.join(skillsDir, '_template.md');
@@ -68,7 +68,7 @@ export async function runSkillScaffold(
   }
 
   const wrappersCreated: string[] = [];
-  if (args.wrappers) {
+  if (request.createExecutableWrappers) {
     const agentsDir = path.join(repoRoot, '.agents', 'skills', slug);
     mkdirSync(agentsDir, { recursive: true });
     const skillMd = path.join(agentsDir, 'SKILL.md');

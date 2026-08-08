@@ -1,4 +1,3 @@
-name: pre-push
-arguments:
-  stage: true
-  fetch: true
+prePush:
+  stageHostUpdates: true
+  fetchOriginMain: true

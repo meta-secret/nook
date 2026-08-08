@@ -1,6 +1,6 @@
 # Loom
 
-Loom weaves mechanical `.cortex` agent rites into a Bun YAML tool protocol.
+Loom weaves mechanical `.cortex` agent rites into a Bun domain-YAML protocol.
 
 Policy stays in `.cortex`. Loom runs deterministic steps and returns YAML plus
 exit codes.
@@ -19,13 +19,21 @@ Single entrypoint:
 loom <request.yaml>
 ```
 
-Request envelope:
+Each request is a **domain-tagged object**. Exactly one root key selects the
+request kind. There is no generic `name` / `arguments` envelope.
 
 ```yaml
-name: pre-push
-arguments:
-  stage: true
-  fetch: true
+prePush:
+  stageHostUpdates: true
+  fetchOriginMain: true
+```
+
+```yaml
+agentStatsAssemble:
+  prNumber: 123
+  scratchPath: /tmp/pr-123-scratch.json
+  outputPath: /tmp/123.yaml
+  includeTestInventory: true
 ```
 
 Stdout is YAML only.
@@ -34,69 +42,56 @@ Success:
 
 ```yaml
 ok: true
-name: pre-push
+requestKind: prePush
 result: { ... }
 ```
 
-Decode / argument failure (exit `2`):
+Decode failure (exit `2`):
 
 ```yaml
 ok: false
 isError: true
-phase: decode # or unknown-tool | arguments
+phase: decode
 errors:
-  - path: arguments.stage
+  - path: prePush.stageHostUpdates
     message: expected boolean
 recover:
   toolsListRequest: agentic-ai/loom/params/tools-list/default.yaml
-  hint: run loom with a tools-list request, then retry with a valid arguments object
+  hint: run loom with a toolsList request, then retry with a valid domain request object
 ```
 
-Discover tools:
+Discover request kinds:
 
 ```bash
 task loom:tools-list
-# or
-bun run --cwd agentic-ai/loom loom -- agentic-ai/loom/params/tools-list/default.yaml
 ```
 
-## Agent entrypoints
+## TypeScript state rules
 
-Preferred Task surface (from the repository root):
+Loom authored TypeScript follows the same explicit-state rules as nook-web:
+
+- no authored `null` / `undefined` sentinels
+- closed vocabularies use enums (`RequestKind`, `ResponsePhase`, …)
+- absence uses `Maybe<T>`
+- request shapes are tagged unions decoded with deny-unknown-fields
+
+These are enforced by `task preflight:typescript-state` / Loom CI.
+
+## Agent entrypoints
 
 ```bash
 task loom:pre-push
 task loom:tools-list
 task loom:cortex-audit
 task loom:run CONFIG=agentic-ai/loom/params/skill-scaffold/request.example.yaml
-task loom:agent-stats CONFIG=path/to/assemble-request.yaml
-task loom:pr-land CONFIG=path/to/pr-land-request.yaml
+task loom:agent-stats CONFIG=path/to/agentStatsAssemble.yaml
+task loom:pr-land CONFIG=path/to/prLandValidate.yaml
 ```
 
-Direct Bun surface:
-
-```bash
-bun run --cwd agentic-ai/loom loom -- agentic-ai/loom/params/pre-push/default.yaml
-```
-
-Committed examples live under `params/<tool>/`.
-
-## Tools
-
-| name             | Role                                              |
-| ---------------- | ------------------------------------------------- |
-| `tools-list`     | Discovery                                         |
-| `tools-call`     | Nested call helper                                |
-| `pre-push`       | Host `task format` + UI demo contract             |
-| `cortex-audit`   | Broken `.cortex` links / skill index sync         |
-| `skill-scaffold` | Create a dynamic-skill card                       |
-| `agent-stats`    | Assemble / validate / publish AI-agent stats YAML |
-| `pr-land`        | Status / validate / ready / merge-check           |
+Committed examples live under `params/<domain>/`.
 
 ## Quality bar
 
 ```bash
 task loom:verify
 ```
-
-`task format` also runs `task loom:format` on the host after product/Hive format.

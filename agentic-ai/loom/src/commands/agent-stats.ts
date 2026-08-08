@@ -1,7 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { AgentStatsArgs } from '../codec/args/agent-stats.ts';
-import { AgentStatsAction } from '../codec/enums.ts';
+import type {
+  AgentStatsAssembleRequest,
+  AgentStatsFileRequest,
+} from '../codec/args/agent-stats.ts';
+import { RequestKind } from '../codec/enums.ts';
 import { assembleAgentStats } from '../lib/agent-stats-assemble.ts';
 import { validateAgentStatsYaml } from '../lib/agent-stats-schema.ts';
 import { findRepoRoot } from '../lib/repo.ts';
@@ -9,26 +12,16 @@ import { runCommand } from '../lib/run.ts';
 import { ResultKind, err, ok, type Result } from '../result.ts';
 
 export type AgentStatsReport = {
-  readonly action: AgentStatsAction;
+  readonly requestKind:
+    | RequestKind.AgentStatsAssemble
+    | RequestKind.AgentStatsValidate
+    | RequestKind.AgentStatsPublish;
   readonly messages: string[];
   readonly outputPath: string;
 };
 
-export async function runAgentStats(
-  args: AgentStatsArgs,
-): Promise<Result<AgentStatsReport>> {
-  switch (args.action) {
-    case AgentStatsAction.Assemble:
-      return assemble(args);
-    case AgentStatsAction.Validate:
-      return validateFile(AgentStatsAction.Validate, args.file);
-    case AgentStatsAction.Publish:
-      return publish(args.file);
-  }
-}
-
-async function assemble(
-  args: Extract<AgentStatsArgs, { action: AgentStatsAction.Assemble }>,
+export async function runAgentStatsAssemble(
+  request: AgentStatsAssembleRequest,
 ): Promise<Result<AgentStatsReport>> {
   const repo = findRepoRoot();
   if (repo.kind === ResultKind.Err) {
@@ -37,19 +30,22 @@ async function assemble(
 
   const assembled = await assembleAgentStats({
     repoRoot: repo.value,
-    prNumber: args.pr,
-    scratchPath: args.scratch,
-    includeInventory: args.inventory,
+    prNumber: request.prNumber,
+    scratchPath: request.scratchPath,
+    includeInventory: request.includeTestInventory,
   });
   if (assembled.kind === ResultKind.Err) {
     return assembled;
   }
 
-  const outPath = path.resolve(args.out);
+  const outPath = path.resolve(request.outputPath);
   mkdirSync(path.dirname(outPath), { recursive: true });
   writeFileSync(outPath, assembled.value.yaml, 'utf8');
 
-  const validation = validateAgentStatsYaml(assembled.value.yaml, args.pr);
+  const validation = validateAgentStatsYaml(
+    assembled.value.yaml,
+    request.prNumber,
+  );
   if (validation.kind === ResultKind.Err) {
     return validation;
   }
@@ -60,7 +56,7 @@ async function assemble(
   }
 
   return ok({
-    action: AgentStatsAction.Assemble,
+    requestKind: RequestKind.AgentStatsAssemble,
     outputPath: outPath,
     messages: [
       `wrote ${outPath}`,
@@ -70,36 +66,20 @@ async function assemble(
   });
 }
 
-async function validateFile(
-  action: AgentStatsAction.Validate,
-  file: string,
+export async function runAgentStatsValidate(
+  request: AgentStatsFileRequest,
 ): Promise<Result<AgentStatsReport>> {
-  const prFromName = path.basename(file).replace(/\.ya?ml$/, '');
-  const prNumber = Number.parseInt(prFromName, 10);
-  if (!Number.isInteger(prNumber) || prNumber <= 0) {
-    return err('Stats filename must be <pr-number>.yaml');
-  }
-  const content = readFileSync(file, 'utf8');
-  const validation = validateAgentStatsYaml(content, prNumber);
-  if (validation.kind === ResultKind.Err) {
-    return validation;
-  }
-  if (!validation.value.ok) {
-    return err(validation.value.errors.join('\n'));
-  }
-  return ok({
-    action,
-    outputPath: path.resolve(file),
-    messages: ['schema validation passed'],
-  });
+  return validateFile(RequestKind.AgentStatsValidate, request.statsFile);
 }
 
-async function publish(file: string): Promise<Result<AgentStatsReport>> {
+export async function runAgentStatsPublish(
+  request: AgentStatsFileRequest,
+): Promise<Result<AgentStatsReport>> {
   const repo = findRepoRoot();
   if (repo.kind === ResultKind.Err) {
     return repo;
   }
-  const absolute = path.resolve(file);
+  const absolute = path.resolve(request.statsFile);
   const prFromName = path.basename(absolute).replace(/\.ya?ml$/, '');
   const prNumber = Number.parseInt(prFromName, 10);
   if (!Number.isInteger(prNumber) || prNumber <= 0) {
@@ -136,11 +116,35 @@ async function publish(file: string): Promise<Result<AgentStatsReport>> {
   }
 
   return ok({
-    action: AgentStatsAction.Publish,
+    requestKind: RequestKind.AgentStatsPublish,
     outputPath: absolute,
     messages: [
       `published ${remotePath}`,
       (published.value.stdout || 'ok').trim(),
     ],
+  });
+}
+
+async function validateFile(
+  requestKind: RequestKind.AgentStatsValidate,
+  file: string,
+): Promise<Result<AgentStatsReport>> {
+  const prFromName = path.basename(file).replace(/\.ya?ml$/, '');
+  const prNumber = Number.parseInt(prFromName, 10);
+  if (!Number.isInteger(prNumber) || prNumber <= 0) {
+    return err('Stats filename must be <pr-number>.yaml');
+  }
+  const content = readFileSync(file, 'utf8');
+  const validation = validateAgentStatsYaml(content, prNumber);
+  if (validation.kind === ResultKind.Err) {
+    return validation;
+  }
+  if (!validation.value.ok) {
+    return err(validation.value.errors.join('\n'));
+  }
+  return ok({
+    requestKind,
+    outputPath: path.resolve(file),
+    messages: ['schema validation passed'],
   });
 }

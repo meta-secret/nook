@@ -1,29 +1,22 @@
-export enum AgentStatsAction {
-  Assemble = 'assemble',
-  Validate = 'validate',
-  Publish = 'publish',
-}
-
-export enum PrLandAction {
-  Status = 'status',
-  Validate = 'validate',
-  Ready = 'ready',
-  MergeCheck = 'merge-check',
+/** Root YAML request kind. Each value is the domain object key. */
+export enum RequestKind {
+  PrePush = 'prePush',
+  CortexAudit = 'cortexAudit',
+  SkillScaffold = 'skillScaffold',
+  AgentStatsAssemble = 'agentStatsAssemble',
+  AgentStatsValidate = 'agentStatsValidate',
+  AgentStatsPublish = 'agentStatsPublish',
+  PrLandStatus = 'prLandStatus',
+  PrLandValidate = 'prLandValidate',
+  PrLandReady = 'prLandReady',
+  PrLandMergeCheck = 'prLandMergeCheck',
+  ToolsList = 'toolsList',
+  ToolsCall = 'toolsCall',
 }
 
 export enum ResponsePhase {
   Decode = 'decode',
-  UnknownTool = 'unknown-tool',
-  Arguments = 'arguments',
+  UnknownRequest = 'unknown-request',
+  Request = 'request',
   Execute = 'execute',
-}
-
-export enum ToolName {
-  ToolsList = 'tools-list',
-  ToolsCall = 'tools-call',
-  PrePush = 'pre-push',
-  CortexAudit = 'cortex-audit',
-  SkillScaffold = 'skill-scaffold',
-  AgentStats = 'agent-stats',
-  PrLand = 'pr-land',
 }
