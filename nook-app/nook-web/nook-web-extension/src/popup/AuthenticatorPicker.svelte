@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
+  import {
+    I18N_KEYS,
+    type I18nKey,
+  } from '../../../nook-web-shared/src/generated/i18n-keys'
   import { Search } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
@@ -19,7 +22,7 @@
     requestId: string
   } = $props()
 
-  function translatePlain(key: string): string {
+  function translatePlain(key: I18nKey): string {
     return i18n.t(plainExtensionTranslation(key))
   }
 

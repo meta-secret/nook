@@ -48,7 +48,7 @@
     activeSessionDevice: ExtensionSessionDeviceState
   } = $props()
 
-  function translatePlain(key: string): string {
+  function translatePlain(key: I18nKey): string {
     return i18n.t(plainExtensionTranslation(key))
   }
 
@@ -142,7 +142,7 @@
     refreshLoginDetection()
   })
 
-  function errorMessage(caught: unknown, fallbackKey: string): string {
+  function errorMessage(caught: unknown, fallbackKey: I18nKey): string {
     if (!(caught instanceof Error)) return translatePlain(fallbackKey)
     if (caught.message.includes('PASSKEY_CEREMONY_NOT_ALLOWED')) {
       return translatePlain(fallbackKey)
