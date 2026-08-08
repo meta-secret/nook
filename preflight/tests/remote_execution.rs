@@ -512,7 +512,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() {
         "a persistent Main-fix label must keep both full e2e jobs active"
     );
     for required in [
-        "E2E_ARTIFACT_DIR=${{ runner.temp }}/nook-e2e-artifacts",
+        "E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts",
         "name: Preserve Playwright diagnostics",
         "if: always()",
         "uses: actions/upload-artifact@v7",
