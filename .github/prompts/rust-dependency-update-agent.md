@@ -36,10 +36,10 @@ Read `.cortex/AGENTS.md`, `.cortex/rules.md`, and
    task hive:verify
    ```
    This covers repository preflight, Rust coverage/unit tests, WASM checks, web
-   checks/unit tests/builds, every local-provider Playwright e2e spec, the
-   extension e2e, the separate fuzz workspace, and the Minds workspace. The
-   credentialed real-provider suite remains an explicit manual check through
-   the E2E (PR) workflow.
+   checks/unit tests/builds, every local-provider Playwright e2e spec, and the
+   extension e2e. The additional targets cover the separate fuzz and Minds
+   workspaces. The credentialed real-provider suite remains an explicit manual
+   check through the E2E (PR) workflow.
 5. If the full suite finds a regression, diagnose it (including persisted app
    logs for any e2e failure), fix it, and repeat the applicable full validation.
 
