@@ -21,7 +21,7 @@ describe('Loom ESLint contracts', () => {
     );
 
     expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
-      'no-restricted-syntax',
+      'loom/no-raw-object-arguments',
     ]);
   });
 
@@ -40,9 +40,9 @@ describe('Loom ESLint contracts', () => {
     );
 
     expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
-      'no-restricted-syntax',
-      'no-restricted-syntax',
-      'no-restricted-syntax',
+      'loom/no-raw-object-arguments',
+      'loom/no-raw-object-arguments',
+      'loom/no-raw-object-arguments',
     ]);
   });
 
@@ -63,8 +63,8 @@ describe('Loom ESLint contracts', () => {
     );
 
     expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
-      'no-restricted-syntax',
-      'no-restricted-syntax',
+      'loom/no-raw-object-arguments',
+      'loom/no-raw-object-arguments',
     ]);
   });
 
@@ -86,9 +86,9 @@ describe('Loom ESLint contracts', () => {
     );
 
     expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
-      'no-restricted-syntax',
-      'no-restricted-syntax',
-      'no-restricted-syntax',
+      'loom/no-raw-object-arguments',
+      'loom/no-raw-object-arguments',
+      'loom/no-raw-object-arguments',
     ]);
   });
 
@@ -111,10 +111,26 @@ describe('Loom ESLint contracts', () => {
     );
 
     expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
-      'no-restricted-syntax',
-      'no-restricted-syntax',
-      'no-restricted-syntax',
-      'no-restricted-syntax',
+      'loom/no-raw-object-arguments',
+      'loom/no-raw-object-arguments',
+      'loom/no-raw-object-arguments',
+      'loom/no-raw-object-arguments',
     ]);
+  });
+
+  test('allows object literals returned by function-valued arguments', async () => {
+    const eslint = new ESLint();
+    const options: LintTextOptions = { filePath: 'src/cli.ts' };
+    const results = await eslint.lintText(
+      `
+        type Widget = { name: string };
+        type Factory = () => Widget;
+        declare function consume(factory: Factory): void;
+        consume((() => ({ name: 'Nook' })) as Factory);
+      `,
+      options,
+    );
+
+    expect(results[0]?.messages).toEqual([]);
   });
 });

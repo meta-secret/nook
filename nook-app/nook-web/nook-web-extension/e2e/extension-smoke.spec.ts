@@ -28,6 +28,11 @@ import {
 } from './helpers/extension-smoke-runtime'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { ExtensionPairingVaultType } from '../../nook-web-shared/src/extension/runtime-messages'
+import {
+  ensurePinProtectedPopup,
+  installForcePinDeviceProtection,
+} from './helpers/pin-device'
+import { lockExtensionSession } from './helpers/paired-pin-extension'
 
 const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
@@ -567,6 +572,96 @@ test('shows extension unlock when a paired device identity is unavailable', asyn
 
     await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
     await expect(popupPage.getByTestId('open-simple-vault-btn')).toHaveCount(0)
+  } finally {
+    await context.close()
+  }
+})
+
+test('translates malformed device-action responses in the popup', async ({
+  browserName,
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+  const userDataDir = testInfo.outputPath('chromium-profile-translated-error')
+  const context = await launchExtensionContext(userDataDir)
+  await context.addInitScript(installForcePinDeviceProtection)
+
+  try {
+    const worker = await getServiceWorker(context)
+    const extensionId = new URL(worker.url()).host
+    const popupPage = await context.newPage()
+    await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
+    await ensurePinProtectedPopup(popupPage)
+    await lockExtensionSession(context)
+    await popupPage.evaluate(() => {
+      localStorage.setItem('nook_locale', 'ru')
+    })
+    await popupPage.reload()
+    await expect(
+      popupPage.getByTestId('device-protection-pin-unlock-btn'),
+    ).toBeVisible()
+
+    await popupPage.evaluate(() => {
+      type MalformedDeviceResponse = {
+        ok: true
+        device: {
+          deviceId: string
+          devicePublicKey: string
+          deviceSigningPublicKey: string
+        }
+      }
+      type UnlockPinRuntimeMessage = {
+        type?: 'nook:extension-session-unlock-pin'
+      }
+      type UnlockPinRuntimeCallback = (
+        response: MalformedDeviceResponse,
+      ) => void
+      type UnlockPinRuntimeArguments = [
+        UnlockPinRuntimeMessage,
+        UnlockPinRuntimeCallback?,
+      ]
+      const runtime = globalThis.chrome.runtime
+      const originalSendMessage = runtime.sendMessage.bind(runtime)
+      const descriptor: PropertyDescriptor = {
+        configurable: true,
+        value(...args: UnlockPinRuntimeArguments) {
+          const [message, callback] = args
+          if (
+            message.type === 'nook:extension-session-unlock-pin' &&
+            callback
+          ) {
+            const malformedResponse: MalformedDeviceResponse = {
+              ok: true,
+              device: {
+                deviceId: '',
+                devicePublicKey: '',
+                deviceSigningPublicKey: '',
+              },
+            }
+            callback(malformedResponse)
+            return
+          }
+          if (callback) {
+            originalSendMessage(message, callback)
+            return
+          }
+          return originalSendMessage(message)
+        },
+      }
+      Object.defineProperty(runtime, 'sendMessage', descriptor)
+    })
+
+    await popupPage
+      .getByTestId('device-protection-pin-unlock-input')
+      .fill('123456')
+    await popupPage.getByTestId('device-protection-pin-unlock-btn').click()
+    const error = popupPage.getByTestId('device-protection-error')
+    await expect(error).toHaveText(
+      'Не удалось настроить passkey до сопряжения расширения.',
+    )
+    await expect(error).not.toContainText(
+      'Extension session returned malformed device identity.',
+    )
   } finally {
     await context.close()
   }

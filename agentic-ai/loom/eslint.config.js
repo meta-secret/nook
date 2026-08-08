@@ -1,6 +1,69 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
+const transparentTypeScriptWrappers = new Set([
+  'ChainExpression',
+  'TSAsExpression',
+  'TSTypeAssertion',
+  'TSSatisfiesExpression',
+  'TSNonNullExpression',
+]);
+
+function rawObjectExpressions(expression) {
+  let current = expression;
+  while (transparentTypeScriptWrappers.has(current.type)) {
+    current = current.expression;
+  }
+  if (current.type === 'ObjectExpression') return [current];
+  if (current.type === 'AssignmentExpression') {
+    return rawObjectExpressions(current.right);
+  }
+  if (current.type === 'ConditionalExpression') {
+    return [
+      ...rawObjectExpressions(current.consequent),
+      ...rawObjectExpressions(current.alternate),
+    ];
+  }
+  if (current.type === 'LogicalExpression') {
+    return [
+      ...rawObjectExpressions(current.left),
+      ...rawObjectExpressions(current.right),
+    ];
+  }
+  if (current.type === 'SequenceExpression') {
+    return rawObjectExpressions(current.expressions.at(-1));
+  }
+  return [];
+}
+
+const noRawObjectArguments = {
+  meta: {
+    type: 'problem',
+    schema: [],
+    messages: {
+      namedArgument:
+        'Loom forbids raw object-literal call and constructor arguments. Assign a named typed value first, then pass that name.',
+    },
+  },
+  create(context) {
+    function inspectArguments(node) {
+      for (const argument of node.arguments) {
+        if (argument.type === 'SpreadElement') continue;
+        for (const objectExpression of rawObjectExpressions(argument)) {
+          context.report({
+            node: objectExpression,
+            messageId: 'namedArgument',
+          });
+        }
+      }
+    }
+    return {
+      CallExpression: inspectArguments,
+      NewExpression: inspectArguments,
+    };
+  },
+};
+
 /**
  * Loom-only static rules:
  * - max one function/method parameter
@@ -16,6 +79,11 @@ export default tseslint.config(
     files: ['src/**/*.ts', 'tests/**/*.ts'],
     plugins: {
       '@typescript-eslint': tseslint.plugin,
+      loom: {
+        rules: {
+          'no-raw-object-arguments': noRawObjectArguments,
+        },
+      },
     },
     languageOptions: {
       parser: tseslint.parser,
@@ -37,37 +105,7 @@ export default tseslint.config(
           },
         },
       ],
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: 'CallExpression > ObjectExpression',
-          message:
-            'Loom forbids raw object-literal call arguments. Assign a named typed value first, then pass that name.',
-        },
-        {
-          selector:
-            'CallExpression > :matches(TSAsExpression, TSSatisfiesExpression, TSTypeAssertion, TSNonNullExpression) ObjectExpression',
-          message:
-            'Loom forbids raw object-literal call arguments hidden by TypeScript wrappers. Assign a named typed value first, then pass that name.',
-        },
-        {
-          selector: 'NewExpression > ObjectExpression',
-          message:
-            'Loom forbids raw object-literal constructor arguments. Assign a named typed value first, then pass that name.',
-        },
-        {
-          selector:
-            'NewExpression > :matches(TSAsExpression, TSSatisfiesExpression, TSTypeAssertion, TSNonNullExpression) ObjectExpression',
-          message:
-            'Loom forbids raw object-literal constructor arguments hidden by TypeScript wrappers. Assign a named typed value first, then pass that name.',
-        },
-        {
-          selector:
-            ':matches(CallExpression, NewExpression) > :matches(ConditionalExpression, LogicalExpression, SequenceExpression) ObjectExpression',
-          message:
-            'Loom forbids raw object literals hidden in conditional, logical, or sequence arguments. Assign a named typed value first, then pass that name.',
-        },
-      ],
+      'loom/no-raw-object-arguments': 'error',
       'no-unused-vars': 'off',
       'no-undef': 'off',
     },

@@ -52,8 +52,9 @@ Rules:
 
 ## Enforcement
 
-Loom's ESLint `no-restricted-syntax` rule rejects call arguments that are
-object literals.
+Loom's ESLint `loom/no-raw-object-arguments` rule rejects call arguments that
+are object literals. Its value-flow walk stops at function boundaries, so
+object literals returned by function-valued arguments remain valid.
 
 Nook web's `nook-typed-api/no-raw-object-arguments` rule enforces the same
 contract. It also requires an explicit type on named object-literal arguments.
@@ -65,7 +66,8 @@ non-null assertions, and nested combinations of those wrappers.
 
 The rule is configured in:
 
-- `agentic-ai/loom/eslint.config.js` uses `no-restricted-syntax`;
+- `agentic-ai/loom/eslint.config.js` defines
+  `loom/no-raw-object-arguments`;
 - `nook-app/nook-web/eslint.config.js` uses
   `nook-typed-api/no-raw-object-arguments`.
 
