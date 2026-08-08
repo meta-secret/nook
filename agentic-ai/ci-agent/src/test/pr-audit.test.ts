@@ -180,7 +180,7 @@ test("buildPrAudit reports current-head and existing-feedback blockers", async (
 
 test("buildPrAudit rejects a green workflow when Native Rust failed", async () => {
   const audit = await buildPrAudit(
-    mockOctokit({ nativeConclusion: "failure" }),
+    mockOctokit({ nativeConclusion: MockJobConclusion.Failure }),
     repoRef,
     410,
   );
@@ -227,10 +227,15 @@ enum MockRunStatus {
   InProgress = "in_progress",
 }
 
+enum MockJobConclusion {
+  Failure = "failure",
+  Success = "success",
+}
+
 type MockOptions = {
   behindBy?: number;
   codexReview?: MockCodexReview;
-  nativeConclusion?: string;
+  nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
   runStatus?: MockRunStatus;
   unresolvedThreads?: number;
@@ -382,10 +387,10 @@ function mockOctokit(options: MockOptions = {}): Octokit {
             .map((name) => ({
               conclusion:
                 name === "Native Rust verification"
-                  ? (options.nativeConclusion ?? "success")
-                  : "success",
+                  ? (options.nativeConclusion ?? MockJobConclusion.Success)
+                  : MockJobConclusion.Success,
               name,
-              status: "completed",
+              status: MockRunStatus.Completed,
             })),
         }),
         listWorkflowRuns: async () => ({
@@ -394,7 +399,7 @@ function mockOctokit(options: MockOptions = {}): Octokit {
               {
                 ...(options.runStatus === MockRunStatus.InProgress
                   ? {}
-                  : { conclusion: "success" }),
+                  : { conclusion: MockJobConclusion.Success }),
                 created_at: "2026-08-08T00:00:00Z",
                 head_sha: headSha,
                 html_url: "https://github.com/meta-secret/nook/actions/runs/42",
