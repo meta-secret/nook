@@ -126,7 +126,7 @@ jobs:
       - name: Run Kani bounded proofs
         working-directory: nook-app/nook-platform
         run: |
-          test "$(kani --version | awk '{print $4}')" = "$KANI_VERSION"
+          test "$(cargo kani --version | awk '{print $4}')" = "$KANI_VERSION"
           cargo kani --package nook-replication
 
   dylint:
