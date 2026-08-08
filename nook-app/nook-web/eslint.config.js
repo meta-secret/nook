@@ -244,7 +244,7 @@ export const noRawObjectArgumentsRule = {
         )
       }
       for (const reference of variable.references) {
-        if (reference.isWrite() && reference.writeExpr) {
+        if (reference.isWrite() && !reference.init && reference.writeExpr) {
           values.push(
             ...possibleExpressionValues({
               expression: reference.writeExpr,
@@ -469,6 +469,7 @@ export const noRawObjectArgumentsRule = {
       for (const reference of variable.references) {
         if (
           reference.isWrite() &&
+          !reference.init &&
           reference.writeExpr &&
           expressionProducesObject({
             expression: reference.writeExpr,
@@ -583,7 +584,7 @@ export const noRawObjectArgumentsRule = {
         }
       }
       for (const reference of variable.references) {
-        if (reference.isWrite() && reference.writeExpr) {
+        if (reference.isWrite() && !reference.init && reference.writeExpr) {
           elements.push(
             ...spreadArrayElements({
               expression: reference.writeExpr,
