@@ -2,15 +2,22 @@
 
 ## Purpose
 
-Keep TypeScript domain models nested and enum-driven. Reject flat prefixed
-vocabularies, string field allow-lists, and hand-rolled generic `Result` /
-`Maybe` wrappers.
+Keep TypeScript domain models nested and enum-driven. Treat raw-string field
+allow-lists and hand-rolled `Result` / `Maybe` utilities as forbidden.
 
-## Problem Pattern
+## Forbidden Patterns
 
-Closed values are flattened into one enum by shared prefix:
+Do not ship any of these:
 
 ```ts
+// Forbidden: raw-string field allow-list
+const ALLOWED = new Set(['stageHostUpdates', 'fetchOriginMain']);
+
+// Forbidden: generic Optional / Result clones
+type Result<T> = Ok<T> | Err;
+type Maybe<T> = Present<T> | Absent;
+
+// Forbidden: flat same-prefix closed vocabularies
 enum RequestKind {
   AgentStatsAssemble = 'agentStatsAssemble',
   AgentStatsValidate = 'agentStatsValidate',
@@ -18,23 +25,10 @@ enum RequestKind {
 }
 ```
 
-Field allow-lists use raw strings:
-
-```ts
-const ALLOWED = new Set(['stageHostUpdates', 'fetchOriginMain']);
-```
-
-Absence and failure are modeled with generic clones of Optional/Result:
-
-```ts
-type Result<T> = Ok<T> | Err;
-type Maybe<T> = Present<T> | Absent;
-```
-
 Same-prefix names almost always mean a separate object was flattened. Generic
 `Result` / `Maybe` hide domain failure and absence behind reusable holes.
 
-## Preferred Pattern
+## Required Pattern
 
 - Same prefix → nest. Prefer `agentStats` + `AgentStatsOperation`, not flat
   `AgentStatsAssemble` / `AgentStatsValidate` / `AgentStatsPublish`.
@@ -49,19 +43,21 @@ Same-prefix names almost always mean a separate object was flattened. Generic
       includeTestInventory: true
   ```
 
-- Closed field names are enums. Pass `Object.values(PrePushField)` (or an enum
-  helper) into unknown-key checks. Do not author string sets of field names.
+- Closed field names are enums. Pass the enum object into unknown-key checks
+  (`denyUnknownKeys(record, PrePushField, path)`). Never author string sets of
+  field names.
 - Closed failure codes are enums. Freeform detail text may accompany an enum
   code at an I/O boundary; the discriminant itself is never a bare string.
 - Do not invent TypeScript `Result<T>` or `Maybe<T>` / Optional clones.
   Language-provided `Result` in Rust is fine.
-- Decode paths may use a **codec-local** outcome type named for decoding
-  (`DecodeOutcome`, `DecodeStatus`) that accumulates field issues. That is not
-  a repository-wide Result utility.
-- Command / runtime failures use domain throws (`LoomFailure` + enum code) or a
-  command-specific outcome union. Do not return `Result<string>`.
+- YAML decode may accumulate field issues in a **codec-local** type
+  (`DecodeOutcome`, `DecodeStatus`, `FieldIssue`). That type must stay in the
+  codec layer and must not become a repo-wide Result utility.
+- Command / runtime failures throw domain errors (`LoomFailure` +
+  `LoomFailureCode`) or use a command-specific outcome union. Never
+  `Result<string>`.
 - Optional request fields that mean a named state become domain unions
-  (`RemoteTask.Specified` / `RemoteTask.Omitted`), not `Maybe<string>`.
+  (`RemoteTask.Specified` / `RemoteTask.Omitted`), never `Maybe<string>`.
 
 ## Scope
 
@@ -78,23 +74,26 @@ Does not apply to:
 
 ## Examples
 
-- Before: flat `AgentStatsAssemble` request root and `Result<string>` helpers in
-  `agentic-ai/loom/src/result.ts`
-- After: nested `agentStats.assemble` YAML, `AgentStatsOperation` enum, field
-  enums, `DecodeOutcome` for codecs, `LoomFailure` for runtime failures
+- Forbidden: `new Set(['stageHostUpdates', ...])`, `result.ts` with
+  `Result` / `Maybe`
+- Required: `enum PrePushField { ... }`, nested `agentStats.assemble`,
+  `DecodeOutcome` only inside codecs, `LoomFailure` for runtime failures
 
 ## Application Checklist
 
-- [ ] Search for same-prefix enum members and flatten them into a parent object
-      plus operation enum.
-- [ ] Replace `new Set(['fieldName', ...])` with field enums.
-- [ ] Delete or refuse generic TypeScript `Result` / `Maybe` utilities.
-- [ ] Keep decode accumulation in a decode-specific type; keep runtime failure
-      codes as enums.
+- [ ] Search for `new Set(['...'])` field allow-lists and replace with field
+      enums.
+- [ ] Search for TypeScript `Result` / `Maybe` / `Present` / `Absent` utilities
+      and delete them.
+- [ ] Nest same-prefix enum members into a parent object plus operation enum.
+- [ ] Keep decode accumulation codec-local; keep runtime failure codes as enums.
 - [ ] Update YAML examples and cortex docs to the nested domain shape.
 
 ## Validation
 
+- `rg "new Set\\(\\['" agentic-ai nook-app` should find no authored field
+  allow-lists
+- `rg "type Result<|type Maybe<" agentic-ai` should find none
 - `task preflight:typescript-state`
 - Loom: `bun run verify` in `agentic-ai/loom`
 - `task loom:pre-push` before push

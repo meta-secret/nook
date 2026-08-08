@@ -25,11 +25,7 @@ export function decodeCortexAuditRequest(
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(
-    object.value,
-    Object.values(CortexAuditField),
-    ROOT,
-  );
+  const unknown = denyUnknownKeys(object.value, CortexAuditField, ROOT);
   const includeDensityLint = expectBoolean(
     object.value,
     CortexAuditField.IncludeDensityLint,

@@ -21,10 +21,11 @@ task loom:run CONFIG=<request.yaml>
 Loom follows [typescript-domain-structure.md](../dynamic-skills/typescript-domain-structure.md):
 
 - nested same-prefix families (`agentStats`, `prLand`) plus operation enums
-- field-name enums for deny-unknown-key checks
-- codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation
+- field-name enums passed into deny-unknown checks (never string sets)
+- codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation only
 - runtime failures throw `LoomFailure` with `LoomFailureCode`
-- no generic TypeScript `Result<T>` or `Maybe<T>` utilities
+- forbidden: generic TypeScript `Result<T>` / `Maybe<T>`, and
+  `new Set(['field', ...])` allow-lists
 
 Enforced by `task preflight:typescript-state` across the repository, including
 `agentic-ai/loom`.

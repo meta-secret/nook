@@ -27,11 +27,7 @@ export function decodePrePushRequest(
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(
-    object.value,
-    Object.values(PrePushField),
-    ROOT,
-  );
+  const unknown = denyUnknownKeys(object.value, PrePushField, ROOT);
   const stageHostUpdates = expectBoolean(
     object.value,
     PrePushField.StageHostUpdates,

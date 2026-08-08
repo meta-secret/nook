@@ -1,4 +1,9 @@
-import { DecodeStatus } from '../field-error.ts';
+import {
+  DecodeStatus,
+  decodeErr,
+  decodeOk,
+  type DecodeOutcome,
+} from '../field-error.ts';
 import {
   denyUnknownKeys,
   expectBoolean,
@@ -6,13 +11,15 @@ import {
   expectPositiveInt,
   expectString,
 } from '../object.ts';
-import { decodeErr, decodeOk, type DecodeOutcome } from '../field-error.ts';
 
-export enum AgentStatsField {
+export enum AgentStatsAssembleField {
   PrNumber = 'prNumber',
   ScratchPath = 'scratchPath',
   OutputPath = 'outputPath',
   IncludeTestInventory = 'includeTestInventory',
+}
+
+export enum AgentStatsFileField {
   StatsFile = 'statsFile',
 }
 
@@ -35,34 +42,25 @@ export function decodeAgentStatsAssemblePayload(
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(
-    object.value,
-    [
-      AgentStatsField.PrNumber,
-      AgentStatsField.ScratchPath,
-      AgentStatsField.OutputPath,
-      AgentStatsField.IncludeTestInventory,
-    ],
-    path,
-  );
+  const unknown = denyUnknownKeys(object.value, AgentStatsAssembleField, path);
   const prNumber = expectPositiveInt(
     object.value,
-    AgentStatsField.PrNumber,
+    AgentStatsAssembleField.PrNumber,
     path,
   );
   const scratchPath = expectString(
     object.value,
-    AgentStatsField.ScratchPath,
+    AgentStatsAssembleField.ScratchPath,
     path,
   );
   const outputPath = expectString(
     object.value,
-    AgentStatsField.OutputPath,
+    AgentStatsAssembleField.OutputPath,
     path,
   );
   const includeTestInventory = expectBoolean(
     object.value,
-    AgentStatsField.IncludeTestInventory,
+    AgentStatsAssembleField.IncludeTestInventory,
     path,
   );
   const errors = [
@@ -93,12 +91,12 @@ export function decodeAgentStatsFilePayload(
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(
+  const unknown = denyUnknownKeys(object.value, AgentStatsFileField, path);
+  const statsFile = expectString(
     object.value,
-    [AgentStatsField.StatsFile],
+    AgentStatsFileField.StatsFile,
     path,
   );
-  const statsFile = expectString(object.value, AgentStatsField.StatsFile, path);
   const errors = [
     ...unknown,
     ...(statsFile.status === DecodeStatus.Failed ? statsFile.errors : []),

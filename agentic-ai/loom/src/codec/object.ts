@@ -24,15 +24,16 @@ export function expectObject(
   return decodeOk(value);
 }
 
+/** Accept a field-name enum object; never a raw string allow-list. */
 export function denyUnknownKeys(
   record: UnknownRecord,
-  allowed: readonly string[],
+  fieldEnum: Record<string, string>,
   path: string,
 ): readonly FieldError[] {
-  const allowedSet = new Set(allowed);
+  const allowed = new Set(Object.values(fieldEnum));
   const errors: FieldError[] = [];
   for (const key of Object.keys(record)) {
-    if (!allowedSet.has(key)) {
+    if (!allowed.has(key)) {
       errors.push(fieldError(joinPath(path, key), FieldIssue.UnknownField));
     }
   }

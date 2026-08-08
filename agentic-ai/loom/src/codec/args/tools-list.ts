@@ -1,7 +1,14 @@
-import { DecodeStatus } from '../field-error.ts';
-import { denyUnknownKeys, expectObject } from '../object.ts';
+import {
+  DecodeStatus,
+  decodeErr,
+  decodeOk,
+  type DecodeOutcome,
+} from '../field-error.ts';
 import { RequestFamily } from '../enums.ts';
-import { decodeErr, decodeOk, type DecodeOutcome } from '../field-error.ts';
+import { denyUnknownKeys, expectObject } from '../object.ts';
+
+/** toolsList accepts no fields; empty enum object for deny-unknown checks. */
+export const ToolsListField = {} as const satisfies Record<string, string>;
 
 export type ToolsListRequest = Record<string, never>;
 
@@ -14,7 +21,7 @@ export function decodeToolsListRequest(
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, [], ROOT);
+  const unknown = denyUnknownKeys(object.value, ToolsListField, ROOT);
   if (unknown.length > 0) {
     return decodeErr(unknown);
   }

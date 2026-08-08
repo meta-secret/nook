@@ -34,11 +34,7 @@ export function decodeSkillScaffoldRequest(
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(
-    object.value,
-    Object.values(SkillScaffoldField),
-    ROOT,
-  );
+  const unknown = denyUnknownKeys(object.value, SkillScaffoldField, ROOT);
   const skillSlug = expectString(
     object.value,
     SkillScaffoldField.SkillSlug,
