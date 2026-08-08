@@ -54,7 +54,7 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         "inspectSpreadArgument(argument)",
         "function spreadArrayElements(args)",
         "unwrapped.type === 'ArrayExpression'",
-        "reference.isWrite() && reference.writeExpr",
+        "reference.isWrite() && !reference.init && reference.writeExpr",
         "nook-web-extension/src/lib/**/*.ts",
         "'@typescript-eslint/await-thenable': 'error'",
         "'@typescript-eslint/no-floating-promises': 'error'",
