@@ -30,6 +30,16 @@ const typedApiRules = {
         'Nook web forbids raw object-literal call arguments, including casts. Assign a named typed value first, then pass that name.',
     },
     {
+      selector: 'CallExpression > TSTypeAssertion > ObjectExpression',
+      message:
+        'Nook web forbids raw object-literal call arguments, including type assertions. Assign a named typed value first, then pass that name.',
+    },
+    {
+      selector: 'CallExpression > TSSatisfiesExpression > ObjectExpression',
+      message:
+        'Nook web forbids raw object-literal call arguments, including satisfies wrappers. Assign a named typed value first, then pass that name.',
+    },
+    {
       selector: 'NewExpression > ObjectExpression',
       message:
         'Nook web forbids raw object-literal constructor arguments. Assign a named typed value first, then pass that name.',
@@ -38,6 +48,16 @@ const typedApiRules = {
       selector: 'NewExpression > TSAsExpression > ObjectExpression',
       message:
         'Nook web forbids raw object-literal constructor arguments, including casts. Assign a named typed value first, then pass that name.',
+    },
+    {
+      selector: 'NewExpression > TSTypeAssertion > ObjectExpression',
+      message:
+        'Nook web forbids raw object-literal constructor arguments, including type assertions. Assign a named typed value first, then pass that name.',
+    },
+    {
+      selector: 'NewExpression > TSSatisfiesExpression > ObjectExpression',
+      message:
+        'Nook web forbids raw object-literal constructor arguments, including satisfies wrappers. Assign a named typed value first, then pass that name.',
     },
   ],
 }

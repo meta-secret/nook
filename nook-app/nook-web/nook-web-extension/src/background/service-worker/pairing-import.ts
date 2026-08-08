@@ -69,6 +69,7 @@ export async function importApprovedPairing(
       message.payload,
       imported,
     )
+    message.payload.providers = []
     const previousPairingState = await getPairingStorage()
     await setPairingStorage(pairingItems)
     try {

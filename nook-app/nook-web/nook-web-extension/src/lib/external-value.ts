@@ -11,7 +11,7 @@ export type ExternalValueCandidate = object | string | number | boolean
 
 /** Object-shaped external payload after the boundary verifies its shape. */
 export interface ExternalObject {
-  [key: string]: ExternalValue
+  readonly [key: string]: ExternalValue
 }
 
 export function isExternalValue(

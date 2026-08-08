@@ -1,6 +1,5 @@
 import {
   isExternalValue,
-  type ExternalObject,
   type ExternalValue,
   type ExternalValueCandidate,
 } from './external-value'
@@ -12,33 +11,47 @@ export enum ProviderCredentialStagingKind {
 
 export type ProviderCredentialStaging =
   | { kind: ProviderCredentialStagingKind.InvalidInput }
-  | { kind: ProviderCredentialStagingKind.Staged; providers: ExternalValue[] }
+  | {
+      kind: ProviderCredentialStagingKind.Staged
+      providers: MutableExternalValue[]
+    }
 
-function isRecord(value: ExternalValue): value is ExternalObject {
+export type MutableExternalValue =
+  | string
+  | number
+  | boolean
+  | MutableExternalValue[]
+  | MutableExternalObject
+
+export interface MutableExternalObject {
+  [key: string]: MutableExternalValue
+}
+
+function isRecord(
+  value: MutableExternalValue,
+): value is MutableExternalObject {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
-function cloneProvider(provider: ExternalValue): ExternalValue {
-  if (!isRecord(provider)) return provider
-  const clone = { ...provider }
-  if (isRecord(provider.oauthFile)) {
-    clone.oauthFile = {
-      ...provider.oauthFile,
-      ...(isRecord(provider.oauthFile.config)
-        ? { config: { ...provider.oauthFile.config } }
-        : {}),
-    }
+function cloneExternalValue(value: ExternalValue): MutableExternalValue {
+  if (Array.isArray(value)) {
+    return value.map(cloneExternalValue)
+  }
+  if (!value || typeof value !== 'object') return value
+  const clone: MutableExternalObject = {}
+  for (const [key, child] of Object.entries(value)) {
+    clone[key] = cloneExternalValue(child)
   }
   return clone
 }
 
 function isExternalValueArray(
   value: ExternalValueCandidate,
-): value is ExternalValue[] {
+): value is readonly ExternalValue[] {
   return Array.isArray(value) && value.every(isExternalValue)
 }
 
-export function scrubProviderCredentials(providers: ExternalValue): void {
+export function scrubProviderCredentials(providers: MutableExternalValue): void {
   if (!Array.isArray(providers)) return
   for (const provider of providers) {
     if (!isRecord(provider)) continue
@@ -68,7 +81,6 @@ export function stageProviderCredentials(
   if (!isExternalValueArray(providers)) {
     return { kind: ProviderCredentialStagingKind.InvalidInput }
   }
-  const staged = providers.map(cloneProvider)
-  scrubProviderCredentials(providers)
+  const staged = providers.map(cloneExternalValue)
   return { kind: ProviderCredentialStagingKind.Staged, providers: staged }
 }

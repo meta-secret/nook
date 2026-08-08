@@ -6,7 +6,7 @@ import {
 } from '../src/lib/provider-credential-staging'
 
 describe('provider credential staging', () => {
-  test('copies provider credentials and scrubs the source immediately', () => {
+  test('copies provider credentials into an owned mutable buffer', () => {
     const source = [
       {
         id: 'github',
@@ -40,11 +40,9 @@ describe('provider credential staging', () => {
         },
       },
     ])
-    expect(Object.hasOwn(source[0] ?? {}, 'githubPat')).toBe(false)
-    expect(source[1]?.oauthFile?.accessToken).toBe('')
-    expect(Object.hasOwn(source[1]?.oauthFile ?? {}, 'refreshToken')).toBe(
-      false,
-    )
+    expect(source[0]?.githubPat).toBe('github_pat_secret')
+    expect(source[1]?.oauthFile?.accessToken).toBe('access-secret')
+    expect(source[1]?.oauthFile?.refreshToken).toBe('refresh-secret')
   })
 
   test('scrubs a staged copy when queued import work expires', () => {

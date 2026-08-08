@@ -275,6 +275,7 @@ export class ExtensionSessionMessageDispatcher {
         ? providerCandidate
         : {},
     )
+    payload.providers = []
     // Pairing imports are one-shot and may run against a cold offscreen WASM
     // runtime. Never expire them with the short interactive probe budget.
     if (
@@ -301,7 +302,6 @@ export class ExtensionSessionMessageDispatcher {
       })
     }
     const stagedProviders = staging.providers
-    payload.providers = []
     let payloadResidency: SensitivePayloadResidency = {
       kind: SensitivePayloadResidencyKind.Resident,
       payload: { ...payload, providers: stagedProviders },

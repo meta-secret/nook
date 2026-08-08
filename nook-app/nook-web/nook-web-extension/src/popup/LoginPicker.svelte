@@ -4,7 +4,12 @@
   import { onMount } from 'svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
-  import type { ExtensionI18n, ExtensionTranslationRequest } from '../lib/i18n'
+  import {
+    ExtensionTranslationRequestKind,
+    plainExtensionTranslation,
+    type ExtensionI18n,
+    type ExtensionTranslationRequest,
+  } from '../lib/i18n'
 
   let {
     i18n,
@@ -13,6 +18,10 @@
     i18n: ExtensionI18n
     requestId: string
   } = $props()
+
+  function translatePlain(key: string): string {
+    return i18n.t(plainExtensionTranslation(key))
+  }
 
   let query = $state('')
   let accounts = $state<WebsiteLoginAccountOption[]>([])
@@ -58,11 +67,12 @@
     if (username.length > 0) return username
     const host = account.websiteHost.trim()
     if (host.length > 0) return host
-    return i18n.t(I18N_KEYS.ExtensionLoginPickerUnnamed)
+    return translatePlain(I18N_KEYS.ExtensionLoginPickerUnnamed)
   }
 
   function destinationLabel(origin: string): string {
     const request: ExtensionTranslationRequest = {
+      kind: ExtensionTranslationRequestKind.WithReplacements,
       key: I18N_KEYS.ExtensionLoginPickerDestination,
       replacements: { origin },
     }
@@ -82,7 +92,7 @@
     if (!isAccountQueryResponse(response)) {
       accounts = []
       destinationOrigin = ''
-      error = i18n.t(I18N_KEYS.ExtensionLoginPickerFailed)
+      error = translatePlain(I18N_KEYS.ExtensionLoginPickerFailed)
       return
     }
     destinationOrigin = response.origin
@@ -107,7 +117,7 @@
       return
     }
     busy = false
-    error = i18n.t(I18N_KEYS.ExtensionLoginPickerFailed)
+    error = translatePlain(I18N_KEYS.ExtensionLoginPickerFailed)
   }
 
   $effect(() => {
@@ -131,12 +141,12 @@
 
 <main class="authenticator-picker" data-testid="login-picker">
   <p class="step-label">
-    {i18n.t(I18N_KEYS.ExtensionLoginPickerStepLabel)}
+    {translatePlain(I18N_KEYS.ExtensionLoginPickerStepLabel)}
   </p>
   <NookIcon src="../icons/nook.png" alt="" class="popup-logo companion-logo" />
-  <h1>{i18n.t(I18N_KEYS.ExtensionLoginPickerTitle)}</h1>
+  <h1>{translatePlain(I18N_KEYS.ExtensionLoginPickerTitle)}</h1>
   <p class="description">
-    {i18n.t(I18N_KEYS.ExtensionLoginPickerDescription)}
+    {translatePlain(I18N_KEYS.ExtensionLoginPickerDescription)}
   </p>
   {#if destinationOrigin}
     <p class="destination-origin" data-testid="login-destination">
@@ -147,7 +157,7 @@
   <div class="picker-filter">
     <Search aria-hidden="true" size={18} />
     <label for="login-search">
-      {i18n.t(I18N_KEYS.ExtensionLoginPickerSearchLabel)}
+      {translatePlain(I18N_KEYS.ExtensionLoginPickerSearchLabel)}
     </label>
     <input
       id="login-search"
@@ -157,22 +167,22 @@
       bind:value={query}
       maxlength="200"
       autocomplete="off"
-      placeholder={i18n.t(I18N_KEYS.ExtensionLoginPickerSearchPlaceholder)}
+      placeholder={translatePlain(I18N_KEYS.ExtensionLoginPickerSearchPlaceholder)}
     />
   </div>
   <p class="filter-chip">
-    {i18n.t(I18N_KEYS.ExtensionLoginPickerFilterLabel)}
+    {translatePlain(I18N_KEYS.ExtensionLoginPickerFilterLabel)}
   </p>
 
   {#if error}
     <p class="error-message" role="alert">{error}</p>
   {:else if loading}
     <p class="picker-status">
-      {i18n.t(I18N_KEYS.ExtensionLoginPickerLoading)}
+      {translatePlain(I18N_KEYS.ExtensionLoginPickerLoading)}
     </p>
   {:else if accounts.length === 0}
     <p class="picker-status">
-      {i18n.t(I18N_KEYS.ExtensionLoginPickerNoResults)}
+      {translatePlain(I18N_KEYS.ExtensionLoginPickerNoResults)}
     </p>
   {:else}
     <div class="authenticator-results" data-testid="login-results">
