@@ -23,3 +23,9 @@ COPY inputs/leaf.txt /tmp/leaf.txt
 RUN cat /tmp/leaf.txt >/opt/leaf-stamp \
   && sleep 1 \
   && echo bake-sim-leaf-expensive
+
+FROM leaf AS consumer
+COPY inputs/consumer.txt /tmp/consumer.txt
+RUN cat /tmp/consumer.txt >/opt/consumer-stamp \
+  && sleep 1 \
+  && echo bake-sim-consumer-expensive

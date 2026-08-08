@@ -97,6 +97,13 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
     )?;
     assert_scope_arms(
         &rust_bake,
+        "rust_wasm_node_cache_from",
+        &["nook-rust-wasm-node-v1"],
+        &[],
+        &["nook-rust-wasm-source-v2", "nook-rust-wasm-deps-v5"],
+    )?;
+    assert_scope_arms(
+        &rust_bake,
         "rust_ecosystem_policy_tools_cache_from",
         &["nook-rust-ecosystem-policy-tools-v4"],
         &[],
@@ -208,6 +215,13 @@ fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Res
             "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE",
             "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
             "nook/buildcache/nook-rust-wasm-source-v2",
+        ),
+        (
+            rust_bake.as_str(),
+            "rust_wasm_node_cache_from",
+            "GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE",
+            "nook-rust-wasm-node-v1${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-wasm-node-v1",
         ),
         (
             preflight_bake.as_str(),
@@ -376,6 +390,7 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
         (rust_bake.as_str(), "rust_wasm_deps_cache_to"),
         (rust_bake.as_str(), "rust_native_source_cache_to"),
         (rust_bake.as_str(), "rust_wasm_source_cache_to"),
+        (rust_bake.as_str(), "rust_wasm_node_cache_to"),
     ] {
         let body = assignment_body(bake, name)?;
         assert!(
@@ -442,6 +457,7 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE",
         "GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE",
         "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE",
+        "GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE",
         "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE",
     ] {
         assert!(
@@ -472,6 +488,7 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "rust_wasm_deps_cache_from",
         "rust_native_source_cache_from",
         "rust_wasm_source_cache_from",
+        "rust_wasm_node_cache_from",
     ] {
         let body = assignment_body(&rust_bake, name)?;
         assert!(
@@ -484,6 +501,7 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "rust_wasm_deps_cache_to",
         "rust_native_source_cache_to",
         "rust_wasm_source_cache_to",
+        "rust_wasm_node_cache_to",
         "rust_base_cache_to",
     ] {
         let body = assignment_body(&rust_bake, name)?;

@@ -30,6 +30,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         format!("{sim}/inputs/parent.txt"),
         format!("{sim}/inputs/platform.txt"),
         format!("{sim}/inputs/leaf.txt"),
+        format!("{sim}/inputs/consumer.txt"),
     ] {
         assert!(
             repository_root().join(&path).is_file(),
@@ -60,6 +61,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("target \"platform-nested-broken\"")
             && bake.contains("target \"leaf-via-platform-broken\"")
             && bake.contains("target \"combined-leaf\"")
+            && bake.contains("target \"combined-consumer\"")
             && bake.contains("target \"leaf\"")
             && bake.contains("target \"leaf-short-chain\"")
             && bake.contains("target \"parent-pr-cold\""),
@@ -141,6 +143,8 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks
                 .contains("Scenario T: unverified local candidate cannot poison stable PR input")
             && tasks.contains("Scenario U: promoter setup failure leaves stable input intact")
+            && tasks
+                .contains("Scenario W: independent Node consumer owns and replays its exact leaf",)
             && tasks.contains("promote_registry_tag")
             && tasks.contains("bake-sim-base-layer")
             && tasks.contains("leaf-via-platform-broken")
@@ -152,7 +156,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("PARENT_OWN_CACHE_ENABLED")
             && bake.contains("BASE_OWN_CACHE_ENABLED")
             && bake.contains("write_cache_repository"),
-        "infra proof must cover FALLBACK, base orphan, PR isolation, local-to-PR reuse, Kani, and the broken/fixed nightly leaf graph"
+        "infra proof must cover FALLBACK, base orphan, PR isolation, local-to-PR reuse, Kani, Node consumer ownership, and the broken/fixed nightly leaf graph"
     );
     let parent_from = assignment_body(&bake, "parent_cache_from");
     assert!(

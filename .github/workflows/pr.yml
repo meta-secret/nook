@@ -378,6 +378,8 @@ jobs:
         run: task ci:wasm:node-test
         env:
           CI: true
+          # Docker setup restricts this writer to the exact PR-head Node scope.
+          GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
 
       - name: Trusted handoff already covered Node tests

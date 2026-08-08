@@ -286,6 +286,9 @@ Use this workflow for quality, CI, and deployment changes.
     Scenario T proves an unverified local candidate is invisible to PR restore.
     Scenario V proves a changed PR source restores a cfg-specific dependency
     stage from Main and then replays its exact source leaf on a fresh builder.
+    Scenario W proves the separate WASM Node consumer owns a non-overlapping
+    full-graph scope. Main seeds it, a changed PR publishes only its exact-head
+    scope after tests pass, and a fresh retry restores every stage as CACHED.
 
     #### SeaweedFS sccache
 

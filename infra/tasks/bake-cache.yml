@@ -119,6 +119,7 @@ tasks:
             INPUT_CACHE_CANDIDATE="${BAKE_SIM_INPUT_CACHE_CANDIDATE:-}" \
             LEAF_EXACT_AVAILABLE="${BAKE_SIM_LEAF_EXACT_AVAILABLE:-}" \
             NESTED_LEAF_EXACT_AVAILABLE="${BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE:-}" \
+            CONSUMER_EXACT_AVAILABLE="${BAKE_SIM_CONSUMER_EXACT_AVAILABLE:-}" \
             NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
             "$docker_bin" buildx bake \
             --progress=plain \
@@ -629,5 +630,50 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-loom-deps-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario V ok"
+
+        echo "== Scenario W: independent Node consumer owns and replays its exact leaf =="
+        # Main owns the stable consumer scope. A changed PR source publishes a
+        # separate exact consumer graph; it must not overwrite the parallel
+        # source-leaf scope, and a fresh retry must execute no expensive stage.
+        printf '%s\n' "$parent_input_orig" >"$parent_input"
+        printf '%s\n' "$loom_input_orig" >"$loom_input"
+        printf '%s\n' "$leaf_input_orig" >"$leaf_input"
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=
+        BAKE_SIM_CONSUMER_EXACT_AVAILABLE=
+        create_builder "nook-bake-sim-w-main-${suffix}"
+        bake_plain "$proof_log" combined-consumer
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-loom-deps-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_uncached_step "$proof_log" "bake-sim-consumer-expensive"
+        require_registry_ref "nook/buildcache/nook-bake-sim-consumer-v1"
+
+        printf 'node-pr-source-edit\n' >"$leaf_input"
+        node_pr_suffix="-git-8888888888888888888888888888888888888888"
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$node_pr_suffix"
+        create_builder "nook-bake-sim-w-producer-${suffix}"
+        bake_plain "$proof_log" combined-consumer
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-loom-deps-expensive"
+        require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_uncached_step "$proof_log" "bake-sim-consumer-expensive"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-consumer-v1${node_pr_suffix}"
+        require_no_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${node_pr_suffix}"
+
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CONSUMER_EXACT_AVAILABLE=1
+        create_builder "nook-bake-sim-w-retry-${suffix}"
+        bake_plain "$proof_log" combined-consumer
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-loom-deps-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_cached_step "$proof_log" "bake-sim-consumer-expensive"
+        echo "scenario W ok"
 
         echo "bake-cache runtime proof passed"

@@ -228,6 +228,7 @@ runs:
         publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE "$wasm_deps_exact_scope"
         publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v3$scope_suffix"
         publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v2$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE "nook-rust-wasm-node-v1$scope_suffix"
         publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
 
         if [ -n "$hive_remote_ref" ]; then

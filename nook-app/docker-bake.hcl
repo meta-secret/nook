@@ -92,6 +92,10 @@ variable "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE" {
   default = ""
 }
 
+variable "GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE" {
+  default = ""
+}
+
 variable "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE" {
   default = ""
 }
