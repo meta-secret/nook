@@ -208,8 +208,33 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
     let web_toolchain = read(&root, "nook-app/nook-web/docker/toolchain.docker-bake.hcl");
     let app_bake = read(&root, "nook-app/docker-bake.hcl");
 
+    // Nested ecosystem leaves context rust-base. Importing the short rust-base
+    // index there orphans nightly/policy RUNs after Main FALLBACK restored them.
+    let rust_base_body = bake_target_body(rust_bake.as_str(), "rust-base");
+    assert!(
+        !rust_base_body.trim().is_empty(),
+        "context parent target rust-base must exist"
+    );
+    assert!(
+        !rust_base_body
+            .lines()
+            .any(|line| line.trim_start().starts_with("cache-from")),
+        "context rust-base must omit cache-from so nested nightly/policy leaves are not orphaned"
+    );
+    assert!(
+        !bake_target_assigns_cache_to(rust_bake.as_str(), "rust-base"),
+        "context parent rust-base must never declare cache-to"
+    );
+    let rust_base_restore = bake_target_body(rust_bake.as_str(), "rust-base-restore");
+    assert!(
+        rust_base_restore
+            .lines()
+            .any(|line| line.trim_start().starts_with("cache-from"))
+            && !bake_target_assigns_cache_to(rust_bake.as_str(), "rust-base-restore"),
+        "rust-base-restore must declare cache-from without cache-to"
+    );
+
     for (bake, target) in [
-        (rust_bake.as_str(), "rust-base"),
         (core_bake.as_str(), "builder-core-deps"),
         (core_bake.as_str(), "builder-wasm-deps"),
         (web_toolchain.as_str(), "web-deps"),

@@ -154,7 +154,7 @@ tasks:
         out_dir="{{.CI_ARTIFACT_DIR}}";
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
-        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" --set "builder-core-deps.output=type=cacheonly" --set "rust-base.output=type=cacheonly" ci-rust builder-core-deps rust-base'
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" --set "builder-core-deps.output=type=cacheonly" --set "rust-base-restore.output=type=cacheonly" ci-rust builder-core-deps rust-base-restore'
       - task: registry-cache:publish:native
 
   docker:ci:wasm:export:
@@ -252,11 +252,13 @@ tasks:
     desc: Bake only rust-base (apt/mold/sccache). Read-only for Zot; never publishes.
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
+      # Restore via rust-base-restore (has cache-from). Context target rust-base
+      # omits cache-from so nested nightly/policy leaves are not orphaned.
       - >-
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
-        --set "rust-base.output=type=cacheonly"
-        rust-base
+        --set "rust-base-restore.output=type=cacheonly"
+        rust-base-restore
 
   docker:ecosystem:policy-tools:
     desc: Bake and load rust-ecosystem-policy-tools (pinned deny/audit CLIs).

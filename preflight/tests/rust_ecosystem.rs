@@ -101,6 +101,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let root_tasks = read("Taskfile.yml")?;
     for marker in [
         "docker:rust-base:",
+        "rust-base-restore",
         "docker:ecosystem:policy-tools:",
         "docker:ecosystem:nightly:",
         "docker:ecosystem:nightly:verify:",

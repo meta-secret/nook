@@ -7,7 +7,9 @@
 // Nightly: rust-ecosystem-nightly-publish is the sole writer for the shared nightly
 // ref. Dylint/fuzz write leaf scopes only (no nightly/rust-base in cache-from).
 // Parents restore via Bake contexts (same pattern as preflight).
-// Context parents keep cache-from and never declare cache-to.
+// Context rust-base omits cache-from and cache-to; rust-base-restore/publish
+// own the rust-base Zot scope. Other context parents keep cache-from and never
+// declare cache-to.
 // Dedicated *-publish targets write mode=max refs under write_cache_repository
 // plus GHA_CACHE_SCOPE_SUFFIX (Main: nook/buildcache; isolated: …-git-<sha>).
 // Empty cache-from= and cache-to= overrides are prohibited.
@@ -190,6 +192,9 @@ rust_wasm_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 ] : []
 
 
+// Context parent for ecosystem/product leaves. No cache-from and no cache-to:
+// importing the short rust-base index while nesting nightly/policy orphans their
+// expensive RUNs even after Main nightly FALLBACK restored them.
 target "rust-base" {
   context    = "."
   dockerfile = "nook-app/nook-platform/docker/rust/lineage.Dockerfile"
@@ -200,13 +205,18 @@ target "rust-base" {
     SCCACHE_BUCKET   = SCCACHE_BUCKET
     SCCACHE_S3_MODE  = SCCACHE_S3_MODE
   }
+}
+
+// Read-only warmer for the rust-base Zot scope (docker:rust-base).
+target "rust-base-restore" {
+  inherits   = ["rust-base"]
   cache-from = rust_base_cache_from
 }
 
 // Explicit writer for the rust-base Zot scope. Context consumers use rust-base
-// (no cache-to) so linked leaf bakes cannot thin-export this parent.
+// (no cache-from/cache-to) so linked leaf bakes cannot thin-export or orphan.
 target "rust-base-publish" {
-  inherits = ["rust-base"]
+  inherits = ["rust-base-restore"]
   cache-to   = rust_base_cache_to
 }
 

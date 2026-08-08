@@ -19,8 +19,10 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
     for path in [
         format!("{sim}/zot-config.json"),
         format!("{sim}/docker-bake.hcl"),
+        format!("{sim}/base.Dockerfile"),
         format!("{sim}/parent.Dockerfile"),
         format!("{sim}/leaf.Dockerfile"),
+        format!("{sim}/inputs/base.txt"),
         format!("{sim}/inputs/parent.txt"),
         format!("{sim}/inputs/leaf.txt"),
     ] {
@@ -40,18 +42,22 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         "sim Zot must allow anonymous docker2s2 push/pull"
     );
     assert!(
-        bake.contains("target \"parent\"")
+        bake.contains("target \"base\"")
+            && bake.contains("target \"base-publish\"")
+            && bake.contains("target \"parent\"")
             && bake.contains("target \"parent-publish\"")
             && bake.contains("target \"leaf\"")
             && bake.contains("target \"leaf-short-chain\"")
             && bake.contains("target \"parent-pr-cold\""),
-        "sim Bake must expose parent/leaf/publish/short-chain/pr-cold targets"
+        "sim Bake must expose base/parent/leaf/publish/short-chain/pr-cold targets"
     );
     assert!(
-        bake.contains("parent-publish")
+        bake.contains("BASE_OWN_CACHE_ENABLED")
+            && bake.contains("parent-publish")
             && bake.contains("cache-to = parent_cache_to")
-            && !assignment_mentions_cache_to(&bake, "parent"),
-        "parent-publish must own cache-to; context parent must not"
+            && !assignment_mentions_cache_to(&bake, "parent")
+            && !assignment_mentions_cache_to(&bake, "base"),
+        "publishers own cache-to; context base/parent must not"
     );
     let leaf_from = assignment_body(&bake, "leaf_cache_from");
     let short_from = assignment_body(&bake, "leaf_short_chain_cache_from");
@@ -85,13 +91,16 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("Scenario I:")
             && tasks.contains("Scenario J:")
             && tasks.contains("Scenario K:")
+            && tasks.contains("Scenario L:")
+            && tasks.contains("bake-sim-base-layer")
             && tasks.contains("parent-pr-cold")
             && tasks.contains("require_registry_ref")
             && tasks.contains("require_no_registry_ref")
             && tasks.contains("nook/remote-buildcache/")
             && bake.contains("PARENT_OWN_CACHE_ENABLED")
+            && bake.contains("BASE_OWN_CACHE_ENABLED")
             && bake.contains("write_cache_repository"),
-        "infra bake-cache prove must cover FALLBACK plus Main/PR isolation"
+        "infra bake-cache prove must cover FALLBACK, base orphan, and Main/PR isolation"
     );
     let parent_from = assignment_body(&bake, "parent_cache_from");
     let main_idx = parent_from

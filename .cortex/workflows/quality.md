@@ -15,10 +15,12 @@ Use this workflow for quality, CI, and deployment changes.
    - That shorter parent importer orphans chef cook layers.
    - Never clear `cache-from` or `cache-to` with an empty Bake override.
    - Empty cache overrides are an architectural failure, not cache hygiene.
-   - Context parents keep `cache-from` and declare no `cache-to`.
+   - Most context parents keep `cache-from` and declare no `cache-to`.
+   - Context `rust-base` omits both `cache-from` and `cache-to`.
+   - `rust-base-restore` / `rust-base-publish` own the rust-base Zot scope.
+   - Importing short rust-base during a nested leaf bake orphans nightly RUNs.
    - Dedicated `*-publish` targets write scoped Main/PR Zot refs.
    - Redesign scopes or Dockerfile lineage instead of wiping cache.
-   - Context `rust-base` declares no `cache-to`, so preflight cannot rewrite it.
    - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
    - Reusable GitHub workflow shell lives in `.task/ci-workflows.yml` and `.github/scripts/`; workflows stay thin `task` wrappers around Actions-only glue.
    - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as sibling Dockerfiles under `nook-app/nook-platform/docker/rust/` (Bake images off `rust-base`, not inside product `lineage.Dockerfile`).

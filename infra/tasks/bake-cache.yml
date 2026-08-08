@@ -107,6 +107,7 @@ tasks:
             GHA_CACHE_FALLBACK_ENABLED="${BAKE_SIM_CACHE_FALLBACK_ENABLED}" \
             GHA_CACHE_SCOPE_SUFFIX="${BAKE_SIM_CACHE_SCOPE_SUFFIX}" \
             PARENT_OWN_CACHE_ENABLED="${BAKE_SIM_PARENT_OWN_CACHE_ENABLED}" \
+            BASE_OWN_CACHE_ENABLED="${BAKE_SIM_BASE_OWN_CACHE_ENABLED}" \
             NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
             "$docker_bin" buildx bake \
             --progress=plain \
@@ -181,7 +182,12 @@ tasks:
         BAKE_SIM_CACHE_FALLBACK_ENABLED=
         BAKE_SIM_CACHE_SCOPE_SUFFIX=
         BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
+        # Context base has no cache-from (mirrors rust-base). Write short base
+        # separately so Scenario L can prove short-base orphan vs fix.
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=
         create_builder "nook-bake-sim-a-${suffix}"
+        bake_plain "$proof_log" base-publish
+        require_uncached_step "$proof_log" "bake-sim-base-layer"
         bake_plain "$proof_log" parent-publish
         require_uncached_step "$proof_log" "bake-sim-parent-expensive"
         # Publish leaf with parent own-cache off so mode=max embeds a full parent chain.
@@ -313,6 +319,7 @@ tasks:
         BAKE_SIM_CACHE_WRITE_ENABLED=
         BAKE_SIM_CACHE_FALLBACK_ENABLED=1
         BAKE_SIM_CACHE_SCOPE_SUFFIX="$pr_leaf_suffix"
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=
         BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
         create_builder "nook-bake-sim-k-${suffix}"
         bake_plain "$proof_log" leaf
@@ -324,10 +331,31 @@ tasks:
         require_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-v1${pr_leaf_suffix}"
         BAKE_SIM_CACHE_WRITE_ENABLED=
         BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=
         create_builder "nook-bake-sim-k2-${suffix}"
         bake_plain "$proof_log" leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario K ok"
+
+        echo "== Scenario L: short nested base orphans parent; bare base keeps CACHED =="
+        # Mirrors dylint leaf after nightly verify CACHED: importing short rust-base
+        # during the nested leaf bake rematerializes cargo install. Context rust-base
+        # must omit cache-from (BASE_OWN empty).
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=1
+        create_builder "nook-bake-sim-l-broken-${suffix}"
+        bake_plain "$proof_log" leaf
+        require_uncached_step "$proof_log" "bake-sim-parent-expensive"
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=
+        create_builder "nook-bake-sim-l-fixed-${suffix}"
+        bake_plain "$proof_log" leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        echo "scenario L ok"
 
         echo "bake-cache runtime proof passed"

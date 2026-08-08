@@ -46,10 +46,14 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     }
     assert!(
         rust_toolchain_bake.contains("target \"rust-base-publish\"")
+            && rust_toolchain_bake.contains("target \"rust-base-restore\"")
             && rust_toolchain_bake.contains("cache-to   = rust_base_cache_to")
             && bake_target_assigns_cache_to(rust_toolchain_bake.as_str(), "rust-base-publish")
-            && !bake_target_assigns_cache_to(rust_toolchain_bake.as_str(), "rust-base"),
-        "rust-base-publish seeds the hosted rust-base scope; context rust-base has no cache-to"
+            && !bake_target_assigns_cache_to(rust_toolchain_bake.as_str(), "rust-base")
+            && !bake_target_body(rust_toolchain_bake.as_str(), "rust-base")
+                .lines()
+                .any(|line| line.trim_start().starts_with("cache-from")),
+        "rust-base-restore/publish own the rust-base scope; context rust-base has no cache-from/to"
     );
     assert!(
         rust_toolchain_bake.contains("cache-to   = rust_ecosystem_policy_tools_cache_to")
@@ -309,7 +313,8 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         read(root, "nook-app/nook-web/docker/Taskfile.yml")
     );
     assert!(
-        docker_tasks.contains("ci-rust builder-core-deps rust-base")
+        docker_tasks.contains("ci-rust builder-core-deps rust-base-restore")
+            && docker_tasks.contains("rust-base-restore")
             && docker_tasks.contains("wasm-export builder-wasm-deps")
             && docker_tasks.contains("nook-web-ci web-deps")
             && docker_tasks.contains("docker:ci:cache:publish:rust-base:")
