@@ -20,7 +20,7 @@ readonly recipe_paths=(
   .github/scripts/rust-deps-cache-fingerprint.sh
   .github/scripts/rust-deps-cache-promote.sh
   .github/scripts/rust-deps-cache-publish-guard.sh
-  .github/workflows/rust-deps-cache-promote.yml
+  .github/workflows/remote.yml
   Taskfile.yml
   nook-app/Taskfile.yml
   nook-app/docker-bake.hcl

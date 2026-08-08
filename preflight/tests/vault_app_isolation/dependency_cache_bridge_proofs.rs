@@ -27,7 +27,7 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
     let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
     let guard = read(&root, ".github/scripts/rust-deps-cache-publish-guard.sh");
     let promoter = read(&root, ".github/scripts/rust-deps-cache-promote.sh");
-    let promotion_workflow = read(&root, ".github/workflows/rust-deps-cache-promote.yml");
+    let promotion_workflow = read(&root, ".github/workflows/remote.yml");
     let hosted_setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
     let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let core_bake = read(&root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
@@ -70,7 +70,8 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
         "NOOK_RUST_DEPS_INPUT_CANDIDATE=\"$candidate\"",
         "builder-wasm-deps-input-publish",
         "builder-core-deps-input-publish",
-        "gh workflow run rust-deps-cache-promote.yml",
+        "gh workflow run remote.yml",
+        "task=rust-cache:promote",
         "--ref main",
     ] {
         assert!(
@@ -133,19 +134,20 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
             && promotion_workflow.contains("version: 1.3.2")
             && promotion_workflow.contains("NOOK_REGISTRY_REMOTE_USERNAME")
             && promotion_workflow.contains("rust-deps-cache-promote.sh")
-            && promotion_workflow.contains("PROMOTION_FINGERPRINT: ${{ inputs.fingerprint }}")
-            && promotion_workflow.contains("PROMOTION_SOURCE_SHA: ${{ inputs.source_sha }}")
+            && promotion_workflow
+                .contains("PROMOTION_FINGERPRINT: ${{ inputs.cache_fingerprint }}")
+            && promotion_workflow.contains("PROMOTION_SOURCE_SHA: ${{ inputs.cache_source_sha }}")
             && promotion_workflow.contains("git -C candidate-source rev-parse HEAD")
             && promotion_workflow
                 .contains("NOOK_RUST_DEPS_FINGERPRINT_ROOT=\"$GITHUB_WORKSPACE/candidate-source\"")
             && !promotion_workflow.contains("promote.sh \"${{ inputs.")
-            && promotion_workflow
-                .contains("group: rust-deps-cache-promote-${{ inputs.fingerprint }}"),
-        "local candidates must be validated and promoted by the serialized hosted workflow"
+            && promotion_workflow.contains("Remote / rust-cache:promote")
+            && promotion_workflow.contains("version: 1.3.2"),
+        "local candidates must be validated and promoted by the allowlisted hosted workflow"
     );
     assert!(
         guard.contains(".github/scripts/rust-deps-cache-promote.sh")
-            && guard.contains(".github/workflows/rust-deps-cache-promote.yml"),
+            && guard.contains(".github/workflows/remote.yml"),
         "dirty promotion policy must prevent local publication"
     );
     Ok(())

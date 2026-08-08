@@ -104,11 +104,12 @@ tasks:
           echo "registry-cache:publish:local-format-deps: candidate quarantined; dependency inputs are not committed" >&2
           exit 0
         fi
-        if ! gh workflow run rust-deps-cache-promote.yml \
+        if ! gh workflow run remote.yml \
           --ref main \
-          --raw-field "fingerprint=$fingerprint" \
-          --raw-field "candidate=$candidate" \
-          --raw-field "source_sha=$source_sha"; then
+          --raw-field "task=rust-cache:promote" \
+          --raw-field "cache_fingerprint=$fingerprint" \
+          --raw-field "cache_candidate=$candidate" \
+          --raw-field "cache_source_sha=$source_sha"; then
           echo "registry-cache:publish:local-format-deps: candidate quarantined; hosted promotion dispatch failed" >&2
           exit 0
         fi

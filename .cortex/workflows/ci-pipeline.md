@@ -673,7 +673,8 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 - Local Task Bake restores git-commit remote-buildcache scopes when remote registry credentials exist.
 - The sealed local formatter uploads source-free Rust/WASM dependency stages to
   unique candidate tags.
-- A Main-defined GitHub-hosted workflow completely downloads each candidate.
+- The Main-defined allowlisted Remote workflow completely downloads each
+  candidate.
 - It uploads and downloads a hosted-normalized tag before atomically assigning
   the stable content-fingerprint tag in the same OCI repository.
 - PR jobs import only the verified stable tag, never a local candidate.
