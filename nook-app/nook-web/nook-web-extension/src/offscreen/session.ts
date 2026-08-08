@@ -15,6 +15,7 @@ import type {
   AuthProvidersSnapshot,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { scrubProviderCredentials } from '../lib/provider-credential-staging'
 import {
   ExtensionSessionMessageType,
   ExtensionSessionMessageDispatcher,
@@ -449,43 +450,47 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
       const grantedProviders =
         decodeStorageProviders(providerSnapshot).providers
-      const recordValues = NookExternalEventLogRecords.fromArray(records)
-      const statusValue = await activeManager.importExtensionEventLogRecords(
-        grant.vaultStoreId,
-        grant.deviceId,
-        grant.devicePublicKey,
-        grant.deviceSigningPublicKey,
-        recordValues,
-      )
-      const status = statusValue.toObject()
-      statusValue.free()
-      const protection = await activeManager.deviceProtectionStatus()
-      if (protection === DeviceProtectionStatus.Unlocked) {
-        await activeManager.replaceAuthProvidersForVault({
-          providers: grantedProviders,
-          activeVaultStoreId: {
-            state: 'storeId',
-            value: grant.vaultStoreId,
-          },
-        })
-      } else {
-        // Pairing may race a closed/locked offscreen session. Website grants are
-        // already sealed for this device public key, so replace this vault's
-        // complete provider set without unlock, including an empty set.
-        const lockedManager = activeManager as NookVaultManager & {
-          savePresealedAuthProviders: (
-            snapshot: AuthProvidersSnapshot,
-          ) => Promise<void>
+      try {
+        const recordValues = NookExternalEventLogRecords.fromArray(records)
+        const statusValue = await activeManager.importExtensionEventLogRecords(
+          grant.vaultStoreId,
+          grant.deviceId,
+          grant.devicePublicKey,
+          grant.deviceSigningPublicKey,
+          recordValues,
+        )
+        const status = statusValue.toObject()
+        statusValue.free()
+        const protection = await activeManager.deviceProtectionStatus()
+        if (protection === DeviceProtectionStatus.Unlocked) {
+          await activeManager.replaceAuthProvidersForVault({
+            providers: grantedProviders,
+            activeVaultStoreId: {
+              state: 'storeId',
+              value: grant.vaultStoreId,
+            },
+          })
+        } else {
+          // Pairing may race a closed/locked offscreen session. Website grants are
+          // already sealed for this device public key, so replace this vault's
+          // complete provider set without unlock, including an empty set.
+          const lockedManager = activeManager as NookVaultManager & {
+            savePresealedAuthProviders: (
+              snapshot: AuthProvidersSnapshot,
+            ) => Promise<void>
+          }
+          await lockedManager.savePresealedAuthProviders({
+            providers: grantedProviders,
+            activeVaultStoreId: {
+              state: 'storeId',
+              value: grant.vaultStoreId,
+            },
+          })
         }
-        await lockedManager.savePresealedAuthProviders({
-          providers: grantedProviders,
-          activeVaultStoreId: {
-            state: 'storeId',
-            value: grant.vaultStoreId,
-          },
-        })
+        return { ok: true, status }
+      } finally {
+        scrubProviderCredentials(grantedProviders)
       }
-      return { ok: true, status }
     }
     case ExtensionSessionMessageType.UpdateVault: {
       const payload = messagePayload(message)
