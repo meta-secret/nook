@@ -81,8 +81,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         "infra bake-cache prove must create network/builder and assert CACHED markers"
     );
     assert!(
-        quality.contains("task infra:bake-cache:prove")
-            && quality.contains("bake_cache_proofs.rs"),
+        quality.contains("task infra:bake-cache:prove") && quality.contains("bake_cache_proofs.rs"),
         "cortex quality must document the runtime sim beside static theorems"
     );
 }
