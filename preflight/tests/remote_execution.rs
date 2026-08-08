@@ -140,6 +140,10 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     )?;
     fs::set_permissions(&mock_task, fs::Permissions::from_mode(0o755))?;
 
+    let mock_docker = fixture.join("docker");
+    fs::write(&mock_docker, "#!/usr/bin/env bash\n[[ \"$1\" = \"ps\" ]]\n")?;
+    fs::set_permissions(&mock_docker, fs::Permissions::from_mode(0o755))?;
+
     let task_log = fixture.join("task.log");
     let summary = fixture.join("summary.md");
     let system_path = std::env::var("PATH")?;
