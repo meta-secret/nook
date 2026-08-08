@@ -7,4 +7,6 @@ export type ExternalValue =
   | ExternalObject
 
 /** Object-shaped external payload after the boundary verifies its shape. */
-export type ExternalObject = Record<string, ExternalValue>
+export interface ExternalObject {
+  readonly [key: string]: ExternalValue
+}
