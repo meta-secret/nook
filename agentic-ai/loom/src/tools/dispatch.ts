@@ -1,5 +1,14 @@
+import { readFileSync } from 'node:fs';
+import {
+  explainAgainstBlueprint,
+  explainSyntaxFailure,
+} from '../codec/blueprint-diff.ts';
 import { RequestFamily, ResponsePhase } from '../codec/enums.ts';
-import { DecodeStatus } from '../codec/field-error.ts';
+import {
+  DecodeStatus,
+  FieldDetailKind,
+  FieldIssue,
+} from '../codec/field-error.ts';
 import { decodeLoomRequest, type LoomRequest } from '../codec/request.ts';
 import {
   decodeErrorResponse,
@@ -26,14 +35,26 @@ export type DispatchOutcome = {
 export async function dispatchRequestFile(
   requestPath: string,
 ): Promise<DispatchOutcome> {
+  const receivedYaml = readRequestText(requestPath);
   const parsed = parseYamlFile(requestPath);
   if (parsed.status === DecodeStatus.Failed) {
+    const syntax = parsed.errors.find(
+      (entry) => entry.issue === FieldIssue.InvalidYaml,
+    );
+    const parseMessage =
+      syntax && syntax.detail.kind === FieldDetailKind.Text
+        ? syntax.detail.text
+        : 'failed to read or parse request YAML';
     return {
       exitCode: 2,
-      body: decodeErrorResponse(ResponsePhase.Decode, parsed.errors),
+      body: decodeErrorResponse(
+        ResponsePhase.Decode,
+        parsed.errors,
+        explainSyntaxFailure(receivedYaml, parseMessage),
+      ),
     };
   }
-  return dispatchValue(parsed.value);
+  return dispatchValue(parsed.value.value);
 }
 
 export async function dispatchValue(value: unknown): Promise<DispatchOutcome> {
@@ -41,7 +62,11 @@ export async function dispatchValue(value: unknown): Promise<DispatchOutcome> {
   if (request.status === DecodeStatus.Failed) {
     return {
       exitCode: 2,
-      body: decodeErrorResponse(ResponsePhase.Decode, request.errors),
+      body: decodeErrorResponse(
+        ResponsePhase.Decode,
+        request.errors,
+        explainAgainstBlueprint(value),
+      ),
     };
   }
   return dispatchDecoded(request.value);
@@ -84,6 +109,14 @@ async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
       exitCode: 1,
       body: buildExecuteErrorResponse(request, failureDetail(error)),
     };
+  }
+}
+
+function readRequestText(requestPath: string): string {
+  try {
+    return readFileSync(requestPath, 'utf8');
+  } catch {
+    return '';
   }
 }
 

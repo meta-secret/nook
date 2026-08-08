@@ -66,7 +66,14 @@ Unknown fields fail closed.
 task loom:tools-list
 ```
 
-On decode errors, read `errors[].path`, then run `toolsList`.
+On decode errors:
+
+1. Read `errors[].path` and `errors[].issue`.
+2. Read `explanation` — it compares the closest blueprint template with the
+   received YAML and lists `changes` (`missing`, `extra`, `typeMismatch`, or
+   `syntaxInvalid`).
+3. Fix the request to match `explanation.blueprintYaml`, then retry.
+4. Run `toolsList` when the root family is unclear.
 
 ## Common requests
 

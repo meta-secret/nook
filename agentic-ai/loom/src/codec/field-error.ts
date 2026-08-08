@@ -110,9 +110,8 @@ export function fieldIssueMessage(error: FieldError): string {
         ? error.detail.text
         : 'execution failed';
     case FieldIssue.InvalidYaml:
-      return error.detail.kind === FieldDetailKind.Text
-        ? error.detail.text
-        : 'invalid YAML';
+      // Parse detail lives on explanation.changes[syntaxInvalid].parseMessage.
+      return 'invalid YAML';
     case FieldIssue.RequestFileReadFailed:
       return error.detail.kind === FieldDetailKind.Text
         ? error.detail.text

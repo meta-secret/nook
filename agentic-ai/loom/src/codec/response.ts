@@ -1,3 +1,4 @@
+import type { BlueprintExplanation } from './blueprint-diff.ts';
 import {
   AgentStatsOperation,
   PrLandOperation,
@@ -44,6 +45,7 @@ export type DecodeErrorResponse = {
   readonly isError: true;
   readonly phase: ResponsePhase.Decode | ResponsePhase.UnknownRequest;
   readonly errors: readonly FieldError[];
+  readonly explanation: BlueprintExplanation;
   readonly recover: RecoverHint;
 };
 
@@ -119,12 +121,14 @@ export function successResponseForPrLand(
 export function decodeErrorResponse(
   phase: ResponsePhase.Decode | ResponsePhase.UnknownRequest,
   errors: readonly FieldError[],
+  explanation: BlueprintExplanation,
 ): DecodeErrorResponse {
   return {
     ok: false,
     isError: true,
     phase,
     errors,
+    explanation,
     recover: {
       toolsListRequest: TOOLS_LIST_REQUEST_PATH,
       hint: DEFAULT_HINT,
@@ -214,6 +218,7 @@ export function encodeResponse(
     phase: response.phase,
     errors: response.errors.map((entry) => ({
       path: entry.path,
+      issue: entry.issue,
       message: fieldIssueMessage(entry),
     })),
     recover: {
@@ -221,6 +226,14 @@ export function encodeResponse(
       hint: response.recover.hint,
     },
   };
+  if ('explanation' in response) {
+    encoded.explanation = {
+      blueprintPath: response.explanation.blueprintPath,
+      blueprintYaml: response.explanation.blueprintYaml,
+      receivedYaml: response.explanation.receivedYaml,
+      changes: response.explanation.changes,
+    };
+  }
   if (response.phase === ResponsePhase.Execute) {
     encoded.family = response.family;
     if (

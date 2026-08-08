@@ -9,7 +9,14 @@ import {
   type DecodeOutcome,
 } from './field-error.ts';
 
-export function parseYamlFile(filePath: string): DecodeOutcome<unknown> {
+export type YamlParseSuccess = {
+  readonly value: unknown;
+  readonly text: string;
+};
+
+export function parseYamlFile(
+  filePath: string,
+): DecodeOutcome<YamlParseSuccess> {
   let text: string;
   try {
     text = readFileSync(filePath, 'utf8');
@@ -23,8 +30,12 @@ export function parseYamlFile(filePath: string): DecodeOutcome<unknown> {
       ),
     ]);
   }
+  return parseYamlText(text);
+}
+
+export function parseYamlText(text: string): DecodeOutcome<YamlParseSuccess> {
   try {
-    return decodeOk(Bun.YAML.parse(text));
+    return decodeOk({ value: Bun.YAML.parse(text), text });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     return decodeErr([
@@ -40,8 +51,4 @@ export function stringifyYaml(value: unknown): string {
     const message = cause instanceof Error ? cause.message : String(cause);
     loomFailureDetail(LoomFailureCode.YamlStringifyFailed, message);
   }
-}
-
-export function stringifyYamlOrThrow(value: unknown): string {
-  return stringifyYaml(value);
 }
