@@ -128,6 +128,8 @@ export async function importApprovedPairing(
   try {
     const staging = stageProviderCredentials(message.payload.providers)
     if (staging.kind !== ProviderCredentialStagingKind.Staged) {
+      scrubProviderCredentials(message.payload.providers)
+      message.payload.providers = []
       return { ok: false, reason: 'invalid-provider-payload' }
     }
     const stagedProviders = staging.providers

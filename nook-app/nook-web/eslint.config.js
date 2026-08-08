@@ -72,16 +72,42 @@ export const noRawObjectArgumentsRule = {
       }
     }
 
+    function inspectInlineObjectExpressions(expression) {
+      const unwrapped = unwrapTypeScriptExpression(expression)
+      if (unwrapped.type === 'ObjectExpression') {
+        context.report({ node: expression, messageId: 'namedArgument' })
+        return true
+      }
+      if (unwrapped.type === 'ConditionalExpression') {
+        const consequentHasObject = inspectInlineObjectExpressions(
+          unwrapped.consequent,
+        )
+        const alternateHasObject = inspectInlineObjectExpressions(
+          unwrapped.alternate,
+        )
+        return consequentHasObject || alternateHasObject
+      }
+      if (unwrapped.type === 'LogicalExpression') {
+        const leftHasObject = inspectInlineObjectExpressions(unwrapped.left)
+        const rightHasObject = inspectInlineObjectExpressions(unwrapped.right)
+        return leftHasObject || rightHasObject
+      }
+      if (unwrapped.type === 'SequenceExpression') {
+        return unwrapped.expressions.reduce(
+          (hasObject, child) =>
+            inspectInlineObjectExpressions(child) || hasObject,
+          false,
+        )
+      }
+      return false
+    }
+
     function inspectSpreadArgument(argument) {
       const expression = unwrapTypeScriptExpression(argument.argument)
       if (expression.type !== 'ArrayExpression') return
       for (const element of expression.elements) {
-        if (
-          element &&
-          element.type !== 'SpreadElement' &&
-          unwrapTypeScriptExpression(element).type === 'ObjectExpression'
-        ) {
-          context.report({ node: element, messageId: 'namedArgument' })
+        if (element && element.type !== 'SpreadElement') {
+          inspectInlineObjectExpressions(element)
         }
       }
     }
@@ -92,8 +118,7 @@ export const noRawObjectArgumentsRule = {
           inspectSpreadArgument(argument)
           continue
         }
-        if (unwrapTypeScriptExpression(argument).type === 'ObjectExpression') {
-          context.report({ node: argument, messageId: 'namedArgument' })
+        if (inspectInlineObjectExpressions(argument)) {
           continue
         }
         inspectNamedObjectArgument(argument)

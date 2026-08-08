@@ -72,11 +72,18 @@ describe('provider credential staging', () => {
   })
 
   test('rejects values outside the serialized external model', () => {
-    const staging = stageProviderCredentials([
-      { id: 'drive', metadata: new Date() },
-    ])
+    const source = [
+      {
+        id: 'github',
+        githubPat: 'github_pat_rejected_secret',
+        metadata: new Date(),
+      },
+    ]
+    const staging = stageProviderCredentials(source)
 
     expect(staging.kind).toBe(ProviderCredentialStagingKind.InvalidInput)
+    scrubProviderCredentials(source)
+    expect(source[0]).not.toHaveProperty('githubPat')
   })
 
   test('clones __proto__ as an own data property', () => {

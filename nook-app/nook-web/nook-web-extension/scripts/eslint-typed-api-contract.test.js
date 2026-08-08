@@ -61,4 +61,21 @@ describe('typed API named arguments', () => {
       'namedArgument',
     ])
   })
+
+  test('rejects object literals nested in call-site expressions', () => {
+    const messages = lint(`
+      declare const flag: boolean
+      declare function consume(value: { name: string }): void
+      consume(flag ? { name: 'Nook' } : { name: 'Vault' })
+      consume(flag && { name: 'Nook' })
+      consume((flag, { name: 'Nook' }))
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+      'namedArgument',
+      'namedArgument',
+      'namedArgument',
+    ])
+  })
 })
