@@ -234,15 +234,6 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
         "rust-base-restore must declare cache-from without cache-to"
     );
 
-    let nightly = bake_target_body(rust_bake.as_str(), "rust-ecosystem-nightly");
-    assert!(
-        !nightly.trim().is_empty()
-            && !nightly.lines().any(|line| {
-                let line = line.trim_start();
-                line.starts_with("cache-from") || line.starts_with("cache-to")
-            }),
-        "nested nightly context must omit cache-from/cache-to"
-    );
     let nightly_restore =
         bake_target_body(rust_bake.as_str(), "rust-ecosystem-nightly-restore");
     assert!(
@@ -255,11 +246,12 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
     );
     assert!(
         !rust_bake.contains("rust-platform-nightly")
+            && !rust_bake.contains("rust-ecosystem-nightly = \"target:rust-ecosystem-nightly\"")
             && rust_bake
-                .matches("rust-ecosystem-nightly = \"target:rust-ecosystem-nightly\"")
+                .matches("dockerfile = \"nook-app/nook-platform/docker/rust/nightly.Dockerfile\"")
                 .count()
-                == 2,
-        "dylint/fuzz must directly context the bare nightly parent"
+                == 3,
+        "nightly/dylint/fuzz must share one Dockerfile with no linked nightly context"
     );
 
     for (bake, target) in [

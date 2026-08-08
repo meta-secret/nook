@@ -373,25 +373,25 @@ tasks:
         require_uncached_step "$proof_log" "bake-sim-parent-expensive"
         echo "scenario M ok"
 
-        echo "== Scenario N: direct leaf over bare warmed parent stays CACHED =="
-        # Fixed graph: warm the restore target, then let the leaf consume the
-        # cache-free context target directly. Publish the source-sensitive leaf
-        # and prove both parent and leaf restore on another fresh builder.
+        echo "== Scenario N: one-Dockerfile leaf keeps nightly CACHED =="
+        # Fixed graph: parent tools and source leaf are stages in one Dockerfile.
+        # Warm the exact parent stage, publish the source-sensitive mode=max leaf,
+        # then prove both restore on another fresh builder.
         create_builder "nook-bake-sim-n-${suffix}"
-        bake_plain "$proof_log" parent-nested-restore
+        bake_plain "$proof_log" combined-parent-restore
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
-        bake_plain "$proof_log" leaf-direct-nested
+        bake_plain "$proof_log" combined-leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
         BAKE_SIM_CACHE_WRITE_ENABLED=1
-        bake_plain "$proof_log" leaf-direct-nested
+        bake_plain "$proof_log" combined-leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         BAKE_SIM_CACHE_WRITE_ENABLED=
         create_builder "nook-bake-sim-n2-${suffix}"
-        bake_plain "$proof_log" parent-nested-restore
+        bake_plain "$proof_log" combined-parent-restore
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
-        bake_plain "$proof_log" leaf-direct-nested
+        bake_plain "$proof_log" combined-leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         require_registry_ref "nook/buildcache/nook-bake-sim-nested-leaf-v1"

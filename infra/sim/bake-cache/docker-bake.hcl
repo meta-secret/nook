@@ -7,7 +7,7 @@
 // parent-nested-restore ≈ read-only nightly cache warmer.
 // platform-nested-broken ≈ removed rust-platform-nightly source overlay.
 // leaf-via-platform-broken ≈ old 3-linked-target dylint/fuzz topology.
-// leaf-direct-nested ≈ fixed leaf directly over bare warmed nightly.
+// combined-parent-restore + combined-leaf ≈ fixed one-Dockerfile stages.
 // leaf ≈ rust-dylint (own-scope leaf; mode=max embeds parent).
 // leaf-short-chain ≈ short-parent import bug (parent scope in cache-from).
 // parent-pr-cold ≈ broken nightly FALLBACK (git-scope only, no Main).
@@ -211,11 +211,23 @@ target "leaf-via-platform-broken" {
   output = ["type=cacheonly"]
 }
 
-target "leaf-direct-nested" {
+target "combined-parent-restore" {
   context = "."
-  dockerfile = "leaf.Dockerfile"
+  dockerfile = "combined-nightly.Dockerfile"
+  target = "parent"
   contexts = {
-    parent = "target:parent-nested"
+    base = "target:base"
+  }
+  cache-from = parent_nested_cache_from
+  output = ["type=cacheonly"]
+}
+
+target "combined-leaf" {
+  context = "."
+  dockerfile = "combined-nightly.Dockerfile"
+  target = "leaf"
+  contexts = {
+    base = "target:base"
   }
   cache-from = nested_leaf_cache_from
   cache-to = nested_leaf_cache_to

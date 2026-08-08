@@ -22,6 +22,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         format!("{sim}/base.Dockerfile"),
         format!("{sim}/parent.Dockerfile"),
         format!("{sim}/parent-nested.Dockerfile"),
+        format!("{sim}/combined-nightly.Dockerfile"),
         format!("{sim}/platform-nested.Dockerfile"),
         format!("{sim}/leaf.Dockerfile"),
         format!("{sim}/leaf-platform.Dockerfile"),
@@ -56,7 +57,8 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("target \"parent-nested-publish\"")
             && bake.contains("target \"platform-nested-broken\"")
             && bake.contains("target \"leaf-via-platform-broken\"")
-            && bake.contains("target \"leaf-direct-nested\"")
+            && bake.contains("target \"combined-parent-restore\"")
+            && bake.contains("target \"combined-leaf\"")
             && bake.contains("target \"leaf\"")
             && bake.contains("target \"leaf-short-chain\"")
             && bake.contains("target \"parent-pr-cold\""),
@@ -116,7 +118,8 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("Scenario N:")
             && tasks.contains("bake-sim-base-layer")
             && tasks.contains("leaf-via-platform-broken")
-            && tasks.contains("leaf-direct-nested")
+            && tasks.contains("combined-parent-restore")
+            && tasks.contains("combined-leaf")
             && tasks.contains("parent-pr-cold")
             && tasks.contains("require_registry_ref")
             && tasks.contains("require_no_registry_ref")

@@ -4,12 +4,10 @@
 // and deterministic compiles are reused without folding that tooling into product rust-base.
 // Main seeds those scopes with the trusted registry writer; PRs only write
 // isolated remote-buildcache refs.
-// Nightly: rust-ecosystem-nightly is a bare context target. Its restore/publish
-// siblings own the shared nightly cache ref. Dylint/fuzz warm the restore target,
-// then consume the bare target directly so nested cache importers cannot rewrite
-// the toolchain lineage. Leaf scopes contain source-sensitive work only.
-// Context rust-base and rust-ecosystem-nightly omit cache-from and cache-to;
-// their restore/publish siblings own the Zot scopes.
+// Nightly, dylint, and fuzz are stages of one Dockerfile. This keeps the exact
+// toolchain lineage inside each mode=max leaf scope and removes the linked
+// nightly context whose nested identity rebuilt cargo-dylint. Source COPY steps
+// stay after the shared tool stage. rust-base remains the only linked context.
 // Dedicated *-publish targets write mode=max refs under write_cache_repository
 // plus GHA_CACHE_SCOPE_SUFFIX (Main: nook/buildcache; isolated: …-git-<sha>).
 // Empty cache-from= and cache-to= overrides are prohibited.
@@ -258,14 +256,14 @@ target "rust-ecosystem-nightly-publish" {
 target "rust-fuzz-smoke" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/fuzz-smoke.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/nightly.Dockerfile"
   target     = "rust-fuzz-smoke"
   platforms  = ["linux/amd64"]
   args = {
     FUZZ_SECONDS = FUZZ_SECONDS
   }
   contexts = {
-    rust-ecosystem-nightly = "target:rust-ecosystem-nightly"
+    rust-base = "target:rust-base"
   }
   cache-from = rust_ecosystem_fuzz_cache_from
   cache-to   = rust_ecosystem_fuzz_cache_to
@@ -275,11 +273,11 @@ target "rust-fuzz-smoke" {
 target "rust-dylint" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/dylint.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/nightly.Dockerfile"
   target     = "rust-dylint"
   platforms  = ["linux/amd64"]
   contexts = {
-    rust-ecosystem-nightly = "target:rust-ecosystem-nightly"
+    rust-base = "target:rust-base"
   }
   cache-from = rust_ecosystem_dylint_cache_from
   cache-to   = rust_ecosystem_dylint_cache_to

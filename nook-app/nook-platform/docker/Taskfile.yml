@@ -359,8 +359,8 @@ tasks:
     vars:
       FUZZ_SECONDS: '{{default "20" .FUZZ_SECONDS}}'
     cmds:
-      # Warm nightly read-only first. The leaf then consumes the bare nightly
-      # context target, so nested cache importers cannot orphan its tool layers.
+      # Warm the shared nightly stage read-only first. The leaf is a later stage
+      # in the same Dockerfile, so it keeps the exact warmed tool lineage.
       - task: docker:ecosystem:nightly:verify
       - >-
         GHA_CACHE_WRITE_ENABLED=
@@ -380,8 +380,8 @@ tasks:
     desc: Bake repository Dylint lints on the sealed nightly ecosystem image.
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
-      # Warm nightly through its read-only restore target. The leaf consumes the
-      # bare nightly context target and cannot re-import a shorter cache lineage.
+      # Warm the shared nightly stage through its read-only restore target. The
+      # leaf is a later stage in the same Dockerfile, not a linked Bake context.
       - task: docker:ecosystem:nightly:verify
       - >-
         GHA_CACHE_WRITE_ENABLED=

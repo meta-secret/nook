@@ -25,8 +25,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "nook-app/nook-platform/docker/rust/deterministic.Dockerfile",
         "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile",
         "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
-        "nook-app/nook-platform/docker/rust/fuzz-smoke.Dockerfile",
-        "nook-app/nook-platform/docker/rust/dylint.Dockerfile",
     ]
     .into_iter()
     .map(read)
@@ -197,19 +195,15 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         );
     }
     let nightly_dockerfile = read("nook-app/nook-platform/docker/rust/nightly.Dockerfile")?;
-    let dylint_dockerfile = read("nook-app/nook-platform/docker/rust/dylint.Dockerfile")?;
-    let fuzz_dockerfile = read("nook-app/nook-platform/docker/rust/fuzz-smoke.Dockerfile")?;
     assert!(
         !nightly_dockerfile.contains("rust-platform-nightly")
-            && !nightly_dockerfile.contains("COPY nook-app/nook-platform/"),
-        "nightly.Dockerfile must remain a source-free toolchain parent"
-    );
-    assert!(
-        dylint_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-dylint")
-            && fuzz_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-fuzz-smoke")
-            && dylint_dockerfile.contains("COPY nook-app/nook-platform/")
-            && fuzz_dockerfile.contains("COPY nook-app/nook-platform/"),
-        "dylint/fuzz must copy sources directly over the nightly toolchain"
+            && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-dylint")
+            && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-fuzz-smoke")
+            && nightly_dockerfile
+                .matches("COPY nook-app/nook-platform/ nook-app/nook-platform/")
+                .count()
+                == 2,
+        "one nightly Dockerfile must own the shared tools and both source leaves"
     );
     assert!(
         docker_tasks.contains("--hide-inclusion-graph")
@@ -357,8 +351,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "dylint/fuzz leaf cache-from must be own-scope only (no nightly/rust-base short parents)"
     );
     assert!(
-        rust_bake.contains("rust-ecosystem-nightly = \"target:rust-ecosystem-nightly\"")
+        !rust_bake.contains("rust-ecosystem-nightly = \"target:rust-ecosystem-nightly\"")
             && !rust_bake.contains("rust-platform-nightly")
+            && rust_bake
+                .matches("dockerfile = \"nook-app/nook-platform/docker/rust/nightly.Dockerfile\"")
+                .count()
+                == 3
             && rust_bake.contains("rust-platform = \"target:rust-platform\"")
             && rust_bake.contains("rust-base = \"target:rust-base\"")
             && rust_bake.contains("target \"rust-base-publish\"")
