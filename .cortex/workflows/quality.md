@@ -158,6 +158,10 @@ Use this workflow for quality, CI, and deployment changes.
     - Dylint/fuzz leaf scopes must not import nightly (or rust-base).
     - WASM deps/source scopes must not import rust-base or native rust-deps.
     - Their mode=max exports already embed that parent chain.
+    - WASM deps may import longer `nook-rust-wasm-source-v2` after own deps
+      scopes miss.
+    - That longer source index restores cook layers when the fingerprinted deps
+      scope is still empty.
     - Preflight restores rust-base only via Bake `contexts` (`target:rust-base`).
     - Native deps and ecosystem leaves restore parents the same way.
     - Leaf `cache-from` stays own-scope only (no short-parent importers).
@@ -182,12 +186,19 @@ Use this workflow for quality, CI, and deployment changes.
     - A thin trusted Main index steals fat PR mode=max layers.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
-    - Native/WASM publishers stage `docker:ci:cache:publish:rust-base` before
+    - Native publishers stage `docker:ci:cache:publish:rust-base` before
       deps/source scopes so one Bake cannot rewrite apt while cooking chef.
+    - WASM publishers stage deps-publish and source export before rust-base.
+    - Staging rust-base first on WASM imports the shorter parent index and
+      orphans local chef cook layers for the next bake.
     - Publishers keep configured `cache-from` on every Bake.
     - Main verifies published WASM fingerprints from a fresh builder.
     - One CI job writes each shared ecosystem registry ref.
-    - The complete Rust/WASM cargo-chef dependency graph uses an immutable scope fingerprinted from manifests, lockfiles, compiler Dockerfiles, Task invocation inputs, and Bake definitions.
+    - The WASM cargo-chef dependency scope is fingerprinted from cook-affecting
+      inputs only.
+    - Those inputs are Cargo manifests/lockfiles, `.cargo`/`.config`,
+      `clippy.toml`, `lineage.Dockerfile` (+ dockerignore), and sccache scripts.
+    - Bake cache-from wiring and Taskfiles must not rotate that fingerprint.
     - Hosted builds never attach Redis credentials.
     - There is no dedicated cache-reconstruction build.
     - Failed validation publishes nothing.

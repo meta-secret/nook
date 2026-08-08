@@ -338,6 +338,24 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && native_publish.contains("builder-core-deps-publish builder-debug"),
         "native cache publish must stage rust-base-publish, then deps-publish/debug, then preflight"
     );
+    let wasm_publish = docker_tasks
+        .split("docker:ci:cache:publish:wasm:")
+        .nth(1)
+        .and_then(|tail| tail.split("docker:rust-base:").next())
+        .unwrap_or("");
+    let wasm_deps_idx = wasm_publish
+        .find("builder-wasm-deps-publish")
+        .expect("wasm publish must bake builder-wasm-deps-publish");
+    let wasm_source_idx = wasm_publish
+        .find("wasm-export")
+        .expect("wasm publish must bake wasm-export");
+    let wasm_rust_base_idx = wasm_publish
+        .find("task: docker:ci:cache:publish:rust-base")
+        .expect("wasm publish must still seed rust-base after deps/source");
+    assert!(
+        wasm_deps_idx < wasm_source_idx && wasm_source_idx < wasm_rust_base_idx,
+        "wasm cache publish must stage deps-publish, then source export, then rust-base (never rust-base first)"
+    );
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
         cache_verifier.contains("docker-container")
