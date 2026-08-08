@@ -109,7 +109,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
-        14,
+        15,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
     assert_rust_cache_export_hardening(&bake);
@@ -122,8 +122,8 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
             && rust_bake
                 .matches("cache-to   = rust_wasm_source_cache_to")
                 .count()
-                == 5,
-        "WASM leaves must use the internal product lineage and persist their source-sensitive caches"
+                == 5 && rust_bake.contains("cache-to   = rust_wasm_node_cache_to"),
+        "WASM leaves and the independent Node consumer must persist non-overlapping source-sensitive caches"
     );
     let core_bake = read(root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
     let core_deps = bake_target_body(core_bake.as_str(), "builder-core-deps");
