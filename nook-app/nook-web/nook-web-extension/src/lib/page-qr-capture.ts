@@ -133,7 +133,8 @@ async function bitmapFromElement(
     }
     if (element instanceof SVGSVGElement) {
       const serialized = new XMLSerializer().serializeToString(element)
-      const blob = new Blob([serialized], { type: 'image/svg+xml' })
+      const blobOptions: BlobPropertyBag = { type: 'image/svg+xml' }
+      const blob = new Blob([serialized], blobOptions)
       return {
         kind: QrBitmapCaptureKind.Captured,
         bitmap: await createImageBitmap(blob),

@@ -35,10 +35,11 @@ export function isExtensionPairingStateQueryMessage(
 
 export function loadExtensionSetupState(): Promise<ExtensionSetupLoad> {
   return new Promise((resolve) => {
+    const queryMessage: ExtensionPairingStateQueryMessage = {
+      type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
+    }
     chrome.runtime.sendMessage(
-      {
-        type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
-      },
+      queryMessage,
       (response: ExternalValue) => {
         if (
           chrome.runtime.lastError ||
