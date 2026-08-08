@@ -41,4 +41,28 @@ describe('extensionDeviceProtectionStatus', () => {
       'Extension session returned malformed device identity.',
     )
   })
+
+  test('rejects empty unlocked device identity fields', async () => {
+    const responses: unknown[] = [
+      { ok: true },
+      {
+        ok: true,
+        status: DeviceProtectionStatus.Unlocked,
+        device: {
+          deviceId: '',
+          devicePublicKey: 'public-key',
+          deviceSigningPublicKey: 'signing-key',
+        },
+      },
+    ]
+    globalThis.chrome = {
+      runtime: {
+        sendMessage: (_message, callback) => callback(responses.shift()),
+      },
+    } as typeof chrome
+
+    await expect(extensionSessionDevice()).rejects.toThrow(
+      'Extension session returned malformed device identity.',
+    )
+  })
 })

@@ -284,68 +284,41 @@ export class ExtensionSessionMessageDispatcher {
     if (providerCandidate && typeof providerCandidate === 'object') {
       scrubProviderCredentials(providerCandidate)
     }
-    const staging = await stagingOperation
-    // Pairing imports are one-shot and may run against a cold offscreen WASM
-    // runtime. Never expire them with the short interactive probe budget.
-    if (staging.kind === ProviderCredentialStagingKind.InvalidInput) {
-      const response = {
-        ok: false,
-        error: 'invalid-provider-payload',
-      }
-      return Promise.resolve(response)
-    }
-    if (staging.providers.length === 0) {
-      return this.operations.enqueue({
-        operation: () =>
-          this.context.handleMessage({
+    // Reserve the queue position before cold WASM decoding can yield. Reset
+    // must remain a terminal barrier after every import accepted before it.
+    return this.operations.enqueue({
+      operation: async () => {
+        const staging = await stagingOperation
+        if (staging.kind === ProviderCredentialStagingKind.InvalidInput) {
+          return {
+            ok: false,
+            error: 'invalid-provider-payload',
+          }
+        }
+        if (staging.providers.length === 0) {
+          return this.context.handleMessage({
             ...message,
             payload: {
               ...payload,
               providers: staging.providers,
             },
-          }),
-        options: {
-          priority: SessionOperationPriority.Interactive,
-          expiry: { kind: SessionOperationExpiryKind.None },
-          cleanup: { kind: SessionOperationCleanupKind.None },
-        },
-      })
-    }
-    const stagedProviders = staging.providers
-    let payloadResidency: SensitivePayloadResidency = {
-      kind: SensitivePayloadResidencyKind.Resident,
-      payload: { ...payload, providers: stagedProviders },
-    }
-    const clearPending = () => {
-      if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared)
-        return
-      scrubProviderCredentials(stagedProviders)
-      payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
-    }
-    return this.operations.enqueue({
-      operation: async () => {
-        if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
-          throw new Error('Extension session request expired.')
+          })
         }
-        const operationPayload = payloadResidency.payload
-        payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
+        const stagedProviders = staging.providers
         try {
           return await this.context.handleMessage({
             ...message,
-            payload: operationPayload,
+            payload: { ...payload, providers: stagedProviders },
           })
         } finally {
           scrubProviderCredentials(stagedProviders)
-          operationPayload.providers = []
+          payload.providers = []
         }
       },
       options: {
         priority: SessionOperationPriority.Interactive,
         expiry: { kind: SessionOperationExpiryKind.None },
-        cleanup: {
-          kind: SessionOperationCleanupKind.OnExpire,
-          run: clearPending,
-        },
+        cleanup: { kind: SessionOperationCleanupKind.None },
       },
     })
   }

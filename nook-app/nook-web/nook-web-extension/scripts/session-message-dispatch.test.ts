@@ -107,6 +107,50 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(handledGithubPat).toBe('github_pat_accepted_secret')
   })
 
+  test('reserves import ordering before provider decoding completes', async () => {
+    let finishDecode: (providers: StorageProvider[]) => void = () => {
+      throw new Error('provider decoder was not initialized')
+    }
+    const decodedProviders = new Promise<StorageProvider[]>((resolve) => {
+      finishDecode = resolve
+    })
+    const handledTypes: string[] = []
+    const dispatcher = new ExtensionSessionMessageDispatcher({
+      messagePayload,
+      decodeProviders: () => decodedProviders,
+      handleMessage: async (message) => {
+        const type =
+          message && typeof message === 'object' && 'type' in message
+            ? String(message.type)
+            : ''
+        handledTypes.push(type)
+        if (type === ExtensionSessionMessageType.Reset) {
+          dispatcher.replaceOperations(new Error('reset'))
+        }
+        return { ok: true }
+      },
+    })
+
+    const importResponse = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: { providers: [] },
+    })
+    const resetResponse = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.Reset,
+      payload: {},
+    })
+    await Promise.resolve()
+    expect(handledTypes).toEqual([])
+
+    finishDecode([])
+    await expect(importResponse).resolves.toEqual({ ok: true })
+    await expect(resetResponse).resolves.toEqual({ ok: true })
+    expect(handledTypes).toEqual([
+      ExtensionSessionMessageType.ImportVault,
+      ExtensionSessionMessageType.Reset,
+    ])
+  })
+
   test('rejects runtime messages from another extension', () => {
     type RuntimeListener = (
       message: unknown,

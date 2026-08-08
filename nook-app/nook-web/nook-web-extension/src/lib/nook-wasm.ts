@@ -163,8 +163,11 @@ function extensionDevice(
   const device = responseObject(value)
   if (
     typeof device.deviceId !== 'string' ||
+    device.deviceId.length === 0 ||
     typeof device.devicePublicKey !== 'string' ||
-    typeof device.deviceSigningPublicKey !== 'string'
+    device.devicePublicKey.length === 0 ||
+    typeof device.deviceSigningPublicKey !== 'string' ||
+    device.deviceSigningPublicKey.length === 0
   ) {
     throw new Error('Extension session returned malformed device identity.')
   }

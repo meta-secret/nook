@@ -59,8 +59,9 @@ Nook web's `nook-typed-api/no-raw-object-arguments` rule enforces the same
 contract. It also requires an explicit type on named object-literal arguments.
 
 Nook web also rejects object literals behind TypeScript wrappers and call-site
-conditional, logical, or sequence expressions. Loom's selector covers its
-current direct object-literal and `as`-wrapped cases.
+conditional, logical, or sequence expressions. Loom rejects direct object
+literals and literals behind `as`, `satisfies`, angle-bracket assertions,
+non-null assertions, and nested combinations of those wrappers.
 
 The rule is configured in:
 

@@ -8,6 +8,10 @@ import {
   type NookAppLocale,
 } from './nook-wasm'
 import { translateFromCatalog } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import {
+  I18N_KEYS,
+  type I18nKey,
+} from '../../../nook-web-shared/src/generated/i18n-keys'
 
 export const NOOK_LOCALE_STORAGE_KEY = 'nook_locale'
 
@@ -19,16 +23,23 @@ export enum ExtensionTranslationRequestKind {
 export type ExtensionTranslationRequest =
   | {
       kind: ExtensionTranslationRequestKind.Plain
-      key: string
+      key: I18nKey
     }
   | {
       kind: ExtensionTranslationRequestKind.WithReplacements
-      key: string
-      replacements: Record<string, string>
+      key:
+        | typeof I18N_KEYS.ExtensionLoginPickerDestination
+        | typeof I18N_KEYS.ExtensionAuthenticatorPickerDestination
+      replacements: { origin: string }
+    }
+  | {
+      kind: ExtensionTranslationRequestKind.WithReplacements
+      key: typeof I18N_KEYS.ExtensionCompanionReadyVault
+      replacements: { vault: string }
     }
 
 export function plainExtensionTranslation(
-  key: string,
+  key: I18nKey,
 ): ExtensionTranslationRequest {
   return { kind: ExtensionTranslationRequestKind.Plain, key }
 }

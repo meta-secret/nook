@@ -73,6 +73,60 @@ export function isObjectRestBinding(pattern, target) {
   )
 }
 
+export function bindingPatternHasTypeAnnotation(identifier) {
+  let current = identifier
+  while (current) {
+    if (current.typeAnnotation) return true
+    const parent = current.parent
+    if (
+      !parent ||
+      ![
+        'AssignmentPattern',
+        'Property',
+        'RestElement',
+        'ObjectPattern',
+        'ArrayPattern',
+      ].includes(parent.type)
+    ) {
+      return false
+    }
+    current = parent
+  }
+  return false
+}
+
+export function objectPropertyValueExpressions(property) {
+  if (property.kind === 'init') return [property.value]
+  if (property.kind !== 'get' || property.value.type !== 'FunctionExpression') return []
+  const expressions = []
+  const getter = property.value
+  function visit(node) {
+    if (node.type === 'ReturnStatement') {
+      if (node.argument) expressions.push(node.argument)
+      return
+    }
+    if (
+      node !== getter.body &&
+      ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(
+        node.type,
+      )
+    ) {
+      return
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (key === 'parent') continue
+      const children = Array.isArray(value) ? value : [value]
+      for (const child of children) {
+        if (child && typeof child === 'object' && typeof child.type === 'string') {
+          visit(child)
+        }
+      }
+    }
+  }
+  visit(getter.body)
+  return expressions
+}
+
 export function writeBindingPattern(identifier) {
   let current = identifier
   while (

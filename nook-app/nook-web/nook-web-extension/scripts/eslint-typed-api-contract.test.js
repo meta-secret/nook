@@ -329,6 +329,19 @@ describe('typed API named arguments', () => {
     ])
   })
 
+  test('accepts annotations on enclosing parameter patterns', () => {
+    const messages = lint(`
+      type ConsumeArgs = { name: string }
+      type Params = { args?: ConsumeArgs }
+      declare function consume(value: ConsumeArgs): void
+      function forward({ args = { name: 'Nook' } }: Params): void {
+        consume(args)
+      }
+    `)
+
+    expect(messages).toEqual([])
+  })
+
   test('resolves constant computed destructuring keys', () => {
     const messages = lint(`
       declare function consume(value: { name: string }): void
@@ -469,6 +482,16 @@ describe('typed API named arguments', () => {
       declare function consume(value: { name: string }): void
       const key = 'picked'
       consume(({ picked: { name: 'Nook' } })[key])
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
+  test('inspects statically resolvable getter results', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      consume(({ get picked() { return { name: 'Nook' } } }).picked)
     `)
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',

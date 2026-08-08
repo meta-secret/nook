@@ -5,8 +5,10 @@ import globals from 'globals'
 import ts from 'typescript-eslint'
 import {
   ActiveCallScopeKind,
+  bindingPatternHasTypeAnnotation,
   concatenateArraySummaries,
   executionScope,
+  objectPropertyValueExpressions,
   isObjectRestBinding,
   mergeArraySummaries,
   namedResultAlternatives,
@@ -96,7 +98,8 @@ export const noRawObjectArgumentsRule = {
             definition.node.type === 'VariableDeclarator' &&
             (definition.name.typeAnnotation ||
               definition.node.id.typeAnnotation)) ||
-          (definition.type === 'Parameter' && definition.name.typeAnnotation)
+          (definition.type === 'Parameter' &&
+            bindingPatternHasTypeAnnotation(definition.name))
         ) {
           return
         }
@@ -384,7 +387,7 @@ export const noRawObjectArgumentsRule = {
 
     function callbackParameterValues(args) {
       const { definition, seenVariables } = args
-      if (definition.name.typeAnnotation) return []
+      if (bindingPatternHasTypeAnnotation(definition.name)) return []
       const callback = definition.node
       const call = callback.parent
       if (
@@ -459,16 +462,15 @@ export const noRawObjectArgumentsRule = {
           }
           const objectKeyLookup = staticObjectKey(property)
           if (
-            property.kind === 'init' &&
             objectKeyLookup.kind === StaticKeyLookupKind.Found &&
             objectKeyLookup.value === selectedKey
           ) {
+            const projectedExpressions = objectPropertyValueExpressions(property)
             return [
               ...possibleValues,
-              ...possibleExpressionValues({
-                expression: property.value,
-                seenVariables,
-              }),
+              ...projectedExpressions.flatMap((expression) =>
+                possibleExpressionValues({ expression, seenVariables }),
+              ),
             ]
           }
         }
