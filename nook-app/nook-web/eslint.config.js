@@ -60,8 +60,7 @@ export const noRawObjectArgumentsRule = {
           definition.type !== 'Variable' ||
           definition.node.type !== 'VariableDeclarator' ||
           !definition.node.init ||
-          unwrapTypeScriptExpression(definition.node.init).type !==
-            'ObjectExpression'
+          inlineObjectExpressions(definition.node.init).length === 0
         ) {
           continue
         }
@@ -72,34 +71,38 @@ export const noRawObjectArgumentsRule = {
       }
     }
 
-    function inspectInlineObjectExpressions(expression) {
+    function inlineObjectExpressions(expression) {
       const unwrapped = unwrapTypeScriptExpression(expression)
       if (unwrapped.type === 'ObjectExpression') {
-        context.report({ node: expression, messageId: 'namedArgument' })
-        return true
+        return [expression]
       }
       if (unwrapped.type === 'ConditionalExpression') {
-        const consequentHasObject = inspectInlineObjectExpressions(
-          unwrapped.consequent,
-        )
-        const alternateHasObject = inspectInlineObjectExpressions(
-          unwrapped.alternate,
-        )
-        return consequentHasObject || alternateHasObject
+        return [
+          ...inlineObjectExpressions(unwrapped.consequent),
+          ...inlineObjectExpressions(unwrapped.alternate),
+        ]
       }
       if (unwrapped.type === 'LogicalExpression') {
-        const leftHasObject = inspectInlineObjectExpressions(unwrapped.left)
-        const rightHasObject = inspectInlineObjectExpressions(unwrapped.right)
-        return leftHasObject || rightHasObject
+        return [
+          ...inlineObjectExpressions(unwrapped.left),
+          ...inlineObjectExpressions(unwrapped.right),
+        ]
       }
       if (unwrapped.type === 'SequenceExpression') {
-        return unwrapped.expressions.reduce(
-          (hasObject, child) =>
-            inspectInlineObjectExpressions(child) || hasObject,
-          false,
-        )
+        return unwrapped.expressions.flatMap(inlineObjectExpressions)
       }
-      return false
+      return []
+    }
+
+    function inspectInlineObjectExpressions(expression) {
+      const objectExpressions = inlineObjectExpressions(expression)
+      for (const objectExpression of objectExpressions) {
+        context.report({
+          node: objectExpression,
+          messageId: 'namedArgument',
+        })
+      }
+      return objectExpressions.length > 0
     }
 
     function inspectSpreadArgument(argument) {

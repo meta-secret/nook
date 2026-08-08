@@ -51,6 +51,25 @@ describe('typed API named arguments', () => {
     expect(messages).toEqual([])
   })
 
+  test('rejects untyped names initialized by object-producing expressions', () => {
+    const messages = lint(`
+      declare const flag: boolean
+      declare function consume(value: { name: string } | false): void
+      const conditionalArgs = flag ? { name: 'Nook' } : { name: 'Vault' }
+      const logicalArgs = flag && { name: 'Nook' }
+      const sequenceArgs = (flag, { name: 'Nook' })
+      consume(conditionalArgs)
+      consume(logicalArgs)
+      consume(sequenceArgs)
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+      'typedArgument',
+      'typedArgument',
+    ])
+  })
+
   test('rejects object literals expanded from an inline spread array', () => {
     const messages = lint(`
       declare function consume(...values: { name: string }[]): void
