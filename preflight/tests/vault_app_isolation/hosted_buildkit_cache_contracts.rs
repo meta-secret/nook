@@ -12,8 +12,10 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     let app_bake = read(root, "nook-app/docker-bake.hcl");
     let rust_toolchain_bake = read(root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let web_image_bake = read(root, "nook-app/nook-web/docker/web.docker-bake.hcl");
+    let web_image = read(root, "nook-app/nook-web/nook-web-app/Dockerfile");
     let web_toolchain_bake = read(root, "nook-app/nook-web/docker/toolchain.docker-bake.hcl");
     let preflight_bake = read(root, "preflight/docker-bake.hcl");
+    let bake_retry = read(root, ".github/scripts/bake-with-frontend-flake-retry.sh");
     let bake = format!(
         "{app_bake}\n{rust_toolchain_bake}\n{web_image_bake}\n{web_toolchain_bake}\n{preflight_bake}"
     );
@@ -48,6 +50,13 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         bake_retry.contains("nook-bake-flake.XXXXXX\"")
             && !bake_retry.contains("nook-bake-flake.XXXXXX.log"),
         "Bake retry logs must use a BSD/macOS-compatible mktemp template ending in XXXXXX"
+    );
+    assert!(
+        web_image_bake.contains("NOOK_SOURCE_REVISION    = NOOK_EXTENSION_COMMIT")
+            && web_image.contains("ARG NOOK_SOURCE_REVISION=")
+            && web_image.contains("/opt/nook/source-revision")
+            && web_image.find("/opt/nook/source-revision") < web_image.find("COPY . ."),
+        "sealed web source COPY must have a commit-specific parent cache key"
     );
     assert!(
         rust_toolchain_bake.contains("target \"rust-base-publish\"")
@@ -169,7 +178,6 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
             && app_tasks.contains("setup: $setup_target"),
         "the primary setup path must retry only its final web solve after the immediate BuildKit frontend flake"
     );
-    let bake_retry = read(root, ".github/scripts/bake-with-frontend-flake-retry.sh");
     for required in [
         "is_buildkit_frontend_flake",
         "failed to read dockerfile",

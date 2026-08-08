@@ -678,6 +678,8 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 - It uploads and downloads a hosted-normalized tag before atomically assigning
   the stable content-fingerprint tag in the same OCI repository.
 - PR jobs import only the verified stable tag, never a local candidate.
+- The sealed web source stage changes the parent of `COPY . .` for every commit.
+  A Main final-image cache therefore cannot substitute a stale source snapshot.
 - Main and release jobs import neither candidate nor stable formatter tags.
 - Hosted promotion independently fingerprints the exact committed source SHA.
 - Agents still run build, test, proof, and validation tasks remotely. Local

@@ -209,6 +209,8 @@ Use this workflow for quality, CI, and deployment changes.
     - A failed or truncated candidate leaves the stable tag unchanged.
     - A fresh PR runner restores only that verified stable tag, even when its
       commit SHA differs.
+    - Sealed web images use a commit revision barrier immediately before the
+      workspace source copy so formatter diffs match the checked-out tree.
     - If a short parent index orphans a leaf RUN, redesign the Bake graph.
     - Do not wipe cache to paper over a short-chain import.
     - Prefer own-scope leaf `cache-from`, same-Dockerfile stage lineage, or a

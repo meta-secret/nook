@@ -19,6 +19,7 @@ ARG VITE_SENTINEL_APP_URL=
 ARG NOOK_EXTENSION_CHANNEL=production
 ARG NOOK_EXTENSION_VERSION=1.0.0
 ARG NOOK_EXTENSION_COMMIT=
+ARG NOOK_SOURCE_REVISION=
 ARG NOOK_EXTENSION_SITE_URL=https://nokey.sh/
 
 WORKDIR /meta-secret/nook
@@ -40,6 +41,11 @@ COPY --from=web-artifacts /coverage /opt/nook/coverage
 # Workspace source, copied as late as possible so the cached web dependency layers above are never
 # invalidated by a source edit. .dockerignore excludes target/, node_modules, dist/, and the
 # generated wasm pkg placeholders so the handoff below is the sole WASM source of truth.
+# The revision barrier changes COPY's parent for every commit. This prevents a
+# final-image cache imported from Main from supplying a stale source snapshot.
+RUN test "${#NOOK_SOURCE_REVISION}" -eq 40 \
+    && case "$NOOK_SOURCE_REVISION" in *[!0-9a-f]*) exit 1 ;; esac \
+    && printf '%s\n' "$NOOK_SOURCE_REVISION" >/opt/nook/source-revision
 COPY . .
 
 RUN test -f nook-app/Taskfile.yml \
