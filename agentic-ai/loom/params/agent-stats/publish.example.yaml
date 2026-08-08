@@ -1,0 +1,4 @@
+name: agent-stats
+arguments:
+  action: publish
+  file: /tmp/123.yaml

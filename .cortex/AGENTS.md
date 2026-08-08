@@ -384,24 +384,41 @@ and [workflows/remote-execution.md](workflows/remote-execution.md).
 
 ## Loom — mechanical cortex rites
 
-[`agentic-ai/loom`](../agentic-ai/loom/README.md) is the Bun CLI for mechanical
-agent procedures that used to live as pasteable bash in `.cortex`.
+[`agentic-ai/loom`](../agentic-ai/loom/README.md) runs mechanical agent
+procedures through a strict YAML tool protocol.
 
 Bun must be installed. Stop and ask for Bun if `bun --version` fails.
 
-Preferred Task surface:
+Single invoke form:
+
+```bash
+task loom:run CONFIG=<request.yaml>
+```
+
+Request envelope:
+
+```yaml
+name: pre-push
+arguments:
+  stage: true
+  fetch: true
+```
+
+Stdout is YAML. On errors, read `errors[].path`, then run `task loom:tools-list`.
+
+Protocol reference: [references/loom-tools.md](references/loom-tools.md).
+
+Preferred Task aliases:
 
 | Command | Role |
 |---|---|
-| `task loom:pre-push` | Format Loom + product format + UI demo contract |
+| `task loom:pre-push` | Default pre-push request |
+| `task loom:tools-list` | Discover tools and schemas |
 | `task loom:verify` | Prettier check + `tsc` + unit tests |
-| `task loom:cortex-audit` | Broken links / skill index sync |
-| `task loom:skill-scaffold SLUG=<name>` | New dynamic-skill card |
-| `task loom:agent-stats ARGS='…'` | Assemble / validate / publish AI stats |
-| `task loom:pr-land ARGS='…'` | Status / validate / ready / merge-check |
-
-Loom holds the same authored-TypeScript quality bar as other TS packages:
-Prettier, `tsc --noEmit`, unit tests, and preflight TypeScript state scanners.
+| `task loom:cortex-audit` | Default cortex-audit request |
+| `task loom:skill-scaffold CONFIG=…` | Skill card request YAML |
+| `task loom:agent-stats CONFIG=…` | Stats assemble/validate/publish request |
+| `task loom:pr-land CONFIG=…` | PR land request YAML |
 
 Policy and judgment stay in `.cortex`. Loom only runs deterministic steps.
 
@@ -492,12 +509,27 @@ Task-owning AI agents must measure every normal PR's lightweight local runs,
 focused/complete GitHub Actions runs and retriggers, merge attempts, elapsed
 time, and the repository test inventory on the merged head.
 
-After merge, assemble and publish `stats/ai-agent/<pr-number>.yaml` with Loom:
+After merge, assemble and publish `stats/ai-agent/<pr-number>.yaml` with Loom.
+
+Write a request YAML, then run it:
+
+```yaml
+name: agent-stats
+arguments:
+  action: assemble
+  pr: 123
+  scratch: /tmp/pr-123-events.json
+  out: /tmp/123.yaml
+  inventory: true
+```
 
 ```bash
-task loom:agent-stats ARGS='assemble --pr <n> --scratch <path> --out /tmp/<n>.yaml --inventory'
-task loom:agent-stats ARGS='publish --file /tmp/<n>.yaml'
+task loom:agent-stats CONFIG=/tmp/assemble-request.yaml
+# then a publish request with action: publish and file: /tmp/123.yaml
+task loom:agent-stats CONFIG=/tmp/publish-request.yaml
 ```
+
+See [references/loom-tools.md](references/loom-tools.md).
 
 Compare with one or two recent comparable records.
 
@@ -547,7 +579,8 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 
 - [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task loom:pre-push`** → commit/push → focused hosted tasks → Loom/Task validate → fix loop → readiness audit → automatic agent-owned squash merge).
 - [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
-- [`agentic-ai/loom/README.md`](../agentic-ai/loom/README.md) — **Loom**: Bun CLIs for mechanical cortex rites (`pre-push`, `cortex-audit`, `agent-stats`, `pr-land`, `skill-scaffold`).
+- [`agentic-ai/loom/README.md`](../agentic-ai/loom/README.md) — **Loom**: YAML tool protocol for mechanical cortex rites.
+- [references/loom-tools.md](references/loom-tools.md) — Loom request/response contracts and examples.
 - [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
 - [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
 - [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md) — **P1 `.cortex` writing rule:** short sentences, bullets, and lists over dense multi-clause prose.

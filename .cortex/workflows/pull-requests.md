@@ -14,12 +14,12 @@ Start by establishing the PR path, then keep ownership until merge or a concrete
 3. **Push and create/update the PR** — run `task loom:pre-push`, push a coherent commit, and open the PR; later fixes update that same PR.
 4. **Iterate and validate on GitHub Actions:**
    - Run focused `task remote TASK_NAME=<name>` jobs as useful.
-   - When the head is ready, run `task loom:pr-land ARGS='validate --pr <number>'` (or Task `pr:preflight` / `pr:validate`).
+   - When the head is ready, run `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` (or Task `pr:preflight` / `pr:validate`).
    - Inspect the path-applicable `PR / Verify and preview` and `Web research / Build and deploy research catalog` workflows.
    - Do **not** run a required local `task check` / `task ci:pr`.
 5. **Fix Nook's failed PR workflow** — inspect failed logs, consult app logs for web/e2e failures, fix, `task loom:pre-push`, and push the completed fix; the agent explicitly triggers complete validation for the replacement head.
 6. **Settle existing review feedback** — inspect current comments and reviews, reply to every actionable human or automated finding, and resolve each thread. Do not request or wait for optional reviewers.
-7. **Merge automatically when ready** — after the branch is current with `origin/main`, Nook's applicable repository-owned PR test checks are green, all actionable comments are resolved, and `task loom:pr-land ARGS='ready --pr <n>'` / `task pr:ready` succeeds, squash-merge immediately without requesting separate permission.
+7. **Merge automatically when ready** — after the branch is current with `origin/main`, Nook's applicable repository-owned PR test checks are green, all actionable comments are resolved, and `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` / `task pr:ready` succeeds, squash-merge immediately without requesting separate permission.
 
 ## ⛔ SQUASH MERGE ONLY
 
@@ -102,7 +102,7 @@ The feedback inspection and readiness audit replace any blind review-batching gr
 
 ```text
 implement/fix → task loom:pre-push → commit → push/update PR → focused task remote jobs
-→ task loom:pr-land validate → complete exact-head PR workflow
+→ task loom:pr-land CONFIG=<pr-land-validate-request.yaml> → complete exact-head PR workflow
 ```
 
 **Required local action** (before every push):
@@ -135,7 +135,7 @@ task pr:validate PR=<number> FULL_E2E=1
 | Before every push          | `task loom:pre-push`                             | Only required local product action              |
 | UI-facing path changes     | included in Loom pre-push                        | Cheap hygiene before hosted execution           |
 | Focused build/test feedback| `task remote TASK_NAME=<name>`                   | Use one hosted worker for the selected task     |
-| Final validation boundary  | `task loom:pr-land ARGS='validate --pr <n>'`     | Start the complete exact-head PR gate           |
+| Final validation boundary  | `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`     | Start the complete exact-head PR gate           |
 | After complete CI failure  | fix → format → commit → push → validate again    | A push does not automatically refresh `pr.yml`  |
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci) and [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md).
@@ -193,7 +193,7 @@ Never use an all-check watcher that can remain blocked on external services. If 
 task pr:preflight PR=<number>
 ```
 
-Use `task loom:pr-land ARGS='ready --pr <number>'` (or `task pr:ready`) for a read-only exact-head readiness assertion. The command never merges by itself. Its success is the final signal for the task-owning agent to squash-merge immediately.
+Use `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` (or `task pr:ready`) for a read-only exact-head readiness assertion. The command never merges by itself. Its success is the final signal for the task-owning agent to squash-merge immediately.
 
 Do not request or wait for Codex, Claude, Cursor, CodeRabbit, or any other optional external review/check. Repository-owned checks and exact-head deployment remain required.
 
@@ -270,7 +270,7 @@ If the failure was obviously fmt-only, `task loom:pre-push` before re-push is en
 
 ### 8. Merge and finish
 
-When **Nook's applicable repository-owned PR test checks pass**, the branch is current with `origin/main`, all actionable comments are resolved, and `task loom:pr-land ARGS='ready --pr <n>'` / `task pr:ready` succeeds:
+When **Nook's applicable repository-owned PR test checks pass**, the branch is current with `origin/main`, all actionable comments are resolved, and `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` / `task pr:ready` succeeds:
 
 ```bash
 gh pr merge <number> --squash

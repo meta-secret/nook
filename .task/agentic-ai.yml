@@ -61,41 +61,75 @@ tasks:
       - task: loom:check
       - task: loom:test
 
-  loom:pre-push:
-    desc: Format Loom, host-apply product format, and enforce the UI demo contract.
-    deps: [loom:format]
+  loom:run:
+    desc: Run Loom with a YAML request envelope (CONFIG=<request.yaml>).
+    deps: [loom:install]
+    vars:
+      CONFIG: '{{.CONFIG}}'
+    requires:
+      vars: [CONFIG]
     cmds:
-      - bun run --cwd agentic-ai/loom loom -- pre-push {{.CLI_ARGS}}
+      - bun run --cwd agentic-ai/loom loom -- {{.CONFIG}}
+
+  loom:pre-push:
+    desc: Format Loom, then run the pre-push YAML request.
+    deps: [loom:format]
+    vars:
+      CONFIG: '{{default "agentic-ai/loom/params/pre-push/default.yaml" .CONFIG}}'
+    cmds:
+      - task: loom:run
+        vars:
+          CONFIG: '{{.CONFIG}}'
 
   loom:cortex-audit:
-    desc: Audit .cortex links and dynamic-skill index sync via Loom.
+    desc: Audit .cortex via Loom YAML request (CONFIG defaults to cortex-audit/default.yaml).
     deps: [loom:install]
+    vars:
+      CONFIG: '{{default "agentic-ai/loom/params/cortex-audit/default.yaml" .CONFIG}}'
     cmds:
-      - bun run --cwd agentic-ai/loom loom -- cortex-audit {{.CLI_ARGS}}
+      - task: loom:run
+        vars:
+          CONFIG: '{{.CONFIG}}'
 
   loom:skill-scaffold:
-    desc: Scaffold a dynamic-skill card (SLUG=<kebab-case>; pass CLI_ARGS='--wrappers' when needed).
+    desc: Scaffold a dynamic-skill card via Loom (CONFIG=<request.yaml>).
     deps: [loom:install]
     requires:
-      vars: [SLUG]
+      vars: [CONFIG]
     cmds:
-      - bun run --cwd agentic-ai/loom loom -- skill-scaffold {{.SLUG}} {{.CLI_ARGS}}
+      - task: loom:run
+        vars:
+          CONFIG: '{{.CONFIG}}'
 
   loom:agent-stats:
-    desc: Assemble, validate, or publish AI-agent stats YAML (ARGS='assemble --pr N ...').
+    desc: Assemble, validate, or publish AI-agent stats via Loom (CONFIG=<request.yaml>).
     deps: [loom:install]
     requires:
-      vars: [ARGS]
+      vars: [CONFIG]
     cmds:
-      - bun run --cwd agentic-ai/loom loom -- agent-stats {{.ARGS}}
+      - task: loom:run
+        vars:
+          CONFIG: '{{.CONFIG}}'
 
   loom:pr-land:
-    desc: PR land assist via Loom (ARGS='status|validate|ready|merge-check --pr N').
+    desc: PR land assist via Loom (CONFIG=<request.yaml>).
     deps: [loom:install]
     requires:
-      vars: [ARGS]
+      vars: [CONFIG]
     cmds:
-      - bun run --cwd agentic-ai/loom loom -- pr-land {{.ARGS}}
+      - task: loom:run
+        vars:
+          CONFIG: '{{.CONFIG}}'
+
+  loom:tools-list:
+    desc: List Loom tools and schemas via YAML protocol.
+    deps: [loom:install]
+    vars:
+      CONFIG: '{{default "agentic-ai/loom/params/tools-list/default.yaml" .CONFIG}}'
+    cmds:
+      - task: loom:run
+        vars:
+          CONFIG: '{{.CONFIG}}'
 
   hive:format:
     desc: Format the Hive Rust workspace.

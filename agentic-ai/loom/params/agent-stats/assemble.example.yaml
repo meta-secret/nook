@@ -1,0 +1,7 @@
+name: agent-stats
+arguments:
+  action: assemble
+  pr: 123
+  scratch: /tmp/pr-123-scratch.json
+  out: /tmp/123.yaml
+  inventory: false

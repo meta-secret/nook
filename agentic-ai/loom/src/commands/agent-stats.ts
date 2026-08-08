@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { flagPresent, positionalArgs, requireOption } from '../lib/args.ts';
+import type { AgentStatsArgs } from '../codec/args/agent-stats.ts';
 import { assembleAgentStats } from '../lib/agent-stats-assemble.ts';
 import { validateAgentStatsYaml } from '../lib/agent-stats-schema.ts';
 import { findRepoRoot } from '../lib/repo.ts';
@@ -14,65 +14,41 @@ export type AgentStatsReport = {
 };
 
 export async function runAgentStats(
-  args: readonly string[],
+  args: AgentStatsArgs,
 ): Promise<Result<AgentStatsReport>> {
-  const action = positionalArgs(args)[0];
-  if (typeof action !== 'string') {
-    return err('Usage: loom agent-stats <assemble|validate|publish> [options]');
-  }
-
-  switch (action) {
+  switch (args.action) {
     case 'assemble':
       return assemble(args);
     case 'validate':
-      return validate(args);
+      return validate(args.file);
     case 'publish':
-      return publish(args);
-    default:
-      return err(`Unknown agent-stats action: ${action}`);
+      return publish(args.file);
   }
 }
 
 async function assemble(
-  args: readonly string[],
+  args: Extract<AgentStatsArgs, { action: 'assemble' }>,
 ): Promise<Result<AgentStatsReport>> {
   const repo = findRepoRoot();
   if (repo.kind === ResultKind.Err) {
     return repo;
   }
-  const prRaw = requireOption(args, '--pr');
-  if (prRaw.kind === ResultKind.Err) {
-    return prRaw;
-  }
-  const prNumber = Number.parseInt(prRaw.value, 10);
-  if (!Number.isInteger(prNumber) || prNumber <= 0) {
-    return err('--pr must be a positive integer');
-  }
-  const scratch = requireOption(args, '--scratch');
-  if (scratch.kind === ResultKind.Err) {
-    return scratch;
-  }
-  const out = requireOption(args, '--out');
-  if (out.kind === ResultKind.Err) {
-    return out;
-  }
-  const includeInventory = flagPresent(args, '--inventory');
 
   const assembled = await assembleAgentStats({
     repoRoot: repo.value,
-    prNumber,
-    scratchPath: scratch.value,
-    includeInventory,
+    prNumber: args.pr,
+    scratchPath: args.scratch,
+    includeInventory: args.inventory,
   });
   if (assembled.kind === ResultKind.Err) {
     return assembled;
   }
 
-  const outPath = path.resolve(out.value);
+  const outPath = path.resolve(args.out);
   mkdirSync(path.dirname(outPath), { recursive: true });
   writeFileSync(outPath, assembled.value.yaml, 'utf8');
 
-  const validation = validateAgentStatsYaml(assembled.value.yaml, prNumber);
+  const validation = validateAgentStatsYaml(assembled.value.yaml, args.pr);
   if (validation.kind === ResultKind.Err) {
     return validation;
   }
@@ -93,19 +69,13 @@ async function assemble(
   });
 }
 
-async function validate(
-  args: readonly string[],
-): Promise<Result<AgentStatsReport>> {
-  const file = requireOption(args, '--file');
-  if (file.kind === ResultKind.Err) {
-    return file;
-  }
-  const prFromName = path.basename(file.value).replace(/\.ya?ml$/, '');
+async function validate(file: string): Promise<Result<AgentStatsReport>> {
+  const prFromName = path.basename(file).replace(/\.ya?ml$/, '');
   const prNumber = Number.parseInt(prFromName, 10);
   if (!Number.isInteger(prNumber) || prNumber <= 0) {
     return err('Stats filename must be <pr-number>.yaml');
   }
-  const content = readFileSync(file.value, 'utf8');
+  const content = readFileSync(file, 'utf8');
   const validation = validateAgentStatsYaml(content, prNumber);
   if (validation.kind === ResultKind.Err) {
     return validation;
@@ -115,23 +85,17 @@ async function validate(
   }
   return ok({
     action: 'validate',
-    outputPath: path.resolve(file.value),
+    outputPath: path.resolve(file),
     messages: ['schema validation passed'],
   });
 }
 
-async function publish(
-  args: readonly string[],
-): Promise<Result<AgentStatsReport>> {
+async function publish(file: string): Promise<Result<AgentStatsReport>> {
   const repo = findRepoRoot();
   if (repo.kind === ResultKind.Err) {
     return repo;
   }
-  const file = requireOption(args, '--file');
-  if (file.kind === ResultKind.Err) {
-    return file;
-  }
-  const absolute = path.resolve(file.value);
+  const absolute = path.resolve(file);
   const prFromName = path.basename(absolute).replace(/\.ya?ml$/, '');
   const prNumber = Number.parseInt(prFromName, 10);
   if (!Number.isInteger(prNumber) || prNumber <= 0) {

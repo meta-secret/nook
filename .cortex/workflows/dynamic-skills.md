@@ -56,13 +56,20 @@ scope, and apply the pattern with normal coding workflow and validation.
 
 For a new card scaffold, prefer Loom:
 
+```yaml
+name: skill-scaffold
+arguments:
+  slug: example-skill
+  wrappers: false
+```
+
 ```bash
-task loom:skill-scaffold SLUG=<kebab-case>
-# optional wrappers:
-bun run --cwd agentic-ai/loom loom -- skill-scaffold <slug> --wrappers
+task loom:skill-scaffold CONFIG=path/to/request.yaml
 ```
 
 Then fill the card content and verify with `task loom:cortex-audit`.
+
+See [loom-tools.md](../references/loom-tools.md).
 
 Ask for clarification only when the scope or preferred pattern cannot be inferred
 from the user's example and surrounding code.

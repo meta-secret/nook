@@ -23,21 +23,34 @@ It is not a free-form task diary.
 
 Keep judgment in this doc.
 
-Run the mechanical assemble / validate / publish path through Loom:
+Run assemble / validate / publish through Loom YAML requests.
 
-```bash
-# Scratch JSON must include started_at, change_surface, local_executions,
-# pr_retriggers, merge_attempts, comparison, and waste_assessment.
-task loom:agent-stats ARGS='assemble --pr <n> --scratch /tmp/pr-<n>-events.json --out /tmp/<n>.yaml --inventory'
-task loom:agent-stats ARGS='validate --file /tmp/<n>.yaml'
-task loom:agent-stats ARGS='publish --file /tmp/<n>.yaml'
+Scratch JSON must include `started_at`, `change_surface`, `local_executions`,
+`pr_retriggers`, `merge_attempts`, `comparison`, and `waste_assessment`.
+
+Assemble request:
+
+```yaml
+name: agent-stats
+arguments:
+  action: assemble
+  pr: 123
+  scratch: /tmp/pr-123-events.json
+  out: /tmp/123.yaml
+  inventory: true
 ```
 
-Equivalent Bun entry:
-
 ```bash
-bun run --cwd agentic-ai/loom loom -- agent-stats assemble --pr <n> --scratch <path> --out <path> --inventory
+task loom:agent-stats CONFIG=/tmp/assemble-request.yaml
 ```
+
+Validate / publish requests use `action: validate` or `action: publish` with
+`file: /tmp/123.yaml`.
+
+Examples:
+[`agentic-ai/loom/params/agent-stats/`](../../agentic-ai/loom/params/agent-stats/).
+
+Protocol: [loom-tools.md](../references/loom-tools.md).
 
 Loom fills PR metadata, Actions runs, optional test inventory, and summary
 derivations.
@@ -136,6 +149,6 @@ Before publishing:
 - do not create a Nook branch or PR;
 - do not wait for Main or deployment;
 - validate with Loom;
-- publish with Loom (`task loom:agent-stats ARGS='publish --file …'`).
+- publish with Loom (`task loom:agent-stats CONFIG=<publish-request.yaml>`).
 
 Invalid records must be corrected before publication.

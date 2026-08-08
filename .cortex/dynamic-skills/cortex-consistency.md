@@ -123,15 +123,21 @@ Name the checked docs and the code or Task paths used as evidence.
 
 Run the mechanical link and index audit:
 
+Request:
+
+```yaml
+name: cortex-audit
+arguments:
+  density: false
+```
+
 ```bash
 task loom:cortex-audit
 ```
 
-Add `--density` through CLI args when prose density should fail closed:
+For density findings, set `density: true` in the request YAML.
 
-```bash
-bun run --cwd agentic-ai/loom loom -- cortex-audit --density
-```
+See [loom-tools.md](../references/loom-tools.md).
 
 Loom checks broken relative links, skill-index sync, and executable skill paths.
 

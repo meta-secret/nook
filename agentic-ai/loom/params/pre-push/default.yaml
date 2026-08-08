@@ -1,0 +1,4 @@
+name: pre-push
+arguments:
+  stage: true
+  fetch: true

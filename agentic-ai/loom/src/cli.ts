@@ -1,31 +1,24 @@
 #!/usr/bin/env bun
-import { runAgentStats } from './commands/agent-stats.ts';
-import { runCortexAudit } from './commands/cortex-audit.ts';
-import { runPrLand } from './commands/pr-land.ts';
-import { runPrePush } from './commands/pre-push.ts';
-import { runSkillScaffold } from './commands/skill-scaffold.ts';
+import path from 'node:path';
+import { stringifyYaml } from './codec/yaml.ts';
 import { requireBun } from './lib/repo.ts';
-import { ResultKind, type Result } from './result.ts';
+import { ResultKind } from './result.ts';
+import { dispatchRequestFile, encodedOutcome } from './tools/dispatch.ts';
 
-const HELP = `Loom — mechanical cortex rites as Bun CLIs
+const HELP = `Loom — mechanical cortex rites (YAML tool protocol)
 
 Usage:
-  loom <command> [args]
+  loom <request.yaml>
+  loom help
 
-Commands:
-  pre-push                 Host task format + UI demo contract
-  cortex-audit [--density] Audit .cortex links and skill index
-  skill-scaffold <slug>    Create a dynamic-skill card [--wrappers]
-  agent-stats <action>     assemble|validate|publish AI-agent stats YAML
-  pr-land <action>         status|validate|ready|merge-check
-  help                     Show this help
+Request envelope:
+  name: <tool>
+  arguments: { ... }
 
-Task wrappers (from repo root):
-  task loom:pre-push
-  task loom:cortex-audit
-  task loom:skill-scaffold SLUG=<slug>
-  task loom:agent-stats ARGS='...'
-  task loom:pr-land ARGS='...'
+Discover tools:
+  loom agentic-ai/loom/params/tools-list/default.yaml
+
+Stdout is YAML only. On decode/argument errors, exit 2 and read errors[].path.
 `;
 
 async function main(): Promise<number> {
@@ -36,63 +29,44 @@ async function main(): Promise<number> {
   }
 
   const argv = process.argv.slice(2);
-  const command = argv[0];
-  const args = argv.slice(1);
-
-  if (
-    typeof command !== 'string' ||
-    command === 'help' ||
-    command === '--help'
-  ) {
-    console.log(HELP);
-    return typeof command === 'string' ? 0 : 2;
+  const token = argv[0];
+  if (typeof token !== 'string' || token === 'help' || token === '--help') {
+    console.error(HELP);
+    return typeof token === 'string' ? 0 : 2;
+  }
+  if (argv.length !== 1) {
+    console.error(HELP);
+    const yaml = stringifyYaml({
+      ok: false,
+      isError: true,
+      phase: 'decode',
+      errors: [
+        {
+          path: '',
+          message: 'expected exactly one request YAML path argument',
+        },
+      ],
+      recover: {
+        toolsListRequest: 'agentic-ai/loom/params/tools-list/default.yaml',
+        hint: 'run loom with a tools-list request, then retry with a valid request envelope',
+      },
+    });
+    if (yaml.kind === ResultKind.Ok) {
+      console.log(yaml.value);
+    }
+    return 2;
   }
 
-  let result: Result<unknown>;
-  switch (command) {
-    case 'pre-push':
-      result = await runPrePush(args);
-      break;
-    case 'cortex-audit':
-      result = await runCortexAudit(args);
-      break;
-    case 'skill-scaffold':
-      result = await runSkillScaffold(args);
-      break;
-    case 'agent-stats':
-      result = await runAgentStats(args);
-      break;
-    case 'pr-land':
-      result = await runPrLand(args);
-      break;
-    default:
-      console.error(`Unknown command: ${command}`);
-      console.log(HELP);
-      return 2;
+  const requestPath = path.resolve(token);
+  const outcome = await dispatchRequestFile(requestPath);
+  const encoded = encodedOutcome(outcome);
+  const yaml = stringifyYaml(encoded);
+  if (yaml.kind === ResultKind.Err) {
+    console.error(yaml.message);
+    return 2;
   }
-
-  if (result.kind === ResultKind.Err) {
-    console.error(result.message);
-    return 1;
-  }
-
-  console.log(stringifyReport(result.value));
-
-  if (
-    command === 'cortex-audit' &&
-    typeof result.value === 'object' &&
-    result.value instanceof Object &&
-    'ok' in result.value &&
-    result.value.ok === false
-  ) {
-    return 1;
-  }
-
-  return 0;
-}
-
-function stringifyReport(value: unknown): string {
-  return JSON.stringify(value, (_key, entry) => entry, 2);
+  console.log(yaml.value);
+  return outcome.exitCode;
 }
 
 const exitCode = await main();

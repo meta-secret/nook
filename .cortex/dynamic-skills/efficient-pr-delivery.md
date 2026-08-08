@@ -17,19 +17,23 @@ requirements are then discovered only at merge time.
 
 ## Preferred Pattern
 
+Write pr-land requests as YAML (`name: pr-land`, `arguments.action`, `arguments.pr`).
+
 ```bash
 task loom:pre-push
 git commit …
 git push -u origin HEAD
 task remote TASK_NAME=<name>   # focused iteration
-task loom:pr-land ARGS='validate --pr <number>'
-task loom:pr-land ARGS='ready --pr <number>'
+task loom:pr-land CONFIG=/tmp/pr-land-validate.yaml
+task loom:pr-land CONFIG=/tmp/pr-land-ready.yaml
 gh pr merge <number> --squash
 ```
 
+See [loom-tools.md](../references/loom-tools.md).
+
 Do not run `task check` / `task ci:pr` as a local product gate.
 
-`task loom:pr-land ARGS='merge-check --pr <n>'` summarizes readiness.
+`task loom:pr-land CONFIG=<pr-land-merge-check-request.yaml>` summarizes readiness.
 
 Loom never squash-merges. The task-owning agent merges after readiness succeeds.
 
@@ -69,7 +73,7 @@ Does not apply to:
 - [ ] Commit and push; use focused hosted tasks instead of a local product gate.
 - [ ] Trigger complete PR validation explicitly on the ready head.
 - [ ] Inspect and address all feedback already present.
-- [ ] Run `task loom:pr-land ARGS='ready --pr <n>'` on the exact head.
+- [ ] Run `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` on the exact head.
 - [ ] Squash-merge immediately when readiness succeeds, then report duration.
 - [ ] Publish Workbench issue, worklog, and Loom AI-agent statistics.
 
