@@ -45,6 +45,13 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
   assert.deepEqual(requiredPrWorkflows(["nook-app/nook-platform/nook-core/src/lib.rs"]), [
     {
       checkName: "Verify and preview",
+      requiredJobs: [
+        "Native Rust verification",
+        "WASM build and artifact",
+        "WASM Node tests",
+        "Web verification",
+        "Verify and preview",
+      ],
       workflowFile: "pr.yml",
       workflowName: "PR",
     },

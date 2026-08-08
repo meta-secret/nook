@@ -221,6 +221,8 @@ Use this workflow for quality, CI, and deployment changes.
     - Main-fix PRs carrying `ci:full-e2e` also feed separate local-provider web and extension browser jobs.
     - `Verify and preview` uses `always()` and fails explicitly when the WASM producer fails.
     - The established required check cannot be skipped by dependency failure.
+    - `Verify and preview` also needs Native Rust verification.
+    - A failed Native job must keep the merge-gate check from going green.
     - `Verify and preview` never waits for native coverage.
     - The preview web solve retries once after the known immediate BuildKit Dockerfile-load flake.
     - Repeated failures still fail the gate.

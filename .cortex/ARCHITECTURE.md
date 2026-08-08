@@ -670,12 +670,14 @@ PR consumer behavior:
 - `Web verification` depends on the WASM build producer through `needs`.
 - It downloads the clippy-clean WASM package with `actions/download-artifact`.
 - `WASM Node tests` can finish in parallel with web verification.
-- `Verify and preview` depends on web verification and WASM Node tests.
+- `Verify and preview` depends on Native Rust, web verification, and WASM Node tests.
 - It deploys from the exported host dist handoff.
 - Rust coverage reporting is a separate native-dependent job.
 - That job downloads the completed handoff directly.
-- Preview never idles on native compilation or sibling-job polling.
-- The overall gate still requires all jobs.
+- Preview waits for Native verification.
+- Preview still does not wait for native coverage.
+- Preview does not poll sibling jobs.
+- The overall gate requires the required producer jobs.
 - Producer failures are reported explicitly.
 
 Hosted CI cache persistence:

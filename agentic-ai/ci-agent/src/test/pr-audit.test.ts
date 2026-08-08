@@ -178,6 +178,36 @@ test("buildPrAudit reports current-head and existing-feedback blockers", async (
   );
 });
 
+test("buildPrAudit rejects a green workflow when Native Rust failed", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ nativeConclusion: "failure" }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.ok(
+    audit.reasons.some((reason) =>
+      reason.includes("Native Rust verification concluded failure"),
+    ),
+  );
+});
+
+test("buildPrAudit rejects when a required PR job is missing from the latest run", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ omitNativeJob: true }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.ok(
+    audit.reasons.some((reason) =>
+      reason.includes("Native Rust verification is missing"),
+    ),
+  );
+});
+
 enum MockCodexReview {
   CleanComment = "clean-comment",
   Dismissed = "dismissed",
@@ -200,6 +230,8 @@ enum MockRunStatus {
 type MockOptions = {
   behindBy?: number;
   codexReview?: MockCodexReview;
+  nativeConclusion?: string;
+  omitNativeJob?: boolean;
   runStatus?: MockRunStatus;
   unresolvedThreads?: number;
 };
@@ -332,6 +364,30 @@ function mockOctokit(options: MockOptions = {}): Octokit {
   const octokit = {
     rest: {
       actions: {
+        listJobsForWorkflowRun: async () => ({
+          data: [
+            "Native Rust verification",
+            "WASM build and artifact",
+            "WASM Node tests",
+            "Web verification",
+            "Verify and preview",
+          ]
+            .filter(
+              (name) =>
+                !(
+                  options.omitNativeJob === true &&
+                  name === "Native Rust verification"
+                ),
+            )
+            .map((name) => ({
+              conclusion:
+                name === "Native Rust verification"
+                  ? (options.nativeConclusion ?? "success")
+                  : "success",
+              name,
+              status: "completed",
+            })),
+        }),
         listWorkflowRuns: async () => ({
           data: {
             workflow_runs: [
@@ -339,6 +395,7 @@ function mockOctokit(options: MockOptions = {}): Octokit {
                 ...(options.runStatus === MockRunStatus.InProgress
                   ? {}
                   : { conclusion: "success" }),
+                created_at: "2026-08-08T00:00:00Z",
                 head_sha: headSha,
                 html_url: "https://github.com/meta-secret/nook/actions/runs/42",
                 id: 42,

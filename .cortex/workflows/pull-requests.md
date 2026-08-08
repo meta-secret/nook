@@ -195,6 +195,11 @@ task pr:preflight PR=<number>
 
 Use `task loom:pr-land ARGS='ready --pr <number>'` (or `task pr:ready`) for a read-only exact-head readiness assertion. The command never merges by itself. Its success is the final signal for the task-owning agent to squash-merge immediately.
 
+`pr:ready` audits required jobs on the latest exact-head `PR` run.
+It rejects when Native Rust, WASM, WASM Node, web verification, or Verify and preview failed.
+Do not merge because Verify and preview looks green while a required producer job failed.
+Do not merge from a mixed status rollup that still shows a failed required job on the latest run.
+
 Do not request or wait for Codex, Claude, Cursor, CodeRabbit, or any other optional external review/check. Repository-owned checks and exact-head deployment remain required.
 
 Before treating a PR as mergeable, **always verify the branch against the latest `origin/main`**.

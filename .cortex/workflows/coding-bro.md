@@ -332,6 +332,7 @@ Do not wait for post-merge Main. Any performance fix belongs in a separate norma
 - **Never merge after a Nook PR-test failure without a green Actions run on the latest head.**
 - **Fix Knip, jscpd, and every other check finding** — unused code, clones/duplicates, lint, types, tests, coverage. Do not raise thresholds or ignore authored sources to silence a red gate. See [quality.md § Fix check findings](quality.md#fix-check-findings--not-silence-them).
 - **Never merge on checks alone.** Require the exact-head `task pr:ready` audit; once it succeeds, the task-owning agent must squash-merge without asking again. Workflows do not blindly merge based on a check event.
+- **Never merge on a green Verify with a failed required producer.** `pr:ready` inspects Native Rust, WASM, WASM Node, web verification, and Verify and preview on the latest exact-head PR run.
 - **Settle feedback already present before merge.** Address and resolve all actionable comments, then require `task pr:ready`. Never request or wait for optional external reviewers or checks.
 - **Never kill the Docker daemon** — only stop containers. See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
 - **Never hide deferred scope** — if requested functionality is not fully implemented because it is large, risky, blocked, or out of scope, manage it in Workbench Markdown first. See [issues.md](issues.md).
