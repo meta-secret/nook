@@ -24,4 +24,25 @@ describe('Loom ESLint contracts', () => {
       'no-restricted-syntax',
     ]);
   });
+
+  test('rejects object literals in multi-argument calls and constructors', async () => {
+    const eslint = new ESLint();
+    const options: LintTextOptions = { filePath: 'src/cli.ts' };
+    const results = await eslint.lintText(
+      `
+        declare class Widget {
+          constructor(label: string, args: { name: string });
+        }
+        Object.assign({}, { name: 'Nook' });
+        new Widget('vault', { name: 'Nook' });
+      `,
+      options,
+    );
+
+    expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
+      'no-restricted-syntax',
+      'no-restricted-syntax',
+      'no-restricted-syntax',
+    ]);
+  });
 });

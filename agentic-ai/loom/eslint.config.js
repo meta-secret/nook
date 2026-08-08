@@ -40,26 +40,22 @@ export default tseslint.config(
       'no-restricted-syntax': [
         'error',
         {
-          selector:
-            "CallExpression[arguments.length=1] > ObjectExpression",
+          selector: 'CallExpression > ObjectExpression',
           message:
             'Loom forbids raw object-literal call arguments. Assign a named typed value first, then pass that name.',
         },
         {
-          selector:
-            "CallExpression[arguments.length=1] > TSAsExpression > ObjectExpression",
+          selector: 'CallExpression > TSAsExpression > ObjectExpression',
           message:
             'Loom forbids raw object-literal call arguments (including `as` casts). Assign a named typed value first, then pass that name.',
         },
         {
-          selector:
-            "NewExpression[arguments.length=1] > ObjectExpression",
+          selector: 'NewExpression > ObjectExpression',
           message:
             'Loom forbids raw object-literal constructor arguments. Assign a named typed value first, then pass that name.',
         },
         {
-          selector:
-            "NewExpression[arguments.length=1] > TSAsExpression > ObjectExpression",
+          selector: 'NewExpression > TSAsExpression > ObjectExpression',
           message:
             'Loom forbids raw object-literal constructor arguments (including `as` casts). Assign a named typed value first, then pass that name.',
         },

@@ -108,7 +108,36 @@ export const noRawObjectArgumentsRule = {
         possibleAncestor: referenceExecutionScope,
         scope: activeCallScope.scope,
       }
-      return scopeContains(args)
+      return (
+        scopeContains(args) &&
+        !nodesUseExclusiveBranches({
+          first: reference.identifier,
+          second: activeCallScope.node,
+        })
+      )
+    }
+    function branchArms(node) {
+      const arms = new Map()
+      let current = node
+      while (current.parent) {
+        const parent = current.parent
+        if (
+          (parent.type === 'IfStatement' ||
+            parent.type === 'ConditionalExpression') &&
+          (current === parent.consequent || current === parent.alternate)
+        ) {
+          arms.set(parent, current === parent.consequent ? 'yes' : 'no')
+        }
+        current = parent
+      }
+      return arms
+    }
+    function nodesUseExclusiveBranches(args) {
+      const firstArms = branchArms(args.first)
+      for (const [branch, arm] of branchArms(args.second)) {
+        if (firstArms.has(branch) && firstArms.get(branch) !== arm) return true
+      }
+      return false
     }
 
     function declaredVariable(identifier) {
@@ -178,7 +207,6 @@ export const noRawObjectArgumentsRule = {
       }
       return []
     }
-
     function staticPropertyKey(member) {
       if (!member.computed && member.property.type === 'Identifier') {
         return {
@@ -199,7 +227,6 @@ export const noRawObjectArgumentsRule = {
       }
       return { kind: StaticKeyLookupKind.NotFound }
     }
-
     function staticObjectKey(property) {
       if (!property.computed && property.key.type === 'Identifier') {
         return {
@@ -207,19 +234,33 @@ export const noRawObjectArgumentsRule = {
           value: property.key.name,
         }
       }
+      return staticExpressionKey(property.key)
+    }
+    function staticExpressionKey(expression) {
       if (
-        property.key.type === 'Literal' &&
-        (typeof property.key.value === 'string' ||
-          typeof property.key.value === 'number')
+        expression.type === 'Literal' &&
+        (typeof expression.value === 'string' ||
+          typeof expression.value === 'number')
       ) {
-        return {
-          kind: StaticKeyLookupKind.Found,
-          value: String(property.key.value),
+        return { kind: StaticKeyLookupKind.Found, value: String(expression.value) }
+      }
+      if (expression.type !== 'Identifier') {
+        return { kind: StaticKeyLookupKind.NotFound }
+      }
+      const lookup = declaredVariable(expression)
+      if (lookup.kind === VariableLookupKind.NotFound) return lookup
+      for (const definition of lookup.variable.defs) {
+        if (
+          definition.type === 'Variable' &&
+          definition.node.type === 'VariableDeclarator' &&
+          definition.parent?.kind === 'const' &&
+          definition.node.init
+        ) {
+          return staticExpressionKey(definition.node.init)
         }
       }
       return { kind: StaticKeyLookupKind.NotFound }
     }
-
     function staticArrayIndex(key) {
       const value =
         typeof key === 'number'
@@ -236,7 +277,6 @@ export const noRawObjectArgumentsRule = {
       }
       return { kind: StaticKeyLookupKind.NotFound }
     }
-
     function possibleExpressionValues(args) {
       const { expression, seenVariables } = args
       const unwrapped = unwrapResultExpression(expression)
@@ -308,7 +348,6 @@ export const noRawObjectArgumentsRule = {
       }
       return values
     }
-
     function bindingProjectionPath(pattern, target) {
       if (pattern === target) {
         return { kind: ProjectionPathLookupKind.Found, path: [] }
@@ -348,7 +387,6 @@ export const noRawObjectArgumentsRule = {
       }
       return { kind: ProjectionPathLookupKind.NotFound }
     }
-
     function isObjectRestBinding(pattern, target) {
       if (pattern.type !== 'ObjectPattern') return false
       return pattern.properties.some(
@@ -356,7 +394,6 @@ export const noRawObjectArgumentsRule = {
           property.type === 'RestElement' && property.argument === target,
       )
     }
-
     function writeBindingPattern(identifier) {
       let current = identifier
       while (
@@ -378,7 +415,6 @@ export const noRawObjectArgumentsRule = {
       }
       return { kind: ProjectionPathLookupKind.NotFound }
     }
-
     function projectValuesAlongPath(args) {
       const { expression, path, seenVariables } = args
       let values = possibleExpressionValues({ expression, seenVariables })
@@ -396,6 +432,16 @@ export const noRawObjectArgumentsRule = {
 
     function variableDefinitionValues(args) {
       const { definition, seenVariables } = args
+      if (
+        definition.type === 'Parameter' &&
+        definition.name.parent?.type === 'AssignmentPattern' &&
+        definition.name.parent.left === definition.name
+      ) {
+        return possibleExpressionValues({
+          expression: definition.name.parent.right,
+          seenVariables,
+        })
+      }
       if (
         definition.type !== 'Variable' ||
         definition.node.type !== 'VariableDeclarator' ||
@@ -480,14 +526,16 @@ export const noRawObjectArgumentsRule = {
         container.type === 'ArrayExpression' &&
         arrayIndexLookup.kind === StaticKeyLookupKind.Found
       ) {
-        const elements = spreadArrayElements({
+        const alternatives = spreadArrayAlternatives({
           expression: container,
           seenVariables,
         })
-        const element = elements[arrayIndexLookup.value]
-        if (element && element.type !== 'SpreadElement') {
-          return possibleExpressionValues({ expression: element, seenVariables })
-        }
+        return alternatives.flatMap((elements) => {
+          const element = elements[arrayIndexLookup.value]
+          return element && element.type !== 'SpreadElement'
+            ? possibleExpressionValues({ expression: element, seenVariables })
+            : []
+        })
       }
       return []
     }
@@ -660,30 +708,40 @@ export const noRawObjectArgumentsRule = {
     }
 
     function spreadArrayElements(args) {
+      return spreadArrayAlternatives(args).flat()
+    }
+    function spreadArrayAlternatives(args) {
       const { expression, seenVariables } = args
       const unwrapped = unwrapResultExpression(expression)
       if (unwrapped.type === 'ArrayExpression') {
-        return unwrapped.elements.flatMap((element) => {
-          if (!element || element.type !== 'SpreadElement') return [element]
-          return spreadArrayElements({
-            expression: element.argument,
-            seenVariables,
-          })
-        })
+        let alternatives = [[]]
+        for (const element of unwrapped.elements) {
+          const additions =
+            element?.type === 'SpreadElement'
+              ? spreadArrayAlternatives({
+                  expression: element.argument,
+                  seenVariables,
+                })
+              : [[element]]
+          alternatives = alternatives.flatMap((prefix) =>
+            additions.map((addition) => [...prefix, ...addition]),
+          )
+        }
+        return alternatives
       }
       if (unwrapped.type === 'AssignmentExpression') {
-        return spreadArrayElements({
+        return spreadArrayAlternatives({
           expression: unwrapped.right,
           seenVariables,
         })
       }
       if (unwrapped.type === 'ConditionalExpression') {
         return [
-          ...spreadArrayElements({
+          ...spreadArrayAlternatives({
             expression: unwrapped.consequent,
             seenVariables,
           }),
-          ...spreadArrayElements({
+          ...spreadArrayAlternatives({
             expression: unwrapped.alternate,
             seenVariables,
           }),
@@ -691,18 +749,18 @@ export const noRawObjectArgumentsRule = {
       }
       if (unwrapped.type === 'LogicalExpression') {
         return [
-          ...spreadArrayElements({
+          ...spreadArrayAlternatives({
             expression: unwrapped.left,
             seenVariables,
           }),
-          ...spreadArrayElements({
+          ...spreadArrayAlternatives({
             expression: unwrapped.right,
             seenVariables,
           }),
         ]
       }
       if (unwrapped.type === 'SequenceExpression') {
-        return spreadArrayElements({
+        return spreadArrayAlternatives({
           expression: unwrapped.expressions.at(-1),
           seenVariables,
         })
@@ -712,8 +770,9 @@ export const noRawObjectArgumentsRule = {
       if (lookup.kind === VariableLookupKind.NotFound) return []
       const { variable } = lookup
       if (seenVariables.has(variable)) return []
-      seenVariables.add(variable)
-      const elements = []
+      const nextSeenVariables = new Set(seenVariables)
+      nextSeenVariables.add(variable)
+      const alternatives = []
       for (const definition of variable.defs) {
         if (
           definition.type === 'Variable' &&
@@ -721,10 +780,10 @@ export const noRawObjectArgumentsRule = {
           definition.node.init &&
           occursBeforeActiveCallSite(definition.node.init)
         ) {
-          elements.push(
-            ...spreadArrayElements({
+          alternatives.push(
+            ...spreadArrayAlternatives({
               expression: definition.node.init,
-              seenVariables,
+              seenVariables: nextSeenVariables,
             }),
           )
         }
@@ -735,15 +794,34 @@ export const noRawObjectArgumentsRule = {
           occursBeforeActiveCallSite(reference.identifier) &&
           referenceCanReachActiveCall(reference)
         ) {
-          elements.push(
-            ...spreadArrayElements({
+          alternatives.push(
+            ...spreadArrayAlternatives({
               expression: reference.writeExpr,
-              seenVariables,
+              seenVariables: nextSeenVariables,
             }),
           )
         }
       }
-      return elements
+      return alternatives
+    }
+    function namedResultAlternatives(expression) {
+      const unwrapped = unwrapResultExpression(expression)
+      if (unwrapped.type === 'ConditionalExpression') {
+        return [
+          ...namedResultAlternatives(unwrapped.consequent),
+          ...namedResultAlternatives(unwrapped.alternate),
+        ]
+      }
+      if (unwrapped.type === 'LogicalExpression') {
+        return [
+          ...namedResultAlternatives(unwrapped.left),
+          ...namedResultAlternatives(unwrapped.right),
+        ]
+      }
+      if (unwrapped.type === 'SequenceExpression') {
+        return namedResultAlternatives(unwrapped.expressions.at(-1))
+      }
+      return [unwrapped]
     }
 
     function inspectArguments(node) {
@@ -752,6 +830,7 @@ export const noRawObjectArgumentsRule = {
         activeCallScope = {
           kind: ActiveCallScopeKind.Active,
           scope: executionScope(sourceCode.getScope(argument)),
+          node: argument,
         }
         try {
           if (argument.type === 'SpreadElement') {
@@ -761,7 +840,9 @@ export const noRawObjectArgumentsRule = {
           if (inspectInlineObjectExpressions(argument)) {
             continue
           }
-          inspectNamedObjectArgument(unwrapResultExpression(argument))
+          for (const result of new Set(namedResultAlternatives(argument))) {
+            inspectNamedObjectArgument(result)
+          }
         } finally {
           activeValueFlowCutoff = Number.POSITIVE_INFINITY
           activeCallScope = { kind: ActiveCallScopeKind.Inactive }

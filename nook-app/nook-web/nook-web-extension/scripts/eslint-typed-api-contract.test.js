@@ -283,6 +283,87 @@ describe('typed API named arguments', () => {
     expect(messages).toEqual([])
   })
 
+  test('ignores writes from mutually exclusive branches', () => {
+    const messages = lint(`
+      declare const flag: boolean
+      declare function consumeCount(value: number): void
+      let value
+      if (flag) {
+        value = { name: 'Nook' }
+      } else {
+        value = 1
+        consumeCount(value)
+      }
+    `)
+
+    expect(messages).toEqual([])
+  })
+
+  test('rejects untyped object-valued parameter defaults', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      function forward(args = { name: 'Nook' }): void {
+        consume(args)
+      }
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+    ])
+  })
+
+  test('resolves constant computed destructuring keys', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      const key = 'picked'
+      const { [key]: args } = { picked: { name: 'Nook' } }
+      consume(args)
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+    ])
+  })
+
+  test('preserves repeated named array spreads during projection', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      const values = [0]
+      consume(([...values, ...values, { name: 'Nook' }])[2])
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
+  test('preserves conditional array layouts during projection', () => {
+    const messages = lint(`
+      declare const flag: boolean
+      declare function consume(value: number | { name: string }): void
+      consume(([...(flag ? [0] : []), { name: 'Nook' }])[0])
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
+  test('inspects named values in conditional result branches', () => {
+    const messages = lint(`
+      type ConsumeArgs = { name: string }
+      declare const flag: boolean
+      declare function consume(value: ConsumeArgs): void
+      const typedArgs: ConsumeArgs = { name: 'Vault' }
+      const args = { name: 'Nook' }
+      consume(flag ? typedArgs : args)
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+    ])
+  })
+
   test('accepts explicitly typed parameter arguments', () => {
     const messages = lint(`
       type ConsumeArgs = { name: string }
