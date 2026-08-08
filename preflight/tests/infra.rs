@@ -427,6 +427,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "sccache",
         "hive",
         "operations",
+        "bake-cache",
     ];
     for domain in expected_domains {
         let include = format!(

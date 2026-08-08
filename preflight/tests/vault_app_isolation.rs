@@ -43,6 +43,27 @@ fn bake_target_assigns_cache_to(bake: &str, target: &str) -> bool {
         .any(|line| line.trim_start().starts_with("cache-to"))
 }
 
+fn taskfile_task_body<'a>(tasks: &'a str, name: &str) -> anyhow::Result<&'a str> {
+    let marker = format!("  {name}:");
+    let rest = tasks
+        .split_once(marker.as_str())
+        .map(|(_, rest)| rest)
+        .ok_or_else(|| anyhow::anyhow!("missing Taskfile task {name}"))?;
+    let mut end = rest.len();
+    for (idx, _) in rest.match_indices('\n') {
+        let line = rest[idx + 1..].lines().next().unwrap_or("");
+        if line.starts_with("  ")
+            && !line.starts_with("   ")
+            && line.trim_end().ends_with(':')
+            && !line.trim_start().starts_with('#')
+        {
+            end = idx;
+            break;
+        }
+    }
+    Ok(rest[..end].trim())
+}
+
 #[path = "vault_app_isolation/bake_cache_proofs.rs"]
 mod bake_cache_proofs;
 #[path = "vault_app_isolation/build_contracts.rs"]
@@ -50,6 +71,8 @@ mod bake_cache_proofs;
 mod build_contracts;
 #[path = "vault_app_isolation/cloudflare_origin_contracts.rs"]
 mod cloudflare_origin_contracts;
+#[path = "vault_app_isolation/dependency_cache_bridge_proofs.rs"]
+mod dependency_cache_bridge_proofs;
 #[path = "vault_app_isolation/hosted_buildkit_cache_contracts.rs"]
 mod hosted_buildkit_cache_contracts;
 #[path = "vault_app_isolation/hosted_delivery_contracts.rs"]

@@ -33,12 +33,22 @@ env:
     sh: >-
       if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '%s' "${GHA_RUST_WASM_DEPS_SCOPE:-}";
       elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ]; then
-        printf 'nook-rust-wasm-deps-v5-%s' "$(git hash-object nook-app/nook-platform/Cargo.lock)";
+        printf 'nook-rust-wasm-deps-v5-%s' "$(bash "{{.ROOT_DIR}}/.github/scripts/rust-deps-cache-fingerprint.sh")";
+      fi
+  NOOK_RUST_DEPS_INPUT_FINGERPRINT:
+    sh: >-
+      if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '%s' "${NOOK_RUST_DEPS_INPUT_FINGERPRINT:-}";
+      elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ]; then
+        bash "{{.ROOT_DIR}}/.github/scripts/rust-deps-cache-fingerprint.sh";
       fi
   NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:
     sh: >-
       if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '%s' "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}";
       elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ] && [ -z "$(git status --porcelain)" ]; then printf '1'; fi
+  NOOK_REGISTRY_CACHE_LOCAL_DEPS_PUBLISH:
+    sh: >-
+      if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '%s' "${NOOK_REGISTRY_CACHE_LOCAL_DEPS_PUBLISH:-}";
+      elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ]; then printf '1'; fi
 
 includes:
   preflight:

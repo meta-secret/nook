@@ -1,13 +1,13 @@
 // Rust toolchain base + ecosystem gates + platform Zot cache scopes.
 // Hosted CI seeds rust_base_cache_* before dependency scopes consume it.
-// Ecosystem Bake targets seed their own scopes so policy-tools, nightly/fuzz/dylint,
+// Ecosystem Bake targets seed their own scopes so policy-tools, fuzz/dylint,
 // and deterministic compiles are reused without folding that tooling into product rust-base.
 // Main seeds those scopes with the trusted registry writer; PRs only write
 // isolated remote-buildcache refs.
-// Nightly: rust-ecosystem-nightly-publish is the sole writer for the shared nightly
-// ref. Dylint/fuzz write leaf scopes only (no nightly/rust-base in cache-from).
-// Parents restore via Bake contexts (same pattern as preflight).
-// Context parents keep cache-from and never declare cache-to.
+// Nightly, dylint, and fuzz are stages of one Dockerfile. This keeps the exact
+// toolchain lineage inside each mode=max leaf scope and removes the linked
+// nightly context whose nested identity rebuilt cargo-dylint. Source COPY steps
+// stay after the shared tool stage. rust-base remains the only linked context.
 // Dedicated *-publish targets write mode=max refs under write_cache_repository
 // plus GHA_CACHE_SCOPE_SUFFIX (Main: nook/buildcache; isolated: …-git-<sha>).
 // Empty cache-from= and cache-to= overrides are prohibited.
@@ -29,7 +29,26 @@ variable "GHA_RUST_WASM_DEPS_SCOPE" {
   default = "nook-rust-wasm-deps-v5-local"
 }
 
-rust_base_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+// Cross-machine, source-free dependency identity. Local sealed formatting and
+// hosted PR jobs derive this value with the same repository script.
+variable "NOOK_RUST_DEPS_INPUT_FINGERPRINT" {
+  default = "local"
+}
+
+variable "NOOK_RUST_DEPS_INPUT_WRITE_ENABLED" {
+  default = ""
+}
+
+// Unique quarantine tag written by one local formatter invocation. Pull
+// requests never import this tag. A GitHub-hosted promoter must download every
+// blob twice before atomically assigning the fingerprint tag.
+variable "NOOK_RUST_DEPS_INPUT_CANDIDATE" {
+  default = ""
+}
+
+rust_base_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_BASE_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1:buildcache",
 ] : [
@@ -40,57 +59,51 @@ rust_base_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
 ] : []
 
-// Nightly + cargo-fuzz + cargo-dylint. Kept out of rust-base so product builds do
-// not inherit a second toolchain, while fuzz/dylint jobs can still reuse it.
-// Do not cache-from rust-base here: a shorter parent importer wins and orphans the
-// nightly RUN even when this scope's mode=max export already embeds rust-base.
-// v4 rotates past thin indexes. PR FALLBACK is PR-scope only: a thin trusted Main
-// importer steals fat PR mode=max layers the same way rust-base did.
-rust_ecosystem_nightly_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-nightly-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-nightly-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-]
-
-rust_ecosystem_nightly_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-nightly-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
-] : []
-
 // Source-sensitive cargo-dylint leaf. Own scope only.
 // Do not cache-from nightly: that shorter parent orphans the dylint RUN (Clippy
 // driver fetch) even when the leaf scope imports. mode=max embeds nightly.
-// v2 rotates past thin PR indexes written while nightly was still listed.
-rust_ecosystem_dylint_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-dylint-v2:buildcache,ignore-error=true",
+// v3 rotates past thin Main dylint-v2 indexes that orphaned nested nightly
+// `cargo install` after Main nightly FALLBACK already restored it.
+rust_ecosystem_dylint_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-dylint-v3:buildcache,ignore-error=true",
 ] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]
 
 rust_ecosystem_dylint_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
 ] : []
 
 // Source-sensitive cargo-fuzz smoke leaf. Own scope only; same short-chain rule
 // as dylint. Dylint's job remains the sole shared nightly writer.
-rust_ecosystem_fuzz_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-fuzz-v2:buildcache,ignore-error=true",
+// v3 matches dylint: leave thin fuzz-v2 indexes that orphaned nested nightly.
+rust_ecosystem_fuzz_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-fuzz-v3:buildcache,ignore-error=true",
 ] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]
 
 rust_ecosystem_fuzz_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
 ] : []
 
 // Pinned cargo-deny/cargo-audit install image. Own scope so other ecosystem
 // exports cannot replace the tools index. mode=max embeds rust-base; do not also
 // import rust-base or the short chain steals the parent and tools RUNs miss.
-// v4 + PR-only FALLBACK: thin Main v3 kept stealing fat PR tools layers.
+// v4 rotates past thin indexes. A present exact ref is imported alone. A cold
+// isolated scope uses the fat Main policy-tools index as its trusted seed.
 // Workspace deny/audit runs via Task against the loaded image, not a Bake leaf.
-rust_ecosystem_policy_tools_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+rust_ecosystem_policy_tools_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-tools-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-tools-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-policy-tools-v4:buildcache,ignore-error=true",
 ] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-tools-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]
@@ -102,7 +115,9 @@ rust_ecosystem_policy_tools_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 // Proptest/Insta/Loom compile layers on top of rust-platform (source over cooked deps).
 // Falls back through trusted rust-deps so PR-isolated deps/base cannot orphan
 // the deterministic toolchain graph. Omit rust-base: rust-deps mode=max embeds it.
-rust_ecosystem_deterministic_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+rust_ecosystem_deterministic_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-deterministic-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-deterministic-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v1:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v3:buildcache,ignore-error=true",
@@ -115,12 +130,30 @@ rust_ecosystem_deterministic_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-deterministic-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
 ] : []
 
-// Product native deps. Own scope only: Bake restores rust-base via contexts
-// (builder-core-deps FROM rust-base). A shorter rust-base importer orphans chef
-// cooks the same way nightly/policy/wasm were orphaned. mode=max embeds rust-base.
+// Kani uses its own compiler, so sccache cannot safely wrap the proof build.
+// Cache the complete toolchain + source proof graph as one mode=max scope.
+rust_ecosystem_kani_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_KANI_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-kani-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-kani-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-kani-v1:buildcache,ignore-error=true",
+] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-kani-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+]
+
+rust_ecosystem_kani_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-kani-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
+] : []
+
+// Product native deps. Own scope only: product.Dockerfile extends rust-base
+// internally. A shorter rust-base importer orphans chef cooks the same way
+// nightly/policy/wasm were orphaned. mode=max embeds rust-base.
 // v3 rotates past thin indexes written while trusted rust-base was still listed.
-rust_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+rust_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-native-deps-input-v2:fingerprint-${NOOK_RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v3:buildcache,ignore-error=true",
 ] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
@@ -130,14 +163,21 @@ rust_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
 ] : []
 
+rust_native_deps_input_cache_to = NOOK_RUST_DEPS_INPUT_WRITE_ENABLED != "" && NOOK_RUST_DEPS_INPUT_CANDIDATE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-native-deps-input-v2:candidate-${NOOK_RUST_DEPS_INPUT_FINGERPRINT}-${NOOK_RUST_DEPS_INPUT_CANDIDATE},mode=max,timeout=10m",
+] : []
+
 // WASM chef cooks. Prefer own deps scopes. Never import shorter rust-base or
 // native rust-deps: those short-chain and orphan cook RUNs. Longer source-v2
 // indexes embed the cook layers (mode=max), so they are a soft fallback when
 // the fingerprinted deps scope is still empty after a cook-input rotation.
 rust_wasm_deps_write_scope = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook-rust-wasm-deps-v5${GHA_CACHE_SCOPE_SUFFIX}" : GHA_RUST_WASM_DEPS_SCOPE
 
-rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-deps-v5${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-wasm-deps-input-v2:fingerprint-${NOOK_RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v2:buildcache,ignore-error=true",
@@ -150,12 +190,19 @@ rust_wasm_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,mode=max,timeout=10m",
 ] : []
 
+rust_wasm_deps_input_cache_to = NOOK_RUST_DEPS_INPUT_WRITE_ENABLED != "" && NOOK_RUST_DEPS_INPUT_CANDIDATE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-wasm-deps-input-v2:candidate-${NOOK_RUST_DEPS_INPUT_FINGERPRINT}-${NOOK_RUST_DEPS_INPUT_CANDIDATE},mode=max,timeout=10m",
+] : []
+
 // Native source restores own scope plus cooked deps. Do not import rust-base:
 // that shorter parent orphans source RUNs even when mode=max embeds the chain.
 // v3 rotates past thin indexes written while rust-base was still listed.
-rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v3:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-native-deps-input-v2:fingerprint-${NOOK_RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v3:buildcache,ignore-error=true",
 ] : [
@@ -169,9 +216,12 @@ rust_native_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 
 // WASM source layers restore their own scope plus wasm-deps. Do not import
 // rust-base or native rust-deps here: those shorter parents orphan source RUNs.
-rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v2:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-wasm-deps-input-v2:fingerprint-${NOOK_RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-deps-v5${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true",
 ] : [
@@ -183,10 +233,30 @@ rust_wasm_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
 ] : []
 
+// Node tests are a distinct source-sensitive consumer running on a separate PR
+// worker. Its own mode=max scope embeds the complete WASM lineage without
+// racing wasm-export's source-v2 writer. A present exact ref is imported alone;
+// the first solve for a new head falls back only to trusted Main's full graph.
+rust_wasm_node_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-node-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-node-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-node-v1:buildcache,ignore-error=true",
+] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-node-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+]
 
+rust_wasm_node_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-node-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
+] : []
+
+
+// Context parent for ecosystem/product leaves. No cache-from and no cache-to:
+// importing the short rust-base index while nesting nightly/policy orphans their
+// expensive RUNs even after Main nightly FALLBACK restored them.
 target "rust-base" {
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/lineage.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "rust-base"
   platforms  = ["linux/amd64"]
   args = {
@@ -194,13 +264,18 @@ target "rust-base" {
     SCCACHE_BUCKET   = SCCACHE_BUCKET
     SCCACHE_S3_MODE  = SCCACHE_S3_MODE
   }
+}
+
+// Read-only warmer for the rust-base Zot scope (docker:rust-base).
+target "rust-base-restore" {
+  inherits   = ["rust-base"]
   cache-from = rust_base_cache_from
 }
 
 // Explicit writer for the rust-base Zot scope. Context consumers use rust-base
-// (no cache-to) so linked leaf bakes cannot thin-export this parent.
+// (no cache-from/cache-to) so linked leaf bakes cannot thin-export or orphan.
 target "rust-base-publish" {
-  inherits = ["rust-base"]
+  inherits = ["rust-base-restore"]
   cache-to   = rust_base_cache_to
 }
 
@@ -218,47 +293,17 @@ target "rust-ecosystem-policy-tools" {
   output     = ["type=docker"]
 }
 
-target "rust-ecosystem-nightly" {
-  context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/nightly.Dockerfile"
-  target     = "rust-ecosystem-nightly"
-  platforms  = ["linux/amd64"]
-  contexts = {
-    rust-base = "target:rust-base"
-  }
-  cache-from = rust_ecosystem_nightly_cache_from
-  output     = ["type=cacheonly"]
-}
-
-target "rust-ecosystem-nightly-publish" {
-  inherits = ["rust-ecosystem-nightly"]
-  cache-to   = rust_ecosystem_nightly_cache_to
-}
-
-// Platform sources over nightly tools. Dylint/fuzz take this via Bake context so
-// source edits do not rewrite the shared nightly toolchain scope.
-target "rust-platform-nightly" {
-  context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/nightly.Dockerfile"
-  target     = "rust-platform-nightly"
-  platforms  = ["linux/amd64"]
-  contexts = {
-    rust-ecosystem-nightly = "target:rust-ecosystem-nightly"
-  }
-  output = ["type=cacheonly"]
-}
-
 target "rust-fuzz-smoke" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/fuzz-smoke.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/nightly.Dockerfile"
   target     = "rust-fuzz-smoke"
   platforms  = ["linux/amd64"]
   args = {
     FUZZ_SECONDS = FUZZ_SECONDS
   }
   contexts = {
-    rust-platform-nightly = "target:rust-platform-nightly"
+    rust-base = "target:rust-base"
   }
   cache-from = rust_ecosystem_fuzz_cache_from
   cache-to   = rust_ecosystem_fuzz_cache_to
@@ -268,11 +313,11 @@ target "rust-fuzz-smoke" {
 target "rust-dylint" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/dylint.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/nightly.Dockerfile"
   target     = "rust-dylint"
   platforms  = ["linux/amd64"]
   contexts = {
-    rust-platform-nightly = "target:rust-platform-nightly"
+    rust-base = "target:rust-base"
   }
   cache-from = rust_ecosystem_dylint_cache_from
   cache-to   = rust_ecosystem_dylint_cache_to
@@ -282,13 +327,20 @@ target "rust-dylint" {
 target "rust-ecosystem-deterministic" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/deterministic.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "rust-ecosystem-deterministic"
   platforms  = ["linux/amd64"]
-  contexts = {
-    rust-platform = "target:rust-platform"
-  }
   cache-from = rust_ecosystem_deterministic_cache_from
   cache-to   = rust_ecosystem_deterministic_cache_to
+  output     = ["type=cacheonly"]
+}
+
+target "rust-kani" {
+  context    = "."
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
+  target     = "rust-kani"
+  platforms  = ["linux/amd64"]
+  cache-from = rust_ecosystem_kani_cache_from
+  cache-to   = rust_ecosystem_kani_cache_to
   output     = ["type=cacheonly"]
 }

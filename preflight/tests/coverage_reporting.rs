@@ -18,13 +18,13 @@ fn classifies_source_and_build_only_coverage_inputs() -> anyhow::Result<()> {
         "nook-app/nook-platform/nook-core/src/lib.rs",
         "nook-app/nook-platform/nook-replication/src/lib.rs",
         "nook-app/nook-platform/nook-event-log/src/lib.rs",
-        "nook-app/nook-platform/nook-core/Dockerfile",
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
     ]);
     assert!(source.coverage_inputs_changed);
     assert!(source.base_coverage_required);
 
     let build_only = classify_coverage_inputs([
-        "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
         "nook-app/nook-platform/nook-core/docker-bake.hcl",
     ]);
     assert!(build_only.coverage_inputs_changed);

@@ -232,7 +232,6 @@ impl CoverageReport {
 fn is_coverage_input(path: &Path) -> bool {
     is_base_coverage_input(path)
         || path == Path::new("nook-app/docker-bake.hcl")
-        || path == Path::new("nook-app/nook-platform/nook-core/Dockerfile")
         || path == Path::new("nook-app/nook-platform/nook-core/docker-bake.hcl")
         || path
             .strip_prefix("nook-app/nook-platform/docker")
@@ -257,7 +256,6 @@ fn is_base_coverage_input(path: &Path) -> bool {
         || path.starts_with("nook-app/nook-platform/nook-replication")
         || path.starts_with("nook-app/nook-platform/nook-event-log")
         || (path.starts_with("nook-app/nook-platform/nook-core")
-            && path != Path::new("nook-app/nook-platform/nook-core/Dockerfile")
             && path != Path::new("nook-app/nook-platform/nook-core/docker-bake.hcl"))
 }
 

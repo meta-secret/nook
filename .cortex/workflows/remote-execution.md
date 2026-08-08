@@ -29,7 +29,10 @@ The command accepts only catalog names. The workflow contains the corresponding 
 
 Remote jobs receive read-only repository and Actions permissions.
 
-They restore only the trusted Main BuildKit lineage as fallback.
+They import a present exact BuildKit lineage alone.
+
+When an exact scope is absent, they seed it from source-free dependency scopes
+and trusted Main.
 
 They write git-commit Zot cache refs (`-git-<sha>`) under `nook/remote-buildcache/**`.
 
@@ -44,7 +47,12 @@ Zot repository authorization gives the Remote identity read-only access to `nook
 
 The two cache layers solve different cold-start costs:
 
-- **Zot** stores BuildKit layers, Cargo downloads, and completed dependency stages. A Remote branch restores its own ref first and Main second, then exports only its own ref. Both repositories use Zot's content-addressed blob deduplication.
+- **Zot** stores BuildKit layers, Cargo downloads, and completed dependency
+  stages.
+  - A Remote branch imports its own ref alone when present.
+  - Otherwise it seeds from source-free dependencies and Main.
+  - It exports only its own ref.
+  - Both repositories use Zot's content-addressed blob deduplication.
 - **SeaweedFS** stores compiler objects published by trusted Main/local/Hive writers. Remote reads those objects; genuinely new branch results persist in its Zot OCI layers until trusted Main publishes the corresponding compiler objects.
 
 Credentials enter compiler vertices only through fixed optional BuildKit secret IDs and target paths.

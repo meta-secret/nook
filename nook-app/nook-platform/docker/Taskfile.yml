@@ -54,6 +54,67 @@ tasks:
         bash "{{.REPO_ROOT}}/.github/scripts/git-cache-scope-publish-guard.sh"
         task docker:ci:cache:publish:web
 
+  registry-cache:publish:local-format-deps:
+    internal: true
+    desc: Publish source-free Rust dependency graphs completed by sealed local formatting.
+    cmds:
+      - |
+        set -euo pipefail
+        if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_DEPS_PUBLISH:-}" != "1" ]; then exit 0; fi
+        if ! bash "{{.REPO_ROOT}}/.github/scripts/rust-deps-cache-publish-guard.sh"; then
+          echo "registry-cache:publish:local-format-deps: unsafe cache recipe; publication skipped" >&2
+          exit 0
+        fi
+        # Local writes are unique quarantine tags. PR jobs cannot import them.
+        # A Main-defined hosted workflow reads every blob twice before it adds
+        # the stable content-fingerprint tag.
+        candidate="$(date -u +%Y%m%d%H%M%S)-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+        fingerprint="${NOOK_RUST_DEPS_INPUT_FINGERPRINT:?missing Rust dependency fingerprint}"
+        source_sha="$(git rev-parse HEAD)"
+        if ! NOOK_RUST_DEPS_INPUT_WRITE_ENABLED=1 NOOK_RUST_DEPS_INPUT_CANDIDATE="$candidate" {{.DOCKER}} buildx bake \
+          {{.NOOK_BAKE_FILES}} \
+          --set "*.output=type=cacheonly" \
+          builder-wasm-deps-input-publish; then
+          echo "registry-cache:publish:local-format-deps: WASM candidate upload failed; stable cache unchanged" >&2
+          exit 0
+        fi
+        if ! NOOK_RUST_DEPS_INPUT_WRITE_ENABLED=1 NOOK_RUST_DEPS_INPUT_CANDIDATE="$candidate" {{.DOCKER}} buildx bake \
+          {{.NOOK_BAKE_FILES}} \
+          --set "*.output=type=cacheonly" \
+          builder-core-deps-input-publish; then
+          echo "registry-cache:publish:local-format-deps: native candidate upload failed; stable cache unchanged" >&2
+          exit 0
+        fi
+        if ! command -v gh >/dev/null 2>&1 || ! gh auth status >/dev/null 2>&1; then
+          echo "registry-cache:publish:local-format-deps: candidate quarantined; GitHub dispatch unavailable" >&2
+          exit 0
+        fi
+        if [ -n "$(git status --porcelain -- \
+          .github/scripts/rust-deps-cache-fingerprint.sh \
+          nook-app/nook-platform/Cargo.toml \
+          nook-app/nook-platform/Cargo.lock \
+          nook-app/nook-platform/clippy.toml \
+          nook-app/nook-platform/docker/rust/product.Dockerfile \
+          nook-app/nook-platform/docker/rust/product.Dockerfile.dockerignore \
+          nook-app/nook-platform/docker/sccache-wrapper.sh \
+          nook-app/nook-platform/docker/sccache-report.sh \
+          ':(glob)nook-app/**/Cargo.toml' \
+          ':(glob)nook-app/nook-platform/.cargo/**' \
+          ':(glob)nook-app/nook-platform/.config/**')" ]; then
+          echo "registry-cache:publish:local-format-deps: candidate quarantined; dependency inputs are not committed" >&2
+          exit 0
+        fi
+        if ! gh workflow run remote.yml \
+          --ref main \
+          --raw-field "task=rust-cache:promote" \
+          --raw-field "cache_fingerprint=$fingerprint" \
+          --raw-field "cache_candidate=$candidate" \
+          --raw-field "cache_source_sha=$source_sha"; then
+          echo "registry-cache:publish:local-format-deps: candidate quarantined; hosted promotion dispatch failed" >&2
+          exit 0
+        fi
+        echo "registry-cache:publish:local-format-deps: hosted promotion dispatched for $candidate"
+
   docker:rust:task:
     internal: true
     desc: Run a Task target in the on-demand source-sealed Rust/WASM image.
@@ -154,7 +215,7 @@ tasks:
         out_dir="{{.CI_ARTIFACT_DIR}}";
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
-        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" --set "builder-core-deps.output=type=cacheonly" --set "rust-base.output=type=cacheonly" ci-rust builder-core-deps rust-base'
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" --set "rust-format-check.output=type=cacheonly" ci-rust'
       - task: registry-cache:publish:native
 
   docker:ci:wasm:export:
@@ -168,7 +229,7 @@ tasks:
         out_dir="{{.CI_ARTIFACT_DIR}}";
         case "$out_dir" in /*) ;; *) out_dir="{{.REPO_ROOT}}/$out_dir" ;; esac;
         rm -rf "$out_dir"; mkdir -p "$out_dir";
-        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" --set "builder-wasm-deps.output=type=cacheonly" wasm-export builder-wasm-deps'
+        {{.DOCKER}} buildx bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "wasm-export.output=type=local,dest=$out_dir" wasm-export'
       - task: registry-cache:publish:wasm
 
   docker:ci:wasm:node-test:
@@ -206,7 +267,12 @@ tasks:
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
-        builder-core-deps-publish builder-debug
+        builder-core-deps-publish
+      - >-
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "*.output=type=cacheonly"
+        builder-debug
       - >-
         {{.DOCKER}} buildx bake
         --allow=fs.read={{.REPO_ROOT}}
@@ -252,11 +318,13 @@ tasks:
     desc: Bake only rust-base (apt/mold/sccache). Read-only for Zot; never publishes.
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
+      # Restore via rust-base-restore (has cache-from). Context target rust-base
+      # omits cache-from so nested nightly/policy leaves are not orphaned.
       - >-
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
-        --set "rust-base.output=type=cacheonly"
-        rust-base
+        --set "rust-base-restore.output=type=cacheonly"
+        rust-base-restore
 
   docker:ecosystem:policy-tools:
     desc: Bake and load rust-ecosystem-policy-tools (pinned deny/audit CLIs).
@@ -309,29 +377,6 @@ tasks:
       - task: fuzz:dependency-policy
       - task: minds:dependency-policy
 
-  docker:ecosystem:nightly:verify:
-    desc: Warm rust-ecosystem-nightly without writing its Zot scope.
-    deps: [sccache:ensure, registry-cache:ensure]
-    cmds:
-      - task: docker:rust-base
-      - >-
-        GHA_CACHE_WRITE_ENABLED=
-        {{.DOCKER}} buildx bake
-        {{.NOOK_BAKE_FILES}}
-        rust-ecosystem-nightly
-
-  docker:ecosystem:nightly:
-    desc: Bake only rust-ecosystem-nightly. Sole shared nightly Zot writer when writes are enabled.
-    deps: [sccache:ensure, registry-cache:ensure]
-    cmds:
-      - task: docker:ecosystem:nightly:verify
-      - |
-        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
-          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
-            {{.NOOK_BAKE_FILES}} \
-            rust-ecosystem-nightly-publish
-        fi
-
   docker:ecosystem:deterministic:
     desc: Bake Proptest, Insta, and Loom on the sealed Rust dependency graph.
     deps: [sccache:ensure, registry-cache:ensure]
@@ -351,14 +396,30 @@ tasks:
             rust-ecosystem-deterministic
         fi
 
+  docker:ecosystem:kani:
+    desc: Run Kani bounded proofs in a full-graph BuildKit cache scope.
+    deps: [sccache:ensure, registry-cache:ensure]
+    cmds:
+      - task: docker:rust-base
+      - >-
+        GHA_CACHE_WRITE_ENABLED=
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        rust-kani
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            rust-kani
+        fi
+
   docker:ecosystem:fuzz:
     desc: Bake the cargo-fuzz smoke target with a bounded runtime.
     deps: [sccache:ensure, registry-cache:ensure]
     vars:
       FUZZ_SECONDS: '{{default "20" .FUZZ_SECONDS}}'
     cmds:
-      # Warm nightly read-only first. Fuzz never rewrites nightly/rust-base.
-      - task: docker:ecosystem:nightly:verify
+      - task: docker:rust-base
       - >-
         GHA_CACHE_WRITE_ENABLED=
         {{.DOCKER}} buildx bake
@@ -377,8 +438,7 @@ tasks:
     desc: Bake repository Dylint lints on the sealed nightly ecosystem image.
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
-      # Warm/publish nightly first (sole nightly writer), then the dylint leaf.
-      - task: docker:ecosystem:nightly
+      - task: docker:rust-base
       - >-
         GHA_CACHE_WRITE_ENABLED=
         {{.DOCKER}} buildx bake
@@ -390,4 +450,3 @@ tasks:
             {{.NOOK_BAKE_FILES}} \
             rust-dylint
         fi
-

@@ -145,12 +145,17 @@ Clearing `cache-to` to stop a linked parent from writing is the wrong fix.
 
 Use scoped architecture instead:
 
-- context parents keep `cache-from` and declare no `cache-to`;
+- product dependency and source stages share one Dockerfile lineage;
+- linked context parents declare no `cache-from` or `cache-to`;
+- dedicated `*-restore` targets read standalone dependency scopes;
 - dedicated `*-publish` targets write `mode=max` refs;
 - Main writes `nook/buildcache/<scope>`;
 - PR/Remote/local writes use
   `nook/remote-buildcache/<scope>-git-<40-char-sha>`;
-- local publish requires a clean worktree so a commit tag cannot lie.
+- local formatting writes only unique, source-free dependency candidates;
+- a Main-defined hosted workflow downloads every candidate blob twice;
+- only that workflow assigns a PR-visible content-fingerprint tag;
+- dirty cache recipes disable local publication.
 
 If a short parent index orphans a leaf RUN, redesign the Bake graph.
 

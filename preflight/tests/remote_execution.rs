@@ -12,6 +12,20 @@ fn read(path: &str) -> String {
         .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
 }
 
+fn docker_stage<'a>(dockerfile: &'a str, stage: &str) -> &'a str {
+    let marker = format!(" AS {stage}\n");
+    let marker_start = dockerfile
+        .find(&marker)
+        .unwrap_or_else(|| panic!("Dockerfile stage must exist: {stage}"));
+    let stage_start = dockerfile[..marker_start]
+        .rfind("FROM ")
+        .unwrap_or_else(|| panic!("Dockerfile stage must start with FROM: {stage}"));
+    let remainder = &dockerfile[stage_start..];
+    remainder
+        .split_once("\nFROM ")
+        .map_or(remainder, |(body, _)| body)
+}
+
 fn catalog_from_taskfile(taskfile: &str) -> BTreeSet<&str> {
     taskfile
         .split("case \"$requested_task\" in")
@@ -92,13 +106,19 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
 
     assert_eq!(
         workflow.matches("if: inputs.task == '").count(),
-        task_catalog.len(),
-        "every selected remote job must correspond to exactly one Taskfile allowlist entry"
+        task_catalog.len() + 1,
+        "Remote has the public Taskfile catalog plus one internal cache-promotion broker"
     );
     assert_eq!(
         workflow.matches("runs-on: ubuntu-latest").count(),
-        task_catalog.len(),
-        "every catalog task must run on its own GitHub-hosted job"
+        task_catalog.len() + 1,
+        "every catalog task and the internal cache promoter need a GitHub-hosted job"
+    );
+    assert!(
+        workflow.contains("if: inputs.task == 'rust-cache:promote'")
+            && workflow.contains("Remote / rust-cache:promote")
+            && !remote_tasks.contains("rust-cache:promote"),
+        "cache promotion must remain an internal parameterized broker, not an agent task"
     );
     assert!(!workflow.contains("runs-on: nook"));
     assert!(
@@ -174,19 +194,16 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     let core_tasks = read("nook-app/nook-platform/Taskfile.yml");
     let web_tasks = read("nook-app/nook-web/Taskfile.yml");
     let extension_tasks = read("nook-app/nook-web/nook-web-extension/Taskfile.yml");
-    let lineage_dockerfile = read("nook-app/nook-platform/docker/rust/lineage.Dockerfile");
-    let test_dockerfile = read("nook-app/nook-platform/docker/rust/nook-rust-test.Dockerfile");
-    let lint_dockerfile = read("nook-app/nook-platform/docker/rust/nook-rust-lint.Dockerfile");
-    let coverage_dockerfile =
-        read("nook-app/nook-platform/docker/rust/nook-rust-coverage.Dockerfile");
-    let base_dockerignore =
-        read("nook-app/nook-platform/docker/rust/nook-rust-test.Dockerfile.dockerignore");
-    let lineage_dockerignore =
-        read("nook-app/nook-platform/docker/rust/lineage.Dockerfile.dockerignore");
+    let product_dockerfile = read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+    let test_dockerfile = docker_stage(&product_dockerfile, "nook-rust-test");
+    let lint_dockerfile = docker_stage(&product_dockerfile, "nook-rust-lint");
+    let coverage_dockerfile = docker_stage(&product_dockerfile, "nook-rust-coverage");
+    let product_dockerignore =
+        read("nook-app/nook-platform/docker/rust/product.Dockerfile.dockerignore");
     let core_bake = read("nook-app/nook-platform/nook-core/docker-bake.hcl");
     let wasm_bake = read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
     let web_app_bake = read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
-    let wasm_dockerfile = read("nook-app/nook-platform/nook-wasm/Dockerfile");
+    let wasm_dockerfile = product_dockerfile.as_str();
     let shared_bake = read("nook-app/docker-bake.hcl");
     let bake = format!("{shared_bake}\n{core_bake}\n{wasm_bake}\n{web_app_bake}");
 
@@ -211,57 +228,39 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     assert!(web_tasks.contains("remote:web:test:"));
     assert!(extension_tasks.contains("remote:extension:check:"));
     assert!(
-        lineage_dockerfile.contains("FROM rust-base AS chef-deps")
-            && lineage_dockerfile.contains("FROM builder-wasm-deps AS builder-core-deps")
-            && lineage_dockerfile.contains("FROM builder-core-deps AS rust-platform")
-            && lineage_dockerfile.contains("COPY nook-app/nook-platform/ nook-app/nook-platform/")
-            && !lineage_dockerfile.contains("AS nook-rust-test")
-            && !lineage_dockerfile.contains("AS nook-rust-lint")
-            && !lineage_dockerfile.contains("AS nook-rust-coverage"),
-        "lineage.Dockerfile must own deps + rust-platform without focused leaves"
+        product_dockerfile.contains("FROM rust-base AS chef-deps")
+            && product_dockerfile.contains("FROM builder-wasm-deps AS builder-core-deps")
+            && product_dockerfile.contains("FROM builder-core-deps AS rust-platform")
+            && product_dockerfile.contains("COPY nook-app/nook-platform/ nook-app/nook-platform/")
+            && product_dockerfile.contains("AS nook-rust-test")
+            && product_dockerfile.contains("AS nook-rust-lint")
+            && product_dockerfile.contains("AS nook-rust-coverage"),
+        "product.Dockerfile must own dependency, source, and focused leaf stages"
     );
     for ignored in [
         "**/docker-bake.hcl",
-        "nook-app/nook-platform/nook-core/Dockerfile",
-        "nook-app/nook-platform/nook-core/coverage-floor.json",
-        "nook-app/nook-platform/nook-wasm/Dockerfile",
-        "nook-app/nook-platform/nook-wasm/LICENSE",
-    ] {
-        assert!(
-            base_dockerignore.lines().any(|line| line == ignored),
-            "focused Rust context must ignore non-compiler input: {ignored}"
-        );
-    }
-    for ignored in [
-        "nook-app/nook-platform/docker/rust",
-        "nook-app/nook-platform/docker/Taskfile.yml",
-        "nook-app/nook-platform/Taskfile.yml",
         "**/target",
+        "**/node_modules",
+        "**/dist",
     ] {
         assert!(
-            lineage_dockerignore.lines().any(|line| line == ignored),
-            "rust-platform COPY context must ignore non-source input: {ignored}"
+            product_dockerignore.lines().any(|line| line == ignored),
+            "product Rust context must ignore generated input: {ignored}"
         );
     }
     assert!(
         core_bake.contains("target \"rust-platform\"")
-            && core_bake.contains("builder-core-deps = \"target:builder-core-deps\""),
-        "rust-platform Bake target must restore builder-core-deps via named context"
+            && core_bake
+                .contains("dockerfile = \"nook-app/nook-platform/docker/rust/product.Dockerfile\"",)
+            && !core_bake.contains("builder-core-deps = \"target:builder-core-deps\""),
+        "rust-platform must resolve builder-core-deps as an internal product stage"
     );
     for (label, stage, compile_marker) in [
-        (
-            "test",
-            test_dockerfile.as_str(),
-            "focused-native-test-compile",
-        ),
-        (
-            "lint",
-            lint_dockerfile.as_str(),
-            "focused-rust-lint-compile",
-        ),
+        ("test", test_dockerfile, "focused-native-test-compile"),
+        ("lint", lint_dockerfile, "focused-rust-lint-compile"),
         (
             "coverage",
-            coverage_dockerfile.as_str(),
+            coverage_dockerfile,
             "focused-rust-coverage-compile",
         ),
     ] {
@@ -315,25 +314,23 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     assert!(wasm_dockerfile.contains("FROM builder-wasm-build AS focused-web-artifacts-source"));
     assert!(wasm_dockerfile.contains("FROM scratch AS focused-web-artifacts"));
     assert!(core_bake.contains("inherits = [\"_nook-rust-test-common\"]"));
-    for (target, dockerfile) in [
-        ("_nook-rust-test-common", "nook-rust-test.Dockerfile"),
-        ("_nook-rust-lint-common", "nook-rust-lint.Dockerfile"),
-        (
-            "_nook-rust-coverage-common",
-            "nook-rust-coverage.Dockerfile",
-        ),
+    for target in [
+        "_nook-rust-test-common",
+        "_nook-rust-lint-common",
+        "_nook-rust-coverage-common",
     ] {
         let stage = core_bake
             .split(&format!("target \"{target}\" {{\n"))
             .nth(1)
             .and_then(|remainder| remainder.split("\n}").next())
             .unwrap_or_else(|| panic!("focused Bake target must exist: {target}"));
-        assert!(stage.contains(&format!(
-            "dockerfile = \"nook-app/nook-platform/docker/rust/{dockerfile}\""
-        )));
         assert!(
-            stage.contains("builder-core-deps = \"target:builder-core-deps\""),
-            "{target} must take builder-core-deps via Bake named context"
+            stage
+                .contains("dockerfile = \"nook-app/nook-platform/docker/rust/product.Dockerfile\"")
+        );
+        assert!(
+            !stage.contains("contexts ="),
+            "{target} must resolve builder-core-deps as an internal stage"
         );
     }
     assert!(web_app_bake.contains("inherits   = [\"_nook-web-focused-common\"]"));
