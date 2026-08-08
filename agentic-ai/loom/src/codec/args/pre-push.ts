@@ -1,13 +1,17 @@
-import { DecodeStatus } from '../field-error.ts';
 import type { ExternalValue } from '../../lib/guards.ts';
+import { RequestFamily } from '../enums.ts';
+import { DecodeStatus, decodeErr, type DecodeOutcome } from '../field-error.ts';
+import {
+  booleanJsonSchema,
+  objectJsonSchema,
+  type ObjectJsonSchema,
+} from '../json-schema.ts';
 import {
   collectDecode,
   denyUnknownKeys,
   expectBoolean,
   expectObject,
 } from '../object.ts';
-import { RequestFamily } from '../enums.ts';
-import { decodeErr, type DecodeOutcome } from '../field-error.ts';
 
 export enum PrePushField {
   StageHostUpdates = 'stageHostUpdates',
@@ -63,12 +67,10 @@ export function decodePrePushRequest(
   });
 }
 
-export const PRE_PUSH_INPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['stageHostUpdates', 'fetchOriginMain'],
+export const PRE_PUSH_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema({
+  required: [PrePushField.StageHostUpdates, PrePushField.FetchOriginMain],
   properties: {
-    stageHostUpdates: { type: 'boolean' },
-    fetchOriginMain: { type: 'boolean' },
+    [PrePushField.StageHostUpdates]: booleanJsonSchema(),
+    [PrePushField.FetchOriginMain]: booleanJsonSchema(),
   },
-} as const;
+});

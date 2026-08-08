@@ -6,6 +6,13 @@ import {
   type DecodeOutcome,
 } from '../field-error.ts';
 import {
+  booleanJsonSchema,
+  integerJsonSchema,
+  objectJsonSchema,
+  stringJsonSchema,
+  type ObjectJsonSchema,
+} from '../json-schema.ts';
+import {
   denyUnknownKeys,
   expectBoolean,
   expectObject,
@@ -130,23 +137,27 @@ export function decodeAgentStatsFilePayload(
   });
 }
 
-export const AGENT_STATS_ASSEMBLE_INPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['prNumber', 'scratchPath', 'outputPath', 'includeTestInventory'],
-  properties: {
-    prNumber: { type: 'integer', minimum: 1 },
-    scratchPath: { type: 'string' },
-    outputPath: { type: 'string' },
-    includeTestInventory: { type: 'boolean' },
-  },
-} as const;
+export const AGENT_STATS_ASSEMBLE_INPUT_SCHEMA: ObjectJsonSchema =
+  objectJsonSchema({
+    required: [
+      AgentStatsAssembleField.PrNumber,
+      AgentStatsAssembleField.ScratchPath,
+      AgentStatsAssembleField.OutputPath,
+      AgentStatsAssembleField.IncludeTestInventory,
+    ],
+    properties: {
+      [AgentStatsAssembleField.PrNumber]: integerJsonSchema({ minimum: 1 }),
+      [AgentStatsAssembleField.ScratchPath]: stringJsonSchema(),
+      [AgentStatsAssembleField.OutputPath]: stringJsonSchema(),
+      [AgentStatsAssembleField.IncludeTestInventory]: booleanJsonSchema(),
+    },
+  });
 
-export const AGENT_STATS_FILE_INPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['statsFile'],
-  properties: {
-    statsFile: { type: 'string' },
+export const AGENT_STATS_FILE_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema(
+  {
+    required: [AgentStatsFileField.StatsFile],
+    properties: {
+      [AgentStatsFileField.StatsFile]: stringJsonSchema(),
+    },
   },
-} as const;
+);

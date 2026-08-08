@@ -95,6 +95,8 @@ Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/
 - no authored `unknown`; untrusted YAML/JSON uses `ExternalValue` /
   `ExternalObject`
   ([typescript-no-unknown.md](../../.cortex/dynamic-skills/typescript-no-unknown.md))
+- discovery `inputSchema` constants are typed `ObjectJsonSchema`, built with
+  `objectJsonSchema` / field enums (not raw `{ type: 'object', ... } as const`)
 
 Enforced by `task preflight:typescript-state`, Loom ESLint (`max-params`,
 `no-restricted-types`), and `task loom:verify`.

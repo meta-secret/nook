@@ -1,11 +1,12 @@
 import type { ExternalValue } from '../../lib/guards.ts';
+import { RequestFamily } from '../enums.ts';
 import {
   DecodeStatus,
   decodeErr,
   decodeOk,
   type DecodeOutcome,
 } from '../field-error.ts';
-import { RequestFamily } from '../enums.ts';
+import { objectJsonSchema, type ObjectJsonSchema } from '../json-schema.ts';
 import { denyUnknownKeys, expectObject } from '../object.ts';
 
 /** toolsList accepts no payload fields. */
@@ -33,9 +34,7 @@ export function decodeToolsListRequest(
   return decodeOk({});
 }
 
-export const TOOLS_LIST_INPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
+export const TOOLS_LIST_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema({
   required: [],
   properties: {},
-} as const;
+});

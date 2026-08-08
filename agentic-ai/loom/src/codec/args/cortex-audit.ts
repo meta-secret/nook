@@ -1,13 +1,17 @@
-import { DecodeStatus } from '../field-error.ts';
 import type { ExternalValue } from '../../lib/guards.ts';
+import { RequestFamily } from '../enums.ts';
+import { DecodeStatus, decodeErr, type DecodeOutcome } from '../field-error.ts';
+import {
+  booleanJsonSchema,
+  objectJsonSchema,
+  type ObjectJsonSchema,
+} from '../json-schema.ts';
 import {
   collectDecode,
   denyUnknownKeys,
   expectBoolean,
   expectObject,
 } from '../object.ts';
-import { RequestFamily } from '../enums.ts';
-import { decodeErr, type DecodeOutcome } from '../field-error.ts';
 
 export enum CortexAuditField {
   IncludeDensityLint = 'includeDensityLint',
@@ -52,11 +56,9 @@ export function decodeCortexAuditRequest(
   });
 }
 
-export const CORTEX_AUDIT_INPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['includeDensityLint'],
+export const CORTEX_AUDIT_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema({
+  required: [CortexAuditField.IncludeDensityLint],
   properties: {
-    includeDensityLint: { type: 'boolean' },
+    [CortexAuditField.IncludeDensityLint]: booleanJsonSchema(),
   },
-} as const;
+});

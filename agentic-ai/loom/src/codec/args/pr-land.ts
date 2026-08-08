@@ -6,6 +6,13 @@ import {
   type DecodeOutcome,
 } from '../field-error.ts';
 import {
+  booleanJsonSchema,
+  integerJsonSchema,
+  objectJsonSchema,
+  stringJsonSchema,
+  type ObjectJsonSchema,
+} from '../json-schema.ts';
+import {
   denyUnknownKeys,
   expectBoolean,
   expectObject,
@@ -128,22 +135,20 @@ export function decodePrLandValidatePayload(
   });
 }
 
-export const PR_LAND_PR_INPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['prNumber'],
+export const PR_LAND_PR_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema({
+  required: [PrLandPrField.PrNumber],
   properties: {
-    prNumber: { type: 'integer', minimum: 1 },
+    [PrLandPrField.PrNumber]: integerJsonSchema({ minimum: 1 }),
   },
-} as const;
+});
 
-export const PR_LAND_VALIDATE_INPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['prNumber', 'runFullE2e'],
-  properties: {
-    prNumber: { type: 'integer', minimum: 1 },
-    remoteTask: { type: 'string' },
-    runFullE2e: { type: 'boolean' },
+export const PR_LAND_VALIDATE_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema(
+  {
+    required: [PrLandValidateField.PrNumber, PrLandValidateField.RunFullE2e],
+    properties: {
+      [PrLandValidateField.PrNumber]: integerJsonSchema({ minimum: 1 }),
+      [PrLandValidateField.RemoteTask]: stringJsonSchema(),
+      [PrLandValidateField.RunFullE2e]: booleanJsonSchema(),
+    },
   },
-} as const;
+);

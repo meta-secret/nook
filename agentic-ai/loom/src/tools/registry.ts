@@ -1,9 +1,4 @@
 import {
-  asExternalValue,
-  type ExternalObject,
-  type ExternalValue,
-} from '../lib/guards.ts';
-import {
   AGENT_STATS_ASSEMBLE_INPUT_SCHEMA,
   AGENT_STATS_FILE_INPUT_SCHEMA,
 } from '../codec/args/agent-stats.ts';
@@ -21,6 +16,7 @@ import {
   PrLandOperation,
   RequestFamily,
 } from '../codec/enums.ts';
+import type { ObjectJsonSchema } from '../codec/json-schema.ts';
 import { listRequestFamilies, type LoomRequest } from '../codec/request.ts';
 import {
   runAgentStatsAssemble,
@@ -37,18 +33,16 @@ import {
 } from '../commands/pr-land.ts';
 import { runPrePush } from '../commands/pre-push.ts';
 import { runSkillScaffold } from '../commands/skill-scaffold.ts';
+import { asExternalValue, type ExternalValue } from '../lib/guards.ts';
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
-
-export type JsonSchema = Readonly<ExternalObject>;
 
 export type DiscoverableRequest = {
   readonly family: RequestFamily;
   readonly operation?: AgentStatsOperation | PrLandOperation;
   readonly description: string;
   readonly exampleRequest: string;
-  readonly inputSchema: JsonSchema;
+  readonly inputSchema: ObjectJsonSchema;
 };
-
 const DISCOVERABLE: readonly DiscoverableRequest[] = [
   {
     family: RequestFamily.ToolsList,

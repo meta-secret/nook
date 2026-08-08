@@ -1,5 +1,5 @@
-import { RequestFamily } from '../enums.ts';
 import type { ExternalValue } from '../../lib/guards.ts';
+import { RequestFamily } from '../enums.ts';
 import {
   DecodeStatus,
   FieldIssue,
@@ -8,6 +8,12 @@ import {
   fieldError,
   type DecodeOutcome,
 } from '../field-error.ts';
+import {
+  booleanJsonSchema,
+  objectJsonSchema,
+  patternStringJsonSchema,
+  type ObjectJsonSchema,
+} from '../json-schema.ts';
 import {
   denyUnknownKeys,
   expectBoolean,
@@ -75,12 +81,15 @@ export function decodeSkillScaffoldRequest(
   });
 }
 
-export const SKILL_SCAFFOLD_INPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['skillSlug', 'createExecutableWrappers'],
+export const SKILL_SCAFFOLD_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema({
+  required: [
+    SkillScaffoldField.SkillSlug,
+    SkillScaffoldField.CreateExecutableWrappers,
+  ],
   properties: {
-    skillSlug: { type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' },
-    createExecutableWrappers: { type: 'boolean' },
+    [SkillScaffoldField.SkillSlug]: patternStringJsonSchema({
+      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
+    }),
+    [SkillScaffoldField.CreateExecutableWrappers]: booleanJsonSchema(),
   },
-} as const;
+});

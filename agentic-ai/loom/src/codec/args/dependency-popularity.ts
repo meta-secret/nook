@@ -1,11 +1,17 @@
 import type { ExternalValue } from '../../lib/guards.ts';
+import { RequestFamily } from '../enums.ts';
 import {
   DecodeStatus,
   decodeErr,
   decodeOk,
   type DecodeOutcome,
 } from '../field-error.ts';
-import { RequestFamily } from '../enums.ts';
+import {
+  booleanJsonSchema,
+  integerJsonSchema,
+  objectJsonSchema,
+  type ObjectJsonSchema,
+} from '../json-schema.ts';
 import {
   collectDecode,
   denyUnknownKeys,
@@ -112,21 +118,31 @@ export function decodeDependencyPopularityRequest(
   });
 }
 
-export const DEPENDENCY_POPULARITY_INPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: [
-    'includeRepositoryManifests',
-    'minNpmWeeklyDownloads',
-    'minGitHubStars',
-    'minCratesIoDownloads',
-    'minCratesIoRecentDownloads',
-  ],
-  properties: {
-    includeRepositoryManifests: { type: 'boolean' },
-    minNpmWeeklyDownloads: { type: 'integer', minimum: 1 },
-    minGitHubStars: { type: 'integer', minimum: 1 },
-    minCratesIoDownloads: { type: 'integer', minimum: 1 },
-    minCratesIoRecentDownloads: { type: 'integer', minimum: 1 },
-  },
-} as const;
+export const DEPENDENCY_POPULARITY_INPUT_SCHEMA: ObjectJsonSchema =
+  objectJsonSchema({
+    required: [
+      DependencyPopularityField.IncludeRepositoryManifests,
+      DependencyPopularityField.MinNpmWeeklyDownloads,
+      DependencyPopularityField.MinGitHubStars,
+      DependencyPopularityField.MinCratesIoDownloads,
+      DependencyPopularityField.MinCratesIoRecentDownloads,
+    ],
+    properties: {
+      [DependencyPopularityField.IncludeRepositoryManifests]:
+        booleanJsonSchema(),
+      [DependencyPopularityField.MinNpmWeeklyDownloads]: integerJsonSchema({
+        minimum: 1,
+      }),
+      [DependencyPopularityField.MinGitHubStars]: integerJsonSchema({
+        minimum: 1,
+      }),
+      [DependencyPopularityField.MinCratesIoDownloads]: integerJsonSchema({
+        minimum: 1,
+      }),
+      [DependencyPopularityField.MinCratesIoRecentDownloads]: integerJsonSchema(
+        {
+          minimum: 1,
+        },
+      ),
+    },
+  });
