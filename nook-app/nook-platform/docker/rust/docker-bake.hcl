@@ -44,11 +44,12 @@ rust_base_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 // not inherit a second toolchain, while fuzz/dylint jobs can still reuse it.
 // Do not cache-from rust-base here: a shorter parent importer wins and orphans the
 // nightly RUN even when this scope's mode=max export already embeds rust-base.
-// v4 rotates past thin indexes. Isolated FALLBACK restores git-scope first, then
-// the fat Main nightly index so PR verify does not cold `cargo install`.
+// v4 rotates past thin indexes. Isolated FALLBACK restores the fat Main nightly
+// index first, then git-scope. A thin PR publish written before layers are
+// materialized must not win over Main and cold `cargo install`.
 rust_ecosystem_nightly_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-nightly-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-nightly-v4:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-nightly-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-nightly-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]
@@ -62,8 +63,8 @@ rust_ecosystem_nightly_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 // driver fetch) even when the leaf scope imports. mode=max embeds nightly.
 // v2 rotates past thin PR indexes written while nightly was still listed.
 rust_ecosystem_dylint_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-dylint-v2:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-dylint-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]
@@ -75,8 +76,8 @@ rust_ecosystem_dylint_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 // Source-sensitive cargo-fuzz smoke leaf. Own scope only; same short-chain rule
 // as dylint. Dylint's job remains the sole shared nightly writer.
 rust_ecosystem_fuzz_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-fuzz-v2:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-fuzz-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]
@@ -88,12 +89,12 @@ rust_ecosystem_fuzz_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 // Pinned cargo-deny/cargo-audit install image. Own scope so other ecosystem
 // exports cannot replace the tools index. mode=max embeds rust-base; do not also
 // import rust-base or the short chain steals the parent and tools RUNs miss.
-// v4 rotates past thin indexes. Isolated FALLBACK restores git-scope first, then
-// the fat Main policy-tools index so PR verify reuses the installed tools.
+// v4 rotates past thin indexes. Isolated FALLBACK restores the fat Main
+// policy-tools index first, then git-scope (same thin-publish rule as nightly).
 // Workspace deny/audit runs via Task against the loaded image, not a Bake leaf.
 rust_ecosystem_policy_tools_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-tools-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-policy-tools-v4:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-tools-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-tools-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
 ]

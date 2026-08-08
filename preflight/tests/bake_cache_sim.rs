@@ -84,6 +84,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("Scenario H:")
             && tasks.contains("Scenario I:")
             && tasks.contains("Scenario J:")
+            && tasks.contains("Scenario K:")
             && tasks.contains("parent-pr-cold")
             && tasks.contains("require_registry_ref")
             && tasks.contains("require_no_registry_ref")
@@ -91,6 +92,17 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("PARENT_OWN_CACHE_ENABLED")
             && bake.contains("write_cache_repository"),
         "infra bake-cache prove must cover FALLBACK plus Main/PR isolation"
+    );
+    let parent_from = assignment_body(&bake, "parent_cache_from");
+    let main_idx = parent_from
+        .find("nook/buildcache/nook-bake-sim-parent-v1")
+        .expect("sim parent FALLBACK must list Main");
+    let git_idx = parent_from
+        .find("nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}")
+        .expect("sim parent FALLBACK must list git-scope");
+    assert!(
+        main_idx < git_idx,
+        "sim parent FALLBACK must restore fat Main before git-scope"
     );
     assert!(
         quality.contains("task infra:bake-cache:prove")

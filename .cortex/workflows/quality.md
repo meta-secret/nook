@@ -115,10 +115,13 @@ Use this workflow for quality, CI, and deployment changes.
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
      bounded proof harnesses via the official action (specialized toolchain).
    - `PR / Rust ecosystem / Dylint repository lints` —
-     `task docker:ecosystem:dylint` runs `docker:ecosystem:nightly` first
-     (sole nightly writer when writes are enabled), then Bakes `rust-dylint`
-     on `rust-platform-nightly` with pinned
-     [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
+     `task docker:ecosystem:dylint` warms `docker:ecosystem:nightly:verify`,
+     Bakes `rust-dylint` on `rust-platform-nightly` (materializing Main nightly
+     layers), then publishes `rust-ecosystem-nightly-publish` and the dylint
+     leaf when writes are enabled.
+     Publishing nightly before the leaf can write a thin git index that orphans
+     fat Main and cold-installs `cargo-dylint`.
+     Pinned [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
      `dylint-link` release binaries (no host `cargo install`).
      The dylint leaf scope is `nook-rust-ecosystem-dylint-v2`.
      Nightly stays toolchain-stable; `rust-platform-nightly` is the shared
@@ -182,8 +185,8 @@ Use this workflow for quality, CI, and deployment changes.
     - Do not wipe cache to paper over a short-chain import.
     - Prefer own-scope leaf `cache-from`, same-Dockerfile stage lineage, or a
       dedicated parent scope that is never thin.
-    - Isolated writes still prefer git-scope first.
-    - Main fat nightly and policy-tools indexes are allowed FALLBACK restores.
+    - Isolated FALLBACK restores fat Main indexes before git-scope.
+    - Thin PR publishes must not orphan Main and cold `cargo install`.
     - That keeps PR verify from cold `cargo install` of ecosystem tools.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.

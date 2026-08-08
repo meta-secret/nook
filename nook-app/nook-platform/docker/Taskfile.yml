@@ -377,8 +377,10 @@ tasks:
     desc: Bake repository Dylint lints on the sealed nightly ecosystem image.
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
-      # Warm/publish nightly first (sole nightly writer), then the dylint leaf.
-      - task: docker:ecosystem:nightly
+      # Verify nightly read-only first (like fuzz). Nested leaf bake materializes
+      # Main layers before any git-scope publish. Publishing nightly before the
+      # leaf can write a thin index that orphans fat Main and cold cargo-install.
+      - task: docker:ecosystem:nightly:verify
       - >-
         GHA_CACHE_WRITE_ENABLED=
         {{.DOCKER}} buildx bake
@@ -386,6 +388,10 @@ tasks:
         rust-dylint
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          # Sole shared nightly writer: export only after leaf nested restore.
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            rust-ecosystem-nightly-publish
           GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
             rust-dylint

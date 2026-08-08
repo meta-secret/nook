@@ -125,22 +125,26 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
 fn theorem_ecosystem_parent_fallback_restores_main() -> anyhow::Result<()> {
     let root = repository_root();
     let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
-    for (name, main_ref) in [
+    for (name, main_ref, git_marker) in [
         (
             "rust_ecosystem_nightly_cache_from",
             "nook/buildcache/nook-rust-ecosystem-nightly-v4",
+            "nook-rust-ecosystem-nightly-v4${GHA_CACHE_SCOPE_SUFFIX}",
         ),
         (
             "rust_ecosystem_policy_tools_cache_from",
             "nook/buildcache/nook-rust-ecosystem-policy-tools-v4",
+            "nook-rust-ecosystem-policy-tools-v4${GHA_CACHE_SCOPE_SUFFIX}",
         ),
         (
             "rust_ecosystem_dylint_cache_from",
             "nook/buildcache/nook-rust-ecosystem-dylint-v2",
+            "nook-rust-ecosystem-dylint-v2${GHA_CACHE_SCOPE_SUFFIX}",
         ),
         (
             "rust_ecosystem_fuzz_cache_from",
             "nook/buildcache/nook-rust-ecosystem-fuzz-v2",
+            "nook-rust-ecosystem-fuzz-v2${GHA_CACHE_SCOPE_SUFFIX}",
         ),
     ] {
         let body = assignment_body(&rust_bake, name)?;
@@ -153,7 +157,46 @@ fn theorem_ecosystem_parent_fallback_restores_main() -> anyhow::Result<()> {
             !non_fallback.contains(main_ref),
             "{name} non-FALLBACK must not hardcode Main {main_ref}"
         );
+        let main_idx = fallback
+            .find(main_ref)
+            .with_context(|| format!("{name} FALLBACK missing Main {main_ref}"))?;
+        let git_idx = fallback
+            .find(git_marker)
+            .with_context(|| format!("{name} FALLBACK missing git-scope {git_marker}"))?;
+        assert!(
+            main_idx < git_idx,
+            "{name} FALLBACK must restore fat Main before git-scope"
+        );
     }
+    Ok(())
+}
+
+#[test]
+fn theorem_dylint_publishes_nightly_after_leaf_materialize() -> anyhow::Result<()> {
+    let root = repository_root();
+    let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
+    let dylint = taskfile_task_body(&docker_tasks, "docker:ecosystem:dylint")?;
+    let verify_idx = dylint
+        .find("docker:ecosystem:nightly:verify")
+        .context("dylint must warm nightly:verify")?;
+    let leaf_idx = dylint
+        .find("rust-dylint")
+        .context("dylint must bake rust-dylint")?;
+    let publish_idx = dylint
+        .find("rust-ecosystem-nightly-publish")
+        .context("dylint must publish nightly after leaf materialize")?;
+    assert!(
+        verify_idx < leaf_idx && leaf_idx < publish_idx,
+        "dylint must verify, bake leaf, then publish nightly (not publish-before-leaf)"
+    );
+    assert!(
+        !dylint.lines().any(|line| {
+            let trimmed = line.trim();
+            trimmed == "task: docker:ecosystem:nightly"
+                || trimmed == "- task: docker:ecosystem:nightly"
+        }),
+        "dylint must not call full docker:ecosystem:nightly (publishes before leaf)"
+    );
     Ok(())
 }
 
@@ -436,6 +479,27 @@ fn assert_scope_arms(
         }
     }
     Ok(())
+}
+
+fn taskfile_task_body<'a>(tasks: &'a str, name: &str) -> anyhow::Result<&'a str> {
+    let marker = format!("  {name}:");
+    let rest = tasks
+        .split_once(marker.as_str())
+        .map(|(_, rest)| rest)
+        .with_context(|| format!("missing Taskfile task {name}"))?;
+    let mut end = rest.len();
+    for (idx, _) in rest.match_indices('\n') {
+        let line = rest[idx + 1..].lines().next().unwrap_or("");
+        if line.starts_with("  ")
+            && !line.starts_with("   ")
+            && line.trim_end().ends_with(':')
+            && !line.trim_start().starts_with('#')
+        {
+            end = idx;
+            break;
+        }
+    }
+    Ok(rest[..end].trim())
 }
 
 fn assignment_body<'a>(bake: &'a str, name: &str) -> anyhow::Result<&'a str> {

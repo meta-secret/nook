@@ -123,7 +123,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "task: docker:rust-base",
         "task: docker:ecosystem:policy-tools",
         "task: docker:ecosystem:nightly:verify",
-        "task: docker:ecosystem:nightly",
         "task: docker:ci:cache:publish:rust-base",
         "task: rust:dependency-policy",
         "task: preflight:dependency-policy",

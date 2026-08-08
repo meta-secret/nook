@@ -305,4 +305,29 @@ tasks:
         require_no_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-v1${pr2_suffix}"
         echo "scenario J ok"
 
+        echo "== Scenario K: leaf after Main FALLBACK, then git publish (CACHED) =="
+        # Mirrors dylint: verify/materialize nested parent from Main before writing
+        # git-scope. Leaf must stay CACHED after the post-leaf parent publish.
+        pr_leaf_suffix="-git-cccccccccccccccccccccccccccccccccccccccc"
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$pr_leaf_suffix"
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
+        create_builder "nook-bake-sim-k-${suffix}"
+        bake_plain "$proof_log" leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
+        bake_plain "$proof_log" parent-publish
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-v1${pr_leaf_suffix}"
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
+        create_builder "nook-bake-sim-k2-${suffix}"
+        bake_plain "$proof_log" leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        echo "scenario K ok"
+
         echo "bake-cache runtime proof passed"
