@@ -189,6 +189,9 @@ Use this workflow for quality, CI, and deployment changes.
     - PR/Remote/local use `nook/remote-buildcache` with `-git-<40-char-sha>`.
     - PR jobs key that SHA by pull-request head, not the merge `GITHUB_SHA`.
     - Local publish is disabled on a dirty worktree.
+    - A successful clean local `task setup` publishes its completed WASM,
+      native product, and web dependency graphs into that exact head scope.
+    - A fresh PR runner restores the same head scope before Main fallback.
     - If a short parent index orphans a leaf RUN, redesign the Bake graph.
     - Do not wipe cache to paper over a short-chain import.
     - Prefer own-scope leaf `cache-from`, same-Dockerfile stage lineage, or a
@@ -238,6 +241,8 @@ Use this workflow for quality, CI, and deployment changes.
     It also proves Main vs parallel PR git-scope isolation on ephemeral Zot:
     PR writes stay under `nook/remote-buildcache/**-git-<sha>`, do not overlap,
     and do not replace Main `nook/buildcache/**`.
+    Scenario P proves a clean local producer and a fresh PR runner share the
+    same git-scoped graph without rerunning the expensive dependency step.
 
     #### SeaweedFS sccache
 

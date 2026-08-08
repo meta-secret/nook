@@ -54,6 +54,20 @@ tasks:
         bash "{{.REPO_ROOT}}/.github/scripts/git-cache-scope-publish-guard.sh"
         task docker:ci:cache:publish:web
 
+  registry-cache:publish:local-setup:
+    internal: true
+    desc: Publish every Rust/WASM/web dependency graph completed by a clean local setup.
+    cmds:
+      - |
+        set -euo pipefail
+        if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" != "1" ]; then exit 0; fi
+        bash "{{.REPO_ROOT}}/.github/scripts/git-cache-scope-publish-guard.sh"
+        # WASM must publish before the shorter rust-base/native graphs. This keeps
+        # its cargo-chef layers attached to the same full source lineage.
+        task docker:ci:cache:publish:wasm
+        task docker:ci:cache:publish:native-product
+        task docker:ci:cache:publish:web
+
   docker:rust:task:
     internal: true
     desc: Run a Task target in the on-demand source-sealed Rust/WASM image.
@@ -194,8 +208,8 @@ tasks:
         --set "*.output=type=cacheonly"
         rust-base-publish
 
-  docker:ci:cache:publish:native:
-    desc: Export the already-verified native dependency/source graph from this job's builder.
+  docker:ci:cache:publish:native-product:
+    desc: Export the already-verified native product dependency/source graph from this job's builder.
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
@@ -207,6 +221,13 @@ tasks:
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
         builder-core-deps-publish builder-debug
+
+  docker:ci:cache:publish:native:
+    desc: Export the verified native product and preflight graphs from this job's builder.
+    env:
+      GHA_CACHE_WRITE_ENABLED: "1"
+    cmds:
+      - task: docker:ci:cache:publish:native-product
       - >-
         {{.DOCKER}} buildx bake
         --allow=fs.read={{.REPO_ROOT}}

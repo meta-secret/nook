@@ -401,4 +401,28 @@ tasks:
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario O ok"
 
+        echo "== Scenario P: clean local publish feeds fresh PR runner =="
+        # Local and PR builds use the same clean commit SHA. The local producer
+        # writes its isolated remote-buildcache ref. A fresh hosted builder must
+        # restore the expensive graph from that exact ref without executing it.
+        printf 'local-pr-shared-head\n' >"$parent_input"
+        local_pr_suffix="-git-dddddddddddddddddddddddddddddddddddddddd"
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$local_pr_suffix"
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=
+        create_builder "nook-bake-sim-p-local-${suffix}"
+        bake_plain "$proof_log" parent-publish
+        require_uncached_step "$proof_log" "bake-sim-parent-expensive"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-v1${local_pr_suffix}"
+
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        create_builder "nook-bake-sim-p-pr-${suffix}"
+        bake_plain "$proof_log" parent
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_registry_ref "nook/buildcache/nook-bake-sim-parent-v1"
+        echo "scenario P ok"
+
         echo "bake-cache runtime proof passed"

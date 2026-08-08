@@ -657,7 +657,10 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 
 - Delivery BuildKit caches use authenticated `type=registry` refs on `registry.dev.nokey.sh` (Zot behind Traefik HTTPS + htpasswd), not GitHub Actions cache storage.
 - Local Task Bake restores git-commit remote-buildcache scopes when remote registry credentials exist.
-- Local publish also requires a clean worktree.
+- A successful clean local setup publishes its completed Rust, WASM, and web
+  dependency graphs into the same git-commit scope consumed by PR jobs.
+- Local publish requires a clean worktree. Dirty builds remain local and cannot
+  poison the committed PR scope.
 - Opt out with `NOOK_REGISTRY_CACHE=0`.
 - Cache restoration is an optimization: an unavailable cache falls back to a correct cold build.
 - Main publishes shared cache manifests after lane verification.

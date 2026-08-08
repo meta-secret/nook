@@ -116,6 +116,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("Scenario M:")
             && tasks.contains("Scenario N:")
             && tasks.contains("Scenario O:")
+            && tasks.contains("Scenario P: clean local publish feeds fresh PR runner")
             && tasks.contains("bake-sim-base-layer")
             && tasks.contains("leaf-via-platform-broken")
             && tasks.contains("combined-leaf")
@@ -126,7 +127,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("PARENT_OWN_CACHE_ENABLED")
             && bake.contains("BASE_OWN_CACHE_ENABLED")
             && bake.contains("write_cache_repository"),
-        "infra proof must cover FALLBACK, base orphan, PR isolation, and the broken/fixed nightly leaf graph"
+        "infra proof must cover FALLBACK, base orphan, PR isolation, local-to-PR reuse, and the broken/fixed nightly leaf graph"
     );
     let parent_from = assignment_body(&bake, "parent_cache_from");
     let main_idx = parent_from

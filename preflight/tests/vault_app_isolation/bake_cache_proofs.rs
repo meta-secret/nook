@@ -377,6 +377,72 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
 }
 
 #[test]
+fn theorem_clean_local_setup_and_pr_share_exact_head_cache() -> anyhow::Result<()> {
+    let root = repository_root();
+    let root_tasks = read(&root, "Taskfile.yml");
+    let app_tasks = read(&root, "nook-app/Taskfile.yml");
+    let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
+    let scope = read(&root, ".github/scripts/git-cache-scope.sh");
+    let guard = read(&root, ".github/scripts/git-cache-scope-publish-guard.sh");
+    let hosted_setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
+    let app_bake = read(&root, "nook-app/docker-bake.hcl");
+
+    assert!(
+        root_tasks.contains("NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:")
+            && root_tasks.contains("git status --porcelain")
+            && scope.contains("sha=\"$(git rev-parse HEAD)\"")
+            && scope.contains("printf '%s' \"-git-$sha\"")
+            && guard.contains("git-cache-scope.sh\" --require-clean")
+            && guard.contains("GHA_CACHE_SCOPE_SUFFIX must be $expected"),
+        "local publication must require a clean worktree and derive -git-<HEAD>"
+    );
+    assert!(
+        hosted_setup.contains("scope_sha=\"${{ github.event.pull_request.head.sha }}\"")
+            && hosted_setup.contains("scope_suffix=\"-git-$scope_sha\"")
+            && app_bake.contains(
+                "write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != \"\" ? \"nook/remote-buildcache\" : \"nook/buildcache\""
+            ),
+        "PR restore/write must derive the identical -git-<head SHA> remote-buildcache namespace"
+    );
+
+    let setup = taskfile_task_body(&app_tasks, "setup")?;
+    let solve = setup
+        .find("buildx bake --allow=fs.write")
+        .context("local setup must solve its Rust/WASM graph")?;
+    let publish = setup
+        .find("task: registry-cache:publish:local-setup")
+        .context("local setup must publish its completed graph")?;
+    assert!(
+        solve < publish,
+        "local setup may publish only after its complete build succeeds"
+    );
+
+    let local_publish = taskfile_task_body(&docker_tasks, "registry-cache:publish:local-setup")?;
+    for marker in [
+        "git-cache-scope-publish-guard.sh",
+        "task docker:ci:cache:publish:wasm",
+        "task docker:ci:cache:publish:native-product",
+        "task docker:ci:cache:publish:web",
+    ] {
+        assert!(
+            local_publish.contains(marker),
+            "clean local setup publisher is missing {marker}"
+        );
+    }
+    let wasm = local_publish
+        .find("task docker:ci:cache:publish:wasm")
+        .context("local setup publisher must export WASM first")?;
+    let native = local_publish
+        .find("task docker:ci:cache:publish:native-product")
+        .context("local setup publisher must export native product second")?;
+    assert!(
+        wasm < native,
+        "local publication must keep full WASM chef lineage ahead of shorter native/base scopes"
+    );
+    Ok(())
+}
+
+#[test]
 fn theorem_wasm_fingerprint_closed_allowlist() -> anyhow::Result<()> {
     let root = repository_root();
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
@@ -406,23 +472,35 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
     let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
     let verifier = read(&root, ".github/scripts/verify-wasm-gha-cache.sh");
 
+    let native_product = docker_tasks
+        .split("docker:ci:cache:publish:native-product:")
+        .nth(1)
+        .and_then(|tail| tail.split("docker:ci:cache:publish:native:").next())
+        .context("native product publish task missing")?;
+    let native_base = native_product
+        .find("task: docker:ci:cache:publish:rust-base")
+        .context("native publish must stage rust-base")?;
+    let native_deps = native_product
+        .find("builder-core-deps-publish builder-debug")
+        .context("native publish must bake deps/debug")?;
+    assert!(
+        native_base < native_deps,
+        "native product publish must stage rust-base before deps/debug"
+    );
     let native = docker_tasks
         .split("docker:ci:cache:publish:native:")
         .nth(1)
         .and_then(|tail| tail.split("docker:ci:cache:publish:wasm:").next())
         .context("native publish task missing")?;
-    let native_base = native
-        .find("task: docker:ci:cache:publish:rust-base")
-        .context("native publish must stage rust-base")?;
-    let native_deps = native
-        .find("builder-core-deps-publish builder-debug")
-        .context("native publish must bake deps/debug")?;
+    let native_product_task = native
+        .find("task: docker:ci:cache:publish:native-product")
+        .context("native publish must stage its product graph")?;
     let native_preflight = native
         .find("preflight-test")
         .context("native publish must bake preflight-test")?;
     assert!(
-        native_base < native_deps && native_deps < native_preflight,
-        "native publish must stage rust-base, then deps/debug, then preflight"
+        native_product_task < native_preflight,
+        "native publish must stage its product graph before preflight"
     );
 
     let wasm = docker_tasks
