@@ -53,7 +53,7 @@ Does not apply to:
 - [ ] Scaffold with `task loom:skill-scaffold CONFIG=<skill-scaffold-request.yaml>` when creating.
 - [ ] Keep the card concrete: problem, preferred pattern, scope, examples,
       validation.
-- [ ] Set `wrappers: true` in the Loom request only when direct invocation is useful.
+- [ ] Set `createExecutableWrappers: true` in the skillScaffold request only when direct invocation is useful.
 - [ ] Update `.cortex/dynamic-skills/index.md` if Loom did not.
 - [ ] Run `task loom:cortex-audit`.
 

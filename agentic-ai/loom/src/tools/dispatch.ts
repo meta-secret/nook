@@ -1,16 +1,31 @@
-import { ResponsePhase, ToolName } from '../codec/enums.ts';
-import { fieldError } from '../codec/field-error.ts';
-import { decodeLoomRequest } from '../codec/request.ts';
+import { readFileSync } from 'node:fs';
 import {
+  explainAgainstBlueprint,
+  explainSyntaxFailure,
+} from '../codec/blueprint-diff.ts';
+import { RequestFamily, ResponsePhase } from '../codec/enums.ts';
+import {
+  DecodeStatus,
+  FieldDetailKind,
+  FieldIssue,
+} from '../codec/field-error.ts';
+import { decodeLoomRequest, type LoomRequest } from '../codec/request.ts';
+import {
+  decodeErrorResponse,
   encodeResponse,
-  errorResponse,
-  successResponse,
+  executeErrorResponseForAgentStats,
+  executeErrorResponseForFamily,
+  executeErrorResponseForPrLand,
+  executionFieldError,
+  successResponseForAgentStats,
+  successResponseForFamily,
+  successResponseForPrLand,
   type ErrorResponse,
   type SuccessResponse,
 } from '../codec/response.ts';
 import { parseYamlFile } from '../codec/yaml.ts';
-import { MaybeKind, ResultKind, absent, present } from '../result.ts';
-import { getTool, listAllToolNames } from './registry.ts';
+import { LoomFailure, LoomFailureDetailKind } from '../loom-failure.ts';
+import { executeRequest, listDiscoverableRequests } from './registry.ts';
 
 export type DispatchOutcome = {
   readonly exitCode: number;
@@ -20,127 +35,170 @@ export type DispatchOutcome = {
 export async function dispatchRequestFile(
   requestPath: string,
 ): Promise<DispatchOutcome> {
+  const receivedYaml = readRequestText(requestPath);
   const parsed = parseYamlFile(requestPath);
-  if (parsed.kind === ResultKind.Err) {
+  if (parsed.status === DecodeStatus.Failed) {
+    const syntax = parsed.errors.find(
+      (entry) => entry.issue === FieldIssue.InvalidYaml,
+    );
+    const parseMessage =
+      syntax && syntax.detail.kind === FieldDetailKind.Text
+        ? syntax.detail.text
+        : 'failed to read or parse request YAML';
     return {
       exitCode: 2,
-      body: errorResponse(ResponsePhase.Decode, parsed.errors, absent()),
+      body: decodeErrorResponse(
+        ResponsePhase.Decode,
+        parsed.errors,
+        explainSyntaxFailure(receivedYaml, parseMessage),
+      ),
     };
   }
-  return dispatchValue(parsed.value);
+  return dispatchValue(parsed.value.value);
 }
 
 export async function dispatchValue(value: unknown): Promise<DispatchOutcome> {
   const request = decodeLoomRequest(value);
-  if (request.kind === ResultKind.Err) {
+  if (request.status === DecodeStatus.Failed) {
     return {
       exitCode: 2,
-      body: errorResponse(ResponsePhase.Decode, request.errors, absent()),
+      body: decodeErrorResponse(
+        ResponsePhase.Decode,
+        request.errors,
+        explainAgainstBlueprint(value),
+      ),
     };
   }
-  return dispatchNamed(request.value.name, request.value.arguments);
+  return dispatchDecoded(request.value);
 }
 
-async function dispatchNamed(
-  name: string,
-  argsValue: unknown,
-): Promise<DispatchOutcome> {
-  const toolLookup = getTool(name);
-  if (toolLookup.kind === MaybeKind.Absent) {
-    return {
-      exitCode: 2,
-      body: errorResponse(
-        ResponsePhase.UnknownTool,
-        [
-          fieldError(
-            'name',
-            `unknown tool; known: ${listAllToolNames().join(', ')}`,
-          ),
-        ],
-        present(name),
-      ),
-    };
-  }
-  const tool = toolLookup.value;
-
-  if (tool.name === ToolName.ToolsCall) {
-    return dispatchToolsCall(argsValue, name);
+async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
+  if (request.family === RequestFamily.ToolsCall) {
+    return dispatchDecoded(request.toolsCall);
   }
 
-  const args = tool.decodeArgs(argsValue);
-  if (args.kind === ResultKind.Err) {
+  if (request.family === RequestFamily.ToolsList) {
     return {
-      exitCode: 2,
-      body: errorResponse(
-        ResponsePhase.Arguments,
-        args.errors,
-        present(tool.name),
-      ),
+      exitCode: 0,
+      body: successResponseForFamily(RequestFamily.ToolsList, {
+        requests: listDiscoverableRequests(),
+      }),
     };
   }
 
-  const result = await tool.run(args.value);
-  if (result.kind === ResultKind.Err) {
-    return {
-      exitCode: 1,
-      body: errorResponse(
-        ResponsePhase.Execute,
-        [fieldError('result', result.message)],
-        present(tool.name),
-        present(
-          'fix the underlying gate, then retry the same request envelope',
+  try {
+    const result = await executeRequest(request);
+    if (
+      request.family === RequestFamily.CortexAudit &&
+      typeof result === 'object' &&
+      result instanceof Object &&
+      'auditOk' in result &&
+      result.auditOk === false
+    ) {
+      return {
+        exitCode: 1,
+        body: successResponseForFamily(RequestFamily.CortexAudit, result),
+      };
+    }
+    if (
+      request.family === RequestFamily.DependencyPopularity &&
+      typeof result === 'object' &&
+      result instanceof Object &&
+      'ok' in result &&
+      result.ok === false
+    ) {
+      return {
+        exitCode: 1,
+        body: successResponseForFamily(
+          RequestFamily.DependencyPopularity,
+          result,
         ),
-      ),
+      };
+    }
+    return {
+      exitCode: 0,
+      body: buildSuccessResponse(request, result),
     };
-  }
-
-  if (
-    tool.name === ToolName.CortexAudit &&
-    typeof result.value === 'object' &&
-    result.value instanceof Object &&
-    'auditOk' in result.value &&
-    result.value.auditOk === false
-  ) {
+  } catch (error) {
     return {
       exitCode: 1,
-      body: successResponse(tool.name, result.value),
+      body: buildExecuteErrorResponse(request, failureDetail(error)),
     };
   }
-
-  return {
-    exitCode: 0,
-    body: successResponse(tool.name, result.value),
-  };
 }
 
-async function dispatchToolsCall(
-  nestedValue: unknown,
-  outerName: string,
-): Promise<DispatchOutcome> {
-  const toolLookup = getTool(ToolName.ToolsCall);
-  if (toolLookup.kind === MaybeKind.Absent) {
-    return {
-      exitCode: 2,
-      body: errorResponse(
-        ResponsePhase.UnknownTool,
-        [fieldError('name', 'tools-call missing from registry')],
-        present(outerName),
-      ),
-    };
+function readRequestText(requestPath: string): string {
+  try {
+    return readFileSync(requestPath, 'utf8');
+  } catch {
+    return '';
   }
-  const nested = toolLookup.value.decodeArgs(nestedValue);
-  if (nested.kind === ResultKind.Err) {
-    return {
-      exitCode: 2,
-      body: errorResponse(
-        ResponsePhase.Arguments,
-        nested.errors,
-        present(outerName),
-      ),
-    };
+}
+
+function failureDetail(error: unknown): string {
+  if (error instanceof LoomFailure) {
+    if (error.detail.kind === LoomFailureDetailKind.Text) {
+      return error.detail.text;
+    }
+    return error.message;
   }
-  const callArgs = nested.value as { name: string; arguments: unknown };
-  return dispatchNamed(callArgs.name, callArgs.arguments);
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function buildSuccessResponse(
+  request: LoomRequest,
+  result: unknown,
+): SuccessResponse {
+  switch (request.family) {
+    case RequestFamily.PrePush:
+      return successResponseForFamily(RequestFamily.PrePush, result);
+    case RequestFamily.CortexAudit:
+      return successResponseForFamily(RequestFamily.CortexAudit, result);
+    case RequestFamily.SkillScaffold:
+      return successResponseForFamily(RequestFamily.SkillScaffold, result);
+    case RequestFamily.AgentStats:
+      return successResponseForAgentStats(request.operation, result);
+    case RequestFamily.PrLand:
+      return successResponseForPrLand(request.operation, result);
+    case RequestFamily.DependencyPopularity:
+      return successResponseForFamily(
+        RequestFamily.DependencyPopularity,
+        result,
+      );
+    case RequestFamily.ToolsList:
+    case RequestFamily.ToolsCall:
+      return successResponseForFamily(RequestFamily.ToolsList, result);
+  }
+}
+
+function buildExecuteErrorResponse(
+  request: LoomRequest,
+  detail: string,
+): ErrorResponse {
+  const errors = [executionFieldError(detail)];
+  switch (request.family) {
+    case RequestFamily.PrePush:
+      return executeErrorResponseForFamily(RequestFamily.PrePush, errors);
+    case RequestFamily.CortexAudit:
+      return executeErrorResponseForFamily(RequestFamily.CortexAudit, errors);
+    case RequestFamily.SkillScaffold:
+      return executeErrorResponseForFamily(RequestFamily.SkillScaffold, errors);
+    case RequestFamily.AgentStats:
+      return executeErrorResponseForAgentStats(request.operation, errors);
+    case RequestFamily.PrLand:
+      return executeErrorResponseForPrLand(request.operation, errors);
+    case RequestFamily.DependencyPopularity:
+      return executeErrorResponseForFamily(
+        RequestFamily.DependencyPopularity,
+        errors,
+      );
+    case RequestFamily.ToolsList:
+    case RequestFamily.ToolsCall:
+      return executeErrorResponseForFamily(RequestFamily.ToolsList, errors);
+  }
 }
 
 export function encodedOutcome(outcome: DispatchOutcome): unknown {

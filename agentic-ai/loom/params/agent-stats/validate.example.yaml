@@ -1,4 +1,3 @@
-name: agent-stats
-arguments:
-  action: validate
-  file: /tmp/123.yaml
+agentStats:
+  validate:
+    statsFile: /tmp/123.yaml

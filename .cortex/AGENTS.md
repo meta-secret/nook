@@ -250,6 +250,18 @@ structural property contracts, never `toBeUndefined`, `toBeNull`,
 `toBeDefined`, or equivalent absence matchers. Full contract:
 [dynamic-skills/typescript-explicit-state.md](dynamic-skills/typescript-explicit-state.md).
 
+## ⛔ Non-negotiable: prefer popular libraries over boilerplate
+
+Before writing commodity helpers (diffs, parsers, HTTP glue, small utilities),
+search for a mature library with clear adoption. Prefer high weekly npm
+downloads or crates.io downloads, and substantial GitHub stars when a GitHub
+repo is available. Avoid obscure packages with near-zero downloads or tiny
+star counts unless the user explicitly requires that package. Domain policy,
+cryptography, auth, and vault rules stay in Nook-owned code. Validate
+candidates with Loom `dependencyPopularity`
+(`task loom:dependency-popularity`). Full contract:
+[dynamic-skills/prefer-popular-libraries.md](dynamic-skills/prefer-popular-libraries.md).
+
 Authored Rust must not call `.unwrap()` or `.expect(...)`. Production paths
 propagate or classify failure. Rust tests that perform fallible setup or
 verification return `Result<(), E>` and propagate with `?`; panic-based setup
@@ -395,13 +407,12 @@ Single invoke form:
 task loom:run CONFIG=<request.yaml>
 ```
 
-Request envelope:
+Domain request example:
 
 ```yaml
-name: pre-push
-arguments:
-  stage: true
-  fetch: true
+prePush:
+  stageHostUpdates: true
+  fetchOriginMain: true
 ```
 
 Stdout is YAML. On errors, read `errors[].path`, then run `task loom:tools-list`.
@@ -514,18 +525,17 @@ After merge, assemble and publish `stats/ai-agent/<pr-number>.yaml` with Loom.
 Write a request YAML, then run it:
 
 ```yaml
-name: agent-stats
-arguments:
-  action: assemble
-  pr: 123
-  scratch: /tmp/pr-123-events.json
-  out: /tmp/123.yaml
-  inventory: true
+agentStats:
+  assemble:
+    prNumber: 123
+    scratchPath: /tmp/pr-123-events.json
+    outputPath: /tmp/123.yaml
+    includeTestInventory: true
 ```
 
 ```bash
 task loom:agent-stats CONFIG=/tmp/assemble-request.yaml
-# then a publish request with action: publish and file: /tmp/123.yaml
+# then an agentStats.publish request with statsFile: /tmp/123.yaml
 task loom:agent-stats CONFIG=/tmp/publish-request.yaml
 ```
 
@@ -588,6 +598,7 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 - [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
 - [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; run focused tasks and complete gates explicitly on GitHub-hosted workers**.
 - [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Load `design-taste-frontend` for user-visible UI work; Impeccable is explicit opt-in only**.
+- [dynamic-skills/prefer-popular-libraries.md](dynamic-skills/prefer-popular-libraries.md) — **Prefer mature high-adoption libraries over hand-rolled boilerplate; reject obscure deps**.
 - [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 - [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.
 - [workflows/remote-execution.md](workflows/remote-execution.md) — **Main agent execution path** (allowlisted focused hosted tasks, label-gated exact-head PR validation, and failure loops).

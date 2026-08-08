@@ -27,12 +27,10 @@ focused jobs with `task remote TASK_NAME=<name>`.
 Validate request example:
 
 ```yaml
-name: pr-land
-arguments:
-  action: validate
-  pr: 123
-  remote: null
-  full_e2e: false
+prLand:
+  validate:
+    prNumber: 123
+    runFullE2e: false
 ```
 
 ```bash
@@ -43,7 +41,7 @@ task remote TASK_NAME=rust:test
 task loom:pr-land CONFIG=/tmp/pr-land-validate.yaml
 ```
 
-For Main-fix PRs, set `full_e2e: true` in the request.
+For Main-fix PRs, set `runFullE2e: true` in the `prLand.validate` request.
 
 See [loom-tools.md](../references/loom-tools.md).
 

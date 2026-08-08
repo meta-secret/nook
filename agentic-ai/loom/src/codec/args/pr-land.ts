@@ -1,74 +1,128 @@
-import { ResultKind, type Maybe } from '../../result.ts';
-import { PrLandAction } from '../enums.ts';
-import { decodeErr, decodeOk, type DecodeResult } from '../field-error.ts';
+import {
+  DecodeStatus,
+  decodeErr,
+  decodeOk,
+  type DecodeOutcome,
+} from '../field-error.ts';
 import {
   denyUnknownKeys,
   expectBoolean,
   expectObject,
-  expectOptionalString,
   expectPositiveInt,
-  expectStringEnum,
+  expectRemoteTask,
 } from '../object.ts';
 
-export type PrLandArgs = {
-  readonly action: PrLandAction;
-  readonly pr: number;
-  readonly remote: Maybe<string>;
-  readonly fullE2e: boolean;
+export enum RemoteTaskPresence {
+  Specified = 'specified',
+  Omitted = 'omitted',
+}
+
+export type RemoteTask =
+  | { readonly presence: RemoteTaskPresence.Specified; readonly task: string }
+  | { readonly presence: RemoteTaskPresence.Omitted };
+
+export enum PrLandPrField {
+  PrNumber = 'prNumber',
+}
+
+export enum PrLandValidateField {
+  PrNumber = 'prNumber',
+  RemoteTask = 'remoteTask',
+  RunFullE2e = 'runFullE2e',
+}
+
+export type PrLandPrRequest = {
+  readonly prNumber: number;
 };
 
-const ACTIONS = [
-  PrLandAction.Status,
-  PrLandAction.Validate,
-  PrLandAction.Ready,
-  PrLandAction.MergeCheck,
-] as const;
-const ALLOWED = new Set(['action', 'pr', 'remote', 'full_e2e']);
+export type PrLandValidateRequest = {
+  readonly prNumber: number;
+  readonly remoteTask: RemoteTask;
+  readonly runFullE2e: boolean;
+};
 
-export function decodePrLandArgs(value: unknown): DecodeResult<PrLandArgs> {
-  const object = expectObject(value, 'arguments');
-  if (object.kind === ResultKind.Err) {
+export function decodePrLandPrPayload(
+  value: unknown,
+  path: string,
+): DecodeOutcome<PrLandPrRequest> {
+  const object = expectObject(value, path);
+  if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, ALLOWED, 'arguments');
-  const action = expectStringEnum(object.value, 'action', 'arguments', ACTIONS);
-  const pr = expectPositiveInt(object.value, 'pr', 'arguments');
-  const remote = expectOptionalString(object.value, 'remote', 'arguments');
-  const fullE2e = expectBoolean(object.value, 'full_e2e', 'arguments');
+  const unknown = denyUnknownKeys(object.value, PrLandPrField, path);
+  const prNumber = expectPositiveInt(
+    object.value,
+    PrLandPrField.PrNumber,
+    path,
+  );
   const errors = [
     ...unknown,
-    ...(action.kind === ResultKind.Err ? action.errors : []),
-    ...(pr.kind === ResultKind.Err ? pr.errors : []),
-    ...(remote.kind === ResultKind.Err ? remote.errors : []),
-    ...(fullE2e.kind === ResultKind.Err ? fullE2e.errors : []),
+    ...(prNumber.status === DecodeStatus.Failed ? prNumber.errors : []),
   ];
   if (errors.length > 0) {
     return decodeErr(errors);
   }
   return decodeOk({
-    action: (action as { value: PrLandAction }).value,
-    pr: (pr as { value: number }).value,
-    remote: (remote as { value: Maybe<string> }).value,
-    fullE2e: (fullE2e as { value: boolean }).value,
+    prNumber: (prNumber as { value: number }).value,
   });
 }
 
-export const PR_LAND_INPUT_SCHEMA = {
+export function decodePrLandValidatePayload(
+  value: unknown,
+  path: string,
+): DecodeOutcome<PrLandValidateRequest> {
+  const object = expectObject(value, path);
+  if (object.status === DecodeStatus.Failed) {
+    return object;
+  }
+  const unknown = denyUnknownKeys(object.value, PrLandValidateField, path);
+  const prNumber = expectPositiveInt(
+    object.value,
+    PrLandValidateField.PrNumber,
+    path,
+  );
+  const remoteTask = expectRemoteTask(
+    object.value,
+    PrLandValidateField.RemoteTask,
+    path,
+  );
+  const runFullE2e = expectBoolean(
+    object.value,
+    PrLandValidateField.RunFullE2e,
+    path,
+  );
+  const errors = [
+    ...unknown,
+    ...(prNumber.status === DecodeStatus.Failed ? prNumber.errors : []),
+    ...(remoteTask.status === DecodeStatus.Failed ? remoteTask.errors : []),
+    ...(runFullE2e.status === DecodeStatus.Failed ? runFullE2e.errors : []),
+  ];
+  if (errors.length > 0) {
+    return decodeErr(errors);
+  }
+  return decodeOk({
+    prNumber: (prNumber as { value: number }).value,
+    remoteTask: (remoteTask as { value: RemoteTask }).value,
+    runFullE2e: (runFullE2e as { value: boolean }).value,
+  });
+}
+
+export const PR_LAND_PR_INPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['action', 'pr', 'full_e2e'],
+  required: ['prNumber'],
   properties: {
-    action: {
-      type: 'string',
-      enum: [
-        PrLandAction.Status,
-        PrLandAction.Validate,
-        PrLandAction.Ready,
-        PrLandAction.MergeCheck,
-      ],
-    },
-    pr: { type: 'integer', minimum: 1 },
-    remote: { type: 'string' },
-    full_e2e: { type: 'boolean' },
+    prNumber: { type: 'integer', minimum: 1 },
+  },
+} as const;
+
+export const PR_LAND_VALIDATE_INPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['prNumber', 'runFullE2e'],
+  properties: {
+    prNumber: { type: 'integer', minimum: 1 },
+    remoteTask: { type: 'string' },
+    runFullE2e: { type: 'boolean' },
   },
 } as const;

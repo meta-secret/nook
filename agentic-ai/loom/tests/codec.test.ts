@@ -1,117 +1,151 @@
 import { describe, expect, test } from 'bun:test';
-import { decodeAgentStatsArgs } from '../src/codec/args/agent-stats.ts';
-import { decodePrePushArgs } from '../src/codec/args/pre-push.ts';
-import { ResponsePhase } from '../src/codec/enums.ts';
+import { decodeAgentStatsAssemblePayload } from '../src/codec/args/agent-stats.ts';
+import { decodePrePushRequest } from '../src/codec/args/pre-push.ts';
+import { RequestFamily, ResponsePhase } from '../src/codec/enums.ts';
+import { DecodeStatus } from '../src/codec/field-error.ts';
 import { decodeLoomRequest } from '../src/codec/request.ts';
-import { ResultKind } from '../src/result.ts';
 import { dispatchValue } from '../src/tools/dispatch.ts';
 
-describe('loom request codec', () => {
-  test('decodes a valid envelope', () => {
+describe('loom domain request codec', () => {
+  test('decodes a valid prePush request', () => {
     const decoded = decodeLoomRequest({
-      name: 'pre-push',
-      arguments: { stage: true, fetch: true },
+      prePush: { stageHostUpdates: true, fetchOriginMain: true },
     });
-    expect(decoded.kind).toBe(ResultKind.Ok);
-    if (decoded.kind === ResultKind.Ok) {
-      expect(decoded.value.name).toBe('pre-push');
+    expect(decoded.status).toBe(DecodeStatus.Ok);
+    if (decoded.status === DecodeStatus.Ok) {
+      expect(decoded.value.family).toBe(RequestFamily.PrePush);
     }
   });
 
-  test('rejects unknown top-level fields', () => {
+  test('decodes nested agentStats.assemble request', () => {
     const decoded = decodeLoomRequest({
-      name: 'pre-push',
-      arguments: {},
-      extra: true,
+      agentStats: {
+        assemble: {
+          prNumber: 12,
+          scratchPath: '/tmp/a.json',
+          outputPath: '/tmp/12.yaml',
+          includeTestInventory: false,
+        },
+      },
     });
-    expect(decoded.kind).toBe(ResultKind.Err);
-    if (decoded.kind === ResultKind.Err) {
-      expect(decoded.errors.some((entry) => entry.path === 'extra')).toBe(true);
+    expect(decoded.status).toBe(DecodeStatus.Ok);
+    if (decoded.status === DecodeStatus.Ok) {
+      expect(decoded.value.family).toBe(RequestFamily.AgentStats);
     }
   });
 
-  test('rejects wrong pre-push argument types', () => {
-    const decoded = decodePrePushArgs({ stage: 'yes', fetch: true });
-    expect(decoded.kind).toBe(ResultKind.Err);
-    if (decoded.kind === ResultKind.Err) {
+  test('rejects generic arguments envelopes', () => {
+    const decoded = decodeLoomRequest({
+      name: 'agent-stats',
+      arguments: { action: 'assemble', pr: 123 },
+    });
+    expect(decoded.status).toBe(DecodeStatus.Failed);
+    if (decoded.status === DecodeStatus.Failed) {
+      expect(decoded.errors.some((entry) => entry.path === 'name')).toBe(true);
+      expect(decoded.errors.some((entry) => entry.path === 'arguments')).toBe(
+        true,
+      );
+    }
+  });
+
+  test('rejects wrong prePush field types', () => {
+    const decoded = decodePrePushRequest({
+      stageHostUpdates: 'yes',
+      fetchOriginMain: true,
+    });
+    expect(decoded.status).toBe(DecodeStatus.Failed);
+    if (decoded.status === DecodeStatus.Failed) {
       expect(
-        decoded.errors.some((entry) => entry.path === 'arguments.stage'),
+        decoded.errors.some(
+          (entry) => entry.path === 'prePush.stageHostUpdates',
+        ),
       ).toBe(true);
     }
   });
 
-  test('decodes agent-stats assemble args', () => {
-    const decoded = decodeAgentStatsArgs({
-      action: 'assemble',
-      pr: 12,
-      scratch: '/tmp/a.json',
-      out: '/tmp/12.yaml',
-      inventory: false,
-    });
-    expect(decoded.kind).toBe(ResultKind.Ok);
+  test('decodes agentStats assemble payload', () => {
+    const decoded = decodeAgentStatsAssemblePayload(
+      {
+        prNumber: 12,
+        scratchPath: '/tmp/a.json',
+        outputPath: '/tmp/12.yaml',
+        includeTestInventory: false,
+      },
+      'agentStats.assemble',
+    );
+    expect(decoded.status).toBe(DecodeStatus.Ok);
   });
 
-  test('rejects unknown agent-stats fields for validate', () => {
-    const decoded = decodeAgentStatsArgs({
-      action: 'validate',
-      file: '/tmp/12.yaml',
-      inventory: true,
-    });
-    expect(decoded.kind).toBe(ResultKind.Err);
-    if (decoded.kind === ResultKind.Err) {
+  test('rejects unknown agentStats assemble fields', () => {
+    const decoded = decodeAgentStatsAssemblePayload(
+      {
+        prNumber: 12,
+        scratchPath: '/tmp/a.json',
+        outputPath: '/tmp/12.yaml',
+        includeTestInventory: false,
+        action: 'assemble',
+      },
+      'agentStats.assemble',
+    );
+    expect(decoded.status).toBe(DecodeStatus.Failed);
+    if (decoded.status === DecodeStatus.Failed) {
       expect(
-        decoded.errors.some((entry) => entry.path === 'arguments.inventory'),
+        decoded.errors.some(
+          (entry) => entry.path === 'agentStats.assemble.action',
+        ),
       ).toBe(true);
     }
   });
 });
 
 describe('loom dispatch protocol', () => {
-  test('tools-list returns discoverable tools', async () => {
+  test('toolsList returns discoverable domain requests', async () => {
     const outcome = await dispatchValue({
-      name: 'tools-list',
-      arguments: {},
+      toolsList: {},
     });
     expect(outcome.exitCode).toBe(0);
     expect(outcome.body.ok).toBe(true);
     if (outcome.body.ok) {
       const result = outcome.body.result as {
-        tools: readonly { name: string }[];
+        requests: readonly { family: RequestFamily }[];
       };
-      expect(result.tools.some((tool) => tool.name === 'pre-push')).toBe(true);
-      expect(result.tools.some((tool) => tool.name === 'tools-call')).toBe(
-        false,
-      );
+      expect(
+        result.requests.some((entry) => entry.family === RequestFamily.PrePush),
+      ).toBe(true);
+      expect(
+        result.requests.some(
+          (entry) => entry.family === RequestFamily.ToolsCall,
+        ),
+      ).toBe(false);
     }
   });
 
-  test('unknown tool returns exit 2 with recover hint', async () => {
+  test('unknown root key returns decode errors', async () => {
     const outcome = await dispatchValue({
-      name: 'not-a-tool',
-      arguments: {},
+      notARequest: {},
     });
     expect(outcome.exitCode).toBe(2);
     expect(outcome.body.ok).toBe(false);
     if (!outcome.body.ok) {
-      expect(outcome.body.phase).toBe(ResponsePhase.UnknownTool);
+      expect(outcome.body.phase).toBe(ResponsePhase.Decode);
       expect(outcome.body.recover.toolsListRequest).toContain('tools-list');
     }
   });
 
-  test('tools-call nests into pre-push decode errors', async () => {
+  test('toolsCall nests into prePush decode errors', async () => {
     const outcome = await dispatchValue({
-      name: 'tools-call',
-      arguments: {
-        name: 'pre-push',
-        arguments: { stage: true },
+      toolsCall: {
+        prePush: { stageHostUpdates: true },
       },
     });
     expect(outcome.exitCode).toBe(2);
     expect(outcome.body.ok).toBe(false);
     if (!outcome.body.ok) {
-      expect(outcome.body.phase).toBe(ResponsePhase.Arguments);
+      expect(outcome.body.phase).toBe(ResponsePhase.Decode);
       expect(
-        outcome.body.errors.some((entry) => entry.path === 'arguments.fetch'),
+        outcome.body.errors.some(
+          (entry) => entry.path === 'prePush.fetchOriginMain',
+        ),
       ).toBe(true);
     }
   });

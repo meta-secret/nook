@@ -1,43 +1,54 @@
-import { ResultKind } from '../../result.ts';
-import { decodeErr, type DecodeResult } from '../field-error.ts';
+import { DecodeStatus } from '../field-error.ts';
 import {
   collectDecode,
   denyUnknownKeys,
   expectBoolean,
   expectObject,
 } from '../object.ts';
+import { RequestFamily } from '../enums.ts';
+import { decodeErr, type DecodeOutcome } from '../field-error.ts';
 
-export type CortexAuditArgs = {
-  readonly density: boolean;
+export enum CortexAuditField {
+  IncludeDensityLint = 'includeDensityLint',
+}
+
+export type CortexAuditRequest = {
+  readonly includeDensityLint: boolean;
 };
 
-const ALLOWED = new Set(['density']);
+const ROOT = RequestFamily.CortexAudit;
 
-export function decodeCortexAuditArgs(
+export function decodeCortexAuditRequest(
   value: unknown,
-): DecodeResult<CortexAuditArgs> {
-  const object = expectObject(value, 'arguments');
-  if (object.kind === ResultKind.Err) {
+): DecodeOutcome<CortexAuditRequest> {
+  const object = expectObject(value, ROOT);
+  if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, ALLOWED, 'arguments');
-  const density = expectBoolean(object.value, 'density', 'arguments');
+  const unknown = denyUnknownKeys(object.value, CortexAuditField, ROOT);
+  const includeDensityLint = expectBoolean(
+    object.value,
+    CortexAuditField.IncludeDensityLint,
+    ROOT,
+  );
   if (unknown.length > 0) {
     return decodeErr([
       ...unknown,
-      ...(density.kind === ResultKind.Err ? density.errors : []),
+      ...(includeDensityLint.status === DecodeStatus.Failed
+        ? includeDensityLint.errors
+        : []),
     ]);
   }
-  return collectDecode([density], () => ({
-    density: (density as { value: boolean }).value,
+  return collectDecode([includeDensityLint], () => ({
+    includeDensityLint: (includeDensityLint as { value: boolean }).value,
   }));
 }
 
 export const CORTEX_AUDIT_INPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['density'],
+  required: ['includeDensityLint'],
   properties: {
-    density: { type: 'boolean' },
+    includeDensityLint: { type: 'boolean' },
   },
 } as const;

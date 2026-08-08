@@ -1,4 +1,4 @@
-# Reference: Loom YAML tool protocol
+# Reference: Loom domain YAML protocol
 
 Loom is the Bun tool runner for mechanical cortex rites.
 
@@ -16,138 +16,169 @@ loom <request.yaml>
 task loom:run CONFIG=<request.yaml>
 ```
 
-## Request envelope
+## TypeScript domain structure
+
+Loom follows [typescript-domain-structure.md](../dynamic-skills/typescript-domain-structure.md):
+
+- nested same-prefix families (`agentStats`, `prLand`) plus operation enums
+- field-name enums passed into deny-unknown checks (never string sets)
+- codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation only
+- runtime failures throw `LoomFailure` with `LoomFailureCode`
+- forbidden: generic TypeScript `Result<T>` / `Maybe<T>`, and
+  `new Set(['field', ...])` allow-lists
+
+Enforced by `task preflight:typescript-state` across the repository, including
+`agentic-ai/loom`.
+
+## Domain request rule
+
+YAML must be a full domain representation.
+
+Do **not** use a generic envelope:
 
 ```yaml
-name: pre-push
+# wrong
+name: agent-stats
 arguments:
-  stage: true
-  fetch: true
+  action: assemble
+  pr: 123
 ```
 
-`name` selects the tool.
+Use one domain root family and descriptive fields. Same-prefix operations nest:
 
-`arguments` must match that tool’s schema.
+```yaml
+# right
+agentStats:
+  assemble:
+    prNumber: 123
+    scratchPath: /tmp/pr-123-events.json
+    outputPath: /tmp/123.yaml
+    includeTestInventory: true
+```
 
-Unknown fields fail.
+Exactly one root family key is allowed.
 
-Wrong types fail.
+Unknown fields fail closed.
 
-## Discover tools
-
-Request file: [`params/tools-list/default.yaml`](../../agentic-ai/loom/params/tools-list/default.yaml)
+## Discover request kinds
 
 ```bash
 task loom:tools-list
 ```
 
-On any decode error, read `errors[].path` in the YAML response.
+On decode errors:
 
-Then run `tools-list` and retry.
+1. Read `errors[].path` and `errors[].issue`.
+2. Read `explanation.unifiedDiff` — a `diff` (jsdiff) patch of the closest
+   blueprint template versus the received YAML.
+3. For syntax failures, also read `explanation.parseMessage`.
+4. Fix the request to match `explanation.blueprintYaml`, then retry.
+5. Run `toolsList` when the root family is unclear.
 
-## Response
+### dependencyPopularity
 
-Stdout is YAML only.
-
-Success:
-
-```yaml
-ok: true
-name: pre-push
-result: { ... }
-```
-
-Failure (exit `2` for decode / unknown tool / bad arguments; exit `1` for execute):
+Reject low-adoption npm packages and crates.io crates:
 
 ```yaml
-ok: false
-isError: true
-phase: decode
-errors:
-  - path: arguments.stage
-    message: expected boolean
-recover:
-  toolsListRequest: agentic-ai/loom/params/tools-list/default.yaml
-  hint: run loom with a tools-list request, then retry with a valid arguments object
+dependencyPopularity:
+  includeRepositoryManifests: true
+  minNpmWeeklyDownloads: 10000
+  minGitHubStars: 100
+  minCratesIoDownloads: 50000
+  minCratesIoRecentDownloads: 1000
 ```
+
+```bash
+task loom:dependency-popularity
+```
+
+Prefer libraries over boilerplate:
+[prefer-popular-libraries.md](../dynamic-skills/prefer-popular-libraries.md).
 
 ## Common requests
 
-### pre-push
+### prePush
 
-File: [`params/pre-push/default.yaml`](../../agentic-ai/loom/params/pre-push/default.yaml)
+```yaml
+prePush:
+  stageHostUpdates: true
+  fetchOriginMain: true
+```
 
 ```bash
 task loom:pre-push
 ```
 
-### cortex-audit
+### cortexAudit
 
-File: [`params/cortex-audit/default.yaml`](../../agentic-ai/loom/params/cortex-audit/default.yaml)
+```yaml
+cortexAudit:
+  includeDensityLint: false
+```
 
 ```bash
 task loom:cortex-audit
 ```
 
-### skill-scaffold
-
-Example: [`params/skill-scaffold/request.example.yaml`](../../agentic-ai/loom/params/skill-scaffold/request.example.yaml)
+### skillScaffold
 
 ```yaml
-name: skill-scaffold
-arguments:
-  slug: example-skill
-  wrappers: false
+skillScaffold:
+  skillSlug: example-skill
+  createExecutableWrappers: false
 ```
 
 ```bash
 task loom:skill-scaffold CONFIG=path/to/request.yaml
 ```
 
-### agent-stats
-
-Examples under [`params/agent-stats/`](../../agentic-ai/loom/params/agent-stats/).
+### agentStats (assemble / validate / publish)
 
 ```yaml
-name: agent-stats
-arguments:
-  action: assemble
-  pr: 123
-  scratch: /tmp/pr-123-scratch.json
-  out: /tmp/123.yaml
-  inventory: true
+agentStats:
+  assemble:
+    prNumber: 123
+    scratchPath: /tmp/pr-123-events.json
+    outputPath: /tmp/123.yaml
+    includeTestInventory: true
 ```
 
 ```bash
 task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 ```
 
-### pr-land
+Validate and publish use `agentStats.validate` / `agentStats.publish` with
+`statsFile`.
 
-Example: [`params/pr-land/request.example.yaml`](../../agentic-ai/loom/params/pr-land/request.example.yaml)
+### prLand (status / validate / ready / mergeCheck)
 
 ```yaml
-name: pr-land
-arguments:
-  action: validate
-  pr: 123
-  remote: null
-  full_e2e: false
+prLand:
+  validate:
+    prNumber: 948
+    runFullE2e: false
 ```
 
 ```bash
-task loom:pr-land CONFIG=path/to/request.yaml
+task loom:pr-land CONFIG=path/to/validate-request.yaml
 ```
 
-## Nested call helper
+### toolsCall
+
+Wraps another domain request:
 
 ```yaml
-name: tools-call
-arguments:
-  name: pre-push
-  arguments:
-    stage: true
-    fetch: true
+toolsCall:
+  prePush:
+    stageHostUpdates: true
+    fetchOriginMain: true
 ```
 
-Prefer a top-level `name` for the target tool.
+Prefer a top-level domain key for normal calls.
+
+## Response
+
+Success includes `family`, optional `operation` for nested families, and
+`result`.
+
+Failures include `phase`, `errors[].path`, and `recover.toolsListRequest`.

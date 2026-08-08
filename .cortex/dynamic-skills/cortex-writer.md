@@ -52,9 +52,8 @@ Checklist for every new or edited `.cortex` sentence:
 Use Loom for a heuristic density pass over `.cortex`:
 
 ```yaml
-name: cortex-audit
-arguments:
-  density: true
+cortexAudit:
+  includeDensityLint: true
 ```
 
 ```bash

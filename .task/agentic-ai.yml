@@ -62,7 +62,7 @@ tasks:
       - task: loom:test
 
   loom:run:
-    desc: Run Loom with a YAML request envelope (CONFIG=<request.yaml>).
+    desc: Run Loom with a domain YAML request (CONFIG=<request.yaml>).
     deps: [loom:install]
     vars:
       CONFIG: '{{.CONFIG}}'
@@ -135,6 +135,16 @@ tasks:
     deps: [loom:install]
     vars:
       CONFIG: '{{default "agentic-ai/loom/params/tools-list/default.yaml" .CONFIG}}'
+    cmds:
+      - task: loom:run
+        vars:
+          CONFIG: '{{.CONFIG}}'
+
+  loom:dependency-popularity:
+    desc: Check npm/crates.io dependency popularity against thresholds.
+    deps: [loom:install]
+    vars:
+      CONFIG: '{{default "agentic-ai/loom/params/dependency-popularity/default.yaml" .CONFIG}}'
     cmds:
       - task: loom:run
         vars:

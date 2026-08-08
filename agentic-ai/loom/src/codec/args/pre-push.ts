@@ -1,47 +1,66 @@
-import { ResultKind } from '../../result.ts';
-import { decodeErr, decodeOk, type DecodeResult } from '../field-error.ts';
+import { DecodeStatus } from '../field-error.ts';
 import {
   collectDecode,
   denyUnknownKeys,
   expectBoolean,
   expectObject,
 } from '../object.ts';
+import { RequestFamily } from '../enums.ts';
+import { decodeErr, type DecodeOutcome } from '../field-error.ts';
 
-export type PrePushArgs = {
-  readonly stage: boolean;
-  readonly fetch: boolean;
+export enum PrePushField {
+  StageHostUpdates = 'stageHostUpdates',
+  FetchOriginMain = 'fetchOriginMain',
+}
+
+export type PrePushRequest = {
+  readonly stageHostUpdates: boolean;
+  readonly fetchOriginMain: boolean;
 };
 
-const ALLOWED = new Set(['stage', 'fetch']);
+const ROOT = RequestFamily.PrePush;
 
-export function decodePrePushArgs(value: unknown): DecodeResult<PrePushArgs> {
-  const object = expectObject(value, 'arguments');
-  if (object.kind === ResultKind.Err) {
+export function decodePrePushRequest(
+  value: unknown,
+): DecodeOutcome<PrePushRequest> {
+  const object = expectObject(value, ROOT);
+  if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, ALLOWED, 'arguments');
-  const stage = expectBoolean(object.value, 'stage', 'arguments');
-  const fetch = expectBoolean(object.value, 'fetch', 'arguments');
+  const unknown = denyUnknownKeys(object.value, PrePushField, ROOT);
+  const stageHostUpdates = expectBoolean(
+    object.value,
+    PrePushField.StageHostUpdates,
+    ROOT,
+  );
+  const fetchOriginMain = expectBoolean(
+    object.value,
+    PrePushField.FetchOriginMain,
+    ROOT,
+  );
   if (unknown.length > 0) {
-    const errors = [
+    return decodeErr([
       ...unknown,
-      ...(stage.kind === ResultKind.Err ? stage.errors : []),
-      ...(fetch.kind === ResultKind.Err ? fetch.errors : []),
-    ];
-    return decodeErr(errors);
+      ...(stageHostUpdates.status === DecodeStatus.Failed
+        ? stageHostUpdates.errors
+        : []),
+      ...(fetchOriginMain.status === DecodeStatus.Failed
+        ? fetchOriginMain.errors
+        : []),
+    ]);
   }
-  return collectDecode([stage, fetch], () => ({
-    stage: (stage as { value: boolean }).value,
-    fetch: (fetch as { value: boolean }).value,
+  return collectDecode([stageHostUpdates, fetchOriginMain], () => ({
+    stageHostUpdates: (stageHostUpdates as { value: boolean }).value,
+    fetchOriginMain: (fetchOriginMain as { value: boolean }).value,
   }));
 }
 
 export const PRE_PUSH_INPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['stage', 'fetch'],
+  required: ['stageHostUpdates', 'fetchOriginMain'],
   properties: {
-    stage: { type: 'boolean' },
-    fetch: { type: 'boolean' },
+    stageHostUpdates: { type: 'boolean' },
+    fetchOriginMain: { type: 'boolean' },
   },
 } as const;

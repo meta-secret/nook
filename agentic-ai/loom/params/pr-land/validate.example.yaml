@@ -1,0 +1,4 @@
+prLand:
+  validate:
+    prNumber: 948
+    runFullE2e: false

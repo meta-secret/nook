@@ -86,9 +86,17 @@ mutable flags create the same problem.
 - Normalize external `null` directly into the same explicit union at the
   boundary; authored `null` is forbidden.
 - Never introduce a generic TypeScript `Option` clone. Names such as
-  `ValueState`, `EMPTY_VALUE`, `presentValue`, `valueState`, and
-  `valueFromState` merely rename `undefined`; they do not explain why a value
-  is absent or what transition makes it available.
+  `ValueState`, `EMPTY_VALUE`, `presentValue`, `valueState`, `Maybe`,
+  `Present`/`Absent` wrappers, and `valueFromState` merely rename `undefined`;
+  they do not explain why a value is absent or what transition makes it
+  available.
+- Never introduce a hand-rolled TypeScript `Result<T>` utility. Rust `Result`
+  is language-provided and fine. TypeScript codecs may use a decode-local
+  outcome type; runtime failures use domain throws or command-specific unions.
+  See [typescript-domain-structure.md](typescript-domain-structure.md).
+- Same-prefix closed values almost always belong on a nested object plus an
+  operation enum. Do not flatten `AgentStatsAssemble` / `AgentStatsValidate`
+  into one sibling list. Field allow-lists must be enums, not string sets.
 - Name both the union and its variants for the lifecycle being modeled:
   `not-loaded/loaded`, `unmounted/mounted`, `idle/scheduled`,
   `not-selected/selected`, `locked/active`, or more precise domain language.

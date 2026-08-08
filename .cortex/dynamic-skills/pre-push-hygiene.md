@@ -27,10 +27,9 @@ Call Loom `pre-push` before every push.
 Request:
 
 ```yaml
-name: pre-push
-arguments:
-  stage: true
-  fetch: true
+prePush:
+  stageHostUpdates: true
+  fetchOriginMain: true
 ```
 
 Invoke:
@@ -51,7 +50,7 @@ Loom always:
 1. Runs host-applied `task format`
 2. Fetches `origin/main` when `fetch: true`
 3. Runs `.github/scripts/ui-demo-contract.sh` against that base
-4. Stages host format updates when `stage: true`
+4. Stages host format updates when `stageHostUpdates: true`
 
 Then commit → push → focused `task remote` → explicit validate.
 

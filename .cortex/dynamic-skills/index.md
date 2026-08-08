@@ -27,16 +27,18 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 | [svelte-state-modeling.md](svelte-state-modeling.md) | Use concise Svelte rune declarations for optional UI state and keep closed domain states in Rust/WASM | |
 | [typescript-serial-operation-queues.md](typescript-serial-operation-queues.md) | Encapsulate serial async work behind enqueue, idle, and reset operations instead of exposing mutable promise chains | |
 | [typescript-explicit-state.md](typescript-explicit-state.md) | Replace authored `undefined`/`null` state with semantic unions while retaining complete `void` unit/effect returns; reject every value-or-void contract, including nested generics and returns | |
+| [typescript-domain-structure.md](typescript-domain-structure.md) | Nest same-prefix closed vocabularies into parent objects + operation enums; use field enums instead of string sets; ban hand-rolled TypeScript `Result`/`Maybe` | |
+| [prefer-popular-libraries.md](prefer-popular-libraries.md) | Before writing boilerplate, prefer mature high-adoption libraries; reject obscure low-star/low-download deps; validate with Loom `dependencyPopularity` | [`.agents/skills/prefer-popular-libraries/SKILL.md`](../../.agents/skills/prefer-popular-libraries/SKILL.md) |
 | [ui-design-skills.md](ui-design-skills.md) | Load `design-taste-frontend` for user-visible UI work; Impeccable is disabled by default and may be used only when the user explicitly requests it | |
 | [web-unused-code.md](web-unused-code.md) | Enable class-member analysis in every web Knip graph and remove every valid unused-code finding | |
 
 ## How To Add One
 
-1. Scaffold with Loom using a request YAML (`name: skill-scaffold`).
+1. Scaffold with Loom using a `skillScaffold` domain request YAML.
 2. Fill in the problem pattern, preferred pattern, scope, examples, and
    validation.
 3. Confirm the new card is in the table above.
-4. If the user wants direct invocation, set `wrappers: true` in the request or
+4. If the user wants direct invocation, set `createExecutableWrappers: true` or
    create `.agents/skills/<skill-name>/SKILL.md` (with `.cursor` / `.claude`
    symlinks) pointing back to the `.cortex` card, then link it from the table.
 5. Verify with `task loom:cortex-audit`.
