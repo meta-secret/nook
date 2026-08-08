@@ -419,7 +419,7 @@ runs weekly and can be started manually. It installs the pinned
 The audit covers every direct library declared in those `Cargo.toml` manifests.
 It does not audit only the current lockfile's transitive graph.
 
-If either audit reports a newer release, the workflow starts the existing
+If any audit reports a newer release, the workflow starts the existing
 isolated CI agent on `ubuntu-latest`. The agent updates **all** outdated direct
 Rust dependencies, makes compatibility fixes, commits lockfile updates, opens a
 PR, and runs this required full deterministic validation before the CI-agent

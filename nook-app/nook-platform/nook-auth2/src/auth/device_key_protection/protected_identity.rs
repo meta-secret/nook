@@ -460,6 +460,19 @@ mod tests {
         },
     };
 
+    #[test]
+    fn age_identity_encoding_preserves_legacy_known_answer() -> anyhow::Result<()> {
+        let secret_bytes = [
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 31,
+        ];
+        assert_eq!(
+            encode_age_identity_secret(&secret_bytes)?,
+            "AGE-SECRET-KEY-1QQQSYQCYQ5RQWZQFPG9SCRGWPUGPZYSNZS23V9CCRYDPK8QARC0SWRYDWG"
+        );
+        Ok(())
+    }
+
     fn passkey_derived_record(
         record: &WrappedDeviceIdentity,
     ) -> anyhow::Result<&PasskeyDerivedDeviceIdentity> {

@@ -32,6 +32,9 @@ fn passkey_error(error: &nook_core::PasskeyAuthenticatorError) -> JsError {
         nook_core::PasskeyAuthenticatorError::SignatureCounterExhausted => {
             "passkey-counter-exhausted"
         }
+        nook_core::PasskeyAuthenticatorError::RandomnessUnavailable => {
+            "passkey-randomness-unavailable"
+        }
         nook_core::PasskeyAuthenticatorError::Serialization => "passkey-serialization-failed",
     };
     JsError::new(code)

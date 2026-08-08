@@ -575,13 +575,7 @@ mod tests {
     use ed25519_dalek::SigningKey;
 
     fn signing_key() -> SigningKey {
-        let mut bytes = [0_u8; 32];
-        let random_result = getrandom::fill(&mut bytes);
-        assert!(
-            random_result.is_ok(),
-            "operating system randomness should be available"
-        );
-        SigningKey::from_bytes(&bytes)
+        SigningKey::from_bytes(&[11_u8; 32])
     }
 
     fn encrypted_secret(

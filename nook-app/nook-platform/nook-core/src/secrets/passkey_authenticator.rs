@@ -40,6 +40,8 @@ pub enum PasskeyAuthenticatorError {
     InvalidKeyMaterial,
     #[error("passkey signature counter is exhausted")]
     SignatureCounterExhausted,
+    #[error("passkey randomness is unavailable")]
+    RandomnessUnavailable,
     #[error("passkey serialization failed")]
     Serialization,
 }
@@ -365,10 +367,10 @@ pub fn create_website_passkey(
     }
 
     let mut credential_id = [0_u8; 32];
-    fill(&mut credential_id).map_err(|_| PasskeyAuthenticatorError::Serialization)?;
+    fill(&mut credential_id).map_err(|_| PasskeyAuthenticatorError::RandomnessUnavailable)?;
     let credential_id_encoded = URL_SAFE_NO_PAD.encode(credential_id);
-    let secret_key =
-        p256::SecretKey::try_generate().map_err(|_| PasskeyAuthenticatorError::Serialization)?;
+    let secret_key = p256::SecretKey::try_generate()
+        .map_err(|_| PasskeyAuthenticatorError::RandomnessUnavailable)?;
     let pkcs8 = secret_key
         .to_pkcs8_der()
         .map_err(|_| PasskeyAuthenticatorError::Serialization)?;

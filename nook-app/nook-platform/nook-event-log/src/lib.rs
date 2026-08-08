@@ -66,17 +66,18 @@ pub use nook_auth2::{
 
 #[cfg(test)]
 mod test_support {
+    use core::sync::atomic::{AtomicU64, Ordering};
+
     use crate::{EventId, EventResult, SigningIdentity};
     use ed25519_dalek::SigningKey;
     use nook_auth2::{AuthKeyId, DeviceSigningPublicKey, StoreId};
 
     pub(crate) fn signing_key() -> SigningKey {
+        static NEXT_SIGNING_KEY: AtomicU64 = AtomicU64::new(1);
+
+        let sequence = NEXT_SIGNING_KEY.fetch_add(1, Ordering::Relaxed);
         let mut bytes = [0_u8; 32];
-        let random_result = getrandom::fill(&mut bytes);
-        assert!(
-            random_result.is_ok(),
-            "operating system randomness should be available"
-        );
+        bytes[..size_of::<u64>()].copy_from_slice(&sequence.to_le_bytes());
         SigningKey::from_bytes(&bytes)
     }
 
