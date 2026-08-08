@@ -99,6 +99,8 @@ runs:
 
     - name: Select hosted BuildKit cache
       shell: bash
+      env:
+        NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}
       run: |
         set -euo pipefail
 
@@ -161,9 +163,8 @@ runs:
             # Key by PR head SHA (not the merge GITHUB_SHA) so local HEAD publish matches.
             scope_sha="${{ github.event.pull_request.head.sha }}"
           else
-            task_name="${{ github.event.inputs.task }}"
-            if [ -z "$task_name" ]; then
-              echo "isolated-cache-write requires a dispatched task name" >&2
+            if [ -z "$NOOK_REMOTE_TASK_SELECTION" ]; then
+              echo "isolated-cache-write requires a dispatched task selection" >&2
               exit 1
             fi
             scope_sha="$(git rev-parse HEAD)"
