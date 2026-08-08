@@ -169,6 +169,17 @@ target "leaf" {
   output = ["type=cacheonly"]
 }
 
+// Leaf over nested parent+base. Used only to observe parent RUN cache status;
+// no own-scope export (three-level mode=max export can skip as empty).
+target "leaf-nested" {
+  context = "."
+  dockerfile = "leaf.Dockerfile"
+  contexts = {
+    parent = "target:parent-nested"
+  }
+  output = ["type=cacheonly"]
+}
+
 target "leaf-short-chain" {
   context = "."
   dockerfile = "leaf.Dockerfile"

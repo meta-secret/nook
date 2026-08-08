@@ -50,6 +50,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("target \"parent-nested\"")
             && bake.contains("target \"parent-nested-publish\"")
             && bake.contains("target \"leaf\"")
+            && bake.contains("target \"leaf-nested\"")
             && bake.contains("target \"leaf-short-chain\"")
             && bake.contains("target \"parent-pr-cold\""),
         "sim Bake must expose base/parent/nested/leaf/publish/short-chain/pr-cold targets"

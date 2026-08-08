@@ -342,8 +342,9 @@ tasks:
         echo "scenario K ok"
 
         echo "== Scenario L: short nested base orphans parent; bare base keeps CACHED =="
-        # Mirrors dylint after nightly verify CACHED: importing short rust-base while
-        # nesting rematerializes cargo install. Context rust-base must omit cache-from.
+        # Mirrors dylint leaf after nightly verify CACHED: leaf nests parent+base.
+        # Short base cache-from during that leaf rematerializes parent cargo install.
+        # Context rust-base must omit cache-from (BASE_OWN empty).
         BAKE_SIM_CACHE_ENABLED=1
         BAKE_SIM_CACHE_WRITE_ENABLED=
         BAKE_SIM_CACHE_FALLBACK_ENABLED=
@@ -351,11 +352,11 @@ tasks:
         BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
         BAKE_SIM_BASE_OWN_CACHE_ENABLED=1
         create_builder "nook-bake-sim-l-broken-${suffix}"
-        bake_plain "$proof_log" parent-nested
+        bake_plain "$proof_log" leaf-nested
         require_uncached_step "$proof_log" "bake-sim-parent-expensive"
         BAKE_SIM_BASE_OWN_CACHE_ENABLED=
         create_builder "nook-bake-sim-l-fixed-${suffix}"
-        bake_plain "$proof_log" parent-nested
+        bake_plain "$proof_log" leaf-nested
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         echo "scenario L ok"
 
