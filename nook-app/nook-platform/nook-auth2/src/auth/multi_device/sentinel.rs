@@ -162,8 +162,7 @@ pub fn create_sentinel_root_share_records_for_recipients(
         u8::try_from(recipients.len()).map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?;
     validate_sentinel_threshold(threshold, required_participants)?;
     let mut root = [0_u8; 32];
-    getrandom::getrandom(&mut root)
-        .map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))?;
+    getrandom::fill(&mut root).map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))?;
     let keys = derive_sentinel_vault_keys(&root)?;
     let shares = slip39::split_sentinel_secret(&root, threshold, required_participants)?;
     root.zeroize();

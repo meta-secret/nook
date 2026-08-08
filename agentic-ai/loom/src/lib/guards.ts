@@ -1,10 +1,6 @@
 /** Untrusted YAML/JSON scalar, array, or object payload. */
 export type ExternalValue =
-  | string
-  | number
-  | boolean
-  | readonly ExternalValue[]
-  | ExternalObject;
+  string | number | boolean | readonly ExternalValue[] | ExternalObject;
 
 /** Untrusted object map from YAML/JSON. */
 export type ExternalObject = {

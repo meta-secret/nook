@@ -13,18 +13,18 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@lucide/svelte": "1.21.0",
-    "svelte": "5.56.3"
+    "@lucide/svelte": "1.30.0",
+    "svelte": "5.56.8"
   },
   "devDependencies": {
-    "@playwright/test": "1.58.2",
-    "@sveltejs/vite-plugin-svelte": "7.1.2",
+    "@playwright/test": "1.62.1",
+    "@sveltejs/vite-plugin-svelte": "7.3.0",
     "@tsconfig/svelte": "5.0.8",
-    "@types/node": "24.13.2",
-    "prettier": "3.8.4",
+    "@types/node": "26.2.0",
+    "prettier": "3.9.6",
     "prettier-plugin-svelte": "4.1.1",
-    "svelte-check": "4.6.0",
-    "typescript": "6.0.3",
-    "vite": "8.0.16"
+    "svelte-check": "4.7.5",
+    "typescript": "7.0.2",
+    "vite": "8.2.1"
   }
 }

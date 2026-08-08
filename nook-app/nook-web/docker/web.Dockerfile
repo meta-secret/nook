@@ -8,7 +8,7 @@ ARG DEBIAN_RELEASE=trixie
 FROM debian:${DEBIAN_RELEASE}-slim AS web-base
 
 ARG BUN_VERSION=1.3.14
-ARG TASK_VERSION=3.42.1
+ARG TASK_VERSION=3.52.0
 # Node binary only — Playwright workers need it. Pin version + sha256; npm/npx stay out.
 ARG NODE_VERSION=24.19.0
 ARG NODE_SHA256=f625d97cd707df4ff96254916fbc5ff014f09c09effe5a1e0ca8f6d41a8789d4

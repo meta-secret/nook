@@ -6,8 +6,7 @@ export { NookWebsiteLoginSaveDecision }
 export type WebsiteLoginSaveOfferView = {
   offerId: string
   decision:
-    | NookWebsiteLoginSaveDecision.Create
-    | NookWebsiteLoginSaveDecision.Update
+    NookWebsiteLoginSaveDecision.Create | NookWebsiteLoginSaveDecision.Update
   vaultStoreId: string
   vaultName: string
 }

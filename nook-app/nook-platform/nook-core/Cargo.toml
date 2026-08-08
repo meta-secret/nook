@@ -15,44 +15,44 @@ nook-app-common = { path = "../nook-app-common" }
 nook-auth2 = { path = "../nook-auth2" }
 nook-event-log = { path = "../nook-event-log" }
 serde = { version = "1.0.228", features = ["derive"] }
-age = { version = "0.11.3", features = ["armor"] }
+age = { version = "0.12.1", features = ["armor"] }
 serde_json = "1.0.150"
 serde_yaml = "0.9.34"
 csv = "1.3.1"
 hex = "0.4.3"
-sha2 = "0.10.9"
-sha1 = "0.10.7"
+sha2 = "0.11.0"
+sha1 = "0.11.0"
 bip39 = "2.2.2"
-getrandom = "0.2.17"
-base64 = "0.22"
+getrandom = "0.4.3"
+base64 = "0.23.1"
 prost = "0.14.4"
 thiserror = "2.0.18"
 aes-gcm = { version = "0.11.0", default-features = false, features = ["aes", "alloc"] }
 aes = "0.9.1"
 cbc = { version = "0.2.0", features = ["alloc"] }
-hmac = "0.12.1"
+hmac = "0.13.0"
 argon2 = { version = "0.5.3", default-features = false, features = ["alloc", "zeroize"] }
-hkdf = "0.12.4"
+hkdf = "0.13.0"
 pbkdf2 = { version = "0.13.0", features = ["sha2"] }
 tracing = { version = "0.1.41", default-features = false, features = ["std", "attributes"] }
 zeroize = "1.9.0"
-wasm-bindgen = "=0.2.125"
+wasm-bindgen = "0.2.127"
 tsify = { version = "0.5.6", default-features = false, features = ["js"] }
 percent-encoding = "2.3.2"
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
-zip = { version = "7.2.0", default-features = false, features = ["deflate-flate2"] }
-p256 = { version = "0.13.2", features = ["ecdsa", "pkcs8"] }
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2"] }
+p256 = { version = "0.14.0", features = ["ecdsa", "pkcs8"] }
 ciborium = "0.2.2"
 url = "2.5.8"
 psl = "2.1.189"
 
 [dev-dependencies]
 anyhow = "1.0.104"
-ed25519-dalek = { version = "2.1", features = ["rand_core"] }
-rand_core = "0.6"
+ed25519-dalek = { version = "3.0.0", features = ["rand_core"] }
+rand_core = "0.10.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { version = "0.2.17", features = ["js"] }
+getrandom = { version = "0.4.3", features = ["wasm_js"] }
 
 [lints]
 workspace = true

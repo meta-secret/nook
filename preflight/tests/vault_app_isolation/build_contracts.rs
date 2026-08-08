@@ -642,7 +642,9 @@ fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() -> 
     let audit_script = read(&root, ".github/scripts/ci-rust-deps-outdated.sh");
     for required in [
         "cargo outdated --workspace --root-deps-only --exit-code 1",
-        "check_manifest nook-app",
+        "check_manifest nook-app/nook-platform",
+        "check_manifest nook-app/nook-platform/fuzz",
+        "check_manifest agentic-ai/minds",
         "check_manifest preflight",
     ] {
         assert!(
@@ -653,7 +655,10 @@ fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() -> 
 
     let prompt = read(&root, ".github/prompts/rust-dependency-update-agent.md");
     for required in [
-        "every `Cargo.toml` under `nook-app/`\n   and `preflight/`",
+        "`nook-app/nook-platform/`",
+        "`nook-app/nook-platform/fuzz/`",
+        "`agentic-ai/minds/`",
+        "`preflight/`",
         "all outdated direct Rust dependencies",
         "WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000",
         "every local-provider Playwright e2e spec, and the\n   extension e2e",

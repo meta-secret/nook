@@ -10,8 +10,8 @@ use aes_gcm::{
     aead::{Aead, KeyInit, Payload, array::Array},
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use bech32::{ToBase32, Variant};
-use getrandom::getrandom;
+use bech32::{Bech32, Hrp};
+use getrandom::fill;
 use hkdf::Hkdf;
 use pbkdf2::{pbkdf2_hmac, sha2::Sha256 as Pbkdf2Sha256};
 use serde::{Deserialize, Serialize};
@@ -61,7 +61,7 @@ pub struct DeviceKeyProtectionSetup {
 impl DeviceKeyProtectionSetup {
     pub fn generate() -> DeviceKeyProtectionResult<Self> {
         let mut user_handle = [0u8; PRF_INPUT_LEN];
-        getrandom(&mut user_handle)
+        fill(&mut user_handle)
             .map_err(|error| DeviceKeyProtectionError::RandomBytes(error.to_string()))?;
         Ok(Self {
             user_handle,

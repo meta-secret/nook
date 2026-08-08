@@ -14,13 +14,13 @@ nook-core = { path = "../nook-core" }
 coset = "0.4.2"
 passkey-types = "0.5.0"
 serde_json = "1.0.150"
-wasm-bindgen = "=0.2.125"
-getrandom = { version = "0.2.17", features = ["js"] }
+wasm-bindgen = "0.2.127"
+getrandom = { version = "0.4.3", features = ["wasm_js"] }
 rexie = "0.6.2"
 serde-wasm-bindgen = "0.6.5"
-wasm-bindgen-futures = "0.4"
-js-sys = "0.3"
-web-sys = { version = "0.3", features = [
+wasm-bindgen-futures = "0.4.77"
+js-sys = "0.3.104"
+web-sys = { version = "0.3.104", features = [
     "AuthenticationExtensionsClientOutputs",
     "AuthenticatorAssertionResponse",
     "AuthenticatorAttestationResponse",
@@ -34,12 +34,12 @@ web-sys = { version = "0.3", features = [
     "Window",
     "Storage",
 ] }
-base64 = "0.21.7"
+base64 = "0.23.1"
 hex = "0.4.3"
 serde = { version = "1.0.228", features = ["derive"] }
-reqwest = { version = "0.12.12", default-features = false, features = ["json"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "query"] }
 thiserror = "2.0.18"
-flume = "0.11.0"
+flume = "0.12.0"
 gloo-file = { version = "0.4.0", features = ["futures"] }
 gloo-storage = "0.4.0"
 gloo-utils = "0.3.0"
@@ -52,7 +52,7 @@ zeroize = "1.9.0"
 [dev-dependencies]
 anyhow = "1.0.104"
 futures-util = "0.3"
-wasm-bindgen-test = "0.3.50"
+wasm-bindgen-test = "0.3.77"
 
 [features]
 default = []

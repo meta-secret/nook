@@ -10,7 +10,7 @@ repository.workspace = true
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"
 url = "2.5.8"
-wasm-bindgen = "=0.2.125"
+wasm-bindgen = "0.2.127"
 
 [dev-dependencies]
 anyhow = "1.0.104"

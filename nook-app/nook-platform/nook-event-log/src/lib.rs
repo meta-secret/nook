@@ -69,10 +69,15 @@ mod test_support {
     use crate::{EventId, EventResult, SigningIdentity};
     use ed25519_dalek::SigningKey;
     use nook_auth2::{AuthKeyId, DeviceSigningPublicKey, StoreId};
-    use rand_core::OsRng;
 
     pub(crate) fn signing_key() -> SigningKey {
-        SigningKey::generate(&mut OsRng)
+        let mut bytes = [0_u8; 32];
+        let random_result = getrandom::fill(&mut bytes);
+        assert!(
+            random_result.is_ok(),
+            "operating system randomness should be available"
+        );
+        SigningKey::from_bytes(&bytes)
     }
 
     pub(crate) fn actor(signing_key: &SigningKey) -> EventResult<AuthKeyId> {

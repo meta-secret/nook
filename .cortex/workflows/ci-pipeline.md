@@ -104,7 +104,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 **`rust-dependency-updates.yml`**
 
-- Audits every direct dependency in `nook-app/` and `preflight/`.
+- Audits every direct dependency in each Rust root.
+- The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
 - When an update exists, an AI agent updates all outdated Rust dependencies.
 - Runs the full deterministic suite and opens a PR for explicit review.
 
@@ -408,9 +409,15 @@ Do **not** set `workers` in `playwright.config.ts` — use Playwright defaults l
 [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml)
 runs weekly and can be started manually. It installs the pinned
 `cargo-outdated` orchestration tool and runs it with `--workspace
---root-deps-only` in both Rust roots: `nook-app/` and `preflight/`. Therefore
-the audit covers every direct library declared in their `Cargo.toml` manifests,
-not merely the current lockfile's transitive graph.
+--root-deps-only` in every Rust root. Those roots are:
+
+- `nook-app/nook-platform/`;
+- `nook-app/nook-platform/fuzz/`;
+- `agentic-ai/minds/`;
+- `preflight/`.
+
+The audit covers every direct library declared in those `Cargo.toml` manifests.
+It does not audit only the current lockfile's transitive graph.
 
 If either audit reports a newer release, the workflow starts the existing
 isolated CI agent on `ubuntu-latest`. The agent updates **all** outdated direct

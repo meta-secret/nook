@@ -1,7 +1,7 @@
 //! RFC 6238 TOTP parsing, validation, and code generation.
 
 use crate::ValidationError;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;

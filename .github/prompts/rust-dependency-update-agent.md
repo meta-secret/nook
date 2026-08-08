@@ -11,14 +11,19 @@ Read `.cortex/AGENTS.md`, `.cortex/rules.md`, and
 
 ## Required work
 
-1. Inspect **every direct dependency** in every `Cargo.toml` under `nook-app/`
-   and `preflight/`; do not update a subset just because one package is the
-   first one reported. Update all outdated direct Rust dependencies with newer
-   releases, including incompatible releases when the project can be migrated
-   safely.
-2. Preserve Nook's exact-version policy: use explicit standard version strings
-   in `Cargo.toml`, never `=`, `^`, `~`, `>=`, or `*`. Update the corresponding
-   `Cargo.lock` files (`nook-app/nook-platform/Cargo.lock` and/or `preflight/Cargo.lock`).
+1. Inspect **every direct dependency** in these Rust roots:
+   - `nook-app/nook-platform/`
+   - `nook-app/nook-platform/fuzz/`
+   - `agentic-ai/minds/`
+   - `preflight/`
+
+   Do not update a subset because one package was reported first.
+   Update all outdated direct Rust dependencies.
+   Include incompatible releases when the project can be migrated safely.
+2. Preserve Nook's version policy.
+   Use explicit standard version strings in `Cargo.toml`.
+   Never use `=`, `^`, `~`, `>=`, or `*`.
+   Update the lockfile owned by each changed Rust root.
 3. Make the smallest required source, feature-flag, or test changes for the
    upgraded APIs. Maintain the Rust/WASM boundary and add behavior-focused Rust
    tests for changed domain behavior.

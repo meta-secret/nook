@@ -6,9 +6,10 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ciborium::value::{Integer, Value};
+use getrandom::fill;
+use p256::Sec1Point;
 use p256::ecdsa::{Signature, SigningKey, signature::Signer};
-use p256::elliptic_curve::rand_core::{OsRng, RngCore};
-use p256::elliptic_curve::sec1::ToEncodedPoint;
+use p256::elliptic_curve::{Generate, sec1::ToSec1Point};
 use p256::pkcs8::{DecodePrivateKey, EncodePrivateKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -195,7 +196,7 @@ fn integer(value: i64) -> Value {
     Value::Integer(Integer::from(value))
 }
 
-fn cose_public_key(encoded_point: &p256::EncodedPoint) -> PasskeyAuthenticatorResult<Vec<u8>> {
+fn cose_public_key(encoded_point: &Sec1Point) -> PasskeyAuthenticatorResult<Vec<u8>> {
     let x = encoded_point
         .x()
         .ok_or(PasskeyAuthenticatorError::InvalidKeyMaterial)?;
@@ -268,7 +269,7 @@ pub(crate) fn validate_es256_credential_key(
             .decode(public_key.encoded())
             .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
         let (x, y) = cose_coordinates(&public_bytes)?;
-        let encoded = secret.public_key().to_encoded_point(false);
+        let encoded = secret.public_key().to_sec1_point(false);
         if encoded
             .x()
             .is_none_or(|value| value.as_slice() != x.as_slice())
@@ -364,13 +365,14 @@ pub fn create_website_passkey(
     }
 
     let mut credential_id = [0_u8; 32];
-    OsRng.fill_bytes(&mut credential_id);
+    fill(&mut credential_id).map_err(|_| PasskeyAuthenticatorError::Serialization)?;
     let credential_id_encoded = URL_SAFE_NO_PAD.encode(credential_id);
-    let secret_key = p256::SecretKey::random(&mut OsRng);
+    let secret_key =
+        p256::SecretKey::try_generate().map_err(|_| PasskeyAuthenticatorError::Serialization)?;
     let pkcs8 = secret_key
         .to_pkcs8_der()
         .map_err(|_| PasskeyAuthenticatorError::Serialization)?;
-    let encoded_point = secret_key.public_key().to_encoded_point(false);
+    let encoded_point = secret_key.public_key().to_sec1_point(false);
     let cose_key = cose_public_key(&encoded_point)?;
     let private_key = PasskeyPrivateKeyPkcs8::parse(URL_SAFE_NO_PAD.encode(pkcs8.as_bytes()))
         .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;

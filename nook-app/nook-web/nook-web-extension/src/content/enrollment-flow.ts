@@ -96,8 +96,7 @@ enum BackupAttachMode {
 type EnrollPreviewResponse = {
   ok?: boolean
   status?:
-    | EnrollPreviewResponseStatus.Ready
-    | EnrollPreviewResponseStatus.Unavailable
+    EnrollPreviewResponseStatus.Ready | EnrollPreviewResponseStatus.Unavailable
   preview?: OtpauthEnrollmentPreview
   vaultStoreId?: string
   reason?: string

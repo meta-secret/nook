@@ -1,13 +1,13 @@
 use super::{
-    AES_GCM_NONCE_LEN, AES_KEY_LEN, AGE_SECRET_KEY_PREFIX, Aead, Aes256Gcm, Array, CIPHER_NAME,
-    CREDENTIAL_ID_MAX_LEN, Deserialize, DeviceIdentitySecret, DeviceKeyProtectionError,
-    DeviceKeyProtectionResult, Engine, Hkdf, KDF_NAME, KeyInit,
+    AES_GCM_NONCE_LEN, AES_KEY_LEN, AGE_SECRET_KEY_PREFIX, Aead, Aes256Gcm, Array, Bech32,
+    CIPHER_NAME, CREDENTIAL_ID_MAX_LEN, Deserialize, DeviceIdentitySecret,
+    DeviceKeyProtectionError, DeviceKeyProtectionResult, Engine, Hkdf, Hrp, KDF_NAME, KeyInit,
     PASSKEY_DERIVED_DEVICE_KEY_PROTECTION_VERSION, PASSKEY_WRAPPED_AAD_CONTEXT,
     PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION, PASSKEY_WRAPPING_HKDF_INFO,
     PASSKEY_WRAPPING_SALT_LEN, PIN_AAD_CONTEXT, PIN_DEVICE_KEY_PROTECTION_VERSION, PIN_KDF_NAME,
     PIN_MIN_LEN, PIN_PBKDF2_ITERATIONS, PIN_SALT_LEN, PRF_INPUT_LEN, PRF_OUTPUT_LEN,
-    PasskeyDeviceProtectionMode, Payload, Pbkdf2Sha256, Serialize, Sha256, ToBase32,
-    URL_SAFE_NO_PAD, USER_HANDLE_MAX_LEN, Variant, Zeroize, Zeroizing, getrandom, pbkdf2_hmac,
+    PasskeyDeviceProtectionMode, Payload, Pbkdf2Sha256, Serialize, Sha256, URL_SAFE_NO_PAD,
+    USER_HANDLE_MAX_LEN, Zeroize, Zeroizing, fill, pbkdf2_hmac,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -135,10 +135,8 @@ pub fn passkey_wrapped_device_identity_record(
     validate_recovery_inputs(user_handle, prf_output)?;
     let mut salt = [0u8; PASSKEY_WRAPPING_SALT_LEN];
     let mut nonce = [0u8; AES_GCM_NONCE_LEN];
-    getrandom(&mut salt)
-        .map_err(|error| DeviceKeyProtectionError::RandomBytes(error.to_string()))?;
-    getrandom(&mut nonce)
-        .map_err(|error| DeviceKeyProtectionError::RandomBytes(error.to_string()))?;
+    fill(&mut salt).map_err(|error| DeviceKeyProtectionError::RandomBytes(error.to_string()))?;
+    fill(&mut nonce).map_err(|error| DeviceKeyProtectionError::RandomBytes(error.to_string()))?;
 
     let mut record = PasskeyWrappedLocalDeviceIdentity {
         version: PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION,
@@ -177,10 +175,8 @@ pub fn wrap_device_identity_with_pin(
     let pin = validate_pin(pin)?;
     let mut salt = [0u8; PIN_SALT_LEN];
     let mut nonce = [0u8; AES_GCM_NONCE_LEN];
-    getrandom(&mut salt)
-        .map_err(|error| DeviceKeyProtectionError::RandomBytes(error.to_string()))?;
-    getrandom(&mut nonce)
-        .map_err(|error| DeviceKeyProtectionError::RandomBytes(error.to_string()))?;
+    fill(&mut salt).map_err(|error| DeviceKeyProtectionError::RandomBytes(error.to_string()))?;
+    fill(&mut nonce).map_err(|error| DeviceKeyProtectionError::RandomBytes(error.to_string()))?;
 
     let key = derive_pin_wrapping_key(pin, &salt, PIN_PBKDF2_ITERATIONS)?;
     let cipher = Aes256Gcm::new_from_slice(key.as_ref())
@@ -423,8 +419,9 @@ fn encode(bytes: &[u8]) -> String {
 }
 
 pub(super) fn encode_age_identity_secret(secret_bytes: &[u8]) -> DeviceKeyProtectionResult<String> {
-    let base32 = secret_bytes.to_base32();
-    let mut encoded = bech32::encode(AGE_SECRET_KEY_PREFIX, base32, Variant::Bech32)
+    let hrp = Hrp::parse(AGE_SECRET_KEY_PREFIX)
+        .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;
+    let mut encoded = bech32::encode::<Bech32>(hrp, secret_bytes)
         .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;
     encoded.make_ascii_uppercase();
     Ok(encoded)

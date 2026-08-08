@@ -38,8 +38,8 @@ fn assert_hosted_workflow_runtime_contract(root: &Path) {
 fn assert_docker_setup_contract(root: &Path) {
     let setup = read(root, ".github/actions/nook-docker-setup/action.yml");
     for required in [
-        "docker/setup-buildx-action@v3",
-        "docker/login-action@v3",
+        "docker/setup-buildx-action@v4",
+        "docker/login-action@v4",
         "registry-username",
         "registry-password",
         "registry.dev.nokey.sh",

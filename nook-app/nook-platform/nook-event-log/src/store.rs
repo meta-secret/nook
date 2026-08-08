@@ -252,11 +252,11 @@ mod tests {
     };
     use crate::graph::EventInsertStatus;
     use crate::signing::SigningIdentity;
+    use crate::test_support::signing_key;
     use ed25519_dalek::SigningKey;
     use nook_auth2::SecretType;
     use nook_auth2::{DeviceSigningPublicKey, IsoTimestamp, OpaqueCiphertext, Sha256Hex};
     use nook_auth2::{SecretId, StoreId};
-    use rand_core::OsRng;
 
     fn genesis(signing_key: &SigningKey) -> EventResult<crate::event::VaultEvent> {
         genesis_for_store(signing_key, "store_testtoken11")
@@ -322,7 +322,7 @@ mod tests {
 
     #[test]
     fn union_imports_missing_events() -> EventResult<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let genesis = genesis(&signing_key)?;
         let id = genesis.id()?;
         let bytes = serialize_event_storage_yaml(&genesis)?;
@@ -335,7 +335,7 @@ mod tests {
 
     #[test]
     fn append_event_reports_applied_for_genesis() -> EventResult<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let genesis = genesis(&signing_key)?;
 
         let mut local = LocalEventStore::new();
@@ -362,7 +362,7 @@ mod tests {
 
     #[test]
     fn append_event_duplicate_is_idempotent() -> EventResult<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let genesis = genesis(&signing_key)?;
         let mut local = LocalEventStore::new();
         let (_, first) = local.append_event(&genesis, STORE)?;
@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn union_remote_events_and_heads_returns_causal_heads() -> EventResult<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let genesis = genesis(&signing_key)?;
         let id = genesis.id()?;
         let bytes = serialize_event_storage_yaml(&genesis)?;
@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn union_commutative_on_event_sets() -> EventResult<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let genesis = genesis(&signing_key)?;
         let genesis_id = genesis.id()?;
         let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
@@ -411,7 +411,7 @@ mod tests {
 
     #[test]
     fn union_rejects_event_id_mismatch() -> anyhow::Result<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let genesis = genesis(&signing_key)?;
         let real_id = genesis.id()?;
         let bytes = serialize_event_storage_yaml(&genesis)?;
@@ -431,7 +431,7 @@ mod tests {
 
     #[test]
     fn remote_event_store_filter_skips_other_vaults() -> EventResult<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let other = genesis_for_store(&signing_key, "store_otherstore1")?;
         let other_id = other.id()?;
         let bytes = serialize_event_storage_yaml(&other)?;
@@ -451,7 +451,7 @@ mod tests {
 
     #[test]
     fn remote_event_store_filter_rejects_id_mismatch() -> anyhow::Result<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let genesis = genesis(&signing_key)?;
         let bytes = serialize_event_storage_yaml(&genesis)?;
         let wrong_id = EventId::parse("sha256u:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0")?;
@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn classify_remote_event_log_allows_same_store() -> EventResult<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let genesis = genesis(&signing_key)?;
         let remote = vec![remote_record(&genesis)?];
 
@@ -492,7 +492,7 @@ mod tests {
 
     #[test]
     fn classify_remote_event_log_adopts_single_store_when_local_empty() -> EventResult<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let remote = vec![remote_record(&genesis_for_store(
             &signing_key,
             "store_otherstore1",
@@ -509,7 +509,7 @@ mod tests {
 
     #[test]
     fn classify_remote_event_log_blocks_different_store() -> EventResult<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let remote = vec![remote_record(&genesis_for_store(
             &signing_key,
             "store_otherstore1",
@@ -527,7 +527,7 @@ mod tests {
 
     #[test]
     fn classify_remote_event_log_blocks_multiple_stores() -> EventResult<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let local = remote_record(&genesis(&signing_key)?)?;
         let remote = remote_record(&genesis_for_store(&signing_key, "store_otherstore1")?)?;
 
@@ -556,7 +556,7 @@ mod tests {
 
     #[test]
     fn union_rejects_current_schema_event_with_bad_signature() -> anyhow::Result<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let mut genesis = genesis(&signing_key)?;
         let event_id = genesis.id()?;
         genesis.signature = Ed25519Signature::from_trusted(format!("ed25519:{}", "00".repeat(64)));
@@ -576,8 +576,8 @@ mod tests {
 
     #[test]
     fn union_skips_unapproved_actor_event() -> EventResult<()> {
-        let root_key = SigningKey::generate(&mut OsRng);
-        let stranger_key = SigningKey::generate(&mut OsRng);
+        let root_key = signing_key();
+        let stranger_key = signing_key();
         let genesis = genesis(&root_key)?;
         let genesis_id = genesis.id()?;
         let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
@@ -596,8 +596,8 @@ mod tests {
 
     #[test]
     fn union_stages_batch_and_quarantines_unauthorized_child() -> EventResult<()> {
-        let root_key = SigningKey::generate(&mut OsRng);
-        let stranger_key = SigningKey::generate(&mut OsRng);
+        let root_key = signing_key();
+        let stranger_key = signing_key();
         let genesis = genesis(&root_key)?;
         let genesis_id = genesis.id()?;
         let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
@@ -624,8 +624,8 @@ mod tests {
 
     #[test]
     fn union_removes_pending_event_that_becomes_unauthorized() -> EventResult<()> {
-        let root_key = SigningKey::generate(&mut OsRng);
-        let stranger_key = SigningKey::generate(&mut OsRng);
+        let root_key = signing_key();
+        let stranger_key = signing_key();
         let genesis = genesis(&root_key)?;
         let genesis_id = genesis.id()?;
         let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
@@ -647,7 +647,7 @@ mod tests {
 
     #[test]
     fn union_graph_failure_preserves_existing_events_and_outbox() -> EventResult<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let remote = genesis(&signing_key)?;
         let remote_id = remote.id()?;
         let remote_bytes = serialize_event_storage_yaml(&remote)?;
@@ -675,7 +675,7 @@ mod tests {
 
     #[test]
     fn union_preserves_existing_outbox_entries() -> EventResult<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let genesis = genesis(&signing_key)?;
         let genesis_id = genesis.id()?;
         let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
@@ -700,7 +700,7 @@ mod tests {
 
     #[test]
     fn bidirectional_union_converges() -> EventResult<()> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let genesis = genesis(&signing_key)?;
         let genesis_id = genesis.id()?;
         let genesis_bytes = serialize_event_storage_yaml(&genesis)?;

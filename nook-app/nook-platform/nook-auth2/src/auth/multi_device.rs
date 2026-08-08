@@ -42,7 +42,7 @@ pub fn generate_symmetric_key() -> MultiDeviceResult<SymmetricKey> {
 /// Compact, URL-safe random ID (64-bit, base64url, no padding — 11 chars).
 pub fn generate_id() -> MultiDeviceResult<CompactToken> {
     let mut bytes = [0u8; 8];
-    getrandom::getrandom(&mut bytes).map_err(|e| MultiDeviceError::GenerateId(e.to_string()))?;
+    getrandom::fill(&mut bytes).map_err(|e| MultiDeviceError::GenerateId(e.to_string()))?;
     CompactToken::parse(&URL_SAFE_NO_PAD.encode(bytes)).map_err(MultiDeviceError::Validation)
 }
 

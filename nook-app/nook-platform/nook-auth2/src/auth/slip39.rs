@@ -56,7 +56,7 @@ pub(crate) fn split_sentinel_secret(
     validate_sentinel_policy(threshold, share_count)?;
 
     let mut identifier_bytes = [0_u8; 2];
-    getrandom::getrandom(&mut identifier_bytes)
+    getrandom::fill(&mut identifier_bytes)
         .map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))?;
     let identifier = u16::from_be_bytes(identifier_bytes) & 0x7fff;
 
@@ -247,7 +247,7 @@ fn recover_secret(threshold: u8, shares: &[RawShare]) -> MultiDeviceResult<Vec<u
 }
 
 fn fill_random(bytes: &mut [u8]) -> MultiDeviceResult<()> {
-    getrandom::getrandom(bytes).map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))
+    getrandom::fill(bytes).map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))
 }
 
 fn share_digest(random_part: &[u8], secret: &[u8]) -> [u8; DIGEST_BYTES] {

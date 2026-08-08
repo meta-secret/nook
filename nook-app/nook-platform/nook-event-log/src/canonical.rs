@@ -250,6 +250,7 @@ pub fn verify_body_signature(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::signing_key;
     use serde_json::json;
 
     #[test]
@@ -282,10 +283,7 @@ mod tests {
 
     #[test]
     fn ed25519_sign_verify_roundtrip() -> anyhow::Result<()> {
-        use ed25519_dalek::SigningKey;
-        use rand_core::OsRng;
-
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let verifying_key = signing_key.verifying_key();
         let body = b"canonical-body";
         let sig = sign_body(body, &signing_key);
@@ -299,7 +297,7 @@ mod tests {
         let roundtripped: EventId = serde_json::from_str(&serde_json::to_string(&id)?)?;
         assert_eq!(roundtripped, id);
 
-        let signing_key = ed25519_dalek::SigningKey::generate(&mut rand_core::OsRng);
+        let signing_key = signing_key();
         let sig = sign_body(b"body", &signing_key);
         let sig_back: Ed25519Signature = serde_json::from_str(&serde_json::to_string(&sig)?)?;
         assert_eq!(sig_back, sig);

@@ -8,8 +8,8 @@ license = "MIT"
 [dependencies]
 proc-macro2 = { version = "1.0.106", features = ["span-locations"] }
 serde_json = "1.0.149"
-syn = { version = "2.0.118", features = ["full", "visit"] }
-tree-sitter = "0.25.10"
+syn = { version = "3.0.3", features = ["full", "visit"] }
+tree-sitter = "0.26.12"
 tree-sitter-svelte-next = "0.1.1"
 tree-sitter-typescript = "0.23.2"
 

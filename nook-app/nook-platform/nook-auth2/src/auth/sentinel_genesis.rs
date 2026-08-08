@@ -632,7 +632,7 @@ mod tests {
 
     fn signing_key() -> anyhow::Result<SigningKey> {
         let mut seed = [0_u8; 32];
-        getrandom::getrandom(&mut seed)?;
+        getrandom::fill(&mut seed)?;
         Ok(SigningKey::from_bytes(&seed))
     }
 

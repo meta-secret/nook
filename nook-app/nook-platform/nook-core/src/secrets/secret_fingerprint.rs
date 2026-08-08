@@ -1,6 +1,6 @@
 //! Vault-keyed identity and secret-version fingerprints for import reconciliation.
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 
 use crate::{LoginSecret, SecretValue, SecureNoteSecret, SymmetricKey};

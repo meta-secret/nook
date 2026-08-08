@@ -31,7 +31,7 @@ pub(super) fn split_secret_bytes(
     let degree = usize::from(threshold - 1);
     for &byte in secret {
         let mut coefficients = vec![0u8; degree];
-        getrandom::getrandom(&mut coefficients)
+        getrandom::fill(&mut coefficients)
             .map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))?;
         for share in &mut shares {
             let mut y = byte;

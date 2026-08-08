@@ -16,24 +16,24 @@
     "security": "bun audit --prod --audit-level=high"
   },
   "dependencies": {
-    "@lucide/svelte": "1.21.0",
+    "@lucide/svelte": "1.30.0",
     "@xyflow/svelte": "1.6.2",
     "clsx": "2.1.1",
     "tailwind-merge": "3.6.0",
-    "tailwind-variants": "3.2.2"
+    "tailwind-variants": "3.3.1"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
-    "@sveltejs/vite-plugin-svelte": "7.1.2",
-    "@tailwindcss/vite": "4.3.1",
+    "@sveltejs/vite-plugin-svelte": "7.3.0",
+    "@tailwindcss/vite": "4.3.3",
     "@tsconfig/svelte": "5.0.8",
-    "knip": "5.88.0",
-    "prettier": "3.8.4",
+    "knip": "6.32.0",
+    "prettier": "3.9.6",
     "prettier-plugin-svelte": "4.1.1",
-    "svelte": "5.56.3",
-    "svelte-check": "4.6.0",
-    "tailwindcss": "4.3.1",
-    "typescript": "6.0.3",
-    "vite": "8.0.16"
+    "svelte": "5.56.8",
+    "svelte-check": "4.7.5",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "8.2.1"
   }
 }

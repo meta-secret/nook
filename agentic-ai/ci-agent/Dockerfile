@@ -4,10 +4,10 @@
 # mounted /var/run/docker.sock (sibling containers — not Docker-in-Docker).
 # Bind-mount the repo at runtime so the agent edits the real working tree.
 
-ARG NODE_IMAGE=node:24-bookworm-slim
-ARG TASK_VERSION=3.42.1
-ARG DOCKER_STATIC_VERSION=27.5.1
-ARG BUILDX_VERSION=0.35.0
+ARG NODE_IMAGE=node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03
+ARG TASK_VERSION=3.52.0
+ARG DOCKER_STATIC_VERSION=29.5.3
+ARG BUILDX_VERSION=0.36.1
 
 FROM ${NODE_IMAGE}
 
