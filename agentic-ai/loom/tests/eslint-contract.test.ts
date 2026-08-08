@@ -8,7 +8,7 @@ type LintTextOptions = {
 describe('Loom ESLint contracts', () => {
   test('rejects cast-wrapped constructor object arguments', async () => {
     const eslint = new ESLint();
-    const options: LintTextOptions = { filePath: 'src/eslint-fixture.ts' };
+    const options: LintTextOptions = { filePath: 'src/cli.ts' };
     const results = await eslint.lintText(
       `
         type WidgetArgs = { name: string };
