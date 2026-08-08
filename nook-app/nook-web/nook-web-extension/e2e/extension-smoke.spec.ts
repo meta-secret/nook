@@ -33,6 +33,7 @@ import {
   installForcePinDeviceProtection,
 } from './helpers/pin-device'
 import { lockExtensionSession } from './helpers/paired-pin-extension'
+import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
 
 const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
@@ -601,55 +602,55 @@ test('translates malformed device-action responses in the popup', async ({
       popupPage.getByTestId('device-protection-pin-unlock-btn'),
     ).toBeVisible()
 
-    await popupPage.evaluate(() => {
-      type MalformedDeviceResponse = {
-        ok: true
-        device: {
-          deviceId: string
-          devicePublicKey: string
-          deviceSigningPublicKey: string
+    await popupPage.evaluate(
+      (unlockMessageType: ExtensionSessionMessageType) => {
+        type MalformedDeviceResponse = {
+          ok: true
+          device: {
+            deviceId: string
+            devicePublicKey: string
+            deviceSigningPublicKey: string
+          }
         }
-      }
-      type UnlockPinRuntimeMessage = {
-        type?: 'nook:extension-session-unlock-pin'
-      }
-      type UnlockPinRuntimeCallback = (
-        response: MalformedDeviceResponse,
-      ) => void
-      type UnlockPinRuntimeArguments = [
-        UnlockPinRuntimeMessage,
-        UnlockPinRuntimeCallback?,
-      ]
-      const runtime = globalThis.chrome.runtime
-      const originalSendMessage = runtime.sendMessage.bind(runtime)
-      const descriptor: PropertyDescriptor = {
-        configurable: true,
-        value(...args: UnlockPinRuntimeArguments) {
-          const [message, callback] = args
-          if (
-            message.type === 'nook:extension-session-unlock-pin' &&
-            callback
-          ) {
-            const malformedResponse: MalformedDeviceResponse = {
-              ok: true,
-              device: {
-                deviceId: '',
-                devicePublicKey: '',
-                deviceSigningPublicKey: '',
-              },
+        type UnlockPinRuntimeMessage = {
+          type?: ExtensionSessionMessageType
+        }
+        type UnlockPinRuntimeCallback = (
+          response: MalformedDeviceResponse,
+        ) => void
+        type UnlockPinRuntimeArguments = [
+          UnlockPinRuntimeMessage,
+          UnlockPinRuntimeCallback?,
+        ]
+        const runtime = globalThis.chrome.runtime
+        const originalSendMessage = runtime.sendMessage.bind(runtime)
+        const descriptor: PropertyDescriptor = {
+          configurable: true,
+          value(...args: UnlockPinRuntimeArguments) {
+            const [message, callback] = args
+            if (message.type === unlockMessageType && callback) {
+              const malformedResponse: MalformedDeviceResponse = {
+                ok: true,
+                device: {
+                  deviceId: '',
+                  devicePublicKey: '',
+                  deviceSigningPublicKey: '',
+                },
+              }
+              callback(malformedResponse)
+              return
             }
-            callback(malformedResponse)
-            return
-          }
-          if (callback) {
-            originalSendMessage(message, callback)
-            return
-          }
-          return originalSendMessage(message)
-        },
-      }
-      Object.defineProperty(runtime, 'sendMessage', descriptor)
-    })
+            if (callback) {
+              originalSendMessage(message, callback)
+              return
+            }
+            return originalSendMessage(message)
+          },
+        }
+        Object.defineProperty(runtime, 'sendMessage', descriptor)
+      },
+      ExtensionSessionMessageType.UnlockPin,
+    )
 
     await popupPage
       .getByTestId('device-protection-pin-unlock-input')
