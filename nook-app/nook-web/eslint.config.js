@@ -68,6 +68,10 @@ export const noRawObjectArgumentsRule = {
       return nodeStart(node) < activeValueFlowCutoff
     }
 
+    function isNonInitialWriteReference(reference) {
+      return reference.isWrite() && !reference.init && reference.writeExpr
+    }
+
     function declaredVariable(identifier) {
       let scope = sourceCode.getScope(identifier)
       while (scope) {
@@ -376,9 +380,7 @@ export const noRawObjectArgumentsRule = {
     function writeReferenceValues(args) {
       const { reference, seenVariables } = args
       if (
-        !reference.isWrite() ||
-        reference.init ||
-        !reference.writeExpr ||
+        !isNonInitialWriteReference(reference) ||
         !occursBeforeActiveCallSite(reference.identifier)
       ) {
         return []
@@ -684,9 +686,7 @@ export const noRawObjectArgumentsRule = {
       }
       for (const reference of variable.references) {
         if (
-          reference.isWrite() &&
-          !reference.init &&
-          reference.writeExpr &&
+          isNonInitialWriteReference(reference) &&
           occursBeforeActiveCallSite(reference.identifier)
         ) {
           elements.push(
