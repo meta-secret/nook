@@ -82,9 +82,11 @@ export const noRawObjectArgumentsRule = {
       if (!producesObject) return
       for (const definition of variable.defs) {
         if (
-          definition.type === 'Variable' &&
-          definition.node.type === 'VariableDeclarator' &&
-          (definition.name.typeAnnotation || definition.node.id.typeAnnotation)
+          (definition.type === 'Variable' &&
+            definition.node.type === 'VariableDeclarator' &&
+            (definition.name.typeAnnotation ||
+              definition.node.id.typeAnnotation)) ||
+          (definition.type === 'Parameter' && definition.name.typeAnnotation)
         ) {
           return
         }
@@ -244,14 +246,12 @@ export const noRawObjectArgumentsRule = {
         )
       }
       for (const reference of variable.references) {
-        if (reference.isWrite() && !reference.init && reference.writeExpr) {
-          values.push(
-            ...possibleExpressionValues({
-              expression: reference.writeExpr,
-              seenVariables: nextSeenVariables,
-            }),
-          )
-        }
+        values.push(
+          ...writeReferenceValues({
+            reference,
+            seenVariables: nextSeenVariables,
+          }),
+        )
       }
       return values
     }
@@ -296,6 +296,51 @@ export const noRawObjectArgumentsRule = {
       return { kind: ProjectionPathLookupKind.NotFound }
     }
 
+    function isObjectRestBinding(pattern, target) {
+      if (pattern.type !== 'ObjectPattern') return false
+      return pattern.properties.some(
+        (property) =>
+          property.type === 'RestElement' && property.argument === target,
+      )
+    }
+
+    function writeBindingPattern(identifier) {
+      let current = identifier
+      while (
+        current.parent &&
+        (current.parent.type === 'Property' ||
+          current.parent.type === 'RestElement' ||
+          current.parent.type === 'AssignmentPattern' ||
+          current.parent.type === 'ObjectPattern' ||
+          current.parent.type === 'ArrayPattern')
+      ) {
+        current = current.parent
+      }
+      if (
+        (current.type === 'ObjectPattern' || current.type === 'ArrayPattern') &&
+        current.parent?.type === 'AssignmentExpression' &&
+        current.parent.left === current
+      ) {
+        return { kind: ProjectionPathLookupKind.Found, pattern: current }
+      }
+      return { kind: ProjectionPathLookupKind.NotFound }
+    }
+
+    function projectValuesAlongPath(args) {
+      const { expression, path, seenVariables } = args
+      let values = possibleExpressionValues({ expression, seenVariables })
+      for (const selectedKey of path) {
+        values = values.flatMap((container) =>
+          projectedContainerValues({
+            container,
+            selectedKey,
+            seenVariables,
+          }),
+        )
+      }
+      return values
+    }
+
     function variableDefinitionValues(args) {
       const { definition, seenVariables } = args
       if (
@@ -310,20 +355,35 @@ export const noRawObjectArgumentsRule = {
         definition.name,
       )
       if (pathLookup.kind === ProjectionPathLookupKind.NotFound) return []
-      let values = possibleExpressionValues({
+      return projectValuesAlongPath({
         expression: definition.node.init,
+        path: pathLookup.path,
         seenVariables,
       })
-      for (const selectedKey of pathLookup.path) {
-        values = values.flatMap((container) =>
-          projectedContainerValues({
-            container,
-            selectedKey,
-            seenVariables,
-          }),
-        )
+    }
+
+    function writeReferenceValues(args) {
+      const { reference, seenVariables } = args
+      if (!reference.isWrite() || reference.init || !reference.writeExpr) {
+        return []
       }
-      return values
+      const patternLookup = writeBindingPattern(reference.identifier)
+      if (patternLookup.kind === ProjectionPathLookupKind.NotFound) {
+        return possibleExpressionValues({
+          expression: reference.writeExpr,
+          seenVariables,
+        })
+      }
+      const pathLookup = bindingProjectionPath(
+        patternLookup.pattern,
+        reference.identifier,
+      )
+      if (pathLookup.kind === ProjectionPathLookupKind.NotFound) return []
+      return projectValuesAlongPath({
+        expression: reference.writeExpr,
+        path: pathLookup.path,
+        seenVariables,
+      })
     }
 
     function projectedContainerValues(args) {
@@ -362,7 +422,11 @@ export const noRawObjectArgumentsRule = {
         container.type === 'ArrayExpression' &&
         arrayIndexLookup.kind === StaticKeyLookupKind.Found
       ) {
-        const element = container.elements[arrayIndexLookup.value]
+        const elements = spreadArrayElements({
+          expression: container,
+          seenVariables,
+        })
+        const element = elements[arrayIndexLookup.value]
         if (element && element.type !== 'SpreadElement') {
           return possibleExpressionValues({ expression: element, seenVariables })
         }
@@ -457,6 +521,13 @@ export const noRawObjectArgumentsRule = {
       if (seenVariables.has(variable)) return false
       seenVariables.add(variable)
       for (const definition of variable.defs) {
+        if (
+          definition.type === 'Variable' &&
+          definition.node.type === 'VariableDeclarator' &&
+          isObjectRestBinding(definition.node.id, definition.name)
+        ) {
+          return true
+        }
         const values = variableDefinitionValues({ definition, seenVariables })
         if (
           values.some((value) =>
@@ -467,14 +538,21 @@ export const noRawObjectArgumentsRule = {
         }
       }
       for (const reference of variable.references) {
+        const patternLookup = writeBindingPattern(reference.identifier)
         if (
-          reference.isWrite() &&
-          !reference.init &&
-          reference.writeExpr &&
-          expressionProducesObject({
-            expression: reference.writeExpr,
-            seenVariables,
-          })
+          patternLookup.kind === ProjectionPathLookupKind.Found &&
+          isObjectRestBinding(
+            patternLookup.pattern,
+            reference.identifier,
+          )
+        ) {
+          return true
+        }
+        const values = writeReferenceValues({ reference, seenVariables })
+        if (
+          values.some((value) =>
+            expressionProducesObject({ expression: value, seenVariables }),
+          )
         ) {
           return true
         }
@@ -509,7 +587,9 @@ export const noRawObjectArgumentsRule = {
           !seenElements.has(element)
         ) {
           seenElements.add(element)
-          inspectInlineObjectExpressions(element)
+          if (!inspectInlineObjectExpressions(element)) {
+            inspectNamedObjectArgument(element)
+          }
         }
       }
     }

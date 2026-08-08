@@ -131,6 +131,18 @@ describe('typed API named arguments', () => {
     ])
   })
 
+  test('rejects untyped named values expanded from spread arrays', () => {
+    const messages = lint(`
+      declare function consume(...values: { name: string }[]): void
+      const args = { name: 'Nook' }
+      consume(...[args])
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+    ])
+  })
+
   test('rejects object literals assigned to a spread array name', () => {
     const messages = lint(`
       declare function consume(...values: { name: string }[]): void
@@ -181,12 +193,14 @@ describe('typed API named arguments', () => {
       consume(({ picked: { name: 'Nook' } }).picked)
       consume(({ ...{ picked: { name: 'Nook' } } }).picked)
       consume(({ 0: { name: 'Nook' } })['0'])
+      consume(([...[{ name: 'Nook' }]])[0])
       consume([{ name: 'Nook' }][0])
       consume([{ name: 'Nook' }]['0'])
       consume(container.picked)
     `)
 
     expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
       'namedArgument',
       'namedArgument',
       'namedArgument',
@@ -209,6 +223,49 @@ describe('typed API named arguments', () => {
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])
+  })
+
+  test('classifies object-rest bindings as object values', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      const source = { name: 'Nook' }
+      const { ...args } = source
+      consume(args)
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+    ])
+  })
+
+  test('projects destructuring assignment writes by binding', () => {
+    const messages = lint(`
+      declare function consumeCount(value: number): void
+      declare function consumeArgs(value: { name: string }): void
+      let count
+      let picked
+      ;({ count } = { count: 1 })
+      ;({ picked } = { picked: { name: 'Nook' } })
+      consumeCount(count)
+      consumeArgs(picked)
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+    ])
+  })
+
+  test('accepts explicitly typed parameter arguments', () => {
+    const messages = lint(`
+      type ConsumeArgs = { name: string }
+      declare function consume(value: ConsumeArgs): void
+      function forward(args: ConsumeArgs): void {
+        args = { name: 'Nook' }
+        consume(args)
+      }
+    `)
+
+    expect(messages).toEqual([])
   })
 
   test('uses only the result operand of a sequence expression', () => {
