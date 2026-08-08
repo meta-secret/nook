@@ -120,6 +120,34 @@ restore_hosted_builder() {
   fi
 }
 
+snapshot_daemon_containers() {
+  docker ps -aq | sort
+}
+
+cleanup_timed_out_daemon_work() {
+  local container
+  local snapshot="$1"
+  local builder="${NOOK_PR_BUILDX_BUILDER:-}"
+  local cleanup_status=0
+
+  while IFS= read -r container; do
+    if [[ -n "$container" ]] && ! grep -Fxq "$container" "$snapshot"; then
+      docker rm -f "$container" || cleanup_status=1
+    fi
+  done < <(docker ps -aq)
+
+  if [[ -n "$builder" ]]; then
+    while IFS= read -r container; do
+      if [[ -n "$container" ]]; then
+        docker restart "$container" || cleanup_status=1
+      fi
+    done < <(docker ps -q --filter "name=buildx_buildkit_${builder}")
+    docker buildx inspect --bootstrap "$builder" >/dev/null || cleanup_status=1
+  fi
+
+  return "$cleanup_status"
+}
+
 run_task() {
   local artifact_root="${E2E_ARTIFACT_DIR:-${TMPDIR:-/tmp}/nook-e2e-artifacts}"
   local timeout_minutes
@@ -178,6 +206,7 @@ run_batch() {
   local task
   local status
   local failures=0
+  local daemon_snapshot
   local -a tasks
 
   IFS=',' read -r -a tasks <<< "$normalized_tasks"
@@ -187,9 +216,16 @@ run_batch() {
 
   for task in "${tasks[@]}"; do
     echo "::group::Remote task: $task"
+    daemon_snapshot="$(mktemp)"
+    snapshot_daemon_containers > "$daemon_snapshot"
     set +e
     run_task "$task"
     status=$?
+    if (( status == 124 )) && ! cleanup_timed_out_daemon_work "$daemon_snapshot"; then
+      echo "::error::Failed to clean up daemon work after timeout: $task"
+      status=1
+    fi
+    rm -f "$daemon_snapshot"
     if ! restore_hosted_builder; then
       echo "::error::Failed to restore the hosted Buildx builder after: $task"
       status=1

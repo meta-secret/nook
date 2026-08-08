@@ -114,6 +114,11 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
     let batch_script = read(".github/scripts/remote-task-batch.sh");
     assert!(batch_script.contains("timeout --kill-after=1m"));
     assert!(!batch_script.contains("timeout --foreground"));
+    assert!(batch_script.contains("snapshot_daemon_containers > \"$daemon_snapshot\""));
+    assert!(batch_script.contains("status == 124"));
+    assert!(batch_script.contains("docker rm -f \"$container\""));
+    assert!(batch_script.contains("docker restart \"$container\""));
+    assert!(batch_script.contains("docker buildx inspect --bootstrap \"$builder\""));
     Ok(())
 }
 
