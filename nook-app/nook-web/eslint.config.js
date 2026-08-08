@@ -19,6 +19,14 @@ function unwrapTypeScriptExpression(expression) {
   return current
 }
 
+function unwrapResultExpression(expression) {
+  let current = unwrapTypeScriptExpression(expression)
+  while (current.type === 'AwaitExpression') {
+    current = unwrapTypeScriptExpression(current.argument)
+  }
+  return current
+}
+
 const VariableLookupKind = Object.freeze({
   NotFound: 'not-found',
   Found: 'found',
@@ -71,7 +79,7 @@ export const noRawObjectArgumentsRule = {
         if (
           definition.type === 'Variable' &&
           definition.node.type === 'VariableDeclarator' &&
-          definition.name.typeAnnotation
+          (definition.name.typeAnnotation || definition.node.id.typeAnnotation)
         ) {
           return
         }
@@ -80,7 +88,7 @@ export const noRawObjectArgumentsRule = {
     }
 
     function inlineObjectExpressions(expression) {
-      const unwrapped = unwrapTypeScriptExpression(expression)
+      const unwrapped = unwrapResultExpression(expression)
       if (unwrapped.type === 'ObjectExpression') {
         return [expression]
       }
@@ -100,7 +108,7 @@ export const noRawObjectArgumentsRule = {
         ]
       }
       if (unwrapped.type === 'SequenceExpression') {
-        return unwrapped.expressions.flatMap(inlineObjectExpressions)
+        return inlineObjectExpressions(unwrapped.expressions.at(-1))
       }
       if (unwrapped.type === 'MemberExpression') {
         return projectedMemberExpressions({
@@ -126,7 +134,7 @@ export const noRawObjectArgumentsRule = {
       ) {
         return {
           kind: StaticKeyLookupKind.Found,
-          value: member.property.value,
+          value: String(member.property.value),
         }
       }
       return { kind: StaticKeyLookupKind.NotFound }
@@ -146,7 +154,7 @@ export const noRawObjectArgumentsRule = {
       ) {
         return {
           kind: StaticKeyLookupKind.Found,
-          value: property.key.value,
+          value: String(property.key.value),
         }
       }
       return { kind: StaticKeyLookupKind.NotFound }
@@ -171,7 +179,7 @@ export const noRawObjectArgumentsRule = {
 
     function possibleExpressionValues(args) {
       const { expression, seenVariables } = args
-      const unwrapped = unwrapTypeScriptExpression(expression)
+      const unwrapped = unwrapResultExpression(expression)
       if (unwrapped.type === 'AssignmentExpression') {
         return possibleExpressionValues({
           expression: unwrapped.right,
@@ -203,9 +211,10 @@ export const noRawObjectArgumentsRule = {
         ]
       }
       if (unwrapped.type === 'SequenceExpression') {
-        return unwrapped.expressions.flatMap((child) =>
-          possibleExpressionValues({ expression: child, seenVariables }),
-        )
+        return possibleExpressionValues({
+          expression: unwrapped.expressions.at(-1),
+          seenVariables,
+        })
       }
       if (unwrapped.type === 'MemberExpression') {
         return projectedMemberExpressions({
@@ -222,18 +231,12 @@ export const noRawObjectArgumentsRule = {
       nextSeenVariables.add(variable)
       const values = []
       for (const definition of variable.defs) {
-        if (
-          definition.type === 'Variable' &&
-          definition.node.type === 'VariableDeclarator' &&
-          definition.node.init
-        ) {
-          values.push(
-            ...possibleExpressionValues({
-              expression: definition.node.init,
-              seenVariables: nextSeenVariables,
-            }),
-          )
-        }
+        values.push(
+          ...variableDefinitionValues({
+            definition,
+            seenVariables: nextSeenVariables,
+          }),
+        )
       }
       for (const reference of variable.references) {
         if (reference.isWrite() && reference.writeExpr) {
@@ -248,6 +251,103 @@ export const noRawObjectArgumentsRule = {
       return values
     }
 
+    function bindingProjectionPath(pattern, target) {
+      if (pattern === target) return []
+      if (pattern.type === 'AssignmentPattern') {
+        return bindingProjectionPath(pattern.left, target)
+      }
+      if (pattern.type === 'RestElement') return undefined
+      if (pattern.type === 'ObjectPattern') {
+        for (const property of pattern.properties) {
+          if (property.type !== 'Property') continue
+          const childPath = bindingProjectionPath(property.value, target)
+          if (!childPath) continue
+          const keyLookup = staticObjectKey(property)
+          if (keyLookup.kind === StaticKeyLookupKind.NotFound) return undefined
+          return [keyLookup.value, ...childPath]
+        }
+      }
+      if (pattern.type === 'ArrayPattern') {
+        for (const [index, element] of pattern.elements.entries()) {
+          if (!element) continue
+          const childPath = bindingProjectionPath(element, target)
+          if (childPath) return [String(index), ...childPath]
+        }
+      }
+      return undefined
+    }
+
+    function variableDefinitionValues(args) {
+      const { definition, seenVariables } = args
+      if (
+        definition.type !== 'Variable' ||
+        definition.node.type !== 'VariableDeclarator' ||
+        !definition.node.init
+      ) {
+        return []
+      }
+      const path = bindingProjectionPath(definition.node.id, definition.name)
+      if (!path) return []
+      let values = possibleExpressionValues({
+        expression: definition.node.init,
+        seenVariables,
+      })
+      for (const selectedKey of path) {
+        values = values.flatMap((container) =>
+          projectedContainerValues({
+            container,
+            selectedKey,
+            seenVariables,
+          }),
+        )
+      }
+      return values
+    }
+
+    function projectedContainerValues(args) {
+      const { container, selectedKey, seenVariables } = args
+      if (container.type === 'ObjectExpression') {
+        for (const property of [...container.properties].reverse()) {
+          if (property.type === 'SpreadElement') {
+            const spreadValues = possibleExpressionValues({
+              expression: property.argument,
+              seenVariables,
+            }).flatMap((spreadContainer) =>
+              projectedContainerValues({
+                container: spreadContainer,
+                selectedKey,
+                seenVariables,
+              }),
+            )
+            if (spreadValues.length > 0) return spreadValues
+            continue
+          }
+          const objectKeyLookup = staticObjectKey(property)
+          if (
+            property.kind === 'init' &&
+            objectKeyLookup.kind === StaticKeyLookupKind.Found &&
+            objectKeyLookup.value === selectedKey
+          ) {
+            return possibleExpressionValues({
+              expression: property.value,
+              seenVariables,
+            })
+          }
+        }
+      }
+      const arrayIndexLookup = staticArrayIndex(selectedKey)
+      if (
+        container.type === 'ArrayExpression' &&
+        arrayIndexLookup.kind === StaticKeyLookupKind.Found
+      ) {
+        const element = container.elements[arrayIndexLookup.value]
+        if (element && element.type !== 'SpreadElement') {
+          return possibleExpressionValues({ expression: element, seenVariables })
+        }
+      }
+      return []
+    }
+
     function projectedMemberExpressions(args) {
       const { expression, seenVariables } = args
       const selectedKeyLookup = staticPropertyKey(expression)
@@ -259,50 +359,27 @@ export const noRawObjectArgumentsRule = {
       })
       const projected = []
       for (const container of containers) {
-        if (container.type === 'ObjectExpression') {
-          for (const property of container.properties) {
-            const objectKeyLookup =
-              property.type === 'Property'
-                ? staticObjectKey(property)
-                : { kind: StaticKeyLookupKind.NotFound }
-            if (
-              property.type === 'Property' &&
-              property.kind === 'init' &&
-              objectKeyLookup.kind === StaticKeyLookupKind.Found &&
-              objectKeyLookup.value === selectedKey
-            ) {
-              projected.push(
-                ...possibleExpressionValues({
-                  expression: property.value,
-                  seenVariables,
-                }),
-              )
-            }
-          }
-        }
-        const arrayIndexLookup = staticArrayIndex(selectedKey)
-        if (
-          container.type === 'ArrayExpression' &&
-          arrayIndexLookup.kind === StaticKeyLookupKind.Found
-        ) {
-          const element = container.elements[arrayIndexLookup.value]
-          if (element && element.type !== 'SpreadElement') {
-            projected.push(
-              ...possibleExpressionValues({
-                expression: element,
-                seenVariables,
-              }),
-            )
-          }
-        }
+        projected.push(
+          ...projectedContainerValues({
+            container,
+            selectedKey,
+            seenVariables,
+          }),
+        )
       }
       return projected
     }
 
     function expressionProducesObject(args) {
       const { expression, seenVariables } = args
-      const unwrapped = unwrapTypeScriptExpression(expression)
+      const unwrapped = unwrapResultExpression(expression)
       if (unwrapped.type === 'ObjectExpression') return true
+      if (unwrapped.type === 'AssignmentExpression') {
+        return expressionProducesObject({
+          expression: unwrapped.right,
+          seenVariables,
+        })
+      }
       if (unwrapped.type === 'ConditionalExpression') {
         return (
           expressionProducesObject({
@@ -328,9 +405,10 @@ export const noRawObjectArgumentsRule = {
         )
       }
       if (unwrapped.type === 'SequenceExpression') {
-        return unwrapped.expressions.some((child) =>
-          expressionProducesObject({ expression: child, seenVariables }),
-        )
+        return expressionProducesObject({
+          expression: unwrapped.expressions.at(-1),
+          seenVariables,
+        })
       }
       if (unwrapped.type === 'MemberExpression') {
         return projectedMemberExpressions({
@@ -357,14 +435,11 @@ export const noRawObjectArgumentsRule = {
       if (seenVariables.has(variable)) return false
       seenVariables.add(variable)
       for (const definition of variable.defs) {
+        const values = variableDefinitionValues({ definition, seenVariables })
         if (
-          definition.type === 'Variable' &&
-          definition.node.type === 'VariableDeclarator' &&
-          definition.node.init &&
-          expressionProducesObject({
-            expression: definition.node.init,
-            seenVariables,
-          })
+          values.some((value) =>
+            expressionProducesObject({ expression: value, seenVariables }),
+          )
         ) {
           return true
         }
@@ -418,7 +493,7 @@ export const noRawObjectArgumentsRule = {
 
     function spreadArrayElements(args) {
       const { expression, seenVariables } = args
-      const unwrapped = unwrapTypeScriptExpression(expression)
+      const unwrapped = unwrapResultExpression(expression)
       if (unwrapped.type === 'ArrayExpression') {
         return unwrapped.elements.flatMap((element) => {
           if (!element || element.type !== 'SpreadElement') return [element]
@@ -459,9 +534,10 @@ export const noRawObjectArgumentsRule = {
         ]
       }
       if (unwrapped.type === 'SequenceExpression') {
-        return unwrapped.expressions.flatMap((child) =>
-          spreadArrayElements({ expression: child, seenVariables }),
-        )
+        return spreadArrayElements({
+          expression: unwrapped.expressions.at(-1),
+          seenVariables,
+        })
       }
       if (unwrapped.type !== 'Identifier') return []
       const lookup = declaredVariable(unwrapped)

@@ -179,6 +179,8 @@ describe('typed API named arguments', () => {
       declare function consume(value: { name: string }): void
       const container = { picked: { name: 'Vault' } }
       consume(({ picked: { name: 'Nook' } }).picked)
+      consume(({ ...{ picked: { name: 'Nook' } } }).picked)
+      consume(({ 0: { name: 'Nook' } })['0'])
       consume([{ name: 'Nook' }][0])
       consume([{ name: 'Nook' }]['0'])
       consume(container.picked)
@@ -188,6 +190,63 @@ describe('typed API named arguments', () => {
       'namedArgument',
       'namedArgument',
       'namedArgument',
+      'namedArgument',
+      'namedArgument',
+      'namedArgument',
+    ])
+  })
+
+  test('classifies destructured bindings by their selected value', () => {
+    const messages = lint(`
+      declare function consumeCount(value: number): void
+      declare function consumeArgs(value: { name: string }): void
+      const { count } = { count: 1 }
+      const { picked } = { picked: { name: 'Nook' } }
+      consumeCount(count)
+      consumeArgs(picked)
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+    ])
+  })
+
+  test('uses only the result operand of a sequence expression', () => {
+    const messages = lint(`
+      type ConsumeArgs = { name: string }
+      declare function consume(value: ConsumeArgs): void
+      let scratch: ConsumeArgs
+      const typedArgs: ConsumeArgs = { name: 'Vault' }
+      consume((scratch = { name: 'Nook' }, typedArgs))
+    `)
+
+    expect(messages).toEqual([])
+  })
+
+  test('follows assignment initializers for named arguments', () => {
+    const messages = lint(`
+      type ConsumeArgs = { name: string }
+      declare function consume(value: ConsumeArgs): void
+      let target: ConsumeArgs
+      const args = (target = { name: 'Nook' })
+      consume(args)
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+    ])
+  })
+
+  test('rejects awaited object literals at call sites', () => {
+    const messages = lint(`
+      type ConsumeArgs = { name: string }
+      declare function consume(value: ConsumeArgs): void
+      async function run(): Promise<void> {
+        consume(await { name: 'Nook' })
+      }
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
     ])
   })
