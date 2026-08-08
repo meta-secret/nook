@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  DEFAULT_SESSION_OPERATION_OPTIONS,
+  SessionOperationCleanupKind,
+  SessionOperationExpiryKind,
   SessionOperationPriority,
   SessionOperationQueue,
 } from '../src/lib/session-operation-queue'
@@ -52,17 +55,23 @@ describe('SessionOperationQueue', () => {
         order.push('first')
         await blocker.promise
       },
+      options: DEFAULT_SESSION_OPERATION_OPTIONS,
     })
     const normal = queue.enqueue({
       operation: async () => {
         order.push('normal')
       },
+      options: DEFAULT_SESSION_OPERATION_OPTIONS,
     })
     const interactive = queue.enqueue({
       operation: async () => {
         order.push('interactive')
       },
-      options: { priority: SessionOperationPriority.Interactive },
+      options: {
+        priority: SessionOperationPriority.Interactive,
+        expiry: { kind: SessionOperationExpiryKind.None },
+        cleanup: { kind: SessionOperationCleanupKind.None },
+      },
     })
 
     blocker.release()
@@ -74,7 +83,10 @@ describe('SessionOperationQueue', () => {
   test('expires queued work and clears its sensitive input', async () => {
     const queue = new SessionOperationQueue()
     const blocker = deferred()
-    const first = queue.enqueue({ operation: () => blocker.promise })
+    const first = queue.enqueue({
+      operation: () => blocker.promise,
+      options: DEFAULT_SESSION_OPERATION_OPTIONS,
+    })
     let passwordResidency: PasswordResidency = {
       kind: PasswordResidencyKind.Resident,
       password: 'temporary-password',
@@ -91,9 +103,15 @@ describe('SessionOperationQueue', () => {
       },
       options: {
         priority: SessionOperationPriority.Interactive,
-        expiresAt: Date.now() + 10,
-        onExpire: () => {
-          passwordResidency = { kind: PasswordResidencyKind.Cleared }
+        expiry: {
+          kind: SessionOperationExpiryKind.Deadline,
+          expiresAt: Date.now() + 10,
+        },
+        cleanup: {
+          kind: SessionOperationCleanupKind.OnExpire,
+          run: () => {
+            passwordResidency = { kind: PasswordResidencyKind.Cleared }
+          },
         },
       },
     })
@@ -110,15 +128,24 @@ describe('SessionOperationQueue', () => {
       operation: async () => {
         throw new Error('expected failure')
       },
+      options: DEFAULT_SESSION_OPERATION_OPTIONS,
     })
     await expect(failed).rejects.toThrow('expected failure')
-    expect(await queue.enqueue({ operation: async () => 'ok' })).toBe('ok')
+    expect(
+      await queue.enqueue({
+        operation: async () => 'ok',
+        options: DEFAULT_SESSION_OPERATION_OPTIONS,
+      }),
+    ).toBe('ok')
   })
 
   test('closes terminally and clears queued sensitive input', async () => {
     const queue = new SessionOperationQueue()
     const blocker = deferred()
-    const first = queue.enqueue({ operation: () => blocker.promise })
+    const first = queue.enqueue({
+      operation: () => blocker.promise,
+      options: DEFAULT_SESSION_OPERATION_OPTIONS,
+    })
     let secretResidency: SecretResidency = {
       kind: SecretResidencyKind.Resident,
       secret: 'temporary-secret',
@@ -126,8 +153,13 @@ describe('SessionOperationQueue', () => {
     const queued = queue.enqueue({
       operation: async () => {},
       options: {
-        onExpire: () => {
-          secretResidency = { kind: SecretResidencyKind.Cleared }
+        priority: SessionOperationPriority.Normal,
+        expiry: { kind: SessionOperationExpiryKind.None },
+        cleanup: {
+          kind: SessionOperationCleanupKind.OnExpire,
+          run: () => {
+            secretResidency = { kind: SecretResidencyKind.Cleared }
+          },
         },
       },
     })
@@ -136,9 +168,12 @@ describe('SessionOperationQueue', () => {
 
     await expect(queued).rejects.toThrow('session expired')
     expect(secretResidency.kind).toBe(SecretResidencyKind.Cleared)
-    await expect(queue.enqueue({ operation: async () => {} })).rejects.toThrow(
-      'session expired',
-    )
+    await expect(
+      queue.enqueue({
+        operation: async () => {},
+        options: DEFAULT_SESSION_OPERATION_OPTIONS,
+      }),
+    ).rejects.toThrow('session expired')
     blocker.release()
     await first
   })

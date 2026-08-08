@@ -5,10 +5,34 @@ export enum SessionOperationPriority {
   Probe = 'probe',
 }
 
-type QueueOptions = {
-  priority?: SessionOperationPriority
-  expiresAt?: number
-  onExpire?: () => void
+export enum SessionOperationExpiryKind {
+  None = 'none',
+  Deadline = 'deadline',
+}
+
+export type SessionOperationExpiry =
+  | { kind: SessionOperationExpiryKind.None }
+  | { kind: SessionOperationExpiryKind.Deadline; expiresAt: number }
+
+export enum SessionOperationCleanupKind {
+  None = 'none',
+  OnExpire = 'on-expire',
+}
+
+export type SessionOperationCleanup =
+  | { kind: SessionOperationCleanupKind.None }
+  | { kind: SessionOperationCleanupKind.OnExpire; run: () => void }
+
+export type SessionOperationOptions = {
+  priority: SessionOperationPriority
+  expiry: SessionOperationExpiry
+  cleanup: SessionOperationCleanup
+}
+
+export const DEFAULT_SESSION_OPERATION_OPTIONS: SessionOperationOptions = {
+  priority: SessionOperationPriority.Normal,
+  expiry: { kind: SessionOperationExpiryKind.None },
+  cleanup: { kind: SessionOperationCleanupKind.None },
 }
 
 type QueueEntry = {
@@ -24,7 +48,7 @@ type QueueEntry = {
 
 export type EnqueueSessionOperationArgs<T> = {
   operation: () => Promise<T>
-  options?: QueueOptions
+  options: SessionOperationOptions
 }
 
 const priorityOrder: Record<SessionOperationPriority, number> = {
@@ -66,26 +90,35 @@ export class SessionOperationQueue {
   }
 
   enqueue<T>(args: EnqueueSessionOperationArgs<T>): Promise<T> {
-    const { operation, options = {} } = args
+    const { operation, options } = args
     // Promise owns this callback's resolve and reject signature.
     // eslint-disable-next-line max-params
     return new Promise<T>((resolve, reject) => {
       if (this.state.kind === QueueStateKind.Closed) {
-        options.onExpire?.()
+        if (options.cleanup.kind === SessionOperationCleanupKind.OnExpire) {
+          options.cleanup.run()
+        }
         reject(this.state.error)
         return
       }
+      const expiryFields =
+        options.expiry.kind === SessionOperationExpiryKind.Deadline
+          ? { expiresAt: options.expiry.expiresAt }
+          : {}
+      const cleanupFields =
+        options.cleanup.kind === SessionOperationCleanupKind.OnExpire
+          ? { onExpire: options.cleanup.run }
+          : {}
       const entry: QueueEntry = {
         sequence: this.sequence++,
-        priority:
-          priorityOrder[options.priority ?? SessionOperationPriority.Normal],
+        priority: priorityOrder[options.priority],
         operation: async () => {
           const result = await operation()
           resolve(result)
         },
         reject,
-        expiresAt: options.expiresAt,
-        onExpire: options.onExpire,
+        ...expiryFields,
+        ...cleanupFields,
         settled: false,
       }
       if (typeof entry.expiresAt === 'number') {

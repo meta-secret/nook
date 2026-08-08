@@ -5,6 +5,8 @@ import {
   stageProviderCredentials,
 } from '../lib/provider-credential-staging'
 import {
+  SessionOperationCleanupKind,
+  SessionOperationExpiryKind,
   SessionOperationPriority,
   SessionOperationQueue,
 } from '../lib/session-operation-queue'
@@ -252,8 +254,14 @@ export class ExtensionSessionMessageDispatcher {
       },
       options: {
         priority: SessionOperationPriority.Interactive,
-        expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
-        onExpire: clearPending,
+        expiry: {
+          kind: SessionOperationExpiryKind.Deadline,
+          expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+        },
+        cleanup: {
+          kind: SessionOperationCleanupKind.OnExpire,
+          run: clearPending,
+        },
       },
     })
   }
@@ -283,7 +291,11 @@ export class ExtensionSessionMessageDispatcher {
                     : [],
             },
           }),
-        options: { priority: SessionOperationPriority.Interactive },
+        options: {
+          priority: SessionOperationPriority.Interactive,
+          expiry: { kind: SessionOperationExpiryKind.None },
+          cleanup: { kind: SessionOperationCleanupKind.None },
+        },
       })
     }
     const stagedProviders = staging.providers
@@ -319,7 +331,11 @@ export class ExtensionSessionMessageDispatcher {
       },
       options: {
         priority: SessionOperationPriority.Interactive,
-        onExpire: clearPending,
+        expiry: { kind: SessionOperationExpiryKind.None },
+        cleanup: {
+          kind: SessionOperationCleanupKind.OnExpire,
+          run: clearPending,
+        },
       },
     })
   }
@@ -357,11 +373,19 @@ export class ExtensionSessionMessageDispatcher {
       operation: () => this.context.handleMessage(message),
       options: {
         priority,
-        ...(requestedExpiry.kind === RequestedQueueExpiryKind.Requested
-          ? { expiresAt: requestedExpiry.expiresAt }
-          : priority === SessionOperationPriority.Interactive
-            ? { expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS }
-            : {}),
+        expiry:
+          requestedExpiry.kind === RequestedQueueExpiryKind.Requested
+            ? {
+                kind: SessionOperationExpiryKind.Deadline,
+                expiresAt: requestedExpiry.expiresAt,
+              }
+            : priority === SessionOperationPriority.Interactive
+              ? {
+                  kind: SessionOperationExpiryKind.Deadline,
+                  expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+                }
+              : { kind: SessionOperationExpiryKind.None },
+        cleanup: { kind: SessionOperationCleanupKind.None },
       },
     })
   }
