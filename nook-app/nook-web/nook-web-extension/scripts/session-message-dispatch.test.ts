@@ -66,6 +66,39 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(providers[0]).not.toHaveProperty('githubPat')
   })
 
+  test('scrubs an accepted caller provider array after staging', async () => {
+    const providers = [{ githubPat: 'github_pat_accepted_secret' }]
+    const payload: Record<string, unknown> = { providers }
+    let handledGithubPat = ''
+    const dispatcher = new ExtensionSessionMessageDispatcher({
+      messagePayload,
+      handleMessage: async (message) => {
+        const handledProviders = messagePayload(message).providers
+        if (Array.isArray(handledProviders)) {
+          const provider = handledProviders[0]
+          if (
+            provider &&
+            typeof provider === 'object' &&
+            'githubPat' in provider
+          ) {
+            handledGithubPat = String(provider.githubPat)
+          }
+        }
+        return { ok: true }
+      },
+    })
+
+    const response = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload,
+    })
+
+    expect(payload.providers).toEqual([])
+    expect(providers[0]).not.toHaveProperty('githubPat')
+    await expect(response).resolves.toEqual({ ok: true })
+    expect(handledGithubPat).toBe('github_pat_accepted_secret')
+  })
+
   test('rejects runtime messages from another extension', () => {
     type RuntimeListener = (
       message: unknown,

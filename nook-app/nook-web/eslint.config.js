@@ -55,25 +55,21 @@ export const noRawObjectArgumentsRule = {
       const lookup = declaredVariable(argument)
       if (lookup.kind === VariableLookupKind.NotFound) return
       const { variable } = lookup
+      const producesObject = variableProducesObject({
+        variable,
+        seenVariables: new Set(),
+      })
+      if (!producesObject) return
       for (const definition of variable.defs) {
         if (
-          definition.type !== 'Variable' ||
-          definition.node.type !== 'VariableDeclarator' ||
-          !definition.node.init
+          definition.type === 'Variable' &&
+          definition.node.type === 'VariableDeclarator' &&
+          definition.name.typeAnnotation
         ) {
-          continue
+          return
         }
-        const seenVariables = new Set([variable])
-        const producesObject = expressionProducesObject({
-          expression: definition.node.init,
-          seenVariables,
-        })
-        if (!producesObject) continue
-        if (!definition.name.typeAnnotation) {
-          context.report({ node: argument, messageId: 'typedArgument' })
-        }
-        return
       }
+      context.report({ node: argument, messageId: 'typedArgument' })
     }
 
     function inlineObjectExpressions(expression) {
@@ -135,7 +131,14 @@ export const noRawObjectArgumentsRule = {
       if (unwrapped.type !== 'Identifier') return false
       const lookup = declaredVariable(unwrapped)
       if (lookup.kind === VariableLookupKind.NotFound) return false
-      const { variable } = lookup
+      return variableProducesObject({
+        variable: lookup.variable,
+        seenVariables,
+      })
+    }
+
+    function variableProducesObject(args) {
+      const { variable, seenVariables } = args
       if (seenVariables.has(variable)) return false
       seenVariables.add(variable)
       for (const definition of variable.defs) {
@@ -145,6 +148,18 @@ export const noRawObjectArgumentsRule = {
           definition.node.init &&
           expressionProducesObject({
             expression: definition.node.init,
+            seenVariables,
+          })
+        ) {
+          return true
+        }
+      }
+      for (const reference of variable.references) {
+        if (
+          reference.isWrite() &&
+          reference.writeExpr &&
+          expressionProducesObject({
+            expression: reference.writeExpr,
             seenVariables,
           })
         ) {

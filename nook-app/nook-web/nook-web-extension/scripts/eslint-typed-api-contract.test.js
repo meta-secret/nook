@@ -84,6 +84,19 @@ describe('typed API named arguments', () => {
     ])
   })
 
+  test('rejects an untyped named argument assigned after declaration', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      let args
+      args = { name: 'Nook' }
+      consume(args)
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+    ])
+  })
+
   test('rejects object literals expanded from an inline spread array', () => {
     const messages = lint(`
       declare function consume(...values: { name: string }[]): void
