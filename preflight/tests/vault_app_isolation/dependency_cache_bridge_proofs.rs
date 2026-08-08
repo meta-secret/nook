@@ -99,8 +99,7 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
         );
     }
     assert!(
-        !rust_bake.contains("deps-input-v1-")
-            && rust_bake.matches(":candidate-").count() == 2,
+        !rust_bake.contains("deps-input-v1-") && rust_bake.matches(":candidate-").count() == 2,
         "PR restores must never import legacy or unverified local candidate refs"
     );
     assert!(
@@ -137,9 +136,11 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
             && promotion_workflow.contains("PROMOTION_FINGERPRINT: ${{ inputs.fingerprint }}")
             && promotion_workflow.contains("PROMOTION_SOURCE_SHA: ${{ inputs.source_sha }}")
             && promotion_workflow.contains("git -C candidate-source rev-parse HEAD")
-            && promotion_workflow.contains("NOOK_RUST_DEPS_FINGERPRINT_ROOT=\"$GITHUB_WORKSPACE/candidate-source\"")
+            && promotion_workflow
+                .contains("NOOK_RUST_DEPS_FINGERPRINT_ROOT=\"$GITHUB_WORKSPACE/candidate-source\"")
             && !promotion_workflow.contains("promote.sh \"${{ inputs.")
-            && promotion_workflow.contains("group: rust-deps-cache-promote-${{ inputs.fingerprint }}"),
+            && promotion_workflow
+                .contains("group: rust-deps-cache-promote-${{ inputs.fingerprint }}"),
         "local candidates must be validated and promoted by the serialized hosted workflow"
     );
     assert!(

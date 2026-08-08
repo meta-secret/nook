@@ -138,7 +138,8 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
                 .contains("Scenario R: exact-only replay works across linked and internal parents")
             && tasks
                 .contains("Scenario S: Kani-style full graph falls back once then replays exact")
-            && tasks.contains("Scenario T: unverified local candidate cannot poison stable PR input")
+            && tasks
+                .contains("Scenario T: unverified local candidate cannot poison stable PR input")
             && tasks.contains("promote_registry_tag")
             && tasks.contains("bake-sim-base-layer")
             && tasks.contains("leaf-via-platform-broken")

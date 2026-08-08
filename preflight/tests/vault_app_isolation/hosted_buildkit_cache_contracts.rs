@@ -45,6 +45,11 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         );
     }
     assert!(
+        bake_retry.contains("nook-bake-flake.XXXXXX\"")
+            && !bake_retry.contains("nook-bake-flake.XXXXXX.log"),
+        "Bake retry logs must use a BSD/macOS-compatible mktemp template ending in XXXXXX"
+    );
+    assert!(
         rust_toolchain_bake.contains("target \"rust-base-publish\"")
             && rust_toolchain_bake.contains("target \"rust-base-restore\"")
             && rust_toolchain_bake.contains("cache-to   = rust_base_cache_to")
