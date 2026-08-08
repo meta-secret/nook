@@ -4,7 +4,7 @@
 //! Runtime CACHED proof for WASM deps remains Main `verify-wasm-gha-cache.sh`.
 
 use super::*;
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use std::collections::{BTreeSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -41,8 +41,7 @@ fn theorem_empty_cache_overrides_banned_repo_wide() -> anyhow::Result<()> {
             .strip_prefix(&root)
             .unwrap_or(path.as_path())
             .to_string_lossy();
-        let text = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read {rel}"))?;
+        let text = fs::read_to_string(&path).with_context(|| format!("failed to read {rel}"))?;
         assert_no_empty_bake_cache_overrides(rel.as_ref(), &text);
     }
     Ok(())
@@ -89,14 +88,20 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
         "rust_ecosystem_nightly_cache_from",
         &["nook-rust-ecosystem-nightly-v4"],
         &[],
-        &["nook-rust-base-v1", "nook/buildcache/nook-rust-ecosystem-nightly"],
+        &[
+            "nook-rust-base-v1",
+            "nook/buildcache/nook-rust-ecosystem-nightly",
+        ],
     )?;
     assert_scope_arms(
         &rust_bake,
         "rust_ecosystem_policy_tools_cache_from",
         &["nook-rust-ecosystem-policy-tools-v4"],
         &[],
-        &["nook-rust-base-v1", "nook/buildcache/nook-rust-ecosystem-policy"],
+        &[
+            "nook-rust-base-v1",
+            "nook/buildcache/nook-rust-ecosystem-policy",
+        ],
     )?;
     assert_scope_arms(
         &rust_bake,
@@ -153,7 +158,11 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
     }
 
     for (bake, target, cache_to_var) in [
-        (rust_bake.as_str(), "rust-base-publish", "rust_base_cache_to"),
+        (
+            rust_bake.as_str(),
+            "rust-base-publish",
+            "rust_base_cache_to",
+        ),
         (
             core_bake.as_str(),
             "builder-core-deps-publish",
@@ -349,8 +358,7 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
         "wasm publish must stage deps-publish, then source export, then rust-base"
     );
     assert!(
-        wasm.contains("verify-wasm-gha-cache.sh")
-            && wasm.contains("GHA_CACHE_SCOPE_SUFFIX"),
+        wasm.contains("verify-wasm-gha-cache.sh") && wasm.contains("GHA_CACHE_SCOPE_SUFFIX"),
         "Main WASM publish must invoke the fresh-builder fingerprint verifier"
     );
 
@@ -413,15 +421,12 @@ fn assignment_body<'a>(bake: &'a str, name: &str) -> anyhow::Result<&'a str> {
             end = idx;
             break;
         }
-        if let Some((ident, _)) = line.split_once(" =") {
-            if !ident.is_empty()
-                && ident
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_')
-            {
-                end = idx;
-                break;
-            }
+        if let Some((ident, _)) = line.split_once(" =")
+            && !ident.is_empty()
+            && ident.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            end = idx;
+            break;
         }
     }
     Ok(rest[..end].trim())
