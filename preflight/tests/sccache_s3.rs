@@ -309,25 +309,27 @@ fn assert_workflows_scope_cache_credentials() {
 
     let remote = read(".github/workflows/remote.yml");
     let selected_jobs = remote.matches("if: inputs.task == '").count();
+    let compiler_jobs = selected_jobs - 1;
+    assert!(remote.contains("if: inputs.task == 'rust-cache:promote'"));
     assert_eq!(
         remote.matches("NOOK_SCCACHE_REMOTE_ACCESS_KEY").count(),
-        selected_jobs
+        compiler_jobs
     );
     assert_eq!(
         remote.matches("NOOK_SCCACHE_REMOTE_SECRET_KEY").count(),
-        selected_jobs
+        compiler_jobs
     );
     assert_eq!(
         remote.matches("NOOK_SCCACHE_REMOTE_BUCKET").count(),
-        selected_jobs
+        compiler_jobs
     );
     assert_eq!(
         remote.matches("NOOK_SCCACHE_ENDPOINT").count(),
-        selected_jobs
+        compiler_jobs
     );
     assert_eq!(
         remote.matches("isolated-cache-write: \"true\"").count(),
-        selected_jobs
+        compiler_jobs
     );
 
     let hive = read(".github/workflows/hive.yml");
