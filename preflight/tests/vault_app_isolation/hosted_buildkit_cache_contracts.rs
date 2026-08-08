@@ -12,6 +12,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     let app_bake = read(root, "nook-app/docker-bake.hcl");
     let rust_toolchain_bake = read(root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let web_image_bake = read(root, "nook-app/nook-web/docker/web.docker-bake.hcl");
+    let web_app_bake = read(root, "nook-app/nook-web/nook-web-app/docker-bake.hcl");
     let web_image = read(root, "nook-app/nook-web/nook-web-app/Dockerfile");
     let web_toolchain_bake = read(root, "nook-app/nook-web/docker/toolchain.docker-bake.hcl");
     let preflight_bake = read(root, "preflight/docker-bake.hcl");
@@ -52,7 +53,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "Bake retry logs must use a BSD/macOS-compatible mktemp template ending in XXXXXX"
     );
     assert!(
-        web_image_bake.contains("NOOK_SOURCE_REVISION    = NOOK_EXTENSION_COMMIT")
+        web_app_bake.contains("NOOK_SOURCE_REVISION    = NOOK_EXTENSION_COMMIT")
             && web_image.contains("ARG NOOK_SOURCE_REVISION=")
             && web_image.contains("/opt/nook/source-revision")
             && web_image.find("/opt/nook/source-revision") < web_image.find("COPY . ."),

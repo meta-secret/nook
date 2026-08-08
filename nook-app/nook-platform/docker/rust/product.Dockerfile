@@ -203,6 +203,15 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo nextest run --no-run -p nook-replication --profile ci \
     && nook-sccache-report native-replication-nextest-dependencies
+# Loom selects an additional dev-dependency graph through cfg(loom). Warm that
+# release graph while this stage still contains manifest-only dummy sources.
+# Fresh PRs can then restore both Cargo target metadata and compiler objects from
+# Main instead of merely replaying rustc through sccache in the source leaf.
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    RUSTFLAGS='--cfg loom' cargo test --locked --release \
+      -p nook-replication --no-run \
+    && nook-sccache-report native-replication-loom-release-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo nextest run --no-run -p nook-event-log --profile ci \

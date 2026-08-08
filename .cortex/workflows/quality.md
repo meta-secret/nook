@@ -107,6 +107,10 @@ Use this workflow for quality, CI, and deployment changes.
      [`proptest`](https://proptest-rs.github.io/proptest/),
      [`insta`](https://insta.rs/), and [`loom`](https://github.com/tokio-rs/loom)
      reuse the sealed Rust dependency graph instead of a host toolchain.
+     `builder-core-deps` separately warms Loom's `cfg(loom)` release test graph
+     with manifest-only dummy sources. Main therefore supplies Cargo metadata
+     and compiler objects for that mode before the real deterministic source
+     leaf runs.
      Lineage stays manifest-stable through `builder-*-deps`; `rust-platform` is
      the shared source overlay for bulk leaves that do not need per-crate layers
      (e.g. deterministic). Focused test/lint/coverage and `builder-debug` keep
@@ -280,6 +284,8 @@ Use this workflow for quality, CI, and deployment changes.
     Scenario S applies the same cold-Main then exact-replay contract to the
     full-graph Kani model, where compiler-object sccache is unavailable.
     Scenario T proves an unverified local candidate is invisible to PR restore.
+    Scenario V proves a changed PR source restores a cfg-specific dependency
+    stage from Main and then replays its exact source leaf on a fresh builder.
 
     #### SeaweedFS sccache
 

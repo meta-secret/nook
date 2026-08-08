@@ -153,6 +153,35 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
 }
 
 #[test]
+fn theorem_loom_release_dependencies_are_source_free_and_main_seeded() {
+    let root = repository_root();
+    let product = read(
+        &root,
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    );
+    let dependency_boundary = product
+        .find("FROM builder-core-deps AS rust-platform")
+        .expect("rust-platform source boundary must exist");
+    let dependency_graph = &product[..dependency_boundary];
+    let source_graph = &product[dependency_boundary..];
+
+    assert!(
+        dependency_graph.contains("RUSTFLAGS='--cfg loom' cargo test --locked --release")
+            && dependency_graph.contains("-p nook-replication --no-run")
+            && dependency_graph
+                .contains("nook-sccache-report native-replication-loom-release-dependencies"),
+        "builder-core-deps must warm the cfg(loom) release graph before real Rust sources are copied"
+    );
+    assert!(
+        source_graph.contains("FROM rust-platform AS rust-ecosystem-deterministic")
+            && source_graph.contains(
+                "RUSTFLAGS='--cfg loom' cargo test --locked -p nook-replication loom_tests --release"
+            ),
+        "the deterministic source leaf must execute the real Loom test after restoring its dependency graph"
+    );
+}
+
+#[test]
 fn theorem_wasm_fingerprint_closed_allowlist() -> anyhow::Result<()> {
     let root = repository_root();
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");

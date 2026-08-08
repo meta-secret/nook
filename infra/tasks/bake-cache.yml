@@ -29,12 +29,15 @@ tasks:
         parent_input_orig="$(cat "$parent_input")"
         leaf_input="$sim_dir/inputs/leaf.txt"
         leaf_input_orig="$(cat "$leaf_input")"
+        loom_input="$sim_dir/inputs/loom.txt"
+        loom_input_orig="$(cat "$loom_input")"
         pr1_suffix="-git-1111111111111111111111111111111111111111"
         pr2_suffix="-git-2222222222222222222222222222222222222222"
         cleanup() {
           set +e
           printf '%s\n' "$parent_input_orig" >"$parent_input"
           printf '%s\n' "$leaf_input_orig" >"$leaf_input"
+          printf '%s\n' "$loom_input_orig" >"$loom_input"
           if [ -n "$builder" ]; then
             "$docker_bin" buildx rm -f "$builder" >/dev/null 2>&1
           fi
@@ -409,12 +412,14 @@ tasks:
         BAKE_SIM_CACHE_WRITE_ENABLED=1
         bake_plain "$proof_log" combined-leaf
         require_uncached_step "$proof_log" "bake-sim-parent-expensive"
+        require_uncached_step "$proof_log" "bake-sim-loom-deps-expensive"
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
         require_registry_ref "nook/buildcache/nook-bake-sim-nested-leaf-v1"
         BAKE_SIM_CACHE_WRITE_ENABLED=
         create_builder "nook-bake-sim-n2-${suffix}"
         bake_plain "$proof_log" combined-leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-loom-deps-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario N ok"
 
@@ -423,6 +428,7 @@ tasks:
         create_builder "nook-bake-sim-o-${suffix}"
         bake_plain "$proof_log" combined-leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-loom-deps-expensive"
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario O ok"
 
@@ -591,5 +597,37 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario S ok"
+
+        echo "== Scenario V: Main cfg-specific deps feed a changed PR source leaf =="
+        # Model Loom's extra cfg(loom) release dependency graph as an explicit
+        # source-free stage. A new PR source must restore that entire stage from
+        # trusted Main, compile only its source leaf, and then replay the exact
+        # leaf without executing either expensive step.
+        printf '%s\n' "$parent_input_orig" >"$parent_input"
+        printf '%s\n' "$loom_input_orig" >"$loom_input"
+        printf 'loom-pr-source-edit\n' >"$leaf_input"
+        loom_pr_suffix="-git-9999999999999999999999999999999999999999"
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$loom_pr_suffix"
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=
+        BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=
+        create_builder "nook-bake-sim-v-producer-${suffix}"
+        bake_plain "$proof_log" combined-leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-loom-deps-expensive"
+        require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${loom_pr_suffix}"
+
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=1
+        create_builder "nook-bake-sim-v-retry-${suffix}"
+        bake_plain "$proof_log" combined-leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-loom-deps-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        echo "scenario V ok"
 
         echo "bake-cache runtime proof passed"

@@ -12,7 +12,13 @@ RUN cat /tmp/parent.txt >/opt/parent-stamp \
   && sleep 1 \
   && echo bake-sim-parent-expensive
 
-FROM parent AS leaf
+FROM parent AS loom-deps
+COPY inputs/loom.txt /tmp/loom.txt
+RUN cat /tmp/loom.txt >/opt/loom-stamp \
+  && sleep 1 \
+  && echo bake-sim-loom-deps-expensive
+
+FROM loom-deps AS leaf
 COPY inputs/leaf.txt /tmp/leaf.txt
 RUN cat /tmp/leaf.txt >/opt/leaf-stamp \
   && sleep 1 \
