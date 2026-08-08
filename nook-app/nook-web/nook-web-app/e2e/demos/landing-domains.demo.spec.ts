@@ -21,6 +21,7 @@ test('public landing modules preserve locale, theme, and install behavior', asyn
   })
 
   await page.goto(`${PUBLIC_SITE_PATH}/`)
+  await expect(page).toHaveTitle('Nook — Keys, not accounts')
   await expect(page.locator('h1')).toHaveText('Keys,not accounts.')
   await expect(page.locator('h1 br')).toHaveCount(1)
   await expect(page.locator('.capsule-stage')).toBeVisible()
