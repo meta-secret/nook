@@ -830,6 +830,8 @@ It restores the independent lineages from `registry.dev.nokey.sh`.
 - Opt out with `NOOK_REGISTRY_CACHE=0`.
 - Hosted CI first stabilizes the shared Rust toolchain parent in `nook-rust-base-v1`.
 - It exports native and WASM dependency boundaries to `nook-rust-deps-v3` and the fingerprinted WASM deps ref with `mode=max`.
+- The WASM deps fingerprint covers cook-affecting Cargo and lineage Dockerfile inputs only.
+- WASM deps restore may fall back to longer `nook-rust-wasm-source-v2` when that fingerprint is empty.
 - Source-sensitive native coverage and WASM outputs use separate `nook-rust-native-source-v3` and `nook-rust-wasm-source-v2` refs.
 - A workflow-only or web-only push does not recompile unchanged Rust on a fresh hosted runner.
 - Same-repository PR jobs restore Main plus the git-commit remote-buildcache scope.
