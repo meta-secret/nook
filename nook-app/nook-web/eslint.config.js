@@ -82,6 +82,9 @@ export const noRawObjectArgumentsRule = {
       if (unwrapped.type === 'ObjectExpression') {
         return [expression]
       }
+      if (unwrapped.type === 'AssignmentExpression') {
+        return inlineObjectExpressions(unwrapped.right)
+      }
       if (unwrapped.type === 'ConditionalExpression') {
         return [
           ...inlineObjectExpressions(unwrapped.consequent),

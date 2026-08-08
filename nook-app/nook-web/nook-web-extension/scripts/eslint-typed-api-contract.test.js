@@ -150,6 +150,19 @@ describe('typed API named arguments', () => {
     ])
   })
 
+  test('rejects an object literal assigned inside a call argument', () => {
+    const messages = lint(`
+      type ConsumeArgs = { name: string }
+      declare function consume(value: ConsumeArgs): void
+      let args: ConsumeArgs
+      consume((args = { name: 'Nook' }))
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
   test('rejects object literals projected into call arguments', () => {
     const messages = lint(`
       declare function consume(value: { name: string }): void

@@ -27,6 +27,7 @@ import {
 import { startMockAuthServer } from '../mock-auth'
 import { waitForExtensionPairingReady } from './extension-approval'
 import {
+  readExtensionPersistenceSnapshot,
   readExtensionPairingStorage,
   removeExtensionPairingStorageKeys,
   writeExtensionPairingStorage,
@@ -41,6 +42,7 @@ export {
   lockExtensionSession,
   sentinelVaultBaseUrl,
   readPersistedAppLogs,
+  readExtensionPersistenceSnapshot,
   simpleVaultUrl,
   waitForExtensionPairingReady,
 }

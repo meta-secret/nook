@@ -13,6 +13,7 @@ import {
   e2eSentinelVaultBaseUrl,
   openSimpleVaultConnection,
   pairingGrantStorageKey,
+  readExtensionPersistenceSnapshot,
   readExtensionStorage,
   sendExternalMessage,
   setupPasskeyExtensionPopup,
@@ -322,6 +323,38 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     expect(
       await sendExternalMessage(simplePage, extensionId, forgedGrant),
     ).toEqual({ ok: false, reason: 'invalid-pairing-grant' })
+
+    const persistenceBeforeMalformedProvider =
+      await readExtensionPersistenceSnapshot(worker)
+    const malformedProviderGrant = {
+      type: 'nook:extension-pairing-approved',
+      payload: {
+        vaultType: ExtensionPairingVaultType.Simple,
+        deviceId: 'device-e2e',
+        devicePublicKey: 'age1extension',
+        deviceSigningPublicKey: 'extension-signing-key',
+        deviceLabel: 'Nook Extension - Chromium test profile',
+        vaultStoreId: 'store-e2e',
+        vaultName: 'Personal',
+        approvedAt: '2026-07-07T00:00:00.000Z',
+        scopes: [
+          ExtensionConnectScope.VaultAccess,
+          ExtensionConnectScope.PasswordFilling,
+        ],
+        providers: [{ githubPat: 'github_pat_malformed_e2e_secret' }],
+      },
+      eventLogRecords: syntheticEventLogRecords,
+    }
+    expect(
+      await sendExternalMessage(
+        simplePage,
+        extensionId,
+        malformedProviderGrant,
+      ),
+    ).toEqual({ ok: false, reason: 'invalid-provider-payload' })
+    expect(await readExtensionPersistenceSnapshot(worker)).toEqual(
+      persistenceBeforeMalformedProvider,
+    )
 
     const approvedGrant: ExtensionPairingApprovedMessage = {
       type: 'nook:extension-pairing-approved',
