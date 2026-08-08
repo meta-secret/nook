@@ -98,3 +98,6 @@ Does not apply to:
 - `task preflight:typescript-state`
 - Loom: `bun run verify` in `agentic-ai/loom`
 - `task loom:pre-push` before push
+
+For Loom's one-parameter function rule, see
+[typescript-single-parameter.md](typescript-single-parameter.md).

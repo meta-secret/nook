@@ -16,6 +16,7 @@ import {
   PrLandOperation,
   RequestFamily,
 } from '../codec/enums.ts';
+import type { ObjectJsonSchema } from '../codec/json-schema.ts';
 import { listRequestFamilies, type LoomRequest } from '../codec/request.ts';
 import {
   runAgentStatsAssemble,
@@ -32,18 +33,17 @@ import {
 } from '../commands/pr-land.ts';
 import { runPrePush } from '../commands/pre-push.ts';
 import { runSkillScaffold } from '../commands/skill-scaffold.ts';
+import { asExternalValue, type ExternalValue } from '../lib/guards.ts';
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
 
-export type JsonSchema = Readonly<Record<string, unknown>>;
-
+import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 export type DiscoverableRequest = {
   readonly family: RequestFamily;
   readonly operation?: AgentStatsOperation | PrLandOperation;
   readonly description: string;
   readonly exampleRequest: string;
-  readonly inputSchema: JsonSchema;
+  readonly inputSchema: ObjectJsonSchema;
 };
-
 const DISCOVERABLE: readonly DiscoverableRequest[] = [
   {
     family: RequestFamily.ToolsList,
@@ -137,41 +137,73 @@ export function listAllRequestFamilies(): readonly RequestFamily[] {
   return listRequestFamilies();
 }
 
-export async function executeRequest(request: LoomRequest): Promise<unknown> {
+export async function executeRequest(
+  request: LoomRequest,
+): Promise<ExternalValue> {
   switch (request.family) {
     case RequestFamily.PrePush:
-      return runPrePush(request.prePush);
+      return asExternalValue(
+        (await runPrePush(request.prePush)) as ExternalValue,
+      );
     case RequestFamily.CortexAudit:
-      return runCortexAudit(request.cortexAudit);
+      return asExternalValue(
+        (await runCortexAudit(request.cortexAudit)) as ExternalValue,
+      );
     case RequestFamily.SkillScaffold:
-      return runSkillScaffold(request.skillScaffold);
-    case RequestFamily.AgentStats:
+      return asExternalValue(
+        (await runSkillScaffold(request.skillScaffold)) as ExternalValue,
+      );
+    case RequestFamily.AgentStats: {
       switch (request.operation) {
         case AgentStatsOperation.Assemble:
-          return runAgentStatsAssemble(request.assemble);
+          return asExternalValue(
+            (await runAgentStatsAssemble(request.assemble)) as ExternalValue,
+          );
         case AgentStatsOperation.Validate:
-          return runAgentStatsValidate(request.validate);
+          return asExternalValue(
+            (await runAgentStatsValidate(request.validate)) as ExternalValue,
+          );
         case AgentStatsOperation.Publish:
-          return runAgentStatsPublish(request.publish);
+          return asExternalValue(
+            (await runAgentStatsPublish(request.publish)) as ExternalValue,
+          );
       }
-    case RequestFamily.PrLand:
+      break;
+    }
+    case RequestFamily.PrLand: {
       switch (request.operation) {
         case PrLandOperation.Status:
-          return runPrLandStatus(request.status);
+          return asExternalValue(
+            (await runPrLandStatus(request.status)) as ExternalValue,
+          );
         case PrLandOperation.Validate:
-          return runPrLandValidate(request.validate);
+          return asExternalValue(
+            (await runPrLandValidate(request.validate)) as ExternalValue,
+          );
         case PrLandOperation.Ready:
-          return runPrLandReady(request.ready);
+          return asExternalValue(
+            (await runPrLandReady(request.ready)) as ExternalValue,
+          );
         case PrLandOperation.MergeCheck:
-          return runPrLandMergeCheck(request.mergeCheck);
+          return asExternalValue(
+            (await runPrLandMergeCheck(request.mergeCheck)) as ExternalValue,
+          );
       }
+      break;
+    }
     case RequestFamily.DependencyPopularity:
-      return runDependencyPopularity(request.dependencyPopularity);
-    case RequestFamily.ToolsList:
-    case RequestFamily.ToolsCall:
-      loomFailureDetail(
-        LoomFailureCode.ValidationFailed,
-        `${request.family} is handled by the dispatcher`,
+      return asExternalValue(
+        (await runDependencyPopularity(
+          request.dependencyPopularity,
+        )) as ExternalValue,
       );
+    case RequestFamily.ToolsList:
+    case RequestFamily.ToolsCall: {
+      const loomFailureDetailArgs: LoomFailureDetailArgs = {
+        code: LoomFailureCode.ValidationFailed,
+        text: `${request.family} is handled by the dispatcher`,
+      };
+      loomFailureDetail(loomFailureDetailArgs);
+    }
   }
 }

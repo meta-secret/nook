@@ -110,3 +110,13 @@ tasks:
         --manifest-path preflight/Cargo.toml
         --test core_ownership
         typescript_
+
+  preflight:loom-contracts:
+    desc: Enforce Loom ESLint max-params and verify-script wiring.
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - >-
+        cargo test
+        --locked
+        --manifest-path preflight/Cargo.toml
+        --test loom_contracts

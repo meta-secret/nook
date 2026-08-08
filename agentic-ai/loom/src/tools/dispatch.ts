@@ -1,5 +1,12 @@
 import { readFileSync } from 'node:fs';
 import {
+  ExternalPropertyPresence,
+  asExternalValue,
+  externalProperty,
+  isRecord,
+  type ExternalValue,
+} from '../lib/guards.ts';
+import {
   explainAgainstBlueprint,
   explainSyntaxFailure,
 } from '../codec/blueprint-diff.ts';
@@ -27,6 +34,17 @@ import { parseYamlFile } from '../codec/yaml.ts';
 import { LoomFailure, LoomFailureDetailKind } from '../loom-failure.ts';
 import { executeRequest, listDiscoverableRequests } from './registry.ts';
 
+import type { ExternalPropertyArgs } from '../lib/guards.ts';
+import type {
+  SuccessResponseForFamilyArgs,
+  SuccessResponseForAgentStatsArgs,
+  SuccessResponseForPrLandArgs,
+  DecodeErrorResponseArgs,
+  ExecuteErrorResponseForFamilyArgs,
+  ExecuteErrorResponseForAgentStatsArgs,
+  ExecuteErrorResponseForPrLandArgs,
+} from '../codec/response.ts';
+import type { ExplainSyntaxFailureArgs } from '../codec/blueprint-diff.ts';
 export type DispatchOutcome = {
   readonly exitCode: number;
   readonly body: SuccessResponse | ErrorResponse;
@@ -45,28 +63,36 @@ export async function dispatchRequestFile(
       syntax && syntax.detail.kind === FieldDetailKind.Text
         ? syntax.detail.text
         : 'failed to read or parse request YAML';
+    const explainSyntaxFailureArgs: ExplainSyntaxFailureArgs = {
+      receivedYaml,
+      parseMessage,
+    };
+    const decodeErrorResponseArgs2: DecodeErrorResponseArgs = {
+      phase: ResponsePhase.Decode,
+      errors: parsed.errors,
+      explanation: explainSyntaxFailure(explainSyntaxFailureArgs),
+    };
     return {
       exitCode: 2,
-      body: decodeErrorResponse(
-        ResponsePhase.Decode,
-        parsed.errors,
-        explainSyntaxFailure(receivedYaml, parseMessage),
-      ),
+      body: decodeErrorResponse(decodeErrorResponseArgs2),
     };
   }
   return dispatchValue(parsed.value.value);
 }
 
-export async function dispatchValue(value: unknown): Promise<DispatchOutcome> {
+export async function dispatchValue(
+  value: ExternalValue,
+): Promise<DispatchOutcome> {
   const request = decodeLoomRequest(value);
   if (request.status === DecodeStatus.Failed) {
+    const decodeErrorResponseArgs: DecodeErrorResponseArgs = {
+      phase: ResponsePhase.Decode,
+      errors: request.errors,
+      explanation: explainAgainstBlueprint(value),
+    };
     return {
       exitCode: 2,
-      body: decodeErrorResponse(
-        ResponsePhase.Decode,
-        request.errors,
-        explainAgainstBlueprint(value),
-      ),
+      body: decodeErrorResponse(decodeErrorResponseArgs),
     };
   }
   return dispatchDecoded(request.value);
@@ -78,51 +104,80 @@ async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
   }
 
   if (request.family === RequestFamily.ToolsList) {
+    const asExternalValueArgs: ExternalValue = {
+      requests: listDiscoverableRequests(),
+    };
+    const successResponseForFamilyArgs8: SuccessResponseForFamilyArgs = {
+      family: RequestFamily.ToolsList,
+      result: asExternalValue(asExternalValueArgs),
+    };
     return {
       exitCode: 0,
-      body: successResponseForFamily(RequestFamily.ToolsList, {
-        requests: listDiscoverableRequests(),
-      }),
+      body: successResponseForFamily(successResponseForFamilyArgs8),
     };
   }
 
   try {
     const result = await executeRequest(request);
-    if (
-      request.family === RequestFamily.CortexAudit &&
-      typeof result === 'object' &&
-      result instanceof Object &&
-      'auditOk' in result &&
-      result.auditOk === false
-    ) {
-      return {
-        exitCode: 1,
-        body: successResponseForFamily(RequestFamily.CortexAudit, result),
+    if (request.family === RequestFamily.CortexAudit && isRecord(result)) {
+      const auditOkArgs: ExternalPropertyArgs = {
+        record: result,
+        key: 'auditOk',
       };
+      const auditOk = externalProperty(auditOkArgs);
+      if (
+        auditOk.presence === ExternalPropertyPresence.Present &&
+        auditOk.value === false
+      ) {
+        const successResponseForFamilyArgs7: SuccessResponseForFamilyArgs = {
+          family: RequestFamily.CortexAudit,
+          result,
+        };
+        return {
+          exitCode: 1,
+          body: successResponseForFamily(successResponseForFamilyArgs7),
+        };
+      }
     }
     if (
       request.family === RequestFamily.DependencyPopularity &&
-      typeof result === 'object' &&
-      result instanceof Object &&
-      'ok' in result &&
-      result.ok === false
+      isRecord(result)
     ) {
-      return {
-        exitCode: 1,
-        body: successResponseForFamily(
-          RequestFamily.DependencyPopularity,
+      const okArgs: ExternalPropertyArgs = { record: result, key: 'ok' };
+      const ok = externalProperty(okArgs);
+      if (
+        ok.presence === ExternalPropertyPresence.Present &&
+        ok.value === false
+      ) {
+        const successResponseForFamilyArgs6: SuccessResponseForFamilyArgs = {
+          family: RequestFamily.DependencyPopularity,
           result,
-        ),
-      };
+        };
+        return {
+          exitCode: 1,
+          body: successResponseForFamily(successResponseForFamilyArgs6),
+        };
+      }
     }
+    const buildSuccessResponseArgs = { request, result };
     return {
       exitCode: 0,
-      body: buildSuccessResponse(request, result),
+      body: buildSuccessResponse(buildSuccessResponseArgs),
     };
   } catch (error) {
+    const detail =
+      error instanceof LoomFailure || error instanceof Error
+        ? failureDetail(error)
+        : typeof error === 'string'
+          ? failureDetail(error)
+          : failureDetail(String(error));
+    const buildExecuteErrorResponseArgs = {
+      request,
+      detail,
+    };
     return {
       exitCode: 1,
-      body: buildExecuteErrorResponse(request, failureDetail(error)),
+      body: buildExecuteErrorResponse(buildExecuteErrorResponseArgs),
     };
   }
 }
@@ -135,7 +190,7 @@ function readRequestText(requestPath: string): string {
   }
 }
 
-function failureDetail(error: unknown): string {
+function failureDetail(error: LoomFailure | Error | string): string {
   if (error instanceof LoomFailure) {
     if (error.detail.kind === LoomFailureDetailKind.Text) {
       return error.detail.text;
@@ -148,59 +203,143 @@ function failureDetail(error: unknown): string {
   return String(error);
 }
 
-function buildSuccessResponse(
-  request: LoomRequest,
-  result: unknown,
-): SuccessResponse {
+type BuildSuccessResponseArgs = {
+  readonly request: LoomRequest;
+  readonly result: ExternalValue;
+};
+
+function buildSuccessResponse(args: BuildSuccessResponseArgs): SuccessResponse {
+  const { request, result } = args;
+
   switch (request.family) {
-    case RequestFamily.PrePush:
-      return successResponseForFamily(RequestFamily.PrePush, result);
-    case RequestFamily.CortexAudit:
-      return successResponseForFamily(RequestFamily.CortexAudit, result);
-    case RequestFamily.SkillScaffold:
-      return successResponseForFamily(RequestFamily.SkillScaffold, result);
-    case RequestFamily.AgentStats:
-      return successResponseForAgentStats(request.operation, result);
-    case RequestFamily.PrLand:
-      return successResponseForPrLand(request.operation, result);
-    case RequestFamily.DependencyPopularity:
-      return successResponseForFamily(
-        RequestFamily.DependencyPopularity,
+    case RequestFamily.PrePush: {
+      const successResponseForFamilyArgs5: SuccessResponseForFamilyArgs = {
+        family: RequestFamily.PrePush,
         result,
-      );
+      };
+      return successResponseForFamily(successResponseForFamilyArgs5);
+    }
+    case RequestFamily.CortexAudit: {
+      const successResponseForFamilyArgs4: SuccessResponseForFamilyArgs = {
+        family: RequestFamily.CortexAudit,
+        result,
+      };
+      return successResponseForFamily(successResponseForFamilyArgs4);
+    }
+    case RequestFamily.SkillScaffold: {
+      const successResponseForFamilyArgs3: SuccessResponseForFamilyArgs = {
+        family: RequestFamily.SkillScaffold,
+        result,
+      };
+      return successResponseForFamily(successResponseForFamilyArgs3);
+    }
+    case RequestFamily.AgentStats: {
+      const successResponseForAgentStatsArgs: SuccessResponseForAgentStatsArgs =
+        {
+          operation: request.operation,
+          result,
+        };
+      return successResponseForAgentStats(successResponseForAgentStatsArgs);
+    }
+    case RequestFamily.PrLand: {
+      const successResponseForPrLandArgs: SuccessResponseForPrLandArgs = {
+        operation: request.operation,
+        result,
+      };
+      return successResponseForPrLand(successResponseForPrLandArgs);
+    }
+    case RequestFamily.DependencyPopularity: {
+      const successResponseForFamilyArgs2: SuccessResponseForFamilyArgs = {
+        family: RequestFamily.DependencyPopularity,
+        result,
+      };
+      return successResponseForFamily(successResponseForFamilyArgs2);
+    }
     case RequestFamily.ToolsList:
-    case RequestFamily.ToolsCall:
-      return successResponseForFamily(RequestFamily.ToolsList, result);
+    case RequestFamily.ToolsCall: {
+      const successResponseForFamilyArgs: SuccessResponseForFamilyArgs = {
+        family: RequestFamily.ToolsList,
+        result,
+      };
+      return successResponseForFamily(successResponseForFamilyArgs);
+    }
   }
 }
+
+type BuildExecuteErrorResponseArgs = {
+  readonly request: LoomRequest;
+  readonly detail: string;
+};
 
 function buildExecuteErrorResponse(
-  request: LoomRequest,
-  detail: string,
+  args: BuildExecuteErrorResponseArgs,
 ): ErrorResponse {
+  const { request, detail } = args;
+
   const errors = [executionFieldError(detail)];
   switch (request.family) {
-    case RequestFamily.PrePush:
-      return executeErrorResponseForFamily(RequestFamily.PrePush, errors);
-    case RequestFamily.CortexAudit:
-      return executeErrorResponseForFamily(RequestFamily.CortexAudit, errors);
-    case RequestFamily.SkillScaffold:
-      return executeErrorResponseForFamily(RequestFamily.SkillScaffold, errors);
-    case RequestFamily.AgentStats:
-      return executeErrorResponseForAgentStats(request.operation, errors);
-    case RequestFamily.PrLand:
-      return executeErrorResponseForPrLand(request.operation, errors);
-    case RequestFamily.DependencyPopularity:
-      return executeErrorResponseForFamily(
-        RequestFamily.DependencyPopularity,
-        errors,
+    case RequestFamily.PrePush: {
+      const executeErrorResponseForFamilyArgs5: ExecuteErrorResponseForFamilyArgs =
+        {
+          family: RequestFamily.PrePush,
+          errors,
+        };
+      return executeErrorResponseForFamily(executeErrorResponseForFamilyArgs5);
+    }
+    case RequestFamily.CortexAudit: {
+      const executeErrorResponseForFamilyArgs4: ExecuteErrorResponseForFamilyArgs =
+        {
+          family: RequestFamily.CortexAudit,
+          errors,
+        };
+      return executeErrorResponseForFamily(executeErrorResponseForFamilyArgs4);
+    }
+    case RequestFamily.SkillScaffold: {
+      const executeErrorResponseForFamilyArgs3: ExecuteErrorResponseForFamilyArgs =
+        {
+          family: RequestFamily.SkillScaffold,
+          errors,
+        };
+      return executeErrorResponseForFamily(executeErrorResponseForFamilyArgs3);
+    }
+    case RequestFamily.AgentStats: {
+      const executeErrorResponseForAgentStatsArgs: ExecuteErrorResponseForAgentStatsArgs =
+        {
+          operation: request.operation,
+          errors,
+        };
+      return executeErrorResponseForAgentStats(
+        executeErrorResponseForAgentStatsArgs,
       );
+    }
+    case RequestFamily.PrLand: {
+      const executeErrorResponseForPrLandArgs: ExecuteErrorResponseForPrLandArgs =
+        {
+          operation: request.operation,
+          errors,
+        };
+      return executeErrorResponseForPrLand(executeErrorResponseForPrLandArgs);
+    }
+    case RequestFamily.DependencyPopularity: {
+      const executeErrorResponseForFamilyArgs2: ExecuteErrorResponseForFamilyArgs =
+        {
+          family: RequestFamily.DependencyPopularity,
+          errors,
+        };
+      return executeErrorResponseForFamily(executeErrorResponseForFamilyArgs2);
+    }
     case RequestFamily.ToolsList:
-    case RequestFamily.ToolsCall:
-      return executeErrorResponseForFamily(RequestFamily.ToolsList, errors);
+    case RequestFamily.ToolsCall: {
+      const executeErrorResponseForFamilyArgs: ExecuteErrorResponseForFamilyArgs =
+        {
+          family: RequestFamily.ToolsList,
+          errors,
+        };
+      return executeErrorResponseForFamily(executeErrorResponseForFamilyArgs);
+    }
   }
 }
 
-export function encodedOutcome(outcome: DispatchOutcome): unknown {
+export function encodedOutcome(outcome: DispatchOutcome): ExternalValue {
   return encodeResponse(outcome.body);
 }

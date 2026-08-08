@@ -5,6 +5,7 @@ import { resolveRequestPath, requireBun } from './lib/repo.ts';
 import { LoomFailure } from './loom-failure.ts';
 import { dispatchRequestFile, encodedOutcome } from './tools/dispatch.ts';
 
+import type { ResolveRequestPathArgs } from './lib/repo.ts';
 const HELP = `Loom — mechanical cortex rites (domain YAML protocol)
 
 Usage:
@@ -38,29 +39,29 @@ async function main(): Promise<number> {
   }
   if (argv.length !== 1) {
     console.error(HELP);
-    console.log(
-      stringifyYaml({
-        ok: false,
-        isError: true,
-        phase: ResponsePhase.Decode,
-        errors: [
-          {
-            path: '',
-            message: 'expected exactly one request YAML path argument',
-          },
-        ],
-        recover: {
-          toolsListRequest: 'agentic-ai/loom/params/tools-list/default.yaml',
-          hint: 'run loom with a toolsList request, then retry with a valid domain request object',
+    const stringifyYamlArgs = {
+      ok: false,
+      isError: true,
+      phase: ResponsePhase.Decode,
+      errors: [
+        {
+          path: '',
+          message: 'expected exactly one request YAML path argument',
         },
-      }),
-    );
+      ],
+      recover: {
+        toolsListRequest: 'agentic-ai/loom/params/tools-list/default.yaml',
+        hint: 'run loom with a toolsList request, then retry with a valid domain request object',
+      },
+    };
+    console.log(stringifyYaml(stringifyYamlArgs));
     return 2;
   }
 
   let requestPath: string;
   try {
-    requestPath = resolveRequestPath(token);
+    const requestPathArgs: ResolveRequestPathArgs = { requestPath: token };
+    requestPath = resolveRequestPath(requestPathArgs);
   } catch (error) {
     console.error(error instanceof LoomFailure ? error.message : String(error));
     return 2;
