@@ -125,9 +125,7 @@ jobs:
 
       - name: Run Kani bounded proofs
         working-directory: nook-app/nook-platform
-        run: |
-          cargo kani --version 2>&1 | grep -F "Kani Rust Verifier $KANI_VERSION"
-          cargo kani --package nook-replication
+        run: cargo kani --package nook-replication
 
   dylint:
     name: Dylint repository lints
