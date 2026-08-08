@@ -18,6 +18,7 @@ import {
   type FieldError,
 } from './field-error.ts';
 
+import type { FieldErrorArgs } from './field-error.ts';
 export type RecoverHint = {
   readonly toolsListRequest: string;
   readonly hint: string;
@@ -303,9 +304,10 @@ export function encodeResponse(
 }
 
 export function executionFieldError(detail: string): FieldError {
-  return fieldError({
+  const fieldErrorArgs: FieldErrorArgs = {
     path: 'result',
     issue: FieldIssue.ExecuteFailed,
     detail: fieldDetailText(detail),
-  });
+  };
+  return fieldError(fieldErrorArgs);
 }

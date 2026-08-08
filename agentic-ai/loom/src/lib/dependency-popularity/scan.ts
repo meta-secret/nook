@@ -9,6 +9,8 @@ import {
   isRecord,
 } from '../guards.ts';
 
+import type { ExternalPropertyArgs } from '../guards.ts';
+import type { LoomFailureDetailArgs } from '../../loom-failure.ts';
 export type ManifestDependencies = {
   readonly npmPackages: readonly string[];
   readonly rustCrates: readonly string[];
@@ -35,7 +37,11 @@ function readNpmPackages(packageJsonPath: string): readonly string[] {
   }
   const names = new Set<string>();
   for (const section of ['dependencies', 'devDependencies'] as const) {
-    const blockProperty = externalProperty({ record: json, key: section });
+    const blockPropertyArgs: ExternalPropertyArgs = {
+      record: json,
+      key: section,
+    };
+    const blockProperty = externalProperty(blockPropertyArgs);
     if (
       blockProperty.presence === ExternalPropertyPresence.Absent ||
       !isRecord(blockProperty.value)
@@ -55,58 +61,68 @@ function readNpmPackages(packageJsonPath: string): readonly string[] {
 function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
   const cargo = Bun.which('cargo');
   if (typeof cargo !== 'string' || cargo.length === 0) {
-    loomFailureDetail({
+    const loomFailureDetailArgs5: LoomFailureDetailArgs = {
       code: LoomFailureCode.CommandFailedToStart,
       text: 'cargo is required to scan Rust workspace dependencies',
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs5);
   }
-  const result = Bun.spawnSync({
+  const resultArgs = {
     cmd: [cargo, 'metadata', '--format-version', '1'],
     cwd: platformRoot,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
+    stdout: 'pipe' as const,
+    stderr: 'pipe' as const,
+  };
+  const result = Bun.spawnSync(resultArgs);
   if (result.exitCode !== 0) {
     const stderr = new TextDecoder().decode(result.stderr).trim();
-    loomFailureDetail({
+    const loomFailureDetailArgs4: LoomFailureDetailArgs = {
       code: LoomFailureCode.CommandFailed,
       text: `cargo metadata failed while scanning crates: ${stderr}`,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs4);
   }
   const metadata = asExternalValue(
     JSON.parse(new TextDecoder().decode(result.stdout)) as ExternalValue,
   );
   if (!isRecord(metadata)) {
-    loomFailureDetail({
+    const loomFailureDetailArgs3: LoomFailureDetailArgs = {
       code: LoomFailureCode.ValidationFailed,
       text: 'cargo metadata returned an unexpected packages payload',
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs3);
   }
-  const packagesProperty = externalProperty({
+  const packagesPropertyArgs: ExternalPropertyArgs = {
     record: metadata,
     key: 'packages',
-  });
+  };
+  const packagesProperty = externalProperty(packagesPropertyArgs);
   if (
     packagesProperty.presence === ExternalPropertyPresence.Absent ||
     !Array.isArray(packagesProperty.value)
   ) {
-    loomFailureDetail({
+    const loomFailureDetailArgs2: LoomFailureDetailArgs = {
       code: LoomFailureCode.ValidationFailed,
       text: 'cargo metadata returned an unexpected packages payload',
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs2);
   }
-  const workspaceMembersProperty = externalProperty({
+  const workspaceMembersPropertyArgs: ExternalPropertyArgs = {
     record: metadata,
     key: 'workspace_members',
-  });
+  };
+  const workspaceMembersProperty = externalProperty(
+    workspaceMembersPropertyArgs,
+  );
   if (
     workspaceMembersProperty.presence === ExternalPropertyPresence.Absent ||
     !Array.isArray(workspaceMembersProperty.value)
   ) {
-    loomFailureDetail({
+    const loomFailureDetailArgs: LoomFailureDetailArgs = {
       code: LoomFailureCode.ValidationFailed,
       text: 'cargo metadata returned an unexpected workspace_members payload',
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs);
   }
   const workspaceMembers = new Set(
     workspaceMembersProperty.value.filter(
@@ -118,7 +134,8 @@ function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
     if (!isRecord(pkg)) {
       continue;
     }
-    const idProperty = externalProperty({ record: pkg, key: 'id' });
+    const idPropertyArgs: ExternalPropertyArgs = { record: pkg, key: 'id' };
+    const idProperty = externalProperty(idPropertyArgs);
     if (
       idProperty.presence === ExternalPropertyPresence.Absent ||
       typeof idProperty.value !== 'string'
@@ -128,10 +145,11 @@ function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
     if (!workspaceMembers.has(idProperty.value)) {
       continue;
     }
-    const dependenciesProperty = externalProperty({
+    const dependenciesPropertyArgs: ExternalPropertyArgs = {
       record: pkg,
       key: 'dependencies',
-    });
+    };
+    const dependenciesProperty = externalProperty(dependenciesPropertyArgs);
     if (
       dependenciesProperty.presence === ExternalPropertyPresence.Absent ||
       !Array.isArray(dependenciesProperty.value)
@@ -142,14 +160,22 @@ function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
       if (!isRecord(dep)) {
         continue;
       }
-      const nameProperty = externalProperty({ record: dep, key: 'name' });
+      const namePropertyArgs: ExternalPropertyArgs = {
+        record: dep,
+        key: 'name',
+      };
+      const nameProperty = externalProperty(namePropertyArgs);
       if (
         nameProperty.presence === ExternalPropertyPresence.Absent ||
         typeof nameProperty.value !== 'string'
       ) {
         continue;
       }
-      const pathProperty = externalProperty({ record: dep, key: 'path' });
+      const pathPropertyArgs: ExternalPropertyArgs = {
+        record: dep,
+        key: 'path',
+      };
+      const pathProperty = externalProperty(pathPropertyArgs);
       if (
         pathProperty.presence === ExternalPropertyPresence.Present &&
         typeof pathProperty.value === 'string'

@@ -10,6 +10,7 @@ import {
 } from '../lib/dependency-popularity/types.ts';
 import { findRepoRoot } from '../lib/repo.ts';
 
+import type { EvaluatePopularityArgs } from '../lib/dependency-popularity/evaluate.ts';
 export type DependencyPopularityReport = {
   readonly ok: boolean;
   readonly thresholds: PopularityThresholds;
@@ -38,11 +39,19 @@ export async function runDependencyPopularity(
   const findings: PopularityFinding[] = [];
   for (const name of npmPackages) {
     const metrics = await fetchNpmPackageMetrics(name);
-    findings.push(evaluatePopularity({ metrics, thresholds }));
+    const evaluatePopularityArgs2: EvaluatePopularityArgs = {
+      metrics,
+      thresholds,
+    };
+    findings.push(evaluatePopularity(evaluatePopularityArgs2));
   }
   for (const name of rustCrates) {
     const metrics = await fetchCrateMetrics(name);
-    findings.push(evaluatePopularity({ metrics, thresholds }));
+    const evaluatePopularityArgs: EvaluatePopularityArgs = {
+      metrics,
+      thresholds,
+    };
+    findings.push(evaluatePopularity(evaluatePopularityArgs));
   }
 
   return {

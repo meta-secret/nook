@@ -13,6 +13,8 @@ import {
   loomFailureDetail,
 } from '../loom-failure.ts';
 
+import type { RunCommandArgs } from '../lib/run.ts';
+import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 export type PrLandReport = {
   readonly family: RequestFamily.PrLand;
   readonly operation: PrLandOperation;
@@ -26,28 +28,32 @@ export async function runPrLandStatus(
   request: PrLandPrRequest,
 ): Promise<PrLandReport> {
   const repoRoot = findRepoRoot();
-  return status({ repoRoot, prNumber: request.prNumber });
+  const statusArgs = { repoRoot, prNumber: request.prNumber };
+  return status(statusArgs);
 }
 
 export async function runPrLandValidate(
   request: PrLandValidateRequest,
 ): Promise<PrLandReport> {
   const repoRoot = findRepoRoot();
-  return validate({ repoRoot, request });
+  const validateArgs2 = { repoRoot, request };
+  return validate(validateArgs2);
 }
 
 export async function runPrLandReady(
   request: PrLandPrRequest,
 ): Promise<PrLandReport> {
   const repoRoot = findRepoRoot();
-  return ready({ repoRoot, prNumber: request.prNumber });
+  const readyArgs = { repoRoot, prNumber: request.prNumber };
+  return ready(readyArgs);
 }
 
 export async function runPrLandMergeCheck(
   request: PrLandPrRequest,
 ): Promise<PrLandReport> {
   const repoRoot = findRepoRoot();
-  return mergeCheck({ repoRoot, prNumber: request.prNumber });
+  const mergeCheckArgs = { repoRoot, prNumber: request.prNumber };
+  return mergeCheck(mergeCheckArgs);
 }
 
 type PrLandStatusArgs = {
@@ -58,7 +64,7 @@ type PrLandStatusArgs = {
 async function status(args: PrLandStatusArgs): Promise<PrLandReport> {
   const { repoRoot, prNumber } = args;
 
-  const view = runCommand({
+  const viewArgs: RunCommandArgs = {
     command: 'gh',
     args: [
       'pr',
@@ -68,12 +74,14 @@ async function status(args: PrLandStatusArgs): Promise<PrLandReport> {
       'number,state,isDraft,mergeStateStatus,url,headRefOid,baseRefName',
     ],
     cwd: repoRoot,
-  });
+  };
+  const view = runCommand(viewArgs);
   if (view.exitCode !== 0) {
-    loomFailureDetail({
+    const loomFailureDetailArgs4: LoomFailureDetailArgs = {
       code: LoomFailureCode.CommandFailed,
       text: `gh pr view failed: ${view.stderr || view.stdout}`,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs4);
   }
 
   return {
@@ -98,29 +106,33 @@ async function validate(args: PrLandValidateArgs): Promise<PrLandReport> {
     repoRoot,
     'agentic-ai/loom/params/pre-push/default.yaml',
   );
-  const prePush = runCommand({
+  const prePushArgs: RunCommandArgs = {
     command: 'bun',
     args: ['run', '--cwd', 'agentic-ai/loom', 'loom', '--', prePushRequest],
     cwd: repoRoot,
-  });
+  };
+  const prePush = runCommand(prePushArgs);
   if (prePush.exitCode !== 0) {
-    loomFailureDetail({
+    const loomFailureDetailArgs3: LoomFailureDetailArgs = {
       code: LoomFailureCode.CommandFailed,
       text: `prePush failed before validate: ${prePush.stderr || prePush.stdout}`,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs3);
   }
 
   if (request.remoteTask.presence === RemoteTaskPresence.Specified) {
-    const remote = runCommand({
+    const remoteArgs: RunCommandArgs = {
       command: 'task',
       args: ['remote', `TASK_NAME=${request.remoteTask.task}`],
       cwd: repoRoot,
-    });
+    };
+    const remote = runCommand(remoteArgs);
     if (remote.exitCode !== 0) {
-      loomFailureDetail({
+      const loomFailureDetailArgs2: LoomFailureDetailArgs = {
         code: LoomFailureCode.CommandFailed,
         text: `task remote failed: ${remote.stderr || remote.stdout}`,
-      });
+      };
+      loomFailureDetail(loomFailureDetailArgs2);
     }
   }
 
@@ -128,16 +140,18 @@ async function validate(args: PrLandValidateArgs): Promise<PrLandReport> {
   if (request.runFullE2e) {
     validateArgs.push('FULL_E2E=1');
   }
-  const validated = runCommand({
+  const validatedArgs: RunCommandArgs = {
     command: 'task',
     args: validateArgs,
     cwd: repoRoot,
-  });
+  };
+  const validated = runCommand(validatedArgs);
   if (validated.exitCode !== 0) {
-    loomFailureDetail({
+    const loomFailureDetailArgs: LoomFailureDetailArgs = {
       code: LoomFailureCode.CommandFailed,
       text: `task pr:validate failed: ${validated.stderr || validated.stdout}`,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs);
   }
 
   return {
@@ -161,11 +175,12 @@ type PrLandReadyArgs = {
 async function ready(args: PrLandReadyArgs): Promise<PrLandReport> {
   const { repoRoot, prNumber } = args;
 
-  const result = runCommand({
+  const resultArgs: RunCommandArgs = {
     command: 'task',
     args: ['pr:ready', `PR=${prNumber}`],
     cwd: repoRoot,
-  });
+  };
+  const result = runCommand(resultArgs);
   const passed = result.exitCode === 0;
   return {
     family: RequestFamily.PrLand,
@@ -189,7 +204,8 @@ type PrLandMergeCheckArgs = {
 async function mergeCheck(args: PrLandMergeCheckArgs): Promise<PrLandReport> {
   const { repoRoot, prNumber } = args;
 
-  const readiness = await ready({ repoRoot, prNumber });
+  const readinessArgs = { repoRoot, prNumber };
+  const readiness = await ready(readinessArgs);
   return {
     family: RequestFamily.PrLand,
     operation: PrLandOperation.MergeCheck,

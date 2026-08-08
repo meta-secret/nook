@@ -15,6 +15,7 @@ import {
 } from './enums.ts';
 import { stringifyYaml } from './yaml.ts';
 
+import type { ExternalPropertyArgs } from '../lib/guards.ts';
 export enum BlueprintOperationMarker {
   FamilyRoot = 'familyRoot',
 }
@@ -131,16 +132,17 @@ export function explainSyntaxFailure(
   const { receivedYaml, parseMessage } = args;
 
   const blueprint = loadBlueprint(DEFAULT_BLUEPRINT.blueprintPath);
+  const yamlUnifiedDiffArgs2 = {
+    blueprintPath: blueprint.blueprintPath,
+    blueprintYaml: blueprint.blueprintYaml,
+    receivedYaml,
+  };
   return {
     kind: BlueprintExplanationKind.Syntax,
     blueprintPath: blueprint.blueprintPath,
     blueprintYaml: blueprint.blueprintYaml,
     receivedYaml,
-    unifiedDiff: yamlUnifiedDiff({
-      blueprintPath: blueprint.blueprintPath,
-      blueprintYaml: blueprint.blueprintYaml,
-      receivedYaml,
-    }),
+    unifiedDiff: yamlUnifiedDiff(yamlUnifiedDiffArgs2),
     parseMessage,
   };
 }
@@ -151,16 +153,17 @@ export function explainAgainstBlueprint(
   const selected = selectBlueprint(received);
   const blueprint = loadBlueprint(selected.blueprintPath);
   const receivedYaml = stringifyYaml(received);
+  const yamlUnifiedDiffArgs = {
+    blueprintPath: blueprint.blueprintPath,
+    blueprintYaml: blueprint.blueprintYaml,
+    receivedYaml,
+  };
   return {
     kind: BlueprintExplanationKind.Structural,
     blueprintPath: blueprint.blueprintPath,
     blueprintYaml: blueprint.blueprintYaml,
     receivedYaml,
-    unifiedDiff: yamlUnifiedDiff({
-      blueprintPath: blueprint.blueprintPath,
-      blueprintYaml: blueprint.blueprintYaml,
-      receivedYaml,
-    }),
+    unifiedDiff: yamlUnifiedDiff(yamlUnifiedDiffArgs),
   };
 }
 
@@ -197,7 +200,11 @@ function selectBlueprint(received: ExternalValue): BlueprintRef {
     return DEFAULT_BLUEPRINT;
   }
   const family = familyKey as RequestFamily;
-  const payloadProperty = externalProperty({ record: received, key: family });
+  const payloadPropertyArgs: ExternalPropertyArgs = {
+    record: received,
+    key: family,
+  };
+  const payloadProperty = externalProperty(payloadPropertyArgs);
   if (
     (family === RequestFamily.AgentStats || family === RequestFamily.PrLand) &&
     payloadProperty.presence === ExternalPropertyPresence.Present &&

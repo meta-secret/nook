@@ -36,8 +36,9 @@ and [typescript-no-unknown.md](../dynamic-skills/typescript-no-unknown.md):
 - no authored `unknown`; untrusted data uses `ExternalValue` / `ExternalObject`
 - toolsList `inputSchema` values are typed `ObjectJsonSchema` (not raw object
   bags); field names come from field enums
-- enforced by ESLint `max-params: 1` and `no-restricted-types` in
-  `agentic-ai/loom`
+- call sites must not pass raw object literals; name a typed args value first
+- enforced by ESLint `max-params: 1`, `no-restricted-types`, and
+  `no-restricted-syntax` in `agentic-ai/loom`
 
 Enforced by `task preflight:typescript-state` across the repository, plus
 `task loom:verify` (includes ESLint) for Loom-local rules.

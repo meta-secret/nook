@@ -36,6 +36,7 @@ import { runSkillScaffold } from '../commands/skill-scaffold.ts';
 import { asExternalValue, type ExternalValue } from '../lib/guards.ts';
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
 
+import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 export type DiscoverableRequest = {
   readonly family: RequestFamily;
   readonly operation?: AgentStatsOperation | PrLandOperation;
@@ -197,10 +198,12 @@ export async function executeRequest(
         )) as ExternalValue,
       );
     case RequestFamily.ToolsList:
-    case RequestFamily.ToolsCall:
-      loomFailureDetail({
+    case RequestFamily.ToolsCall: {
+      const loomFailureDetailArgs: LoomFailureDetailArgs = {
         code: LoomFailureCode.ValidationFailed,
         text: `${request.family} is handled by the dispatcher`,
-      });
+      };
+      loomFailureDetail(loomFailureDetailArgs);
+    }
   }
 }

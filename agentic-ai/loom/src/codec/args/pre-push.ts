@@ -5,12 +5,17 @@ import {
   booleanJsonSchema,
   objectJsonSchema,
   type ObjectJsonSchema,
+  type ObjectJsonSchemaArgs,
 } from '../json-schema.ts';
 import {
   collectDecode,
   denyUnknownKeys,
   expectBoolean,
   expectObject,
+  type CollectDecodeArgs,
+  type DenyUnknownKeysArgs,
+  type ExpectFieldArgs,
+  type ExpectObjectArgs,
 } from '../object.ts';
 
 export enum PrePushField {
@@ -28,25 +33,29 @@ const ROOT = RequestFamily.PrePush;
 export function decodePrePushRequest(
   value: ExternalValue,
 ): DecodeOutcome<PrePushRequest> {
-  const object = expectObject({ value, path: ROOT });
+  const objectArgs: ExpectObjectArgs = { value, path: ROOT };
+  const object = expectObject(objectArgs);
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys({
+  const unknownArgs: DenyUnknownKeysArgs<PrePushField> = {
     record: object.value,
     fields: PrePushField,
     path: ROOT,
-  });
-  const stageHostUpdates = expectBoolean({
+  };
+  const unknown = denyUnknownKeys(unknownArgs);
+  const stageHostUpdatesArgs: ExpectFieldArgs<PrePushField> = {
     record: object.value,
     key: PrePushField.StageHostUpdates,
     path: ROOT,
-  });
-  const fetchOriginMain = expectBoolean({
+  };
+  const stageHostUpdates = expectBoolean(stageHostUpdatesArgs);
+  const fetchOriginMainArgs: ExpectFieldArgs<PrePushField> = {
     record: object.value,
     key: PrePushField.FetchOriginMain,
     path: ROOT,
-  });
+  };
+  const fetchOriginMain = expectBoolean(fetchOriginMainArgs);
   if (unknown.length > 0) {
     return decodeErr([
       ...unknown,
@@ -58,19 +67,23 @@ export function decodePrePushRequest(
         : []),
     ]);
   }
-  return collectDecode({
+  const collectDecodeArgs: CollectDecodeArgs<PrePushRequest> = {
     results: [stageHostUpdates, fetchOriginMain],
     build: () => ({
       stageHostUpdates: (stageHostUpdates as { value: boolean }).value,
       fetchOriginMain: (fetchOriginMain as { value: boolean }).value,
     }),
-  });
+  };
+  return collectDecode(collectDecodeArgs);
 }
 
-export const PRE_PUSH_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema({
+const prePushInputSchemaArgs: ObjectJsonSchemaArgs = {
   required: [PrePushField.StageHostUpdates, PrePushField.FetchOriginMain],
   properties: {
     [PrePushField.StageHostUpdates]: booleanJsonSchema(),
     [PrePushField.FetchOriginMain]: booleanJsonSchema(),
   },
-});
+};
+export const PRE_PUSH_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema(
+  prePushInputSchemaArgs,
+);

@@ -40,11 +40,12 @@ export function findBrokenRelativeLinks(
         if (withoutHash.length > 0) {
           const resolved = path.resolve(fileDir, withoutHash);
           if (!existsSync(resolved)) {
-            broken.push({
+            const pushArgs = {
               file: path.relative(repoRoot, filePath),
               line: i + 1,
               target,
-            });
+            };
+            broken.push(pushArgs);
           }
         }
       }

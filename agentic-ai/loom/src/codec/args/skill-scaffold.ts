@@ -7,18 +7,24 @@ import {
   decodeOk,
   fieldError,
   type DecodeOutcome,
+  type FieldErrorArgs,
 } from '../field-error.ts';
 import {
   booleanJsonSchema,
   objectJsonSchema,
   patternStringJsonSchema,
   type ObjectJsonSchema,
+  type ObjectJsonSchemaArgs,
+  type PatternStringJsonSchemaArgs,
 } from '../json-schema.ts';
 import {
   denyUnknownKeys,
   expectBoolean,
   expectObject,
   expectString,
+  type DenyUnknownKeysArgs,
+  type ExpectFieldArgs,
+  type ExpectObjectArgs,
 } from '../object.ts';
 
 export enum SkillScaffoldField {
@@ -37,25 +43,29 @@ const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export function decodeSkillScaffoldRequest(
   value: ExternalValue,
 ): DecodeOutcome<SkillScaffoldRequest> {
-  const object = expectObject({ value, path: ROOT });
+  const objectArgs: ExpectObjectArgs = { value, path: ROOT };
+  const object = expectObject(objectArgs);
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys({
+  const unknownArgs: DenyUnknownKeysArgs<SkillScaffoldField> = {
     record: object.value,
     fields: SkillScaffoldField,
     path: ROOT,
-  });
-  const skillSlug = expectString({
+  };
+  const unknown = denyUnknownKeys(unknownArgs);
+  const skillSlugArgs: ExpectFieldArgs<SkillScaffoldField> = {
     record: object.value,
     key: SkillScaffoldField.SkillSlug,
     path: ROOT,
-  });
-  const createExecutableWrappers = expectBoolean({
+  };
+  const skillSlug = expectString(skillSlugArgs);
+  const createExecutableWrappersArgs: ExpectFieldArgs<SkillScaffoldField> = {
     record: object.value,
     key: SkillScaffoldField.CreateExecutableWrappers,
     path: ROOT,
-  });
+  };
+  const createExecutableWrappers = expectBoolean(createExecutableWrappersArgs);
   const errors = [
     ...unknown,
     ...(skillSlug.status === DecodeStatus.Failed ? skillSlug.errors : []),
@@ -64,32 +74,37 @@ export function decodeSkillScaffoldRequest(
       : []),
   ];
   if (skillSlug.status === DecodeStatus.Ok && !SLUG_RE.test(skillSlug.value)) {
-    errors.push(
-      fieldError({
-        path: `${ROOT}.${SkillScaffoldField.SkillSlug}`,
-        issue: FieldIssue.ExpectedKebabCaseSlug,
-      }),
-    );
+    const fieldErrorArgs: FieldErrorArgs = {
+      path: `${ROOT}.${SkillScaffoldField.SkillSlug}`,
+      issue: FieldIssue.ExpectedKebabCaseSlug,
+    };
+    errors.push(fieldError(fieldErrorArgs));
   }
   if (errors.length > 0) {
     return decodeErr(errors);
   }
-  return decodeOk({
+  const request: SkillScaffoldRequest = {
     skillSlug: (skillSlug as { value: string }).value,
     createExecutableWrappers: (createExecutableWrappers as { value: boolean })
       .value,
-  });
+  };
+  return decodeOk(request);
 }
 
-export const SKILL_SCAFFOLD_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema({
+const skillSlugPatternArgs: PatternStringJsonSchemaArgs = {
+  pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
+};
+const skillScaffoldInputSchemaArgs: ObjectJsonSchemaArgs = {
   required: [
     SkillScaffoldField.SkillSlug,
     SkillScaffoldField.CreateExecutableWrappers,
   ],
   properties: {
-    [SkillScaffoldField.SkillSlug]: patternStringJsonSchema({
-      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
-    }),
+    [SkillScaffoldField.SkillSlug]:
+      patternStringJsonSchema(skillSlugPatternArgs),
     [SkillScaffoldField.CreateExecutableWrappers]: booleanJsonSchema(),
   },
-});
+};
+export const SKILL_SCAFFOLD_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema(
+  skillScaffoldInputSchemaArgs,
+);

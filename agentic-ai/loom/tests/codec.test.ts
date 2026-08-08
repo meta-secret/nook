@@ -6,11 +6,13 @@ import { DecodeStatus } from '../src/codec/field-error.ts';
 import { decodeLoomRequest } from '../src/codec/request.ts';
 import { dispatchValue } from '../src/tools/dispatch.ts';
 
+import type { DecodeAgentStatsAssemblePayloadArgs } from '../src/codec/args/agent-stats.ts';
 describe('loom domain request codec', () => {
   test('decodes a valid prePush request', () => {
-    const decoded = decodeLoomRequest({
+    const decodedArgs6 = {
       prePush: { stageHostUpdates: true, fetchOriginMain: true },
-    });
+    };
+    const decoded = decodeLoomRequest(decodedArgs6);
     expect(decoded.status).toBe(DecodeStatus.Ok);
     if (decoded.status === DecodeStatus.Ok) {
       expect(decoded.value.family).toBe(RequestFamily.PrePush);
@@ -18,7 +20,7 @@ describe('loom domain request codec', () => {
   });
 
   test('decodes nested agentStats.assemble request', () => {
-    const decoded = decodeLoomRequest({
+    const decodedArgs5 = {
       agentStats: {
         assemble: {
           prNumber: 12,
@@ -27,7 +29,8 @@ describe('loom domain request codec', () => {
           includeTestInventory: false,
         },
       },
-    });
+    };
+    const decoded = decodeLoomRequest(decodedArgs5);
     expect(decoded.status).toBe(DecodeStatus.Ok);
     if (decoded.status === DecodeStatus.Ok) {
       expect(decoded.value.family).toBe(RequestFamily.AgentStats);
@@ -35,10 +38,11 @@ describe('loom domain request codec', () => {
   });
 
   test('rejects generic arguments envelopes', () => {
-    const decoded = decodeLoomRequest({
+    const decodedArgs4 = {
       name: 'agent-stats',
       arguments: { action: 'assemble', pr: 123 },
-    });
+    };
+    const decoded = decodeLoomRequest(decodedArgs4);
     expect(decoded.status).toBe(DecodeStatus.Failed);
     if (decoded.status === DecodeStatus.Failed) {
       expect(decoded.errors.some((entry) => entry.path === 'name')).toBe(true);
@@ -49,10 +53,11 @@ describe('loom domain request codec', () => {
   });
 
   test('rejects wrong prePush field types', () => {
-    const decoded = decodePrePushRequest({
+    const decodedArgs3 = {
       stageHostUpdates: 'yes',
       fetchOriginMain: true,
-    });
+    };
+    const decoded = decodePrePushRequest(decodedArgs3);
     expect(decoded.status).toBe(DecodeStatus.Failed);
     if (decoded.status === DecodeStatus.Failed) {
       expect(
@@ -64,7 +69,7 @@ describe('loom domain request codec', () => {
   });
 
   test('decodes agentStats assemble payload', () => {
-    const decoded = decodeAgentStatsAssemblePayload({
+    const decodedArgs2: DecodeAgentStatsAssemblePayloadArgs = {
       value: {
         prNumber: 12,
         scratchPath: '/tmp/a.json',
@@ -72,12 +77,13 @@ describe('loom domain request codec', () => {
         includeTestInventory: false,
       },
       path: 'agentStats.assemble',
-    });
+    };
+    const decoded = decodeAgentStatsAssemblePayload(decodedArgs2);
     expect(decoded.status).toBe(DecodeStatus.Ok);
   });
 
   test('rejects unknown agentStats assemble fields', () => {
-    const decoded = decodeAgentStatsAssemblePayload({
+    const decodedArgs: DecodeAgentStatsAssemblePayloadArgs = {
       value: {
         prNumber: 12,
         scratchPath: '/tmp/a.json',
@@ -86,7 +92,8 @@ describe('loom domain request codec', () => {
         action: 'assemble',
       },
       path: 'agentStats.assemble',
-    });
+    };
+    const decoded = decodeAgentStatsAssemblePayload(decodedArgs);
     expect(decoded.status).toBe(DecodeStatus.Failed);
     if (decoded.status === DecodeStatus.Failed) {
       expect(
@@ -100,9 +107,10 @@ describe('loom domain request codec', () => {
 
 describe('loom dispatch protocol', () => {
   test('toolsList returns discoverable domain requests', async () => {
-    const outcome = await dispatchValue({
+    const outcomeArgs3 = {
       toolsList: {},
-    });
+    };
+    const outcome = await dispatchValue(outcomeArgs3);
     expect(outcome.exitCode).toBe(0);
     expect(outcome.body.ok).toBe(true);
     if (outcome.body.ok) {
@@ -121,9 +129,10 @@ describe('loom dispatch protocol', () => {
   });
 
   test('unknown root key returns decode errors', async () => {
-    const outcome = await dispatchValue({
+    const outcomeArgs2 = {
       notARequest: {},
-    });
+    };
+    const outcome = await dispatchValue(outcomeArgs2);
     expect(outcome.exitCode).toBe(2);
     expect(outcome.body.ok).toBe(false);
     if (!outcome.body.ok) {
@@ -133,11 +142,12 @@ describe('loom dispatch protocol', () => {
   });
 
   test('toolsCall nests into prePush decode errors', async () => {
-    const outcome = await dispatchValue({
+    const outcomeArgs = {
       toolsCall: {
         prePush: { stageHostUpdates: true },
       },
-    });
+    };
+    const outcome = await dispatchValue(outcomeArgs);
     expect(outcome.exitCode).toBe(2);
     expect(outcome.body.ok).toBe(false);
     if (!outcome.body.ok) {

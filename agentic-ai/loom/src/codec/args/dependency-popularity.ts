@@ -1,16 +1,13 @@
 import type { ExternalValue } from '../../lib/guards.ts';
 import { RequestFamily } from '../enums.ts';
-import {
-  DecodeStatus,
-  decodeErr,
-  decodeOk,
-  type DecodeOutcome,
-} from '../field-error.ts';
+import { DecodeStatus, decodeErr, type DecodeOutcome } from '../field-error.ts';
 import {
   booleanJsonSchema,
   integerJsonSchema,
   objectJsonSchema,
+  type IntegerJsonSchemaArgs,
   type ObjectJsonSchema,
+  type ObjectJsonSchemaArgs,
 } from '../json-schema.ts';
 import {
   collectDecode,
@@ -18,6 +15,10 @@ import {
   expectBoolean,
   expectObject,
   expectPositiveInt,
+  type CollectDecodeArgs,
+  type DenyUnknownKeysArgs,
+  type ExpectFieldArgs,
+  type ExpectObjectArgs,
 } from '../object.ts';
 
 export enum DependencyPopularityField {
@@ -41,40 +42,54 @@ const ROOT = RequestFamily.DependencyPopularity;
 export function decodeDependencyPopularityRequest(
   value: ExternalValue,
 ): DecodeOutcome<DependencyPopularityRequest> {
-  const object = expectObject({ value, path: ROOT });
+  const objectArgs: ExpectObjectArgs = { value, path: ROOT };
+  const object = expectObject(objectArgs);
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys({
+  const unknownArgs: DenyUnknownKeysArgs<DependencyPopularityField> = {
     record: object.value,
     fields: DependencyPopularityField,
     path: ROOT,
-  });
-  const includeRepositoryManifests = expectBoolean({
-    record: object.value,
-    key: DependencyPopularityField.IncludeRepositoryManifests,
-    path: ROOT,
-  });
-  const minNpmWeeklyDownloads = expectPositiveInt({
-    record: object.value,
-    key: DependencyPopularityField.MinNpmWeeklyDownloads,
-    path: ROOT,
-  });
-  const minGitHubStars = expectPositiveInt({
+  };
+  const unknown = denyUnknownKeys(unknownArgs);
+  const includeRepositoryManifestsArgs: ExpectFieldArgs<DependencyPopularityField> =
+    {
+      record: object.value,
+      key: DependencyPopularityField.IncludeRepositoryManifests,
+      path: ROOT,
+    };
+  const includeRepositoryManifests = expectBoolean(
+    includeRepositoryManifestsArgs,
+  );
+  const minNpmWeeklyDownloadsArgs: ExpectFieldArgs<DependencyPopularityField> =
+    {
+      record: object.value,
+      key: DependencyPopularityField.MinNpmWeeklyDownloads,
+      path: ROOT,
+    };
+  const minNpmWeeklyDownloads = expectPositiveInt(minNpmWeeklyDownloadsArgs);
+  const minGitHubStarsArgs: ExpectFieldArgs<DependencyPopularityField> = {
     record: object.value,
     key: DependencyPopularityField.MinGitHubStars,
     path: ROOT,
-  });
-  const minCratesIoDownloads = expectPositiveInt({
+  };
+  const minGitHubStars = expectPositiveInt(minGitHubStarsArgs);
+  const minCratesIoDownloadsArgs: ExpectFieldArgs<DependencyPopularityField> = {
     record: object.value,
     key: DependencyPopularityField.MinCratesIoDownloads,
     path: ROOT,
-  });
-  const minCratesIoRecentDownloads = expectPositiveInt({
-    record: object.value,
-    key: DependencyPopularityField.MinCratesIoRecentDownloads,
-    path: ROOT,
-  });
+  };
+  const minCratesIoDownloads = expectPositiveInt(minCratesIoDownloadsArgs);
+  const minCratesIoRecentDownloadsArgs: ExpectFieldArgs<DependencyPopularityField> =
+    {
+      record: object.value,
+      key: DependencyPopularityField.MinCratesIoRecentDownloads,
+      path: ROOT,
+    };
+  const minCratesIoRecentDownloads = expectPositiveInt(
+    minCratesIoRecentDownloadsArgs,
+  );
   const errors = [
     ...unknown,
     ...(includeRepositoryManifests.status === DecodeStatus.Failed
@@ -96,7 +111,7 @@ export function decodeDependencyPopularityRequest(
   if (errors.length > 0) {
     return decodeErr(errors);
   }
-  return collectDecode({
+  const collectDecodeArgs: CollectDecodeArgs<DependencyPopularityRequest> = {
     results: [
       includeRepositoryManifests,
       minNpmWeeklyDownloads,
@@ -115,34 +130,34 @@ export function decodeDependencyPopularityRequest(
         minCratesIoRecentDownloads as { value: number }
       ).value,
     }),
-  });
+  };
+  return collectDecode(collectDecodeArgs);
 }
 
+const positiveIntegerSchemaArgs: IntegerJsonSchemaArgs = { minimum: 1 };
+const dependencyPopularityInputSchemaArgs: ObjectJsonSchemaArgs = {
+  required: [
+    DependencyPopularityField.IncludeRepositoryManifests,
+    DependencyPopularityField.MinNpmWeeklyDownloads,
+    DependencyPopularityField.MinGitHubStars,
+    DependencyPopularityField.MinCratesIoDownloads,
+    DependencyPopularityField.MinCratesIoRecentDownloads,
+  ],
+  properties: {
+    [DependencyPopularityField.IncludeRepositoryManifests]: booleanJsonSchema(),
+    [DependencyPopularityField.MinNpmWeeklyDownloads]: integerJsonSchema(
+      positiveIntegerSchemaArgs,
+    ),
+    [DependencyPopularityField.MinGitHubStars]: integerJsonSchema(
+      positiveIntegerSchemaArgs,
+    ),
+    [DependencyPopularityField.MinCratesIoDownloads]: integerJsonSchema(
+      positiveIntegerSchemaArgs,
+    ),
+    [DependencyPopularityField.MinCratesIoRecentDownloads]: integerJsonSchema(
+      positiveIntegerSchemaArgs,
+    ),
+  },
+};
 export const DEPENDENCY_POPULARITY_INPUT_SCHEMA: ObjectJsonSchema =
-  objectJsonSchema({
-    required: [
-      DependencyPopularityField.IncludeRepositoryManifests,
-      DependencyPopularityField.MinNpmWeeklyDownloads,
-      DependencyPopularityField.MinGitHubStars,
-      DependencyPopularityField.MinCratesIoDownloads,
-      DependencyPopularityField.MinCratesIoRecentDownloads,
-    ],
-    properties: {
-      [DependencyPopularityField.IncludeRepositoryManifests]:
-        booleanJsonSchema(),
-      [DependencyPopularityField.MinNpmWeeklyDownloads]: integerJsonSchema({
-        minimum: 1,
-      }),
-      [DependencyPopularityField.MinGitHubStars]: integerJsonSchema({
-        minimum: 1,
-      }),
-      [DependencyPopularityField.MinCratesIoDownloads]: integerJsonSchema({
-        minimum: 1,
-      }),
-      [DependencyPopularityField.MinCratesIoRecentDownloads]: integerJsonSchema(
-        {
-          minimum: 1,
-        },
-      ),
-    },
-  });
+  objectJsonSchema(dependencyPopularityInputSchemaArgs);

@@ -16,7 +16,7 @@ fn read(root: &Path, path: &str) -> String {
 }
 
 #[test]
-fn loom_verify_enforces_single_parameter_and_no_unknown_eslint_rules() {
+fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let root = repository_root();
     let manifest = read(&root, "agentic-ai/loom/package.json");
     for required in [
@@ -35,6 +35,9 @@ fn loom_verify_enforces_single_parameter_and_no_unknown_eslint_rules() {
         "'max-params': ['error', { max: 1 }]",
         "'@typescript-eslint/no-restricted-types'",
         "unknown:",
+        "'no-restricted-syntax'",
+        "CallExpression[arguments.length=1] > ObjectExpression",
+        "named typed value first",
         "files: ['src/**/*.ts', 'tests/**/*.ts']",
         "ExternalValue / ExternalObject",
     ] {

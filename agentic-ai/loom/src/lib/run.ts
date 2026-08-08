@@ -25,13 +25,14 @@ export function runCommand(input: RunCommandArgs): CommandOutput {
     env: process.env,
   });
   if (result.error) {
-    throw new LoomFailure({
+    const loomFailureArgs = {
       code: LoomFailureCode.CommandFailedToStart,
       detail: {
         kind: LoomFailureDetailKind.Text,
         text: `${command} failed to start: ${result.error.message}`,
       },
-    });
+    };
+    throw new LoomFailure(loomFailureArgs);
   }
   const exitCode = typeof result.status === 'number' ? result.status : 1;
   return {

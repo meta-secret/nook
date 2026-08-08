@@ -74,7 +74,11 @@ function defaultMessage(code: LoomFailureCode): string {
 }
 
 export function loomFailure(code: LoomFailureCode): never {
-  throw new LoomFailure({ code, detail: { kind: LoomFailureDetailKind.None } });
+  const loomFailureArgs2: LoomFailureArgs = {
+    code,
+    detail: { kind: LoomFailureDetailKind.None },
+  };
+  throw new LoomFailure(loomFailureArgs2);
 }
 
 export type LoomFailureDetailArgs = {
@@ -85,11 +89,12 @@ export type LoomFailureDetailArgs = {
 export function loomFailureDetail(args: LoomFailureDetailArgs): never {
   const { code, text } = args;
 
-  throw new LoomFailure({
+  const loomFailureArgs: LoomFailureArgs = {
     code,
     detail: {
       kind: LoomFailureDetailKind.Text,
       text,
     },
-  });
+  };
+  throw new LoomFailure(loomFailureArgs);
 }

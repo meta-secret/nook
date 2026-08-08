@@ -12,8 +12,14 @@ import {
   expectObject,
   mapDecode,
   PR_LAND_OPERATIONS,
+  type ExpectObjectArgs,
+  type MapDecodeArgs,
 } from './object.ts';
-
+import type { JoinPathArgs } from './field-error.ts';
+import type {
+  DecodePrLandPrPayloadArgs,
+  DecodePrLandValidatePayloadArgs,
+} from './args/pr-land.ts';
 export type PrLandLoomRequest =
   | {
       readonly family: RequestFamily.PrLand;
@@ -46,72 +52,93 @@ export function decodePrLandFamily(
 ): DecodeOutcome<PrLandLoomRequest> {
   const { value, path } = args;
 
-  const basePath = joinPath({ base: path, key: RequestFamily.PrLand });
-  const object = expectObject({ value, path: basePath });
+  const basePathArgs: JoinPathArgs = { base: path, key: RequestFamily.PrLand };
+  const basePath = joinPath(basePathArgs);
+  const objectArgs: ExpectObjectArgs = { value, path: basePath };
+  const object = expectObject(objectArgs);
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const selected = decodeExactlyOneOperation({
+  const selectedArgs = {
     record: object.value,
     path: basePath,
     operations: PR_LAND_OPERATIONS,
-  });
+  };
+  const selected = decodeExactlyOneOperation(selectedArgs);
   if (selected.status === DecodeStatus.Failed) {
     return selected;
   }
-  const operationPath = joinPath({
+  const operationPathArgs: JoinPathArgs = {
     base: basePath,
     key: selected.value.operation,
-  });
+  };
+  const operationPath = joinPath(operationPathArgs);
   switch (selected.value.operation) {
-    case PrLandOperation.Status:
-      return mapDecode({
-        outcome: decodePrLandPrPayload({
-          value: selected.value.payload,
-          path: operationPath,
-        }),
-        build: (status) => ({
-          family: RequestFamily.PrLand,
-          operation: PrLandOperation.Status,
-          status,
-        }),
-      });
-    case PrLandOperation.Validate:
-      return mapDecode({
-        outcome: decodePrLandValidatePayload({
-          value: selected.value.payload,
-          path: operationPath,
-        }),
+    case PrLandOperation.Status: {
+      const decodePrLandPrPayloadArgs3: DecodePrLandPrPayloadArgs = {
+        value: selected.value.payload,
+        path: operationPath,
+      };
+      const mapDecodeArgs4: MapDecodeArgs<PrLandPrRequest, PrLandLoomRequest> =
+        {
+          outcome: decodePrLandPrPayload(decodePrLandPrPayloadArgs3),
+          build: (status) => ({
+            family: RequestFamily.PrLand,
+            operation: PrLandOperation.Status,
+            status,
+          }),
+        };
+      return mapDecode(mapDecodeArgs4);
+    }
+    case PrLandOperation.Validate: {
+      const decodePrLandValidatePayloadArgs: DecodePrLandValidatePayloadArgs = {
+        value: selected.value.payload,
+        path: operationPath,
+      };
+      const mapDecodeArgs3: MapDecodeArgs<
+        PrLandValidateRequest,
+        PrLandLoomRequest
+      > = {
+        outcome: decodePrLandValidatePayload(decodePrLandValidatePayloadArgs),
         build: (validate) => ({
           family: RequestFamily.PrLand,
           operation: PrLandOperation.Validate,
           validate,
         }),
-      });
-    case PrLandOperation.Ready:
-      return mapDecode({
-        outcome: decodePrLandPrPayload({
-          value: selected.value.payload,
-          path: operationPath,
-        }),
-        build: (ready) => ({
-          family: RequestFamily.PrLand,
-          operation: PrLandOperation.Ready,
-          ready,
-        }),
-      });
-    case PrLandOperation.MergeCheck:
-      return mapDecode({
-        outcome: decodePrLandPrPayload({
-          value: selected.value.payload,
-          path: operationPath,
-        }),
+      };
+      return mapDecode(mapDecodeArgs3);
+    }
+    case PrLandOperation.Ready: {
+      const decodePrLandPrPayloadArgs2: DecodePrLandPrPayloadArgs = {
+        value: selected.value.payload,
+        path: operationPath,
+      };
+      const mapDecodeArgs2: MapDecodeArgs<PrLandPrRequest, PrLandLoomRequest> =
+        {
+          outcome: decodePrLandPrPayload(decodePrLandPrPayloadArgs2),
+          build: (ready) => ({
+            family: RequestFamily.PrLand,
+            operation: PrLandOperation.Ready,
+            ready,
+          }),
+        };
+      return mapDecode(mapDecodeArgs2);
+    }
+    case PrLandOperation.MergeCheck: {
+      const decodePrLandPrPayloadArgs: DecodePrLandPrPayloadArgs = {
+        value: selected.value.payload,
+        path: operationPath,
+      };
+      const mapDecodeArgs: MapDecodeArgs<PrLandPrRequest, PrLandLoomRequest> = {
+        outcome: decodePrLandPrPayload(decodePrLandPrPayloadArgs),
         build: (mergeCheck) => ({
           family: RequestFamily.PrLand,
           operation: PrLandOperation.MergeCheck,
           mergeCheck,
         }),
-      });
+      };
+      return mapDecode(mapDecodeArgs);
+    }
   }
 }
 

@@ -31,16 +31,24 @@ import {
   joinPath,
   type DecodeOutcome,
 } from './field-error.ts';
-import { expectObject, mapDecode } from './object.ts';
+import {
+  expectObject,
+  mapDecode,
+  type ExpectObjectArgs,
+  type MapDecodeArgs,
+} from './object.ts';
 import {
   decodeAgentStatsFamily,
   type AgentStatsLoomRequest,
+  type DecodeAgentStatsFamilyArgs,
 } from './request-agent-stats.ts';
 import {
   decodePrLandFamily,
+  type DecodePrLandFamilyArgs,
   type PrLandLoomRequest,
 } from './request-pr-land.ts';
-
+import type { FieldErrorArgs, JoinPathArgs } from './field-error.ts';
+import type { ExternalPropertyArgs } from '../lib/guards.ts';
 export type LoomRequest =
   | { readonly family: RequestFamily.PrePush; readonly prePush: PrePushRequest }
   | {
@@ -80,7 +88,8 @@ const ROOT_FAMILIES: readonly RequestFamily[] = [
 export function decodeLoomRequest(
   value: ExternalValue,
 ): DecodeOutcome<LoomRequest> {
-  return decodeLoomRequestAt({ value, path: '', allowToolsCall: true });
+  const decodeLoomRequestAtArgs = { value, path: '', allowToolsCall: true };
+  return decodeLoomRequestAt(decodeLoomRequestAtArgs);
 }
 
 type DecodeLoomRequestAtArgs = {
@@ -94,7 +103,8 @@ function decodeLoomRequestAt(
 ): DecodeOutcome<LoomRequest> {
   const { value, path, allowToolsCall } = args;
 
-  const object = expectObject({ value, path });
+  const objectArgs: ExpectObjectArgs = { value, path };
+  const object = expectObject(objectArgs);
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
@@ -105,22 +115,23 @@ function decodeLoomRequestAt(
   const unknownKeys = keys.filter(
     (key) => !ROOT_FAMILIES.includes(key as RequestFamily),
   );
-  const errors = unknownKeys.map((key) =>
-    fieldError({
-      path: joinPath({ base: path, key }),
+  const errors = unknownKeys.map((key) => {
+    const joinPathArgs5: JoinPathArgs = { base: path, key };
+    const fieldErrorArgs5: FieldErrorArgs = {
+      path: joinPath(joinPathArgs5),
       issue: FieldIssue.UnknownField,
-    }),
-  );
+    };
+    return fieldError(fieldErrorArgs5);
+  });
   if (domainKeys.length !== 1) {
-    errors.push(
-      fieldError({
-        path: path.length === 0 ? '' : path,
-        issue: FieldIssue.ExpectedExactlyOneDomainKey,
-        detail: fieldDetailText(
-          `expected exactly one domain request key; known: ${ROOT_FAMILIES.join(', ')}`,
-        ),
-      }),
-    );
+    const fieldErrorArgs4: FieldErrorArgs = {
+      path: path.length === 0 ? '' : path,
+      issue: FieldIssue.ExpectedExactlyOneDomainKey,
+      detail: fieldDetailText(
+        `expected exactly one domain request key; known: ${ROOT_FAMILIES.join(', ')}`,
+      ),
+    };
+    errors.push(fieldError(fieldErrorArgs4));
     return decodeErr(errors);
   }
   if (errors.length > 0) {
@@ -128,30 +139,32 @@ function decodeLoomRequestAt(
   }
   const family = domainKeys[0] as RequestFamily;
   if (family === RequestFamily.ToolsCall && !allowToolsCall) {
-    return decodeErr([
-      fieldError({
-        path: joinPath({ base: path, key: family }),
-        issue: FieldIssue.NestedToolsCallNotAllowed,
-      }),
-    ]);
+    const joinPathArgs4: JoinPathArgs = { base: path, key: family };
+    const fieldErrorArgs3: FieldErrorArgs = {
+      path: joinPath(joinPathArgs4),
+      issue: FieldIssue.NestedToolsCallNotAllowed,
+    };
+    return decodeErr([fieldError(fieldErrorArgs3)]);
   }
-  const payloadProperty = externalProperty({
+  const payloadPropertyArgs: ExternalPropertyArgs = {
     record: object.value,
     key: family,
-  });
+  };
+  const payloadProperty = externalProperty(payloadPropertyArgs);
   if (payloadProperty.presence === ExternalPropertyPresence.Absent) {
-    return decodeErr([
-      fieldError({
-        path: joinPath({ base: path, key: family }),
-        issue: FieldIssue.MissingRequiredField,
-      }),
-    ]);
+    const joinPathArgs3: JoinPathArgs = { base: path, key: family };
+    const fieldErrorArgs2: FieldErrorArgs = {
+      path: joinPath(joinPathArgs3),
+      issue: FieldIssue.MissingRequiredField,
+    };
+    return decodeErr([fieldError(fieldErrorArgs2)]);
   }
-  return decodeFamily({
+  const decodeFamilyArgs = {
     family,
     payload: payloadProperty.value,
     path,
-  });
+  };
+  return decodeFamily(decodeFamilyArgs);
 }
 
 type DecodeFamilyArgs = {
@@ -166,64 +179,91 @@ function decodeFamily(args: DecodeFamilyArgs): DecodeOutcome<LoomRequest> {
   switch (family) {
     case RequestFamily.PrePush: {
       const decoded = decodePrePushRequest(payload);
-      return mapDecode({
+      const mapDecodeArgs6: MapDecodeArgs<PrePushRequest, LoomRequest> = {
         outcome: decoded,
-        build: (prePush) => ({ family, prePush }),
-      });
+        build: (prePush) => ({ family: RequestFamily.PrePush, prePush }),
+      };
+      return mapDecode(mapDecodeArgs6);
     }
     case RequestFamily.CortexAudit: {
       const decoded = decodeCortexAuditRequest(payload);
-      return mapDecode({
+      const mapDecodeArgs5: MapDecodeArgs<CortexAuditRequest, LoomRequest> = {
         outcome: decoded,
-        build: (cortexAudit) => ({ family, cortexAudit }),
-      });
+        build: (cortexAudit) => ({
+          family: RequestFamily.CortexAudit,
+          cortexAudit,
+        }),
+      };
+      return mapDecode(mapDecodeArgs5);
     }
     case RequestFamily.SkillScaffold: {
       const decoded = decodeSkillScaffoldRequest(payload);
-      return mapDecode({
+      const mapDecodeArgs4: MapDecodeArgs<SkillScaffoldRequest, LoomRequest> = {
         outcome: decoded,
-        build: (skillScaffold) => ({ family, skillScaffold }),
-      });
+        build: (skillScaffold) => ({
+          family: RequestFamily.SkillScaffold,
+          skillScaffold,
+        }),
+      };
+      return mapDecode(mapDecodeArgs4);
     }
-    case RequestFamily.AgentStats:
-      return decodeAgentStatsFamily({ value: payload, path });
-    case RequestFamily.PrLand:
-      return decodePrLandFamily({ value: payload, path });
+    case RequestFamily.AgentStats: {
+      const decodeAgentStatsFamilyArgs: DecodeAgentStatsFamilyArgs = {
+        value: payload,
+        path,
+      };
+      return decodeAgentStatsFamily(decodeAgentStatsFamilyArgs);
+    }
+    case RequestFamily.PrLand: {
+      const decodePrLandFamilyArgs: DecodePrLandFamilyArgs = {
+        value: payload,
+        path,
+      };
+      return decodePrLandFamily(decodePrLandFamilyArgs);
+    }
     case RequestFamily.DependencyPopularity: {
       const decoded = decodeDependencyPopularityRequest(payload);
-      return mapDecode({
+      const mapDecodeArgs3: MapDecodeArgs<
+        DependencyPopularityRequest,
+        LoomRequest
+      > = {
         outcome: decoded,
         build: (dependencyPopularity) => ({
-          family,
+          family: RequestFamily.DependencyPopularity,
           dependencyPopularity,
         }),
-      });
+      };
+      return mapDecode(mapDecodeArgs3);
     }
     case RequestFamily.ToolsList: {
       const decoded = decodeToolsListRequest(payload);
-      return mapDecode({
+      const mapDecodeArgs2: MapDecodeArgs<ToolsListRequest, LoomRequest> = {
         outcome: decoded,
-        build: (toolsList) => ({ family, toolsList }),
-      });
+        build: (toolsList) => ({ family: RequestFamily.ToolsList, toolsList }),
+      };
+      return mapDecode(mapDecodeArgs2);
     }
     case RequestFamily.ToolsCall: {
       if (!isRecord(payload)) {
-        return decodeErr([
-          fieldError({
-            path: joinPath({ base: path, key: family }),
-            issue: FieldIssue.ExpectedNestedDomainRequest,
-          }),
-        ]);
+        const joinPathArgs2: JoinPathArgs = { base: path, key: family };
+        const fieldErrorArgs: FieldErrorArgs = {
+          path: joinPath(joinPathArgs2),
+          issue: FieldIssue.ExpectedNestedDomainRequest,
+        };
+        return decodeErr([fieldError(fieldErrorArgs)]);
       }
-      const nested = decodeLoomRequestAt({
+      const joinPathArgs: JoinPathArgs = { base: path, key: family };
+      const nestedArgs: DecodeLoomRequestAtArgs = {
         value: payload,
-        path: joinPath({ base: path, key: family }),
+        path: joinPath(joinPathArgs),
         allowToolsCall: false,
-      });
-      return mapDecode({
+      };
+      const nested = decodeLoomRequestAt(nestedArgs);
+      const mapDecodeArgs: MapDecodeArgs<LoomRequest, LoomRequest> = {
         outcome: nested,
-        build: (toolsCall) => ({ family, toolsCall }),
-      });
+        build: (toolsCall) => ({ family: RequestFamily.ToolsCall, toolsCall }),
+      };
+      return mapDecode(mapDecodeArgs);
     }
   }
 }

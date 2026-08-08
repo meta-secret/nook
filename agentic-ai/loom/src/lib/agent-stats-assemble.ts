@@ -17,6 +17,9 @@ import {
   loomFailureDetail,
 } from '../loom-failure.ts';
 
+import type { ExternalPropertyArgs } from './guards.ts';
+import type { RunCommandArgs } from './run.ts';
+import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 export type ScratchEventLog = {
   readonly started_at: string;
   readonly change_surface: string;
@@ -61,60 +64,71 @@ export function loadScratchEventLog(scratchPath: string): ScratchEventLog {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    loomFailureDetail({
+    const loomFailureDetailArgs14: LoomFailureDetailArgs = {
       code: LoomFailureCode.ScratchLogInvalid,
       text: `Failed to read scratch event log: ${message}`,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs14);
   }
   if (!isRecord(parsed)) {
-    loomFailureDetail({
+    const loomFailureDetailArgs13: LoomFailureDetailArgs = {
       code: LoomFailureCode.ScratchLogInvalid,
       text: 'Scratch event log must be a JSON object',
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs13);
   }
-  const startedAt = requireExternalString({
+  const startedAtArgs = {
     record: parsed,
     key: 'started_at',
     failure: 'scratch.started_at must be a non-empty string',
-  });
-  const changeSurface = requireExternalString({
+  };
+  const startedAt = requireExternalString(startedAtArgs);
+  const changeSurfaceArgs = {
     record: parsed,
     key: 'change_surface',
     failure: 'scratch.change_surface must be a non-empty string',
-  });
-  const localExecutions = requireExternalArray({
+  };
+  const changeSurface = requireExternalString(changeSurfaceArgs);
+  const localExecutionsArgs = {
     record: parsed,
     key: 'local_executions',
     failure: 'scratch.local_executions must be an array',
-  });
-  const prRetriggers = requireExternalArray({
+  };
+  const localExecutions = requireExternalArray(localExecutionsArgs);
+  const prRetriggersArgs = {
     record: parsed,
     key: 'pr_retriggers',
     failure: 'scratch.pr_retriggers must be an array',
-  });
-  const mergeAttempts = requireExternalArray({
+  };
+  const prRetriggers = requireExternalArray(prRetriggersArgs);
+  const mergeAttemptsArgs = {
     record: parsed,
     key: 'merge_attempts',
     failure: 'scratch.merge_attempts must be an array',
-  });
-  const comparison = requireExternalObject({
+  };
+  const mergeAttempts = requireExternalArray(mergeAttemptsArgs);
+  const comparisonArgs = {
     record: parsed,
     key: 'comparison',
     failure: 'scratch.comparison must be an object',
-  });
-  const wasteAssessment = requireExternalObject({
+  };
+  const comparison = requireExternalObject(comparisonArgs);
+  const wasteAssessmentArgs = {
     record: parsed,
     key: 'waste_assessment',
     failure: 'scratch.waste_assessment must be an object',
-  });
-  const cacheTelemetryProperty = externalProperty({
+  };
+  const wasteAssessment = requireExternalObject(wasteAssessmentArgs);
+  const cacheTelemetryPropertyArgs: ExternalPropertyArgs = {
     record: parsed,
     key: 'cache_telemetry',
-  });
-  const testInventoryProperty = externalProperty({
+  };
+  const cacheTelemetryProperty = externalProperty(cacheTelemetryPropertyArgs);
+  const testInventoryPropertyArgs: ExternalPropertyArgs = {
     record: parsed,
     key: 'test_inventory',
-  });
+  };
+  const testInventoryProperty = externalProperty(testInventoryPropertyArgs);
 
   return {
     started_at: startedAt,
@@ -148,7 +162,7 @@ export async function assembleAgentStats(
 ): Promise<AssembledStats> {
   const scratch = loadScratchEventLog(options.scratchPath);
 
-  const prJson = runCommand({
+  const prJsonArgs: RunCommandArgs = {
     command: 'gh',
     args: [
       'pr',
@@ -158,75 +172,89 @@ export async function assembleAgentStats(
       'number,url,title,mergedAt,createdAt,mergeCommit,baseRefName,state',
     ],
     cwd: options.repoRoot,
-  });
+  };
+  const prJson = runCommand(prJsonArgs);
   if (prJson.exitCode !== 0) {
-    loomFailureDetail({
+    const loomFailureDetailArgs12: LoomFailureDetailArgs = {
       code: LoomFailureCode.CommandFailed,
       text: `gh pr view failed: ${prJson.stderr || prJson.stdout}`,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs12);
   }
 
   let pr: ExternalObject;
   try {
     const parsed = asExternalValue(JSON.parse(prJson.stdout) as ExternalValue);
     if (!isRecord(parsed)) {
-      loomFailureDetail({
+      const loomFailureDetailArgs11: LoomFailureDetailArgs = {
         code: LoomFailureCode.PrMetadataInvalid,
         text: 'gh pr view returned a non-object',
-      });
+      };
+      loomFailureDetail(loomFailureDetailArgs11);
     }
     pr = parsed;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    loomFailureDetail({
+    const loomFailureDetailArgs10: LoomFailureDetailArgs = {
       code: LoomFailureCode.PrMetadataInvalid,
       text: `Failed to parse gh pr view JSON: ${message}`,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs10);
   }
 
-  const stateProperty = externalProperty({ record: pr, key: 'state' });
+  const statePropertyArgs: ExternalPropertyArgs = { record: pr, key: 'state' };
+  const stateProperty = externalProperty(statePropertyArgs);
   if (
     stateProperty.presence === ExternalPropertyPresence.Absent ||
     stateProperty.value !== 'MERGED'
   ) {
-    loomFailureDetail({
+    const loomFailureDetailArgs9: LoomFailureDetailArgs = {
       code: LoomFailureCode.PrMetadataInvalid,
       text: 'AI-agent stats require a merged source PR',
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs9);
   }
-  const mergedAt = requireExternalString({
+  const mergedAtArgs = {
     record: pr,
     key: 'mergedAt',
     failure: 'Merged PR is missing mergedAt',
     code: LoomFailureCode.PrMetadataInvalid,
-  });
-  const mergeCommitProperty = externalProperty({
+  };
+  const mergedAt = requireExternalString(mergedAtArgs);
+  const mergeCommitPropertyArgs: ExternalPropertyArgs = {
     record: pr,
     key: 'mergeCommit',
-  });
+  };
+  const mergeCommitProperty = externalProperty(mergeCommitPropertyArgs);
   const mergeCommit =
     mergeCommitProperty.presence === ExternalPropertyPresence.Present &&
     isRecord(mergeCommitProperty.value)
       ? mergeCommitProperty.value
       : {};
-  const oidProperty = externalProperty({ record: mergeCommit, key: 'oid' });
+  const oidPropertyArgs: ExternalPropertyArgs = {
+    record: mergeCommit,
+    key: 'oid',
+  };
+  const oidProperty = externalProperty(oidPropertyArgs);
   const headSha =
     oidProperty.presence === ExternalPropertyPresence.Present &&
     typeof oidProperty.value === 'string'
       ? oidProperty.value
       : '';
   if (!/^[0-9a-f]{40}$/.test(headSha)) {
-    loomFailureDetail({
+    const loomFailureDetailArgs8: LoomFailureDetailArgs = {
       code: LoomFailureCode.PrMetadataInvalid,
       text: 'Merged PR is missing mergeCommit.oid',
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs8);
   }
 
-  const runs = collectGithubActionsRuns({
+  const runsArgs = {
     repoRoot: options.repoRoot,
     prNumber: options.prNumber,
     headSha,
-  });
+  };
+  const runs = collectGithubActionsRuns(runsArgs);
 
   const localExecutions = scratch.local_executions;
   const localSeconds = sumDurationSeconds(localExecutions);
@@ -236,7 +264,8 @@ export async function assembleAgentStats(
   if (scratch.test_inventory.kind === OptionalRecordKind.Present) {
     inventory = scratch.test_inventory.value;
   } else if (options.includeInventory) {
-    inventory = countTestInventory({ repoRoot: options.repoRoot, headSha });
+    const inventoryArgs = { repoRoot: options.repoRoot, headSha };
+    inventory = countTestInventory(inventoryArgs);
   } else {
     inventory = {
       measured_at: new Date().toISOString(),
@@ -263,7 +292,11 @@ export async function assembleAgentStats(
           jobs: [],
         };
 
-  const createdAtProperty = externalProperty({ record: pr, key: 'createdAt' });
+  const createdAtPropertyArgs: ExternalPropertyArgs = {
+    record: pr,
+    key: 'createdAt',
+  };
+  const createdAtProperty = externalProperty(createdAtPropertyArgs);
   const openedAt =
     createdAtProperty.presence === ExternalPropertyPresence.Present &&
     typeof createdAtProperty.value === 'string'
@@ -277,61 +310,74 @@ export async function assembleAgentStats(
     Number.isNaN(openedMs) ||
     Number.isNaN(mergedMs)
   ) {
-    loomFailureDetail({
+    const loomFailureDetailArgs7: LoomFailureDetailArgs = {
       code: LoomFailureCode.PrMetadataInvalid,
       text: 'Could not parse started_at / opened_at / merged_at timestamps',
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs7);
   }
 
-  const url = optionalExternalString({ record: pr, key: 'url' });
-  const title = optionalExternalString({ record: pr, key: 'title' });
+  const urlArgs = { record: pr, key: 'url' };
+  const url = optionalExternalString(urlArgs);
+  const titleArgs = { record: pr, key: 'title' };
+  const title = optionalExternalString(titleArgs);
+  const countByCategoryArgs = {
+    items: localExecutions,
+    category: 'combined',
+  };
+  const countByCategoryArgs2 = {
+    items: localExecutions,
+    category: 'test',
+  };
+  const countByCategoryArgs3 = {
+    items: localExecutions,
+    category: 'check',
+  };
+  const sealExternalObjectArgs2 = {
+    local_execution_count: localExecutions.length,
+    local_check_count: countByCategory(countByCategoryArgs3),
+    local_test_count: countByCategory(countByCategoryArgs2),
+    local_combined_count: countByCategory(countByCategoryArgs),
+    local_execution_seconds: localSeconds,
+    github_actions_run_count: runs.length,
+    github_actions_seconds: actionsSeconds,
+    pr_retrigger_count: scratch.pr_retriggers.length,
+    agent_requested_rerun_count: scratch.pr_retriggers.filter((item) => {
+      const kindArgs: ExternalPropertyArgs = { record: item, key: 'kind' };
+      const kind = externalProperty(kindArgs);
+      const triggerArgs: ExternalPropertyArgs = {
+        record: item,
+        key: 'trigger',
+      };
+      const trigger = externalProperty(triggerArgs);
+      return (
+        (kind.presence === ExternalPropertyPresence.Present &&
+          kind.value === 'agent_requested') ||
+        (trigger.presence === ExternalPropertyPresence.Present &&
+          trigger.value === 'manual_rerun')
+      );
+    }).length,
+    merge_attempt_count: scratch.merge_attempts.length,
+  };
+  const sealExternalObjectArgs3 = {
+    number: options.prNumber,
+    url,
+    title,
+    change_surface: scratch.change_surface,
+    head_sha: headSha,
+    started_at: scratch.started_at,
+    opened_at: openedAt,
+    merged_at: mergedAt,
+    elapsed_seconds: Math.max(0, Math.round((mergedMs - startedMs) / 1000)),
+    open_to_merge_seconds: Math.max(
+      0,
+      Math.round((mergedMs - openedMs) / 1000),
+    ),
+  };
   const recordBuilder: ExternalObjectBuilder = {
     schema_version: 3,
-    source_pr: sealExternalObject({
-      number: options.prNumber,
-      url,
-      title,
-      change_surface: scratch.change_surface,
-      head_sha: headSha,
-      started_at: scratch.started_at,
-      opened_at: openedAt,
-      merged_at: mergedAt,
-      elapsed_seconds: Math.max(0, Math.round((mergedMs - startedMs) / 1000)),
-      open_to_merge_seconds: Math.max(
-        0,
-        Math.round((mergedMs - openedMs) / 1000),
-      ),
-    }),
-    summary: sealExternalObject({
-      local_execution_count: localExecutions.length,
-      local_check_count: countByCategory({
-        items: localExecutions,
-        category: 'check',
-      }),
-      local_test_count: countByCategory({
-        items: localExecutions,
-        category: 'test',
-      }),
-      local_combined_count: countByCategory({
-        items: localExecutions,
-        category: 'combined',
-      }),
-      local_execution_seconds: localSeconds,
-      github_actions_run_count: runs.length,
-      github_actions_seconds: actionsSeconds,
-      pr_retrigger_count: scratch.pr_retriggers.length,
-      agent_requested_rerun_count: scratch.pr_retriggers.filter((item) => {
-        const kind = externalProperty({ record: item, key: 'kind' });
-        const trigger = externalProperty({ record: item, key: 'trigger' });
-        return (
-          (kind.presence === ExternalPropertyPresence.Present &&
-            kind.value === 'agent_requested') ||
-          (trigger.presence === ExternalPropertyPresence.Present &&
-            trigger.value === 'manual_rerun')
-        );
-      }).length,
-      merge_attempt_count: scratch.merge_attempts.length,
-    }),
+    source_pr: sealExternalObject(sealExternalObjectArgs3),
+    summary: sealExternalObject(sealExternalObjectArgs2),
     test_inventory: inventory,
     local_executions: localExecutions,
     github_actions_runs: runs,
@@ -360,7 +406,7 @@ function collectGithubActionsRuns(
 ): ExternalObject[] {
   const { repoRoot, prNumber, headSha } = args;
 
-  const listed = runCommand({
+  const listedArgs4: RunCommandArgs = {
     command: 'gh',
     args: [
       'run',
@@ -371,12 +417,14 @@ function collectGithubActionsRuns(
       'databaseId,workflowName,headSha,event,status,conclusion,createdAt,updatedAt,attempt',
     ],
     cwd: repoRoot,
-  });
+  };
+  const listed = runCommand(listedArgs4);
   if (listed.exitCode !== 0) {
-    loomFailureDetail({
+    const loomFailureDetailArgs6: LoomFailureDetailArgs = {
       code: LoomFailureCode.CommandFailed,
       text: `gh run list failed: ${listed.stderr || listed.stdout}`,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs6);
   }
 
   let runs: ExternalValue;
@@ -384,16 +432,18 @@ function collectGithubActionsRuns(
     runs = asExternalValue(JSON.parse(listed.stdout) as ExternalValue);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    loomFailureDetail({
+    const loomFailureDetailArgs5: LoomFailureDetailArgs = {
       code: LoomFailureCode.CommandFailed,
       text: `Failed to parse gh run list JSON: ${message}`,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs5);
   }
   if (!Array.isArray(runs)) {
-    loomFailureDetail({
+    const loomFailureDetailArgs4: LoomFailureDetailArgs = {
       code: LoomFailureCode.CommandFailed,
       text: 'gh run list returned a non-array',
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs4);
   }
 
   const out: ExternalObject[] = [];
@@ -401,18 +451,24 @@ function collectGithubActionsRuns(
     if (!isRecord(run)) {
       continue;
     }
-    const headShaProperty = externalProperty({ record: run, key: 'headSha' });
+    const headShaPropertyArgs: ExternalPropertyArgs = {
+      record: run,
+      key: 'headSha',
+    };
+    const headShaProperty = externalProperty(headShaPropertyArgs);
     if (
       headShaProperty.presence === ExternalPropertyPresence.Absent ||
       headShaProperty.value !== headSha
     ) {
       continue;
     }
-    const createdAt = optionalExternalString({ record: run, key: 'createdAt' });
-    const updatedAtProperty = externalProperty({
+    const createdAtArgs = { record: run, key: 'createdAt' };
+    const createdAt = optionalExternalString(createdAtArgs);
+    const updatedAtPropertyArgs: ExternalPropertyArgs = {
       record: run,
       key: 'updatedAt',
-    });
+    };
+    const updatedAtProperty = externalProperty(updatedAtPropertyArgs);
     const updatedAt =
       updatedAtProperty.presence === ExternalPropertyPresence.Present &&
       typeof updatedAtProperty.value === 'string'
@@ -424,36 +480,47 @@ function collectGithubActionsRuns(
       Number.isNaN(startedMs) || Number.isNaN(finishedMs)
         ? 0
         : Math.max(0, Math.round((finishedMs - startedMs) / 1000));
-    const attemptProperty = externalProperty({ record: run, key: 'attempt' });
-    const conclusionProperty = externalProperty({
+    const attemptPropertyArgs: ExternalPropertyArgs = {
+      record: run,
+      key: 'attempt',
+    };
+    const attemptProperty = externalProperty(attemptPropertyArgs);
+    const conclusionPropertyArgs: ExternalPropertyArgs = {
       record: run,
       key: 'conclusion',
-    });
-    const statusProperty = externalProperty({ record: run, key: 'status' });
-    out.push(
-      sealExternalObject({
-        workflow: optionalExternalValue({ record: run, key: 'workflowName' }),
-        run_id: optionalExternalValue({ record: run, key: 'databaseId' }),
-        run_attempt:
-          attemptProperty.presence === ExternalPropertyPresence.Present &&
-          typeof attemptProperty.value === 'number'
-            ? attemptProperty.value
-            : 1,
-        head_sha: headSha,
-        trigger: optionalExternalValue({ record: run, key: 'event' }),
-        started_at: createdAt,
-        finished_at: updatedAt,
-        duration_seconds: durationSeconds,
-        conclusion:
-          conclusionProperty.presence === ExternalPropertyPresence.Present &&
-          typeof conclusionProperty.value === 'string'
-            ? conclusionProperty.value
-            : statusProperty.presence === ExternalPropertyPresence.Present
-              ? String(statusProperty.value)
-              : '',
-        source_pr: prNumber,
-      }),
-    );
+    };
+    const conclusionProperty = externalProperty(conclusionPropertyArgs);
+    const statusPropertyArgs: ExternalPropertyArgs = {
+      record: run,
+      key: 'status',
+    };
+    const statusProperty = externalProperty(statusPropertyArgs);
+    const optionalExternalValueArgs = { record: run, key: 'event' };
+    const optionalExternalValueArgs2 = { record: run, key: 'databaseId' };
+    const optionalExternalValueArgs3 = { record: run, key: 'workflowName' };
+    const sealExternalObjectArgs = {
+      workflow: optionalExternalValue(optionalExternalValueArgs3),
+      run_id: optionalExternalValue(optionalExternalValueArgs2),
+      run_attempt:
+        attemptProperty.presence === ExternalPropertyPresence.Present &&
+        typeof attemptProperty.value === 'number'
+          ? attemptProperty.value
+          : 1,
+      head_sha: headSha,
+      trigger: optionalExternalValue(optionalExternalValueArgs),
+      started_at: createdAt,
+      finished_at: updatedAt,
+      duration_seconds: durationSeconds,
+      conclusion:
+        conclusionProperty.presence === ExternalPropertyPresence.Present &&
+        typeof conclusionProperty.value === 'string'
+          ? conclusionProperty.value
+          : statusProperty.presence === ExternalPropertyPresence.Present
+            ? String(statusProperty.value)
+            : '',
+      source_pr: prNumber,
+    };
+    out.push(sealExternalObject(sealExternalObjectArgs));
   }
   return out;
 }
@@ -467,12 +534,14 @@ function countTestInventory(args: CountTestInventoryArgs): ExternalObject {
   const { repoRoot, headSha } = args;
 
   const measuredAt = new Date().toISOString();
-  const rust = countNextest({
+  const rustArgs = {
     repoRoot,
     filter:
       'package(nook-app-common) + package(nook-core) + package(nook-auth2) + package(nook-replication) + package(nook-event-log)',
-  });
-  const preflight = countNextest({ repoRoot, filter: 'package(preflight)' });
+  };
+  const rust = countNextest(rustArgs);
+  const preflightArgs = { repoRoot, filter: 'package(preflight)' };
+  const preflight = countNextest(preflightArgs);
   const webUnit = countVitest(repoRoot);
   const e2e = countPlaywright(repoRoot);
   const byType = {
@@ -497,11 +566,12 @@ type CountNextestArgs = {
 function countNextest(args: CountNextestArgs): number {
   const { repoRoot, filter } = args;
 
-  const listed = runCommand({
+  const listedArgs3: RunCommandArgs = {
     command: 'cargo',
     args: ['nextest', 'list', '-E', filter, '--lib', '--tests'],
     cwd: path.join(repoRoot, 'nook-app'),
-  });
+  };
+  const listed = runCommand(listedArgs3);
   if (listed.exitCode !== 0) {
     return 0;
   }
@@ -514,11 +584,12 @@ function countNextest(args: CountNextestArgs): number {
 
 function countVitest(repoRoot: string): number {
   const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
-  const listed = runCommand({
+  const listedArgs2: RunCommandArgs = {
     command: 'bunx',
     args: ['vitest', 'list'],
     cwd: appRoot,
-  });
+  };
+  const listed = runCommand(listedArgs2);
   if (listed.exitCode !== 0) {
     return 0;
   }
@@ -531,11 +602,12 @@ function countVitest(repoRoot: string): number {
 
 function countPlaywright(repoRoot: string): number {
   const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
-  const listed = runCommand({
+  const listedArgs: RunCommandArgs = {
     command: 'bunx',
     args: ['playwright', 'test', '--list'],
     cwd: appRoot,
-  });
+  };
+  const listed = runCommand(listedArgs);
   if (listed.exitCode !== 0) {
     return 0;
   }
@@ -549,10 +621,11 @@ function countPlaywright(repoRoot: string): number {
 function sumDurationSeconds(items: ExternalObject[]): number {
   let total = 0;
   for (const item of items) {
-    const duration = externalProperty({
+    const durationArgs: ExternalPropertyArgs = {
       record: item,
       key: 'duration_seconds',
-    });
+    };
+    const duration = externalProperty(durationArgs);
     if (
       duration.presence === ExternalPropertyPresence.Present &&
       typeof duration.value === 'number'
@@ -572,7 +645,11 @@ function countByCategory(args: CountByCategoryArgs): number {
   const { items, category } = args;
 
   return items.filter((item) => {
-    const property = externalProperty({ record: item, key: 'category' });
+    const propertyArgs4: ExternalPropertyArgs = {
+      record: item,
+      key: 'category',
+    };
+    const property = externalProperty(propertyArgs4);
     return (
       property.presence === ExternalPropertyPresence.Present &&
       property.value === category
@@ -588,16 +665,21 @@ type RequireExternalStringArgs = {
 };
 
 function requireExternalString(args: RequireExternalStringArgs): string {
-  const property = externalProperty({ record: args.record, key: args.key });
+  const propertyArgs3: ExternalPropertyArgs = {
+    record: args.record,
+    key: args.key,
+  };
+  const property = externalProperty(propertyArgs3);
   if (
     property.presence === ExternalPropertyPresence.Absent ||
     typeof property.value !== 'string' ||
     property.value.length === 0
   ) {
-    loomFailureDetail({
+    const loomFailureDetailArgs3: LoomFailureDetailArgs = {
       code: args.code ?? LoomFailureCode.ScratchLogInvalid,
       text: args.failure,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs3);
   }
   return property.value;
 }
@@ -611,15 +693,20 @@ type RequireExternalArrayArgs = {
 function requireExternalArray(
   args: RequireExternalArrayArgs,
 ): readonly ExternalValue[] {
-  const property = externalProperty({ record: args.record, key: args.key });
+  const propertyArgs2: ExternalPropertyArgs = {
+    record: args.record,
+    key: args.key,
+  };
+  const property = externalProperty(propertyArgs2);
   if (
     property.presence === ExternalPropertyPresence.Absent ||
     !Array.isArray(property.value)
   ) {
-    loomFailureDetail({
+    const loomFailureDetailArgs2: LoomFailureDetailArgs = {
       code: LoomFailureCode.ScratchLogInvalid,
       text: args.failure,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs2);
   }
   return property.value;
 }
@@ -633,15 +720,20 @@ type RequireExternalObjectArgs = {
 function requireExternalObject(
   args: RequireExternalObjectArgs,
 ): ExternalObject {
-  const property = externalProperty({ record: args.record, key: args.key });
+  const propertyArgs: ExternalPropertyArgs = {
+    record: args.record,
+    key: args.key,
+  };
+  const property = externalProperty(propertyArgs);
   if (
     property.presence === ExternalPropertyPresence.Absent ||
     !isRecord(property.value)
   ) {
-    loomFailureDetail({
+    const loomFailureDetailArgs: LoomFailureDetailArgs = {
       code: LoomFailureCode.ScratchLogInvalid,
       text: args.failure,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs);
   }
   return property.value;
 }

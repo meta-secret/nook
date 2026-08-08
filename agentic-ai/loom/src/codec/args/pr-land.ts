@@ -10,7 +10,9 @@ import {
   integerJsonSchema,
   objectJsonSchema,
   stringJsonSchema,
+  type IntegerJsonSchemaArgs,
   type ObjectJsonSchema,
+  type ObjectJsonSchemaArgs,
 } from '../json-schema.ts';
 import {
   denyUnknownKeys,
@@ -18,6 +20,9 @@ import {
   expectObject,
   expectPositiveInt,
   expectRemoteTask,
+  type DenyUnknownKeysArgs,
+  type ExpectFieldArgs,
+  type ExpectObjectArgs,
 } from '../object.ts';
 
 export enum RemoteTaskPresence {
@@ -59,20 +64,23 @@ export function decodePrLandPrPayload(
 ): DecodeOutcome<PrLandPrRequest> {
   const { value, path } = args;
 
-  const object = expectObject({ value, path });
+  const objectArgs: ExpectObjectArgs = { value, path };
+  const object = expectObject(objectArgs);
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys({
+  const unknownArgs: DenyUnknownKeysArgs<PrLandPrField> = {
     record: object.value,
     fields: PrLandPrField,
     path,
-  });
-  const prNumber = expectPositiveInt({
+  };
+  const unknown = denyUnknownKeys(unknownArgs);
+  const prNumberArgs: ExpectFieldArgs<PrLandPrField> = {
     record: object.value,
     key: PrLandPrField.PrNumber,
     path,
-  });
+  };
+  const prNumber = expectPositiveInt(prNumberArgs);
   const errors = [
     ...unknown,
     ...(prNumber.status === DecodeStatus.Failed ? prNumber.errors : []),
@@ -80,9 +88,10 @@ export function decodePrLandPrPayload(
   if (errors.length > 0) {
     return decodeErr(errors);
   }
-  return decodeOk({
+  const request: PrLandPrRequest = {
     prNumber: (prNumber as { value: number }).value,
-  });
+  };
+  return decodeOk(request);
 }
 
 export type DecodePrLandValidatePayloadArgs = {
@@ -95,30 +104,35 @@ export function decodePrLandValidatePayload(
 ): DecodeOutcome<PrLandValidateRequest> {
   const { value, path } = args;
 
-  const object = expectObject({ value, path });
+  const objectArgs: ExpectObjectArgs = { value, path };
+  const object = expectObject(objectArgs);
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys({
+  const unknownArgs: DenyUnknownKeysArgs<PrLandValidateField> = {
     record: object.value,
     fields: PrLandValidateField,
     path,
-  });
-  const prNumber = expectPositiveInt({
+  };
+  const unknown = denyUnknownKeys(unknownArgs);
+  const prNumberArgs: ExpectFieldArgs<PrLandValidateField> = {
     record: object.value,
     key: PrLandValidateField.PrNumber,
     path,
-  });
-  const remoteTask = expectRemoteTask({
+  };
+  const prNumber = expectPositiveInt(prNumberArgs);
+  const remoteTaskArgs: ExpectFieldArgs<PrLandValidateField> = {
     record: object.value,
     key: PrLandValidateField.RemoteTask,
     path,
-  });
-  const runFullE2e = expectBoolean({
+  };
+  const remoteTask = expectRemoteTask(remoteTaskArgs);
+  const runFullE2eArgs: ExpectFieldArgs<PrLandValidateField> = {
     record: object.value,
     key: PrLandValidateField.RunFullE2e,
     path,
-  });
+  };
+  const runFullE2e = expectBoolean(runFullE2eArgs);
   const errors = [
     ...unknown,
     ...(prNumber.status === DecodeStatus.Failed ? prNumber.errors : []),
@@ -128,27 +142,35 @@ export function decodePrLandValidatePayload(
   if (errors.length > 0) {
     return decodeErr(errors);
   }
-  return decodeOk({
+  const request: PrLandValidateRequest = {
     prNumber: (prNumber as { value: number }).value,
     remoteTask: (remoteTask as { value: RemoteTask }).value,
     runFullE2e: (runFullE2e as { value: boolean }).value,
-  });
+  };
+  return decodeOk(request);
 }
 
-export const PR_LAND_PR_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema({
+const positiveIntegerSchemaArgs: IntegerJsonSchemaArgs = { minimum: 1 };
+const prLandPrInputSchemaArgs: ObjectJsonSchemaArgs = {
   required: [PrLandPrField.PrNumber],
   properties: {
-    [PrLandPrField.PrNumber]: integerJsonSchema({ minimum: 1 }),
+    [PrLandPrField.PrNumber]: integerJsonSchema(positiveIntegerSchemaArgs),
   },
-});
+};
+export const PR_LAND_PR_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema(
+  prLandPrInputSchemaArgs,
+);
 
-export const PR_LAND_VALIDATE_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema(
-  {
-    required: [PrLandValidateField.PrNumber, PrLandValidateField.RunFullE2e],
-    properties: {
-      [PrLandValidateField.PrNumber]: integerJsonSchema({ minimum: 1 }),
-      [PrLandValidateField.RemoteTask]: stringJsonSchema(),
-      [PrLandValidateField.RunFullE2e]: booleanJsonSchema(),
-    },
+const prLandValidateInputSchemaArgs: ObjectJsonSchemaArgs = {
+  required: [PrLandValidateField.PrNumber, PrLandValidateField.RunFullE2e],
+  properties: {
+    [PrLandValidateField.PrNumber]: integerJsonSchema(
+      positiveIntegerSchemaArgs,
+    ),
+    [PrLandValidateField.RemoteTask]: stringJsonSchema(),
+    [PrLandValidateField.RunFullE2e]: booleanJsonSchema(),
   },
+};
+export const PR_LAND_VALIDATE_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema(
+  prLandValidateInputSchemaArgs,
 );

@@ -10,6 +10,8 @@ import {
   type DecodeOutcome,
 } from './field-error.ts';
 
+import type { FieldErrorArgs } from './field-error.ts';
+import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 export type YamlParseSuccess = {
   readonly value: ExternalValue;
   readonly text: string;
@@ -23,32 +25,31 @@ export function parseYamlFile(
     text = readFileSync(filePath, 'utf8');
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
-    return decodeErr([
-      fieldError({
-        path: '',
-        issue: FieldIssue.RequestFileReadFailed,
-        detail: fieldDetailText(message),
-      }),
-    ]);
+    const fieldErrorArgs2: FieldErrorArgs = {
+      path: '',
+      issue: FieldIssue.RequestFileReadFailed,
+      detail: fieldDetailText(message),
+    };
+    return decodeErr([fieldError(fieldErrorArgs2)]);
   }
   return parseYamlText(text);
 }
 
 export function parseYamlText(text: string): DecodeOutcome<YamlParseSuccess> {
   try {
-    return decodeOk({
+    const decodeOkArgs = {
       value: asExternalValue(Bun.YAML.parse(text) as ExternalValue),
       text,
-    });
+    };
+    return decodeOk(decodeOkArgs);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
-    return decodeErr([
-      fieldError({
-        path: '',
-        issue: FieldIssue.InvalidYaml,
-        detail: fieldDetailText(message),
-      }),
-    ]);
+    const fieldErrorArgs: FieldErrorArgs = {
+      path: '',
+      issue: FieldIssue.InvalidYaml,
+      detail: fieldDetailText(message),
+    };
+    return decodeErr([fieldError(fieldErrorArgs)]);
   }
 }
 
@@ -57,9 +58,10 @@ export function stringifyYaml(value: ExternalValue): string {
     return `${Bun.YAML.stringify(value).trimEnd()}\n`;
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
-    loomFailureDetail({
+    const loomFailureDetailArgs: LoomFailureDetailArgs = {
       code: LoomFailureCode.YamlStringifyFailed,
       text: message,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs);
   }
 }

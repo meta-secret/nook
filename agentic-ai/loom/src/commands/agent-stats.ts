@@ -15,6 +15,9 @@ import {
   loomFailureDetail,
 } from '../loom-failure.ts';
 
+import type { RunCommandArgs } from '../lib/run.ts';
+import type { ValidateAgentStatsYamlArgs } from '../lib/agent-stats-schema.ts';
+import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 export type AgentStatsReport = {
   readonly family: RequestFamily.AgentStats;
   readonly operation: AgentStatsOperation;
@@ -26,26 +29,29 @@ export async function runAgentStatsAssemble(
   request: AgentStatsAssembleRequest,
 ): Promise<AgentStatsReport> {
   const repoRoot = findRepoRoot();
-  const assembled = await assembleAgentStats({
+  const assembledArgs = {
     repoRoot,
     prNumber: request.prNumber,
     scratchPath: request.scratchPath,
     includeInventory: request.includeTestInventory,
-  });
+  };
+  const assembled = await assembleAgentStats(assembledArgs);
 
   const outPath = path.resolve(request.outputPath);
   mkdirSync(path.dirname(outPath), { recursive: true });
   writeFileSync(outPath, assembled.yaml, 'utf8');
 
-  const validation = validateAgentStatsYaml({
+  const validationArgs3: ValidateAgentStatsYamlArgs = {
     content: assembled.yaml,
     expectedPrNumber: request.prNumber,
-  });
+  };
+  const validation = validateAgentStatsYaml(validationArgs3);
   if (!validation.ok) {
-    loomFailureDetail({
+    const loomFailureDetailArgs4: LoomFailureDetailArgs = {
       code: LoomFailureCode.ValidationFailed,
       text: `Assembled YAML failed validation:\n${validation.errors.join('\n')}`,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs4);
   }
 
   return {
@@ -63,10 +69,11 @@ export async function runAgentStatsAssemble(
 export async function runAgentStatsValidate(
   request: AgentStatsFileRequest,
 ): Promise<AgentStatsReport> {
-  return validateFile({
+  const validateFileArgs: ValidateFileArgs = {
     operation: AgentStatsOperation.Validate,
     file: request.statsFile,
-  });
+  };
+  return validateFile(validateFileArgs);
 }
 
 export async function runAgentStatsPublish(
@@ -81,19 +88,21 @@ export async function runAgentStatsPublish(
   }
 
   const content = readFileSync(absolute, 'utf8');
-  const validation = validateAgentStatsYaml({
+  const validationArgs2: ValidateAgentStatsYamlArgs = {
     content,
     expectedPrNumber: prNumber,
-  });
+  };
+  const validation = validateAgentStatsYaml(validationArgs2);
   if (!validation.ok) {
-    loomFailureDetail({
+    const loomFailureDetailArgs3: LoomFailureDetailArgs = {
       code: LoomFailureCode.ValidationFailed,
       text: validation.errors.join('\n'),
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs3);
   }
 
   const remotePath = `stats/ai-agent/${prNumber}.yaml`;
-  const published = runCommand({
+  const publishedArgs: RunCommandArgs = {
     command: 'node',
     args: [
       '.github/scripts/workbench-publish.cjs',
@@ -102,12 +111,14 @@ export async function runAgentStatsPublish(
       `stats: record Nook PR ${prNumber}`,
     ],
     cwd: repoRoot,
-  });
+  };
+  const published = runCommand(publishedArgs);
   if (published.exitCode !== 0) {
-    loomFailureDetail({
+    const loomFailureDetailArgs2: LoomFailureDetailArgs = {
       code: LoomFailureCode.CommandFailed,
       text: `workbench-publish failed: ${published.stderr || published.stdout}`,
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs2);
   }
 
   return {
@@ -132,15 +143,17 @@ function validateFile(args: ValidateFileArgs): AgentStatsReport {
     loomFailure(LoomFailureCode.StatsFilenameInvalid);
   }
   const content = readFileSync(file, 'utf8');
-  const validation = validateAgentStatsYaml({
+  const validationArgs: ValidateAgentStatsYamlArgs = {
     content,
     expectedPrNumber: prNumber,
-  });
+  };
+  const validation = validateAgentStatsYaml(validationArgs);
   if (!validation.ok) {
-    loomFailureDetail({
+    const loomFailureDetailArgs: LoomFailureDetailArgs = {
       code: LoomFailureCode.ValidationFailed,
       text: validation.errors.join('\n'),
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs);
   }
   return {
     family: RequestFamily.AgentStats,

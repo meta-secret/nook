@@ -10,7 +10,9 @@ import {
   integerJsonSchema,
   objectJsonSchema,
   stringJsonSchema,
+  type IntegerJsonSchemaArgs,
   type ObjectJsonSchema,
+  type ObjectJsonSchemaArgs,
 } from '../json-schema.ts';
 import {
   denyUnknownKeys,
@@ -18,6 +20,9 @@ import {
   expectObject,
   expectPositiveInt,
   expectString,
+  type DenyUnknownKeysArgs,
+  type ExpectFieldArgs,
+  type ExpectObjectArgs,
 } from '../object.ts';
 
 export enum AgentStatsAssembleField {
@@ -52,35 +57,41 @@ export function decodeAgentStatsAssemblePayload(
 ): DecodeOutcome<AgentStatsAssembleRequest> {
   const { value, path } = args;
 
-  const object = expectObject({ value, path });
+  const objectArgs: ExpectObjectArgs = { value, path };
+  const object = expectObject(objectArgs);
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys({
+  const unknownArgs: DenyUnknownKeysArgs<AgentStatsAssembleField> = {
     record: object.value,
     fields: AgentStatsAssembleField,
     path,
-  });
-  const prNumber = expectPositiveInt({
+  };
+  const unknown = denyUnknownKeys(unknownArgs);
+  const prNumberArgs: ExpectFieldArgs<AgentStatsAssembleField> = {
     record: object.value,
     key: AgentStatsAssembleField.PrNumber,
     path,
-  });
-  const scratchPath = expectString({
+  };
+  const prNumber = expectPositiveInt(prNumberArgs);
+  const scratchPathArgs: ExpectFieldArgs<AgentStatsAssembleField> = {
     record: object.value,
     key: AgentStatsAssembleField.ScratchPath,
     path,
-  });
-  const outputPath = expectString({
+  };
+  const scratchPath = expectString(scratchPathArgs);
+  const outputPathArgs: ExpectFieldArgs<AgentStatsAssembleField> = {
     record: object.value,
     key: AgentStatsAssembleField.OutputPath,
     path,
-  });
-  const includeTestInventory = expectBoolean({
+  };
+  const outputPath = expectString(outputPathArgs);
+  const includeTestInventoryArgs: ExpectFieldArgs<AgentStatsAssembleField> = {
     record: object.value,
     key: AgentStatsAssembleField.IncludeTestInventory,
     path,
-  });
+  };
+  const includeTestInventory = expectBoolean(includeTestInventoryArgs);
   const errors = [
     ...unknown,
     ...(prNumber.status === DecodeStatus.Failed ? prNumber.errors : []),
@@ -93,12 +104,13 @@ export function decodeAgentStatsAssemblePayload(
   if (errors.length > 0) {
     return decodeErr(errors);
   }
-  return decodeOk({
+  const request: AgentStatsAssembleRequest = {
     prNumber: (prNumber as { value: number }).value,
     scratchPath: (scratchPath as { value: string }).value,
     outputPath: (outputPath as { value: string }).value,
     includeTestInventory: (includeTestInventory as { value: boolean }).value,
-  });
+  };
+  return decodeOk(request);
 }
 
 export type DecodeAgentStatsFilePayloadArgs = {
@@ -111,20 +123,23 @@ export function decodeAgentStatsFilePayload(
 ): DecodeOutcome<AgentStatsFileRequest> {
   const { value, path } = args;
 
-  const object = expectObject({ value, path });
+  const objectArgs: ExpectObjectArgs = { value, path };
+  const object = expectObject(objectArgs);
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys({
+  const unknownArgs: DenyUnknownKeysArgs<AgentStatsFileField> = {
     record: object.value,
     fields: AgentStatsFileField,
     path,
-  });
-  const statsFile = expectString({
+  };
+  const unknown = denyUnknownKeys(unknownArgs);
+  const statsFileArgs: ExpectFieldArgs<AgentStatsFileField> = {
     record: object.value,
     key: AgentStatsFileField.StatsFile,
     path,
-  });
+  };
+  const statsFile = expectString(statsFileArgs);
   const errors = [
     ...unknown,
     ...(statsFile.status === DecodeStatus.Failed ? statsFile.errors : []),
@@ -132,32 +147,38 @@ export function decodeAgentStatsFilePayload(
   if (errors.length > 0) {
     return decodeErr(errors);
   }
-  return decodeOk({
+  const request: AgentStatsFileRequest = {
     statsFile: (statsFile as { value: string }).value,
-  });
+  };
+  return decodeOk(request);
 }
 
-export const AGENT_STATS_ASSEMBLE_INPUT_SCHEMA: ObjectJsonSchema =
-  objectJsonSchema({
-    required: [
-      AgentStatsAssembleField.PrNumber,
-      AgentStatsAssembleField.ScratchPath,
-      AgentStatsAssembleField.OutputPath,
-      AgentStatsAssembleField.IncludeTestInventory,
-    ],
-    properties: {
-      [AgentStatsAssembleField.PrNumber]: integerJsonSchema({ minimum: 1 }),
-      [AgentStatsAssembleField.ScratchPath]: stringJsonSchema(),
-      [AgentStatsAssembleField.OutputPath]: stringJsonSchema(),
-      [AgentStatsAssembleField.IncludeTestInventory]: booleanJsonSchema(),
-    },
-  });
-
-export const AGENT_STATS_FILE_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema(
-  {
-    required: [AgentStatsFileField.StatsFile],
-    properties: {
-      [AgentStatsFileField.StatsFile]: stringJsonSchema(),
-    },
+const positiveIntegerSchemaArgs: IntegerJsonSchemaArgs = { minimum: 1 };
+const agentStatsAssembleInputSchemaArgs: ObjectJsonSchemaArgs = {
+  required: [
+    AgentStatsAssembleField.PrNumber,
+    AgentStatsAssembleField.ScratchPath,
+    AgentStatsAssembleField.OutputPath,
+    AgentStatsAssembleField.IncludeTestInventory,
+  ],
+  properties: {
+    [AgentStatsAssembleField.PrNumber]: integerJsonSchema(
+      positiveIntegerSchemaArgs,
+    ),
+    [AgentStatsAssembleField.ScratchPath]: stringJsonSchema(),
+    [AgentStatsAssembleField.OutputPath]: stringJsonSchema(),
+    [AgentStatsAssembleField.IncludeTestInventory]: booleanJsonSchema(),
   },
+};
+export const AGENT_STATS_ASSEMBLE_INPUT_SCHEMA: ObjectJsonSchema =
+  objectJsonSchema(agentStatsAssembleInputSchemaArgs);
+
+const agentStatsFileInputSchemaArgs: ObjectJsonSchemaArgs = {
+  required: [AgentStatsFileField.StatsFile],
+  properties: {
+    [AgentStatsFileField.StatsFile]: stringJsonSchema(),
+  },
+};
+export const AGENT_STATS_FILE_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema(
+  agentStatsFileInputSchemaArgs,
 );

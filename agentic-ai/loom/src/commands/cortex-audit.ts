@@ -10,6 +10,9 @@ import {
   loomFailureDetail,
 } from '../loom-failure.ts';
 
+import type { LintProseDensityArgs } from '../lib/density.ts';
+import type { FindBrokenRelativeLinksArgs } from '../lib/links.ts';
+import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[];
   readonly missingFromIndex: string[];
@@ -25,10 +28,11 @@ export async function runCortexAudit(
   const repoRoot = findRepoRoot();
   const cortexRoot = path.join(repoRoot, '.cortex');
   if (!existsSync(cortexRoot)) {
-    loomFailureDetail({
+    const loomFailureDetailArgs: LoomFailureDetailArgs = {
       code: LoomFailureCode.CortexAuditFailed,
       text: '.cortex directory is missing',
-    });
+    };
+    loomFailureDetail(loomFailureDetailArgs);
   }
 
   const mdFiles = listMarkdownFiles(cortexRoot);
@@ -37,16 +41,18 @@ export async function runCortexAudit(
 
   for (const filePath of mdFiles) {
     const content = readFileSync(filePath, 'utf8');
-    brokenLinks.push(
-      ...findBrokenRelativeLinks({ filePath, content, repoRoot }),
-    );
+    const findBrokenRelativeLinksArgs: FindBrokenRelativeLinksArgs = {
+      filePath,
+      content,
+      repoRoot,
+    };
+    brokenLinks.push(...findBrokenRelativeLinks(findBrokenRelativeLinksArgs));
     if (request.includeDensityLint) {
-      densityFindings.push(
-        ...lintProseDensity({
-          filePath: path.relative(repoRoot, filePath),
-          content,
-        }),
-      );
+      const lintProseDensityArgs: LintProseDensityArgs = {
+        filePath: path.relative(repoRoot, filePath),
+        content,
+      };
+      densityFindings.push(...lintProseDensity(lintProseDensityArgs));
     }
   }
 

@@ -6,8 +6,16 @@ import {
   decodeOk,
   type DecodeOutcome,
 } from '../field-error.ts';
-import { objectJsonSchema, type ObjectJsonSchema } from '../json-schema.ts';
-import { denyUnknownKeys, expectObject } from '../object.ts';
+import {
+  objectJsonSchema,
+  type ObjectJsonSchema,
+  type ObjectJsonSchemaArgs,
+} from '../json-schema.ts';
+import {
+  denyUnknownKeys,
+  expectObject,
+  type ExpectObjectArgs,
+} from '../object.ts';
 
 /** toolsList accepts no payload fields. */
 export enum ToolsListField {}
@@ -19,22 +27,28 @@ const ROOT = RequestFamily.ToolsList;
 export function decodeToolsListRequest(
   value: ExternalValue,
 ): DecodeOutcome<ToolsListRequest> {
-  const object = expectObject({ value, path: ROOT });
+  const objectArgs: ExpectObjectArgs = { value, path: ROOT };
+  const object = expectObject(objectArgs);
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys({
+  const unknownArgs = {
     record: object.value,
     fields: ToolsListField,
     path: ROOT,
-  });
+  };
+  const unknown = denyUnknownKeys(unknownArgs);
   if (unknown.length > 0) {
     return decodeErr(unknown);
   }
-  return decodeOk({});
+  const emptyRequest: ToolsListRequest = {};
+  return decodeOk(emptyRequest);
 }
 
-export const TOOLS_LIST_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema({
+const toolsListInputSchemaArgs: ObjectJsonSchemaArgs = {
   required: [],
   properties: {},
-});
+};
+export const TOOLS_LIST_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema(
+  toolsListInputSchemaArgs,
+);

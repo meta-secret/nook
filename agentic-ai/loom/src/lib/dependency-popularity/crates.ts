@@ -12,6 +12,7 @@ import {
   type GitHubStars,
 } from './types.ts';
 
+import type { ExternalPropertyArgs } from '../guards.ts';
 export async function fetchCrateMetrics(name: string): Promise<CrateMetrics> {
   const response = await fetch(
     `https://crates.io/api/v1/crates/${encodeURIComponent(name)}`,
@@ -31,7 +32,11 @@ export async function fetchCrateMetrics(name: string): Promise<CrateMetrics> {
   if (!isRecord(json)) {
     throw new Error(`crates.io payload invalid for ${name}`);
   }
-  const crateProperty = externalProperty({ record: json, key: 'crate' });
+  const cratePropertyArgs2: ExternalPropertyArgs = {
+    record: json,
+    key: 'crate',
+  };
+  const crateProperty = externalProperty(cratePropertyArgs2);
   if (
     crateProperty.presence === ExternalPropertyPresence.Absent ||
     !isRecord(crateProperty.value)
@@ -39,11 +44,16 @@ export async function fetchCrateMetrics(name: string): Promise<CrateMetrics> {
     throw new Error(`crates.io payload invalid for ${name}`);
   }
   const crate = crateProperty.value;
-  const downloads = externalProperty({ record: crate, key: 'downloads' });
-  const recentDownloads = externalProperty({
+  const downloadsArgs: ExternalPropertyArgs = {
+    record: crate,
+    key: 'downloads',
+  };
+  const downloads = externalProperty(downloadsArgs);
+  const recentDownloadsArgs: ExternalPropertyArgs = {
     record: crate,
     key: 'recent_downloads',
-  });
+  };
+  const recentDownloads = externalProperty(recentDownloadsArgs);
   if (
     downloads.presence === ExternalPropertyPresence.Absent ||
     typeof downloads.value !== 'number' ||
@@ -67,24 +77,33 @@ async function resolveCrateGitHubStars(
   if (!isRecord(payload)) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const versions = externalProperty({ record: payload, key: 'versions' });
+  const versionsArgs: ExternalPropertyArgs = {
+    record: payload,
+    key: 'versions',
+  };
+  const versions = externalProperty(versionsArgs);
   if (
     versions.presence === ExternalPropertyPresence.Absent ||
     !Array.isArray(versions.value)
   ) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const crateProperty = externalProperty({ record: payload, key: 'crate' });
+  const cratePropertyArgs: ExternalPropertyArgs = {
+    record: payload,
+    key: 'crate',
+  };
+  const crateProperty = externalProperty(cratePropertyArgs);
   if (
     crateProperty.presence === ExternalPropertyPresence.Absent ||
     !isRecord(crateProperty.value)
   ) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const repository = externalProperty({
+  const repositoryArgs: ExternalPropertyArgs = {
     record: crateProperty.value,
     key: 'repository',
-  });
+  };
+  const repository = externalProperty(repositoryArgs);
   if (
     repository.presence === ExternalPropertyPresence.Absent ||
     typeof repository.value !== 'string'
@@ -113,7 +132,11 @@ async function resolveCrateGitHubStars(
   if (!isRecord(json)) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const stars = externalProperty({ record: json, key: 'stargazers_count' });
+  const starsArgs: ExternalPropertyArgs = {
+    record: json,
+    key: 'stargazers_count',
+  };
+  const stars = externalProperty(starsArgs);
   if (
     stars.presence === ExternalPropertyPresence.Absent ||
     typeof stars.value !== 'number'

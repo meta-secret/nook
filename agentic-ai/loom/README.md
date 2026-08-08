@@ -97,6 +97,8 @@ Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/
   ([typescript-no-unknown.md](../../.cortex/dynamic-skills/typescript-no-unknown.md))
 - discovery `inputSchema` constants are typed `ObjectJsonSchema`, built with
   `objectJsonSchema` / field enums (not raw `{ type: 'object', ... } as const`)
+- call sites pass named typed args values, never inline `{ ... }` object
+  literals ([typescript-named-args.md](../../.cortex/dynamic-skills/typescript-named-args.md))
 
 Enforced by `task preflight:typescript-state`, Loom ESLint (`max-params`,
 `no-restricted-types`), and `task loom:verify`.

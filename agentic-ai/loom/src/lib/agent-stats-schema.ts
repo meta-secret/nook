@@ -7,6 +7,7 @@ import {
   isRecord,
 } from './guards.ts';
 
+import type { ExternalPropertyArgs } from './guards.ts';
 export type AgentStatsValidation = {
   readonly ok: boolean;
   readonly errors: string[];
@@ -35,10 +36,11 @@ export function validateAgentStatsYaml(
   }
 
   const errors: string[] = [];
-  const schemaVersion = externalProperty({
+  const schemaVersionArgs: ExternalPropertyArgs = {
     record: parsed,
     key: 'schema_version',
-  });
+  };
+  const schemaVersion = externalProperty(schemaVersionArgs);
   if (
     schemaVersion.presence === ExternalPropertyPresence.Absent ||
     schemaVersion.value !== 3
@@ -46,10 +48,11 @@ export function validateAgentStatsYaml(
     errors.push('schema_version must be 3');
   }
 
-  const sourcePrProperty = externalProperty({
+  const sourcePrPropertyArgs: ExternalPropertyArgs = {
     record: parsed,
     key: 'source_pr',
-  });
+  };
+  const sourcePrProperty = externalProperty(sourcePrPropertyArgs);
   const sourcePr =
     sourcePrProperty.presence === ExternalPropertyPresence.Present &&
     isRecord(sourcePrProperty.value)
@@ -61,10 +64,11 @@ export function validateAgentStatsYaml(
   ) {
     errors.push('source_pr must be a mapping');
   } else {
-    const numberProperty = externalProperty({
+    const numberPropertyArgs: ExternalPropertyArgs = {
       record: sourcePr,
       key: 'number',
-    });
+    };
+    const numberProperty = externalProperty(numberPropertyArgs);
     if (
       numberProperty.presence === ExternalPropertyPresence.Absent ||
       numberProperty.value !== expectedPrNumber
@@ -86,7 +90,11 @@ export function validateAgentStatsYaml(
       'opened_at',
       'merged_at',
     ] as const) {
-      const property = externalProperty({ record: sourcePr, key: key });
+      const propertyArgs5: ExternalPropertyArgs = {
+        record: sourcePr,
+        key: key,
+      };
+      const property = externalProperty(propertyArgs5);
       if (
         property.presence === ExternalPropertyPresence.Absent ||
         typeof property.value !== 'string' ||
@@ -96,7 +104,11 @@ export function validateAgentStatsYaml(
       }
     }
     for (const key of ['elapsed_seconds', 'open_to_merge_seconds'] as const) {
-      const property = externalProperty({ record: sourcePr, key: key });
+      const propertyArgs4: ExternalPropertyArgs = {
+        record: sourcePr,
+        key: key,
+      };
+      const property = externalProperty(propertyArgs4);
       if (
         property.presence === ExternalPropertyPresence.Absent ||
         !isNonNegativeInt(property.value)
@@ -106,7 +118,11 @@ export function validateAgentStatsYaml(
     }
   }
 
-  const summaryProperty = externalProperty({ record: parsed, key: 'summary' });
+  const summaryPropertyArgs: ExternalPropertyArgs = {
+    record: parsed,
+    key: 'summary',
+  };
+  const summaryProperty = externalProperty(summaryPropertyArgs);
   const summary =
     summaryProperty.presence === ExternalPropertyPresence.Present &&
     isRecord(summaryProperty.value)
@@ -130,7 +146,8 @@ export function validateAgentStatsYaml(
       'agent_requested_rerun_count',
       'merge_attempt_count',
     ] as const) {
-      const property = externalProperty({ record: summary, key: key });
+      const propertyArgs3: ExternalPropertyArgs = { record: summary, key: key };
+      const property = externalProperty(propertyArgs3);
       if (
         property.presence === ExternalPropertyPresence.Absent ||
         !isNonNegativeInt(property.value)
@@ -140,10 +157,11 @@ export function validateAgentStatsYaml(
     }
   }
 
-  const inventoryProperty = externalProperty({
+  const inventoryPropertyArgs: ExternalPropertyArgs = {
     record: parsed,
     key: 'test_inventory',
-  });
+  };
+  const inventoryProperty = externalProperty(inventoryPropertyArgs);
   const inventory =
     inventoryProperty.presence === ExternalPropertyPresence.Present &&
     isRecord(inventoryProperty.value)
@@ -155,30 +173,33 @@ export function validateAgentStatsYaml(
   ) {
     errors.push('test_inventory must be a mapping');
   } else {
-    const measuredAt = externalProperty({
+    const measuredAtArgs: ExternalPropertyArgs = {
       record: inventory,
       key: 'measured_at',
-    });
+    };
+    const measuredAt = externalProperty(measuredAtArgs);
     if (
       measuredAt.presence === ExternalPropertyPresence.Absent ||
       typeof measuredAt.value !== 'string'
     ) {
       errors.push('test_inventory.measured_at must be a string');
     }
-    const inventoryHeadSha = externalProperty({
+    const inventoryHeadShaArgs: ExternalPropertyArgs = {
       record: inventory,
       key: 'head_sha',
-    });
+    };
+    const inventoryHeadSha = externalProperty(inventoryHeadShaArgs);
     if (
       inventoryHeadSha.presence === ExternalPropertyPresence.Absent ||
       typeof inventoryHeadSha.value !== 'string'
     ) {
       errors.push('test_inventory.head_sha must be a string');
     }
-    const sourceHeadSha = externalProperty({
+    const sourceHeadShaArgs: ExternalPropertyArgs = {
       record: sourcePr,
       key: 'head_sha',
-    });
+    };
+    const sourceHeadSha = externalProperty(sourceHeadShaArgs);
     if (
       sourcePrProperty.presence === ExternalPropertyPresence.Present &&
       isRecord(sourcePrProperty.value) &&
@@ -189,10 +210,11 @@ export function validateAgentStatsYaml(
     ) {
       errors.push('test_inventory.head_sha must match source_pr.head_sha');
     }
-    const byTypeProperty = externalProperty({
+    const byTypePropertyArgs: ExternalPropertyArgs = {
       record: inventory,
       key: 'by_type',
-    });
+    };
+    const byTypeProperty = externalProperty(byTypePropertyArgs);
     if (
       byTypeProperty.presence === ExternalPropertyPresence.Absent ||
       !isRecord(byTypeProperty.value)
@@ -202,7 +224,11 @@ export function validateAgentStatsYaml(
       const byType = byTypeProperty.value;
       let sum = 0;
       for (const key of ['rust', 'preflight', 'web_unit', 'e2e'] as const) {
-        const property = externalProperty({ record: byType, key: key });
+        const propertyArgs2: ExternalPropertyArgs = {
+          record: byType,
+          key: key,
+        };
+        const property = externalProperty(propertyArgs2);
         if (
           property.presence === ExternalPropertyPresence.Absent ||
           !isNonNegativeInt(property.value)
@@ -214,10 +240,11 @@ export function validateAgentStatsYaml(
           sum += property.value;
         }
       }
-      const totalProperty = externalProperty({
+      const totalPropertyArgs: ExternalPropertyArgs = {
         record: inventory,
         key: 'total',
-      });
+      };
+      const totalProperty = externalProperty(totalPropertyArgs);
       if (
         totalProperty.presence === ExternalPropertyPresence.Present &&
         isNonNegativeInt(totalProperty.value) &&
@@ -234,7 +261,8 @@ export function validateAgentStatsYaml(
     'pr_retriggers',
     'merge_attempts',
   ] as const) {
-    const property = externalProperty({ record: parsed, key: key });
+    const propertyArgs: ExternalPropertyArgs = { record: parsed, key: key };
+    const property = externalProperty(propertyArgs);
     if (
       property.presence === ExternalPropertyPresence.Absent ||
       !Array.isArray(property.value)
@@ -243,27 +271,33 @@ export function validateAgentStatsYaml(
     }
   }
 
-  const comparison = externalProperty({ record: parsed, key: 'comparison' });
+  const comparisonArgs: ExternalPropertyArgs = {
+    record: parsed,
+    key: 'comparison',
+  };
+  const comparison = externalProperty(comparisonArgs);
   if (
     comparison.presence === ExternalPropertyPresence.Absent ||
     !isRecord(comparison.value)
   ) {
     errors.push('comparison must be a mapping');
   }
-  const wasteAssessment = externalProperty({
+  const wasteAssessmentArgs: ExternalPropertyArgs = {
     record: parsed,
     key: 'waste_assessment',
-  });
+  };
+  const wasteAssessment = externalProperty(wasteAssessmentArgs);
   if (
     wasteAssessment.presence === ExternalPropertyPresence.Absent ||
     !isRecord(wasteAssessment.value)
   ) {
     errors.push('waste_assessment must be a mapping');
   }
-  const cacheTelemetry = externalProperty({
+  const cacheTelemetryArgs: ExternalPropertyArgs = {
     record: parsed,
     key: 'cache_telemetry',
-  });
+  };
+  const cacheTelemetry = externalProperty(cacheTelemetryArgs);
   if (
     cacheTelemetry.presence === ExternalPropertyPresence.Absent ||
     !isRecord(cacheTelemetry.value)
@@ -271,20 +305,22 @@ export function validateAgentStatsYaml(
     errors.push('cache_telemetry must be a mapping');
   }
 
-  const localExecutions = externalProperty({
+  const localExecutionsArgs: ExternalPropertyArgs = {
     record: parsed,
     key: 'local_executions',
-  });
+  };
+  const localExecutions = externalProperty(localExecutionsArgs);
   if (
     summaryProperty.presence === ExternalPropertyPresence.Present &&
     isRecord(summaryProperty.value) &&
     localExecutions.presence === ExternalPropertyPresence.Present &&
     Array.isArray(localExecutions.value)
   ) {
-    const count = externalProperty({
+    const countArgs4: ExternalPropertyArgs = {
       record: summary,
       key: 'local_execution_count',
-    });
+    };
+    const count = externalProperty(countArgs4);
     if (
       count.presence === ExternalPropertyPresence.Present &&
       count.value !== localExecutions.value.length
@@ -294,20 +330,22 @@ export function validateAgentStatsYaml(
       );
     }
   }
-  const githubActionsRuns = externalProperty({
+  const githubActionsRunsArgs: ExternalPropertyArgs = {
     record: parsed,
     key: 'github_actions_runs',
-  });
+  };
+  const githubActionsRuns = externalProperty(githubActionsRunsArgs);
   if (
     summaryProperty.presence === ExternalPropertyPresence.Present &&
     isRecord(summaryProperty.value) &&
     githubActionsRuns.presence === ExternalPropertyPresence.Present &&
     Array.isArray(githubActionsRuns.value)
   ) {
-    const count = externalProperty({
+    const countArgs3: ExternalPropertyArgs = {
       record: summary,
       key: 'github_actions_run_count',
-    });
+    };
+    const count = externalProperty(countArgs3);
     if (
       count.presence === ExternalPropertyPresence.Present &&
       count.value !== githubActionsRuns.value.length
@@ -317,20 +355,22 @@ export function validateAgentStatsYaml(
       );
     }
   }
-  const mergeAttempts = externalProperty({
+  const mergeAttemptsArgs: ExternalPropertyArgs = {
     record: parsed,
     key: 'merge_attempts',
-  });
+  };
+  const mergeAttempts = externalProperty(mergeAttemptsArgs);
   if (
     summaryProperty.presence === ExternalPropertyPresence.Present &&
     isRecord(summaryProperty.value) &&
     mergeAttempts.presence === ExternalPropertyPresence.Present &&
     Array.isArray(mergeAttempts.value)
   ) {
-    const count = externalProperty({
+    const countArgs2: ExternalPropertyArgs = {
       record: summary,
       key: 'merge_attempt_count',
-    });
+    };
+    const count = externalProperty(countArgs2);
     if (
       count.presence === ExternalPropertyPresence.Present &&
       count.value !== mergeAttempts.value.length
@@ -340,20 +380,22 @@ export function validateAgentStatsYaml(
       );
     }
   }
-  const prRetriggers = externalProperty({
+  const prRetriggersArgs: ExternalPropertyArgs = {
     record: parsed,
     key: 'pr_retriggers',
-  });
+  };
+  const prRetriggers = externalProperty(prRetriggersArgs);
   if (
     summaryProperty.presence === ExternalPropertyPresence.Present &&
     isRecord(summaryProperty.value) &&
     prRetriggers.presence === ExternalPropertyPresence.Present &&
     Array.isArray(prRetriggers.value)
   ) {
-    const count = externalProperty({
+    const countArgs: ExternalPropertyArgs = {
       record: summary,
       key: 'pr_retrigger_count',
-    });
+    };
+    const count = externalProperty(countArgs);
     if (
       count.presence === ExternalPropertyPresence.Present &&
       count.value !== prRetriggers.value.length
