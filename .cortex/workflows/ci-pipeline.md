@@ -11,7 +11,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 | Workflow | Trigger | What runs | GitHub PAT |
 | --- | --- | --- | --- |
-| [`remote.yml`](../../.github/workflows/remote.yml) | Manual allowlisted task dispatch | One focused Taskfile command; no merge authorization | No |
+| [`remote.yml`](../../.github/workflows/remote.yml) | Manual allowlisted task dispatch | Focused command batch; no merge authorization | No |
 | [`pr.yml`](../../.github/workflows/pr.yml) | Explicit `ci:validate` / `ci:full-e2e` label | Exact-head PR gate, including Rust ecosystem jobs | No |
 | [`rust-ecosystem.yml`](../../.github/workflows/rust-ecosystem.yml) | Schedule, path-filtered main push, manual | Non-PR Rust ecosystem entry points | No |
 | [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml) | Successful same-repository PR workflow | Promote trusted PR artifacts | No |
@@ -30,7 +30,9 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 **`remote.yml`**
 
-- One selected focused Taskfile command on an independent GitHub-hosted runner.
+- One or more selected Taskfile commands on one GitHub-hosted runner.
+- Checkout, Docker setup, and cache connection happen once per batch.
+- Selected tasks run sequentially and report individual results.
 - Git-commit-scoped Zot writes (`-git-<sha>`), with Main used only while the
   exact scope is absent.
 - Read-only SeaweedFS compiler-object access.
@@ -121,7 +123,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 ```mermaid
 flowchart LR
-  branch[Exact pushed branch head] --> remote_yml[remote.yml focused task]
+  branch[Exact pushed branch head] --> remote_yml[remote.yml focused task batch]
   PR[Ready pull request] --> label[Validation label]
   label --> pr_yml[pr.yml]
   pr_yml --> preview[Cloudflare isolated aliases]
@@ -612,7 +614,8 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 
 **Agent remote commands:**
 
-- Agents use `task remote TASK_NAME=<name>` for focused build/test feedback.
+- Agents use `task remote TASK_NAME=<name>` for one focused command.
+- Agents use `task remote TASK_NAMES=<a>,<b>` to reuse one job for a batch.
 - When the branch is ready, they run `task pr:validate PR=<number>` (or `FULL_E2E=1`) and wait only for the applicable repository-owned exact-head PR checks.
 - Ordinary pushes do not start `pr.yml`.
 - Every later push requires another explicit validation before readiness.
@@ -728,7 +731,9 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 **Agent efficiency rules:**
 
 1. **Before product validation** — `task format` (+ UI demo contract when UI), then commit and push/open/update the PR so the exact head can run remotely.
-2. **Focused hosted iteration** — dispatch only the useful allowlisted remote tasks; independent tasks may occupy independent workers.
+2. **Focused hosted iteration** — batch useful allowlisted tasks when they need
+   the same head. Use separate dispatches when parallel compute is worth another
+   runner.
 3. **After any remote CI failure** — read test output and static-analysis errors, then **persisted app logs** (see below), fix, `task format`, push the completed fix, then dispatch focused work or explicitly trigger complete validation again.
 4. **Complete gate only when ready** — run `task pr:validate`; a push never refreshes that gate automatically.
 

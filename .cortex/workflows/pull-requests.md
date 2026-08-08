@@ -116,10 +116,8 @@ Always run `task loom:pre-push` again before every fix re-push.
 Focused hosted commands (never merge gates):
 
 ```bash
-task remote TASK_NAME=web:check
-task remote TASK_NAME=web:test
-task remote TASK_NAME=rust:test
-task remote TASK_NAME=rust:coverage
+task remote TASK_NAMES=web:check,web:test
+task remote TASK_NAMES=rust:test,rust:coverage
 ```
 
 Complete validation:
@@ -134,7 +132,7 @@ task pr:validate PR=<number> FULL_E2E=1
 | -------------------------- | ------------------------------------------------ | ----------------------------------------------- |
 | Before every push          | `task loom:pre-push`                             | Only required local product action              |
 | UI-facing path changes     | included in Loom pre-push                        | Cheap hygiene before hosted execution           |
-| Focused build/test feedback| `task remote TASK_NAME=<name>`                   | Use one hosted worker for the selected task     |
+| Focused build/test feedback| `task remote TASK_NAMES=<a>,<b>`                | Reuse one hosted worker for selected tasks      |
 | Final validation boundary  | `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`     | Start the complete exact-head PR gate           |
 | After complete CI failure  | fix → format → commit → push → validate again    | A push does not automatically refresh `pr.yml`  |
 

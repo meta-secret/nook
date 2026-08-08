@@ -9,30 +9,14 @@ name: Remote task
 on:
   workflow_dispatch:
     inputs:
+      tasks:
+        description: Comma-separated allowlisted Taskfile commands
+        required: false
+        type: string
       task:
-        description: Allowlisted Taskfile command
-        required: true
-        type: choice
-        options:
-          - preflight
-          - bake-cache:prove
-          - rust-cache:promote
-          - rust:test
-          - rust:lint
-          - rust:coverage
-          - wasm:build
-          - wasm:test
-          - wasm:test:browser
-          - web:check
-          - web:test
-          - web:build
-          - web:e2e
-          - extension:check
-          - extension:e2e
-          - hive:verify
-          - check
-          - ci:pr
-          - ci:pr:e2e
+        description: Legacy single task or internal cache promotion selector
+        required: false
+        type: string
       cache_fingerprint:
         description: Rust dependency candidate fingerprint (promotion task only)
         required: false
@@ -51,9 +35,7 @@ permissions:
   contents: read
 
 concurrency:
-  # Every writable ref is branch-and-task scoped, so independent catalog tasks retain the
-  # documented parallel execution model without competing to replace a cache manifest.
-  group: remote-${{ github.ref }}-${{ inputs.task }}
+  group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}
   cancel-in-progress: false
 
 env:
@@ -62,13 +44,26 @@ env:
   DOCKER_E2E_IMAGE: nook-web-e2e:remote-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
-  preflight:
-    if: inputs.task == 'preflight'
-    name: Remote / preflight
+  batch:
+    if: inputs.task != 'rust-cache:promote' || inputs.tasks != ''
+    name: Remote / ${{ inputs.tasks || inputs.task }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 360
+    env:
+      REQUESTED_REMOTE_BATCH: ${{ inputs.tasks }}
+      REQUESTED_REMOTE_TASK: ${{ inputs.task }}
+      REQUESTED_REMOTE_TASKS: ${{ inputs.tasks || inputs.task }}
     steps:
       - uses: actions/checkout@v7
+      - name: Validate batch request
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$REQUESTED_REMOTE_BATCH" && -n "$REQUESTED_REMOTE_TASK" ]]; then
+            echo "Set either tasks or task, not both." >&2
+            exit 2
+          fi
+          .github/scripts/remote-task-batch.sh --validate "$REQUESTED_REMOTE_TASKS"
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
@@ -81,31 +76,22 @@ jobs:
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: "true"
-      - run: task preflight
-
-  bake-cache-prove:
-    if: inputs.task == 'bake-cache:prove'
-    name: Remote / bake-cache:prove
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
+      - name: Run allowlisted task batch
+        shell: bash
+        env:
+          E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts
+        run: .github/scripts/remote-task-batch.sh --run "$REQUESTED_REMOTE_TASKS"
+      - name: Preserve Playwright diagnostics
+        if: always() && (contains(inputs.tasks, 'e2e') || contains(inputs.task, 'e2e'))
+        uses: actions/upload-artifact@v7
         with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task infra:bake-cache:prove
+          name: remote-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nook-e2e-artifacts
+          if-no-files-found: warn
+          retention-days: 15
 
   rust-cache-promote:
-    if: inputs.task == 'rust-cache:promote'
+    if: inputs.task == 'rust-cache:promote' && inputs.tasks == ''
     name: Remote / rust-cache:promote
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -138,369 +124,3 @@ jobs:
           )"
           test "$committed_fingerprint" = "$PROMOTION_FINGERPRINT"
           bash .github/scripts/rust-deps-cache-promote.sh "$PROMOTION_FINGERPRINT" "$PROMOTION_CANDIDATE"
-
-  rust-test:
-    if: inputs.task == 'rust:test'
-    name: Remote / rust:test
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task remote:rust:test
-
-  rust-lint:
-    if: inputs.task == 'rust:lint'
-    name: Remote / rust:lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task remote:rust:lint
-
-  rust-coverage:
-    if: inputs.task == 'rust:coverage'
-    name: Remote / rust:coverage
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task remote:rust:coverage
-
-  wasm-build:
-    if: inputs.task == 'wasm:build'
-    name: Remote / wasm:build
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task wasm:build
-
-  wasm-test:
-    if: inputs.task == 'wasm:test'
-    name: Remote / wasm:test
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task wasm:test
-
-  wasm-test-browser:
-    if: inputs.task == 'wasm:test:browser'
-    name: Remote / wasm:test:browser
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task wasm:test:browser
-
-  web-check:
-    if: inputs.task == 'web:check'
-    name: Remote / web:check
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task remote:web:check
-
-  web-test:
-    if: inputs.task == 'web:test'
-    name: Remote / web:test
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task remote:web:test
-
-  web-build:
-    if: inputs.task == 'web:build'
-    name: Remote / web:build
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task web:build
-
-  web-e2e:
-    if: inputs.task == 'web:e2e'
-    name: Remote / web:e2e
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: >-
-          task web:test:e2e
-          E2E_ARTIFACT_DIR=${{ runner.temp }}/nook-e2e-artifacts
-      - name: Preserve Playwright diagnostics
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: remote-web-e2e-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/nook-e2e-artifacts
-          if-no-files-found: warn
-          retention-days: 15
-
-  extension-check:
-    if: inputs.task == 'extension:check'
-    name: Remote / extension:check
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task remote:extension:check
-
-  extension-e2e:
-    if: inputs.task == 'extension:e2e'
-    name: Remote / extension:e2e
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: >-
-          task extension:test:e2e
-          E2E_ARTIFACT_DIR=${{ runner.temp }}/nook-e2e-artifacts
-      - name: Preserve Playwright diagnostics
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: remote-extension-e2e-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/nook-e2e-artifacts
-          if-no-files-found: warn
-          retention-days: 15
-
-  hive-verify:
-    if: inputs.task == 'hive:verify'
-    name: Remote / hive:verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task hive:verify
-
-  check:
-    if: inputs.task == 'check'
-    name: Remote / check
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task check
-
-  ci-pr:
-    if: inputs.task == 'ci:pr'
-    name: Remote / ci:pr
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: task ci:pr
-
-  ci-pr-e2e:
-    if: inputs.task == 'ci:pr:e2e'
-    name: Remote / ci:pr:e2e
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
-      - run: >-
-          task ci:pr:e2e
-          E2E_ARTIFACT_DIR=${{ runner.temp }}/nook-e2e-artifacts
-      - name: Preserve Playwright diagnostics
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: remote-ci-pr-e2e-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/nook-e2e-artifacts
-          if-no-files-found: warn
-          retention-days: 15
