@@ -333,9 +333,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "native deps/source must restore the v3 own scopes after leaving short-chain rust-base"
     );
     assert!(
-        !nightly_from.contains("nook/buildcache/nook-rust-ecosystem-nightly")
-            && !policy_tools_from.contains("nook/buildcache/nook-rust-ecosystem-policy-tools"),
-        "nightly/policy-tools PR FALLBACK must not import thin trusted Main indexes"
+        nightly_from.contains("nook/buildcache/nook-rust-ecosystem-nightly-v4")
+            && policy_tools_from.contains("nook/buildcache/nook-rust-ecosystem-policy-tools-v4"),
+        "nightly/policy-tools FALLBACK must restore fat Main indexes so PR verify is not cold"
     );
     assert!(
         dylint_from.contains("nook-rust-ecosystem-dylint-v2")
