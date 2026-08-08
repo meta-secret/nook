@@ -485,6 +485,17 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         echo "scenario T ok"
 
+        echo "== Scenario U: promoter setup failure leaves stable input intact =="
+        # A workflow/action failure occurs before the promoter process runs.
+        # Model that boundary by preserving the already verified tag while the
+        # quarantined candidate remains unreachable from PR cache imports.
+        test "$(registry_ref_code "$input_repository" "$stable_tag")" = "200"
+        test "$(registry_ref_code "$input_repository" "candidate-${deps_fingerprint}-local-rejected")" = "200"
+        create_builder "nook-bake-sim-u-pr-${suffix}"
+        bake_plain "$proof_log" parent
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        echo "scenario U ok"
+
         echo "== Scenario Q: inline PR verification publishes Hive-style exact leaf =="
         # A standalone PR workflow first restores its unchanged dependency/tool
         # stages from trusted Main. The verified build writes only its isolated

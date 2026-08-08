@@ -130,8 +130,8 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
     }
     assert!(
         promotion_workflow.contains("workflow_dispatch:")
-            && promotion_workflow.contains("oras-project/setup-oras@v1")
-            && promotion_workflow.contains("version: 1.3.2")
+            && promotion_workflow.contains("oras-project/setup-oras@v2")
+            && promotion_workflow.contains("version: 1.3.3")
             && promotion_workflow.contains("NOOK_REGISTRY_REMOTE_USERNAME")
             && promotion_workflow.contains("rust-deps-cache-promote.sh")
             && promotion_workflow
@@ -141,8 +141,7 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
             && promotion_workflow
                 .contains("NOOK_RUST_DEPS_FINGERPRINT_ROOT=\"$GITHUB_WORKSPACE/candidate-source\"")
             && !promotion_workflow.contains("promote.sh \"${{ inputs.")
-            && promotion_workflow.contains("Remote / rust-cache:promote")
-            && promotion_workflow.contains("version: 1.3.2"),
+            && promotion_workflow.contains("Remote / rust-cache:promote"),
         "local candidates must be validated and promoted by the allowlisted hosted workflow"
     );
     assert!(
