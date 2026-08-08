@@ -341,17 +341,26 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario K ok"
 
-        echo "== Scenario L: leaf-nested with bare base keeps parent CACHED =="
-        # Mirrors dylint leaf nesting nightly+rust-base. Context rust-base must omit
-        # cache-from (BASE_OWN empty); static theorems ban short rust-base import.
-        # leaf-nested has no own-scope export — only parent RUN cache is asserted.
+        echo "== Scenario L: same-builder leaf after verify; short base orphans =="
+        # Mirrors dylint: nightly:verify CACHED on the builder, then leaf bake.
+        # Short base cache-from during leaf orphans the verified parent RUNs.
+        # Bare base (BASE_OWN empty) keeps parent CACHED — real rust-base omits cache-from.
         BAKE_SIM_CACHE_ENABLED=1
         BAKE_SIM_CACHE_WRITE_ENABLED=
         BAKE_SIM_CACHE_FALLBACK_ENABLED=
         BAKE_SIM_CACHE_SCOPE_SUFFIX=
         BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
         BAKE_SIM_BASE_OWN_CACHE_ENABLED=
-        create_builder "nook-bake-sim-l-${suffix}"
+        create_builder "nook-bake-sim-l-broken-${suffix}"
+        bake_plain "$proof_log" parent-nested
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=1
+        bake_plain "$proof_log" leaf-nested
+        require_uncached_step "$proof_log" "bake-sim-parent-expensive"
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=
+        create_builder "nook-bake-sim-l-fixed-${suffix}"
+        bake_plain "$proof_log" parent-nested
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
         bake_plain "$proof_log" leaf-nested
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         echo "scenario L ok"
