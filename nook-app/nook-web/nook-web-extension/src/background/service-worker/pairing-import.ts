@@ -1,7 +1,9 @@
 import type { ExtensionPairingApprovedMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import type { StorageProvider } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
+  type ProviderCredentialCleanupArgs,
   ProviderCredentialStagingKind,
+  runWithProviderCredentialCleanup,
   scrubProviderCredentials,
   stageProviderCredentials,
 } from '../../lib/provider-credential-staging'
@@ -94,7 +96,15 @@ async function importDecodedApprovedPairing(
         },
       }
       scrubProviderCredentials(providers)
-      const sessionImport = await sendSessionMessage(importMessage)
+      type SessionImportResponse = Awaited<
+        ReturnType<typeof sendSessionMessage>
+      >
+      const handoffArgs: ProviderCredentialCleanupArgs<SessionImportResponse> =
+        {
+          providers: importMessage.payload.providers,
+          operation: () => sendSessionMessage(importMessage),
+        }
+      const sessionImport = await runWithProviderCredentialCleanup(handoffArgs)
       if (
         !sessionImport ||
         typeof sessionImport !== 'object' ||
@@ -126,16 +136,21 @@ export async function importApprovedPairing(
   message: ExtensionPairingApprovedMessage,
 ): Promise<{ ok: boolean; reason?: string; eventCount?: number }> {
   try {
-    const staging = stageProviderCredentials(message.payload.providers)
+    const sourceProviders = message.payload.providers
+    const staging = stageProviderCredentials(sourceProviders)
+    scrubProviderCredentials(sourceProviders)
+    message.payload.providers = []
     if (staging.kind !== ProviderCredentialStagingKind.Staged) {
-      scrubProviderCredentials(message.payload.providers)
-      message.payload.providers = []
       return { ok: false, reason: 'invalid-provider-payload' }
     }
     const stagedProviders = staging.providers
-    message.payload.providers = []
     try {
-      const providers = await decodeExtensionStorageProviders(stagedProviders)
+      let providers: StorageProvider[]
+      try {
+        providers = await decodeExtensionStorageProviders(stagedProviders)
+      } catch {
+        return { ok: false, reason: 'invalid-provider-payload' }
+      }
       const args: ImportDecodedApprovedPairingArgs = { message, providers }
       return await importDecodedApprovedPairing(args)
     } finally {

@@ -108,6 +108,31 @@ describe('typed API named arguments', () => {
     ])
   })
 
+  test('rejects object literals expanded from a named spread array', () => {
+    const messages = lint(`
+      declare function consume(...values: { name: string }[]): void
+      const packed = [{ name: 'Nook' }]
+      consume(...packed)
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
+  test('rejects object literals assigned to a spread array name', () => {
+    const messages = lint(`
+      declare function consume(...values: { name: string }[]): void
+      let packed
+      packed = [{ name: 'Nook' }]
+      consume(...packed)
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
   test('rejects object literals nested in call-site expressions', () => {
     const messages = lint(`
       declare const flag: boolean

@@ -73,6 +73,21 @@ export function scrubProviderCredentials(providers: object): void {
   }
 }
 
+export type ProviderCredentialCleanupArgs<Result> = {
+  providers: object
+  operation: () => Promise<Result>
+}
+
+export async function runWithProviderCredentialCleanup<Result>(
+  args: ProviderCredentialCleanupArgs<Result>,
+): Promise<Result> {
+  try {
+    return await args.operation()
+  } finally {
+    scrubProviderCredentials(args.providers)
+  }
+}
+
 export function stageProviderCredentials(
   providers: ExternalValueCandidate,
 ): ProviderCredentialStaging {

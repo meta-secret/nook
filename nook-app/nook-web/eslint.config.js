@@ -181,13 +181,88 @@ export const noRawObjectArgumentsRule = {
     }
 
     function inspectSpreadArgument(argument) {
-      const expression = unwrapTypeScriptExpression(argument.argument)
-      if (expression.type !== 'ArrayExpression') return
-      for (const element of expression.elements) {
+      const elements = spreadArrayElements({
+        expression: argument.argument,
+        seenVariables: new Set(),
+      })
+      for (const element of elements) {
         if (element && element.type !== 'SpreadElement') {
           inspectInlineObjectExpressions(element)
         }
       }
+    }
+
+    function spreadArrayElements(args) {
+      const { expression, seenVariables } = args
+      const unwrapped = unwrapTypeScriptExpression(expression)
+      if (unwrapped.type === 'ArrayExpression') return unwrapped.elements
+      if (unwrapped.type === 'AssignmentExpression') {
+        return spreadArrayElements({
+          expression: unwrapped.right,
+          seenVariables,
+        })
+      }
+      if (unwrapped.type === 'ConditionalExpression') {
+        return [
+          ...spreadArrayElements({
+            expression: unwrapped.consequent,
+            seenVariables,
+          }),
+          ...spreadArrayElements({
+            expression: unwrapped.alternate,
+            seenVariables,
+          }),
+        ]
+      }
+      if (unwrapped.type === 'LogicalExpression') {
+        return [
+          ...spreadArrayElements({
+            expression: unwrapped.left,
+            seenVariables,
+          }),
+          ...spreadArrayElements({
+            expression: unwrapped.right,
+            seenVariables,
+          }),
+        ]
+      }
+      if (unwrapped.type === 'SequenceExpression') {
+        return unwrapped.expressions.flatMap((child) =>
+          spreadArrayElements({ expression: child, seenVariables }),
+        )
+      }
+      if (unwrapped.type !== 'Identifier') return []
+      const lookup = declaredVariable(unwrapped)
+      if (lookup.kind === VariableLookupKind.NotFound) return []
+      const { variable } = lookup
+      if (seenVariables.has(variable)) return []
+      seenVariables.add(variable)
+      const elements = []
+      for (const definition of variable.defs) {
+        if (
+          definition.type === 'Variable' &&
+          definition.node.type === 'VariableDeclarator' &&
+          definition.node.init
+        ) {
+          elements.push(
+            ...spreadArrayElements({
+              expression: definition.node.init,
+              seenVariables,
+            }),
+          )
+        }
+      }
+      for (const reference of variable.references) {
+        if (reference.isWrite() && reference.writeExpr) {
+          elements.push(
+            ...spreadArrayElements({
+              expression: reference.writeExpr,
+              seenVariables,
+            }),
+          )
+        }
+      }
+      return elements
     }
 
     function inspectArguments(node) {
