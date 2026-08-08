@@ -50,7 +50,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
-      E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts
       REQUESTED_REMOTE_BATCH: ${{ inputs.tasks }}
       REQUESTED_REMOTE_TASK: ${{ inputs.task }}
       REQUESTED_REMOTE_TASKS: ${{ inputs.tasks || inputs.task }}
@@ -79,6 +78,8 @@ jobs:
           isolated-cache-write: "true"
       - name: Run allowlisted task batch
         shell: bash
+        env:
+          E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts
         run: .github/scripts/remote-task-batch.sh --run "$REQUESTED_REMOTE_TASKS"
       - name: Preserve Playwright diagnostics
         if: always() && (contains(inputs.tasks, 'e2e') || contains(inputs.task, 'e2e'))
