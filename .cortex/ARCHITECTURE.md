@@ -832,6 +832,7 @@ It restores the independent lineages from `registry.dev.nokey.sh`.
 - It exports native and WASM dependency boundaries to `nook-rust-deps-v3` and the fingerprinted WASM deps ref with `mode=max`.
 - The WASM deps fingerprint covers cook-affecting Cargo and lineage Dockerfile inputs only.
 - WASM deps restore may fall back to longer `nook-rust-wasm-source-v2` when that fingerprint is empty.
+- Preflight owns static Bake cache proofs in `bake_cache_proofs.rs` for the Zot restore graph.
 - Source-sensitive native coverage and WASM outputs use separate `nook-rust-native-source-v3` and `nook-rust-wasm-source-v2` refs.
 - A workflow-only or web-only push does not recompile unchanged Rust on a fresh hosted runner.
 - Same-repository PR jobs restore Main plus the git-commit remote-buildcache scope.

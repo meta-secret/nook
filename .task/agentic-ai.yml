@@ -69,7 +69,16 @@ tasks:
     requires:
       vars: [CONFIG]
     cmds:
-      - bun run --cwd agentic-ai/loom loom -- {{.CONFIG}}
+      # CONFIG paths are repo-root relative (or absolute). Resolve before --cwd so
+      # bun does not look under agentic-ai/loom/agentic-ai/loom/params/...
+      - |
+        set -euo pipefail
+        config="{{.CONFIG}}"
+        case "$config" in
+          /*) ;;
+          *) config="{{.REPO_ROOT}}/$config" ;;
+        esac
+        bun run --cwd agentic-ai/loom loom -- "$config"
 
   loom:pre-push:
     desc: Format Loom, then run the pre-push YAML request.

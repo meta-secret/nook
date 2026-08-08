@@ -75,6 +75,8 @@ Discover request kinds:
 
 ```bash
 task loom:tools-list
+# or (path is relative to the Loom package cwd)
+bun run --cwd agentic-ai/loom loom -- params/tools-list/default.yaml
 ```
 
 ## TypeScript domain structure
@@ -106,7 +108,29 @@ task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 task loom:pr-land CONFIG=path/to/validate-request.yaml
 ```
 
+`task loom:run` resolves repo-root-relative `CONFIG` paths before entering the
+Loom package cwd.
+
+Direct Bun surface (paths are relative to `agentic-ai/loom`):
+
+```bash
+bun run --cwd agentic-ai/loom loom -- params/pre-push/default.yaml
+```
+
 Committed examples live under `params/<domain>/`.
+
+## Tools
+
+| name                    | Role                                              |
+| ----------------------- | ------------------------------------------------- |
+| `tools-list`            | Discovery                                         |
+| `tools-call`            | Nested call helper                                |
+| `pre-push`              | Host `task format` + UI demo contract             |
+| `cortex-audit`          | Broken `.cortex` links / skill index sync         |
+| `skill-scaffold`        | Create a dynamic-skill card                       |
+| `agent-stats`           | Assemble / validate / publish AI-agent stats YAML |
+| `pr-land`               | Status / validate / ready / merge-check           |
+| `dependency-popularity` | Reject low-adoption npm packages and crates       |
 
 ## Quality bar
 

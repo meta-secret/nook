@@ -43,6 +43,8 @@ fn bake_target_assigns_cache_to(bake: &str, target: &str) -> bool {
         .any(|line| line.trim_start().starts_with("cache-to"))
 }
 
+#[path = "vault_app_isolation/bake_cache_proofs.rs"]
+mod bake_cache_proofs;
 #[path = "vault_app_isolation/build_contracts.rs"]
 #[allow(clippy::unnecessary_wraps)]
 mod build_contracts;
