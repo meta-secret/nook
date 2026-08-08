@@ -1,4 +1,10 @@
-import { isRecord } from '../guards.ts';
+import {
+  ExternalPropertyPresence,
+  asExternalValue,
+  externalProperty,
+  type ExternalValue,
+  isRecord,
+} from '../guards.ts';
 import {
   DependencyEcosystem,
   GitHubStarsPresence,
@@ -6,6 +12,7 @@ import {
   type NpmPackageMetrics,
 } from './types.ts';
 
+import type { ExternalPropertyArgs } from '../guards.ts';
 export async function fetchNpmPackageMetrics(
   name: string,
 ): Promise<NpmPackageMetrics> {
@@ -24,9 +31,14 @@ export async function fetchNpmPackageMetrics(
       `npm registry lookup failed for ${name}: HTTP ${metadataResponse.status}`,
     );
   }
-  const downloadsJson: unknown = await downloadsResponse.json();
-  const metadataJson: unknown = await metadataResponse.json();
-  const weeklyDownloads = readWeeklyDownloads(downloadsJson, name);
+  const downloadsJson = asExternalValue(
+    (await downloadsResponse.json()) as ExternalValue,
+  );
+  const metadataJson = asExternalValue(
+    (await metadataResponse.json()) as ExternalValue,
+  );
+  const weeklyDownloadsArgs = { value: downloadsJson, name };
+  const weeklyDownloads = readWeeklyDownloads(weeklyDownloadsArgs);
   const githubStars = await resolveGitHubStars(metadataJson);
   return {
     ecosystem: DependencyEcosystem.Npm,
@@ -36,24 +48,60 @@ export async function fetchNpmPackageMetrics(
   };
 }
 
-function readWeeklyDownloads(value: unknown, name: string): number {
-  if (!isRecord(value) || typeof value.downloads !== 'number') {
+type ReadWeeklyDownloadsArgs = {
+  readonly value: ExternalValue;
+  readonly name: string;
+};
+
+function readWeeklyDownloads(args: ReadWeeklyDownloadsArgs): number {
+  const { value, name } = args;
+
+  if (!isRecord(value)) {
     throw new Error(`npm downloads payload invalid for ${name}`);
   }
-  return value.downloads;
+  const downloadsArgs: ExternalPropertyArgs = {
+    record: value,
+    key: 'downloads',
+  };
+  const downloads = externalProperty(downloadsArgs);
+  if (
+    downloads.presence === ExternalPropertyPresence.Absent ||
+    typeof downloads.value !== 'number'
+  ) {
+    throw new Error(`npm downloads payload invalid for ${name}`);
+  }
+  return downloads.value;
 }
 
-async function resolveGitHubStars(metadata: unknown): Promise<GitHubStars> {
+async function resolveGitHubStars(
+  metadata: ExternalValue,
+): Promise<GitHubStars> {
   if (!isRecord(metadata)) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const repository = metadata.repository;
-  const repoUrl =
-    typeof repository === 'string'
-      ? repository
-      : isRecord(repository) && typeof repository.url === 'string'
-        ? repository.url
-        : '';
+  const repositoryPropertyArgs: ExternalPropertyArgs = {
+    record: metadata,
+    key: 'repository',
+  };
+  const repositoryProperty = externalProperty(repositoryPropertyArgs);
+  let repoUrl = '';
+  if (repositoryProperty.presence === ExternalPropertyPresence.Present) {
+    if (typeof repositoryProperty.value === 'string') {
+      repoUrl = repositoryProperty.value;
+    } else if (isRecord(repositoryProperty.value)) {
+      const urlPropertyArgs: ExternalPropertyArgs = {
+        record: repositoryProperty.value,
+        key: 'url',
+      };
+      const urlProperty = externalProperty(urlPropertyArgs);
+      if (
+        urlProperty.presence === ExternalPropertyPresence.Present &&
+        typeof urlProperty.value === 'string'
+      ) {
+        repoUrl = urlProperty.value;
+      }
+    }
+  }
   const slug = githubSlug(repoUrl);
   if (slug.length === 0) {
     return { presence: GitHubStarsPresence.Unavailable };
@@ -67,13 +115,24 @@ async function resolveGitHubStars(metadata: unknown): Promise<GitHubStars> {
   if (!response.ok) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const json: unknown = await response.json();
-  if (!isRecord(json) || typeof json.stargazers_count !== 'number') {
+  const json = asExternalValue((await response.json()) as ExternalValue);
+  if (!isRecord(json)) {
+    return { presence: GitHubStarsPresence.Unavailable };
+  }
+  const starsArgs: ExternalPropertyArgs = {
+    record: json,
+    key: 'stargazers_count',
+  };
+  const stars = externalProperty(starsArgs);
+  if (
+    stars.presence === ExternalPropertyPresence.Absent ||
+    typeof stars.value !== 'number'
+  ) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
   return {
     presence: GitHubStarsPresence.Reported,
-    stars: json.stargazers_count,
+    stars: stars.value,
   };
 }
 

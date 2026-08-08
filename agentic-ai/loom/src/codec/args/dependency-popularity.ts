@@ -1,16 +1,24 @@
-import {
-  DecodeStatus,
-  decodeErr,
-  decodeOk,
-  type DecodeOutcome,
-} from '../field-error.ts';
+import type { ExternalValue } from '../../lib/guards.ts';
 import { RequestFamily } from '../enums.ts';
+import { DecodeStatus, decodeErr, type DecodeOutcome } from '../field-error.ts';
+import {
+  booleanJsonSchema,
+  integerJsonSchema,
+  objectJsonSchema,
+  type IntegerJsonSchemaArgs,
+  type ObjectJsonSchema,
+  type ObjectJsonSchemaArgs,
+} from '../json-schema.ts';
 import {
   collectDecode,
   denyUnknownKeys,
   expectBoolean,
   expectObject,
   expectPositiveInt,
+  type CollectDecodeArgs,
+  type DenyUnknownKeysArgs,
+  type ExpectFieldArgs,
+  type ExpectObjectArgs,
 } from '../object.ts';
 
 export enum DependencyPopularityField {
@@ -32,41 +40,55 @@ export type DependencyPopularityRequest = {
 const ROOT = RequestFamily.DependencyPopularity;
 
 export function decodeDependencyPopularityRequest(
-  value: unknown,
+  value: ExternalValue,
 ): DecodeOutcome<DependencyPopularityRequest> {
-  const object = expectObject(value, ROOT);
+  const objectArgs: ExpectObjectArgs = { value, path: ROOT };
+  const object = expectObject(objectArgs);
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(
-    object.value,
-    DependencyPopularityField,
-    ROOT,
-  );
+  const unknownArgs: DenyUnknownKeysArgs<DependencyPopularityField> = {
+    record: object.value,
+    fields: DependencyPopularityField,
+    path: ROOT,
+  };
+  const unknown = denyUnknownKeys(unknownArgs);
+  const includeRepositoryManifestsArgs: ExpectFieldArgs<DependencyPopularityField> =
+    {
+      record: object.value,
+      key: DependencyPopularityField.IncludeRepositoryManifests,
+      path: ROOT,
+    };
   const includeRepositoryManifests = expectBoolean(
-    object.value,
-    DependencyPopularityField.IncludeRepositoryManifests,
-    ROOT,
+    includeRepositoryManifestsArgs,
   );
-  const minNpmWeeklyDownloads = expectPositiveInt(
-    object.value,
-    DependencyPopularityField.MinNpmWeeklyDownloads,
-    ROOT,
-  );
-  const minGitHubStars = expectPositiveInt(
-    object.value,
-    DependencyPopularityField.MinGitHubStars,
-    ROOT,
-  );
-  const minCratesIoDownloads = expectPositiveInt(
-    object.value,
-    DependencyPopularityField.MinCratesIoDownloads,
-    ROOT,
-  );
+  const minNpmWeeklyDownloadsArgs: ExpectFieldArgs<DependencyPopularityField> =
+    {
+      record: object.value,
+      key: DependencyPopularityField.MinNpmWeeklyDownloads,
+      path: ROOT,
+    };
+  const minNpmWeeklyDownloads = expectPositiveInt(minNpmWeeklyDownloadsArgs);
+  const minGitHubStarsArgs: ExpectFieldArgs<DependencyPopularityField> = {
+    record: object.value,
+    key: DependencyPopularityField.MinGitHubStars,
+    path: ROOT,
+  };
+  const minGitHubStars = expectPositiveInt(minGitHubStarsArgs);
+  const minCratesIoDownloadsArgs: ExpectFieldArgs<DependencyPopularityField> = {
+    record: object.value,
+    key: DependencyPopularityField.MinCratesIoDownloads,
+    path: ROOT,
+  };
+  const minCratesIoDownloads = expectPositiveInt(minCratesIoDownloadsArgs);
+  const minCratesIoRecentDownloadsArgs: ExpectFieldArgs<DependencyPopularityField> =
+    {
+      record: object.value,
+      key: DependencyPopularityField.MinCratesIoRecentDownloads,
+      path: ROOT,
+    };
   const minCratesIoRecentDownloads = expectPositiveInt(
-    object.value,
-    DependencyPopularityField.MinCratesIoRecentDownloads,
-    ROOT,
+    minCratesIoRecentDownloadsArgs,
   );
   const errors = [
     ...unknown,
@@ -89,15 +111,15 @@ export function decodeDependencyPopularityRequest(
   if (errors.length > 0) {
     return decodeErr(errors);
   }
-  return collectDecode(
-    [
+  const collectDecodeArgs: CollectDecodeArgs<DependencyPopularityRequest> = {
+    results: [
       includeRepositoryManifests,
       minNpmWeeklyDownloads,
       minGitHubStars,
       minCratesIoDownloads,
       minCratesIoRecentDownloads,
     ],
-    () => ({
+    build: () => ({
       includeRepositoryManifests: (
         includeRepositoryManifests as { value: boolean }
       ).value,
@@ -108,24 +130,34 @@ export function decodeDependencyPopularityRequest(
         minCratesIoRecentDownloads as { value: number }
       ).value,
     }),
-  );
+  };
+  return collectDecode(collectDecodeArgs);
 }
 
-export const DEPENDENCY_POPULARITY_INPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
+const positiveIntegerSchemaArgs: IntegerJsonSchemaArgs = { minimum: 1 };
+const dependencyPopularityInputSchemaArgs: ObjectJsonSchemaArgs = {
   required: [
-    'includeRepositoryManifests',
-    'minNpmWeeklyDownloads',
-    'minGitHubStars',
-    'minCratesIoDownloads',
-    'minCratesIoRecentDownloads',
+    DependencyPopularityField.IncludeRepositoryManifests,
+    DependencyPopularityField.MinNpmWeeklyDownloads,
+    DependencyPopularityField.MinGitHubStars,
+    DependencyPopularityField.MinCratesIoDownloads,
+    DependencyPopularityField.MinCratesIoRecentDownloads,
   ],
   properties: {
-    includeRepositoryManifests: { type: 'boolean' },
-    minNpmWeeklyDownloads: { type: 'integer', minimum: 1 },
-    minGitHubStars: { type: 'integer', minimum: 1 },
-    minCratesIoDownloads: { type: 'integer', minimum: 1 },
-    minCratesIoRecentDownloads: { type: 'integer', minimum: 1 },
+    [DependencyPopularityField.IncludeRepositoryManifests]: booleanJsonSchema(),
+    [DependencyPopularityField.MinNpmWeeklyDownloads]: integerJsonSchema(
+      positiveIntegerSchemaArgs,
+    ),
+    [DependencyPopularityField.MinGitHubStars]: integerJsonSchema(
+      positiveIntegerSchemaArgs,
+    ),
+    [DependencyPopularityField.MinCratesIoDownloads]: integerJsonSchema(
+      positiveIntegerSchemaArgs,
+    ),
+    [DependencyPopularityField.MinCratesIoRecentDownloads]: integerJsonSchema(
+      positiveIntegerSchemaArgs,
+    ),
   },
-} as const;
+};
+export const DEPENDENCY_POPULARITY_INPUT_SCHEMA: ObjectJsonSchema =
+  objectJsonSchema(dependencyPopularityInputSchemaArgs);

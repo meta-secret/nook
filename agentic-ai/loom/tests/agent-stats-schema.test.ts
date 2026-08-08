@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { validateAgentStatsYaml } from '../src/lib/agent-stats-schema.ts';
 
+import type { ValidateAgentStatsYamlArgs } from '../src/lib/agent-stats-schema.ts';
 const validYaml = `
 schema_version: 3
 source_pr:
@@ -67,13 +68,21 @@ waste_assessment:
 
 describe('validateAgentStatsYaml', () => {
   test('accepts a schema-v3 record', () => {
-    const result = validateAgentStatsYaml(validYaml, 481);
+    const resultArgs2: ValidateAgentStatsYamlArgs = {
+      content: validYaml,
+      expectedPrNumber: 481,
+    };
+    const result = validateAgentStatsYaml(resultArgs2);
     expect(result.ok).toBe(true);
     expect(result.errors).toEqual([]);
   });
 
   test('rejects filename/source PR mismatch', () => {
-    const result = validateAgentStatsYaml(validYaml, 999);
+    const resultArgs: ValidateAgentStatsYamlArgs = {
+      content: validYaml,
+      expectedPrNumber: 999,
+    };
+    const result = validateAgentStatsYaml(resultArgs);
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) => item.includes('source_pr.number')),

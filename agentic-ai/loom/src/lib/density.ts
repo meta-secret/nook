@@ -9,10 +9,14 @@ const MAX_SENTENCE_CHARS = 180;
 const MAX_SEMICOLONS = 1;
 const MAX_AND_JOINS = 2;
 
-export function lintProseDensity(
-  filePath: string,
-  content: string,
-): DensityFinding[] {
+export type LintProseDensityArgs = {
+  readonly filePath: string;
+  readonly content: string;
+};
+
+export function lintProseDensity(args: LintProseDensityArgs): DensityFinding[] {
+  const { filePath, content } = args;
+
   const findings: DensityFinding[] = [];
   const lines = content.split(/\r?\n/);
   let inFence = false;
@@ -38,32 +42,35 @@ export function lintProseDensity(
     const sentenceChunks = trimmed.split(/(?<=[.!?])\s+/);
     for (const sentence of sentenceChunks) {
       if (sentence.length > MAX_SENTENCE_CHARS) {
-        findings.push({
+        const pushArgs3 = {
           file: filePath,
           line: i + 1,
           reason: `sentence longer than ${MAX_SENTENCE_CHARS} characters`,
           excerpt: sentence.slice(0, 120),
-        });
+        };
+        findings.push(pushArgs3);
       }
       const semicolonMatches = sentence.match(/;/g);
       const semicolons = semicolonMatches ? semicolonMatches.length : 0;
       if (semicolons > MAX_SEMICOLONS) {
-        findings.push({
+        const pushArgs2 = {
           file: filePath,
           line: i + 1,
           reason: 'too many semicolons in one sentence',
           excerpt: sentence.slice(0, 120),
-        });
+        };
+        findings.push(pushArgs2);
       }
       const andMatches = sentence.match(/\sand\s/gi);
       const andJoins = andMatches ? andMatches.length : 0;
       if (andJoins > MAX_AND_JOINS && sentence.length > 120) {
-        findings.push({
+        const pushArgs = {
           file: filePath,
           line: i + 1,
           reason: 'many "and" joins in a long sentence',
           excerpt: sentence.slice(0, 120),
-        });
+        };
+        findings.push(pushArgs);
       }
     }
   }

@@ -1,3 +1,5 @@
+import type { ExternalObjectBuilder, ExternalValue } from '../lib/guards.ts';
+import { sealExternalObject } from '../lib/guards.ts';
 import {
   BlueprintExplanationKind,
   type BlueprintExplanation,
@@ -16,6 +18,7 @@ import {
   type FieldError,
 } from './field-error.ts';
 
+import type { FieldErrorArgs } from './field-error.ts';
 export type RecoverHint = {
   readonly toolsListRequest: string;
   readonly hint: string;
@@ -23,7 +26,7 @@ export type RecoverHint = {
 
 type SuccessResponseBase = {
   readonly ok: true;
-  readonly result: unknown;
+  readonly result: ExternalValue;
 };
 
 export type SuccessResponse =
@@ -98,37 +101,61 @@ const DEFAULT_HINT =
 const EXECUTE_HINT =
   'fix the underlying gate, then retry the same domain request object';
 
-export function successResponseForFamily(
-  family:
+export type SuccessResponseForFamilyArgs = {
+  readonly family:
     | RequestFamily.PrePush
     | RequestFamily.CortexAudit
     | RequestFamily.SkillScaffold
     | RequestFamily.DependencyPopularity
-    | RequestFamily.ToolsList,
-  result: unknown,
+    | RequestFamily.ToolsList;
+  readonly result: ExternalValue;
+};
+
+export function successResponseForFamily(
+  args: SuccessResponseForFamilyArgs,
 ): SuccessResponse {
+  const { family, result } = args;
+
   return { ok: true, family, result };
 }
 
+export type SuccessResponseForAgentStatsArgs = {
+  readonly operation: AgentStatsOperation;
+  readonly result: ExternalValue;
+};
+
 export function successResponseForAgentStats(
-  operation: AgentStatsOperation,
-  result: unknown,
+  args: SuccessResponseForAgentStatsArgs,
 ): SuccessResponse {
+  const { operation, result } = args;
+
   return { ok: true, family: RequestFamily.AgentStats, operation, result };
 }
 
+export type SuccessResponseForPrLandArgs = {
+  readonly operation: PrLandOperation;
+  readonly result: ExternalValue;
+};
+
 export function successResponseForPrLand(
-  operation: PrLandOperation,
-  result: unknown,
+  args: SuccessResponseForPrLandArgs,
 ): SuccessResponse {
+  const { operation, result } = args;
+
   return { ok: true, family: RequestFamily.PrLand, operation, result };
 }
 
+export type DecodeErrorResponseArgs = {
+  readonly phase: ResponsePhase.Decode | ResponsePhase.UnknownRequest;
+  readonly errors: readonly FieldError[];
+  readonly explanation: BlueprintExplanation;
+};
+
 export function decodeErrorResponse(
-  phase: ResponsePhase.Decode | ResponsePhase.UnknownRequest,
-  errors: readonly FieldError[],
-  explanation: BlueprintExplanation,
+  args: DecodeErrorResponseArgs,
 ): DecodeErrorResponse {
+  const { phase, errors, explanation } = args;
+
   return {
     ok: false,
     isError: true,
@@ -142,16 +169,22 @@ export function decodeErrorResponse(
   };
 }
 
-export function executeErrorResponseForFamily(
-  family:
+export type ExecuteErrorResponseForFamilyArgs = {
+  readonly family:
     | RequestFamily.PrePush
     | RequestFamily.CortexAudit
     | RequestFamily.SkillScaffold
     | RequestFamily.DependencyPopularity
     | RequestFamily.ToolsList
-    | RequestFamily.ToolsCall,
-  errors: readonly FieldError[],
+    | RequestFamily.ToolsCall;
+  readonly errors: readonly FieldError[];
+};
+
+export function executeErrorResponseForFamily(
+  args: ExecuteErrorResponseForFamilyArgs,
 ): ExecuteErrorResponse {
+  const { family, errors } = args;
+
   return {
     ok: false,
     isError: true,
@@ -165,10 +198,16 @@ export function executeErrorResponseForFamily(
   };
 }
 
+export type ExecuteErrorResponseForAgentStatsArgs = {
+  readonly operation: AgentStatsOperation;
+  readonly errors: readonly FieldError[];
+};
+
 export function executeErrorResponseForAgentStats(
-  operation: AgentStatsOperation,
-  errors: readonly FieldError[],
+  args: ExecuteErrorResponseForAgentStatsArgs,
 ): ExecuteErrorResponse {
+  const { operation, errors } = args;
+
   return {
     ok: false,
     isError: true,
@@ -183,10 +222,16 @@ export function executeErrorResponseForAgentStats(
   };
 }
 
+export type ExecuteErrorResponseForPrLandArgs = {
+  readonly operation: PrLandOperation;
+  readonly errors: readonly FieldError[];
+};
+
 export function executeErrorResponseForPrLand(
-  operation: PrLandOperation,
-  errors: readonly FieldError[],
+  args: ExecuteErrorResponseForPrLandArgs,
 ): ExecuteErrorResponse {
+  const { operation, errors } = args;
+
   return {
     ok: false,
     isError: true,
@@ -203,9 +248,9 @@ export function executeErrorResponseForPrLand(
 
 export function encodeResponse(
   response: SuccessResponse | ErrorResponse,
-): unknown {
+): ExternalValue {
   if (response.ok) {
-    const encoded: Record<string, unknown> = {
+    const encoded: ExternalObjectBuilder = {
       ok: true,
       family: response.family,
       result: response.result,
@@ -216,10 +261,10 @@ export function encodeResponse(
     ) {
       encoded.operation = response.operation;
     }
-    return encoded;
+    return sealExternalObject(encoded);
   }
 
-  const encoded: Record<string, unknown> = {
+  const encoded: ExternalObjectBuilder = {
     ok: false,
     isError: true,
     phase: response.phase,
@@ -234,7 +279,7 @@ export function encodeResponse(
     },
   };
   if ('explanation' in response) {
-    const explanation: Record<string, unknown> = {
+    const explanation: ExternalObjectBuilder = {
       kind: response.explanation.kind,
       blueprintPath: response.explanation.blueprintPath,
       blueprintYaml: response.explanation.blueprintYaml,
@@ -244,7 +289,7 @@ export function encodeResponse(
     if (response.explanation.kind === BlueprintExplanationKind.Syntax) {
       explanation.parseMessage = response.explanation.parseMessage;
     }
-    encoded.explanation = explanation;
+    encoded.explanation = sealExternalObject(explanation);
   }
   if (response.phase === ResponsePhase.Execute) {
     encoded.family = response.family;
@@ -255,13 +300,14 @@ export function encodeResponse(
       encoded.operation = response.operation;
     }
   }
-  return encoded;
+  return sealExternalObject(encoded);
 }
 
 export function executionFieldError(detail: string): FieldError {
-  return fieldError(
-    'result',
-    FieldIssue.ExecuteFailed,
-    fieldDetailText(detail),
-  );
+  const fieldErrorArgs: FieldErrorArgs = {
+    path: 'result',
+    issue: FieldIssue.ExecuteFailed,
+    detail: fieldDetailText(detail),
+  };
+  return fieldError(fieldErrorArgs);
 }

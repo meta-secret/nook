@@ -22,11 +22,17 @@ export type LoomFailureDetail =
   | { readonly kind: LoomFailureDetailKind.None }
   | { readonly kind: LoomFailureDetailKind.Text; readonly text: string };
 
+export type LoomFailureArgs = {
+  readonly code: LoomFailureCode;
+  readonly detail: LoomFailureDetail;
+};
+
 export class LoomFailure extends Error {
   readonly code: LoomFailureCode;
   readonly detail: LoomFailureDetail;
 
-  constructor(code: LoomFailureCode, detail: LoomFailureDetail) {
+  constructor(args: LoomFailureArgs) {
+    const { code, detail } = args;
     super(
       detail.kind === LoomFailureDetailKind.Text
         ? detail.text
@@ -68,12 +74,27 @@ function defaultMessage(code: LoomFailureCode): string {
 }
 
 export function loomFailure(code: LoomFailureCode): never {
-  throw new LoomFailure(code, { kind: LoomFailureDetailKind.None });
+  const loomFailureArgs2: LoomFailureArgs = {
+    code,
+    detail: { kind: LoomFailureDetailKind.None },
+  };
+  throw new LoomFailure(loomFailureArgs2);
 }
 
-export function loomFailureDetail(code: LoomFailureCode, text: string): never {
-  throw new LoomFailure(code, {
-    kind: LoomFailureDetailKind.Text,
-    text,
-  });
+export type LoomFailureDetailArgs = {
+  readonly code: LoomFailureCode;
+  readonly text: string;
+};
+
+export function loomFailureDetail(args: LoomFailureDetailArgs): never {
+  const { code, text } = args;
+
+  const loomFailureArgs: LoomFailureArgs = {
+    code,
+    detail: {
+      kind: LoomFailureDetailKind.Text,
+      text,
+    },
+  };
+  throw new LoomFailure(loomFailureArgs);
 }

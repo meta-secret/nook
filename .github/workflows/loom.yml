@@ -47,3 +47,6 @@ jobs:
 
       - name: Enforce authored TypeScript state invariants
         run: task preflight:typescript-state
+
+      - name: Enforce Loom single-parameter contract
+        run: task preflight:loom-contracts

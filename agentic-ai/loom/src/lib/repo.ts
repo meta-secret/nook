@@ -1,10 +1,6 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import {
-  LoomFailureCode,
-  loomFailure,
-  loomFailureDetail,
-} from '../loom-failure.ts';
+import { LoomFailureCode, loomFailure } from '../loom-failure.ts';
 
 export function findRepoRoot(startDir: string = process.cwd()): string {
   let current = path.resolve(startDir);
@@ -21,10 +17,14 @@ export function findRepoRoot(startDir: string = process.cwd()): string {
 }
 
 /** Resolve request YAML paths against the repository root (Task CONFIG convention). */
-export function resolveRequestPath(
-  requestPath: string,
-  startDir: string = process.cwd(),
-): string {
+export type ResolveRequestPathArgs =
+  | { readonly requestPath: string }
+  | { readonly requestPath: string; readonly startDir: string };
+
+export function resolveRequestPath(args: ResolveRequestPathArgs): string {
+  const requestPath = args.requestPath;
+  const startDir = 'startDir' in args ? args.startDir : process.cwd();
+
   if (path.isAbsolute(requestPath)) {
     return requestPath;
   }

@@ -1,4 +1,10 @@
-import { isRecord } from '../guards.ts';
+import {
+  ExternalPropertyPresence,
+  asExternalValue,
+  externalProperty,
+  type ExternalValue,
+  isRecord,
+} from '../guards.ts';
 import {
   DependencyEcosystem,
   GitHubStarsPresence,
@@ -6,6 +12,7 @@ import {
   type GitHubStars,
 } from './types.ts';
 
+import type { ExternalPropertyArgs } from '../guards.ts';
 export async function fetchCrateMetrics(name: string): Promise<CrateMetrics> {
   const response = await fetch(
     `https://crates.io/api/v1/crates/${encodeURIComponent(name)}`,
@@ -21,40 +28,89 @@ export async function fetchCrateMetrics(name: string): Promise<CrateMetrics> {
       `crates.io lookup failed for ${name}: HTTP ${response.status}`,
     );
   }
-  const json: unknown = await response.json();
-  if (!isRecord(json) || !isRecord(json.crate)) {
+  const json = asExternalValue((await response.json()) as ExternalValue);
+  if (!isRecord(json)) {
     throw new Error(`crates.io payload invalid for ${name}`);
   }
-  const crate = json.crate;
+  const cratePropertyArgs2: ExternalPropertyArgs = {
+    record: json,
+    key: 'crate',
+  };
+  const crateProperty = externalProperty(cratePropertyArgs2);
   if (
-    typeof crate.downloads !== 'number' ||
-    typeof crate.recent_downloads !== 'number'
+    crateProperty.presence === ExternalPropertyPresence.Absent ||
+    !isRecord(crateProperty.value)
+  ) {
+    throw new Error(`crates.io payload invalid for ${name}`);
+  }
+  const crate = crateProperty.value;
+  const downloadsArgs: ExternalPropertyArgs = {
+    record: crate,
+    key: 'downloads',
+  };
+  const downloads = externalProperty(downloadsArgs);
+  const recentDownloadsArgs: ExternalPropertyArgs = {
+    record: crate,
+    key: 'recent_downloads',
+  };
+  const recentDownloads = externalProperty(recentDownloadsArgs);
+  if (
+    downloads.presence === ExternalPropertyPresence.Absent ||
+    typeof downloads.value !== 'number' ||
+    recentDownloads.presence === ExternalPropertyPresence.Absent ||
+    typeof recentDownloads.value !== 'number'
   ) {
     throw new Error(`crates.io download fields missing for ${name}`);
   }
   return {
     ecosystem: DependencyEcosystem.CratesIo,
     name,
-    downloads: crate.downloads,
-    recentDownloads: crate.recent_downloads,
+    downloads: downloads.value,
+    recentDownloads: recentDownloads.value,
     githubStars: await resolveCrateGitHubStars(json),
   };
 }
 
-async function resolveCrateGitHubStars(payload: unknown): Promise<GitHubStars> {
-  if (!isRecord(payload) || !Array.isArray(payload.versions)) {
+async function resolveCrateGitHubStars(
+  payload: ExternalValue,
+): Promise<GitHubStars> {
+  if (!isRecord(payload)) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  // Repository URL is on the crate object in newer API responses.
+  const versionsArgs: ExternalPropertyArgs = {
+    record: payload,
+    key: 'versions',
+  };
+  const versions = externalProperty(versionsArgs);
   if (
-    !isRecord(payload.crate) ||
-    typeof payload.crate.repository !== 'string'
+    versions.presence === ExternalPropertyPresence.Absent ||
+    !Array.isArray(versions.value)
   ) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const match = payload.crate.repository.match(
-    /github\.com\/([^/]+)\/([^/#?]+)/i,
-  );
+  const cratePropertyArgs: ExternalPropertyArgs = {
+    record: payload,
+    key: 'crate',
+  };
+  const crateProperty = externalProperty(cratePropertyArgs);
+  if (
+    crateProperty.presence === ExternalPropertyPresence.Absent ||
+    !isRecord(crateProperty.value)
+  ) {
+    return { presence: GitHubStarsPresence.Unavailable };
+  }
+  const repositoryArgs: ExternalPropertyArgs = {
+    record: crateProperty.value,
+    key: 'repository',
+  };
+  const repository = externalProperty(repositoryArgs);
+  if (
+    repository.presence === ExternalPropertyPresence.Absent ||
+    typeof repository.value !== 'string'
+  ) {
+    return { presence: GitHubStarsPresence.Unavailable };
+  }
+  const match = repository.value.match(/github\.com\/([^/]+)\/([^/#?]+)/i);
   const owner = match?.[1];
   const repo = match?.[2];
   if (typeof owner !== 'string' || typeof repo !== 'string') {
@@ -72,12 +128,23 @@ async function resolveCrateGitHubStars(payload: unknown): Promise<GitHubStars> {
   if (!response.ok) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const json: unknown = await response.json();
-  if (!isRecord(json) || typeof json.stargazers_count !== 'number') {
+  const json = asExternalValue((await response.json()) as ExternalValue);
+  if (!isRecord(json)) {
+    return { presence: GitHubStarsPresence.Unavailable };
+  }
+  const starsArgs: ExternalPropertyArgs = {
+    record: json,
+    key: 'stargazers_count',
+  };
+  const stars = externalProperty(starsArgs);
+  if (
+    stars.presence === ExternalPropertyPresence.Absent ||
+    typeof stars.value !== 'number'
+  ) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
   return {
     presence: GitHubStarsPresence.Reported,
-    stars: json.stargazers_count,
+    stars: stars.value,
   };
 }

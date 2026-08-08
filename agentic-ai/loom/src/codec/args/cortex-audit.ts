@@ -1,12 +1,22 @@
-import { DecodeStatus } from '../field-error.ts';
+import type { ExternalValue } from '../../lib/guards.ts';
+import { RequestFamily } from '../enums.ts';
+import { DecodeStatus, decodeErr, type DecodeOutcome } from '../field-error.ts';
+import {
+  booleanJsonSchema,
+  objectJsonSchema,
+  type ObjectJsonSchema,
+  type ObjectJsonSchemaArgs,
+} from '../json-schema.ts';
 import {
   collectDecode,
   denyUnknownKeys,
   expectBoolean,
   expectObject,
+  type CollectDecodeArgs,
+  type DenyUnknownKeysArgs,
+  type ExpectFieldArgs,
+  type ExpectObjectArgs,
 } from '../object.ts';
-import { RequestFamily } from '../enums.ts';
-import { decodeErr, type DecodeOutcome } from '../field-error.ts';
 
 export enum CortexAuditField {
   IncludeDensityLint = 'includeDensityLint',
@@ -19,18 +29,25 @@ export type CortexAuditRequest = {
 const ROOT = RequestFamily.CortexAudit;
 
 export function decodeCortexAuditRequest(
-  value: unknown,
+  value: ExternalValue,
 ): DecodeOutcome<CortexAuditRequest> {
-  const object = expectObject(value, ROOT);
+  const objectArgs: ExpectObjectArgs = { value, path: ROOT };
+  const object = expectObject(objectArgs);
   if (object.status === DecodeStatus.Failed) {
     return object;
   }
-  const unknown = denyUnknownKeys(object.value, CortexAuditField, ROOT);
-  const includeDensityLint = expectBoolean(
-    object.value,
-    CortexAuditField.IncludeDensityLint,
-    ROOT,
-  );
+  const unknownArgs: DenyUnknownKeysArgs<CortexAuditField> = {
+    record: object.value,
+    fields: CortexAuditField,
+    path: ROOT,
+  };
+  const unknown = denyUnknownKeys(unknownArgs);
+  const includeDensityLintArgs: ExpectFieldArgs<CortexAuditField> = {
+    record: object.value,
+    key: CortexAuditField.IncludeDensityLint,
+    path: ROOT,
+  };
+  const includeDensityLint = expectBoolean(includeDensityLintArgs);
   if (unknown.length > 0) {
     return decodeErr([
       ...unknown,
@@ -39,16 +56,21 @@ export function decodeCortexAuditRequest(
         : []),
     ]);
   }
-  return collectDecode([includeDensityLint], () => ({
-    includeDensityLint: (includeDensityLint as { value: boolean }).value,
-  }));
+  const collectDecodeArgs: CollectDecodeArgs<CortexAuditRequest> = {
+    results: [includeDensityLint],
+    build: () => ({
+      includeDensityLint: (includeDensityLint as { value: boolean }).value,
+    }),
+  };
+  return collectDecode(collectDecodeArgs);
 }
 
-export const CORTEX_AUDIT_INPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['includeDensityLint'],
+const cortexAuditInputSchemaArgs: ObjectJsonSchemaArgs = {
+  required: [CortexAuditField.IncludeDensityLint],
   properties: {
-    includeDensityLint: { type: 'boolean' },
+    [CortexAuditField.IncludeDensityLint]: booleanJsonSchema(),
   },
-} as const;
+};
+export const CORTEX_AUDIT_INPUT_SCHEMA: ObjectJsonSchema = objectJsonSchema(
+  cortexAuditInputSchemaArgs,
+);

@@ -1,7 +1,12 @@
 import { createTwoFilesPatch } from 'diff';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { isRecord } from '../lib/guards.ts';
+import {
+  ExternalPropertyPresence,
+  externalProperty,
+  type ExternalValue,
+  isRecord,
+} from '../lib/guards.ts';
 import { findRepoRoot } from '../lib/repo.ts';
 import {
   AgentStatsOperation,
@@ -10,6 +15,7 @@ import {
 } from './enums.ts';
 import { stringifyYaml } from './yaml.ts';
 
+import type { ExternalPropertyArgs } from '../lib/guards.ts';
 export enum BlueprintOperationMarker {
   FamilyRoot = 'familyRoot',
 }
@@ -115,49 +121,61 @@ const BLUEPRINTS: readonly BlueprintRef[] = [
   },
 ];
 
+export type ExplainSyntaxFailureArgs = {
+  readonly receivedYaml: string;
+  readonly parseMessage: string;
+};
+
 export function explainSyntaxFailure(
-  receivedYaml: string,
-  parseMessage: string,
+  args: ExplainSyntaxFailureArgs,
 ): BlueprintExplanation {
+  const { receivedYaml, parseMessage } = args;
+
   const blueprint = loadBlueprint(DEFAULT_BLUEPRINT.blueprintPath);
+  const yamlUnifiedDiffArgs2 = {
+    blueprintPath: blueprint.blueprintPath,
+    blueprintYaml: blueprint.blueprintYaml,
+    receivedYaml,
+  };
   return {
     kind: BlueprintExplanationKind.Syntax,
     blueprintPath: blueprint.blueprintPath,
     blueprintYaml: blueprint.blueprintYaml,
     receivedYaml,
-    unifiedDiff: yamlUnifiedDiff(
-      blueprint.blueprintPath,
-      blueprint.blueprintYaml,
-      receivedYaml,
-    ),
+    unifiedDiff: yamlUnifiedDiff(yamlUnifiedDiffArgs2),
     parseMessage,
   };
 }
 
 export function explainAgainstBlueprint(
-  received: unknown,
+  received: ExternalValue,
 ): BlueprintExplanation {
   const selected = selectBlueprint(received);
   const blueprint = loadBlueprint(selected.blueprintPath);
   const receivedYaml = stringifyYaml(received);
+  const yamlUnifiedDiffArgs = {
+    blueprintPath: blueprint.blueprintPath,
+    blueprintYaml: blueprint.blueprintYaml,
+    receivedYaml,
+  };
   return {
     kind: BlueprintExplanationKind.Structural,
     blueprintPath: blueprint.blueprintPath,
     blueprintYaml: blueprint.blueprintYaml,
     receivedYaml,
-    unifiedDiff: yamlUnifiedDiff(
-      blueprint.blueprintPath,
-      blueprint.blueprintYaml,
-      receivedYaml,
-    ),
+    unifiedDiff: yamlUnifiedDiff(yamlUnifiedDiffArgs),
   };
 }
 
-function yamlUnifiedDiff(
-  blueprintPath: string,
-  blueprintYaml: string,
-  receivedYaml: string,
-): string {
+type YamlUnifiedDiffArgs = {
+  readonly blueprintPath: string;
+  readonly blueprintYaml: string;
+  readonly receivedYaml: string;
+};
+
+function yamlUnifiedDiff(args: YamlUnifiedDiffArgs): string {
+  const { blueprintPath, blueprintYaml, receivedYaml } = args;
+
   return createTwoFilesPatch(
     blueprintPath,
     'received.yaml',
@@ -170,7 +188,7 @@ function normalizeYamlText(text: string): string {
   return text.endsWith('\n') ? text : `${text}\n`;
 }
 
-function selectBlueprint(received: unknown): BlueprintRef {
+function selectBlueprint(received: ExternalValue): BlueprintRef {
   if (!isRecord(received)) {
     return DEFAULT_BLUEPRINT;
   }
@@ -182,12 +200,17 @@ function selectBlueprint(received: unknown): BlueprintRef {
     return DEFAULT_BLUEPRINT;
   }
   const family = familyKey as RequestFamily;
-  const payload = received[family];
+  const payloadPropertyArgs: ExternalPropertyArgs = {
+    record: received,
+    key: family,
+  };
+  const payloadProperty = externalProperty(payloadPropertyArgs);
   if (
     (family === RequestFamily.AgentStats || family === RequestFamily.PrLand) &&
-    isRecord(payload)
+    payloadProperty.presence === ExternalPropertyPresence.Present &&
+    isRecord(payloadProperty.value)
   ) {
-    const operationKeys = Object.keys(payload);
+    const operationKeys = Object.keys(payloadProperty.value);
     const match = BLUEPRINTS.find(
       (entry) =>
         entry.family === family &&

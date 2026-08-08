@@ -7,10 +7,16 @@ import {
   type PopularityThresholds,
 } from './types.ts';
 
+export type EvaluatePopularityArgs = {
+  readonly metrics: DependencyMetrics;
+  readonly thresholds: PopularityThresholds;
+};
+
 export function evaluatePopularity(
-  metrics: DependencyMetrics,
-  thresholds: PopularityThresholds,
+  args: EvaluatePopularityArgs,
 ): PopularityFinding {
+  const { metrics, thresholds } = args;
+
   const reasons: string[] = [];
   if (metrics.ecosystem === DependencyEcosystem.Npm) {
     if (metrics.weeklyDownloads < thresholds.minNpmWeeklyDownloads) {
