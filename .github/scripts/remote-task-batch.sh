@@ -221,7 +221,7 @@ run_batch() {
     set +e
     run_task "$task"
     status=$?
-    if (( status == 124 )) && ! cleanup_timed_out_daemon_work "$daemon_snapshot"; then
+    if (( status == 124 || status == 137 )) && ! cleanup_timed_out_daemon_work "$daemon_snapshot"; then
       echo "::error::Failed to clean up daemon work after timeout: $task"
       status=1
     fi
