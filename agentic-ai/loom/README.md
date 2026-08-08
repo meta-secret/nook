@@ -56,8 +56,8 @@ Discover tools:
 
 ```bash
 task loom:tools-list
-# or
-bun run --cwd agentic-ai/loom loom -- agentic-ai/loom/params/tools-list/default.yaml
+# or (path is relative to the Loom package cwd)
+bun run --cwd agentic-ai/loom loom -- params/tools-list/default.yaml
 ```
 
 ## Agent entrypoints
@@ -73,10 +73,13 @@ task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 task loom:pr-land CONFIG=path/to/pr-land-request.yaml
 ```
 
-Direct Bun surface:
+`task loom:run` resolves repo-root-relative `CONFIG` paths before entering the
+Loom package cwd.
+
+Direct Bun surface (paths are relative to `agentic-ai/loom`):
 
 ```bash
-bun run --cwd agentic-ai/loom loom -- agentic-ai/loom/params/pre-push/default.yaml
+bun run --cwd agentic-ai/loom loom -- params/pre-push/default.yaml
 ```
 
 Committed examples live under `params/<tool>/`.
