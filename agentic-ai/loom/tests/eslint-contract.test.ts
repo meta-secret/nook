@@ -1,0 +1,27 @@
+import { describe, expect, test } from 'bun:test';
+import { ESLint } from 'eslint';
+
+type LintTextOptions = {
+  filePath: string;
+};
+
+describe('Loom ESLint contracts', () => {
+  test('rejects cast-wrapped constructor object arguments', async () => {
+    const eslint = new ESLint();
+    const options: LintTextOptions = { filePath: 'src/cli.ts' };
+    const results = await eslint.lintText(
+      `
+        type WidgetArgs = { name: string };
+        declare class Widget {
+          constructor(args: WidgetArgs);
+        }
+        new Widget({ name: 'Nook' } as WidgetArgs);
+      `,
+      options,
+    );
+
+    expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
+      'no-restricted-syntax',
+    ]);
+  });
+});

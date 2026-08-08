@@ -4,6 +4,8 @@ import {
   stageProviderCredentials,
 } from '../lib/provider-credential-staging'
 import {
+  SessionOperationCleanupKind,
+  SessionOperationExpiryKind,
   SessionOperationPriority,
   SessionOperationQueue,
 } from '../lib/session-operation-queue'
@@ -230,8 +232,8 @@ export class ExtensionSessionMessageDispatcher {
       }
       payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
     }
-    return this.operations.enqueue(
-      async () => {
+    return this.operations.enqueue({
+      operation: async () => {
         if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
           throw new Error('Extension session request expired.')
         }
@@ -249,44 +251,61 @@ export class ExtensionSessionMessageDispatcher {
           }
         }
       },
-      {
+      options: {
         priority: SessionOperationPriority.Interactive,
-        expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
-        onExpire: clearPending,
+        expiry: {
+          kind: SessionOperationExpiryKind.Deadline,
+          expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+        },
+        cleanup: {
+          kind: SessionOperationCleanupKind.OnExpire,
+          run: clearPending,
+        },
       },
-    )
+    })
   }
 
   private enqueueVaultImport(
     message: Record<string, unknown>,
     payload: Record<string, unknown>,
   ): Promise<unknown> {
-    const staging = stageProviderCredentials(payload.providers)
+    const providerCandidate = payload.providers
+    const staging = stageProviderCredentials(
+      providerCandidate && typeof providerCandidate === 'object'
+        ? providerCandidate
+        : {},
+    )
+    payload.providers = []
+    if (providerCandidate && typeof providerCandidate === 'object') {
+      scrubProviderCredentials(providerCandidate)
+    }
     // Pairing imports are one-shot and may run against a cold offscreen WASM
     // runtime. Never expire them with the short interactive probe budget.
-    if (
-      staging.kind === ProviderCredentialStagingKind.InvalidInput ||
-      staging.providers.length === 0
-    ) {
-      return this.operations.enqueue(
-        () =>
+    if (staging.kind === ProviderCredentialStagingKind.InvalidInput) {
+      const response = {
+        ok: false,
+        error: 'invalid-provider-payload',
+      }
+      return Promise.resolve(response)
+    }
+    if (staging.providers.length === 0) {
+      return this.operations.enqueue({
+        operation: () =>
           this.context.handleMessage({
             ...message,
             payload: {
               ...payload,
-              providers:
-                staging.kind === ProviderCredentialStagingKind.Staged
-                  ? staging.providers
-                  : Array.isArray(payload.providers)
-                    ? payload.providers
-                    : [],
+              providers: staging.providers,
             },
           }),
-        { priority: SessionOperationPriority.Interactive },
-      )
+        options: {
+          priority: SessionOperationPriority.Interactive,
+          expiry: { kind: SessionOperationExpiryKind.None },
+          cleanup: { kind: SessionOperationCleanupKind.None },
+        },
+      })
     }
     const stagedProviders = staging.providers
-    payload.providers = []
     let payloadResidency: SensitivePayloadResidency = {
       kind: SensitivePayloadResidencyKind.Resident,
       payload: { ...payload, providers: stagedProviders },
@@ -294,11 +313,11 @@ export class ExtensionSessionMessageDispatcher {
     const clearPending = () => {
       if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared)
         return
-      scrubProviderCredentials(payloadResidency.payload.providers)
+      scrubProviderCredentials(stagedProviders)
       payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
     }
-    return this.operations.enqueue(
-      async () => {
+    return this.operations.enqueue({
+      operation: async () => {
         if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
           throw new Error('Extension session request expired.')
         }
@@ -310,15 +329,19 @@ export class ExtensionSessionMessageDispatcher {
             payload: operationPayload,
           })
         } finally {
-          scrubProviderCredentials(operationPayload.providers)
+          scrubProviderCredentials(stagedProviders)
           operationPayload.providers = []
         }
       },
-      {
+      options: {
         priority: SessionOperationPriority.Interactive,
-        onExpire: clearPending,
+        expiry: { kind: SessionOperationExpiryKind.None },
+        cleanup: {
+          kind: SessionOperationCleanupKind.OnExpire,
+          run: clearPending,
+        },
       },
-    )
+    })
   }
 
   enqueue(message: unknown): Promise<unknown> {
@@ -350,13 +373,24 @@ export class ExtensionSessionMessageDispatcher {
       )
     }
 
-    return this.operations.enqueue(() => this.context.handleMessage(message), {
-      priority,
-      ...(requestedExpiry.kind === RequestedQueueExpiryKind.Requested
-        ? { expiresAt: requestedExpiry.expiresAt }
-        : priority === SessionOperationPriority.Interactive
-          ? { expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS }
-          : {}),
+    return this.operations.enqueue({
+      operation: () => this.context.handleMessage(message),
+      options: {
+        priority,
+        expiry:
+          requestedExpiry.kind === RequestedQueueExpiryKind.Requested
+            ? {
+                kind: SessionOperationExpiryKind.Deadline,
+                expiresAt: requestedExpiry.expiresAt,
+              }
+            : priority === SessionOperationPriority.Interactive
+              ? {
+                  kind: SessionOperationExpiryKind.Deadline,
+                  expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+                }
+              : { kind: SessionOperationExpiryKind.None },
+        cleanup: { kind: SessionOperationCleanupKind.None },
+      },
     })
   }
 

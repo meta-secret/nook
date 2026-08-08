@@ -74,8 +74,13 @@ export function normalizeSimpleVaultBaseUrl(value: string): string {
   return wasmNormalizeSimpleVaultBaseUrl(value)
 }
 
-export function simpleVaultUrl(baseUrl: string, path = ''): string {
-  return wasmSimpleVaultUrl(baseUrl, path)
+export type SimpleVaultUrlArgs = {
+  baseUrl: string
+  path: string
+}
+
+export function simpleVaultUrl(args: SimpleVaultUrlArgs): string {
+  return wasmSimpleVaultUrl(args.baseUrl, args.path)
 }
 
 export function simpleVaultMatchPattern(baseUrl: string): string {
@@ -114,20 +119,24 @@ export function isSentinelVaultHostname(hostname: string): boolean {
   return wasmIsSentinelVaultHostname(hostname)
 }
 
-export function isNookVaultAppUrl(candidateUrl: string, baseUrl = ''): boolean {
-  return wasmIsNookVaultAppUrl(candidateUrl, baseUrl)
+export type NookVaultAppUrlArgs = {
+  candidateUrl: string
+  baseUrl: string
 }
 
-export function belongsToSimpleVault(
-  baseUrl: string,
-  candidateUrl: string,
-): boolean {
-  return wasmBelongsToSimpleVault(baseUrl, candidateUrl)
+export function isNookVaultAppUrl(args: NookVaultAppUrlArgs): boolean {
+  return wasmIsNookVaultAppUrl(args.candidateUrl, args.baseUrl)
 }
 
-export function belongsToSentinelVault(
-  baseUrl: string,
-  candidateUrl: string,
-): boolean {
-  return wasmBelongsToSentinelVault(baseUrl, candidateUrl)
+export type VaultUrlMembershipArgs = {
+  baseUrl: string
+  candidateUrl: string
+}
+
+export function belongsToSimpleVault(args: VaultUrlMembershipArgs): boolean {
+  return wasmBelongsToSimpleVault(args.baseUrl, args.candidateUrl)
+}
+
+export function belongsToSentinelVault(args: VaultUrlMembershipArgs): boolean {
+  return wasmBelongsToSentinelVault(args.baseUrl, args.candidateUrl)
 }

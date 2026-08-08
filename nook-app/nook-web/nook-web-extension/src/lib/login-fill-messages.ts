@@ -1,3 +1,4 @@
+import type { ExternalValue } from './external-value'
 import { hasOriginPayload } from './origin-runtime-message'
 
 export type WebsiteLoginAccountOption = {
@@ -66,7 +67,7 @@ export type WebsiteAuthenticatorFillMessage = {
 }
 
 export function isWebsiteLoginOptionsMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteLoginOptionsMessage {
   if (
     !message ||
@@ -79,23 +80,31 @@ export function isWebsiteLoginOptionsMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   return typeof payload.origin === 'string' && payload.origin.length > 0
 }
 
 export function isWebsiteAuthenticatorOptionsMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteAuthenticatorOptionsMessage {
-  return hasOriginPayload(message, 'nook:website-authenticator-options')
+  return (
+    hasOriginPayload(message) &&
+    message.type ===
+      WebsiteAuthenticatorOptionsMessageType.NookWebsiteAuthenticatorOptions
+  )
 }
 
 export function isWebsiteAuthenticatorFillMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteAuthenticatorFillMessage {
-  if (!hasOriginPayload(message, 'nook:website-authenticator-fill')) {
+  if (
+    !hasOriginPayload(message) ||
+    message.type !==
+      WebsiteAuthenticatorFillMessageType.NookWebsiteAuthenticatorFill
+  ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
@@ -105,7 +114,7 @@ export function isWebsiteAuthenticatorFillMessage(
 }
 
 export function isWebsiteLoginRevealMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteLoginRevealMessage {
   if (
     !message ||
@@ -118,7 +127,7 @@ export function isWebsiteLoginRevealMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   return (
     typeof payload.origin === 'string' &&
     payload.origin.length > 0 &&

@@ -1,27 +1,37 @@
-# TypeScript Single Parameter (Loom)
+# TypeScript Single Parameter
 
 ## Purpose
 
-In Loom TypeScript, a function or method may take at most one parameter.
+Authored TypeScript functions and methods may take at most one parameter.
 Multi-argument APIs must use a named object type.
 
 ## Scope
 
-Applies only to `agentic-ai/loom` authored TypeScript (`src/` and `tests/`).
+Applies to:
 
-Does not apply to:
+- `agentic-ai/loom` authored TypeScript;
+- migrated `nook-app/nook-web` paths selected by the shared ESLint config.
 
-- `nook-app/nook-web` or other TypeScript packages
-- Generated bindings
-- Host callbacks that Loom does not author (third-party APIs Loom calls)
+Nook web expands enforcement one green package slice at a time.
+
+Generated bindings are excluded.
+
+Host callback signatures may require multiple positional values.
+
+Keep that boundary narrow.
+
+Use a focused ESLint suppression with a reason when the host owns the callback
+shape.
+
+Do not suppress a Nook-authored API.
 
 ## Problem Pattern
 
 ```ts
-export function decodeAgentStatsFilePayload(
-  value: ExternalValue,
-  path: string,
-): DecodeOutcome<AgentStatsFileRequest>
+export function writeAgentStatsFile(
+  request: AgentStatsFileRequest,
+  sourcePath: string,
+): Promise<AgentStatsFileResult>
 ```
 
 Multiple positional parameters hide argument meaning at call sites and make
@@ -30,26 +40,27 @@ reordering unsafe.
 ## Preferred Pattern
 
 ```ts
-export type DecodeAgentStatsFilePayloadArgs = {
-  readonly value: ExternalValue;
-  readonly path: string;
+export type WriteAgentStatsFileArgs = {
+  readonly request: AgentStatsFileRequest;
+  readonly sourcePath: string;
 };
 
-export function decodeAgentStatsFilePayload(
-  args: DecodeAgentStatsFilePayloadArgs,
-): DecodeOutcome<AgentStatsFileRequest>
+export function writeAgentStatsFile(
+  args: WriteAgentStatsFileArgs,
+): Promise<AgentStatsFileResult>
 ```
 
 Call sites pass a single object:
 
 ```ts
-decodeAgentStatsFilePayload({ value, path })
+const args: WriteAgentStatsFileArgs = { request, sourcePath }
+writeAgentStatsFile(args)
 ```
 
 Rules:
 
-1. Maximum one parameter per function, method, constructor, or arrow function
-   Loom authors.
+1. Maximum one parameter per authored function, method, constructor, or arrow
+   function.
 2. When more than one value is needed, wrap them in a named exported type when
    the shape is reused, or an inline object type for local helpers.
 3. Do not use optional `undefined` parameters to fake multi-arg APIs. Model
@@ -59,7 +70,10 @@ Rules:
 
 ## Enforcement
 
-ESLint `max-params: [error, 1]` in `agentic-ai/loom`.
+ESLint `max-params: [error, 1]` enforces the rule in:
+
+- `agentic-ai/loom/eslint.config.js`;
+- `nook-app/nook-web/eslint.config.js`.
 
 ```bash
 task loom:verify
@@ -69,6 +83,7 @@ bun run --cwd agentic-ai/loom lint
 
 ## Application Checklist
 
-- [ ] New Loom functions take zero or one parameter.
+- [ ] New authored functions take zero or one parameter.
 - [ ] Multi-value inputs use a typed object argument.
-- [ ] `bun run lint` / `task loom:verify` stays green.
+- [ ] Any host-callback exception is local and explains the host contract.
+- [ ] The applicable Loom or web lint task stays green.

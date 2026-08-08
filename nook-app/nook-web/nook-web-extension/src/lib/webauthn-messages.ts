@@ -1,3 +1,4 @@
+import type { ExternalValue } from './external-value'
 export enum WebsitePasskeyCeremony {
   Create = 'create',
   Get = 'get',
@@ -40,7 +41,7 @@ export type WebsitePasskeyCancelMessage = {
   }
 }
 
-function validBase(message: unknown): message is {
+function validBase(message: ExternalValue): message is {
   payload: WebsitePasskeyOptionsMessage['payload']
 } {
   if (!message || typeof message !== 'object' || !('payload' in message)) {
@@ -69,7 +70,7 @@ function validBase(message: unknown): message is {
 }
 
 export function isWebsitePasskeyOptionsMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsitePasskeyOptionsMessage {
   return (
     validBase(message) &&
@@ -79,7 +80,7 @@ export function isWebsitePasskeyOptionsMessage(
 }
 
 export function isWebsitePasskeyPerformMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsitePasskeyPerformMessage {
   return (
     validBase(message) &&
@@ -95,7 +96,7 @@ export function isWebsitePasskeyPerformMessage(
 }
 
 export function isWebsitePasskeyCancelMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsitePasskeyCancelMessage {
   return Boolean(
     message &&
@@ -120,7 +121,7 @@ export enum WebsitePasskeyRequestParseKind {
 export type WebsitePasskeyRequestParse =
   | {
       kind: WebsitePasskeyRequestParseKind.Parsed
-      request: Record<string, unknown>
+      request: Record<string, ExternalValue>
     }
   | { kind: WebsitePasskeyRequestParseKind.Rejected }
 
@@ -132,7 +133,7 @@ export function parsedWebsitePasskeyRequest(
     return parsed && typeof parsed === 'object'
       ? {
           kind: WebsitePasskeyRequestParseKind.Parsed,
-          request: parsed as Record<string, unknown>,
+          request: parsed as Record<string, ExternalValue>,
         }
       : { kind: WebsitePasskeyRequestParseKind.Rejected }
   } catch {

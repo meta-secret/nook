@@ -152,7 +152,10 @@ export async function launchPairedPinExtension(
   await popupPage.getByTestId('connect-simple-vault-btn').click()
   const simplePage = await openedConnectPage
   await expect(simplePage).toHaveURL((url) =>
-    belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
+    belongsToSimpleVault({
+      baseUrl: simpleVaultBaseUrl,
+      candidateUrl: url.toString(),
+    }),
   )
 
   const consent = simplePage.getByTestId('extension-connect-consent')

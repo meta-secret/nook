@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 /**
  * Loom-only static rules:
  * - max one function/method parameter
- * - ban authored `unknown` (use ExternalValue / ExternalObject)
+ * - ban authored `unknown`; require domain values after boundary decoding
  * - ban raw object-literal call arguments (name a typed value first)
  */
 export default tseslint.config(
@@ -32,7 +32,7 @@ export default tseslint.config(
           types: {
             unknown: {
               message:
-                'Loom forbids unknown. Use ExternalValue / ExternalObject for untrusted data.',
+                'Loom forbids unknown. Model a concrete domain type. A generic transport value is allowed only inside a dedicated untrusted-input codec and must be narrowed immediately.',
             },
           },
         },
@@ -56,6 +56,12 @@ export default tseslint.config(
             "NewExpression[arguments.length=1] > ObjectExpression",
           message:
             'Loom forbids raw object-literal constructor arguments. Assign a named typed value first, then pass that name.',
+        },
+        {
+          selector:
+            "NewExpression[arguments.length=1] > TSAsExpression > ObjectExpression",
+          message:
+            'Loom forbids raw object-literal constructor arguments (including `as` casts). Assign a named typed value first, then pass that name.',
         },
       ],
       'no-unused-vars': 'off',

@@ -33,12 +33,16 @@ and [typescript-no-unknown.md](../dynamic-skills/typescript-no-unknown.md):
 
 - every authored function/method takes at most one parameter
 - multi-value inputs use a typed object argument
-- no authored `unknown`; untrusted data uses `ExternalValue` / `ExternalObject`
+- no authored `unknown`
+- no generic value bags in new or changed domain or application APIs
+- generic transport values stay inside dedicated codecs and narrow immediately
+- existing generic-value APIs are staged migration debt and must not expand
 - toolsList `inputSchema` values are typed `ObjectJsonSchema` (not raw object
   bags); field names come from field enums
 - call sites must not pass raw object literals; name a typed args value first
-- enforced by ESLint `max-params: 1`, `no-restricted-types`, and
-  `no-restricted-syntax` in `agentic-ai/loom`
+- mechanically enforced by ESLint `max-params: 1`, `no-restricted-types`, and
+  `no-restricted-syntax` in `agentic-ai/loom`; review enforces generic-value
+  containment while the existing debt is migrated
 
 Enforced by `task preflight:typescript-state` across the repository, plus
 `task loom:verify` (includes ESLint) for Loom-local rules.

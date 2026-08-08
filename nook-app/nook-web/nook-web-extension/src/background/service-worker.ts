@@ -1,3 +1,4 @@
+import type { ExternalValue } from '../lib/external-value'
 import {
   isBeginExtensionPairingMessage,
   isExtensionIdentityHandoffRequestMessage,
@@ -121,7 +122,8 @@ import {
   generateSuggestedPassword,
 } from './vault-runtime'
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
+  const message = runtimeMessage as ExternalValue
   if (isExtensionPairingStateQueryMessage(message)) {
     if (sender.id !== chrome.runtime.id) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
@@ -582,7 +584,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 })
 
 chrome.runtime.onMessageExternal.addListener(
-  (message, sender, sendResponse) => {
+  (runtimeMessage, sender, sendResponse) => {
+    const message = runtimeMessage as ExternalValue
     if (isOpenCompanionLauncherMessage(message)) {
       if (!isNokeySender(sender)) {
         sendResponse({ ok: false, reason: 'forbidden-sender' })
