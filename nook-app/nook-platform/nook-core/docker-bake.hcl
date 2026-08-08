@@ -5,53 +5,65 @@
 target "builder-core-deps" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/lineage.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "builder-core-deps"
   platforms  = ["linux/amd64"]
+}
+
+// Standalone dependency restore for explicit dependency-only solves.
+target "builder-core-deps-restore" {
+  inherits   = ["builder-core-deps"]
   cache-from = rust_deps_cache_from
 }
 
-// Explicit writer for the native deps Zot scope. Context consumers use
-// builder-core-deps (no cache-to) so linked leaves cannot thin-export this parent.
+// Explicit writer for the native deps Zot scope.
 target "builder-core-deps-publish" {
-  inherits = ["builder-core-deps"]
+  inherits = ["builder-core-deps-restore"]
   cache-to   = rust_deps_cache_to
 }
 
-// Shared platform source overlay on cooked deps. Bulk native leaves take this via
-// Bake context so each leaf does not repeat the directory COPY.
+// Dirty-safe local formatter publisher. This target contains manifests,
+// synthetic crate roots, and compiled dependencies. It contains no real source.
+target "builder-core-deps-input-publish" {
+  inherits = ["builder-core-deps-restore"]
+  cache-to = rust_native_deps_input_cache_to
+}
+
+// Shared platform source overlay on cooked deps. Product leaves resolve this
+// internal stage from the same Dockerfile, preserving one stable cache lineage.
 target "rust-platform" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/lineage.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "rust-platform"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-core-deps = "target:builder-core-deps"
-  }
   output = ["type=cacheonly"]
 }
 
 target "builder-wasm-deps" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/lineage.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "builder-wasm-deps"
   platforms  = ["linux/amd64"]
-  // Main owns the fingerprinted WASM lineage. PRs restore that scope, their
-  // isolated write, and longer source-v2 as a soft fallback. Do not cache-from
-  // rust-base or native rust-deps: those shorter parents orphan cook layers.
-  //
-  // Cache proof: a repeated solve for the same fingerprint must hit CACHED for both chef cooks.
+}
+
+// Standalone dependency restore for explicit dependency-only solves.
+target "builder-wasm-deps-restore" {
+  inherits   = ["builder-wasm-deps"]
   cache-from = rust_wasm_deps_cache_from
 }
 
-// Explicit writer for the WASM deps Zot scope. Context consumers use
-// builder-wasm-deps (no cache-to). Main writes GHA_RUST_WASM_DEPS_SCOPE;
-// Isolated writes use the git-commit remote-buildcache suffix via write_cache_repository.
+// Explicit writer for the WASM deps Zot scope. Main writes
+// GHA_RUST_WASM_DEPS_SCOPE; isolated writes use the exact git scope.
 target "builder-wasm-deps-publish" {
-  inherits = ["builder-wasm-deps"]
+  inherits = ["builder-wasm-deps-restore"]
   cache-to   = rust_wasm_deps_cache_to
+}
+
+target "builder-wasm-deps-input-publish" {
+  inherits = ["builder-wasm-deps-restore"]
+  cache-to = rust_wasm_deps_input_cache_to
 }
 
 // Native verify warm-up (nextest --no-run, clippy, llvm-cov). Parallel with builder-wasm.
@@ -60,12 +72,9 @@ target "builder-wasm-deps-publish" {
 target "builder-debug" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/nook-core/Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "builder-debug"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-core-deps = "target:builder-core-deps"
-  }
   cache-from = rust_native_source_cache_from
   cache-to   = rust_native_source_cache_to
 }
@@ -75,12 +84,9 @@ target "builder-debug" {
 target "coverage-export" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/nook-core/Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "coverage-export"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-core-deps = "target:builder-core-deps"
-  }
   // Main verifies this graph read-only, then exports the already-solved local builder state in a
   // separate post-verification step without a second reconstruction job.
   cache-from = rust_native_source_cache_from
@@ -92,12 +98,9 @@ target "coverage-export" {
 target "_nook-rust-test-common" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/nook-rust-test.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "nook-rust-test"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-core-deps = "target:builder-core-deps"
-  }
   // Focused Remote rust:test runs own a branch-scoped Zot export. Trusted Main remains the
   // fallback restore source, while untrusted pull-request workflows never receive write access.
   cache-from = rust_native_source_cache_from
@@ -107,12 +110,9 @@ target "_nook-rust-test-common" {
 target "_nook-rust-lint-common" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/nook-rust-lint.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "nook-rust-lint"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-core-deps = "target:builder-core-deps"
-  }
   cache-from = rust_native_source_cache_from
   cache-to   = rust_native_source_cache_to
 }
@@ -120,12 +120,9 @@ target "_nook-rust-lint-common" {
 target "_nook-rust-coverage-common" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/nook-rust-coverage.Dockerfile"
+  dockerfile = "nook-app/nook-platform/docker/rust/product.Dockerfile"
   target     = "nook-rust-coverage"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-core-deps = "target:builder-core-deps"
-  }
   cache-from = rust_native_source_cache_from
   cache-to   = rust_native_source_cache_to
 }

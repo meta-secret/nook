@@ -4,23 +4,10 @@
 //! Runtime CACHED proof for WASM deps remains Main `verify-wasm-gha-cache.sh`.
 
 use super::*;
-use anyhow::{Context, bail};
-use std::collections::{BTreeSet, VecDeque};
+use anyhow::Context;
+use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
-
-const WASM_FINGERPRINT_ALLOWLIST: &[&str] = &[
-    "nook-app/nook-platform/Cargo.toml",
-    "nook-app/nook-platform/Cargo.lock",
-    "nook-app/**/Cargo.toml",
-    "nook-app/nook-platform/.cargo/**",
-    "nook-app/nook-platform/.config/**",
-    "nook-app/nook-platform/clippy.toml",
-    "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
-    "nook-app/nook-platform/docker/rust/lineage.Dockerfile.dockerignore",
-    "nook-app/nook-platform/docker/sccache-wrapper.sh",
-    "nook-app/nook-platform/docker/sccache-report.sh",
-];
 
 #[test]
 fn theorem_empty_cache_overrides_banned_repo_wide() -> anyhow::Result<()> {
@@ -43,6 +30,31 @@ fn theorem_empty_cache_overrides_banned_repo_wide() -> anyhow::Result<()> {
             .to_string_lossy();
         let text = fs::read_to_string(&path).with_context(|| format!("failed to read {rel}"))?;
         assert_no_empty_bake_cache_overrides(rel.as_ref(), &text);
+    }
+    Ok(())
+}
+
+#[test]
+fn theorem_pr_workflows_have_no_host_rust_compilation() -> anyhow::Result<()> {
+    let root = repository_root();
+    for relative in [
+        ".github/workflows/pr.yml",
+        ".github/workflows/rust-ecosystem-checks.yml",
+        ".github/workflows/hive.yml",
+        ".github/workflows/source-architecture.yml",
+    ] {
+        let workflow = read(&root, relative);
+        for (index, line) in workflow.lines().enumerate() {
+            let command = line.trim_start();
+            for compiler in ["cargo ", "rustc ", "rustup ", "wasm-pack "] {
+                assert!(
+                    !command.starts_with(compiler)
+                        && !command.starts_with(&format!("run: {compiler}")),
+                    "{relative}:{} invokes uncached host Rust command {compiler}",
+                    index + 1
+                );
+            }
+        }
     }
     Ok(())
 }
@@ -85,37 +97,38 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
     )?;
     assert_scope_arms(
         &rust_bake,
-        "rust_ecosystem_nightly_cache_from",
-        &["nook-rust-ecosystem-nightly-v4"],
+        "rust_wasm_node_cache_from",
+        &["nook-rust-wasm-node-v1"],
         &[],
-        &[
-            "nook-rust-base-v1",
-            "nook/buildcache/nook-rust-ecosystem-nightly",
-        ],
+        &["nook-rust-wasm-source-v2", "nook-rust-wasm-deps-v5"],
     )?;
     assert_scope_arms(
         &rust_bake,
         "rust_ecosystem_policy_tools_cache_from",
         &["nook-rust-ecosystem-policy-tools-v4"],
         &[],
-        &[
-            "nook-rust-base-v1",
-            "nook/buildcache/nook-rust-ecosystem-policy",
-        ],
+        &["nook-rust-base-v1"],
     )?;
     assert_scope_arms(
         &rust_bake,
         "rust_ecosystem_dylint_cache_from",
-        &["nook-rust-ecosystem-dylint-v2"],
+        &["nook-rust-ecosystem-dylint-v3"],
         &[],
         &["nook-rust-base-v1", "nook-rust-ecosystem-nightly"],
     )?;
     assert_scope_arms(
         &rust_bake,
         "rust_ecosystem_fuzz_cache_from",
-        &["nook-rust-ecosystem-fuzz-v2"],
+        &["nook-rust-ecosystem-fuzz-v3"],
         &[],
         &["nook-rust-base-v1", "nook-rust-ecosystem-nightly"],
+    )?;
+    assert_scope_arms(
+        &rust_bake,
+        "rust_ecosystem_kani_cache_from",
+        &["nook-rust-ecosystem-kani-v1"],
+        &[],
+        &["nook-rust-base-v1", "nook-rust-deps-v3"],
     )?;
     assert_scope_arms(
         &preflight_bake,
@@ -128,6 +141,131 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
 }
 
 #[test]
+fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Result<()> {
+    let root = repository_root();
+    let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let preflight_bake = read(&root, "preflight/docker-bake.hcl");
+    for (bake, name, availability, exact_marker, main_ref) in [
+        (
+            rust_bake.as_str(),
+            "rust_base_cache_from",
+            "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE",
+            "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-base-v1",
+        ),
+        (
+            rust_bake.as_str(),
+            "rust_ecosystem_policy_tools_cache_from",
+            "GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE",
+            "nook-rust-ecosystem-policy-tools-v4${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-ecosystem-policy-tools-v4",
+        ),
+        (
+            rust_bake.as_str(),
+            "rust_ecosystem_dylint_cache_from",
+            "GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE",
+            "nook-rust-ecosystem-dylint-v3${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-ecosystem-dylint-v3",
+        ),
+        (
+            rust_bake.as_str(),
+            "rust_ecosystem_fuzz_cache_from",
+            "GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE",
+            "nook-rust-ecosystem-fuzz-v3${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-ecosystem-fuzz-v3",
+        ),
+        (
+            rust_bake.as_str(),
+            "rust_ecosystem_deterministic_cache_from",
+            "GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE",
+            "nook-rust-ecosystem-deterministic-v1${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-ecosystem-deterministic-v1",
+        ),
+        (
+            rust_bake.as_str(),
+            "rust_ecosystem_kani_cache_from",
+            "GHA_CACHE_EXACT_RUST_KANI_AVAILABLE",
+            "nook-rust-ecosystem-kani-v1${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-ecosystem-kani-v1",
+        ),
+        (
+            rust_bake.as_str(),
+            "rust_deps_cache_from",
+            "GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE",
+            "nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-deps-v3",
+        ),
+        (
+            rust_bake.as_str(),
+            "rust_wasm_deps_cache_from",
+            "GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE",
+            "${rust_wasm_deps_write_scope}",
+            "nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}",
+        ),
+        (
+            rust_bake.as_str(),
+            "rust_native_source_cache_from",
+            "GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE",
+            "nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-native-source-v3",
+        ),
+        (
+            rust_bake.as_str(),
+            "rust_wasm_source_cache_from",
+            "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE",
+            "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-wasm-source-v2",
+        ),
+        (
+            rust_bake.as_str(),
+            "rust_wasm_node_cache_from",
+            "GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE",
+            "nook-rust-wasm-node-v1${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-wasm-node-v1",
+        ),
+        (
+            preflight_bake.as_str(),
+            "preflight_cache_from",
+            "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE",
+            "nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-preflight-v1",
+        ),
+    ] {
+        let body = assignment_body(bake, name)?;
+        let exact = split_exact_available_arm(body, availability)?;
+        assert!(
+            exact.contains(exact_marker) && !exact.contains(main_ref),
+            "{name} must import only its exact full-graph ref when {availability} is set"
+        );
+        let (fallback, _) = split_fallback_arms(body)?;
+        assert!(
+            fallback.contains(main_ref),
+            "{name} FALLBACK must restore Main {main_ref}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn theorem_nightly_leaves_publish_only_their_full_graphs() -> anyhow::Result<()> {
+    let root = repository_root();
+    let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
+    for (task, leaf) in [
+        ("docker:ecosystem:dylint", "rust-dylint"),
+        ("docker:ecosystem:fuzz", "rust-fuzz-smoke"),
+    ] {
+        let body = taskfile_task_body(&docker_tasks, task)?;
+        assert!(
+            body.contains("task: docker:rust-base")
+                && body.matches(leaf).count() >= 2
+                && !body.contains("rust-ecosystem-nightly"),
+            "{task} must restore/publish only its own full-graph {leaf} scope"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<()> {
     let root = repository_root();
     let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
@@ -135,27 +273,83 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
     let web_toolchain = read(&root, "nook-app/nook-web/docker/toolchain.docker-bake.hcl");
     let app_bake = read(&root, "nook-app/docker-bake.hcl");
 
-    for (bake, target) in [
-        (rust_bake.as_str(), "rust-base"),
-        (core_bake.as_str(), "builder-core-deps"),
-        (core_bake.as_str(), "builder-wasm-deps"),
-        (web_toolchain.as_str(), "web-deps"),
+    // Nested ecosystem leaves context rust-base. Importing the short rust-base
+    // index there orphans nightly/policy RUNs after Main FALLBACK restored them.
+    let rust_base_body = bake_target_body(rust_bake.as_str(), "rust-base");
+    assert!(
+        !rust_base_body.trim().is_empty(),
+        "context parent target rust-base must exist"
+    );
+    assert!(
+        !rust_base_body
+            .lines()
+            .any(|line| line.trim_start().starts_with("cache-from")),
+        "context rust-base must omit cache-from so nested nightly/policy leaves are not orphaned"
+    );
+    assert!(
+        !bake_target_assigns_cache_to(rust_bake.as_str(), "rust-base"),
+        "context parent rust-base must never declare cache-to"
+    );
+    let rust_base_restore = bake_target_body(rust_bake.as_str(), "rust-base-restore");
+    assert!(
+        rust_base_restore
+            .lines()
+            .any(|line| line.trim_start().starts_with("cache-from"))
+            && !bake_target_assigns_cache_to(rust_bake.as_str(), "rust-base-restore"),
+        "rust-base-restore must declare cache-from without cache-to"
+    );
+
+    assert!(
+        !rust_bake.contains("rust-platform-nightly")
+            && !rust_bake.contains("rust-ecosystem-nightly = \"target:rust-ecosystem-nightly\"")
+            && rust_bake
+                .matches("dockerfile = \"nook-app/nook-platform/docker/rust/nightly.Dockerfile\"")
+                .count()
+                == 2,
+        "nightly/dylint/fuzz must share one Dockerfile with no linked nightly context"
+    );
+
+    for (target, restore, cache_from) in [
+        (
+            "builder-core-deps",
+            "builder-core-deps-restore",
+            "rust_deps_cache_from",
+        ),
+        (
+            "builder-wasm-deps",
+            "builder-wasm-deps-restore",
+            "rust_wasm_deps_cache_from",
+        ),
     ] {
-        let body = bake_target_body(bake, target);
+        let body = bake_target_body(core_bake.as_str(), target);
         assert!(
             !body.trim().is_empty(),
-            "context parent target {target} must exist"
+            "dependency stage target {target} must exist"
         );
         assert!(
-            body.lines()
+            !body
+                .lines()
                 .any(|line| line.trim_start().starts_with("cache-from")),
-            "context parent {target} must declare cache-from"
+            "dependency stage {target} must omit cache-from so source leaves keep their full lineage"
         );
         assert!(
-            !bake_target_assigns_cache_to(bake, target),
-            "context parent {target} must never declare cache-to"
+            !bake_target_assigns_cache_to(core_bake.as_str(), target),
+            "dependency stage {target} must never declare cache-to"
+        );
+        let restore_body = bake_target_body(core_bake.as_str(), restore);
+        assert!(
+            restore_body.contains(cache_from)
+                && !bake_target_assigns_cache_to(core_bake.as_str(), restore),
+            "standalone {restore} must own {cache_from} without cache-to"
         );
     }
+
+    let web_deps_body = bake_target_body(web_toolchain.as_str(), "web-deps");
+    assert!(
+        web_deps_body.contains("cache-from = web_deps_cache_from")
+            && !bake_target_assigns_cache_to(web_toolchain.as_str(), "web-deps"),
+        "standalone web-deps keeps read-only restore while its publisher owns writes"
+    );
 
     for (bake, target, cache_to_var) in [
         (
@@ -196,6 +390,7 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
         (rust_bake.as_str(), "rust_wasm_deps_cache_to"),
         (rust_bake.as_str(), "rust_native_source_cache_to"),
         (rust_bake.as_str(), "rust_wasm_source_cache_to"),
+        (rust_bake.as_str(), "rust_wasm_node_cache_to"),
     ] {
         let body = assignment_body(bake, name)?;
         assert!(
@@ -243,8 +438,34 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
             && setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled")
             && setup.contains("fallback_enabled=1")
             && setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"),
-        "PR/Remote isolated writes must use -git-<40-char head SHA> with Main fallback enabled"
+        "PR/Remote isolated writes must use -git-<40-char head SHA> with cold-scope Main fallback enabled"
     );
+    assert!(
+        setup.contains("docker buildx imagetools inspect")
+            && setup.contains("cache-from entries are merged, not ordered")
+            && setup.contains("Exact cache absent; Main/fingerprint fallback enabled"),
+        "hosted setup must probe exact refs before selecting exact-only or cold fallback imports"
+    );
+    for availability in [
+        "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE",
+        "GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE",
+        "GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE",
+        "GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE",
+        "GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE",
+        "GHA_CACHE_EXACT_RUST_KANI_AVAILABLE",
+        "GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE",
+        "GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE",
+        "GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE",
+        "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE",
+        "GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE",
+        "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE",
+    ] {
+        assert!(
+            app_bake.contains(&format!("variable \"{availability}\""))
+                && setup.contains(&format!("publish_exact_availability {availability}")),
+            "{availability} must be declared and populated by the hosted exact-ref probe"
+        );
+    }
     assert!(
         !setup.contains("scope_suffix=\"-pr-$pr_number\""),
         "PR cache scope must not use -pr-<number> suffixes"
@@ -267,6 +488,7 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "rust_wasm_deps_cache_from",
         "rust_native_source_cache_from",
         "rust_wasm_source_cache_from",
+        "rust_wasm_node_cache_from",
     ] {
         let body = assignment_body(&rust_bake, name)?;
         assert!(
@@ -279,6 +501,7 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "rust_wasm_deps_cache_to",
         "rust_native_source_cache_to",
         "rust_wasm_source_cache_to",
+        "rust_wasm_node_cache_to",
         "rust_base_cache_to",
     ] {
         let body = assignment_body(&rust_bake, name)?;
@@ -291,87 +514,131 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
 }
 
 #[test]
-fn theorem_wasm_fingerprint_closed_allowlist() -> anyhow::Result<()> {
+fn theorem_hive_pr_publishes_only_exact_head_cache() -> anyhow::Result<()> {
     let root = repository_root();
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
-    let fingerprint_call = setup
-        .split_once("wasm_deps_fingerprint=\"${{ hashFiles(")
-        .context("docker setup must compute wasm_deps_fingerprint via hashFiles")?
-        .1
-        .split_once(") }}\"")
-        .context("docker setup hashFiles call must terminate")?
-        .0;
-    let actual = parse_hashfiles_args(fingerprint_call)?;
-    let expected: BTreeSet<&str> = WASM_FINGERPRINT_ALLOWLIST.iter().copied().collect();
-    assert_eq!(
-        actual, expected,
-        "WASM deps fingerprint must equal the cook-only allowlist (got {actual:?})"
+    let workflow = read(&root, ".github/workflows/hive.yml");
+    let tasks = read(&root, "agentic-ai/minds/hive/Taskfile.yml");
+
+    assert!(
+        setup.contains("HIVE_CACHE_FROM=$hive_remote_ref")
+            && setup.contains("HIVE_CACHE_SEED_FROM=$hive_seed")
+            && setup.contains("HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m")
+            && setup.contains("Exact Hive cache available; Main seed suppressed")
+            && !setup.contains("if [ \"$event_name\" != \"pull_request\" ]; then"),
+        "isolated PR setup must use exact Hive alone when present, otherwise Main, and publish only the exact SHA"
     );
     assert!(
-        setup.contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$wasm_deps_fingerprint"),
-        "fingerprinted scope must remain nook-rust-wasm-deps-v5-<hash>"
+        workflow.contains("uses: ./.github/actions/nook-docker-setup")
+            && workflow.contains("Docker setup for isolated PR cache")
+            && workflow.contains("cache-write: \"false\"")
+            && workflow.contains("main-cache-only: \"true\"")
+            && workflow.contains("isolated-cache-write: \"true\""),
+        "Hive PR verification must opt into the same isolated exact-head cache contract as every other Docker job"
+    );
+    let verify = taskfile_task_body(&tasks, "verify")?;
+    assert!(
+        verify.contains("--cache-from \"$HIVE_CACHE_FROM\"")
+            && verify.contains("--cache-from \"$HIVE_CACHE_SEED_FROM\"")
+            && verify.contains("--cache-to \"$HIVE_CACHE_TO\""),
+        "Hive verification must consume the setup-selected exact-or-Main cache and publish the verified exact graph"
+    );
+    assert!(
+        workflow.contains("if: github.event_name == 'push' && github.ref == 'refs/heads/main'")
+            && workflow.contains("nook/buildcache/nook-hive-linux-amd64-v1"),
+        "only trusted Main may publish the shared Hive seed"
     );
     Ok(())
 }
 
 #[test]
-fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
+fn theorem_product_source_leaves_use_one_internal_dockerfile_lineage() -> anyhow::Result<()> {
     let root = repository_root();
-    let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
-    let verifier = read(&root, ".github/scripts/verify-wasm-gha-cache.sh");
-
-    let native = docker_tasks
-        .split("docker:ci:cache:publish:native:")
-        .nth(1)
-        .and_then(|tail| tail.split("docker:ci:cache:publish:wasm:").next())
-        .context("native publish task missing")?;
-    let native_base = native
-        .find("task: docker:ci:cache:publish:rust-base")
-        .context("native publish must stage rust-base")?;
-    let native_deps = native
-        .find("builder-core-deps-publish builder-debug")
-        .context("native publish must bake deps/debug")?;
-    let native_preflight = native
-        .find("preflight-test")
-        .context("native publish must bake preflight-test")?;
-    assert!(
-        native_base < native_deps && native_deps < native_preflight,
-        "native publish must stage rust-base, then deps/debug, then preflight"
+    let tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
+    let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let core_bake = read(&root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let wasm_bake = read(&root, "nook-app/nook-platform/nook-wasm/docker-bake.hcl");
+    let product = read(
+        &root,
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
     );
-
-    let wasm = docker_tasks
-        .split("docker:ci:cache:publish:wasm:")
-        .nth(1)
-        .and_then(|tail| tail.split("docker:rust-base:").next())
-        .context("wasm publish task missing")?;
-    let wasm_deps = wasm
-        .find("builder-wasm-deps-publish")
-        .context("wasm publish must bake builder-wasm-deps-publish")?;
-    let wasm_source = wasm
-        .find("wasm-export")
-        .context("wasm publish must bake wasm-export")?;
-    let wasm_base = wasm
-        .find("task: docker:ci:cache:publish:rust-base")
-        .context("wasm publish must seed rust-base after deps/source")?;
-    assert!(
-        wasm_deps < wasm_source && wasm_source < wasm_base,
-        "wasm publish must stage deps-publish, then source export, then rust-base"
-    );
-    assert!(
-        wasm.contains("verify-wasm-gha-cache.sh") && wasm.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "Main WASM publish must invoke the fresh-builder fingerprint verifier"
-    );
+    let native = taskfile_task_body(&tasks, "docker:ci:rust:export")?;
+    let export = taskfile_task_body(&tasks, "docker:ci:wasm:export")?;
 
     assert!(
-        verifier.contains("docker-container")
-            && verifier.contains("--use")
-            && !verifier.contains("--builder")
-            && verifier.contains("builder-wasm-deps.cache-from=type=registry")
-            && verifier.contains("nook-sccache-report chef-wasm-release")
-            && verifier.contains("nook-sccache-report chef-wasm-clippy")
-            && verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "runtime WASM proof must use a fresh docker-container builder and require chef CACHED markers"
+        native.contains("ci-rust'")
+            && !native.contains("builder-core-deps.output=type=cacheonly")
+            && !native.contains("rust-base-restore.output=type=cacheonly")
+            && !native.contains("ci-rust builder-core-deps"),
+        "native verification must request only its source-leaf group"
     );
+    assert!(
+        export.contains("wasm-export.output=type=local") && export.contains("wasm-export'"),
+        "WASM verification must request the artifact leaf"
+    );
+    assert!(
+        !export.contains("builder-wasm-deps.output=type=cacheonly")
+            && !export.contains("wasm-export builder-wasm-deps"),
+        "WASM verification must not request a dependency sibling"
+    );
+    for stage in [
+        "FROM rust-base AS chef-deps",
+        "FROM chef-deps AS builder-wasm-deps",
+        "FROM builder-wasm-deps AS builder-core-deps",
+        "FROM builder-core-deps AS builder-debug",
+        "FROM builder-wasm-deps AS builder-wasm-source",
+        "FROM builder-wasm-build AS focused-web-artifacts-source",
+        "FROM rust-platform AS rust-ecosystem-deterministic",
+        "FROM rust-base AS rust-kani-toolchain",
+        "FROM rust-kani-toolchain AS rust-kani",
+    ] {
+        assert!(
+            product.contains(stage),
+            "self-contained product lineage is missing stage: {stage}"
+        );
+    }
+    for (bake, targets) in [
+        (
+            core_bake.as_str(),
+            &[
+                "builder-core-deps",
+                "builder-wasm-deps",
+                "rust-platform",
+                "builder-debug",
+                "coverage-export",
+                "_nook-rust-test-common",
+                "_nook-rust-lint-common",
+                "_nook-rust-coverage-common",
+            ][..],
+        ),
+        (
+            wasm_bake.as_str(),
+            &[
+                "builder-wasm",
+                "_nook-rust-fast-common",
+                "rust-format-check",
+                "wasm-export",
+                "focused-web-artifacts",
+                "web-artifacts",
+                "_nook-rust-common",
+                "_nook-rust-browser-common",
+            ][..],
+        ),
+        (
+            rust_bake.as_str(),
+            &["rust-base", "rust-ecosystem-deterministic", "rust-kani"][..],
+        ),
+    ] {
+        for target in targets {
+            let body = bake_target_body(bake, target);
+            assert!(
+                body.contains(
+                    "dockerfile = \"nook-app/nook-platform/docker/rust/product.Dockerfile\"",
+                ) && !body.contains("contexts ="),
+                "product target {target} must use the internal product Dockerfile without a Bake-linked parent"
+            );
+        }
+    }
     Ok(())
 }
 
@@ -449,19 +716,17 @@ fn split_fallback_arms(body: &str) -> anyhow::Result<(&str, &str)> {
     Ok((fallback.trim(), non_fallback.trim()))
 }
 
-fn parse_hashfiles_args(call: &str) -> anyhow::Result<BTreeSet<&str>> {
-    let mut args = BTreeSet::new();
-    for part in call.split(',') {
-        let trimmed = part.trim();
-        let path = trimmed
-            .strip_prefix('\'')
-            .and_then(|s| s.strip_suffix('\''))
-            .with_context(|| format!("hashFiles arg must be single-quoted: {trimmed}"))?;
-        if !args.insert(path) {
-            bail!("duplicate hashFiles path {path}");
-        }
-    }
-    Ok(args)
+fn split_exact_available_arm<'a>(body: &'a str, availability: &str) -> anyhow::Result<&'a str> {
+    let marker = format!("{availability} != \"\" ? [");
+    let after = body
+        .split_once(marker.as_str())
+        .map(|(_, rest)| rest)
+        .with_context(|| format!("missing exact-availability ternary for {availability}"))?;
+    let exact = after
+        .split_once("] : GHA_CACHE_FALLBACK_ENABLED")
+        .map(|(arm, _)| arm)
+        .with_context(|| format!("exact arm for {availability} must precede cold fallback"))?;
+    Ok(exact.trim())
 }
 
 fn assert_no_empty_bake_cache_overrides(path: &str, text: &str) {

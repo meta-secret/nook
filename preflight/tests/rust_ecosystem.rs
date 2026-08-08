@@ -19,14 +19,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let pr = read(".github/workflows/pr.yml")?;
     let quality = read(".cortex/workflows/quality.md")?;
     let workspace = read("nook-app/nook-platform/Cargo.toml")?;
-    let rust_lineage_dockerfile = read("nook-app/nook-platform/docker/rust/lineage.Dockerfile")?;
+    let rust_lineage_dockerfile = read("nook-app/nook-platform/docker/rust/product.Dockerfile")?;
     let rust_dockerfile = [
-        "nook-app/nook-platform/docker/rust/lineage.Dockerfile",
-        "nook-app/nook-platform/docker/rust/deterministic.Dockerfile",
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
         "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile",
         "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
-        "nook-app/nook-platform/docker/rust/fuzz-smoke.Dockerfile",
-        "nook-app/nook-platform/docker/rust/dylint.Dockerfile",
     ]
     .into_iter()
     .map(read)
@@ -60,13 +57,14 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "Bake rust-ecosystem-deterministic",
         "Bake rust-fuzz-smoke",
         "Bake rust-dylint",
+        "Bake Kani bounded proofs",
         "task docker:ecosystem:dependency-policy",
         "task docker:ecosystem:deterministic",
         "task docker:ecosystem:fuzz",
         "task docker:ecosystem:dylint",
+        "task docker:ecosystem:kani",
         "nook-docker-setup",
         "NOOK_SCCACHE_ACCESS_KEY",
-        "kani-github-action",
         "FUZZ_SECONDS",
         "isolated-cache-write: ${{ inputs.isolated_cache_write }}",
         "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}",
@@ -91,7 +89,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
                 "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}"
             )
             .count(),
-        4,
+        5,
         "every Bake-backed ecosystem job must seed Main and isolate PR cache writes"
     );
     let docker_tasks = read("nook-app/nook-platform/docker/Taskfile.yml")?;
@@ -101,29 +99,26 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let root_tasks = read("Taskfile.yml")?;
     for marker in [
         "docker:rust-base:",
+        "rust-base-restore",
         "docker:ecosystem:policy-tools:",
-        "docker:ecosystem:nightly:",
-        "docker:ecosystem:nightly:verify:",
         "docker:ecosystem:dependency-policy:",
         "docker:ecosystem:dependency-policy:run:",
         "bash -c \"set -euo pipefail;",
         "rust-ecosystem-policy-tools.output=type=cacheonly",
         "docker:ecosystem:deterministic:",
+        "docker:ecosystem:kani:",
         "docker:ecosystem:fuzz:",
         "docker:ecosystem:dylint:",
         "docker:ci:cache:publish:rust-base:",
         "rust-ecosystem-policy-tools",
         "rust-ecosystem-deterministic",
+        "rust-kani",
         "rust-fuzz-smoke",
         "rust-dylint",
-        "rust-ecosystem-nightly",
         "sccache:ensure",
-        "rust-ecosystem-nightly-publish",
         "GHA_CACHE_WRITE_ENABLED=",
         "task: docker:rust-base",
         "task: docker:ecosystem:policy-tools",
-        "task: docker:ecosystem:nightly:verify",
-        "task: docker:ecosystem:nightly",
         "task: docker:ci:cache:publish:rust-base",
         "task: rust:dependency-policy",
         "task: preflight:dependency-policy",
@@ -166,23 +161,32 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "cargo-deny-action",
         "cargo install cargo-audit",
         "cargo install cargo-dylint",
-        "dtolnay/rust-toolchain",
+        "cargo kani",
+        "kani-verifier",
         "Swatinem/rust-cache",
         "taiki-e/install-action",
+        "actions/cache",
+        "dtolnay/rust-toolchain",
     ] {
         assert!(
             !checks.contains(forbidden),
             "Rust ecosystem checks must not use host-toolchain path: {forbidden}"
         );
     }
+    assert!(
+        !checks.contains("model-checking/kani-github-action")
+            && checks.contains("task docker:ecosystem:kani"),
+        "Kani proof compilation must run through the BuildKit-cached Task target"
+    );
 
     for marker in [
         "AS rust-ecosystem-policy-tools",
         "AS rust-ecosystem-nightly",
-        "AS rust-platform-nightly",
         "AS rust-fuzz-smoke",
         "AS rust-dylint",
         "AS rust-ecosystem-deterministic",
+        "AS rust-kani-toolchain",
+        "AS rust-kani",
         "CARGO_DENY_SHA256=",
         "CARGO_AUDIT_SHA256=",
         "CARGO_FUZZ_SHA256=",
@@ -191,6 +195,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "COPY nook-app/nook-platform/ nook-app/nook-platform/",
         "cargo fuzz run",
         "cargo dylint --all",
+        "KANI_VERSION=0.67.0",
+        "cargo kani setup",
+        "cargo kani --package nook-replication",
     ] {
         assert!(
             rust_dockerfile.contains(marker),
@@ -198,19 +205,15 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         );
     }
     let nightly_dockerfile = read("nook-app/nook-platform/docker/rust/nightly.Dockerfile")?;
-    let dylint_dockerfile = read("nook-app/nook-platform/docker/rust/dylint.Dockerfile")?;
-    let fuzz_dockerfile = read("nook-app/nook-platform/docker/rust/fuzz-smoke.Dockerfile")?;
     assert!(
-        nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-platform-nightly")
-            && nightly_dockerfile.contains("COPY nook-app/nook-platform/ nook-app/nook-platform/"),
-        "nightly.Dockerfile must own the platform source overlay for dylint/fuzz"
-    );
-    assert!(
-        dylint_dockerfile.contains("FROM rust-platform-nightly AS rust-dylint")
-            && fuzz_dockerfile.contains("FROM rust-platform-nightly AS rust-fuzz-smoke")
-            && !dylint_dockerfile.contains("COPY nook-app/nook-platform/")
-            && !fuzz_dockerfile.contains("COPY nook-app/nook-platform/"),
-        "dylint/fuzz leaves must not re-copy platform sources"
+        !nightly_dockerfile.contains("rust-platform-nightly")
+            && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-dylint")
+            && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-fuzz-smoke")
+            && nightly_dockerfile
+                .matches("COPY nook-app/nook-platform/ nook-app/nook-platform/")
+                .count()
+                == 2,
+        "one nightly Dockerfile must own the shared tools and both source leaves"
     );
     assert!(
         docker_tasks.contains("--hide-inclusion-graph")
@@ -226,17 +229,16 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     ] {
         assert!(
             !rust_lineage_dockerfile.contains(forbidden),
-            "lineage.Dockerfile/rust-base must not install ecosystem CLI {forbidden}"
+            "product.Dockerfile/rust-base must not install ecosystem CLI {forbidden}"
         );
     }
 
     for target in [
         "rust-ecosystem-policy-tools",
-        "rust-ecosystem-nightly",
-        "rust-platform-nightly",
         "rust-fuzz-smoke",
         "rust-dylint",
         "rust-ecosystem-deterministic",
+        "rust-kani",
     ] {
         assert!(
             rust_bake.contains(&format!("target \"{target}\"")),
@@ -255,31 +257,15 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "policy-tools must be the only deny/audit Bake target and load a runnable image"
     );
     assert!(
-        rust_bake.contains("target \"rust-ecosystem-nightly-publish\"")
-            && rust_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
-            && rust_bake
-                .matches("cache-to   = rust_ecosystem_nightly_cache_to")
-                .count()
-                == 1
-            && !rust_bake
-                .split("target \"rust-ecosystem-nightly\" {")
-                .nth(1)
-                .and_then(|tail| tail.split("target \"").next())
-                .unwrap_or("")
-                .lines()
-                .any(|line| line.trim_start().starts_with("cache-to"))
+        !rust_bake.contains("target \"rust-ecosystem-nightly")
+            && !rust_bake.contains("rust_ecosystem_nightly_cache_")
             && rust_bake.contains("cache-to   = rust_ecosystem_dylint_cache_to")
             && rust_bake.contains("cache-to   = rust_ecosystem_fuzz_cache_to")
             && rust_bake.contains("cache-from = rust_ecosystem_dylint_cache_from")
             && rust_bake.contains("cache-from = rust_ecosystem_fuzz_cache_from"),
-        "nightly-publish alone writes the shared nightly scope; context nightly has no cache-to; dylint/fuzz write leaf scopes"
+        "dylint/fuzz full-graph leaf scopes must replace the standalone nightly cache lane"
     );
     let preflight_bake = read("preflight/docker-bake.hcl")?;
-    let nightly_from = rust_bake
-        .split("rust_ecosystem_nightly_cache_from =")
-        .nth(1)
-        .and_then(|tail| tail.split("rust_ecosystem_nightly_cache_to =").next())
-        .unwrap_or("");
     let policy_tools_from = rust_bake
         .split("rust_ecosystem_policy_tools_cache_from =")
         .nth(1)
@@ -314,9 +300,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         .and_then(|tail| tail.split("rust_native_source_cache_to =").next())
         .unwrap_or("");
     assert!(
-        !nightly_from.contains(trusted_rust_base)
-            && !nightly_from.contains(pr_isolated_rust_base)
-            && !policy_tools_from.contains(trusted_rust_base)
+        !policy_tools_from.contains(trusted_rust_base)
             && !policy_tools_from.contains(pr_isolated_rust_base)
             && !preflight_from.contains(trusted_rust_base)
             && !preflight_from.contains(pr_isolated_rust_base)
@@ -333,13 +317,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "native deps/source must restore the v3 own scopes after leaving short-chain rust-base"
     );
     assert!(
-        !nightly_from.contains("nook/buildcache/nook-rust-ecosystem-nightly")
-            && !policy_tools_from.contains("nook/buildcache/nook-rust-ecosystem-policy-tools"),
-        "nightly/policy-tools PR FALLBACK must not import thin trusted Main indexes"
+        policy_tools_from.contains("nook/buildcache/nook-rust-ecosystem-policy-tools-v4"),
+        "policy-tools FALLBACK must restore the fat Main index so PR verify is not cold"
     );
     assert!(
-        dylint_from.contains("nook-rust-ecosystem-dylint-v2")
-            && fuzz_from.contains("nook-rust-ecosystem-fuzz-v2")
+        dylint_from.contains("nook-rust-ecosystem-dylint-v3")
+            && fuzz_from.contains("nook-rust-ecosystem-fuzz-v3")
             && !dylint_from.contains("nook-rust-ecosystem-nightly")
             && !fuzz_from.contains("nook-rust-ecosystem-nightly")
             && !dylint_from.contains("nook-rust-base-v1")
@@ -347,28 +330,41 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "dylint/fuzz leaf cache-from must be own-scope only (no nightly/rust-base short parents)"
     );
     assert!(
-        rust_bake.contains("rust-ecosystem-nightly = \"target:rust-ecosystem-nightly\"")
-            && rust_bake.contains("rust-platform-nightly = \"target:rust-platform-nightly\"")
-            && rust_bake.contains("rust-platform = \"target:rust-platform\"")
-            && rust_bake.contains("rust-base = \"target:rust-base\"")
+        !rust_bake.contains("rust-ecosystem-nightly = \"target:rust-ecosystem-nightly\"")
+            && !rust_bake.contains("rust-platform-nightly")
+            && rust_bake
+                .matches("dockerfile = \"nook-app/nook-platform/docker/rust/nightly.Dockerfile\"")
+                .count()
+                == 2
+            && !rust_bake.contains("rust-platform = \"target:rust-platform\"")
+            && rust_bake
+                .matches("rust-base = \"target:rust-base\"")
+                .count()
+                == 3
             && rust_bake.contains("target \"rust-base-publish\"")
             && docker_tasks.contains("rust-base-publish")
-            && docker_tasks.contains("rust-ecosystem-nightly-publish")
             && !docker_tasks.contains("cache-from=\"")
             && !docker_tasks.contains("cache-from='")
             && !docker_tasks.contains("cache-to=\"")
             && !docker_tasks.contains("cache-to='"),
-        "ecosystem leaves restore context parents without cache-to; scoped *-publish targets own writes"
+        "external ecosystem Dockerfiles link read-only rust-base, product stages stay internal, and scoped publishers own writes"
     );
     assert!(
         rust_bake.contains("nook-rust-ecosystem-policy-tools-v4")
-            && rust_bake.contains("nook-rust-ecosystem-nightly-v4"),
-        "policy-tools and nightly must keep dedicated hosted cache scopes"
+            && rust_bake.contains("nook-rust-ecosystem-dylint-v3")
+            && rust_bake.contains("nook-rust-ecosystem-fuzz-v3"),
+        "policy-tools and nightly leaves must keep dedicated hosted cache scopes"
     );
     assert!(
         rust_bake.contains("cache-from = rust_ecosystem_deterministic_cache_from")
             && rust_bake.contains("cache-to   = rust_ecosystem_deterministic_cache_to"),
         "ecosystem deterministic must seed its own hosted cache above rust-deps"
+    );
+    assert!(
+        rust_bake.contains("nook-rust-ecosystem-kani-v1")
+            && rust_bake.contains("cache-from = rust_ecosystem_kani_cache_from")
+            && rust_bake.contains("cache-to   = rust_ecosystem_kani_cache_to"),
+        "Kani proof compilation must own a complete hosted BuildKit cache scope"
     );
 
     for capability in [

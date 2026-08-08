@@ -115,7 +115,7 @@ tasks:
       FLOOR:
         sh: jq -r '.lines_percent' {{.APP_ROOT}}/nook-platform/nook-core/coverage-floor.json
     cmds:
-      # Same cargo-llvm-cov subcommand warmed in nook-app/nook-platform/nook-core/Dockerfile (builder-debug), so the coverage
+      # Same cargo-llvm-cov subcommand warmed in product.Dockerfile (builder-debug), so the coverage
       # build is a cache hit — no dep recompile at runtime. cargo-llvm-cov enforces the threshold
       # itself via --fail-under-lines (non-zero exit if below); no output parsing.
       - cd "{{.PLATFORM_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --summary-only --fail-under-lines {{.FLOOR}}

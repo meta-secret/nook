@@ -23,7 +23,7 @@ bake_args=(
   --set "*.args.SCCACHE_ENDPOINT=$sccache_endpoint"
   --set "*.args.SCCACHE_BUCKET=$sccache_bucket"
   --set "*.output=type=cacheonly"
-  --set "builder-wasm-deps.cache-from=type=registry,ref=${registry_host}/nook/buildcache/$cache_scope:buildcache"
+  --set "builder-wasm-deps-restore.cache-from=type=registry,ref=${registry_host}/nook/buildcache/$cache_scope:buildcache"
 )
 
 require_cached_step() {
@@ -52,7 +52,7 @@ for attempt in 1 2 3; do
   if "$docker_bin" buildx bake \
     --progress=plain \
     "${bake_args[@]}" \
-    builder-wasm-deps 2>&1 | tee "$proof_log" \
+    builder-wasm-deps-restore 2>&1 | tee "$proof_log" \
     && require_cached_step "$proof_log" "nook-sccache-report chef-wasm-release" \
     && require_cached_step "$proof_log" "nook-sccache-report chef-wasm-clippy" \
     && require_cached_step "$proof_log" "nook-sccache-report wasm-release-test-dependencies"; then

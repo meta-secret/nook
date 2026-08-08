@@ -34,7 +34,8 @@ is_buildkit_frontend_flake() {
     "$log_file"
 }
 
-log_file="$(mktemp "${TMPDIR:-/tmp}/nook-bake-flake.XXXXXX.log")"
+# BSD/macOS mktemp requires the X template to end the path.
+log_file="$(mktemp "${TMPDIR:-/tmp}/nook-bake-flake.XXXXXX")"
 cleanup() {
   rm -f "$log_file"
 }

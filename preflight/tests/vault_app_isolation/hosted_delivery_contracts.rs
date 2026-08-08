@@ -167,8 +167,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         wasm_node_job.contains("needs: wasm")
             && wasm_node_job.contains("task ci:wasm:node-test")
             && wasm_node_job.contains("needs.wasm.outputs.run-node-tests == 'true'")
+            && wasm_node_job.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && wasm_node_job.contains("Trusted handoff already covered Node tests"),
-        "PR CI must finish WASM Node tests in a dependent job after the build handoff"
+        "PR CI must finish WASM Node tests and publish its isolated exact cache in a dependent job after the build handoff"
     );
     assert!(
         native_job.contains("cache-write: \"false\"")
