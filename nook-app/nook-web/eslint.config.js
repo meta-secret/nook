@@ -24,6 +24,11 @@ const VariableLookupKind = Object.freeze({
   Found: 'found',
 })
 
+const StaticKeyLookupKind = Object.freeze({
+  NotFound: 'not-found',
+  Found: 'found',
+})
+
 export const noRawObjectArgumentsRule = {
   meta: {
     type: 'problem',
@@ -103,7 +108,10 @@ export const noRawObjectArgumentsRule = {
 
     function staticPropertyKey(member) {
       if (!member.computed && member.property.type === 'Identifier') {
-        return member.property.name
+        return {
+          kind: StaticKeyLookupKind.Found,
+          value: member.property.name,
+        }
       }
       if (
         member.computed &&
@@ -111,23 +119,32 @@ export const noRawObjectArgumentsRule = {
         (typeof member.property.value === 'string' ||
           typeof member.property.value === 'number')
       ) {
-        return member.property.value
+        return {
+          kind: StaticKeyLookupKind.Found,
+          value: member.property.value,
+        }
       }
-      return undefined
+      return { kind: StaticKeyLookupKind.NotFound }
     }
 
     function staticObjectKey(property) {
       if (!property.computed && property.key.type === 'Identifier') {
-        return property.key.name
+        return {
+          kind: StaticKeyLookupKind.Found,
+          value: property.key.name,
+        }
       }
       if (
         property.key.type === 'Literal' &&
         (typeof property.key.value === 'string' ||
           typeof property.key.value === 'number')
       ) {
-        return property.key.value
+        return {
+          kind: StaticKeyLookupKind.Found,
+          value: property.key.value,
+        }
       }
-      return undefined
+      return { kind: StaticKeyLookupKind.NotFound }
     }
 
     function possibleExpressionValues(args) {
@@ -211,8 +228,9 @@ export const noRawObjectArgumentsRule = {
 
     function projectedMemberExpressions(args) {
       const { expression, seenVariables } = args
-      const selectedKey = staticPropertyKey(expression)
-      if (selectedKey === undefined) return []
+      const selectedKeyLookup = staticPropertyKey(expression)
+      if (selectedKeyLookup.kind === StaticKeyLookupKind.NotFound) return []
+      const selectedKey = selectedKeyLookup.value
       const containers = possibleExpressionValues({
         expression: expression.object,
         seenVariables,
@@ -221,10 +239,15 @@ export const noRawObjectArgumentsRule = {
       for (const container of containers) {
         if (container.type === 'ObjectExpression') {
           for (const property of container.properties) {
+            const objectKeyLookup =
+              property.type === 'Property'
+                ? staticObjectKey(property)
+                : { kind: StaticKeyLookupKind.NotFound }
             if (
               property.type === 'Property' &&
               property.kind === 'init' &&
-              staticObjectKey(property) === selectedKey
+              objectKeyLookup.kind === StaticKeyLookupKind.Found &&
+              objectKeyLookup.value === selectedKey
             ) {
               projected.push(
                 ...possibleExpressionValues({
