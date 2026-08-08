@@ -54,9 +54,8 @@ leaf_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-leaf-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
 ] : []
 
-// Short-chain: own leaf scope plus shorter parent importer orphans leaf RUN.
+// Short-chain: parent scope only (no leaf own-scope) — leaf RUN cannot restore.
 leaf_short_chain_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-leaf-v1:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-parent-v1:buildcache,ignore-error=true",
 ]
 

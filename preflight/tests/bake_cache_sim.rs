@@ -61,8 +61,8 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
     );
     assert!(
         short_from.contains("nook-bake-sim-parent-v1")
-            && short_from.contains("nook-bake-sim-leaf-v1"),
-        "short-chain leaf must include parent scope to document the orphan bug"
+            && !short_from.contains("nook-bake-sim-leaf-v1"),
+        "short-chain leaf must cache-from only parent scope (no leaf own-scope)"
     );
     assert!(
         !bake.contains("cache-from=\"\"")
@@ -108,9 +108,7 @@ fn assignment_body<'a>(bake: &'a str, name: &str) -> &'a str {
         }
         if let Some((ident, _)) = line.split_once(" =")
             && !ident.is_empty()
-            && ident
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && ident.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
         {
             end = idx;
             break;

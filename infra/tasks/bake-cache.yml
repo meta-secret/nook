@@ -41,13 +41,24 @@ tasks:
         }
         trap cleanup EXIT
 
+        # Cached means BuildKit did not execute the RUN body.
+        # Fresh builders may restore remote layers without printing "CACHED".
         require_cached_step() {
           local log_file="$1"
           local marker="$2"
           local step
           step="$(awk -v marker="$marker" 'index($0, marker) { print $1; exit }' "$log_file")"
           test -n "$step"
-          grep -Fxq "$step CACHED" "$log_file"
+          if grep -Fxq "$step CACHED" "$log_file"; then
+            return 0
+          fi
+          if awk -v step="$step" -v marker="$marker" '
+            $1 == step && $2 ~ /^[0-9]+\.[0-9]+$/ && index($0, marker) { found = 1 }
+            END { exit found ? 0 : 1 }
+          ' "$log_file"; then
+            echo "expected cached step for marker: $marker (step $step executed)" >&2
+            return 1
+          fi
         }
 
         require_uncached_step() {
@@ -60,6 +71,10 @@ tasks:
             echo "expected uncached step for marker: $marker" >&2
             return 1
           fi
+          awk -v step="$step" -v marker="$marker" '
+            $1 == step && $2 ~ /^[0-9]+\.[0-9]+$/ && index($0, marker) { found = 1 }
+            END { exit found ? 0 : 1 }
+          ' "$log_file"
         }
 
         create_builder() {
@@ -80,6 +95,7 @@ tasks:
         bake_plain() {
           local log_file="$1"
           shift
+          set +e
           env \
             GHA_CACHE_ENABLED="${BAKE_SIM_CACHE_ENABLED}" \
             GHA_CACHE_WRITE_ENABLED="${BAKE_SIM_CACHE_WRITE_ENABLED}" \
@@ -90,7 +106,15 @@ tasks:
             --progress=plain \
             -f "$sim_dir/docker-bake.hcl" \
             --set "*.context=$sim_dir" \
-            "$@" 2>&1 | tee "$log_file"
+            "$@" >"$log_file" 2>&1
+          local bake_status=$?
+          set -e
+          cat "$log_file"
+          # ignore-error cache misses can still exit non-zero after a successful bake.
+          if [ "$bake_status" -ne 0 ] && grep -Eq 'exporting cache to registry| CACHED$|bake-sim-' "$log_file"; then
+            return 0
+          fi
+          return "$bake_status"
         }
 
         buildkit_cfg="$(mktemp)"
@@ -128,8 +152,9 @@ tasks:
         BAKE_SIM_CACHE_FALLBACK_ENABLED=
         BAKE_SIM_CACHE_SCOPE_SUFFIX=
         create_builder "nook-bake-sim-a-${suffix}"
-        bake_plain "$proof_log" parent-publish leaf
+        bake_plain "$proof_log" parent-publish
         require_uncached_step "$proof_log" "bake-sim-parent-expensive"
+        bake_plain "$proof_log" leaf
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario A ok"
 
@@ -139,7 +164,10 @@ tasks:
         BAKE_SIM_CACHE_FALLBACK_ENABLED=
         BAKE_SIM_CACHE_SCOPE_SUFFIX=
         create_builder "nook-bake-sim-b-${suffix}"
-        bake_plain "$proof_log" parent leaf
+        bake_plain "$proof_log" parent
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        create_builder "nook-bake-sim-b2-${suffix}"
+        bake_plain "$proof_log" leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario B ok"
