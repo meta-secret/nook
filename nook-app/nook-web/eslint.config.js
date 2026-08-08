@@ -364,13 +364,16 @@ export const noRawObjectArgumentsRule = {
 
     function inspectInlineObjectExpressions(expression) {
       const objectExpressions = inlineObjectExpressions(expression)
+      const seenObjectExpressions = new Set()
       for (const objectExpression of objectExpressions) {
+        if (seenObjectExpressions.has(objectExpression)) continue
+        seenObjectExpressions.add(objectExpression)
         context.report({
           node: objectExpression,
           messageId: 'namedArgument',
         })
       }
-      return objectExpressions.length > 0
+      return seenObjectExpressions.size > 0
     }
 
     function inspectSpreadArgument(argument) {
