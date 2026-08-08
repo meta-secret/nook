@@ -36,7 +36,7 @@ function cloneExternalValue(value: ExternalValue): MutableExternalValue {
     return value.map(cloneExternalValue)
   }
   if (!value || typeof value !== 'object') return value
-  const clone: MutableExternalObject = {}
+  const clone: MutableExternalObject = Object.create(null)
   for (const [key, child] of Object.entries(value)) {
     clone[key] = cloneExternalValue(child)
   }

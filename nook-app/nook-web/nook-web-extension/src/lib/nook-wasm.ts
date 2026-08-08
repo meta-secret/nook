@@ -165,7 +165,7 @@ enum PasskeyOperation {
 }
 
 type PasskeyErrorArgs = {
-  error: ExternalValue
+  error: object
   action: PasskeyOperation
 }
 
@@ -182,7 +182,7 @@ function passkeyError(args: PasskeyErrorArgs): Error {
 }
 
 async function getPasskey(
-  options: ExternalValue,
+  options: CredentialRequestOptions,
 ): Promise<PublicKeyCredentialWithPrf> {
   if (
     !window.isSecureContext ||
@@ -194,16 +194,16 @@ async function getPasskey(
     )
   }
   try {
-    const credential = await navigator.credentials.get(
-      options as CredentialRequestOptions,
-    )
+    const credential = await navigator.credentials.get(options)
     if (!(credential instanceof PublicKeyCredential)) {
       throw new Error('Passkey get ceremony was cancelled.')
     }
     return credential as PublicKeyCredentialWithPrf
   } catch (error) {
+    const capturedError =
+      error instanceof Object ? error : new Error('Passkey get failed.')
     const args: PasskeyErrorArgs = {
-      error: error as ExternalValue,
+      error: capturedError,
       action: PasskeyOperation.Get,
     }
     throw passkeyError(args)
@@ -211,7 +211,7 @@ async function getPasskey(
 }
 
 async function createPasskey(
-  options: ExternalValue,
+  options: CredentialCreationOptions,
 ): Promise<PublicKeyCredentialWithPrf> {
   if (
     !window.isSecureContext ||
@@ -223,16 +223,16 @@ async function createPasskey(
     )
   }
   try {
-    const credential = await navigator.credentials.create(
-      options as CredentialCreationOptions,
-    )
+    const credential = await navigator.credentials.create(options)
     if (!(credential instanceof PublicKeyCredential)) {
       throw new Error('Passkey create ceremony was cancelled.')
     }
     return credential as PublicKeyCredentialWithPrf
   } catch (error) {
+    const capturedError =
+      error instanceof Object ? error : new Error('Passkey create failed.')
     const args: PasskeyErrorArgs = {
-      error: error as ExternalValue,
+      error: capturedError,
       action: PasskeyOperation.Create,
     }
     throw passkeyError(args)
