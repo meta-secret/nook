@@ -78,15 +78,13 @@ export type ExtensionDeviceProtectionResult = {
   deviceSigningPublicKey: string
 }
 
-type SessionResponse<T> = { ok: true } & T
-
 type PublicKeyCredentialWithPrf = PublicKeyCredential & {
   getClientExtensionResults(): AuthenticationExtensionsClientOutputs & {
     prf?: { enabled?: boolean; results?: { first?: ArrayBuffer } }
   }
 }
 
-function runtimeMessage<T>(message: ExternalValue): Promise<T> {
+function runtimeMessage(message: ExternalValue): Promise<ExternalValue> {
   // Promise owns this callback's resolve and reject signature.
   // eslint-disable-next-line max-params
   return new Promise((resolve, reject) => {
@@ -99,30 +97,119 @@ function runtimeMessage<T>(message: ExternalValue): Promise<T> {
         reject(new Error('Extension session did not respond.'))
         return
       }
-      resolve(response as T)
+      resolve(response)
     })
   })
 }
 
-async function sessionMessage<T>(message: ExternalValue): Promise<T> {
+function responseObject(value: ExternalValue): ExternalObject {
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Extension session returned a malformed response.')
+  }
+  return value
+}
+
+async function sessionResponse(
+  message: ExternalValue,
+): Promise<ExternalObject> {
   const runtimeRequest: ExternalObject = {
     type: 'nook:ensure-extension-session-runtime',
   }
-  const runtime = await runtimeMessage<{ ok?: boolean; reason?: string }>(
-    runtimeRequest,
-  )
+  const runtime = responseObject(await runtimeMessage(runtimeRequest))
   if (runtime.ok !== true) {
     throw new Error(
-      runtime.reason ?? 'Extension session runtime could not start.',
+      typeof runtime.reason === 'string'
+        ? runtime.reason
+        : 'Extension session runtime could not start.',
     )
   }
-  const response = await runtimeMessage<{ ok?: boolean; error?: string } & T>(
-    message,
-  )
+  const response = responseObject(await runtimeMessage(message))
   if (response.ok !== true) {
-    throw new Error(response.error ?? 'Extension session operation failed.')
+    throw new Error(
+      typeof response.error === 'string'
+        ? response.error
+        : 'Extension session operation failed.',
+    )
   }
   return response
+}
+
+function deviceProtectionStatus(value: ExternalValue): DeviceProtectionStatus {
+  switch (value) {
+    case DeviceProtectionStatus.Error:
+    case DeviceProtectionStatus.Loading:
+    case DeviceProtectionStatus.Missing:
+    case DeviceProtectionStatus.Passkey:
+    case DeviceProtectionStatus.Pin:
+    case DeviceProtectionStatus.PinSetup:
+    case DeviceProtectionStatus.Plaintext:
+    case DeviceProtectionStatus.Unlocked:
+      return value
+    default:
+      throw new Error('Unsupported extension device protection status.')
+  }
+}
+
+function extensionDevice(
+  value: ExternalValue,
+): ExtensionDeviceProtectionResult {
+  const device = responseObject(value)
+  if (
+    typeof device.deviceId !== 'string' ||
+    typeof device.devicePublicKey !== 'string' ||
+    typeof device.deviceSigningPublicKey !== 'string'
+  ) {
+    throw new Error('Extension session returned malformed device identity.')
+  }
+  return {
+    deviceId: device.deviceId,
+    devicePublicKey: device.devicePublicKey,
+    deviceSigningPublicKey: device.deviceSigningPublicKey,
+  }
+}
+
+function byteArray(value: ExternalValue): number[] {
+  if (
+    !Array.isArray(value) ||
+    !value.every(
+      (item) =>
+        typeof item === 'number' &&
+        Number.isInteger(item) &&
+        item >= 0 &&
+        item <= 255,
+    )
+  ) {
+    throw new Error('Extension session returned malformed byte material.')
+  }
+  return [...value]
+}
+
+type PasskeySetupMaterial = {
+  userHandle: number[]
+  prfInput: number[]
+}
+
+function passkeySetup(response: ExternalObject): PasskeySetupMaterial {
+  const setup = responseObject(response.setup)
+  return {
+    userHandle: byteArray(setup.userHandle),
+    prfInput: byteArray(setup.prfInput),
+  }
+}
+
+type PasskeyUnlockMaterial = {
+  credentialId: number[]
+  prfInput: number[]
+}
+
+function passkeyUnlockMaterial(
+  response: ExternalObject,
+): PasskeyUnlockMaterial {
+  const material = responseObject(response.material)
+  return {
+    credentialId: byteArray(material.credentialId),
+    prfInput: byteArray(material.prfInput),
+  }
 }
 
 function bytes(value: ArrayBuffer | ArrayBufferView): number[] {
@@ -241,9 +328,8 @@ async function createPasskey(
 
 export async function extensionDeviceProtectionStatus(): Promise<DeviceProtectionStatus> {
   const request: ExternalObject = { type: 'nook:extension-session-status' }
-  const { status } =
-    await sessionMessage<SessionResponse<{ status: ExternalValue }>>(request)
-  const deviceStatus = status as DeviceProtectionStatus
+  const response = await sessionResponse(request)
+  const deviceStatus = deviceProtectionStatus(response.status)
   switch (deviceStatus) {
     case DeviceProtectionStatus.Missing:
     case DeviceProtectionStatus.Plaintext:
@@ -257,8 +343,6 @@ export async function extensionDeviceProtectionStatus(): Promise<DeviceProtectio
       throw new Error(
         `Unsupported extension device protection status: ${deviceStatus}`,
       )
-    default:
-      throw new Error('Unsupported extension device protection status.')
   }
 }
 
@@ -276,15 +360,15 @@ export type ExtensionSessionDeviceState =
 
 export async function extensionSessionDevice(): Promise<ExtensionSessionDeviceState> {
   const request: ExternalObject = { type: 'nook:extension-session-status' }
-  const response = await sessionMessage<
-    SessionResponse<{
-      status: DeviceProtectionStatus
-      device?: ExtensionDeviceProtectionResult
-    }>
-  >(request)
-  return response.status === DeviceProtectionStatus.Unlocked && response.device
-    ? { kind: ExtensionSessionDeviceStateKind.Active, device: response.device }
-    : { kind: ExtensionSessionDeviceStateKind.Locked }
+  const response = await sessionResponse(request)
+  const status = deviceProtectionStatus(response.status)
+  if (status !== DeviceProtectionStatus.Unlocked) {
+    return { kind: ExtensionSessionDeviceStateKind.Locked }
+  }
+  return {
+    kind: ExtensionSessionDeviceStateKind.Active,
+    device: extensionDevice(response.device),
+  }
 }
 
 export type CreateExtensionPasskeyArgs = {
@@ -300,14 +384,7 @@ export async function createExtensionPasskey(
   const beginRequest: ExternalObject = {
     type: 'nook:extension-session-begin-passkey-setup',
   }
-  const { setup } = await sessionMessage<
-    SessionResponse<{
-      setup: {
-        userHandle: number[]
-        prfInput: number[]
-      }
-    }>
-  >(beginRequest)
+  const setup = passkeySetup(await sessionResponse(beginRequest))
   const creationOptions = buildPasskeyCreationOptions(
     '',
     'Nook Extension',
@@ -332,11 +409,8 @@ export async function createExtensionPasskey(
       deviceMode,
     },
   }
-  return (
-    await sessionMessage<
-      SessionResponse<{ device: ExtensionDeviceProtectionResult }>
-    >(finishRequest)
-  ).device
+  const finishResponse = await sessionResponse(finishRequest)
+  return extensionDevice(finishResponse.device)
 }
 
 export async function recoverExtensionPasskey(): Promise<ExtensionDeviceProtectionResult> {
@@ -351,11 +425,8 @@ export async function recoverExtensionPasskey(): Promise<ExtensionDeviceProtecti
       prfOutput: prfOutput(credential),
     },
   }
-  return (
-    await sessionMessage<
-      SessionResponse<{ device: ExtensionDeviceProtectionResult }>
-    >(request)
-  ).device
+  const response = await sessionResponse(request)
+  return extensionDevice(response.device)
 }
 
 export async function unlockExtensionPasskey(): Promise<ExtensionDeviceProtectionResult> {
@@ -363,11 +434,7 @@ export async function unlockExtensionPasskey(): Promise<ExtensionDeviceProtectio
   const optionsRequest: ExternalObject = {
     type: 'nook:extension-session-unlock-options',
   }
-  const { material } = await sessionMessage<
-    SessionResponse<{
-      material: { credentialId: number[]; prfInput: number[] }
-    }>
-  >(optionsRequest)
+  const material = passkeyUnlockMaterial(await sessionResponse(optionsRequest))
   const options = buildPasskeyPrfRequestOptions(
     '',
     new Uint8Array(material.credentialId),
@@ -378,11 +445,8 @@ export async function unlockExtensionPasskey(): Promise<ExtensionDeviceProtectio
     type: 'nook:extension-session-unlock-passkey',
     payload: { prfOutput: prfOutput(credential) },
   }
-  return (
-    await sessionMessage<
-      SessionResponse<{ device: ExtensionDeviceProtectionResult }>
-    >(request)
-  ).device
+  const response = await sessionResponse(request)
+  return extensionDevice(response.device)
 }
 
 export async function createExtensionPin(
@@ -392,11 +456,8 @@ export async function createExtensionPin(
     type: 'nook:extension-session-create-pin',
     payload: { pin },
   }
-  return (
-    await sessionMessage<
-      SessionResponse<{ device: ExtensionDeviceProtectionResult }>
-    >(request)
-  ).device
+  const response = await sessionResponse(request)
+  return extensionDevice(response.device)
 }
 
 export async function unlockExtensionPin(
@@ -406,11 +467,8 @@ export async function unlockExtensionPin(
     type: 'nook:extension-session-unlock-pin',
     payload: { pin },
   }
-  return (
-    await sessionMessage<
-      SessionResponse<{ device: ExtensionDeviceProtectionResult }>
-    >(request)
-  ).device
+  const response = await sessionResponse(request)
+  return extensionDevice(response.device)
 }
 
 export async function generateSuggestedPassword(): Promise<string> {

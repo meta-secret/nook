@@ -59,6 +59,7 @@ export const noRawObjectArgumentsRule = {
   create(context) {
     const sourceCode = context.sourceCode
     let activeValueFlowCutoff = Number.POSITIVE_INFINITY
+    let activeCallExecutionScope
 
     function nodeStart(node) {
       return node.range?.[0] ?? sourceCode.getIndexFromLoc(node.loc.start)
@@ -70,6 +71,39 @@ export const noRawObjectArgumentsRule = {
 
     function isNonInitialWriteReference(reference) {
       return reference.isWrite() && !reference.init && reference.writeExpr
+    }
+
+    function executionScope(scope) {
+      let current = scope
+      while (
+        current.upper &&
+        current.type !== 'function' &&
+        current.type !== 'module' &&
+        current.type !== 'global'
+      ) {
+        current = current.upper
+      }
+      return current
+    }
+
+    function scopeContains(args) {
+      const { possibleAncestor, scope } = args
+      let current = scope
+      while (current) {
+        if (current === possibleAncestor) return true
+        current = current.upper
+      }
+      return false
+    }
+
+    function referenceCanReachActiveCall(reference) {
+      if (!activeCallExecutionScope) return true
+      const referenceExecutionScope = executionScope(reference.from)
+      const args = {
+        possibleAncestor: referenceExecutionScope,
+        scope: activeCallExecutionScope,
+      }
+      return scopeContains(args)
     }
 
     function declaredVariable(identifier) {
@@ -381,7 +415,8 @@ export const noRawObjectArgumentsRule = {
       const { reference, seenVariables } = args
       if (
         !isNonInitialWriteReference(reference) ||
-        !occursBeforeActiveCallSite(reference.identifier)
+        !occursBeforeActiveCallSite(reference.identifier) ||
+        !referenceCanReachActiveCall(reference)
       ) {
         return []
       }
@@ -557,7 +592,12 @@ export const noRawObjectArgumentsRule = {
         }
       }
       for (const reference of variable.references) {
-        if (!occursBeforeActiveCallSite(reference.identifier)) continue
+        if (
+          !occursBeforeActiveCallSite(reference.identifier) ||
+          !referenceCanReachActiveCall(reference)
+        ) {
+          continue
+        }
         const patternLookup = writeBindingPattern(reference.identifier)
         if (
           patternLookup.kind === ProjectionPathLookupKind.Found &&
@@ -687,7 +727,8 @@ export const noRawObjectArgumentsRule = {
       for (const reference of variable.references) {
         if (
           isNonInitialWriteReference(reference) &&
-          occursBeforeActiveCallSite(reference.identifier)
+          occursBeforeActiveCallSite(reference.identifier) &&
+          referenceCanReachActiveCall(reference)
         ) {
           elements.push(
             ...spreadArrayElements({
@@ -703,6 +744,7 @@ export const noRawObjectArgumentsRule = {
     function inspectArguments(node) {
       for (const argument of node.arguments) {
         activeValueFlowCutoff = nodeStart(argument)
+        activeCallExecutionScope = executionScope(sourceCode.getScope(argument))
         try {
           if (argument.type === 'SpreadElement') {
             inspectSpreadArgument(argument)
@@ -711,9 +753,10 @@ export const noRawObjectArgumentsRule = {
           if (inspectInlineObjectExpressions(argument)) {
             continue
           }
-          inspectNamedObjectArgument(argument)
+          inspectNamedObjectArgument(unwrapResultExpression(argument))
         } finally {
           activeValueFlowCutoff = Number.POSITIVE_INFINITY
+          activeCallExecutionScope = undefined
         }
       }
     }

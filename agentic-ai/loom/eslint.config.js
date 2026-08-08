@@ -57,6 +57,12 @@ export default tseslint.config(
           message:
             'Loom forbids raw object-literal constructor arguments. Assign a named typed value first, then pass that name.',
         },
+        {
+          selector:
+            "NewExpression[arguments.length=1] > TSAsExpression > ObjectExpression",
+          message:
+            'Loom forbids raw object-literal constructor arguments (including `as` casts). Assign a named typed value first, then pass that name.',
+        },
       ],
       'no-unused-vars': 'off',
       'no-undef': 'off',

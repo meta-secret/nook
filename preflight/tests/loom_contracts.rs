@@ -37,6 +37,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "unknown:",
         "'no-restricted-syntax'",
         "CallExpression[arguments.length=1] > ObjectExpression",
+        "NewExpression[arguments.length=1] > TSAsExpression > ObjectExpression",
         "named typed value first",
         "files: ['src/**/*.ts', 'tests/**/*.ts']",
         "Model a concrete domain type",

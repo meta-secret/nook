@@ -269,6 +269,20 @@ describe('typed API named arguments', () => {
     expect(messages).toEqual([])
   })
 
+  test('ignores object writes in nested execution scopes', () => {
+    const messages = lint(`
+      declare function consumeCount(value: number): void
+      let value
+      value = 1
+      function unused(): void {
+        value = { name: 'Nook' }
+      }
+      consumeCount(value)
+    `)
+
+    expect(messages).toEqual([])
+  })
+
   test('accepts explicitly typed parameter arguments', () => {
     const messages = lint(`
       type ConsumeArgs = { name: string }
@@ -319,6 +333,21 @@ describe('typed API named arguments', () => {
 
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
+    ])
+  })
+
+  test('rejects awaited untyped named object arguments', () => {
+    const messages = lint(`
+      type ConsumeArgs = { name: string }
+      declare function consume(value: ConsumeArgs): void
+      async function run(): Promise<void> {
+        const args = { name: 'Nook' }
+        consume(await args)
+      }
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
     ])
   })
 })
