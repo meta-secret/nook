@@ -135,7 +135,7 @@ async function sessionResponse(
 }
 
 function deviceProtectionStatus(value: ExternalValue): DeviceProtectionStatus {
-  if (typeof value !== 'string') {
+  if (typeof value !== 'number') {
     throw new Error('Unsupported extension device protection status.')
   }
   switch (value) {
