@@ -180,10 +180,12 @@ describe('typed API named arguments', () => {
       const container = { picked: { name: 'Vault' } }
       consume(({ picked: { name: 'Nook' } }).picked)
       consume([{ name: 'Nook' }][0])
+      consume([{ name: 'Nook' }]['0'])
       consume(container.picked)
     `)
 
     expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
       'namedArgument',
       'namedArgument',
       'namedArgument',

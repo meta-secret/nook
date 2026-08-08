@@ -57,9 +57,13 @@ type ImportDecodedApprovedPairingArgs = {
   providers: StorageProvider[]
 }
 
+export type PairingImportResult =
+  | { ok: true; eventCount: number }
+  | { ok: false; reason: string }
+
 async function importDecodedApprovedPairing(
   args: ImportDecodedApprovedPairingArgs,
-): Promise<{ ok: boolean; reason?: string; eventCount?: number }> {
+): Promise<PairingImportResult> {
   const { message, providers } = args
   const grant: ExtensionPairingApprovedMessage['payload'] = {
     ...message.payload,
@@ -134,7 +138,7 @@ async function importDecodedApprovedPairing(
 
 export async function importApprovedPairing(
   message: ExtensionPairingApprovedMessage,
-): Promise<{ ok: boolean; reason?: string; eventCount?: number }> {
+): Promise<PairingImportResult> {
   try {
     const sourceProviders = message.payload.providers
     const staging = stageProviderCredentials(sourceProviders)
@@ -164,7 +168,7 @@ export async function importApprovedPairing(
 export async function importLocalEventLogUpdate(
   vaultStoreId: string,
   eventLogRecords: Parameters<typeof importExtensionEventLog>[1],
-): Promise<{ ok: boolean; reason?: string; eventCount?: number }> {
+): Promise<PairingImportResult> {
   const key = pairingGrantStorageKey(vaultStoreId)
   try {
     const stored = await getPairingStorage()

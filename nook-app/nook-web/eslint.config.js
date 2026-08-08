@@ -29,6 +29,8 @@ const StaticKeyLookupKind = Object.freeze({
   Found: 'found',
 })
 
+const maximumArrayIndex = 2 ** 32 - 2
+
 export const noRawObjectArgumentsRule = {
   meta: {
     type: 'problem',
@@ -150,6 +152,23 @@ export const noRawObjectArgumentsRule = {
       return { kind: StaticKeyLookupKind.NotFound }
     }
 
+    function staticArrayIndex(key) {
+      const value =
+        typeof key === 'number'
+          ? key
+          : String(Number(key)) === key
+            ? Number(key)
+            : Number.NaN
+      if (
+        Number.isInteger(value) &&
+        value >= 0 &&
+        value <= maximumArrayIndex
+      ) {
+        return { kind: StaticKeyLookupKind.Found, value }
+      }
+      return { kind: StaticKeyLookupKind.NotFound }
+    }
+
     function possibleExpressionValues(args) {
       const { expression, seenVariables } = args
       const unwrapped = unwrapTypeScriptExpression(expression)
@@ -261,12 +280,12 @@ export const noRawObjectArgumentsRule = {
             }
           }
         }
+        const arrayIndexLookup = staticArrayIndex(selectedKey)
         if (
           container.type === 'ArrayExpression' &&
-          typeof selectedKey === 'number' &&
-          Number.isInteger(selectedKey)
+          arrayIndexLookup.kind === StaticKeyLookupKind.Found
         ) {
-          const element = container.elements[selectedKey]
+          const element = container.elements[arrayIndexLookup.value]
           if (element && element.type !== 'SpreadElement') {
             projected.push(
               ...possibleExpressionValues({
