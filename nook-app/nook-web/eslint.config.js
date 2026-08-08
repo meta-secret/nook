@@ -400,7 +400,15 @@ export const noRawObjectArgumentsRule = {
     function spreadArrayElements(args) {
       const { expression, seenVariables } = args
       const unwrapped = unwrapTypeScriptExpression(expression)
-      if (unwrapped.type === 'ArrayExpression') return unwrapped.elements
+      if (unwrapped.type === 'ArrayExpression') {
+        return unwrapped.elements.flatMap((element) => {
+          if (!element || element.type !== 'SpreadElement') return [element]
+          return spreadArrayElements({
+            expression: element.argument,
+            seenVariables,
+          })
+        })
+      }
       if (unwrapped.type === 'AssignmentExpression') {
         return spreadArrayElements({
           expression: unwrapped.right,

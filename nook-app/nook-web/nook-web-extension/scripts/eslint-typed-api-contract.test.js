@@ -108,6 +108,17 @@ describe('typed API named arguments', () => {
     ])
   })
 
+  test('rejects object literals expanded from nested spread arrays', () => {
+    const messages = lint(`
+      declare function consume(...values: { name: string }[]): void
+      consume(...[...[{ name: 'Nook' }]])
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
   test('rejects object literals expanded from a named spread array', () => {
     const messages = lint(`
       declare function consume(...values: { name: string }[]): void

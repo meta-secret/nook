@@ -53,7 +53,8 @@ export function writeAgentStatsFile(
 Call sites pass a single object:
 
 ```ts
-writeAgentStatsFile({ request, sourcePath })
+const args: WriteAgentStatsFileArgs = { request, sourcePath }
+writeAgentStatsFile(args)
 ```
 
 Rules:
