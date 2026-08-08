@@ -110,7 +110,7 @@ Use this workflow for quality, CI, and deployment changes.
      Bakes `rust-fuzz-smoke` on `rust-platform-nightly` (platform sources over
      toolchain-only `rust-ecosystem-nightly`) with pinned
      [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html).
-     Fuzz restores nightly read-only and writes `nook-rust-ecosystem-fuzz-v2`.
+     Fuzz restores nightly read-only and writes `nook-rust-ecosystem-fuzz-v3`.
    - `PR / Rust ecosystem / Kani bounded proofs` —
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
      bounded proof harnesses via the official action (specialized toolchain).
@@ -123,7 +123,7 @@ Use this workflow for quality, CI, and deployment changes.
      fat Main and cold-installs `cargo-dylint`.
      Pinned [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
      `dylint-link` release binaries (no host `cargo install`).
-     The dylint leaf scope is `nook-rust-ecosystem-dylint-v2`.
+     The dylint leaf scope is `nook-rust-ecosystem-dylint-v3`.
      Nightly stays toolchain-stable; `rust-platform-nightly` is the shared
      source overlay for dylint/fuzz leaves.
 7. Build wasm before Svelte checks or web builds.

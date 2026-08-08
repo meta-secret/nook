@@ -337,8 +337,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "nightly/policy-tools FALLBACK must restore fat Main indexes so PR verify is not cold"
     );
     assert!(
-        dylint_from.contains("nook-rust-ecosystem-dylint-v2")
-            && fuzz_from.contains("nook-rust-ecosystem-fuzz-v2")
+        dylint_from.contains("nook-rust-ecosystem-dylint-v3")
+            && fuzz_from.contains("nook-rust-ecosystem-fuzz-v3")
             && !dylint_from.contains("nook-rust-ecosystem-nightly")
             && !fuzz_from.contains("nook-rust-ecosystem-nightly")
             && !dylint_from.contains("nook-rust-base-v1")

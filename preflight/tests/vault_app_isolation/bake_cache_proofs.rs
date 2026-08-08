@@ -100,14 +100,14 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
     assert_scope_arms(
         &rust_bake,
         "rust_ecosystem_dylint_cache_from",
-        &["nook-rust-ecosystem-dylint-v2"],
+        &["nook-rust-ecosystem-dylint-v3"],
         &[],
         &["nook-rust-base-v1", "nook-rust-ecosystem-nightly"],
     )?;
     assert_scope_arms(
         &rust_bake,
         "rust_ecosystem_fuzz_cache_from",
-        &["nook-rust-ecosystem-fuzz-v2"],
+        &["nook-rust-ecosystem-fuzz-v3"],
         &[],
         &["nook-rust-base-v1", "nook-rust-ecosystem-nightly"],
     )?;
@@ -138,13 +138,13 @@ fn theorem_ecosystem_parent_fallback_restores_main() -> anyhow::Result<()> {
         ),
         (
             "rust_ecosystem_dylint_cache_from",
-            "nook/buildcache/nook-rust-ecosystem-dylint-v2",
-            "nook-rust-ecosystem-dylint-v2${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-ecosystem-dylint-v3",
+            "nook-rust-ecosystem-dylint-v3${GHA_CACHE_SCOPE_SUFFIX}",
         ),
         (
             "rust_ecosystem_fuzz_cache_from",
-            "nook/buildcache/nook-rust-ecosystem-fuzz-v2",
-            "nook-rust-ecosystem-fuzz-v2${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-ecosystem-fuzz-v3",
+            "nook-rust-ecosystem-fuzz-v3${GHA_CACHE_SCOPE_SUFFIX}",
         ),
     ] {
         let body = assignment_body(&rust_bake, name)?;
