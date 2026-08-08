@@ -3,7 +3,7 @@ export type ExternalValue =
   | string
   | number
   | boolean
-  | ExternalValue[]
+  | readonly ExternalValue[]
   | ExternalObject
 
 /** Object-shaped external payload after the boundary verifies its shape. */

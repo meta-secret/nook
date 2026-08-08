@@ -53,6 +53,10 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
             "the web static-analysis config must retain `{required}`"
         );
     }
+    assert!(
+        !eslint.contains("[arguments.length=1]"),
+        "the named-argument rule must inspect object literals at every argument position"
+    );
 
     let translation_html = read(
         &root,
