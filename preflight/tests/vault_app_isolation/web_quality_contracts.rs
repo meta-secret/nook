@@ -50,7 +50,9 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         "explicitly typed named declaration",
         "VariableLookupKind.NotFound",
         "inspectSpreadArgument(argument)",
-        "expression.type !== 'ArrayExpression'",
+        "function spreadArrayElements(args)",
+        "unwrapped.type === 'ArrayExpression'",
+        "reference.isWrite() && reference.writeExpr",
         "nook-web-extension/src/lib/**/*.ts",
         "'@typescript-eslint/await-thenable': 'error'",
         "'@typescript-eslint/no-floating-promises': 'error'",
@@ -99,6 +101,20 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
             .contains("eslint --config ../eslint.config.js scripts src e2e playwright.config.ts"),
         "the extension lint command must retain its production source tree"
     );
+
+    let typed_api_tests = read(
+        &root,
+        "nook-app/nook-web/nook-web-extension/scripts/eslint-typed-api-contract.test.js",
+    );
+    for required in [
+        "rejects object literals expanded from a named spread array",
+        "rejects object literals assigned to a spread array name",
+    ] {
+        assert!(
+            typed_api_tests.contains(required),
+            "the typed API lint contract must retain `{required}`"
+        );
+    }
 
     let property_tests = read(
         &root,

@@ -185,8 +185,14 @@ export const noRawObjectArgumentsRule = {
         expression: argument.argument,
         seenVariables: new Set(),
       })
+      const seenElements = new Set()
       for (const element of elements) {
-        if (element && element.type !== 'SpreadElement') {
+        if (
+          element &&
+          element.type !== 'SpreadElement' &&
+          !seenElements.has(element)
+        ) {
+          seenElements.add(element)
           inspectInlineObjectExpressions(element)
         }
       }
