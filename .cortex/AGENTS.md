@@ -152,7 +152,9 @@ Use scoped architecture instead:
 - Main writes `nook/buildcache/<scope>`;
 - PR/Remote/local writes use
   `nook/remote-buildcache/<scope>-git-<40-char-sha>`;
-- local formatting publishes only source-free dependency scopes;
+- local formatting writes only unique, source-free dependency candidates;
+- a Main-defined hosted workflow downloads every candidate blob twice;
+- only that workflow assigns a PR-visible content-fingerprint tag;
 - dirty cache recipes disable local publication.
 
 If a short parent index orphans a leaf RUN, redesign the Bake graph.

@@ -6,7 +6,7 @@
 # without allowing source-sensitive layers into a committed SHA namespace.
 set -euo pipefail
 
-repo_root="$(git rev-parse --show-toplevel)"
+repo_root="${NOOK_RUST_DEPS_FINGERPRINT_ROOT:-$(git rev-parse --show-toplevel)}"
 cd "$repo_root"
 
 paths="$({
@@ -26,7 +26,7 @@ paths="$({
 } | LC_ALL=C sort -u)"
 
 {
-  printf '%s\n' 'nook-rust-deps-input-v1'
+  printf '%s\n' 'nook-rust-deps-input-v2'
   while IFS= read -r path; do
     if [ -L "$path" ] || [ ! -f "$path" ]; then
       echo "rust-deps-cache-fingerprint: expected regular file: $path" >&2

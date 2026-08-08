@@ -26,6 +26,8 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
     let app_tasks = read(&root, "nook-app/Taskfile.yml");
     let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
     let guard = read(&root, ".github/scripts/rust-deps-cache-publish-guard.sh");
+    let promoter = read(&root, ".github/scripts/rust-deps-cache-promote.sh");
+    let promotion_workflow = read(&root, ".github/workflows/rust-deps-cache-promote.yml");
     let hosted_setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
     let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let core_bake = read(&root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
@@ -65,8 +67,11 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
     for marker in [
         "rust-deps-cache-publish-guard.sh",
         "NOOK_RUST_DEPS_INPUT_WRITE_ENABLED=1",
+        "NOOK_RUST_DEPS_INPUT_CANDIDATE=\"$candidate\"",
         "builder-wasm-deps-input-publish",
         "builder-core-deps-input-publish",
+        "gh workflow run rust-deps-cache-promote.yml",
+        "--ref main",
     ] {
         assert!(
             local_publish.contains(marker),
@@ -79,16 +84,25 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
             && !local_publish.contains("preflight-test"),
         "dirty formatter publication must never export real source or validation layers"
     );
-    for marker in [
-        "nook-rust-native-deps-input-v1-${NOOK_RUST_DEPS_INPUT_FINGERPRINT}",
-        "nook-rust-wasm-deps-input-v1-${NOOK_RUST_DEPS_INPUT_FINGERPRINT}",
-    ] {
+    for graph in ["native", "wasm"] {
+        let repository = format!("nook-rust-{graph}-deps-input-v2");
+        let stable = format!("{repository}:fingerprint-${{NOOK_RUST_DEPS_INPUT_FINGERPRINT}}");
+        let candidate = format!(
+            "{repository}:candidate-${{NOOK_RUST_DEPS_INPUT_FINGERPRINT}}-${{NOOK_RUST_DEPS_INPUT_CANDIDATE}}"
+        );
         assert!(
-            rust_bake.contains(marker)
-                && rust_bake.contains(&format!("{marker}:buildcache,mode=max")),
-            "content-addressed dependency restore/publish scope is missing {marker}"
+            rust_bake.contains(&stable)
+                && rust_bake.contains(&candidate)
+                && rust_bake.contains(&format!("{candidate},mode=max"))
+                && rust_bake.matches(&stable).count() == 2,
+            "quarantined dependency publication and verified restore are missing for {graph}"
         );
     }
+    assert!(
+        !rust_bake.contains("deps-input-v1-")
+            && rust_bake.matches(":candidate-").count() == 2,
+        "PR restores must never import legacy or unverified local candidate refs"
+    );
     assert!(
         core_bake.contains("target \"builder-core-deps-input-publish\"")
             && core_bake.contains("inherits = [\"builder-core-deps-restore\"]")
@@ -101,6 +115,37 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
             "rust_deps_fingerprint=\"$(bash .github/scripts/rust-deps-cache-fingerprint.sh)\""
         ) && hosted_setup.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint"),
         "PR jobs must derive and import the identical formatter dependency fingerprint"
+    );
+    for marker in [
+        "oras cp --to-oci-layout \"$repository:$candidate_tag\"",
+        "oras cp --from-oci-layout",
+        "oras cp --to-oci-layout \"$repository:$verified_tag\"",
+        "oras tag \"$repository:$verified_tag\" \"$stable_tag\"",
+        "stable tag does not match verified content",
+    ] {
+        assert!(
+            promoter.contains(marker),
+            "hosted byte-validation promoter is missing {marker}"
+        );
+    }
+    assert!(
+        promotion_workflow.contains("workflow_dispatch:")
+            && promotion_workflow.contains("oras-project/setup-oras@v1")
+            && promotion_workflow.contains("version: 1.3.2")
+            && promotion_workflow.contains("NOOK_REGISTRY_REMOTE_USERNAME")
+            && promotion_workflow.contains("rust-deps-cache-promote.sh")
+            && promotion_workflow.contains("PROMOTION_FINGERPRINT: ${{ inputs.fingerprint }}")
+            && promotion_workflow.contains("PROMOTION_SOURCE_SHA: ${{ inputs.source_sha }}")
+            && promotion_workflow.contains("git -C candidate-source rev-parse HEAD")
+            && promotion_workflow.contains("NOOK_RUST_DEPS_FINGERPRINT_ROOT=\"$GITHUB_WORKSPACE/candidate-source\"")
+            && !promotion_workflow.contains("promote.sh \"${{ inputs.")
+            && promotion_workflow.contains("group: rust-deps-cache-promote-${{ inputs.fingerprint }}"),
+        "local candidates must be validated and promoted by the serialized hosted workflow"
+    );
+    assert!(
+        guard.contains(".github/scripts/rust-deps-cache-promote.sh")
+            && guard.contains(".github/workflows/rust-deps-cache-promote.yml"),
+        "dirty promotion policy must prevent local publication"
     );
     Ok(())
 }
@@ -162,6 +207,14 @@ fn theorem_wasm_fingerprint_closed_allowlist() -> anyhow::Result<()> {
     assert!(
         setup.contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$rust_deps_fingerprint"),
         "fingerprinted scope must remain nook-rust-wasm-deps-v5-<hash>"
+    );
+    assert!(
+        script.contains("nook-rust-deps-input-v2") && !script.contains("nook-rust-deps-input-v1"),
+        "dependency fingerprint domain must rotate with the verified v2 bridge"
+    );
+    assert!(
+        script.contains("NOOK_RUST_DEPS_FINGERPRINT_ROOT"),
+        "trusted Main promotion must be able to fingerprint an exact committed candidate checkout"
     );
     Ok(())
 }

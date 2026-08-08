@@ -671,14 +671,24 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 
 - Delivery BuildKit caches use authenticated `type=registry` refs on `registry.dev.nokey.sh` (Zot behind Traefik HTTPS + htpasswd), not GitHub Actions cache storage.
 - Local Task Bake restores git-commit remote-buildcache scopes when remote registry credentials exist.
-- The sealed local formatter publishes source-free Rust/WASM dependency stages
-  under a content fingerprint also computed by PR jobs.
+- The sealed local formatter uploads source-free Rust/WASM dependency stages to
+  unique candidate tags.
+- A Main-defined GitHub-hosted workflow completely downloads each candidate.
+- It uploads and downloads a hosted-normalized tag before atomically assigning
+  the stable content-fingerprint tag in the same OCI repository.
+- PR jobs import only the verified stable tag, never a local candidate.
+- Main and release jobs import neither candidate nor stable formatter tags.
+- Hosted promotion independently fingerprints the exact committed source SHA.
 - Agents still run build, test, proof, and validation tasks remotely. Local
   execution remains available only for explicit rare-case debugging.
-- Local publish requires a clean worktree. Dirty builds remain local and cannot
-  poison the committed PR scope. The formatter dependency publisher is the
-  exception because its targets contain no authored source. It still skips
-  publication whenever the Dockerfile, Bake graph, publisher, or guard is dirty.
+- Commit-scoped local publish requires a clean worktree. Dirty builds remain
+  local and cannot poison the committed PR scope.
+- The formatter dependency candidate is the exception because its targets
+  contain no authored source.
+- It still skips upload whenever the Dockerfile, Bake graph, publisher,
+  promotion workflow, or guard is dirty.
+- A failed candidate upload or hosted validation leaves the prior stable tag
+  unchanged and PR jobs fall back to Main.
 - Opt out with `NOOK_REGISTRY_CACHE=0`.
 - Cache restoration is an optimization: an unavailable cache falls back to a correct cold build.
 - Main publishes shared cache manifests after lane verification.

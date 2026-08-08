@@ -113,6 +113,7 @@ tasks:
             BASE_OWN_CACHE_ENABLED="${BAKE_SIM_BASE_OWN_CACHE_ENABLED}" \
             RUST_DEPS_INPUT_FINGERPRINT="${BAKE_SIM_RUST_DEPS_INPUT_FINGERPRINT:-}" \
             INPUT_CACHE_WRITE_ENABLED="${BAKE_SIM_INPUT_CACHE_WRITE_ENABLED:-}" \
+            INPUT_CACHE_CANDIDATE="${BAKE_SIM_INPUT_CACHE_CANDIDATE:-}" \
             LEAF_EXACT_AVAILABLE="${BAKE_SIM_LEAF_EXACT_AVAILABLE:-}" \
             NESTED_LEAF_EXACT_AVAILABLE="${BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE:-}" \
             NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
@@ -134,10 +135,11 @@ tasks:
         # Probe Zot for a BuildKit cache manifest (Main vs remote-buildcache isolation).
         registry_ref_code() {
           local repository="$1"
+          local tag="${2:-buildcache}"
           "$docker_bin" run --rm --network "$network" curlimages/curl:8.12.1 \
             -sS -o /dev/null -w "%{http_code}" \
-            -H "Accept: application/vnd.oci.image.manifest.v1+json" \
-            "http://${registry_ref}/v2/${repository}/manifests/buildcache"
+            -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json" \
+            "http://${registry_ref}/v2/${repository}/manifests/${tag}"
         }
 
         require_registry_ref() {
@@ -152,6 +154,25 @@ tasks:
           local code
           code="$(registry_ref_code "$repository")"
           test "$code" = "404"
+        }
+
+        promote_registry_tag() {
+          local repository="$1"
+          local source_tag="$2"
+          local stable_tag="$3"
+          "$docker_bin" run --rm --network "$network" curlimages/curl:8.12.1 \
+            sh -euc '
+              manifest="$(mktemp)"
+              headers="$(mktemp)"
+              trap '\''rm -f "$manifest" "$headers"'\'' EXIT
+              curl -fsS -D "$headers" -o "$manifest" \
+                -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json" \
+                "http://$1/v2/$2/manifests/$3"
+              content_type="$(awk '\''tolower($1) == "content-type:" { gsub("\\r", "", $2); print $2; exit }'\'' "$headers")"
+              test -n "$content_type"
+              curl -fsS -X PUT -H "Content-Type: $content_type" --data-binary @"$manifest" \
+                "http://$1/v2/$2/manifests/$4" >/dev/null
+            ' sh "$registry_ref" "$repository" "$source_tag" "$stable_tag"
         }
 
         buildkit_cfg="$(mktemp)"
@@ -405,7 +426,7 @@ tasks:
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario O ok"
 
-        echo "== Scenario P: dirty formatter deps feed fresh PR runner =="
+        echo "== Scenario P: hosted-verified formatter deps feed fresh PR runner =="
         # The unavoidable local formatter and a PR can have different commit
         # SHAs while sharing identical source-free dependency inputs.
         printf 'local-pr-shared-head\n' >"$parent_input"
@@ -418,19 +439,51 @@ tasks:
         BAKE_SIM_BASE_OWN_CACHE_ENABLED=
         BAKE_SIM_RUST_DEPS_INPUT_FINGERPRINT="$deps_fingerprint"
         BAKE_SIM_INPUT_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_INPUT_CACHE_CANDIDATE="local-good"
         create_builder "nook-bake-sim-p-local-${suffix}"
         bake_plain "$proof_log" parent-input-publish
         require_uncached_step "$proof_log" "bake-sim-parent-expensive"
-        require_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-input-v1-${deps_fingerprint}"
+        input_repository="nook/remote-buildcache/nook-bake-sim-parent-input-v2"
+        candidate_tag="candidate-${deps_fingerprint}-local-good"
+        stable_tag="fingerprint-${deps_fingerprint}"
+        test "$(registry_ref_code "$input_repository" "$candidate_tag")" = "200"
+        test "$(registry_ref_code "$input_repository" "$stable_tag")" = "404"
         require_no_registry_ref "nook/remote-buildcache/nook-bake-sim-parent-v1${pr2_suffix}"
 
+        # A distinct hosted builder must consume the candidate before the
+        # registry manifest is atomically tagged as PR-visible.
         BAKE_SIM_INPUT_CACHE_WRITE_ENABLED=
+        create_builder "nook-bake-sim-p-hosted-verify-${suffix}"
+        bake_plain "$proof_log" parent-input-verify
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        promote_registry_tag "$input_repository" "$candidate_tag" "$stable_tag"
+        test "$(registry_ref_code "$input_repository" "$stable_tag")" = "200"
+
         BAKE_SIM_CACHE_SCOPE_SUFFIX="$pr2_suffix"
         create_builder "nook-bake-sim-p-pr-${suffix}"
         bake_plain "$proof_log" parent
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_registry_ref "nook/buildcache/nook-bake-sim-parent-v1"
         echo "scenario P ok"
+
+        echo "== Scenario T: unverified local candidate cannot poison stable PR input =="
+        printf 'unverified-local-candidate\n' >"$parent_input"
+        BAKE_SIM_INPUT_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_INPUT_CACHE_CANDIDATE="local-rejected"
+        create_builder "nook-bake-sim-t-local-${suffix}"
+        bake_plain "$proof_log" parent-input-publish
+        require_uncached_step "$proof_log" "bake-sim-parent-expensive"
+        test "$(registry_ref_code "$input_repository" "candidate-${deps_fingerprint}-local-rejected")" = "200"
+
+        # Do not promote the rejected candidate. A fresh PR solve sees only the
+        # previously verified fingerprint tag and therefore retains the hit.
+        printf 'local-pr-shared-head\n' >"$parent_input"
+        BAKE_SIM_INPUT_CACHE_WRITE_ENABLED=
+        BAKE_SIM_INPUT_CACHE_CANDIDATE=
+        create_builder "nook-bake-sim-t-pr-${suffix}"
+        bake_plain "$proof_log" parent
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        echo "scenario T ok"
 
         echo "== Scenario Q: inline PR verification publishes Hive-style exact leaf =="
         # A standalone PR workflow first restores its unchanged dependency/tool

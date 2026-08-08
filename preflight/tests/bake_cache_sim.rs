@@ -52,6 +52,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("target \"parent\"")
             && bake.contains("target \"parent-publish\"")
             && bake.contains("target \"parent-input-publish\"")
+            && bake.contains("target \"parent-input-verify\"")
             && bake.contains("target \"parent-nested\"")
             && bake.contains("target \"parent-nested-restore\"")
             && bake.contains("target \"parent-nested-importing\"")
@@ -131,12 +132,14 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("Scenario M:")
             && tasks.contains("Scenario N:")
             && tasks.contains("Scenario O:")
-            && tasks.contains("Scenario P: dirty formatter deps feed fresh PR runner")
+            && tasks.contains("Scenario P: hosted-verified formatter deps feed fresh PR runner")
             && tasks.contains("Scenario Q: inline PR verification publishes Hive-style exact leaf")
             && tasks
                 .contains("Scenario R: exact-only replay works across linked and internal parents")
             && tasks
                 .contains("Scenario S: Kani-style full graph falls back once then replays exact")
+            && tasks.contains("Scenario T: unverified local candidate cannot poison stable PR input")
+            && tasks.contains("promote_registry_tag")
             && tasks.contains("bake-sim-base-layer")
             && tasks.contains("leaf-via-platform-broken")
             && tasks.contains("combined-leaf")

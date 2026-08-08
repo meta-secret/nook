@@ -195,11 +195,20 @@ Use this workflow for quality, CI, and deployment changes.
       `-git-<40-char-sha>`.
     - PR jobs key that SHA by pull-request head, not the merge `GITHUB_SHA`.
     - Ordinary commit-scoped local publish is disabled on a dirty worktree.
-    - The unavoidable local formatter publishes only source-free native and
-      WASM dependency stages under a cook-input fingerprint.
+    - The unavoidable local formatter writes only unique, source-free native
+      and WASM dependency candidate tags.
     - Dirty local source never enters that fingerprinted dependency scope.
     - Dirty cache recipes disable formatter publication.
-    - A fresh PR runner restores that scope even when its commit SHA differs.
+    - PR jobs never import a local candidate tag.
+    - Main and release jobs never import the PR-visible formatter scope.
+    - A Main-defined hosted workflow downloads every candidate blob.
+    - It independently fingerprints the exact committed source SHA.
+    - It uploads the graph to a hosted-normalized tag and downloads it again.
+    - Only after both complete reads does it atomically assign the stable
+      `fingerprint-<hash>` tag in the same OCI repository.
+    - A failed or truncated candidate leaves the stable tag unchanged.
+    - A fresh PR runner restores only that verified stable tag, even when its
+      commit SHA differs.
     - If a short parent index orphans a leaf RUN, redesign the Bake graph.
     - Do not wipe cache to paper over a short-chain import.
     - Prefer own-scope leaf `cache-from`, same-Dockerfile stage lineage, or a
@@ -259,8 +268,8 @@ Use this workflow for quality, CI, and deployment changes.
     It also proves Main vs parallel PR git-scope isolation on ephemeral Zot:
     PR writes stay under `nook/remote-buildcache/**-git-<sha>`, do not overlap,
     and do not replace Main `nook/buildcache/**`.
-    Scenario P proves a dirty local formatter and a fresh PR runner share the
-    same source-free dependency graph without sharing a commit SHA.
+    Scenario P proves a hosted-verified local candidate and a fresh PR runner
+    share the same source-free dependency graph without sharing a commit SHA.
     Scenario Q proves standalone Hive-style verification restores Main,
     publishes only its exact PR leaf, and replays that leaf on a fresh runner.
     Scenario R proves exact-only selection replays the leaf across both a bare
@@ -268,6 +277,7 @@ Use this workflow for quality, CI, and deployment changes.
     builders.
     Scenario S applies the same cold-Main then exact-replay contract to the
     full-graph Kani model, where compiler-object sccache is unavailable.
+    Scenario T proves an unverified local candidate is invisible to PR restore.
 
     #### SeaweedFS sccache
 

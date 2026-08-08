@@ -65,16 +65,54 @@ tasks:
           echo "registry-cache:publish:local-format-deps: unsafe cache recipe; publication skipped" >&2
           exit 0
         fi
-        # The two exporters contain only manifests, synthetic crate roots, and
-        # dependency outputs. Real source layers remain hosted/commit-scoped.
-        NOOK_RUST_DEPS_INPUT_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+        # Local writes are unique quarantine tags. PR jobs cannot import them.
+        # A Main-defined hosted workflow reads every blob twice before it adds
+        # the stable content-fingerprint tag.
+        candidate="$(date -u +%Y%m%d%H%M%S)-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+        fingerprint="${NOOK_RUST_DEPS_INPUT_FINGERPRINT:?missing Rust dependency fingerprint}"
+        source_sha="$(git rev-parse HEAD)"
+        if ! NOOK_RUST_DEPS_INPUT_WRITE_ENABLED=1 NOOK_RUST_DEPS_INPUT_CANDIDATE="$candidate" {{.DOCKER}} buildx bake \
           {{.NOOK_BAKE_FILES}} \
           --set "*.output=type=cacheonly" \
-          builder-wasm-deps-input-publish
-        NOOK_RUST_DEPS_INPUT_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+          builder-wasm-deps-input-publish; then
+          echo "registry-cache:publish:local-format-deps: WASM candidate upload failed; stable cache unchanged" >&2
+          exit 0
+        fi
+        if ! NOOK_RUST_DEPS_INPUT_WRITE_ENABLED=1 NOOK_RUST_DEPS_INPUT_CANDIDATE="$candidate" {{.DOCKER}} buildx bake \
           {{.NOOK_BAKE_FILES}} \
           --set "*.output=type=cacheonly" \
-          builder-core-deps-input-publish
+          builder-core-deps-input-publish; then
+          echo "registry-cache:publish:local-format-deps: native candidate upload failed; stable cache unchanged" >&2
+          exit 0
+        fi
+        if ! command -v gh >/dev/null 2>&1 || ! gh auth status >/dev/null 2>&1; then
+          echo "registry-cache:publish:local-format-deps: candidate quarantined; GitHub dispatch unavailable" >&2
+          exit 0
+        fi
+        if [ -n "$(git status --porcelain -- \
+          .github/scripts/rust-deps-cache-fingerprint.sh \
+          nook-app/nook-platform/Cargo.toml \
+          nook-app/nook-platform/Cargo.lock \
+          nook-app/nook-platform/clippy.toml \
+          nook-app/nook-platform/docker/rust/product.Dockerfile \
+          nook-app/nook-platform/docker/rust/product.Dockerfile.dockerignore \
+          nook-app/nook-platform/docker/sccache-wrapper.sh \
+          nook-app/nook-platform/docker/sccache-report.sh \
+          ':(glob)nook-app/**/Cargo.toml' \
+          ':(glob)nook-app/nook-platform/.cargo/**' \
+          ':(glob)nook-app/nook-platform/.config/**')" ]; then
+          echo "registry-cache:publish:local-format-deps: candidate quarantined; dependency inputs are not committed" >&2
+          exit 0
+        fi
+        if ! gh workflow run rust-deps-cache-promote.yml \
+          --ref main \
+          --raw-field "fingerprint=$fingerprint" \
+          --raw-field "candidate=$candidate" \
+          --raw-field "source_sha=$source_sha"; then
+          echo "registry-cache:publish:local-format-deps: candidate quarantined; hosted promotion dispatch failed" >&2
+          exit 0
+        fi
+        echo "registry-cache:publish:local-format-deps: hosted promotion dispatched for $candidate"
 
   docker:rust:task:
     internal: true

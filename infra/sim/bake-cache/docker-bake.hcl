@@ -49,6 +49,10 @@ variable "INPUT_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
+variable "INPUT_CACHE_CANDIDATE" {
+  default = ""
+}
+
 variable "LEAF_EXACT_AVAILABLE" {
   default = ""
 }
@@ -77,19 +81,23 @@ base_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 // FALLBACK: exact git scope first, then content fingerprint, then trusted Main.
 parent_cache_from = GHA_CACHE_ENABLED == "" || PARENT_OWN_CACHE_ENABLED == "" ? [] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v1-${RUST_DEPS_INPUT_FINGERPRINT}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v2:fingerprint-${RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-parent-v1:buildcache,ignore-error=true",
 ] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v1-${RUST_DEPS_INPUT_FINGERPRINT}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v2:fingerprint-${RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
 ]
 
 parent_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
 ] : []
 
-parent_input_cache_to = INPUT_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v1-${RUST_DEPS_INPUT_FINGERPRINT}:buildcache,mode=max,timeout=5m",
+parent_input_cache_to = INPUT_CACHE_WRITE_ENABLED != "" && INPUT_CACHE_CANDIDATE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v2:candidate-${RUST_DEPS_INPUT_FINGERPRINT}-${INPUT_CACHE_CANDIDATE},mode=max,timeout=5m",
+] : []
+
+parent_input_candidate_cache_from = INPUT_CACHE_CANDIDATE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-parent-input-v2:candidate-${RUST_DEPS_INPUT_FINGERPRINT}-${INPUT_CACHE_CANDIDATE}",
 ] : []
 
 // Nested parent (Bake-context base) uses its own Zot scope.
@@ -176,6 +184,13 @@ target "parent-input-publish" {
   dockerfile = "parent.Dockerfile"
   cache-from = parent_cache_from
   cache-to = parent_input_cache_to
+  output = ["type=cacheonly"]
+}
+
+target "parent-input-verify" {
+  context = "."
+  dockerfile = "parent.Dockerfile"
+  cache-from = parent_input_candidate_cache_from
   output = ["type=cacheonly"]
 }
 
