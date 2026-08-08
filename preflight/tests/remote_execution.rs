@@ -246,6 +246,11 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
     assert!(!workflow.contains("${{ inputs.command }}"));
     assert!(workflow.contains("group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}"));
     assert!(workflow.contains("remote-task-batch.sh --run \"$REQUESTED_REMOTE_TASKS\""));
+    let docker_setup = read(".github/actions/nook-docker-setup/action.yml");
+    assert!(docker_setup.contains(
+        "NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}"
+    ));
+    assert!(docker_setup.contains("if [ -z \"$NOOK_REMOTE_TASK_SELECTION\" ]"));
     assert!(workflow.contains("cache-write: \"false\""));
     assert!(workflow.contains("main-cache-only: \"true\""));
     assert_eq!(
