@@ -87,9 +87,9 @@ type PublicKeyCredentialWithPrf = PublicKeyCredential & {
 }
 
 function runtimeMessage<T>(message: ExternalValue): Promise<T> {
+  // Promise owns this callback's resolve and reject signature.
+  // eslint-disable-next-line max-params
   return new Promise((resolve, reject) => {
-    // Chrome owns this callback's response and sender signature.
-    // eslint-disable-next-line max-params
     chrome.runtime.sendMessage(message, (response: ExternalValue) => {
       if (chrome.runtime.lastError?.message) {
         reject(new Error(chrome.runtime.lastError.message))
@@ -243,18 +243,19 @@ export async function extensionDeviceProtectionStatus(): Promise<DeviceProtectio
   const request: ExternalObject = { type: 'nook:extension-session-status' }
   const { status } =
     await sessionMessage<SessionResponse<{ status: ExternalValue }>>(request)
-  switch (status) {
+  const deviceStatus = status as DeviceProtectionStatus
+  switch (deviceStatus) {
     case DeviceProtectionStatus.Missing:
     case DeviceProtectionStatus.Plaintext:
     case DeviceProtectionStatus.Passkey:
     case DeviceProtectionStatus.Pin:
     case DeviceProtectionStatus.Unlocked:
-      return status
+      return deviceStatus
     case DeviceProtectionStatus.Loading:
     case DeviceProtectionStatus.PinSetup:
     case DeviceProtectionStatus.Error:
       throw new Error(
-        `Unsupported extension device protection status: ${status}`,
+        `Unsupported extension device protection status: ${deviceStatus}`,
       )
     default:
       throw new Error('Unsupported extension device protection status.')

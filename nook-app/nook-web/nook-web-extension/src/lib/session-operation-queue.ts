@@ -107,10 +107,9 @@ export class SessionOperationQueue {
       this.entries.push(entry)
       // Array.sort owns this comparator signature.
       // eslint-disable-next-line max-params
-      this.entries.sort(
-        (left, right) =>
-          left.priority - right.priority || left.sequence - right.sequence,
-      )
+      const compareEntries = (left: QueueEntry, right: QueueEntry) =>
+        left.priority - right.priority || left.sequence - right.sequence
+      this.entries.sort(compareEntries)
       void this.drain()
     })
   }
