@@ -137,7 +137,10 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() {
         .output()
         .expect("remote batch helper must execute with mock tasks");
 
-    assert!(!output.status.success(), "one failed task must fail the batch");
+    assert!(
+        !output.status.success(),
+        "one failed task must fail the batch"
+    );
     assert_eq!(
         fs::read_to_string(&task_log).expect("task log must be readable"),
         "remote:rust:test\nremote:web:check\nwasm:test\n",
