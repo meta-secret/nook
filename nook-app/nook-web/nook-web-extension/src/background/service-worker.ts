@@ -584,7 +584,8 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
 })
 
 chrome.runtime.onMessageExternal.addListener(
-  (message, sender, sendResponse) => {
+  (runtimeMessage, sender, sendResponse) => {
+    const message = runtimeMessage as ExternalValue
     if (isOpenCompanionLauncherMessage(message)) {
       if (!isNokeySender(sender)) {
         sendResponse({ ok: false, reason: 'forbidden-sender' })
@@ -596,9 +597,7 @@ chrome.runtime.onMessageExternal.addListener(
       return true
     }
 
-    if (
-      isExtensionPairedVaultIdentityDiscoveryMessage(message)
-    ) {
+    if (isExtensionPairedVaultIdentityDiscoveryMessage(message)) {
       if (!isNokeySender(sender)) {
         sendResponse({ ok: false, reason: 'forbidden-sender' })
         return false
@@ -634,11 +633,7 @@ chrome.runtime.onMessageExternal.addListener(
       return true
     }
 
-    if (
-      isExtensionPairedVaultIdentityHandoffRequestMessage(
-        message,
-      )
-    ) {
+    if (isExtensionPairedVaultIdentityHandoffRequestMessage(message)) {
       if (!isNokeySender(sender)) {
         sendResponse({ ok: false, reason: 'forbidden-sender' })
         return false
@@ -647,10 +642,7 @@ chrome.runtime.onMessageExternal.addListener(
       return true
     }
 
-    if (
-      !isExtensionPairingApprovedMessage(message) ||
-      !isNokeySender(sender)
-    ) {
+    if (!isExtensionPairingApprovedMessage(message) || !isNokeySender(sender)) {
       sendResponse({ ok: false, reason: 'invalid-pairing-grant' })
       return false
     }
