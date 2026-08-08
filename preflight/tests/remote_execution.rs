@@ -111,6 +111,9 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
             "task timeout must preserve the former bounded range: {task}"
         );
     }
+    let batch_script = read(".github/scripts/remote-task-batch.sh");
+    assert!(batch_script.contains("timeout --kill-after=1m"));
+    assert!(!batch_script.contains("timeout --foreground"));
     Ok(())
 }
 
@@ -258,6 +261,8 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
         workflow.contains("group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}")
     );
     assert!(workflow.contains("remote-task-batch.sh --run \"$REQUESTED_REMOTE_TASKS\""));
+    assert!(batch_script.contains("docker buildx use \"$builder\""));
+    assert!(batch_script.contains("if ! restore_hosted_builder; then"));
     let docker_setup = read(".github/actions/nook-docker-setup/action.yml");
     assert!(docker_setup.contains(
         "NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}"

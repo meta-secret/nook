@@ -42,7 +42,14 @@ task failed.
 
 Each task keeps its former 15-to-45-minute timeout.
 
+A timed-out task and its process group receive `TERM` followed by forced
+termination after a one-minute grace period.
+
 A timed-out task fails without blocking later selections.
+
+After each task, the runner reselects the job-scoped hosted Buildx builder.
+This prevents temporary builders created by one task from affecting later
+selections.
 
 The GitHub job summary reports every task result.
 

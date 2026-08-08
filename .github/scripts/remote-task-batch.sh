@@ -110,7 +110,14 @@ task_timeout_minutes() {
 run_with_timeout() {
   local timeout_minutes="$1"
   shift
-  timeout --foreground "${timeout_minutes}m" "$@"
+  timeout --kill-after=1m "${timeout_minutes}m" "$@"
+}
+
+restore_hosted_builder() {
+  local builder="${NOOK_PR_BUILDX_BUILDER:-}"
+  if [[ -n "$builder" ]]; then
+    docker buildx use "$builder"
+  fi
 }
 
 run_task() {
@@ -183,6 +190,10 @@ run_batch() {
     set +e
     run_task "$task"
     status=$?
+    if ! restore_hosted_builder; then
+      echo "::error::Failed to restore the hosted Buildx builder after: $task"
+      status=1
+    fi
     set -e
     echo "::endgroup::"
 
