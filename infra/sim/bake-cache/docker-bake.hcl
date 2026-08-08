@@ -3,7 +3,11 @@
 // base-publish ≈ rust-base-publish (mode=max writer for short base index).
 // parent ≈ rust-ecosystem-nightly (cache-from only; standalone Dockerfile).
 // parent-publish ≈ rust-ecosystem-nightly-publish (mode=max writer).
-// parent-nested ≈ nightly with Bake-context base (Scenario L orphan proof).
+// parent-nested ≈ bare nightly context target (no cache importer).
+// parent-nested-restore ≈ read-only nightly cache warmer.
+// platform-nested-broken ≈ removed rust-platform-nightly source overlay.
+// leaf-via-platform-broken ≈ old 3-linked-target dylint/fuzz topology.
+// leaf-direct-nested ≈ fixed leaf directly over bare warmed nightly.
 // leaf ≈ rust-dylint (own-scope leaf; mode=max embeds parent).
 // leaf-short-chain ≈ short-parent import bug (parent scope in cache-from).
 // parent-pr-cold ≈ broken nightly FALLBACK (git-scope only, no Main).
@@ -78,6 +82,14 @@ parent_nested_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-nested-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
 ] : []
 
+nested_leaf_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-nested-leaf-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+]
+
+nested_leaf_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-nested-leaf-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
+] : []
+
 // Broken PR FALLBACK: git-scope only (documents cold install without Main).
 parent_pr_cold_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-parent-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
@@ -136,19 +148,21 @@ target "parent-nested" {
   contexts = {
     base = "target:base"
   }
-  cache-from = parent_nested_cache_from
   output = ["type=cacheonly"]
 }
 
-target "parent-nested-publish" {
-  context = "."
-  dockerfile = "parent-nested.Dockerfile"
-  contexts = {
-    base = "target:base"
-  }
+target "parent-nested-restore" {
+  inherits = ["parent-nested"]
   cache-from = parent_nested_cache_from
+}
+
+target "parent-nested-importing" {
+  inherits = ["parent-nested-restore"]
+}
+
+target "parent-nested-publish" {
+  inherits = ["parent-nested-restore"]
   cache-to = parent_nested_cache_to
-  output = ["type=cacheonly"]
 }
 
 target "parent-pr-cold" {
@@ -176,5 +190,34 @@ target "leaf-short-chain" {
     parent = "target:parent"
   }
   cache-from = leaf_short_chain_cache_from
+  output = ["type=cacheonly"]
+}
+
+target "platform-nested-broken" {
+  context = "."
+  dockerfile = "platform-nested.Dockerfile"
+  contexts = {
+    parent = "target:parent-nested-importing"
+  }
+  output = ["type=cacheonly"]
+}
+
+target "leaf-via-platform-broken" {
+  context = "."
+  dockerfile = "leaf-platform.Dockerfile"
+  contexts = {
+    platform = "target:platform-nested-broken"
+  }
+  output = ["type=cacheonly"]
+}
+
+target "leaf-direct-nested" {
+  context = "."
+  dockerfile = "leaf.Dockerfile"
+  contexts = {
+    parent = "target:parent-nested"
+  }
+  cache-from = nested_leaf_cache_from
+  cache-to = nested_leaf_cache_to
   output = ["type=cacheonly"]
 }

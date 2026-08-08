@@ -24,12 +24,3 @@ RUN curl -fsSL \
 RUN cargo install cargo-dylint dylint-link \
       --version "${CARGO_DYLINT_VERSION}" --locked \
     && cargo dylint --version
-
-# Source overlay for nightly leaves (dylint/fuzz). Keep this after the tool install
-# so the shared nightly cache scope stays toolchain-stable.
-FROM rust-ecosystem-nightly AS rust-platform-nightly
-
-# COPY dests are relative to WORKDIR. Keep WORKDIR at the repo root so dest paths
-# match context paths.
-WORKDIR /meta-secret/nook
-COPY nook-app/nook-platform/ nook-app/nook-platform/

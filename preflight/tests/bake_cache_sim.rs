@@ -22,9 +22,12 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         format!("{sim}/base.Dockerfile"),
         format!("{sim}/parent.Dockerfile"),
         format!("{sim}/parent-nested.Dockerfile"),
+        format!("{sim}/platform-nested.Dockerfile"),
         format!("{sim}/leaf.Dockerfile"),
+        format!("{sim}/leaf-platform.Dockerfile"),
         format!("{sim}/inputs/base.txt"),
         format!("{sim}/inputs/parent.txt"),
+        format!("{sim}/inputs/platform.txt"),
         format!("{sim}/inputs/leaf.txt"),
     ] {
         assert!(
@@ -48,11 +51,16 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("target \"parent\"")
             && bake.contains("target \"parent-publish\"")
             && bake.contains("target \"parent-nested\"")
+            && bake.contains("target \"parent-nested-restore\"")
+            && bake.contains("target \"parent-nested-importing\"")
             && bake.contains("target \"parent-nested-publish\"")
+            && bake.contains("target \"platform-nested-broken\"")
+            && bake.contains("target \"leaf-via-platform-broken\"")
+            && bake.contains("target \"leaf-direct-nested\"")
             && bake.contains("target \"leaf\"")
             && bake.contains("target \"leaf-short-chain\"")
             && bake.contains("target \"parent-pr-cold\""),
-        "sim Bake must expose base/parent/nested/leaf/publish/short-chain/pr-cold targets"
+        "sim Bake must expose restore/publish plus broken and fixed nested leaf topologies"
     );
     assert!(
         bake.contains("BASE_OWN_CACHE_ENABLED")
@@ -61,6 +69,15 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && !assignment_mentions_cache_to(&bake, "parent")
             && !assignment_mentions_cache_to(&bake, "base"),
         "publishers own cache-to; context base/parent must not"
+    );
+    let nested_parent = target_body(&bake, "parent-nested");
+    let nested_restore = target_body(&bake, "parent-nested-restore");
+    assert!(
+        !nested_parent.lines().any(|line| {
+            let line = line.trim_start();
+            line.starts_with("cache-from") || line.starts_with("cache-to")
+        }) && nested_restore.contains("cache-from = parent_nested_cache_from"),
+        "nested context parent must be cache-free and its restore target must import the scope"
     );
     let leaf_from = assignment_body(&bake, "leaf_cache_from");
     let short_from = assignment_body(&bake, "leaf_short_chain_cache_from");
@@ -95,7 +112,11 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("Scenario J:")
             && tasks.contains("Scenario K:")
             && tasks.contains("Scenario L:")
+            && tasks.contains("Scenario M:")
+            && tasks.contains("Scenario N:")
             && tasks.contains("bake-sim-base-layer")
+            && tasks.contains("leaf-via-platform-broken")
+            && tasks.contains("leaf-direct-nested")
             && tasks.contains("parent-pr-cold")
             && tasks.contains("require_registry_ref")
             && tasks.contains("require_no_registry_ref")
@@ -103,7 +124,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("PARENT_OWN_CACHE_ENABLED")
             && bake.contains("BASE_OWN_CACHE_ENABLED")
             && bake.contains("write_cache_repository"),
-        "infra bake-cache prove must cover FALLBACK, base orphan, and Main/PR isolation"
+        "infra proof must cover FALLBACK, base orphan, PR isolation, and the broken/fixed nightly leaf graph"
     );
     let parent_from = assignment_body(&bake, "parent_cache_from");
     let main_idx = parent_from

@@ -179,7 +179,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     for marker in [
         "AS rust-ecosystem-policy-tools",
         "AS rust-ecosystem-nightly",
-        "AS rust-platform-nightly",
         "AS rust-fuzz-smoke",
         "AS rust-dylint",
         "AS rust-ecosystem-deterministic",
@@ -201,16 +200,16 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let dylint_dockerfile = read("nook-app/nook-platform/docker/rust/dylint.Dockerfile")?;
     let fuzz_dockerfile = read("nook-app/nook-platform/docker/rust/fuzz-smoke.Dockerfile")?;
     assert!(
-        nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-platform-nightly")
-            && nightly_dockerfile.contains("COPY nook-app/nook-platform/ nook-app/nook-platform/"),
-        "nightly.Dockerfile must own the platform source overlay for dylint/fuzz"
+        !nightly_dockerfile.contains("rust-platform-nightly")
+            && !nightly_dockerfile.contains("COPY nook-app/nook-platform/"),
+        "nightly.Dockerfile must remain a source-free toolchain parent"
     );
     assert!(
-        dylint_dockerfile.contains("FROM rust-platform-nightly AS rust-dylint")
-            && fuzz_dockerfile.contains("FROM rust-platform-nightly AS rust-fuzz-smoke")
-            && !dylint_dockerfile.contains("COPY nook-app/nook-platform/")
-            && !fuzz_dockerfile.contains("COPY nook-app/nook-platform/"),
-        "dylint/fuzz leaves must not re-copy platform sources"
+        dylint_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-dylint")
+            && fuzz_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-fuzz-smoke")
+            && dylint_dockerfile.contains("COPY nook-app/nook-platform/")
+            && fuzz_dockerfile.contains("COPY nook-app/nook-platform/"),
+        "dylint/fuzz must copy sources directly over the nightly toolchain"
     );
     assert!(
         docker_tasks.contains("--hide-inclusion-graph")
@@ -233,7 +232,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     for target in [
         "rust-ecosystem-policy-tools",
         "rust-ecosystem-nightly",
-        "rust-platform-nightly",
+        "rust-ecosystem-nightly-restore",
+        "rust-ecosystem-nightly-publish",
         "rust-fuzz-smoke",
         "rust-dylint",
         "rust-ecosystem-deterministic",
@@ -256,6 +256,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     );
     assert!(
         rust_bake.contains("target \"rust-ecosystem-nightly-publish\"")
+            && rust_bake.contains("target \"rust-ecosystem-nightly-restore\"")
             && rust_bake.contains("cache-to   = rust_ecosystem_nightly_cache_to")
             && rust_bake
                 .matches("cache-to   = rust_ecosystem_nightly_cache_to")
@@ -267,12 +268,21 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
                 .and_then(|tail| tail.split("target \"").next())
                 .unwrap_or("")
                 .lines()
-                .any(|line| line.trim_start().starts_with("cache-to"))
+                .any(|line| {
+                    let line = line.trim_start();
+                    line.starts_with("cache-from") || line.starts_with("cache-to")
+                })
+            && rust_bake
+                .split("target \"rust-ecosystem-nightly-restore\" {")
+                .nth(1)
+                .and_then(|tail| tail.split("target \"").next())
+                .unwrap_or("")
+                .contains("cache-from = rust_ecosystem_nightly_cache_from")
             && rust_bake.contains("cache-to   = rust_ecosystem_dylint_cache_to")
             && rust_bake.contains("cache-to   = rust_ecosystem_fuzz_cache_to")
             && rust_bake.contains("cache-from = rust_ecosystem_dylint_cache_from")
             && rust_bake.contains("cache-from = rust_ecosystem_fuzz_cache_from"),
-        "nightly-publish alone writes the shared nightly scope; context nightly has no cache-to; dylint/fuzz write leaf scopes"
+        "nightly context must be cache-free; restore imports; publisher alone writes; dylint/fuzz write leaf scopes"
     );
     let preflight_bake = read("preflight/docker-bake.hcl")?;
     let nightly_from = rust_bake
@@ -348,10 +358,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     );
     assert!(
         rust_bake.contains("rust-ecosystem-nightly = \"target:rust-ecosystem-nightly\"")
-            && rust_bake.contains("rust-platform-nightly = \"target:rust-platform-nightly\"")
+            && !rust_bake.contains("rust-platform-nightly")
             && rust_bake.contains("rust-platform = \"target:rust-platform\"")
             && rust_bake.contains("rust-base = \"target:rust-base\"")
             && rust_bake.contains("target \"rust-base-publish\"")
+            && docker_tasks.contains("rust-ecosystem-nightly-restore")
             && docker_tasks.contains("rust-base-publish")
             && docker_tasks.contains("rust-ecosystem-nightly-publish")
             && !docker_tasks.contains("cache-from=\"")

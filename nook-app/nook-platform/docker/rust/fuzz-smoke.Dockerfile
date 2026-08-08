@@ -1,9 +1,12 @@
 # syntax=docker/dockerfile:1.4
 
-FROM rust-platform-nightly AS rust-fuzz-smoke
+FROM rust-ecosystem-nightly AS rust-fuzz-smoke
 
 ARG FUZZ_SECONDS=20
 ARG DYLINT_NIGHTLY=nightly-2026-04-16
+
+WORKDIR /meta-secret/nook
+COPY nook-app/nook-platform/ nook-app/nook-platform/
 
 WORKDIR /meta-secret/nook/nook-app/nook-platform
 ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}

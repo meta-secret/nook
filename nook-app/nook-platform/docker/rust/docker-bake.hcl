@@ -4,12 +4,12 @@
 // and deterministic compiles are reused without folding that tooling into product rust-base.
 // Main seeds those scopes with the trusted registry writer; PRs only write
 // isolated remote-buildcache refs.
-// Nightly: rust-ecosystem-nightly-publish is the sole writer for the shared nightly
-// ref. Dylint/fuzz write leaf scopes only (no nightly/rust-base in cache-from).
-// Parents restore via Bake contexts (same pattern as preflight).
-// Context rust-base omits cache-from and cache-to; rust-base-restore/publish
-// own the rust-base Zot scope. Other context parents keep cache-from and never
-// declare cache-to.
+// Nightly: rust-ecosystem-nightly is a bare context target. Its restore/publish
+// siblings own the shared nightly cache ref. Dylint/fuzz warm the restore target,
+// then consume the bare target directly so nested cache importers cannot rewrite
+// the toolchain lineage. Leaf scopes contain source-sensitive work only.
+// Context rust-base and rust-ecosystem-nightly omit cache-from and cache-to;
+// their restore/publish siblings own the Zot scopes.
 // Dedicated *-publish targets write mode=max refs under write_cache_repository
 // plus GHA_CACHE_SCOPE_SUFFIX (Main: nook/buildcache; isolated: …-git-<sha>).
 // Empty cache-from= and cache-to= overrides are prohibited.
@@ -242,26 +242,17 @@ target "rust-ecosystem-nightly" {
   contexts = {
     rust-base = "target:rust-base"
   }
-  cache-from = rust_ecosystem_nightly_cache_from
   output     = ["type=cacheonly"]
 }
 
-target "rust-ecosystem-nightly-publish" {
+target "rust-ecosystem-nightly-restore" {
   inherits = ["rust-ecosystem-nightly"]
-  cache-to   = rust_ecosystem_nightly_cache_to
+  cache-from = rust_ecosystem_nightly_cache_from
 }
 
-// Platform sources over nightly tools. Dylint/fuzz take this via Bake context so
-// source edits do not rewrite the shared nightly toolchain scope.
-target "rust-platform-nightly" {
-  context    = "."
-  dockerfile = "nook-app/nook-platform/docker/rust/nightly.Dockerfile"
-  target     = "rust-platform-nightly"
-  platforms  = ["linux/amd64"]
-  contexts = {
-    rust-ecosystem-nightly = "target:rust-ecosystem-nightly"
-  }
-  output = ["type=cacheonly"]
+target "rust-ecosystem-nightly-publish" {
+  inherits = ["rust-ecosystem-nightly-restore"]
+  cache-to   = rust_ecosystem_nightly_cache_to
 }
 
 target "rust-fuzz-smoke" {
@@ -274,7 +265,7 @@ target "rust-fuzz-smoke" {
     FUZZ_SECONDS = FUZZ_SECONDS
   }
   contexts = {
-    rust-platform-nightly = "target:rust-platform-nightly"
+    rust-ecosystem-nightly = "target:rust-ecosystem-nightly"
   }
   cache-from = rust_ecosystem_fuzz_cache_from
   cache-to   = rust_ecosystem_fuzz_cache_to
@@ -288,7 +279,7 @@ target "rust-dylint" {
   target     = "rust-dylint"
   platforms  = ["linux/amd64"]
   contexts = {
-    rust-platform-nightly = "target:rust-platform-nightly"
+    rust-ecosystem-nightly = "target:rust-ecosystem-nightly"
   }
   cache-from = rust_ecosystem_dylint_cache_from
   cache-to   = rust_ecosystem_dylint_cache_to

@@ -234,6 +234,34 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
         "rust-base-restore must declare cache-from without cache-to"
     );
 
+    let nightly = bake_target_body(rust_bake.as_str(), "rust-ecosystem-nightly");
+    assert!(
+        !nightly.trim().is_empty()
+            && !nightly.lines().any(|line| {
+                let line = line.trim_start();
+                line.starts_with("cache-from") || line.starts_with("cache-to")
+            }),
+        "nested nightly context must omit cache-from/cache-to"
+    );
+    let nightly_restore =
+        bake_target_body(rust_bake.as_str(), "rust-ecosystem-nightly-restore");
+    assert!(
+        nightly_restore.contains("cache-from = rust_ecosystem_nightly_cache_from")
+            && !bake_target_assigns_cache_to(
+                rust_bake.as_str(),
+                "rust-ecosystem-nightly-restore",
+            ),
+        "nightly restore must import its own scope without writing"
+    );
+    assert!(
+        !rust_bake.contains("rust-platform-nightly")
+            && rust_bake
+                .matches("rust-ecosystem-nightly = \"target:rust-ecosystem-nightly\"")
+                .count()
+                == 2,
+        "dylint/fuzz must directly context the bare nightly parent"
+    );
+
     for (bake, target) in [
         (core_bake.as_str(), "builder-core-deps"),
         (core_bake.as_str(), "builder-wasm-deps"),
@@ -260,6 +288,11 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
             rust_bake.as_str(),
             "rust-base-publish",
             "rust_base_cache_to",
+        ),
+        (
+            rust_bake.as_str(),
+            "rust-ecosystem-nightly-publish",
+            "rust_ecosystem_nightly_cache_to",
         ),
         (
             core_bake.as_str(),

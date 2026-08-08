@@ -312,7 +312,7 @@ tasks:
       - task: minds:dependency-policy
 
   docker:ecosystem:nightly:verify:
-    desc: Warm rust-ecosystem-nightly without writing its Zot scope.
+    desc: Warm rust-ecosystem-nightly-restore without writing its Zot scope.
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
       - task: docker:rust-base
@@ -320,7 +320,7 @@ tasks:
         GHA_CACHE_WRITE_ENABLED=
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
-        rust-ecosystem-nightly
+        rust-ecosystem-nightly-restore
 
   docker:ecosystem:nightly:
     desc: Bake only rust-ecosystem-nightly. Sole shared nightly Zot writer when writes are enabled.
@@ -359,7 +359,8 @@ tasks:
     vars:
       FUZZ_SECONDS: '{{default "20" .FUZZ_SECONDS}}'
     cmds:
-      # Warm nightly read-only first. Fuzz never rewrites nightly/rust-base.
+      # Warm nightly read-only first. The leaf then consumes the bare nightly
+      # context target, so nested cache importers cannot orphan its tool layers.
       - task: docker:ecosystem:nightly:verify
       - >-
         GHA_CACHE_WRITE_ENABLED=
@@ -379,9 +380,8 @@ tasks:
     desc: Bake repository Dylint lints on the sealed nightly ecosystem image.
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
-      # Verify nightly read-only first (like fuzz). Nested leaf bake materializes
-      # Main layers before any git-scope publish. Publishing nightly before the
-      # leaf can write a thin index that orphans fat Main and cold cargo-install.
+      # Warm nightly through its read-only restore target. The leaf consumes the
+      # bare nightly context target and cannot re-import a shorter cache lineage.
       - task: docker:ecosystem:nightly:verify
       - >-
         GHA_CACHE_WRITE_ENABLED=
@@ -398,4 +398,3 @@ tasks:
             {{.NOOK_BAKE_FILES}} \
             rust-dylint
         fi
-

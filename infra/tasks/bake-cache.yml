@@ -341,10 +341,9 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario K ok"
 
-        echo "== Scenario L: nested parent with bare base restores CACHED =="
-        # Nested nightly FROM Bake-context base. Bare base (no cache-from) must not
-        # block parent-nested own-scope restore. Context rust-base omits cache-from
-        # (enforced by bake_cache_proofs); restore/publish own the rust-base scope.
+        echo "== Scenario L: nested parent restore target is CACHED =="
+        # Nested nightly FROM Bake-context base. The explicit restore target owns
+        # nightly cache-from while the context target remains bare.
         BAKE_SIM_CACHE_ENABLED=1
         BAKE_SIM_CACHE_WRITE_ENABLED=
         BAKE_SIM_CACHE_FALLBACK_ENABLED=
@@ -352,8 +351,50 @@ tasks:
         BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
         BAKE_SIM_BASE_OWN_CACHE_ENABLED=
         create_builder "nook-bake-sim-l-${suffix}"
-        bake_plain "$proof_log" parent-nested
+        bake_plain "$proof_log" parent-nested-restore
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         echo "scenario L ok"
+
+        echo "== Scenario M: extra linked source overlay reproduces nightly miss =="
+        # Mirrors the rejected leaf -> rust-platform-nightly -> nightly -> base
+        # graph. A standalone restore is warm, but re-importing that cache below
+        # the extra linked source target changes the solve lineage and reruns the
+        # expensive nightly step on a fresh builder.
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=
+        create_builder "nook-bake-sim-m-${suffix}"
+        bake_plain "$proof_log" parent-nested-restore
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        bake_plain "$proof_log" leaf-via-platform-broken
+        require_uncached_step "$proof_log" "bake-sim-parent-expensive"
+        echo "scenario M ok"
+
+        echo "== Scenario N: direct leaf over bare warmed parent stays CACHED =="
+        # Fixed graph: warm the restore target, then let the leaf consume the
+        # cache-free context target directly. Publish the source-sensitive leaf
+        # and prove both parent and leaf restore on another fresh builder.
+        create_builder "nook-bake-sim-n-${suffix}"
+        bake_plain "$proof_log" parent-nested-restore
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        bake_plain "$proof_log" leaf-direct-nested
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        bake_plain "$proof_log" leaf-direct-nested
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        create_builder "nook-bake-sim-n2-${suffix}"
+        bake_plain "$proof_log" parent-nested-restore
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        bake_plain "$proof_log" leaf-direct-nested
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_registry_ref "nook/buildcache/nook-bake-sim-nested-leaf-v1"
+        echo "scenario N ok"
 
         echo "bake-cache runtime proof passed"

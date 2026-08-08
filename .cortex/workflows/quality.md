@@ -16,8 +16,9 @@ Use this workflow for quality, CI, and deployment changes.
    - Never clear `cache-from` or `cache-to` with an empty Bake override.
    - Empty cache overrides are an architectural failure, not cache hygiene.
    - Most context parents keep `cache-from` and declare no `cache-to`.
-   - Context `rust-base` omits both `cache-from` and `cache-to`.
-   - `rust-base-restore` / `rust-base-publish` own the rust-base Zot scope.
+   - Context `rust-base` and `rust-ecosystem-nightly` omit both.
+   - Their `*-restore` / `*-publish` siblings own the Zot scopes.
+   - Warm a restore target before a nested leaf consumes its bare context target.
    - Importing short rust-base during a nested leaf bake orphans nightly RUNs.
    - Dedicated `*-publish` targets write scoped Main/PR Zot refs.
    - Redesign scopes or Dockerfile lineage instead of wiping cache.
@@ -109,25 +110,26 @@ Use this workflow for quality, CI, and deployment changes.
      per-crate COPY+RUN layering so one crate edit reuses earlier compile layers.
    - `PR / Rust ecosystem / Cargo fuzz smoke` —
      `task docker:ecosystem:fuzz` warms `docker:ecosystem:nightly:verify`, then
-     Bakes `rust-fuzz-smoke` on `rust-platform-nightly` (platform sources over
-     toolchain-only `rust-ecosystem-nightly`) with pinned
+     Bakes `rust-fuzz-smoke` directly on the bare, toolchain-only
+     `rust-ecosystem-nightly` context with pinned
      [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html).
+     The leaf Dockerfile owns the platform source copy.
      Fuzz restores nightly read-only and writes `nook-rust-ecosystem-fuzz-v3`.
    - `PR / Rust ecosystem / Kani bounded proofs` —
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
      bounded proof harnesses via the official action (specialized toolchain).
    - `PR / Rust ecosystem / Dylint repository lints` —
      `task docker:ecosystem:dylint` warms `docker:ecosystem:nightly:verify`,
-     Bakes `rust-dylint` on `rust-platform-nightly` (materializing Main nightly
-     layers), then publishes `rust-ecosystem-nightly-publish` and the dylint
-     leaf when writes are enabled.
-     Publishing nightly before the leaf can write a thin git index that orphans
-     fat Main and cold-installs `cargo-dylint`.
+     Bakes `rust-dylint` directly on the bare `rust-ecosystem-nightly` context,
+     then publishes nightly and dylint when writes are enabled.
+     `rust-ecosystem-nightly-restore` owns cache import.
+     The bare context target owns neither cache import nor export.
+     This prevents the nested leaf solve from changing the restored tool lineage.
      Pinned [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
      `dylint-link` release binaries (no host `cargo install`).
      The dylint leaf scope is `nook-rust-ecosystem-dylint-v3`.
-     Nightly stays toolchain-stable; `rust-platform-nightly` is the shared
-     source overlay for dylint/fuzz leaves.
+     Nightly stays toolchain-stable and source-free.
+     Dylint and fuzz copy platform sources in their own Dockerfiles.
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
@@ -160,6 +162,8 @@ Use this workflow for quality, CI, and deployment changes.
     - Native source must not import rust-base.
     - Ecosystem nightly/policy-tools/policy and preflight scopes must not
       import rust-base at all.
+    - Nested dylint/fuzz solves consume bare `rust-ecosystem-nightly`.
+    - `rust-ecosystem-nightly-restore` imports the nightly scope before them.
     - Dylint/fuzz leaf scopes must not import nightly (or rust-base).
     - WASM deps/source scopes must not import rust-base or native rust-deps.
     - Their mode=max exports already embed that parent chain.
@@ -227,6 +231,8 @@ Use this workflow for quality, CI, and deployment changes.
     `verify-wasm-gha-cache.sh` on a fresh builder.
     Runtime Bake+Zot parent/leaf proof is `task infra:bake-cache:prove`.
     That sim complements the static `bake_cache_proofs.rs` theorems.
+    It reproduces the rejected three-linked-target nightly miss.
+    It then proves the direct leaf over a bare, pre-warmed nightly parent.
     It also proves Main vs parallel PR git-scope isolation on ephemeral Zot:
     PR writes stay under `nook/remote-buildcache/**-git-<sha>`, do not overlap,
     and do not replace Main `nook/buildcache/**`.
