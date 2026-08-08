@@ -190,8 +190,11 @@ tasks:
         require_uncached_step "$proof_log" "bake-sim-base-layer"
         bake_plain "$proof_log" parent-publish
         require_uncached_step "$proof_log" "bake-sim-parent-expensive"
-        # Publish leaf with parent own-cache off so mode=max embeds a full parent chain.
+        # Fat nested parent with bare base (no base cache-from) for Scenario L.
         BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
+        bake_plain "$proof_log" parent-nested-publish
+        require_uncached_step "$proof_log" "bake-sim-parent-expensive"
+        # Publish leaf with parent own-cache off so mode=max embeds a full parent chain.
         bake_plain "$proof_log" leaf
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario A ok"
@@ -339,23 +342,21 @@ tasks:
         echo "scenario K ok"
 
         echo "== Scenario L: short nested base orphans parent; bare base keeps CACHED =="
-        # Mirrors dylint leaf after nightly verify CACHED: importing short rust-base
-        # during the nested leaf bake rematerializes cargo install. Context rust-base
-        # must omit cache-from (BASE_OWN empty).
+        # Mirrors dylint after nightly verify CACHED: importing short rust-base while
+        # nesting rematerializes cargo install. Context rust-base must omit cache-from.
         BAKE_SIM_CACHE_ENABLED=1
         BAKE_SIM_CACHE_WRITE_ENABLED=
         BAKE_SIM_CACHE_FALLBACK_ENABLED=
         BAKE_SIM_CACHE_SCOPE_SUFFIX=
-        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
         BAKE_SIM_BASE_OWN_CACHE_ENABLED=1
         create_builder "nook-bake-sim-l-broken-${suffix}"
-        bake_plain "$proof_log" leaf
+        bake_plain "$proof_log" parent-nested
         require_uncached_step "$proof_log" "bake-sim-parent-expensive"
         BAKE_SIM_BASE_OWN_CACHE_ENABLED=
         create_builder "nook-bake-sim-l-fixed-${suffix}"
-        bake_plain "$proof_log" leaf
+        bake_plain "$proof_log" parent-nested
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
-        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario L ok"
 
         echo "bake-cache runtime proof passed"
