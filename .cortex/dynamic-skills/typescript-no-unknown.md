@@ -19,6 +19,14 @@ Nook web expands enforcement one green package slice at a time.
 
 Generated bindings are excluded.
 
+The domain-value rule is a staged migration target. It is mandatory for every
+new or changed domain and application API after this rule was adopted.
+
+Existing Loom and Nook web generic-value APIs are migration debt. They are not
+compliant examples or boundary exceptions. Do not add to them, widen them, or
+copy them into new code. Migrate them to concrete domain types when their
+owning slice changes.
+
 ## Problem Pattern
 
 ```ts
@@ -95,6 +103,10 @@ ESLint `@typescript-eslint/no-restricted-types` bans `unknown` in:
 
 - `agentic-ai/loom/eslint.config.js`;
 - `nook-app/nook-web/eslint.config.js`.
+
+That mechanical rule does not prove generic-value containment. Review enforces
+the domain-value rule prospectively while existing generic APIs are migrated.
+Do not claim full Loom or Nook web compliance until those APIs are removed.
 
 ```bash
 task loom:verify
