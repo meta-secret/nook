@@ -949,5 +949,12 @@ async function handleMessage(message: unknown): Promise<unknown> {
 const sessionMessageDispatcher = new ExtensionSessionMessageDispatcher({
   handleMessage,
   messagePayload,
+  decodeProviders: async (providers) => {
+    const snapshot: AuthProvidersSnapshot = {
+      providers: providers as StorageProvider[],
+      activeVaultStoreId: { state: 'unselected' },
+    }
+    return decodeStorageProviders(snapshot).providers
+  },
 })
 sessionMessageDispatcher.registerRuntimeListener()

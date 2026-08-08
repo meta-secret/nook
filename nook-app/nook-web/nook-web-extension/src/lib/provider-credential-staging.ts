@@ -3,6 +3,7 @@ import {
   type ExternalValue,
   type ExternalValueCandidate,
 } from './external-value'
+import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export enum ProviderCredentialStagingKind {
   InvalidInput = 'invalid-input',
@@ -13,17 +14,17 @@ export type ProviderCredentialStaging =
   | { kind: ProviderCredentialStagingKind.InvalidInput }
   | {
       kind: ProviderCredentialStagingKind.Staged
-      providers: MutableExternalValue[]
+      providers: StorageProvider[]
     }
 
-export type MutableExternalValue =
+type MutableExternalValue =
   | string
   | number
   | boolean
   | MutableExternalValue[]
   | MutableExternalObject
 
-export interface MutableExternalObject {
+interface MutableExternalObject {
   [key: string]: MutableExternalValue
 }
 
@@ -88,12 +89,24 @@ export async function runWithProviderCredentialCleanup<Result>(
   }
 }
 
-export function stageProviderCredentials(
-  providers: ExternalValueCandidate,
-): ProviderCredentialStaging {
-  if (!isExternalValueArray(providers)) {
+export type StageProviderCredentialsArgs = {
+  providers: ExternalValueCandidate
+  decode: (providers: object) => Promise<StorageProvider[]>
+}
+
+export async function stageProviderCredentials(
+  args: StageProviderCredentialsArgs,
+): Promise<ProviderCredentialStaging> {
+  if (!isExternalValueArray(args.providers)) {
     return { kind: ProviderCredentialStagingKind.InvalidInput }
   }
-  const staged = providers.map(cloneExternalValue)
-  return { kind: ProviderCredentialStagingKind.Staged, providers: staged }
+  const staged = args.providers.map(cloneExternalValue)
+  try {
+    const providers = await args.decode(staged)
+    return { kind: ProviderCredentialStagingKind.Staged, providers }
+  } catch {
+    return { kind: ProviderCredentialStagingKind.InvalidInput }
+  } finally {
+    scrubProviderCredentials(staged)
+  }
 }

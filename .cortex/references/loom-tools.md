@@ -41,8 +41,8 @@ and [typescript-no-unknown.md](../dynamic-skills/typescript-no-unknown.md):
   bags); field names come from field enums
 - call sites must not pass raw object literals; name a typed args value first
 - mechanically enforced by ESLint `max-params: 1`, `no-restricted-types`, and
-  `no-restricted-syntax` in `agentic-ai/loom`; review enforces generic-value
-  containment while the existing debt is migrated
+  `no-restricted-syntax` in `agentic-ai/loom`
+- review enforces generic-value containment while the existing debt is migrated
 
 Enforced by `task preflight:typescript-state` across the repository, plus
 `task loom:verify` (includes ESLint) for Loom-local rules.

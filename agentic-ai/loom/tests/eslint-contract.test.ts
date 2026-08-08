@@ -45,4 +45,26 @@ describe('Loom ESLint contracts', () => {
       'no-restricted-syntax',
     ]);
   });
+
+  test('rejects satisfies-wrapped call and constructor arguments', async () => {
+    const eslint = new ESLint();
+    const options: LintTextOptions = { filePath: 'src/cli.ts' };
+    const results = await eslint.lintText(
+      `
+        type WidgetArgs = { name: string };
+        declare function consume(args: WidgetArgs): void;
+        declare class Widget {
+          constructor(args: WidgetArgs);
+        }
+        consume({ name: 'Nook' } satisfies WidgetArgs);
+        new Widget({ name: 'Vault' } satisfies WidgetArgs);
+      `,
+      options,
+    );
+
+    expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
+      'no-restricted-syntax',
+      'no-restricted-syntax',
+    ]);
+  });
 });

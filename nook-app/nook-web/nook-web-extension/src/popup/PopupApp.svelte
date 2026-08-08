@@ -153,7 +153,7 @@
     ) {
       return translatePlain(I18N_KEYS.ExtensionSetupSessionBusyRetry)
     }
-    return caught.message
+    return translatePlain(fallbackKey)
   }
 
   function openSimpleVault(): void {

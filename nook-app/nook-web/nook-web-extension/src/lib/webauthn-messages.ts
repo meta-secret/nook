@@ -121,22 +121,101 @@ export enum WebsitePasskeyRequestParseKind {
 export type WebsitePasskeyRequestParse =
   | {
       kind: WebsitePasskeyRequestParseKind.Parsed
-      request: Record<string, ExternalValue>
+      request: WebsitePasskeyRequest
     }
   | { kind: WebsitePasskeyRequestParseKind.Rejected }
 
+export type WebsitePasskeyRequest =
+  | {
+      ceremony: WebsitePasskeyCeremony.Create
+      origin: string
+      rpId: string
+      requestJson: string
+    }
+  | {
+      ceremony: WebsitePasskeyCeremony.Get
+      origin: string
+      rpId: string
+      requestJson: string
+    }
+
+export type ParseWebsitePasskeyRequestArgs = {
+  ceremony: WebsitePasskeyCeremony
+  requestJson: string
+}
+
 export function parsedWebsitePasskeyRequest(
-  requestJson: string,
+  args: ParseWebsitePasskeyRequestArgs,
 ): WebsitePasskeyRequestParse {
   try {
-    const parsed = JSON.parse(requestJson)
-    return parsed && typeof parsed === 'object'
+    const parsed = JSON.parse(args.requestJson) as ExternalValue
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      Array.isArray(parsed) ||
+      !('origin' in parsed) ||
+      typeof parsed.origin !== 'string'
+    ) {
+      return { kind: WebsitePasskeyRequestParseKind.Rejected }
+    }
+    if (args.ceremony === WebsitePasskeyCeremony.Get) {
+      return 'rpId' in parsed && typeof parsed.rpId === 'string'
+        ? {
+            kind: WebsitePasskeyRequestParseKind.Parsed,
+            request: {
+              ceremony: WebsitePasskeyCeremony.Get,
+              origin: parsed.origin,
+              rpId: parsed.rpId,
+              requestJson: args.requestJson,
+            },
+          }
+        : { kind: WebsitePasskeyRequestParseKind.Rejected }
+    }
+    const relyingParty = 'relyingParty' in parsed ? parsed.relyingParty : false
+    return relyingParty &&
+      typeof relyingParty === 'object' &&
+      !Array.isArray(relyingParty) &&
+      'id' in relyingParty &&
+      typeof relyingParty.id === 'string'
       ? {
           kind: WebsitePasskeyRequestParseKind.Parsed,
-          request: parsed as Record<string, ExternalValue>,
+          request: {
+            ceremony: WebsitePasskeyCeremony.Create,
+            origin: parsed.origin,
+            rpId: relyingParty.id,
+            requestJson: args.requestJson,
+          },
         }
       : { kind: WebsitePasskeyRequestParseKind.Rejected }
   } catch {
     return { kind: WebsitePasskeyRequestParseKind.Rejected }
   }
+}
+
+export type WebsitePasskeyRequestJsonArgs = {
+  request: WebsitePasskeyRequest
+  credentialId?: string
+}
+
+export function websitePasskeyRequestJson(
+  args: WebsitePasskeyRequestJsonArgs,
+): string {
+  if (
+    args.request.ceremony !== WebsitePasskeyCeremony.Get ||
+    !args.credentialId
+  ) {
+    return args.request.requestJson
+  }
+  const parsed: ExternalValue = JSON.parse(args.request.requestJson)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Validated passkey request could not be reconstructed.')
+  }
+  const descriptor: PropertyDescriptor = {
+    value: [{ id: args.credentialId }],
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  }
+  Object.defineProperty(parsed, 'allowCredentials', descriptor)
+  return JSON.stringify(parsed)
 }

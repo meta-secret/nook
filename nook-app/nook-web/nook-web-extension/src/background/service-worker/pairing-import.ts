@@ -141,21 +141,23 @@ export async function importApprovedPairing(
 ): Promise<PairingImportResult> {
   try {
     const sourceProviders = message.payload.providers
-    const staging = stageProviderCredentials(sourceProviders)
+    const stagingArgs = {
+      providers: sourceProviders,
+      decode: decodeExtensionStorageProviders,
+    }
+    const stagingOperation = stageProviderCredentials(stagingArgs)
     scrubProviderCredentials(sourceProviders)
     message.payload.providers = []
+    const staging = await stagingOperation
     if (staging.kind !== ProviderCredentialStagingKind.Staged) {
       return { ok: false, reason: 'invalid-provider-payload' }
     }
     const stagedProviders = staging.providers
     try {
-      let providers: StorageProvider[]
-      try {
-        providers = await decodeExtensionStorageProviders(stagedProviders)
-      } catch {
-        return { ok: false, reason: 'invalid-provider-payload' }
+      const args: ImportDecodedApprovedPairingArgs = {
+        message,
+        providers: stagedProviders,
       }
-      const args: ImportDecodedApprovedPairingArgs = { message, providers }
       return await importDecodedApprovedPairing(args)
     } finally {
       scrubProviderCredentials(stagedProviders)

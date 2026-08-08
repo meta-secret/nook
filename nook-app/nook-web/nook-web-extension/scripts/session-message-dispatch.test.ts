@@ -3,6 +3,7 @@ import {
   ExtensionSessionMessageType,
   ExtensionSessionMessageDispatcher,
 } from '../src/offscreen/session-message-dispatch'
+import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 function messagePayload(message: unknown): Record<string, unknown> {
   if (!message || typeof message !== 'object' || !('payload' in message)) {
@@ -14,11 +15,16 @@ function messagePayload(message: unknown): Record<string, unknown> {
     : {}
 }
 
+async function decodeProviders(providers: object) {
+  return structuredClone(providers) as object as StorageProvider[]
+}
+
 describe('ExtensionSessionMessageDispatcher', () => {
   test('stages sensitive fields and clears the caller-owned payload', async () => {
     const payload: Record<string, unknown> = { pin: '123456' }
     const dispatcher = new ExtensionSessionMessageDispatcher({
       messagePayload,
+      decodeProviders,
       handleMessage: async (message) => ({
         pin: messagePayload(message).pin,
       }),
@@ -46,6 +52,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({
       messagePayload,
+      decodeProviders,
       handleMessage: async () => {
         handled = true
         return { ok: true }
@@ -72,6 +79,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     let handledGithubPat = ''
     const dispatcher = new ExtensionSessionMessageDispatcher({
       messagePayload,
+      decodeProviders,
       handleMessage: async (message) => {
         const handledProviders = messagePayload(message).providers
         if (Array.isArray(handledProviders)) {
@@ -132,6 +140,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     } as typeof chrome
     const dispatcher = new ExtensionSessionMessageDispatcher({
       messagePayload,
+      decodeProviders,
       handleMessage: async () => ({ ok: true }),
     })
     dispatcher.registerRuntimeListener()

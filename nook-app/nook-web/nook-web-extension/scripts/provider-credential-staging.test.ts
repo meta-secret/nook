@@ -6,9 +6,19 @@ import {
   scrubProviderCredentials,
   stageProviderCredentials,
 } from '../src/lib/provider-credential-staging'
+import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+
+async function stageFixture(providers: object) {
+  const args = {
+    providers,
+    decode: async (candidate: object) =>
+      structuredClone(candidate) as object as StorageProvider[],
+  }
+  return stageProviderCredentials(args)
+}
 
 describe('provider credential staging', () => {
-  test('copies provider credentials into an owned mutable buffer', () => {
+  test('copies provider credentials into decoded domain providers', async () => {
     const source = [
       {
         id: 'github',
@@ -24,7 +34,7 @@ describe('provider credential staging', () => {
       },
     ]
 
-    const staging = stageProviderCredentials(source)
+    const staging = await stageFixture(source)
 
     expect(staging.kind).toBe(ProviderCredentialStagingKind.Staged)
     if (staging.kind !== ProviderCredentialStagingKind.Staged) return
@@ -47,8 +57,8 @@ describe('provider credential staging', () => {
     expect(source[1]?.oauthFile?.refreshToken).toBe('refresh-secret')
   })
 
-  test('scrubs a staged copy when queued import work expires', () => {
-    const staging = stageProviderCredentials([
+  test('scrubs decoded providers when queued import work expires', async () => {
+    const staging = await stageFixture([
       {
         id: 'drive',
         oauthFile: {
@@ -106,7 +116,7 @@ describe('provider credential staging', () => {
     expect(providers[0]).not.toHaveProperty('githubPat')
   })
 
-  test('rejects values outside the serialized external model', () => {
+  test('rejects values outside the serialized external model', async () => {
     const source = [
       {
         id: 'github',
@@ -114,18 +124,18 @@ describe('provider credential staging', () => {
         metadata: new Date(),
       },
     ]
-    const staging = stageProviderCredentials(source)
+    const staging = await stageFixture(source)
 
     expect(staging.kind).toBe(ProviderCredentialStagingKind.InvalidInput)
     scrubProviderCredentials(source)
     expect(source[0]).not.toHaveProperty('githubPat')
   })
 
-  test('clones __proto__ as an own data property', () => {
+  test('clones __proto__ as an own data property', async () => {
     const source = JSON.parse(
       '[{"id":"github","__proto__":{"githubPat":"inherited-secret"}}]',
     )
-    const staging = stageProviderCredentials(source)
+    const staging = await stageFixture(source)
 
     expect(staging.kind).toBe(ProviderCredentialStagingKind.Staged)
     if (staging.kind !== ProviderCredentialStagingKind.Staged) return

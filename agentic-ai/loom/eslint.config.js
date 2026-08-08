@@ -50,6 +50,11 @@ export default tseslint.config(
             'Loom forbids raw object-literal call arguments (including `as` casts). Assign a named typed value first, then pass that name.',
         },
         {
+          selector: 'CallExpression > TSSatisfiesExpression > ObjectExpression',
+          message:
+            'Loom forbids raw object-literal call arguments (including `satisfies`). Assign a named typed value first, then pass that name.',
+        },
+        {
           selector: 'NewExpression > ObjectExpression',
           message:
             'Loom forbids raw object-literal constructor arguments. Assign a named typed value first, then pass that name.',
@@ -58,6 +63,11 @@ export default tseslint.config(
           selector: 'NewExpression > TSAsExpression > ObjectExpression',
           message:
             'Loom forbids raw object-literal constructor arguments (including `as` casts). Assign a named typed value first, then pass that name.',
+        },
+        {
+          selector: 'NewExpression > TSSatisfiesExpression > ObjectExpression',
+          message:
+            'Loom forbids raw object-literal constructor arguments (including `satisfies`). Assign a named typed value first, then pass that name.',
         },
       ],
       'no-unused-vars': 'off',

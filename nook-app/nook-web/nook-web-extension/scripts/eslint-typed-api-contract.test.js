@@ -299,6 +299,23 @@ describe('typed API named arguments', () => {
     expect(messages).toEqual([])
   })
 
+  test('ignores writes on paths that exit before the call', () => {
+    const messages = lint(`
+      declare const flag: boolean
+      declare function consumeCount(value: number): void
+      function run(): void {
+        let value
+        if (flag) {
+          value = { name: 'Nook' }
+          return
+        }
+        value = 1
+        consumeCount(value)
+      }
+    `)
+    expect(messages).toEqual([])
+  })
+
   test('rejects untyped object-valued parameter defaults', () => {
     const messages = lint(`
       declare function consume(value: { name: string }): void
@@ -344,6 +361,21 @@ describe('typed API named arguments', () => {
       consume(([...(flag ? [0] : []), { name: 'Nook' }])[0])
     `)
 
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
+  test('analyzes many conditional spreads without enumerating layouts', () => {
+    const spreads = Array.from(
+      { length: 30 },
+      () => '...(flag ? [0] : [])',
+    ).join(', ')
+    const messages = lint(`
+      declare const flag: boolean
+      declare function consume(value: number | { name: string }): void
+      consume(([${spreads}, { name: 'Nook' }])[0])
+    `)
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
     ])
@@ -429,6 +461,88 @@ describe('typed API named arguments', () => {
 
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
+    ])
+  })
+
+  test('resolves constant computed member keys', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      const key = 'picked'
+      consume(({ picked: { name: 'Nook' } })[key])
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
+  test('includes destructuring defaults in binding values', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      declare const source: { picked?: { name: string } }
+      const { picked: args = { name: 'Nook' } } = source
+      consume(args)
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+    ])
+  })
+
+  test('inspects named assignment results at call sites', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      const args = { name: 'Nook' }
+      let target
+      consume(target = args)
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+    ])
+  })
+
+  test('tracks object-valued for-of and callback parameters', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      for (const args of [{ name: 'Nook' }]) consume(args)
+      ;[{ name: 'Vault' }].forEach((args) => consume(args))
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+      'typedArgument',
+    ])
+  })
+
+  test('tracks writes to projected member arguments', () => {
+    const messages = lint(`
+      type Holder = { value: number | { name: string } }
+      declare function consume(value: Holder['value']): void
+      const holder: Holder = { value: 1 }
+      holder.value = { name: 'Nook' }
+      consume(holder.value)
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
+  test('inspects statically resolvable IIFE results', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      consume((() => ({ name: 'Nook' }))())
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
+  test('preserves missing-key object spread alternatives', () => {
+    const messages = lint(`
+      declare const flag: boolean
+      declare function consume(value: number | { name: string }): void
+      const spread = flag ? { args: 1 } : {}
+      consume(({ args: { name: 'Nook' }, ...spread }).args)
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
     ])
   })
 })

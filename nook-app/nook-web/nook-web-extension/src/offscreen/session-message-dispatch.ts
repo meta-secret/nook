@@ -3,6 +3,7 @@ import {
   scrubProviderCredentials,
   stageProviderCredentials,
 } from '../lib/provider-credential-staging'
+import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   SessionOperationCleanupKind,
   SessionOperationExpiryKind,
@@ -27,6 +28,7 @@ type SensitivePayloadResidency =
 type SessionMessageDispatchContext = {
   handleMessage: (message: unknown) => Promise<unknown>
   messagePayload: (message: unknown) => Record<string, unknown>
+  decodeProviders: (providers: object) => Promise<StorageProvider[]>
 }
 
 export enum ExtensionSessionMessageType {
@@ -265,20 +267,24 @@ export class ExtensionSessionMessageDispatcher {
     })
   }
 
-  private enqueueVaultImport(
+  private async enqueueVaultImport(
     message: Record<string, unknown>,
     payload: Record<string, unknown>,
   ): Promise<unknown> {
     const providerCandidate = payload.providers
-    const staging = stageProviderCredentials(
-      providerCandidate && typeof providerCandidate === 'object'
-        ? providerCandidate
-        : {},
-    )
+    const stagingArgs = {
+      providers:
+        providerCandidate && typeof providerCandidate === 'object'
+          ? providerCandidate
+          : {},
+      decode: this.context.decodeProviders,
+    }
+    const stagingOperation = stageProviderCredentials(stagingArgs)
     payload.providers = []
     if (providerCandidate && typeof providerCandidate === 'object') {
       scrubProviderCredentials(providerCandidate)
     }
+    const staging = await stagingOperation
     // Pairing imports are one-shot and may run against a cold offscreen WASM
     // runtime. Never expire them with the short interactive probe budget.
     if (staging.kind === ProviderCredentialStagingKind.InvalidInput) {
