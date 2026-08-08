@@ -203,6 +203,22 @@ Use this workflow for quality, CI, and deployment changes.
     - There is no dedicated cache-reconstruction build.
     - Failed validation publishes nothing.
 
+    #### Preflight Bake cache proofs
+
+    Static theorems live in
+    `preflight/tests/vault_app_isolation/bake_cache_proofs.rs`.
+    Extend that module when Bake cache graphs change.
+
+    - `theorem_empty_cache_overrides_banned_repo_wide`
+    - `theorem_short_parent_import_graph`
+    - `theorem_context_parents_never_write_publishers_mode_max`
+    - `theorem_github_actions_zot_parameter_matrix`
+    - `theorem_wasm_fingerprint_closed_allowlist`
+    - `theorem_wasm_and_native_publish_staging`
+
+    Runtime CACHED proof for published WASM deps remains Main
+    `verify-wasm-gha-cache.sh` on a fresh builder.
+
     #### SeaweedFS sccache
 
     - Trusted Main Rust/WASM producers receive fixed-ID SeaweedFS secret mounts.
