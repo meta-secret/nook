@@ -25,6 +25,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-dylint-v3",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-fuzz-v3",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-kani-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1",
         "nook-rust-ecosystem-policy-tools-v4",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v1",
@@ -75,6 +76,11 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "ecosystem deterministic must seed its own hosted cache"
     );
     assert!(
+        rust_toolchain_bake.contains("cache-to   = rust_ecosystem_kani_cache_to")
+            && bake_target_assigns_cache_to(rust_toolchain_bake.as_str(), "rust-kani"),
+        "Kani proofs must seed their full hosted toolchain and proof graph"
+    );
+    assert!(
         !app_bake.contains("preflight_cache_from =")
             && preflight_bake.contains("preflight_cache_from =")
             && preflight_bake.contains("preflight_cache_to =")
@@ -88,7 +94,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
-        13,
+        14,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
     assert_rust_cache_export_hardening(&bake);
