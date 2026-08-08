@@ -191,6 +191,7 @@ describe('typed API named arguments', () => {
       declare function consume(value: { name: string }): void
       const container = { picked: { name: 'Vault' } }
       consume(({ picked: { name: 'Nook' } }).picked)
+      consume(({ picked: { name: 'Nook' } })?.picked)
       consume(({ ...{ picked: { name: 'Nook' } } }).picked)
       consume(({ 0: { name: 'Nook' } })['0'])
       consume(([...[{ name: 'Nook' }]])[0])
@@ -200,6 +201,7 @@ describe('typed API named arguments', () => {
     `)
 
     expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
       'namedArgument',
       'namedArgument',
       'namedArgument',
@@ -253,6 +255,18 @@ describe('typed API named arguments', () => {
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])
+  })
+
+  test('ignores object assignments after the argument call site', () => {
+    const messages = lint(`
+      declare function consumeCount(value: number): void
+      let value
+      value = 1
+      consumeCount(value)
+      value = { name: 'Nook' }
+    `)
+
+    expect(messages).toEqual([])
   })
 
   test('accepts explicitly typed parameter arguments', () => {

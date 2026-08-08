@@ -5,6 +5,7 @@ import globals from 'globals'
 import ts from 'typescript-eslint'
 
 const transparentTypeScriptWrappers = new Set([
+  'ChainExpression',
   'TSAsExpression',
   'TSTypeAssertion',
   'TSSatisfiesExpression',
@@ -57,6 +58,15 @@ export const noRawObjectArgumentsRule = {
   },
   create(context) {
     const sourceCode = context.sourceCode
+    let activeValueFlowCutoff = Number.POSITIVE_INFINITY
+
+    function nodeStart(node) {
+      return node.range?.[0] ?? sourceCode.getIndexFromLoc(node.loc.start)
+    }
+
+    function occursBeforeActiveCallSite(node) {
+      return nodeStart(node) < activeValueFlowCutoff
+    }
 
     function declaredVariable(identifier) {
       let scope = sourceCode.getScope(identifier)
@@ -346,7 +356,8 @@ export const noRawObjectArgumentsRule = {
       if (
         definition.type !== 'Variable' ||
         definition.node.type !== 'VariableDeclarator' ||
-        !definition.node.init
+        !definition.node.init ||
+        !occursBeforeActiveCallSite(definition.node.init)
       ) {
         return []
       }
@@ -364,7 +375,12 @@ export const noRawObjectArgumentsRule = {
 
     function writeReferenceValues(args) {
       const { reference, seenVariables } = args
-      if (!reference.isWrite() || reference.init || !reference.writeExpr) {
+      if (
+        !reference.isWrite() ||
+        reference.init ||
+        !reference.writeExpr ||
+        !occursBeforeActiveCallSite(reference.identifier)
+      ) {
         return []
       }
       const patternLookup = writeBindingPattern(reference.identifier)
@@ -524,6 +540,7 @@ export const noRawObjectArgumentsRule = {
         if (
           definition.type === 'Variable' &&
           definition.node.type === 'VariableDeclarator' &&
+          occursBeforeActiveCallSite(definition.node) &&
           isObjectRestBinding(definition.node.id, definition.name)
         ) {
           return true
@@ -538,6 +555,7 @@ export const noRawObjectArgumentsRule = {
         }
       }
       for (const reference of variable.references) {
+        if (!occursBeforeActiveCallSite(reference.identifier)) continue
         const patternLookup = writeBindingPattern(reference.identifier)
         if (
           patternLookup.kind === ProjectionPathLookupKind.Found &&
@@ -653,7 +671,8 @@ export const noRawObjectArgumentsRule = {
         if (
           definition.type === 'Variable' &&
           definition.node.type === 'VariableDeclarator' &&
-          definition.node.init
+          definition.node.init &&
+          occursBeforeActiveCallSite(definition.node.init)
         ) {
           elements.push(
             ...spreadArrayElements({
@@ -664,7 +683,12 @@ export const noRawObjectArgumentsRule = {
         }
       }
       for (const reference of variable.references) {
-        if (reference.isWrite() && !reference.init && reference.writeExpr) {
+        if (
+          reference.isWrite() &&
+          !reference.init &&
+          reference.writeExpr &&
+          occursBeforeActiveCallSite(reference.identifier)
+        ) {
           elements.push(
             ...spreadArrayElements({
               expression: reference.writeExpr,
@@ -678,14 +702,19 @@ export const noRawObjectArgumentsRule = {
 
     function inspectArguments(node) {
       for (const argument of node.arguments) {
-        if (argument.type === 'SpreadElement') {
-          inspectSpreadArgument(argument)
-          continue
+        activeValueFlowCutoff = nodeStart(argument)
+        try {
+          if (argument.type === 'SpreadElement') {
+            inspectSpreadArgument(argument)
+            continue
+          }
+          if (inspectInlineObjectExpressions(argument)) {
+            continue
+          }
+          inspectNamedObjectArgument(argument)
+        } finally {
+          activeValueFlowCutoff = Number.POSITIVE_INFINITY
         }
-        if (inspectInlineObjectExpressions(argument)) {
-          continue
-        }
-        inspectNamedObjectArgument(argument)
       }
     }
     return {
