@@ -2,6 +2,8 @@ use std::{
     collections::BTreeSet, fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Command,
 };
 
+use anyhow::Result;
+
 fn repository_root() -> PathBuf {
     std::env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
@@ -28,22 +30,20 @@ fn docker_stage<'a>(dockerfile: &'a str, stage: &str) -> &'a str {
         .map_or(remainder, |(body, _)| body)
 }
 
-fn remote_batch_command(args: &[&str]) -> std::process::Output {
+fn remote_batch_command(args: &[&str]) -> std::io::Result<std::process::Output> {
     Command::new("bash")
         .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
         .args(args)
         .output()
-        .expect("remote batch helper must execute")
 }
 
-fn remote_catalog() -> BTreeSet<String> {
-    let output = remote_batch_command(&["--list"]);
+fn remote_catalog() -> Result<BTreeSet<String>> {
+    let output = remote_batch_command(&["--list"])?;
     assert!(output.status.success(), "remote catalog must be readable");
-    String::from_utf8(output.stdout)
-        .expect("remote catalog must be UTF-8")
+    Ok(String::from_utf8(output.stdout)?
         .lines()
         .map(str::to_owned)
-        .collect()
+        .collect())
 }
 
 #[test]
@@ -74,11 +74,11 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 }
 
 #[test]
-fn remote_task_batches_are_validated_and_keep_requested_order() {
-    let valid = remote_batch_command(&["--validate", "rust:test,web:check"]);
+fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
+    let valid = remote_batch_command(&["--validate", "rust:test,web:check"])?;
     assert!(valid.status.success());
     assert_eq!(
-        String::from_utf8(valid.stdout).expect("valid batch must be UTF-8"),
+        String::from_utf8(valid.stdout)?,
         "rust:test,web:check\n"
     );
 
@@ -92,82 +92,92 @@ fn remote_task_batches_are_validated_and_keep_requested_order() {
         "preflight,rust:test,rust:lint,rust:coverage,wasm:build,wasm:test,web:check,web:test,web:build",
     ] {
         assert!(
-            !remote_batch_command(&["--validate", invalid])
+            !remote_batch_command(&["--validate", invalid])?
                 .status
                 .success(),
             "invalid remote batch must be rejected: {invalid:?}"
         );
     }
 
-    let commands = remote_batch_command(&["--commands", "rust:test,web:check,wasm:test"]);
+    let commands = remote_batch_command(&["--commands", "rust:test,web:check,wasm:test"])?;
     assert!(commands.status.success());
     assert_eq!(
-        String::from_utf8(commands.stdout).expect("commands must be UTF-8"),
+        String::from_utf8(commands.stdout)?,
         "task remote:rust:test\ntask remote:web:check\ntask wasm:test\n"
     );
+    for task in remote_catalog()? {
+        let timeout = remote_batch_command(&["--timeout", &task])?;
+        assert!(timeout.status.success(), "task timeout must exist: {task}");
+        let minutes = String::from_utf8(timeout.stdout)?.trim().parse::<u8>()?;
+        assert!(
+            (15..=45).contains(&minutes),
+            "task timeout must preserve the former bounded range: {task}"
+        );
+    }
+    Ok(())
 }
 
 #[test]
-fn remote_task_batch_runs_every_selection_and_reports_failures() {
+fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
+    let fixture_nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
     let fixture = std::env::temp_dir().join(format!(
-        "nook-remote-task-batch-test-{}",
-        std::process::id()
+        "nook-remote-task-batch-test-{}-{fixture_nonce}",
+        std::process::id(),
     ));
-    let _ = fs::remove_dir_all(&fixture);
-    fs::create_dir_all(&fixture).expect("batch fixture directory must be created");
+    fs::create_dir_all(&fixture)?;
 
     let mock_task = fixture.join("task");
     fs::write(
         &mock_task,
         "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"$TASK_LOG\"\n[[ \"$1\" != \"remote:web:check\" ]]\n",
-    )
-    .expect("mock task command must be written");
-    fs::set_permissions(&mock_task, fs::Permissions::from_mode(0o755))
-        .expect("mock task command must be executable");
+    )?;
+    fs::set_permissions(&mock_task, fs::Permissions::from_mode(0o755))?;
 
     let task_log = fixture.join("task.log");
     let summary = fixture.join("summary.md");
-    let system_path = std::env::var("PATH").expect("test process must have PATH");
+    let system_path = std::env::var("PATH")?;
     let output = Command::new("bash")
         .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
         .args(["--run", "rust:test,web:check,wasm:test"])
         .env("PATH", format!("{}:{system_path}", fixture.display()))
         .env("TASK_LOG", &task_log)
         .env("GITHUB_STEP_SUMMARY", &summary)
-        .output()
-        .expect("remote batch helper must execute with mock tasks");
+        .output()?;
 
     assert!(
         !output.status.success(),
         "one failed task must fail the batch"
     );
     assert_eq!(
-        fs::read_to_string(&task_log).expect("task log must be readable"),
+        fs::read_to_string(&task_log)?,
         "remote:rust:test\nremote:web:check\nwasm:test\n",
         "a failed task must not prevent later selections from running"
     );
-    let summary = fs::read_to_string(&summary).expect("batch summary must be readable");
+    let summary = fs::read_to_string(&summary)?;
     assert!(summary.contains("| `rust:test` | passed |"));
     assert!(summary.contains("| `web:check` | failed (exit 1) |"));
     assert!(summary.contains("| `wasm:test` | passed |"));
 
-    fs::remove_dir_all(fixture).expect("batch fixture directory must be removable");
+    fs::remove_dir_all(fixture)?;
+    Ok(())
 }
 
 #[test]
-fn expensive_remote_validation_requires_the_current_base() -> std::io::Result<()> {
+fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     assert!(remote_tasks.contains("remote-task-batch.sh --requires-current-base"));
     for tasks in ["web:e2e", "rust:test,extension:e2e", "web:test,ci:pr"] {
         assert!(
-            remote_batch_command(&["--requires-current-base", tasks])
+            remote_batch_command(&["--requires-current-base", tasks])?
                 .status
                 .success(),
             "expensive batch must require current base: {tasks}"
         );
     }
     assert!(
-        !remote_batch_command(&["--requires-current-base", "rust:test,web:check"])
+        !remote_batch_command(&["--requires-current-base", "rust:test,web:check"])?
             .status
             .success(),
         "cheap batch must remain available on a stale base"
@@ -189,11 +199,11 @@ fn expensive_remote_validation_requires_the_current_base() -> std::io::Result<()
 }
 
 #[test]
-fn hosted_workflow_matches_the_taskfile_catalog() {
+fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     let workflow = read(".github/workflows/remote.yml");
     let batch_script = read(".github/scripts/remote-task-batch.sh");
-    let task_catalog = remote_catalog();
+    let task_catalog = remote_catalog()?;
 
     for task in &task_catalog {
         assert!(
@@ -273,12 +283,16 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
     ] {
         assert!(
             batch_script.contains(&format!("{requested}) echo \"task {focused}\""))
-                && batch_script.contains(&format!("{requested}) task {focused}")),
+                && batch_script.contains(&format!(
+                    "{requested}) run_with_timeout \"$timeout_minutes\" task {focused}"
+                )),
             "frequent remote task {requested} must use its narrow source-sealed route"
         );
     }
     assert_eq!(
-        batch_script.matches(") task remote:").count(),
+        batch_script
+            .matches(") run_with_timeout \"$timeout_minutes\" task remote:")
+            .count(),
         6,
         "only the mechanically reviewed focused routes may bypass their full local task"
     );
@@ -288,6 +302,7 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
     assert!(!batch_script.contains("web:check) task web:check"));
     assert!(!batch_script.contains("web:test) task web:test"));
     assert!(!batch_script.contains("extension:check) task extension:check"));
+    Ok(())
 }
 
 #[test]

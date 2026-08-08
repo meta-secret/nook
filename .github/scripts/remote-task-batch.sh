@@ -95,28 +95,48 @@ task_command() {
   esac
 }
 
+task_timeout_minutes() {
+  case "$1" in
+    preflight) echo 15 ;;
+    bake-cache:prove|rust:test|rust:lint|wasm:build|wasm:test|web:check|web:test|extension:check|hive:verify) echo 20 ;;
+    wasm:test:browser|web:build) echo 25 ;;
+    rust:coverage|web:e2e|extension:e2e) echo 30 ;;
+    check|ci:pr) echo 35 ;;
+    ci:pr:e2e) echo 45 ;;
+    *) return 2 ;;
+  esac
+}
+
+run_with_timeout() {
+  local timeout_minutes="$1"
+  shift
+  timeout --foreground "${timeout_minutes}m" "$@"
+}
+
 run_task() {
   local artifact_root="${E2E_ARTIFACT_DIR:-${TMPDIR:-/tmp}/nook-e2e-artifacts}"
+  local timeout_minutes
+  timeout_minutes="$(task_timeout_minutes "$1")"
 
   case "$1" in
-    preflight) task preflight ;;
-    bake-cache:prove) task infra:bake-cache:prove ;;
-    rust:test) task remote:rust:test ;;
-    rust:lint) task remote:rust:lint ;;
-    rust:coverage) task remote:rust:coverage ;;
-    wasm:build) task wasm:build ;;
-    wasm:test) task wasm:test ;;
-    wasm:test:browser) task wasm:test:browser ;;
-    web:check) task remote:web:check ;;
-    web:test) task remote:web:test ;;
-    web:build) task web:build ;;
-    web:e2e) E2E_ARTIFACT_DIR="$artifact_root/web-e2e" task web:test:e2e ;;
-    extension:check) task remote:extension:check ;;
-    extension:e2e) E2E_ARTIFACT_DIR="$artifact_root/extension-e2e" task extension:test:e2e ;;
-    hive:verify) task hive:verify ;;
-    check) task check ;;
-    ci:pr) task ci:pr ;;
-    ci:pr:e2e) E2E_ARTIFACT_DIR="$artifact_root/ci-pr-e2e" task ci:pr:e2e ;;
+    preflight) run_with_timeout "$timeout_minutes" task preflight ;;
+    bake-cache:prove) run_with_timeout "$timeout_minutes" task infra:bake-cache:prove ;;
+    rust:test) run_with_timeout "$timeout_minutes" task remote:rust:test ;;
+    rust:lint) run_with_timeout "$timeout_minutes" task remote:rust:lint ;;
+    rust:coverage) run_with_timeout "$timeout_minutes" task remote:rust:coverage ;;
+    wasm:build) run_with_timeout "$timeout_minutes" task wasm:build ;;
+    wasm:test) run_with_timeout "$timeout_minutes" task wasm:test ;;
+    wasm:test:browser) run_with_timeout "$timeout_minutes" task wasm:test:browser ;;
+    web:check) run_with_timeout "$timeout_minutes" task remote:web:check ;;
+    web:test) run_with_timeout "$timeout_minutes" task remote:web:test ;;
+    web:build) run_with_timeout "$timeout_minutes" task web:build ;;
+    web:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/web-e2e" task web:test:e2e ;;
+    extension:check) run_with_timeout "$timeout_minutes" task remote:extension:check ;;
+    extension:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/extension-e2e" task extension:test:e2e ;;
+    hive:verify) run_with_timeout "$timeout_minutes" task hive:verify ;;
+    check) run_with_timeout "$timeout_minutes" task check ;;
+    ci:pr) run_with_timeout "$timeout_minutes" task ci:pr ;;
+    ci:pr:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/ci-pr-e2e" task ci:pr:e2e ;;
     *) return 2 ;;
   esac
 }
@@ -187,7 +207,7 @@ run_batch() {
 }
 
 usage() {
-  echo "Usage: $0 --list | --validate <tasks> | --commands <tasks> | --requires-current-base <tasks> | --run <tasks>" >&2
+  echo "Usage: $0 --list | --validate <tasks> | --commands <tasks> | --timeout <task> | --requires-current-base <tasks> | --run <tasks>" >&2
 }
 
 case "${1:-}" in
@@ -203,6 +223,12 @@ case "${1:-}" in
     [[ $# -eq 2 ]] || { usage; exit 2; }
     normalized_tasks="$(normalize_tasks "$2")"
     print_commands "$normalized_tasks"
+    ;;
+  --timeout)
+    [[ $# -eq 2 ]] || { usage; exit 2; }
+    normalized_tasks="$(normalize_tasks "$2")"
+    [[ "$normalized_tasks" != *,* ]] || { echo "--timeout accepts one task." >&2; exit 2; }
+    task_timeout_minutes "$normalized_tasks"
     ;;
   --requires-current-base)
     [[ $# -eq 2 ]] || { usage; exit 2; }

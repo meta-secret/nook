@@ -40,6 +40,10 @@ One batch accepts at most eight tasks.
 The batch continues after a task fails. Its final status fails when any selected
 task failed.
 
+Each task keeps its former 15-to-45-minute timeout.
+
+A timed-out task fails without blocking later selections.
+
 The GitHub job summary reports every task result.
 
 The command accepts only catalog names.
