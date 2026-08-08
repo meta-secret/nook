@@ -410,8 +410,9 @@ Untrusted payloads use a named external-value model. Enforced by ESLint
 [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md).
 
 Loom and migrated Nook web TypeScript must not pass raw object literals into
-calls. Assign a named typed argument value first. Enforced by ESLint
-`no-restricted-syntax`. Full contract:
+calls. Assign a named typed argument value first. Loom uses ESLint
+`no-restricted-syntax`. Nook web uses
+`nook-typed-api/no-raw-object-arguments`. Full contract:
 [dynamic-skills/typescript-named-args.md](dynamic-skills/typescript-named-args.md).
 
 Bun must be installed. Stop and ask for Bun if `bun --version` fails.

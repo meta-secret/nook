@@ -50,4 +50,15 @@ describe('typed API named arguments', () => {
 
     expect(messages).toEqual([])
   })
+
+  test('rejects object literals expanded from an inline spread array', () => {
+    const messages = lint(`
+      declare function consume(...values: { name: string }[]): void
+      consume(...[{ name: 'Nook' }])
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
 })

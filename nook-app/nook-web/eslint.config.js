@@ -19,6 +19,11 @@ function unwrapTypeScriptExpression(expression) {
   return current
 }
 
+const VariableLookupKind = Object.freeze({
+  NotFound: 'not-found',
+  Found: 'found',
+})
+
 export const noRawObjectArgumentsRule = {
   meta: {
     type: 'problem',
@@ -37,16 +42,19 @@ export const noRawObjectArgumentsRule = {
       let scope = sourceCode.getScope(identifier)
       while (scope) {
         const variable = scope.set.get(identifier.name)
-        if (variable) return variable
+        if (variable) {
+          return { kind: VariableLookupKind.Found, variable }
+        }
         scope = scope.upper
       }
-      return undefined
+      return { kind: VariableLookupKind.NotFound }
     }
 
     function inspectNamedObjectArgument(argument) {
       if (argument.type !== 'Identifier') return
-      const variable = declaredVariable(argument)
-      if (!variable) return
+      const lookup = declaredVariable(argument)
+      if (lookup.kind === VariableLookupKind.NotFound) return
+      const { variable } = lookup
       for (const definition of variable.defs) {
         if (
           definition.type !== 'Variable' ||
@@ -64,9 +72,26 @@ export const noRawObjectArgumentsRule = {
       }
     }
 
+    function inspectSpreadArgument(argument) {
+      const expression = unwrapTypeScriptExpression(argument.argument)
+      if (expression.type !== 'ArrayExpression') return
+      for (const element of expression.elements) {
+        if (
+          element &&
+          element.type !== 'SpreadElement' &&
+          unwrapTypeScriptExpression(element).type === 'ObjectExpression'
+        ) {
+          context.report({ node: element, messageId: 'namedArgument' })
+        }
+      }
+    }
+
     function inspectArguments(node) {
       for (const argument of node.arguments) {
-        if (argument.type === 'SpreadElement') continue
+        if (argument.type === 'SpreadElement') {
+          inspectSpreadArgument(argument)
+          continue
+        }
         if (unwrapTypeScriptExpression(argument).type === 'ObjectExpression') {
           context.report({ node: argument, messageId: 'namedArgument' })
           continue
