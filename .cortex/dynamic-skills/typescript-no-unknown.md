@@ -1,18 +1,19 @@
-# TypeScript No Unknown (Loom)
+# TypeScript No Unknown
 
 ## Purpose
 
-In Loom TypeScript, do not author the `unknown` type. Untrusted input uses a
-named external-value model instead.
+Do not author the `unknown` type in linted TypeScript or Svelte code.
+
+Untrusted input uses a named external-value model instead.
 
 ## Scope
 
-Applies only to `agentic-ai/loom` authored TypeScript (`src/` and `tests/`).
+Applies to:
 
-Does not apply to:
+- `agentic-ai/loom` authored TypeScript;
+- linted `nook-app/nook-web` TypeScript and Svelte scripts.
 
-- `nook-app/nook-web` or other TypeScript packages
-- Generated bindings
+Generated bindings are excluded.
 
 ## Problem Pattern
 
@@ -43,7 +44,7 @@ export function decodeDependencyPopularityRequest(value: ExternalValue)
 
 Rules:
 
-1. Do not write the `unknown` type token in Loom sources.
+1. Do not write the `unknown` type token in enforced sources.
 2. YAML/JSON and other untrusted payloads use `ExternalValue` /
    `ExternalObject`.
 3. Narrow with `isRecord`, `isExternalNull`, `externalProperty`, and codec
@@ -57,8 +58,10 @@ Rules:
 
 ## Enforcement
 
-ESLint `@typescript-eslint/no-restricted-types` bans `unknown` in
-`agentic-ai/loom`.
+ESLint `@typescript-eslint/no-restricted-types` bans `unknown` in:
+
+- `agentic-ai/loom/eslint.config.js`;
+- `nook-app/nook-web/eslint.config.js`.
 
 ```bash
 task loom:verify
@@ -68,6 +71,7 @@ bun run --cwd agentic-ai/loom lint
 
 ## Application Checklist
 
-- [ ] Replace `unknown` parameters/fields with `ExternalValue` or a domain type.
+- [ ] Replace `unknown` parameters and fields with an external-value model or a
+      domain type.
 - [ ] Replace `Record<string, unknown>` with `ExternalObject`.
-- [ ] Keep `bun run lint` / `task loom:verify` green.
+- [ ] Keep the applicable Loom or web lint task green.

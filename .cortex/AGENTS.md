@@ -399,19 +399,19 @@ and [workflows/remote-execution.md](workflows/remote-execution.md).
 [`agentic-ai/loom`](../agentic-ai/loom/README.md) runs mechanical agent
 procedures through a strict YAML tool protocol.
 
-Loom TypeScript functions and methods take at most one parameter. Multi-value
-inputs use a typed object argument. Enforced by ESLint `max-params` in
-`agentic-ai/loom` (`task loom:verify`). Full contract:
+Loom and linted Nook web TypeScript functions and methods take at most one
+parameter. Multi-value inputs use a typed object argument. Enforced by ESLint
+`max-params`. Full contract:
 [dynamic-skills/typescript-single-parameter.md](dynamic-skills/typescript-single-parameter.md).
 
-Loom TypeScript must not author the `unknown` type. Untrusted YAML/JSON uses
-`ExternalValue` / `ExternalObject`. Enforced by ESLint
-`@typescript-eslint/no-restricted-types` in `agentic-ai/loom`. Full contract:
+Loom and linted Nook web TypeScript must not author the `unknown` type.
+Untrusted payloads use a named external-value model. Enforced by ESLint
+`@typescript-eslint/no-restricted-types`. Full contract:
 [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md).
 
-Loom TypeScript must not pass raw object literals into calls. Assign a named
-typed argument value first. Enforced by ESLint `no-restricted-syntax` in
-`agentic-ai/loom`. Full contract:
+Loom and linted Nook web TypeScript must not pass raw object literals into
+calls. Assign a named typed argument value first. Enforced by ESLint
+`no-restricted-syntax`. Full contract:
 [dynamic-skills/typescript-named-args.md](dynamic-skills/typescript-named-args.md).
 
 Bun must be installed. Stop and ask for Bun if `bun --version` fails.

@@ -4,6 +4,40 @@ import svelte from 'eslint-plugin-svelte'
 import globals from 'globals'
 import ts from 'typescript-eslint'
 
+const typedApiRules = {
+  'max-params': ['error', { max: 1 }],
+  '@typescript-eslint/no-restricted-types': [
+    'error',
+    {
+      types: {
+        unknown: {
+          message:
+            'Nook web forbids unknown. Use ExternalValue / ExternalObject for untrusted data or a concrete platform type.',
+        },
+      },
+    },
+  ],
+  'no-restricted-syntax': [
+    'error',
+    {
+      selector: 'CallExpression[arguments.length=1] > ObjectExpression',
+      message:
+        'Nook web forbids raw object-literal call arguments. Assign a named typed value first, then pass that name.',
+    },
+    {
+      selector:
+        'CallExpression[arguments.length=1] > TSAsExpression > ObjectExpression',
+      message:
+        'Nook web forbids raw object-literal call arguments, including casts. Assign a named typed value first, then pass that name.',
+    },
+    {
+      selector: 'NewExpression[arguments.length=1] > ObjectExpression',
+      message:
+        'Nook web forbids raw object-literal constructor arguments. Assign a named typed value first, then pass that name.',
+    },
+  ],
+}
+
 export default [
   {
     ignores: [
@@ -58,6 +92,7 @@ export default [
   {
     files: ['**/*.ts', '**/*.svelte.ts'],
     rules: {
+      ...typedApiRules,
       '@typescript-eslint/await-thenable': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',
@@ -77,6 +112,7 @@ export default [
   {
     files: ['**/*.svelte'],
     rules: {
+      ...typedApiRules,
       '@typescript-eslint/await-thenable': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',
