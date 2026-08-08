@@ -149,4 +149,20 @@ describe('typed API named arguments', () => {
       'namedArgument',
     ])
   })
+
+  test('rejects object literals projected into call arguments', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      const container = { picked: { name: 'Vault' } }
+      consume(({ picked: { name: 'Nook' } }).picked)
+      consume([{ name: 'Nook' }][0])
+      consume(container.picked)
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+      'namedArgument',
+      'namedArgument',
+    ])
+  })
 })
