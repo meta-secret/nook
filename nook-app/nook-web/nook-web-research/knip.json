@@ -1,6 +1,6 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
-  "include": ["files", "exports", "types", "enumMembers", "classMembers"],
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "include": ["files", "exports", "types", "enumMembers"],
   "includeEntryExports": true,
   "ignoreExportsUsedInFile": true,
   "paths": {
