@@ -63,6 +63,11 @@ import {
   type StagedRemoteStorage,
 } from "$lib/vault/state/provider.svelte";
 import type { EventOutboxTarget } from "$lib/vault/sync-operation-state";
+import {
+  translationKey,
+  translationReplacements,
+  type TranslationRequest,
+} from "$lib/vault/translation";
 
 export type VaultEditRestriction =
   | { decision: VaultEditDecision.Allowed }
@@ -325,18 +330,12 @@ export class VaultState extends VaultLifecycleState {
     return wasmResolveErrorMessage(this.translations, this.locale, message);
   }
 
-  t = ({
-    key,
-    replacements,
-  }: {
-    readonly key: string;
-    readonly replacements?: Record<string, string>;
-  }): string => {
-    const entries = replacements ? Object.entries(replacements) : [];
+  t = (request: TranslationRequest): string => {
+    const entries = Object.entries(translationReplacements(request));
     return translateWithReplacements(
       this.translations,
       this.locale,
-      key,
+      translationKey(request),
       entries.map(([name]) => name),
       entries.map(([, value]) => value),
     );

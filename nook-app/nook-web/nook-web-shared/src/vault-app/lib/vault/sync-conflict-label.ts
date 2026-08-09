@@ -4,10 +4,11 @@ import {
   type NookSyncConflictReview,
   VaultSyncConflictKind,
 } from "$app-wasm";
+import type { TranslationRequest } from "$lib/vault/translation";
 
 type SyncConflictLabelState = {
   syncConflictReview: NookSyncConflictReview;
-  t(key: string, values?: Record<string, string>): string;
+  t(request: TranslationRequest): string;
 };
 
 /** Translate the currently staged conflict without leaking UI concerns into sync actions. */
@@ -18,8 +19,9 @@ export function syncConflictLabel(state: SyncConflictLabelState): string {
     conflict.conflictKind === VaultSyncConflictKind.StoreId
       ? I18N_KEYS.AuthStorageSyncConflictStoreIdBanner
       : I18N_KEYS.AuthStorageSyncConflictBanner;
-  const tArgs: Parameters<typeof state.t>[1] = {
-    provider: conflict.providerLabel,
+  const translationRequest: TranslationRequest = {
+    key,
+    replacements: { provider: conflict.providerLabel },
   };
-  return state.t(key, tArgs);
+  return state.t(translationRequest);
 }

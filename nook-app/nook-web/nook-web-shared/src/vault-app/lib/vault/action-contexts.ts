@@ -18,6 +18,7 @@ import type { VaultSessionState } from "$lib/vault/state/session.svelte";
 import type { VaultSyncState } from "$lib/vault/state/sync.svelte";
 import type { VaultUiState } from "$lib/vault/state/ui.svelte";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
+import type { TranslationRequest } from "$lib/vault/translation";
 import type {
   AdminAccordionSection,
   SettingsAccordionSection,
@@ -83,7 +84,7 @@ type ProviderSessionFields = Pick<
 
 interface SharedStorageActionsContext {
   enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T>;
-  t(key: string, values?: Record<string, string>): string;
+  t(request: TranslationRequest): string;
 }
 
 interface ProviderActionPorts extends SharedStorageActionsContext {
@@ -351,7 +352,7 @@ export type UiActionsContext = Pick<
     refreshLocalVaultCatalog(): Promise<void>;
     stopIdleSessionTracking(): void;
     stopVaultSync(): void;
-    t(key: string, values?: Record<string, string>): string;
+    t(request: TranslationRequest): string;
     waitForStorageChain(): Promise<void>;
   };
 

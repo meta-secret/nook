@@ -93,7 +93,7 @@
   async function copyAll() {
     try {
       await navigator.clipboard.writeText(
-        JSON.stringify(newestFirst, undefined, 2),
+        JSON.stringify(newestFirst),
       )
       copied = true
       setTimeout(() => {
