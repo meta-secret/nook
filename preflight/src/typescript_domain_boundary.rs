@@ -57,9 +57,8 @@ pub(super) fn extension_persistence_policy_lines(source: &str) -> Vec<usize> {
         .lines()
         .enumerate()
         .filter_map(|(index, line)| {
-            (line.contains("databases.some(")
-                || line.contains("objectStoreNames.contains("))
-            .then_some(index + 1)
+            (line.contains("databases.some(") || line.contains("objectStoreNames.contains("))
+                .then_some(index + 1)
         })
         .collect()
 }

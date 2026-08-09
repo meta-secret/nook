@@ -21,7 +21,10 @@ import {
   type WebsitePasskeyCeremony,
   type WebsitePasskeyRequest,
 } from '../../lib/webauthn-messages'
-import type { StoredExtensionPairingGrant } from '../pairing-grants'
+import type {
+  ExtensionPairingItems,
+  StoredExtensionPairingGrant,
+} from '../pairing-grants'
 import {
   firstStoredPairingGrant,
   isStoredExtensionPairingGrant,
@@ -32,7 +35,6 @@ import {
   setupStorageKey,
 } from '../pairing-grants'
 import {
-  type ExtensionPairingItems,
   readExtensionPairingState,
   writeExtensionPairingState,
 } from '../vault-runtime'

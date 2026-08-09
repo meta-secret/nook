@@ -9,6 +9,7 @@ import {
   stageProviderCredentials,
 } from '../../lib/provider-credential-staging'
 import {
+  type ExtensionPairingItems,
   extensionPairingGrantStorageItems,
   extensionStoredPairingGrantStorageItems,
   isExtensionReadySetupState,
@@ -21,7 +22,6 @@ import {
   decodeExtensionStorageProviders,
   importExtensionEventLog,
   reconcileExtensionPairingState,
-  type ExtensionPairingItems,
 } from '../vault-runtime'
 import {
   ensureLegacyPairingMigration,
