@@ -45,8 +45,7 @@ export async function approveJoin({
       (entry) => entry.deviceId !== joinDeviceId,
     );
     state.showSuccess(state.t(I18N_KEYS.ToastsDeviceApproved));
-    const infoArgs = { joinDeviceId };
-    log.info("join request approved" + " " + JSON.stringify(infoArgs));
+    log.info("join request approved");
   } catch (e) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to approve join request.";
@@ -212,11 +211,7 @@ export async function enrollAndConnect(state: VaultState) {
     void state.hydrateMultiDeviceState();
     await state.syncFromStorage();
     state.showSuccess(state.t(I18N_KEYS.ToastsEnrolledConnected));
-    const infoArgs2 = {
-      secrets: rawRecords.length,
-      mode: state.storageMode,
-    };
-    log.info("enrolled and connected" + " " + JSON.stringify(infoArgs2));
+    log.info("enrolled and connected");
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.closeSettings();
     state.startIdleSessionTracking();

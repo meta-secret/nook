@@ -412,11 +412,7 @@ export async function loadProviders({
     state.openActiveVault(snapshot.activeVaultStoreId.value);
   }
   state.providersLoaded = true;
-  const debugArgs = {
-    count: state.providers.length,
-    localVaultPresent: state.localVaultPresent,
-  };
-  log.debug("providers loaded" + " " + JSON.stringify(debugArgs));
+  log.debug("providers loaded");
 }
 
 export async function promoteSessionVaultToLocalIfNeeded(
@@ -606,8 +602,7 @@ export function beginProviderSetup({
   state.clearExistingVaultRecoverySummary();
   state.errorMsg = "";
   state.dismissSuccess();
-  const debugArgs2 = { type, oauthPreset };
-  log.debug("provider setup started" + " " + JSON.stringify(debugArgs2));
+  log.debug("provider setup started");
 }
 
 export function beginAddProvider(state: ProviderActionsContext) {
@@ -683,9 +678,7 @@ export async function removeProvider({
     replace: true,
   };
   await state.persistProviders(persistProvidersArgs);
-
-  const infoArgs = { id, label: target.label };
-  log.info("sync provider removed" + " " + JSON.stringify(infoArgs));
+  log.info("sync provider removed");
   const tArgs: Parameters<typeof state.t>[0] = {
     key: I18N_KEYS.ToastsRemovedDevice,
     replacements: { label: target.label },
@@ -971,10 +964,6 @@ export async function ensureProviderSaved(
   state.addProviderOpen = false;
   state.applyActiveProviderCredentials();
   await state.persistProviders();
-  const infoArgs2 = {
-    type,
-    explicitAdd: isExplicitAdd,
-  };
-  log.info("sync provider saved" + " " + JSON.stringify(infoArgs2));
+  log.info("sync provider saved");
   return true;
 }

@@ -79,15 +79,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
     return;
   }
   const oauthFile = state.oauthFileDraft.config;
-  const infoArgs = {
-    preset: oauthFile.preset,
-    hasAccessToken:
-      oauthAccessToken(oauthFile).kind === OAuthAccessTokenKind.Available,
-    expiresAt: oauthFile.expiresAt,
-  };
-  log.info(
-    "oauth token freshness check started" + " " + JSON.stringify(infoArgs),
-  );
+  log.info("oauth token freshness check started");
   const providerToRefresh: ReturnType<typeof findDuplicateSyncProvider> =
     state.loginSetup.kind !== LoginSetupKind.Active && !state.addProviderOpen
       ? (() => {
@@ -116,15 +108,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
       JSON.stringify(oauthFile.accessToken) &&
     JSON.stringify(refreshed.expiresAt) === JSON.stringify(oauthFile.expiresAt)
   ) {
-    const infoArgs2 = {
-      preset: refreshed.preset,
-      expiresAt: refreshed.expiresAt,
-    };
-    log.info(
-      "oauth token freshness check kept existing token" +
-        " " +
-        JSON.stringify(infoArgs2),
-    );
+    log.info("oauth token freshness check kept existing token");
     return;
   }
   state.configureOauthFile(refreshed);
@@ -136,18 +120,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
     );
     await state.persistProviders();
   }
-  const infoArgs3 = {
-    preset: refreshed.preset,
-    expiresAt: refreshed.expiresAt,
-    ...(providerToRefresh.state === NookDuplicateSyncProviderState.Duplicate
-      ? { providerId: providerToRefresh.provider.id }
-      : {}),
-  };
-  log.info(
-    "oauth token freshness check refreshed provider" +
-      " " +
-      JSON.stringify(infoArgs3),
-  );
+  log.info("oauth token freshness check refreshed provider");
 }
 
 function bindSharedICloudTarget({
@@ -467,14 +440,7 @@ export async function signInWithICloud({
   readonly state: VaultState;
   readonly options: { clickPreparedControl?: boolean };
 }): Promise<void> {
-  const infoArgs4 = {
-    configured: isICloudOAuthConfigured(),
-    ready: state.icloudOAuthReady,
-    preparing: state.icloudOAuthPreparing,
-    busy: state.icloudOAuthBusy,
-    clickPreparedControl: options.clickPreparedControl === true,
-  };
-  log.info("iCloud sign-in requested" + " " + JSON.stringify(infoArgs4));
+  log.info("iCloud sign-in requested");
   if (!isICloudOAuthConfigured()) {
     state.errorMsg = state.t(I18N_KEYS.ProviderSetupIcloudOauthUnconfigured);
     log.warn("iCloud sign-in blocked: not configured");
@@ -499,15 +465,7 @@ export async function signInWithICloud({
       await prepareICloudSignIn(state);
     }
     if (!state.icloudOAuthReady) {
-      const warnArgs = {
-        wasReady,
-        ready: state.icloudOAuthReady,
-        preparing: state.icloudOAuthPreparing,
-      };
-      log.warn(
-        "iCloud sign-in blocked: control not ready after prepare " +
-          JSON.stringify(warnArgs),
-      );
+      log.warn("iCloud sign-in blocked: control not ready after prepare ");
       throw new Error(I18N_KEYS.ProviderSetupIcloudSignInLoading);
     }
     if (!wasReady) {
@@ -523,13 +481,7 @@ export async function signInWithICloud({
       requestPreparedICloudWebAuthTokenArgs,
     );
     const tokens = await tokenRequest;
-    const infoArgs5 = {
-      hasAccessToken: Boolean(tokens.accessToken.trim()),
-      tokenLength: tokens.accessToken.length,
-      hasAccountName:
-        tokens.accountName.kind === ICloudAccountNameKind.Available,
-    };
-    log.info("iCloud sign-in returned token" + " " + JSON.stringify(infoArgs5));
+    log.info("iCloud sign-in returned token");
     const applyICloudOAuthTokensArgs: Parameters<
       typeof applyICloudOAuthTokens
     >[0] = { state, tokens };
@@ -541,47 +493,21 @@ export async function signInWithICloud({
         ? error.message
         : I18N_KEYS.ProviderSetupIcloudSignInFailed,
     );
-    const warnArgs2 = { error: state.errorMsg };
-    log.warn("iCloud sign-in failed" + " " + JSON.stringify(warnArgs2));
+    log.warn("iCloud sign-in failed");
   } finally {
     state.icloudOAuthBusy = false;
-    const infoArgs6 = {
-      ready: state.icloudOAuthReady,
-      preparing: state.icloudOAuthPreparing,
-      busy: state.icloudOAuthBusy,
-      hasOauthFile: state.oauthFileDraft.kind === OAuthFileDraftKind.Configured,
-      oauthPreset:
-        state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-          ? state.oauthFileDraft.config.preset
-          : "",
-      storageMode: state.storageMode,
-    };
-    log.info("iCloud sign-in finished" + " " + JSON.stringify(infoArgs6));
+    log.info("iCloud sign-in finished");
   }
 }
 
 export async function prepareICloudSignIn(state: VaultState): Promise<void> {
-  const infoArgs7 = {
-    ready: state.icloudOAuthReady,
-    preparing: state.icloudOAuthPreparing,
-    configured: isICloudOAuthConfigured(),
-  };
-  log.info(
-    "iCloud sign-in prepare requested" + " " + JSON.stringify(infoArgs7),
-  );
+  log.info("iCloud sign-in prepare requested");
   if (
     state.icloudOAuthReady ||
     state.icloudOAuthPreparing ||
     !isICloudOAuthConfigured()
   ) {
-    const infoArgs8 = {
-      ready: state.icloudOAuthReady,
-      preparing: state.icloudOAuthPreparing,
-      configured: isICloudOAuthConfigured(),
-    };
-    log.info(
-      "iCloud sign-in prepare skipped" + " " + JSON.stringify(infoArgs8),
-    );
+    log.info("iCloud sign-in prepare skipped");
     return;
   }
   const support = resolveCurrentOAuthOriginSupport(BrowserOAuthProvider.ICloud);
@@ -597,13 +523,7 @@ export async function prepareICloudSignIn(state: VaultState): Promise<void> {
   try {
     await prepareICloudSignInControl();
     state.icloudOAuthReady = true;
-    const infoArgs9 = {
-      ready: state.icloudOAuthReady,
-      origin: support.origin,
-    };
-    log.info(
-      "iCloud sign-in prepare completed" + " " + JSON.stringify(infoArgs9),
-    );
+    log.info("iCloud sign-in prepare completed");
   } catch (error) {
     state.icloudOAuthReady = false;
     state.errorMsg = state.t(
@@ -612,8 +532,7 @@ export async function prepareICloudSignIn(state: VaultState): Promise<void> {
         ? error.message
         : I18N_KEYS.ProviderSetupIcloudSignInFailed,
     );
-    const warnArgs3 = { error: state.errorMsg };
-    log.warn("iCloud sign-in prepare failed" + " " + JSON.stringify(warnArgs3));
+    log.warn("iCloud sign-in prepare failed");
   } finally {
     state.icloudOAuthPreparing = false;
   }
@@ -658,25 +577,7 @@ async function applyICloudOAuthTokens({
       ? resolvedFileName.fileName
       : DEFAULT_DRIVE_BACKUP_NAME;
   const accessCredential = oauthAccessToken(oauthFile);
-  const infoArgs10 = {
-    storageMode: state.storageMode,
-    oauthSetupPreset:
-      state.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
-        ? state.oauthSetupSelection.preset
-        : "",
-    hasOauthFile: true,
-    fileName: oauthFile.fileName,
-    hasAccessToken: accessCredential.kind === OAuthAccessTokenKind.Available,
-    tokenLength:
-      accessCredential.kind === OAuthAccessTokenKind.Available
-        ? accessCredential.token.length
-        : 0,
-  };
-  log.info(
-    "iCloud oauth tokens applied to vault state" +
-      " " +
-      JSON.stringify(infoArgs10),
-  );
+  log.info("iCloud oauth tokens applied to vault state");
 }
 
 function ensureSupportedOAuthOrigin({
@@ -688,19 +589,10 @@ function ensureSupportedOAuthOrigin({
 }): boolean {
   const support = resolveCurrentOAuthOriginSupport(provider);
   if (support.supported) {
-    const infoArgs11 = {
-      provider,
-      origin: support.origin,
-    };
-    log.info("oauth origin supported" + " " + JSON.stringify(infoArgs11));
+    log.info("oauth origin supported");
     return true;
   }
-  const warnArgs4 = {
-    provider,
-    origin: support.origin,
-    reason: support.reason,
-  };
-  log.warn("oauth origin unsupported" + " " + JSON.stringify(warnArgs4));
+  log.warn("oauth origin unsupported");
   const tArgs4: Parameters<typeof state.t>[0] = {
     key:
       support.reason === OAuthOriginUnsupportedReason.CloudflarePrPreview

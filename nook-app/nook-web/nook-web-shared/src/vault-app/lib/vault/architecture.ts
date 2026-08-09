@@ -54,14 +54,7 @@ export function refreshVaultArchitectureFromManager(
     architecture = state.requireManager()
       .vaultArchitecture as VaultArchitecture;
   } catch (error) {
-    const warnArgs = {
-      error: error instanceof Error ? error.message : String(error),
-    };
-    log.warn(
-      "vault architecture metadata could not be loaded" +
-        " " +
-        JSON.stringify(warnArgs),
-    );
+    log.warn("vault architecture metadata could not be loaded");
     return;
   }
   const replaceVaultArchitectureArgs2: Parameters<

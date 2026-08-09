@@ -257,13 +257,7 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
     await state.refreshPasswordEntriesList();
     void state.hydrateMultiDeviceState();
     state.markVaultUnlocked();
-    const infoArgs = {
-      mode: state.storageMode,
-      secrets: rawRecords.length,
-    };
-    log.info(
-      "vault unlocked with sentinel quorum" + " " + JSON.stringify(infoArgs),
-    );
+    log.info("vault unlocked with sentinel quorum");
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.loginPasswordPrompt = false;
     state.showSuccess(state.t(I18N_KEYS.ToastsVaultUnlocked));

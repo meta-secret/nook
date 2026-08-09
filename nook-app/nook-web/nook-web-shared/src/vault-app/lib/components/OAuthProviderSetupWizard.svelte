@@ -214,18 +214,7 @@
       ) {
         return
       }
-      const infoArgs = {
-        eventPhase: event.eventPhase,
-        ...(event.target instanceof Element
-          ? { targetTag: event.target.tagName }
-          : {}),
-        ...(event.currentTarget instanceof Element
-          ? { currentTargetTag: event.currentTarget.tagName }
-          : {}),
-        isTrusted: event.isTrusted,
-        defaultPrevented: event.defaultPrevented,
-      };
-      log.info('CloudKit native sign-in click observed' + " " + JSON.stringify(infoArgs))
+      log.info('CloudKit native sign-in click observed')
       if (deferredSignInPending) {
         log.info('CloudKit native sign-in click ignored: wait already pending')
         return
@@ -239,12 +228,7 @@
           vault.icloudOAuthBusy ||
           oauthSignedIn
         ) {
-          const infoArgs2 = {
-            ready: vault.icloudOAuthReady,
-            busy: vault.icloudOAuthBusy,
-            signedIn: oauthSignedIn,
-          };
-          log.info('CloudKit native sign-in deferred wait skipped' + " " + JSON.stringify(infoArgs2))
+          log.info('CloudKit native sign-in deferred wait skipped')
           return
         }
         log.info('CloudKit native sign-in deferred wait started')

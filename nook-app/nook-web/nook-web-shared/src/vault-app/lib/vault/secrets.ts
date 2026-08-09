@@ -96,20 +96,13 @@ export async function loadDb(state: VaultState) {
     let storageConnection: StorageConnection = {
       kind: StorageConnectionKind.Configured,
     };
-    const debugArgs = {
-      accessStatus,
-      localVaultPresent: state.localVaultPresent,
-      joinEnrollmentPrompt: state.joinEnrollmentPrompt,
-      syncProviders: state.syncProviders.length,
-    };
-    log.debug("loadDb assess" + " " + JSON.stringify(debugArgs));
+    log.debug("loadDb assess");
 
     if (
       accessStatus === VaultAccessStatus.NeedsEnrollment ||
       accessStatus === VaultAccessStatus.JoinPending
     ) {
-      const infoArgs = { accessStatus };
-      log.info("loadDb waiting on enrollment" + " " + JSON.stringify(infoArgs));
+      log.info("loadDb waiting on enrollment");
     }
 
     // A joiner device keeps a pre-approval projection in the local cache
@@ -125,8 +118,7 @@ export async function loadDb(state: VaultState) {
     ) {
       const providerArgs = state.providerWasmArgs(state.syncProviders[0]!);
       const remoteStatus = await state.assessVaultConnectStatus(providerArgs);
-      const debugArgs2 = { remoteStatus };
-      log.debug("loadDb provider re-assess" + " " + JSON.stringify(debugArgs2));
+      log.debug("loadDb provider re-assess");
       if (remoteStatus === VaultAccessStatus.Ready) {
         accessStatus = VaultAccessStatus.Ready;
         storageConnection = {
@@ -176,10 +168,7 @@ export async function loadDb(state: VaultState) {
         storageConnection.kind === StorageConnectionKind.RemoteRecovery
           ? storageConnection.args
           : state.connectStorageArgs();
-      const debugArgs3 = {
-        mode: connectArgs[0],
-      };
-      log.debug("loadDb connect" + " " + JSON.stringify(debugArgs3));
+      log.debug("loadDb connect");
       const connectPromise =
         state.remoteVaultRecoveryState === RemoteVaultRecoveryState.ConnectFresh
           ? state.requireManager().connect_fresh(...connectArgs)
@@ -219,12 +208,7 @@ export async function loadDb(state: VaultState) {
     await state.refreshPasswordEntriesList();
     await state.hydrateMultiDeviceState();
     state.markVaultUnlocked();
-    const infoArgs2 = {
-      mode: state.storageMode,
-      secrets: state.secretTotal,
-      accessStatus,
-    };
-    log.info("vault connected" + " " + JSON.stringify(infoArgs2));
+    log.info("vault connected");
     if (state.storageMode === "local") {
       state.showSuccess(state.t(I18N_KEYS.ToastsLocalLoaded));
     } else if (state.storageMode === "local-folder") {
@@ -306,14 +290,7 @@ async function runPasswordManagerImport({
     const result = await state.enqueueStorage(() => importFromManager(manager));
     await state.runFanOutSyncAfterLocalSave();
     await state.refreshSecretsFromSession();
-    const infoArgs3 = {
-      imported: result.imported,
-      skippedUnsupported: result.skippedUnsupported,
-      skippedDuplicates: result.skippedDuplicates,
-    };
-    log.info(
-      `${sourceName} import completed` + " " + JSON.stringify(infoArgs3),
-    );
+    log.info(`${sourceName} import completed`);
     const tArgs: Parameters<typeof state.t>[0] = {
       key: successKey,
       replacements: { count: String(result.imported) },
@@ -376,8 +353,7 @@ export async function handleAddSecret({
       freeSecretRecords(rawRecords);
     });
     await state.refreshSecretsFromSession();
-    const infoArgs4 = { id, type };
-    log.info("secret added" + " " + JSON.stringify(infoArgs4));
+    log.info("secret added");
     state.showSuccess(state.t(I18N_KEYS.ToastsSecretSaved));
     await state.runFanOutSyncAfterLocalSave();
     await state.refreshSecretsFromSession();
@@ -619,8 +595,7 @@ export async function handleDeleteSecret({
     committed = true;
     deletedRecord?.free();
     await state.refreshSecretsFromSession();
-    const infoArgs5 = { id };
-    log.info("secret deleted" + " " + JSON.stringify(infoArgs5));
+    log.info("secret deleted");
     state.showSuccess(state.t(I18N_KEYS.ToastsSecretDeleted));
     // Match add/replace: await fan-out so the delete event is pushed before
     // callers observe remote state (and so an empty provider list is not a
@@ -659,8 +634,7 @@ export async function handleReplaceSecret({
       freeSecretRecords(rawRecords);
     });
     await state.refreshSecretsFromSession();
-    const infoArgs6 = { oldId, newId, type };
-    log.info("secret replaced" + " " + JSON.stringify(infoArgs6));
+    log.info("secret replaced");
     await state.runFanOutSyncAfterLocalSave();
     state.showSuccess(state.t(I18N_KEYS.ToastsItemUpdated));
   } catch (e) {

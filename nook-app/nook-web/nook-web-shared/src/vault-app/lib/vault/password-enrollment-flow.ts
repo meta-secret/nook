@@ -510,8 +510,7 @@ export async function issueEnrollmentCode({
   // wait for any *already in-flight* `&mut self` storage future to release its
   // borrow before verify runs, or wasm-bindgen's borrow detector trips.
   state.isPasswordBusy = true;
-  const infoArgs3 = { providerId };
-  log.info("enrollment code issue started" + " " + JSON.stringify(infoArgs3));
+  log.info("enrollment code issue started");
   try {
     // Wait for the queued wasm op to settle. We deliberately do NOT
     // `resetStorageChain()` on timeout: abandoning an in-flight `&mut self`
@@ -560,8 +559,7 @@ export async function issueEnrollmentCode({
     if (!verified) {
       throw new Error("Password does not match the vault.");
     }
-    const infoArgs4 = { providerId };
-    log.info("enrollment password verified" + " " + JSON.stringify(infoArgs4));
+    log.info("enrollment password verified");
     const selectedProvider = state.providers.find((p) => p.id === providerId);
     if (!selectedProvider) {
       throw new Error("Choose a sync provider.");
@@ -587,12 +585,7 @@ export async function issueEnrollmentCode({
       usesSharedProviderGrant &&
       isConfiguredOAuthFile(selectedOauth) &&
       selectedOauth.config.preset === "icloud";
-    const infoArgs5 = {
-      providerId,
-      providerType: selectedProvider.type,
-      usesSharedProviderGrant,
-    };
-    log.info("enrollment provider selected" + " " + JSON.stringify(infoArgs5));
+    log.info("enrollment provider selected");
     if (usesSharedProviderGrant && !usesSharedICloud && !sharedJoinerIdentity) {
       throw new Error(
         state.t(I18N_KEYS.ErrorsValidationSharedJoinerIdentityRequired),
@@ -629,10 +622,7 @@ export async function issueEnrollmentCode({
           throw new Error(state.t(I18N_KEYS.ErrorsSharedProviderOauthRequired));
         }
         const accessCredential = oauthAccessToken(selectedOauth.config);
-        const infoArgs6 = { providerId };
-        log.info(
-          "shared enrollment grant started" + " " + JSON.stringify(infoArgs6),
-        );
+        log.info("shared enrollment grant started");
         const fileName = oauthFileName(selectedOauth.config);
         const storageTargetHint =
           fileName.kind === OAuthFileNameKind.Resolved
@@ -661,13 +651,7 @@ export async function issueEnrollmentCode({
         const grant = await prepareSharedStorageGrant(
           prepareSharedStorageGrantArgs,
         );
-        const infoArgs7 = {
-          providerId,
-          grantKind: grant.kind,
-        };
-        log.info(
-          "shared enrollment grant prepared" + " " + JSON.stringify(infoArgs7),
-        );
+        log.info("shared enrollment grant prepared");
         if (grant.kind === "unsupported") {
           throw new Error(state.t(grant.reasonKey));
         }
@@ -780,10 +764,7 @@ export async function issueEnrollmentCode({
             enrollmentProviderRow,
             state.vaultArchitecture,
           );
-    const infoArgs8 = { providerId };
-    log.info(
-      "enrollment provider payload prepared" + " " + JSON.stringify(infoArgs8),
-    );
+    log.info("enrollment provider payload prepared");
     let catalogVaultName: CatalogVaultLabel = {
       kind: CatalogVaultLabelKind.Missing,
     };
@@ -810,11 +791,7 @@ export async function issueEnrollmentCode({
             label: manager.vaultName,
           }
         : catalogVaultName;
-    const infoArgs9 = {
-      providerId,
-      hasVaultName: vaultName.kind === CatalogVaultLabelKind.Present,
-    };
-    log.info("enrollment vault name loaded" + " " + JSON.stringify(infoArgs9));
+    log.info("enrollment vault name loaded");
     const payload =
       vaultName.kind === CatalogVaultLabelKind.Present
         ? NookEnrollmentIssueInput.named(
@@ -837,8 +814,7 @@ export async function issueEnrollmentCode({
         : encryptUnlabeledEnrollmentPayload(payload, password);
     state.enrollmentCode = code;
     state.beginEnrollmentEntry(entryId);
-    const infoArgs10 = { providerId };
-    log.info("enrollment code issued" + " " + JSON.stringify(infoArgs10));
+    log.info("enrollment code issued");
     return code;
   } finally {
     state.isPasswordBusy = false;
