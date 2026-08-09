@@ -417,15 +417,6 @@ jobs:
       - name: Test cache telemetry collector
         run: node --test .github/scripts/cache-telemetry.test.cjs
 
-      - name: Enforce the UI demo contract
-        id: ui-demo-contract
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          git fetch origin "$BASE_SHA" --depth=1
-          bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
-
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
@@ -478,6 +469,66 @@ jobs:
         run: task ci:main:publish-web-cache
         env:
           GHA_CACHE_WRITE_ENABLED: "1"
+
+      - name: Extract preview dist to the host
+        run: task docker:extract:dist
+        env:
+          CI: true
+
+      - name: Upload preview dist handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-web-dist-${{ github.run_id }}
+          path: |
+            nook-app/nook-web/nook-web-app/dist
+            nook-app/nook-web/nook-vault-simple/dist
+            nook-app/nook-web/nook-vault-sentinel/dist
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
+  ui-demo:
+    name: Headless UI demo
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e')
+    needs: [validation-request, wasm]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Enforce the UI demo contract
+        id: ui-demo-contract
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$BASE_SHA" --depth=1
+          bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
+
+      - name: Docker setup
+        if: steps.ui-demo-contract.outputs.required == 'true'
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          cache-write: "false"
+          main-cache-only: "true"
+          isolated-cache-write: "true"
+
+      - name: Download built WASM handoff
+        if: steps.ui-demo-contract.outputs.required == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-wasm-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
 
       - name: Record headless UI demo
         id: record-ui-demo
@@ -557,25 +608,8 @@ jobs:
               })
             }
 
-      - name: Extract preview dist to the host
-        run: task docker:extract:dist
-        env:
-          CI: true
-
-      - name: Upload preview dist handoff
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr-web-dist-${{ github.run_id }}
-          path: |
-            nook-app/nook-web/nook-web-app/dist
-            nook-app/nook-web/nook-vault-simple/dist
-            nook-app/nook-web/nook-vault-sentinel/dist
-          retention-days: 1
-          if-no-files-found: error
-          overwrite: true
-
       - name: Preserve cache telemetry
-        if: always()
+        if: always() && steps.ui-demo-contract.outputs.required == 'true'
         uses: ./.github/actions/nook-cache-telemetry
 
 
@@ -587,7 +621,7 @@ jobs:
       github.event.label.name == 'ci:full-e2e')
     # Native must succeed before the merge gate check can go green. A green
     # preview with a failed Native job previously allowed false readiness.
-    needs: [rust, verify, wasm-node-test]
+    needs: [rust, verify, wasm-node-test, ui-demo]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

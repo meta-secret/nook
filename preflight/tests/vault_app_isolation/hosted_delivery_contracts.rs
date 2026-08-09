@@ -74,6 +74,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "name: WASM build and artifact",
         "name: WASM Node tests",
         "name: Web verification",
+        "name: Headless UI demo",
         "name: Verify and preview",
         "name: Rust coverage report",
         "uses: ./.github/workflows/pr-coverage.yml",
@@ -109,7 +110,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
         "needs: [validation-request, wasm]",
-        "needs: [rust, verify, wasm-node-test]",
+        "needs: [rust, verify, wasm-node-test, ui-demo]",
         "name: Download built WASM handoff",
         "name: Upload preview dist handoff",
         "NOOK_HOST_PAGES_DEPLOY",
@@ -150,6 +151,8 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     let native_job = section(&pr, "  rust:\n", "  wasm:\n");
     let wasm_job = section(&pr, "  wasm:\n", "  wasm-node-test:\n");
     let wasm_node_job = section(&pr, "  wasm-node-test:\n", "  verify:\n");
+    let verify_job = section(&pr, "  verify:\n", "  ui-demo:\n");
+    let ui_demo_job = section(&pr, "  ui-demo:\n", "  preview:\n");
     assert!(
         wasm_job.contains("task ci:pr:wasm")
             && !wasm_job.contains("task ci:wasm:node-test")
@@ -179,6 +182,16 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && native_job.contains("if: steps.trusted-native.outputs.found == 'true'")
             && native_job.contains("task preflight"),
         "native PR validation must use sccache, isolate BuildKit writes, and run explicit preflight only for an exact handoff"
+    );
+    assert!(
+        !verify_job.contains("Record headless UI demo")
+            && ui_demo_job.contains("needs: [validation-request, wasm]")
+            && ui_demo_job.contains("Enforce the UI demo contract")
+            && ui_demo_job.contains("task ci:pr:ui-demo")
+            && ui_demo_job.contains("name: pr-wasm-${{ github.run_id }}")
+            && ui_demo_job.contains("isolated-cache-write: \"true\"")
+            && ui_demo_job.contains("steps.ui-demo-contract.outputs.required == 'true'"),
+        "changed PR demos must consume the WASM handoff in a sibling job without serializing web verification"
     );
     assert!(
         !pr.contains("actions/cache/"),

@@ -670,7 +670,10 @@ PR consumer behavior:
 - `Web verification` depends on the WASM build producer through `needs`.
 - It downloads the clippy-clean WASM package with `actions/download-artifact`.
 - `WASM Node tests` can finish in parallel with web verification.
-- `Verify and preview` depends on Native Rust, web verification, and WASM Node tests.
+- The conditional `Headless UI demo` job also starts from the WASM handoff.
+- It overlaps web verification on UI-changing pull requests.
+- `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
+- It also waits for the UI demo job.
 - It deploys from the exported host dist handoff.
 - Rust coverage reporting is a separate native-dependent job.
 - That job downloads the completed handoff directly.
@@ -707,9 +710,9 @@ Local on-demand images:
 - The CI-only web target runs format, lint, check, and tests as a sibling of the production web/extension build.
 - It joins both successful branches into the same sealed image.
 - Verification is not serialized after the build.
-- `web-e2e-base` adds Playwright Chromium only for main/manual e2e.
+- `web-e2e-base` adds Playwright Chromium for Main, manual e2e, and changed PR demos.
 - It uses a separate `:web-e2e-*` cache.
-- PR cache imports never pull the browser layer.
+- Browser-free PR web solves never pull the browser layer.
 - Neither lineage contains Cargo or `target/`.
 
 **Common task image** (`nook-web:local`):
@@ -1014,17 +1017,18 @@ Write vs read identity:
 **CI Docker builds**
 
 - PR CI builds verified WASM once and uploads its small generated package.
-- Parallel preview and `ci:full-e2e` consumers download that artifact.
+- Parallel web, UI-demo, and `ci:full-e2e` consumers download that artifact.
 - Independent web and extension e2e consumers each build only the Chromium web image from that artifact.
 - They run on separate hosted runners.
-- The extension job owns the shared e2e cache export.
-- The web job restores it without duplicating that upload.
+- Pull-request browser jobs write only isolated exact-head cache refs.
 - Changed PR demo specs and Main's complete demo project retain 90-day Actions artifacts.
 - The 10 largest WebMs per run are best-effort published into one private Linear `nook-ui` issue per PR.
 - Main serializes native → WASM → web cache-writing lanes.
 - Each lane verifies read-only and then exports its already-solved local graph.
 - Isolated no-import WASM dependency publication runs separately.
-- Parallel web e2e / extension e2e / UI demo consumers rebuild from the verified WASM handoff and remain read-only.
+- Parallel Main browser consumers build and test read-only from the verified WASM handoff.
+- The successful Main UI-demo lane publishes its warm `nook-web-e2e-v1` graph.
+- This is the trusted browser-image seed for later pull requests.
 - Deploy waits on web verify + web e2e only.
 - Main also publishes commit-keyed Rust coverage.
 - A dedicated PR reporting job reuses trusted exact-commit artifacts when available.
