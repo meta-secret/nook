@@ -672,8 +672,9 @@ PR consumer behavior:
 - `WASM Node tests` can finish in parallel with web verification.
 - The conditional `Headless UI demo` job also starts from the WASM handoff.
 - It overlaps web verification on UI-changing pull requests.
-- It solves the browser image read-only, then publishes the isolated exact-head
-  graph through a dedicated cache-only target after Playwright succeeds.
+- It solves the browser image without writing cache state.
+- Playwright must succeed before cache publication starts.
+- A dedicated cache-only target publishes the isolated exact-head browser graph.
 - `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
 - It also waits for the UI demo job.
 - It deploys from the exported host dist handoff.
