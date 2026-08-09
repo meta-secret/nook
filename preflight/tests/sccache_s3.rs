@@ -28,6 +28,7 @@ fn hive_materializes_test_and_clippy_dependency_graphs_in_parallel() -> anyhow::
         "COPY --from=clippy-dependencies /opt/nook/hive-clippy-dependencies",
         "cargo test --locked --workspace --no-run",
         "cargo clippy --locked --workspace --all-targets -- -D warnings",
+        "COPY graph.yaml graph.yaml",
     ] {
         assert!(
             dockerfile.contains(required),

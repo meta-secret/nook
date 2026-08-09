@@ -153,6 +153,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
     && install -D /dev/null /opt/nook/hive-clippy-dependencies
 
 FROM clippy-dependencies AS check-source
+COPY graph.yaml graph.yaml
 COPY lace/src lace/src
 COPY hive/src hive/src
 COPY hive/tests hive/tests
@@ -175,6 +176,7 @@ COPY hive/tests hive/tests
 RUN cargo fmt --all
 
 FROM test-dependencies AS test-source
+COPY graph.yaml graph.yaml
 COPY lace/src lace/src
 COPY hive/src hive/src
 COPY hive/tests hive/tests
