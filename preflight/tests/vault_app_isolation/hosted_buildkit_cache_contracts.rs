@@ -268,8 +268,7 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && pr[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && pr[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && ui_demo_verify < ui_demo_publish
-            && ui_demo[ui_demo_verify..ui_demo_publish]
-                .contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && ui_demo[ui_demo_verify..ui_demo_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && ui_demo[ui_demo_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\""),
         "PR producers must verify read-only, then publish from warm builders with writes enabled"
     );
@@ -336,8 +335,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && web[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && web[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && ui_demo_verify < ui_demo_publish
-            && ui_demo[ui_demo_verify..ui_demo_publish]
-                .contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && ui_demo[ui_demo_verify..ui_demo_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && ui_demo[ui_demo_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && !main.contains("\n  publish-cache:\n")
             && !main.contains("task ci:main:warm-gha-cache")
