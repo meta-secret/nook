@@ -9,8 +9,9 @@ import {
 import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 async function stageFixture(providers: object) {
-  const args = {
-    providers,
+  const providerCandidates = providers as StorageProvider[]
+  const args: Parameters<typeof stageProviderCredentials>[0] = {
+    providers: providerCandidates,
     decode: async (candidate: object) =>
       structuredClone(candidate) as object as StorageProvider[],
   }
