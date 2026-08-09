@@ -104,9 +104,8 @@ export function isAuthenticatorPickerQueryMessage(
   ) {
     return false
   }
-  const payload = message.payload as 
-    AuthenticatorPickerQueryMessage['payload']
-  
+  const payload = message.payload as AuthenticatorPickerQueryMessage['payload']
+
   return (
     isNonEmptyString(payload.requestId) &&
     typeof payload.query === 'string' &&
@@ -129,9 +128,8 @@ export function isAuthenticatorPickerSelectMessage(
   ) {
     return false
   }
-  const payload = message.payload as 
-    AuthenticatorPickerSelectMessage['payload']
-  
+  const payload = message.payload as AuthenticatorPickerSelectMessage['payload']
+
   return (
     isNonEmptyString(payload.requestId) &&
     isNonEmptyString(payload.vaultStoreId) &&
@@ -154,9 +152,8 @@ export function isAuthenticatorPickerCancelMessage(
   ) {
     return false
   }
-  const payload = message.payload as 
-    AuthenticatorPickerCancelMessage['payload']
-  
+  const payload = message.payload as AuthenticatorPickerCancelMessage['payload']
+
   return isNonEmptyString(payload.requestId)
 }
 
@@ -175,9 +172,9 @@ export function isWebsiteAuthenticatorSelectedMessage(
   ) {
     return false
   }
-  const payload = message.payload as 
-    WebsiteAuthenticatorSelectedMessage['payload']
-  
+  const payload =
+    message.payload as WebsiteAuthenticatorSelectedMessage['payload']
+
   if (
     !isNonEmptyString(payload.origin) ||
     !isNonEmptyString(payload.requestId) ||
@@ -186,9 +183,9 @@ export function isWebsiteAuthenticatorSelectedMessage(
   ) {
     return false
   }
-  const account = payload.account as 
-    WebsiteAuthenticatorSelectedMessage['payload']['account']
-  
+  const account =
+    payload.account as WebsiteAuthenticatorSelectedMessage['payload']['account']
+
   return (
     isNonEmptyString(account.vaultStoreId) && isNonEmptyString(account.secretId)
   )
@@ -198,9 +195,9 @@ export function isWebsiteAuthenticatorCanceledMessage(
   message: object,
 ): message is WebsiteAuthenticatorCanceledMessage {
   if (!hasOriginPayload(message)) return false
-  const payload = message.payload as 
-    WebsiteAuthenticatorCanceledMessage['payload']
-  
+  const payload =
+    message.payload as WebsiteAuthenticatorCanceledMessage['payload']
+
   return (
     message.type ===
       WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled &&

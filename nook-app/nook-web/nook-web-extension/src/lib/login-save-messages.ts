@@ -102,9 +102,8 @@ export function isWebsiteLoginSaveOfferMessage(
   ) {
     return false
   }
-  const payload = message.payload as 
-    WebsiteLoginSaveOfferMessage['payload']
-  
+  const payload = message.payload as WebsiteLoginSaveOfferMessage['payload']
+
   return (
     typeof payload.username === 'string' &&
     payload.username.trim().length > 0 &&
@@ -133,9 +132,8 @@ export function isWebsiteLoginSaveCommitMessage(
   ) {
     return false
   }
-  const payload = message.payload as 
-    WebsiteLoginSaveCommitMessage['payload']
-  
+  const payload = message.payload as WebsiteLoginSaveCommitMessage['payload']
+
   return (
     typeof payload.offerId === 'string' &&
     payload.offerId.length > 0 &&
@@ -153,8 +151,7 @@ export function isWebsiteLoginSaveDismissMessage(
   ) {
     return false
   }
-  const payload = message.payload as 
-    WebsiteLoginSaveDismissMessage['payload']
-  
+  const payload = message.payload as WebsiteLoginSaveDismissMessage['payload']
+
   return typeof payload.offerId === 'string' && payload.offerId.length > 0
 }

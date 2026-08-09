@@ -79,9 +79,8 @@ export function isWebsiteLoginOptionsMessage(
   ) {
     return false
   }
-  const payload = message.payload as 
-    WebsiteLoginOptionsMessage['payload']
-  
+  const payload = message.payload as WebsiteLoginOptionsMessage['payload']
+
   return typeof payload.origin === 'string' && payload.origin.length > 0
 }
 
@@ -105,9 +104,8 @@ export function isWebsiteAuthenticatorFillMessage(
   ) {
     return false
   }
-  const payload = message.payload as 
-    WebsiteAuthenticatorFillMessage['payload']
-  
+  const payload = message.payload as WebsiteAuthenticatorFillMessage['payload']
+
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
@@ -130,9 +128,8 @@ export function isWebsiteLoginRevealMessage(
   ) {
     return false
   }
-  const payload = message.payload as 
-    WebsiteLoginRevealMessage['payload']
-  
+  const payload = message.payload as WebsiteLoginRevealMessage['payload']
+
   return (
     typeof payload.origin === 'string' &&
     payload.origin.length > 0 &&

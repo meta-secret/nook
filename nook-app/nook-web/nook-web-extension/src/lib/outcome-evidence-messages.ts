@@ -43,9 +43,9 @@ export function isAuthenticationOutcomeClassifyMessage(
   ) {
     return false
   }
-  const payload = message.payload as 
-    AuthenticationOutcomeClassifyMessage['payload']
-  
+  const payload =
+    message.payload as AuthenticationOutcomeClassifyMessage['payload']
+
   const observation = payload.observation
   if (!observation || typeof observation !== 'object') return false
   const view = observation as AuthenticationOutcomeObservationView

@@ -166,9 +166,7 @@ type PublicKeyCredentialWithPrf = PublicKeyCredential & {
   }
 }
 
-function runtimeMessage(
-  message: ExtensionRuntimeRequest,
-): Promise<object> {
+function runtimeMessage(message: ExtensionRuntimeRequest): Promise<object> {
   // Promise owns this callback's resolve and reject signature.
   // eslint-disable-next-line max-params
   return new Promise((resolve, reject) => {
