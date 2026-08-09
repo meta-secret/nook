@@ -142,7 +142,9 @@ type PublicKeyCredentialWithPrf = PublicKeyCredential & {
   }
 }
 
-function runtimeMessage(message: ExtensionRuntimeRequest): Promise<ExtensionSessionResponse> {
+function runtimeMessage(
+  message: ExtensionRuntimeRequest,
+): Promise<ExtensionSessionResponse> {
   // Promise owns this callback's resolve and reject signature.
   // eslint-disable-next-line max-params
   return new Promise((resolve, reject) => {
@@ -186,7 +188,9 @@ async function sessionResponse(
   return response
 }
 
-function deviceProtectionStatus(value: number | undefined): DeviceProtectionStatus {
+function deviceProtectionStatus(
+  value: number | undefined,
+): DeviceProtectionStatus {
   if (typeof value !== 'number') {
     throw new Error('Unsupported extension device protection status.')
   }

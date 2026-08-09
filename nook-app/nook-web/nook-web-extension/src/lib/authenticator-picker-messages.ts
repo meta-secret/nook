@@ -104,7 +104,9 @@ export function isAuthenticatorPickerQueryMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<AuthenticatorPickerQueryMessage['payload']>
+  const payload = message.payload as Partial<
+    AuthenticatorPickerQueryMessage['payload']
+  >
   return (
     isNonEmptyString(payload.requestId) &&
     typeof payload.query === 'string' &&
@@ -127,7 +129,9 @@ export function isAuthenticatorPickerSelectMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<AuthenticatorPickerSelectMessage['payload']>
+  const payload = message.payload as Partial<
+    AuthenticatorPickerSelectMessage['payload']
+  >
   return (
     isNonEmptyString(payload.requestId) &&
     isNonEmptyString(payload.vaultStoreId) &&
@@ -150,7 +154,9 @@ export function isAuthenticatorPickerCancelMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<AuthenticatorPickerCancelMessage['payload']>
+  const payload = message.payload as Partial<
+    AuthenticatorPickerCancelMessage['payload']
+  >
   return isNonEmptyString(payload.requestId)
 }
 

@@ -101,7 +101,9 @@ export function isWebsiteLoginSaveOfferMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<WebsiteLoginSaveOfferMessage['payload']>
+  const payload = message.payload as Partial<
+    WebsiteLoginSaveOfferMessage['payload']
+  >
   return (
     typeof payload.username === 'string' &&
     payload.username.trim().length > 0 &&
@@ -130,11 +132,14 @@ export function isWebsiteLoginSaveCommitMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<WebsiteLoginSaveCommitMessage['payload']>
+  const payload = message.payload as Partial<
+    WebsiteLoginSaveCommitMessage['payload']
+  >
   return (
     typeof payload.offerId === 'string' &&
     payload.offerId.length > 0 &&
-    Boolean(payload.evidence) && isOutcomeObservation(payload.evidence)
+    Boolean(payload.evidence) &&
+    isOutcomeObservation(payload.evidence)
   )
 }
 
@@ -148,6 +153,8 @@ export function isWebsiteLoginSaveDismissMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<WebsiteLoginSaveDismissMessage['payload']>
+  const payload = message.payload as Partial<
+    WebsiteLoginSaveDismissMessage['payload']
+  >
   return typeof payload.offerId === 'string' && payload.offerId.length > 0
 }

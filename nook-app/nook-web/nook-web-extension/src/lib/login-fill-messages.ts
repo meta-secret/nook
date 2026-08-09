@@ -79,7 +79,9 @@ export function isWebsiteLoginOptionsMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<WebsiteLoginOptionsMessage['payload']>
+  const payload = message.payload as Partial<
+    WebsiteLoginOptionsMessage['payload']
+  >
   return typeof payload.origin === 'string' && payload.origin.length > 0
 }
 
@@ -128,7 +130,9 @@ export function isWebsiteLoginRevealMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<WebsiteLoginRevealMessage['payload']>
+  const payload = message.payload as Partial<
+    WebsiteLoginRevealMessage['payload']
+  >
   return (
     typeof payload.origin === 'string' &&
     payload.origin.length > 0 &&

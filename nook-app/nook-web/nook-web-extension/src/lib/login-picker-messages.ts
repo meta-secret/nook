@@ -125,7 +125,9 @@ export function isLoginPickerSelectMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<LoginPickerSelectMessage['payload']>
+  const payload = message.payload as Partial<
+    LoginPickerSelectMessage['payload']
+  >
   return (
     isNonEmptyString(payload.requestId) &&
     isNonEmptyString(payload.vaultStoreId) &&
@@ -147,7 +149,9 @@ export function isLoginPickerCancelMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<LoginPickerCancelMessage['payload']>
+  const payload = message.payload as Partial<
+    LoginPickerCancelMessage['payload']
+  >
   return isNonEmptyString(payload.requestId)
 }
 
