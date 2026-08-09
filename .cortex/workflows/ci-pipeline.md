@@ -374,8 +374,9 @@ and extension e2e on separate hosted runners through
 `task ci:pr:e2e:web:artifacts` and
 `task ci:pr:e2e:extension:artifacts`. Both tasks use the same bounded BuildKit
 health/recovery wrapper as Main. Pull-request browser consumers publish only
-isolated exact-head cache refs. Trusted Main owns the shared browser-image
-seed. Adding
+isolated exact-head cache refs. Each consumer probes its exact browser ref.
+An available exact ref is imported alone. A missing exact ref falls back to
+the browser-image seed owned by trusted Main. Adding
 or removing the label retriggers PR Actions for the current head. Because the
 readiness audit already requires the exact-head `PR` workflow to succeed, a
 labeled PR cannot be ready while this job is queued, red, or cancelled.

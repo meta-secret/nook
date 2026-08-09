@@ -1024,6 +1024,9 @@ Write vs read identity:
 - Independent web and extension e2e consumers each build only the Chromium web image from that artifact.
 - They run on separate hosted runners.
 - Pull-request browser jobs write only isolated exact-head cache refs.
+- Each browser job probes its isolated exact-head ref before solving.
+- An available exact browser ref is imported alone.
+- A missing exact browser ref falls back to the trusted Main seed.
 - Changed PR demo specs and Main's complete demo project retain 90-day Actions artifacts.
 - The 10 largest WebMs per run are best-effort published into one private Linear `nook-ui` issue per PR.
 - Main serializes native → WASM → web cache-writing lanes.
