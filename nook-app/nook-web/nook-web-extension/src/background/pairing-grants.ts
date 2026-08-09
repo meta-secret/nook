@@ -57,9 +57,13 @@ type TransportJsonResult =
 
 function transportJson(value: unknown): TransportJsonResult {
   try {
+    const json = JSON.stringify(value)
+    if (typeof json !== 'string') {
+      return { kind: TransportJsonResultKind.SerializationFailed }
+    }
     return {
       kind: TransportJsonResultKind.Serialized,
-      json: JSON.stringify(value),
+      json,
     }
   } catch {
     return { kind: TransportJsonResultKind.SerializationFailed }
