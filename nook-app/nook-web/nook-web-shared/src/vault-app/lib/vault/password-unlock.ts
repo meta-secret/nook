@@ -66,11 +66,11 @@ export async function addVaultPassword({
       return manager.addVaultPassword(trimmedLabel, password);
     });
     await state.refreshPasswordEntriesList();
-    const infoArgs: Parameters<typeof log.info>[1] = {
+    const infoArgs = {
       hadPasswords,
       label: label.trim(),
     };
-    log.info("vault password added", infoArgs);
+    log.info("vault password added" + " " + JSON.stringify(infoArgs));
     state.showSuccess(
       hadPasswords
         ? state.t(I18N_KEYS.ToastsPasswordAddedRotate)
@@ -224,12 +224,12 @@ export async function unlockWithPassword({
       void state.hydrateMultiDeviceState();
     }
     state.markVaultUnlocked();
-    const infoArgs2: Parameters<typeof log.info>[1] = {
+    const infoArgs2 = {
       mode: state.storageMode,
       secrets: state.secretTotal,
       entryId,
     };
-    log.info("vault unlocked with password", infoArgs2);
+    log.info("vault unlocked with password" + " " + JSON.stringify(infoArgs2));
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.loginPasswordPrompt = false;
     state.showSuccess(state.t(I18N_KEYS.ToastsVaultUnlocked));
@@ -241,8 +241,8 @@ export async function unlockWithPassword({
     state.isAuthenticated = false;
     const message =
       e instanceof Error ? e.message : "Failed to unlock with password.";
-    const warnArgs: Parameters<typeof log.warn>[1] = { error: message };
-    log.warn("vault password unlock failed", warnArgs);
+    const warnArgs = { error: message };
+    log.warn("vault password unlock failed" + " " + JSON.stringify(warnArgs));
     if (isSentinelPasswordUnlockForbiddenError(runtimeFailure(e))) {
       state.errorMsg = state.t(
         I18N_KEYS.ArchitectureModesSentinelPasswordForbidden,

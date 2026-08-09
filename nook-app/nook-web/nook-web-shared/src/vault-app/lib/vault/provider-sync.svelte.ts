@@ -81,12 +81,12 @@ async function stageProviderStoreMismatchConflict({
   } finally {
     revision.free();
   }
-  const warnArgs: Parameters<typeof log.warn>[1] = {
+  const warnArgs = {
     provider: provider.label,
     localStoreId,
     remoteStoreId,
   };
-  log.warn("provider store mismatch staged", warnArgs);
+  log.warn("provider store mismatch staged" + " " + JSON.stringify(warnArgs));
   return true;
 }
 
@@ -131,11 +131,15 @@ function stageLocalFolderMultipleVaultsIssue({
   readonly state: SyncActionsContext;
   readonly issue: NookLocalFolderHealth;
 }) {
-  const warnArgs6: Parameters<typeof log.warn>[1] = {
+  const warnArgs6 = {
     provider: issue.providerLabel,
     storeIds: issue.storeIds,
   };
-  log.warn("local folder contains multiple vault logs", warnArgs6);
+  log.warn(
+    "local folder contains multiple vault logs" +
+      " " +
+      JSON.stringify(warnArgs6),
+  );
   state.reportLocalFolderMultipleVaults(issue);
 }
 
@@ -170,13 +174,13 @@ export async function syncProviderById({
   if (!options?.quiet) {
     state.errorMsg = "";
   }
-  const debugArgs3: Parameters<typeof log.debug>[1] = {
+  const debugArgs3 = {
     providerId,
     type: provider.type,
     label: provider.label,
     quiet: options?.quiet ?? false,
   };
-  log.debug("provider sync started", debugArgs3);
+  log.debug("provider sync started" + " " + JSON.stringify(debugArgs3));
   try {
     if (provider.type === "local-folder") {
       const syncLocalFolderProviderArgs4: Parameters<
@@ -185,11 +189,11 @@ export async function syncProviderById({
       await syncLocalFolderProvider(syncLocalFolderProviderArgs4);
       await state.refreshSecretsFromSession();
       await state.refreshReplacementConflicts();
-      const debugArgs4: Parameters<typeof log.debug>[1] = {
+      const debugArgs4 = {
         providerId,
         type: provider.type,
       };
-      log.debug("provider sync finished", debugArgs4);
+      log.debug("provider sync finished" + " " + JSON.stringify(debugArgs4));
       return;
     }
 
@@ -227,11 +231,11 @@ export async function syncProviderById({
       revision: NookProviderSyncRevision.untracked(),
     };
     await state.updateProviderSyncMetadata(metadataRequest);
-    const debugArgs5: Parameters<typeof log.debug>[1] = {
+    const debugArgs5 = {
       providerId,
       type: provider.type,
     };
-    log.debug("provider sync finished", debugArgs5);
+    log.debug("provider sync finished" + " " + JSON.stringify(debugArgs5));
     return;
   } catch (e) {
     const syncErrorArgs4: Parameters<typeof syncError>[0] = {

@@ -94,7 +94,7 @@ function logPasskeyCeremony({
   readonly message: string;
   readonly data: ReturnType<typeof sanitizedPasskeyCeremonyData>;
 }): void {
-  log.warn(message, data);
+  log.warn(message + " " + JSON.stringify(data));
 }
 
 export async function setupDeviceProtection({
@@ -286,10 +286,12 @@ export async function setupPinDeviceProtection({
     >[0] = { state, mode: DeviceProtectionStatus.Pin };
     await finishAuthorizedInitialization(finishAuthorizedInitializationArgs3);
   } catch (error) {
-    const warnArgs: Parameters<typeof log.warn>[1] = {
+    const warnArgs = {
       outcome: "pin_setup_failed",
     };
-    log.warn("PIN device protection setup failed", warnArgs);
+    log.warn(
+      "PIN device protection setup failed" + " " + JSON.stringify(warnArgs),
+    );
     const lockFailedAuthorizationArgs3: Parameters<
       typeof lockFailedAuthorization
     >[0] = { state, deviceIdentityUnlocked };
@@ -369,10 +371,12 @@ export async function unlockPinDeviceProtection({
     >[0] = { state, mode: DeviceProtectionStatus.Pin };
     await finishAuthorizedInitialization(finishAuthorizedInitializationArgs5);
   } catch (error) {
-    const warnArgs2: Parameters<typeof log.warn>[1] = {
+    const warnArgs2 = {
       outcome: "pin_unlock_failed",
     };
-    log.warn("PIN device protection unlock failed", warnArgs2);
+    log.warn(
+      "PIN device protection unlock failed" + " " + JSON.stringify(warnArgs2),
+    );
     const lockFailedAuthorizationArgs5: Parameters<
       typeof lockFailedAuthorization
     >[0] = { state, deviceIdentityUnlocked };
@@ -406,10 +410,14 @@ export async function resetDeviceProtectionForRecovery(
     state.storageMode = LOCAL_PROVIDER_TYPE;
     state.showSuccess(state.t(I18N_KEYS.DeviceProtectionRecoveryComplete));
   } catch (error) {
-    const warnArgs3: Parameters<typeof log.warn>[1] = {
+    const warnArgs3 = {
       outcome: "recovery_reset_failed",
     };
-    log.warn("device protection recovery reset failed", warnArgs3);
+    log.warn(
+      "device protection recovery reset failed" +
+        " " +
+        JSON.stringify(warnArgs3),
+    );
     state.errorMsg =
       error instanceof Error ? error.message : "Recovery reset failed.";
   } finally {

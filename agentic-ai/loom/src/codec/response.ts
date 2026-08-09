@@ -3,6 +3,8 @@ import type {
   UntrustedYamlNode,
 } from '../lib/guards.ts';
 import { sealUntrustedYamlMap } from '../lib/guards.ts';
+import { asUntrustedYamlNode } from '../lib/guards.ts';
+import type { LoomCommandResult } from '../tools/registry.ts';
 import {
   BlueprintExplanationKind,
   type BlueprintExplanation,
@@ -31,6 +33,13 @@ type SuccessResponseBase = {
   readonly ok: true;
   readonly result: UntrustedYamlNode;
 };
+
+/** Serialize a concrete command report only at the outbound YAML boundary. */
+export function commandResultToResponseValue(
+  result: LoomCommandResult,
+): UntrustedYamlNode {
+  return asUntrustedYamlNode(result as UntrustedYamlNode);
+}
 
 export type SuccessResponse =
   | (SuccessResponseBase & {

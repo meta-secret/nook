@@ -57,9 +57,9 @@ tasks:
 
   web:research:install:
     desc: Install web-research catalog dependencies.
-    dir: '{{.ROOT_DIR}}/nook-app/nook-web/nook-web-research'
     cmds:
-      - bun install --frozen-lockfile
+      - bun install --cwd "{{.ROOT_DIR}}/nook-app/nook-web/nook-web-app" --frozen-lockfile
+      - bun install --cwd "{{.ROOT_DIR}}/nook-app/nook-web/nook-web-research" --frozen-lockfile
 
   web:research:verify:
     desc: Format-check, check, build, and e2e the web-research catalog.

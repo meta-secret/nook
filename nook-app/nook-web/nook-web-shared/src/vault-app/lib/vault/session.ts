@@ -57,10 +57,10 @@ export function markVaultUnlocked(state: SessionActionsContext): void {
   state.awaitingJoinApproval = false;
   state.sessionExpiredByIdle = false;
   state.refreshVaultArchitectureFromManager();
-  const infoArgs: Parameters<typeof log.info>[1] = {
+  const infoArgs = {
     secrets: state.secrets.length,
   };
-  log.info("vault session unlocked", infoArgs);
+  log.info("vault session unlocked" + " " + JSON.stringify(infoArgs));
   void state.publishExtensionEventLogUpdate();
 }
 

@@ -20,7 +20,6 @@ export const untrustedInputAdapterFiles = [
   'nook-web-shared/src/vault-app/lib/auth/passkey-device-protection.ts',
   'nook-web-shared/src/vault-app/lib/extension/connect.ts',
   'nook-web-shared/src/vault-app/lib/extension/install.ts',
-  'nook-web-shared/src/vault-app/lib/runtime/log.ts',
 ]
 
 export const typedApiRules = {

@@ -189,6 +189,7 @@
           onAddDevice={() => {
             const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
               section: SettingsSection.Onboard,
+              accordion: SettingsAccordionSection.Devices,
             }
             vault.openSettings(settingsRequest)
           }}
@@ -375,6 +376,7 @@
         leaveSecretsEditor()
         const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
           section: SettingsSection.DevicesAccess,
+          accordion: SettingsAccordionSection.Devices,
         }
         vault.openSettings(settingsRequest)
       }}
@@ -382,6 +384,7 @@
         leaveSecretsEditor()
         const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
           section: SettingsSection.Onboard,
+          accordion: SettingsAccordionSection.Devices,
         }
         vault.openSettings(settingsRequest)
       }}
@@ -391,7 +394,11 @@
       }}
       onSelectSettings={() => {
         leaveSecretsEditor()
-        vault.openSettings()
+        const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
+          section: SettingsSection.Storage,
+          accordion: SettingsAccordionSection.Devices,
+        }
+        vault.openSettings(settingsRequest)
       }}
     />
   </div>

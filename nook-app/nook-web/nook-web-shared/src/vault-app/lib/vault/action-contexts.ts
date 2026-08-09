@@ -363,8 +363,8 @@ export type UiActionsContext = Pick<
   };
 
 export type OpenSettingsArgs = {
-  section?: SettingsSection;
-  accordion?: SettingsAccordionSection;
+  readonly section: SettingsSection;
+  readonly accordion: SettingsAccordionSection;
 };
 
 export type OpenAdminAccordion = AdminAccordionSection;

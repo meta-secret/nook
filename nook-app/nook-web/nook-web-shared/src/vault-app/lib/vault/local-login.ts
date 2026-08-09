@@ -90,8 +90,8 @@ export async function switchToVault({
     await chooseLoginVault(chooseLoginVaultArgs);
     state.isVerifying = true;
     await state.lockDeviceProtection();
-    const infoArgs: Parameters<typeof log.info>[1] = { storeId: target };
-    log.info("vault switch completed", infoArgs);
+    const infoArgs = { storeId: target };
+    log.info("vault switch completed" + " " + JSON.stringify(infoArgs));
   } catch (error) {
     state.errorMsg =
       error instanceof Error ? error.message : "Failed to switch vaults.";
@@ -255,12 +255,14 @@ export async function createLocalVaultWithDeviceKeys({
     await state.ensureProviderSaved();
     await state.syncActiveVaultStoreIdToAuth();
     await state.hydrateMultiDeviceState();
-    const infoArgs2: Parameters<typeof log.info>[1] = {
+    const infoArgs2 = {
       secrets: rawRecords.length,
       deviceId: state.deviceId,
       storeId,
     };
-    log.info("local vault created (device keys)", infoArgs2);
+    log.info(
+      "local vault created (device keys)" + " " + JSON.stringify(infoArgs2),
+    );
     state.showSuccess(state.t(I18N_KEYS.ToastsLocalLoaded));
     state.startIdleSessionTracking();
     state.startVaultSync();
@@ -270,8 +272,8 @@ export async function createLocalVaultWithDeviceKeys({
       e instanceof Error
         ? e.message
         : state.t(I18N_KEYS.ErrorsVaultCreationFailed);
-    const warnArgs: Parameters<typeof log.warn>[1] = { error: message };
-    log.warn("local vault create failed", warnArgs);
+    const warnArgs = { error: message };
+    log.warn("local vault create failed" + " " + JSON.stringify(warnArgs));
     state.errorMsg = message;
   } finally {
     state.isVerifying = false;
@@ -342,13 +344,17 @@ export async function renameLocalVaultLabel({
         await setLocalVaultLabel(trimmedStoreId, previousLabel.label);
         await refreshLocalVaultCatalog(state);
       } catch (rollbackError) {
-        const warnArgs2: Parameters<typeof log.warn>[1] = {
+        const warnArgs2 = {
           error:
             rollbackError instanceof Error
               ? rollbackError.message
               : String(rollbackError),
         };
-        log.warn("local vault rename rollback failed", warnArgs2);
+        log.warn(
+          "local vault rename rollback failed" +
+            " " +
+            JSON.stringify(warnArgs2),
+        );
       }
     }
     state.errorMsg =

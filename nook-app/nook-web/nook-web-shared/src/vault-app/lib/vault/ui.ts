@@ -151,8 +151,8 @@ function workspaceRouteForSettings(section: SettingsSection): WorkspaceRoute {
 
 export function openSettings({
   state,
-  section = SettingsSection.Storage,
-  accordion = SettingsAccordionSection.Devices,
+  section,
+  accordion,
 }: OpenSettingsRequest): void {
   const applySettingsArgs4: Parameters<typeof applySettings>[0] = {
     state,

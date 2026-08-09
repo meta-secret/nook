@@ -32,7 +32,6 @@ import {
   nookLogGetLevel,
   nookLogInit,
   nookLogSetLevel,
-  nookLogWithData,
 } from "$app-wasm";
 export enum LogLevel {
   Error = "error",
@@ -56,6 +55,7 @@ export type RuntimeFailure = {
 };
 
 /** Narrow an untrusted thrown value at the logging adapter boundary. */
+// eslint-disable-next-line @typescript-eslint/no-restricted-types -- This exact thrown-value boundary narrows immediately.
 export function runtimeFailure(cause: unknown): RuntimeFailure {
   return cause instanceof Error
     ? {
@@ -66,6 +66,7 @@ export function runtimeFailure(cause: unknown): RuntimeFailure {
 }
 
 /** Normalize an untrusted thrown value before application code stores it. */
+// eslint-disable-next-line @typescript-eslint/no-restricted-types -- This exact thrown-value boundary narrows immediately.
 export function runtimeError(cause: unknown): Error {
   return cause instanceof Error ? cause : new Error(String(cause));
 }
@@ -83,25 +84,11 @@ const FLUSH_INTERVAL_MS = 250;
 /** Cap the pre-init replay queue so early crash loops can't grow unbounded. */
 const PRE_INIT_QUEUE_MAX = 1000;
 
-enum PendingRecordKind {
-  MessageOnly = "message-only",
-  Structured = "structured",
-}
-
-type PendingRecord =
-  | {
-      kind: PendingRecordKind.MessageOnly;
-      level: LogLevel;
-      scope: string;
-      message: string;
-    }
-  | {
-      kind: PendingRecordKind.Structured;
-      level: LogLevel;
-      scope: string;
-      message: string;
-      data: string;
-    };
+type PendingRecord = {
+  readonly level: LogLevel;
+  readonly scope: string;
+  readonly message: string;
+};
 
 let wasmReady = false;
 enum LogFlushScheduleKind {
@@ -127,6 +114,7 @@ const preInitQueue: PendingRecord[] = [];
  * paths (`createLogger`, the `console.*` patch, Rust via `__nookConsole.echo`)
  * print through these so patching never causes recursion or double-persist.
  */
+// eslint-disable-next-line @typescript-eslint/no-restricted-types -- Console owns this variadic ingress boundary.
 type ConsoleMethod = (...args: unknown[]) => void;
 enum ConsoleMethodKind {
   Error = "error",
@@ -162,7 +150,7 @@ type LogLevelParse =
   | { kind: LogLevelParseKind.Invalid }
   | { kind: LogLevelParseKind.Valid; level: LogLevel };
 
-function parseLevel(raw: unknown): LogLevelParse {
+function parseLevel(raw: string): LogLevelParse {
   if (typeof raw !== "string") return { kind: LogLevelParseKind.Invalid };
   const value = raw.trim().toLowerCase();
   return LOG_LEVELS.includes(value as LogLevel)
@@ -172,36 +160,15 @@ function parseLevel(raw: unknown): LogLevelParse {
 
 function initialLevel(): LogLevel {
   if ("localStorage" in globalThis) {
-    const stored = parseLevel(
-      localStorage.getItem("nook_log_level")?.valueOf(),
-    );
+    const stored = parseLevel(localStorage.getItem("nook_log_level") ?? "");
     if (stored.kind === LogLevelParseKind.Valid) return stored.level;
   }
-  const env = parseLevel(import.meta.env?.VITE_LOG_LEVEL);
+  const env = parseLevel(import.meta.env?.VITE_LOG_LEVEL ?? "");
   return env.kind === LogLevelParseKind.Valid ? env.level : LogLevel.Info;
 }
 
-enum LogPayloadKind {
-  MessageOnly = "message-only",
-  Structured = "structured",
-}
-
-type LogPayload =
-  | { kind: LogPayloadKind.MessageOnly }
-  | { kind: LogPayloadKind.Structured; data: unknown };
-
-function serializeData(
-  payload: Extract<LogPayload, { data: unknown }>,
-): string {
-  const { data } = payload;
-  try {
-    return typeof data === "string" ? data : JSON.stringify(data);
-  } catch {
-    return String(data);
-  }
-}
-
 /** Render arbitrary `console.*` arguments into a single persisted message. */
+// eslint-disable-next-line @typescript-eslint/no-restricted-types -- Console arguments are stringified immediately at ingress.
 function stringifyArgs(args: unknown[]): string {
   return args
     .map((arg) => {
@@ -318,7 +285,6 @@ function persistMessage({
   if (!wasmReady) {
     if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
       const pushArgs: Parameters<typeof preInitQueue.push>[0] = {
-        kind: PendingRecordKind.MessageOnly,
         level,
         scope,
         message,
@@ -334,80 +300,32 @@ function persistMessage({
   }
 }
 
-function persistStructured({
-  level,
-  scope,
-  message,
-  serialized,
-}: {
-  readonly level: LogLevel;
-  readonly scope: string;
-  readonly message: string;
-  readonly serialized: string;
-}) {
-  if (!wasmReady) {
-    if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
-      const pushArgs2: Parameters<typeof preInitQueue.push>[0] = {
-        kind: PendingRecordKind.Structured,
-        level,
-        scope,
-        message,
-        data: serialized,
-      };
-      preInitQueue.push(pushArgs2);
-    }
-    return;
-  }
-  try {
-    nookLogWithData(level, scope, message, serialized);
-  } catch {
-    // Logging must never break the app.
-  }
-}
-
 /** `createLogger` path: gate, echo once via originals, then persist. */
 function record({
   level,
   scope,
   message,
-  payload,
 }: {
   readonly level: LogLevel;
   readonly scope: string;
   readonly message: string;
-  readonly payload: LogPayload;
 }) {
   if (!isEnabled(level)) return;
-  if (payload.kind === LogPayloadKind.MessageOnly) {
-    const echoArgs: Parameters<typeof echo>[0] = {
-      level,
-      text: `[${scope}] ${message}`,
-    };
-    echo(echoArgs);
-    const persistMessageArgs: Parameters<typeof persistMessage>[0] = {
-      level,
-      scope,
-      message,
-    };
-    persistMessage(persistMessageArgs);
-    return;
-  }
-  const serialized = serializeData(payload);
   const echoArgs2: Parameters<typeof echo>[0] = {
     level,
-    text: `[${scope}] ${message} ${serialized}`,
+    text: `[${scope}] ${message}`,
   };
   echo(echoArgs2);
-  const persistStructuredArgs: Parameters<typeof persistStructured>[0] = {
+  const persistMessageArgs: Parameters<typeof persistMessage>[0] = {
     level,
     scope,
     message,
-    serialized,
   };
-  persistStructured(persistStructuredArgs);
+  persistMessage(persistMessageArgs);
 }
 
 /** True for browser-extension scripts we should not persist as app errors. */
+// eslint-disable-next-line @typescript-eslint/no-restricted-types -- Browser error sources are narrowed immediately at ingress.
 export function isIgnoredErrorSource(source: unknown): boolean {
   if (typeof source !== "string") return false;
   const value = source.trim();
@@ -443,18 +361,15 @@ function captureDiagnostic({
   level,
   scope,
   message,
-  data,
 }: {
   readonly level: LogLevel;
   readonly scope: string;
   readonly message: string;
-  readonly data: unknown;
 }) {
   const recordArgs: Parameters<typeof record>[0] = {
     level,
     scope,
     message,
-    payload: { kind: LogPayloadKind.Structured, data },
   };
   record(recordArgs);
 }
@@ -467,15 +382,7 @@ function installGlobalErrorHandlers() {
     const captureDiagnosticArgs: Parameters<typeof captureDiagnostic>[0] = {
       level: LogLevel.Error,
       scope: "window",
-      message: event.message || "Uncaught error",
-      data: {
-        source: event.filename,
-        line: event.lineno,
-        column: event.colno,
-        ...(event.error instanceof Error && event.error.stack
-          ? { stack: event.error.stack }
-          : {}),
-      },
+      message: `${event.message || "Uncaught error"} source=${sanitizeLogUrl(event.filename)} line=${event.lineno} column=${event.colno}${event.error instanceof Error && event.error.stack ? ` stack=${event.error.stack}` : ""}`,
     };
     captureDiagnostic(captureDiagnosticArgs);
   });
@@ -491,11 +398,7 @@ function installGlobalErrorHandlers() {
     const captureDiagnosticArgs2: Parameters<typeof captureDiagnostic>[0] = {
       level: LogLevel.Error,
       scope: "unhandledrejection",
-      message,
-      data:
-        reason instanceof Error && reason.stack
-          ? { stack: reason.stack }
-          : { reason: "stack-not-available" },
+      message: `${message}${reason instanceof Error && reason.stack ? ` stack=${reason.stack}` : " stack=unavailable"}`,
     };
     captureDiagnostic(captureDiagnosticArgs2);
   });
@@ -519,12 +422,7 @@ function installFetchInstrumentation() {
           {
             level: LogLevel.Warn,
             scope: "fetch",
-            message: `HTTP ${response.status} ${response.statusText}`,
-            data: {
-              url,
-              status: response.status,
-              method: init?.method ?? "GET",
-            },
+            message: `HTTP ${response.status} ${response.statusText} url=${url} method=${init?.method ?? "GET"}`,
           };
         captureDiagnostic(captureDiagnosticArgs3);
       }
@@ -545,76 +443,57 @@ function installDiagnosticsCapture() {
 }
 
 export type ScopedLogger = {
-  error: (
-    ...args: [message: string] | [message: string, data: unknown]
-  ) => void;
-  warn: (...args: [message: string] | [message: string, data: unknown]) => void;
-  info: (...args: [message: string] | [message: string, data: unknown]) => void;
-  debug: (
-    ...args: [message: string] | [message: string, data: unknown]
-  ) => void;
-  trace: (
-    ...args: [message: string] | [message: string, data: unknown]
-  ) => void;
+  error: (message: string) => void;
+  warn: (message: string) => void;
+  info: (message: string) => void;
+  debug: (message: string) => void;
+  trace: (message: string) => void;
 };
-
-function logPayload(
-  args: [message: string] | [message: string, data: unknown],
-): LogPayload {
-  return args.length === 1
-    ? { kind: LogPayloadKind.MessageOnly }
-    : { kind: LogPayloadKind.Structured, data: args[1] };
-}
 
 export function createLogger(scope: string): ScopedLogger {
   return {
-    error: (...args) =>
+    error: (message) =>
       (() => {
         const recordArgs2: Parameters<typeof record>[0] = {
           level: LogLevel.Error,
           scope,
-          message: args[0],
-          payload: logPayload(args),
+          message,
         };
         return record(recordArgs2);
       })(),
-    warn: (...args) =>
+    warn: (message) =>
       (() => {
         const recordArgs3: Parameters<typeof record>[0] = {
           level: LogLevel.Warn,
           scope,
-          message: args[0],
-          payload: logPayload(args),
+          message,
         };
         return record(recordArgs3);
       })(),
-    info: (...args) =>
+    info: (message) =>
       (() => {
         const recordArgs4: Parameters<typeof record>[0] = {
           level: LogLevel.Info,
           scope,
-          message: args[0],
-          payload: logPayload(args),
+          message,
         };
         return record(recordArgs4);
       })(),
-    debug: (...args) =>
+    debug: (message) =>
       (() => {
         const recordArgs5: Parameters<typeof record>[0] = {
           level: LogLevel.Debug,
           scope,
-          message: args[0],
-          payload: logPayload(args),
+          message,
         };
         return record(recordArgs5);
       })(),
-    trace: (...args) =>
+    trace: (message) =>
       (() => {
         const recordArgs6: Parameters<typeof record>[0] = {
           level: LogLevel.Trace,
           scope,
-          message: args[0],
-          payload: logPayload(args),
+          message,
         };
         return record(recordArgs6);
       })(),
@@ -707,6 +586,7 @@ function patchConsole() {
     readonly method: ConsoleMethodKind;
     readonly level: LogLevel;
   }) => {
+    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Console arguments are stringified immediately at ingress.
     console[method] = (...args: unknown[]) => {
       originalConsole[method](...args);
       if (isEnabled(level)) {
@@ -768,11 +648,7 @@ export function initWasmLogging() {
     const queued = preInitQueue.splice(0, preInitQueue.length);
     for (const entry of queued) {
       try {
-        if (entry.kind === PendingRecordKind.Structured) {
-          nookLogWithData(entry.level, entry.scope, entry.message, entry.data);
-        } else {
-          nookLog(entry.level, entry.scope, entry.message);
-        }
+        nookLog(entry.level, entry.scope, entry.message);
       } catch {
         // Ignore — a broken early log must not block startup.
       }

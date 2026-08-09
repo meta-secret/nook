@@ -52,11 +52,11 @@ export function stopIdleSessionTracking(state: VaultState) {
 }
 
 export function lockVault(state: VaultState) {
-  const infoArgs: Parameters<typeof log.info>[1] = {
+  const infoArgs = {
     idle: state.sessionExpiredByIdle,
     secrets: state.secrets.length,
   };
-  log.info("vault locked", infoArgs);
+  log.info("vault locked" + " " + JSON.stringify(infoArgs));
   state.helpOpen = false;
   state.stopIdleSessionTracking();
   setVaultSessionLocked(true);

@@ -578,7 +578,7 @@ export class VaultState extends VaultRuntimeState {
     return providersActions.discoverStagedVaultStoreId(this);
   }
 
-  openSettings(options: OpenSettingsArgs = {}) {
+  openSettings(options: OpenSettingsArgs) {
     const openSettingsArgs: Parameters<typeof uiActions.openSettings>[0] = {
       state: this,
       ...options,

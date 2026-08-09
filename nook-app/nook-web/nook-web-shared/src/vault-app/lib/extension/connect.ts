@@ -224,17 +224,18 @@ function sendExtensionMessage({
       finishUnavailable,
       EXTENSION_MESSAGE_TIMEOUT_MS,
     );
-    runtime.sendMessage(extensionId, message, (response) => {
+    function receiveExtensionResponse(response?: unknown): void {
       if (runtime.lastError?.message) {
         finishUnavailable();
         return;
       }
-      if (response === void 0) {
+      if (arguments.length === 0) {
         finishUnavailable();
         return;
       }
       finishReceived(response);
-    });
+    }
+    runtime.sendMessage(extensionId, message, receiveExtensionResponse);
   });
 }
 

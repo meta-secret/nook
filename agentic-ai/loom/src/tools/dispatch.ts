@@ -1,11 +1,5 @@
 import { readFileSync } from 'node:fs';
-import {
-  UntrustedYamlPropertyPresence,
-  asUntrustedYamlNode,
-  untrustedYamlProperty,
-  isRecord,
-  type UntrustedYamlNode,
-} from '../lib/guards.ts';
+import { asUntrustedYamlNode, type UntrustedYamlNode } from '../lib/guards.ts';
 import {
   explainAgainstBlueprint,
   explainSyntaxFailure,
@@ -27,14 +21,13 @@ import {
   successResponseForAgentStats,
   successResponseForFamily,
   successResponseForPrLand,
+  commandResultToResponseValue,
   type ErrorResponse,
   type SuccessResponse,
 } from '../codec/response.ts';
 import { parseYamlFile } from '../codec/yaml.ts';
 import { LoomFailure, LoomFailureDetailKind } from '../loom-failure.ts';
 import { executeRequest, listDiscoverableRequests } from './registry.ts';
-
-import type { UntrustedYamlPropertyArgs } from '../lib/guards.ts';
 import type {
   SuccessResponseForFamilyArgs,
   SuccessResponseForAgentStatsArgs,
@@ -119,19 +112,12 @@ async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
 
   try {
     const result = await executeRequest(request);
-    if (request.family === RequestFamily.CortexAudit && isRecord(result)) {
-      const auditOkArgs: UntrustedYamlPropertyArgs = {
-        record: result,
-        key: 'auditOk',
-      };
-      const auditOk = untrustedYamlProperty(auditOkArgs);
-      if (
-        auditOk.presence === UntrustedYamlPropertyPresence.Present &&
-        auditOk.value === false
-      ) {
+    const responseValue = commandResultToResponseValue(result);
+    if (request.family === RequestFamily.CortexAudit && 'auditOk' in result) {
+      if (!result.auditOk) {
         const successResponseForFamilyArgs7: SuccessResponseForFamilyArgs = {
           family: RequestFamily.CortexAudit,
-          result,
+          result: responseValue,
         };
         return {
           exitCode: 1,
@@ -141,17 +127,12 @@ async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
     }
     if (
       request.family === RequestFamily.DependencyPopularity &&
-      isRecord(result)
+      'ok' in result
     ) {
-      const okArgs: UntrustedYamlPropertyArgs = { record: result, key: 'ok' };
-      const ok = untrustedYamlProperty(okArgs);
-      if (
-        ok.presence === UntrustedYamlPropertyPresence.Present &&
-        ok.value === false
-      ) {
+      if (!result.ok) {
         const successResponseForFamilyArgs6: SuccessResponseForFamilyArgs = {
           family: RequestFamily.DependencyPopularity,
-          result,
+          result: responseValue,
         };
         return {
           exitCode: 1,
@@ -159,7 +140,7 @@ async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
         };
       }
     }
-    const buildSuccessResponseArgs = { request, result };
+    const buildSuccessResponseArgs = { request, result: responseValue };
     return {
       exitCode: 0,
       body: buildSuccessResponse(buildSuccessResponseArgs),

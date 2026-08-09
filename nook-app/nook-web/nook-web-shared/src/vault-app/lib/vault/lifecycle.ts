@@ -155,12 +155,12 @@ export async function initOnce(state: VaultState): Promise<void> {
           await state.loadProviders(loadProvidersArgs);
           state.applyActiveProviderCredentials();
         } catch (error) {
-          const warnArgs: Parameters<typeof log.warn>[1] = {
+          const warnArgs = {
             error: error instanceof Error ? error.message : String(error),
           };
           log.warn(
-            "empty-device provider load deferred until passkey",
-            warnArgs,
+            "empty-device provider load deferred until passkey " +
+              JSON.stringify(warnArgs),
           );
           state.providersLoaded = true;
         }
@@ -266,14 +266,14 @@ export async function continueInitializationAfterDeviceUnlock(
     state.startVaultSync();
   }
 
-  const infoArgs: Parameters<typeof log.info>[1] = {
+  const infoArgs = {
     localVaultPresent: state.localVaultPresent,
     authenticated: state.isAuthenticated,
     providers: state.providers.length,
     syncProviders: state.syncProviders.length,
     ...(state.deviceId ? { deviceId: state.deviceId } : {}),
   };
-  log.info("app init finished", infoArgs);
+  log.info("app init finished" + " " + JSON.stringify(infoArgs));
 }
 
 export async function initDeviceIdentity({
@@ -327,10 +327,10 @@ export async function authorizeWithExternalDeviceIdentity({
       await continueInitializationAfterDeviceUnlock(state);
     }
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
-    const infoArgs2: Parameters<typeof log.info>[1] = {
+    const infoArgs2 = {
       deviceId: state.deviceId,
     };
-    log.info("extension identity adopted", infoArgs2);
+    log.info("extension identity adopted" + " " + JSON.stringify(infoArgs2));
     return true;
   } catch (error) {
     await state.enqueueStorage(() =>
@@ -343,10 +343,12 @@ export async function authorizeWithExternalDeviceIdentity({
         ? state.deviceProtectionLockedStatus
         : priorDeviceProtectionStatus;
     state.errorMsg = state.t(I18N_KEYS.ExtensionConnectIdentityHandoffFailed);
-    const warnArgs2: Parameters<typeof log.warn>[1] = {
+    const warnArgs2 = {
       error: error instanceof Error ? error.message : String(error),
     };
-    log.warn("extension identity handoff failed", warnArgs2);
+    log.warn(
+      "extension identity handoff failed" + " " + JSON.stringify(warnArgs2),
+    );
     return false;
   } finally {
     state.deviceAuthorizationInProgress = false;
@@ -369,8 +371,8 @@ export async function createFreshVault(state: VaultState) {
   state.errorMsg = "";
   state.dismissSuccess();
   state.isVerifying = true;
-  const infoArgs3: Parameters<typeof log.info>[1] = { mode: state.storageMode };
-  log.info("creating fresh remote vault", infoArgs3);
+  const infoArgs3 = { mode: state.storageMode };
+  log.info("creating fresh remote vault" + " " + JSON.stringify(infoArgs3));
   try {
     await state.initDeviceIdentity();
     const creatingAdditionalVault = state.localVaults.length > 0;
@@ -417,19 +419,19 @@ export async function createFreshVault(state: VaultState) {
     await state.syncActiveVaultStoreIdToAuth();
     await state.hydrateMultiDeviceState();
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-    const infoArgs4: Parameters<typeof log.info>[1] = {
+    const infoArgs4 = {
       mode: state.storageMode,
       secrets: rawRecords.length,
     };
-    log.info("fresh remote vault created", infoArgs4);
+    log.info("fresh remote vault created" + " " + JSON.stringify(infoArgs4));
     state.showSuccess(state.t(I18N_KEYS.ToastsVaultCreated));
     state.startIdleSessionTracking();
   } catch (e) {
     state.isAuthenticated = false;
     const message =
       e instanceof Error ? e.message : "Failed to create a new vault.";
-    const warnArgs3: Parameters<typeof log.warn>[1] = { error: message };
-    log.warn("fresh vault create failed", warnArgs3);
+    const warnArgs3 = { error: message };
+    log.warn("fresh vault create failed" + " " + JSON.stringify(warnArgs3));
     state.errorMsg = message;
   } finally {
     state.isVerifying = false;

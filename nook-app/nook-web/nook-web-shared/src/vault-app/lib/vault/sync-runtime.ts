@@ -11,11 +11,11 @@ export function syncError({
   readonly context: string;
   readonly failure: RuntimeFailure;
 }): void {
-  const warnArgs: Parameters<typeof log.warn>[1] = {
+  const warnArgs = {
     error: failure.message,
     ...(failure.stack ? { stack: failure.stack } : {}),
   };
-  log.warn(`${context} failed`, warnArgs);
+  log.warn(`${context} failed` + " " + JSON.stringify(warnArgs));
 }
 
 export function scheduleAutoConnectAfterApproval(

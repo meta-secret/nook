@@ -109,11 +109,13 @@ export async function resolveSyncConflictKeepLocal(
 
   state.isVerifying = true;
   state.errorMsg = "";
-  const infoArgs: Parameters<typeof log.info>[1] = {
+  const infoArgs = {
     provider: conflict.providerLabel,
     kind: conflict.conflictKind,
   };
-  log.info("sync conflict resolved (keep local)", infoArgs);
+  log.info(
+    "sync conflict resolved (keep local)" + " " + JSON.stringify(infoArgs),
+  );
   state.errorMsg = state.t(I18N_KEYS.ErrorsWholeVaultConflictResolutionRetired);
   state.isVerifying = false;
 }
@@ -129,11 +131,13 @@ export async function resolveSyncConflictKeepRemote(
     return;
   const conflict = review;
 
-  const infoArgs2: Parameters<typeof log.info>[1] = {
+  const infoArgs2 = {
     provider: conflict.providerLabel,
     kind: conflict.conflictKind,
   };
-  log.info("sync conflict resolved (keep remote)", infoArgs2);
+  log.info(
+    "sync conflict resolved (keep remote)" + " " + JSON.stringify(infoArgs2),
+  );
   state.errorMsg = state.t(I18N_KEYS.ErrorsWholeVaultConflictResolutionRetired);
   state.isVerifying = false;
 }

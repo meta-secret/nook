@@ -20,6 +20,8 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
     for required in [
         "\"security\": \"bun audit --prod --audit-level=high\"",
         "\"check\": \"bun run security",
+        "bun run lint",
+        "\"lint\": \"../nook-web-app/node_modules/.bin/eslint --config ../eslint.config.js src\"",
     ] {
         assert!(
             research_manifest.contains(required),

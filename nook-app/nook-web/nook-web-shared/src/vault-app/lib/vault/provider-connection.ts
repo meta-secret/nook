@@ -90,10 +90,14 @@ export async function discoverStagedVaultStoreId(
           );
         } catch (error) {
           state.clearExistingVaultRecoverySummary();
-          const warnArgs: Parameters<typeof log.warn>[1] = {
+          const warnArgs = {
             error: error instanceof Error ? error.message : String(error),
           };
-          log.warn("vault recovery summary unavailable", warnArgs);
+          log.warn(
+            "vault recovery summary unavailable" +
+              " " +
+              JSON.stringify(warnArgs),
+          );
         }
       }
       return storeId;

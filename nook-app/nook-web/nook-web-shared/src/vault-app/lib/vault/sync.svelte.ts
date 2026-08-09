@@ -67,20 +67,22 @@ export function applyVaultSyncResult({
   const accessStatus = accessAssessed
     ? result.accessStatus
     : VaultAccessStatus.NewVault;
-  const debugArgs: Parameters<typeof log.debug>[1] = {
+  const debugArgs = {
     changed: result.changed,
     accessAssessed,
     accessStatus,
     joinEnrollmentPrompt: state.joinEnrollmentPrompt,
   };
-  log.debug("sync result (unauthenticated)", debugArgs);
+  log.debug("sync result (unauthenticated)" + " " + JSON.stringify(debugArgs));
 
   if (accessAssessed) {
-    const infoArgs: Parameters<typeof log.info>[1] = {
+    const infoArgs = {
       accessStatus,
       pendingJoins: result.pendingJoins.length,
     };
-    log.info("sync state changed (login gate)", infoArgs);
+    log.info(
+      "sync state changed (login gate)" + " " + JSON.stringify(infoArgs),
+    );
   }
 
   const decision = state.clientPolicy.unauthenticatedSyncDecision(
@@ -305,11 +307,11 @@ export async function flushRemoteEventOutboxNow({
       >[0] = { state, provider: target.provider };
       await syncLocalFolderProvider(syncLocalFolderProviderArgs2);
     } catch (error) {
-      const warnArgs: Parameters<typeof log.warn>[1] = {
+      const warnArgs = {
         providerId: target.provider.id,
         message: error instanceof Error ? error.message : String(error),
       };
-      log.warn("local backup sync skipped", warnArgs);
+      log.warn("local backup sync skipped" + " " + JSON.stringify(warnArgs));
     }
     return;
   }
@@ -319,11 +321,11 @@ export async function flushRemoteEventOutboxNow({
       state.requireManager().flushEventOutboxForProvider(...target.args),
     );
   } catch (error) {
-    const warnArgs2: Parameters<typeof log.warn>[1] = {
+    const warnArgs2 = {
       providerId: provider?.id ?? "active",
       message: error instanceof Error ? error.message : String(error),
     };
-    log.warn("event outbox flush skipped", warnArgs2);
+    log.warn("event outbox flush skipped" + " " + JSON.stringify(warnArgs2));
   }
 }
 
@@ -489,12 +491,14 @@ export async function stageStagedProviderSyncIssue({
     } finally {
       revision.free();
     }
-    const warnArgs4: Parameters<typeof log.warn>[1] = {
+    const warnArgs4 = {
       provider: state.stagedProviderLabel(),
       localStoreId,
       remoteStoreId,
     };
-    log.warn("staged provider store mismatch staged", warnArgs4);
+    log.warn(
+      "staged provider store mismatch staged" + " " + JSON.stringify(warnArgs4),
+    );
     return true;
   } finally {
     issue.free();
@@ -520,12 +524,12 @@ export function startVaultSync(state: SyncActionsContext) {
     log.debug("vault sync timer skipped (no remote updates needed)");
     return;
   }
-  const infoArgs2: Parameters<typeof log.info>[1] = {
+  const infoArgs2 = {
     authenticated: state.isAuthenticated,
     providers: state.syncProviders.length,
     intervalMs,
   };
-  log.info("vault sync timer started", infoArgs2);
+  log.info("vault sync timer started" + " " + JSON.stringify(infoArgs2));
   if (state.isAuthenticated) {
     void state.syncFromStorage();
   }
@@ -682,10 +686,10 @@ export async function manualSync(state: SyncActionsContext) {
     return;
   }
 
-  const infoArgs3: Parameters<typeof log.info>[1] = {
+  const infoArgs3 = {
     providers: state.syncProviders.length,
   };
-  log.info("manual sync started", infoArgs3);
+  log.info("manual sync started" + " " + JSON.stringify(infoArgs3));
   state.isSyncing = true;
   try {
     await state.initDeviceIdentity();
@@ -735,10 +739,10 @@ export async function fanOutSyncToProviders({
   if (state.syncBlocked) return;
   if (state.syncProviders.length === 0) return;
 
-  const debugArgs2: Parameters<typeof log.debug>[1] = {
+  const debugArgs2 = {
     providers: state.syncProviders.length,
   };
-  log.debug("fan-out sync queued", debugArgs2);
+  log.debug("fan-out sync queued" + " " + JSON.stringify(debugArgs2));
   const run = state.fanOutSyncChain.then(() =>
     state.runFanOutSyncToProviders(options),
   );
@@ -753,11 +757,11 @@ export function stageSyncConflict({
   readonly state: SyncActionsContext;
   readonly conflict: NookPendingSyncConflict;
 }) {
-  const warnArgs5: Parameters<typeof log.warn>[1] = {
+  const warnArgs5 = {
     provider: conflict.providerLabel,
     kind: conflict.kind,
   };
-  log.warn("sync conflict staged", warnArgs5);
+  log.warn("sync conflict staged" + " " + JSON.stringify(warnArgs5));
   state.stageSyncConflict(conflict);
   state.errorMsg = "";
 }

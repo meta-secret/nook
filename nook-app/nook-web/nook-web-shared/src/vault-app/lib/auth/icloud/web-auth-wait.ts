@@ -49,7 +49,7 @@ function readWebAuthTokenFromCookie(): WebAuthTokenLookup {
     const value = trimmed.slice(eq + 1);
     if (value) {
       const token = decodeURIComponent(value);
-      const infoArgs: Parameters<typeof log.info>[1] = {
+      const infoArgs = {
         cookieName: trimmed.slice(0, eq),
         token: (() => {
           const tokenDiagnosticsArgs: Parameters<typeof tokenDiagnostics>[0] = {
@@ -59,7 +59,11 @@ function readWebAuthTokenFromCookie(): WebAuthTokenLookup {
           return tokenDiagnostics(tokenDiagnosticsArgs);
         })(),
       };
-      log.info("CloudKit web auth token found in cookie", infoArgs);
+      log.info(
+        "CloudKit web auth token found in cookie" +
+          " " +
+          JSON.stringify(infoArgs),
+      );
       return { kind: WebAuthTokenLookupKind.Available, token };
     }
   }
@@ -74,11 +78,15 @@ export function readStoredWebAuthToken(): WebAuthTokenLookup {
   const stored = cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID);
   const token = normalizeWebAuthToken(stored);
   if (token.kind === WebAuthTokenLookupKind.Available) {
-    const infoArgs2: Parameters<typeof log.info>[1] = {
+    const infoArgs2 = {
       storedType: typeof stored,
       token: tokenDiagnostics(token),
     };
-    log.info("CloudKit web auth token found in session storage", infoArgs2);
+    log.info(
+      "CloudKit web auth token found in session storage" +
+        " " +
+        JSON.stringify(infoArgs2),
+    );
   }
   return token;
 }
@@ -88,18 +96,20 @@ export function waitForStoredWebAuthToken(
 ): Promise<string> {
   const existing = readStoredWebAuthToken();
   if (existing.kind === WebAuthTokenLookupKind.Available) {
-    const infoArgs3: Parameters<typeof log.info>[1] = {
+    const infoArgs3 = {
       token: tokenDiagnostics(existing),
       timeoutMs,
     };
     log.info(
-      "CloudKit web auth token already available before wait",
-      infoArgs3,
+      "CloudKit web auth token already available before wait " +
+        JSON.stringify(infoArgs3),
     );
     return Promise.resolve(existing.token);
   }
-  const infoArgs4: Parameters<typeof log.info>[1] = { timeoutMs };
-  log.info("CloudKit web auth token wait started", infoArgs4);
+  const infoArgs4 = { timeoutMs };
+  log.info(
+    "CloudKit web auth token wait started" + " " + JSON.stringify(infoArgs4),
+  );
 
   return new Promise(
     // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
@@ -118,7 +128,7 @@ export function waitForStoredWebAuthToken(
           return;
         }
         cleanup();
-        const infoArgs2: Parameters<typeof log.info>[1] = {
+        const infoArgs2 = {
           token: (() => {
             const tokenDiagnosticsArgs2: Parameters<
               typeof tokenDiagnostics
@@ -130,8 +140,8 @@ export function waitForStoredWebAuthToken(
           })(),
         };
         log.info(
-          "CloudKit web auth token wait resolved by token store",
-          infoArgs2,
+          "CloudKit web auth token wait resolved by token store " +
+            JSON.stringify(infoArgs2),
         );
         resolve(token);
       };
@@ -141,12 +151,12 @@ export function waitForStoredWebAuthToken(
         const token = readStoredWebAuthToken();
         if (token.kind === WebAuthTokenLookupKind.Available) {
           cleanup();
-          const infoArgs6: Parameters<typeof log.info>[1] = {
+          const infoArgs6 = {
             token: tokenDiagnostics(token),
           };
           log.info(
-            "CloudKit web auth token wait resolved by polling",
-            infoArgs6,
+            "CloudKit web auth token wait resolved by polling " +
+              JSON.stringify(infoArgs6),
           );
           resolve(token.token);
         }
@@ -154,13 +164,17 @@ export function waitForStoredWebAuthToken(
 
       const timeoutId = setTimeout(() => {
         cleanup();
-        const warnArgs: Parameters<typeof log.warn>[1] = {
+        const warnArgs = {
           timeoutMs,
           ...currentBrowserDiagnostics(),
           storage: webAuthTokenStorageDiagnostics(),
           control: cloudKitSignInControlDiagnostics(),
         };
-        log.warn("CloudKit web auth token wait timed out", warnArgs);
+        log.warn(
+          "CloudKit web auth token wait timed out" +
+            " " +
+            JSON.stringify(warnArgs),
+        );
         reject(cloudKitSignInTimeoutError());
       }, timeoutMs);
     },
@@ -183,7 +197,7 @@ async function fetchCloudKitWebAuthChallenge(): Promise<CloudKitAuthChallenge> {
   const body = (await response
     .json()
     .catch(() => ({}))) as CloudKitAuthChallenge;
-  const infoArgs7: Parameters<typeof log.info>[1] = {
+  const infoArgs7 = {
     status: response.status,
     ok: response.ok,
     serverErrorCode: body.serverErrorCode,
@@ -191,7 +205,11 @@ async function fetchCloudKitWebAuthChallenge(): Promise<CloudKitAuthChallenge> {
     redirectURL: sanitizedURLDiagnostics(body.redirectURL),
     uuidPresent: Boolean(body.uuid),
   };
-  log.info("CloudKit direct web auth challenge received", infoArgs7);
+  log.info(
+    "CloudKit direct web auth challenge received" +
+      " " +
+      JSON.stringify(infoArgs7),
+  );
   if (body.serverErrorCode === "AUTHENTICATION_REQUIRED" && body.redirectURL) {
     return body;
   }
@@ -235,8 +253,12 @@ function webAuthTokenFromMessageData(data: unknown): WebAuthTokenLookup {
 function listenForCloudKitWebAuthTokenMessage(
   timeoutMs: number,
 ): Promise<string> {
-  const infoArgs8: Parameters<typeof log.info>[1] = { timeoutMs };
-  log.info("CloudKit web auth postMessage wait started", infoArgs8);
+  const infoArgs8 = { timeoutMs };
+  log.info(
+    "CloudKit web auth postMessage wait started" +
+      " " +
+      JSON.stringify(infoArgs8),
+  );
   return new Promise(
     // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
     (resolve, reject) => {
@@ -248,11 +270,15 @@ function listenForCloudKitWebAuthTokenMessage(
       };
       const handleMessage = (event: MessageEvent<unknown>) => {
         const token = webAuthTokenFromMessageData(event.data);
-        const infoArgs9: Parameters<typeof log.info>[1] = {
+        const infoArgs9 = {
           origin: event.origin,
           token: tokenDiagnostics(token),
         };
-        log.info("CloudKit web auth postMessage received", infoArgs9);
+        log.info(
+          "CloudKit web auth postMessage received" +
+            " " +
+            JSON.stringify(infoArgs9),
+        );
         if (token.kind === WebAuthTokenLookupKind.Unavailable || settled) {
           return;
         }
@@ -281,11 +307,15 @@ function listenForCloudKitWebAuthTokenMessage(
 export async function requestDirectCloudKitWebAuthToken(
   timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
 ): Promise<string> {
-  const infoArgs10: Parameters<typeof log.info>[1] = {
+  const infoArgs10 = {
     timeoutMs,
     browser: currentBrowserDiagnostics(),
   };
-  log.info("CloudKit direct web auth fallback started", infoArgs10);
+  log.info(
+    "CloudKit direct web auth fallback started" +
+      " " +
+      JSON.stringify(infoArgs10),
+  );
   const challenge = await fetchCloudKitWebAuthChallenge();
   const authWindow = window.open(
     challenge.redirectURL,
@@ -293,10 +323,14 @@ export async function requestDirectCloudKitWebAuthToken(
     "popup,width=520,height=720",
   );
   if (!authWindow) {
-    const warnArgs2: Parameters<typeof log.warn>[1] = {
+    const warnArgs2 = {
       redirectURL: sanitizedURLDiagnostics(challenge.redirectURL),
     };
-    log.warn("CloudKit direct web auth popup blocked", warnArgs2);
+    log.warn(
+      "CloudKit direct web auth popup blocked" +
+        " " +
+        JSON.stringify(warnArgs2),
+    );
     throw new Error(
       "Apple sign-in popup was blocked. Allow popups and try again.",
     );
@@ -312,11 +346,15 @@ export async function requestDirectCloudKitWebAuthToken(
       };
       const handleMessage = (event: MessageEvent<unknown>) => {
         const token = webAuthTokenFromMessageData(event.data);
-        const infoArgs11: Parameters<typeof log.info>[1] = {
+        const infoArgs11 = {
           origin: event.origin,
           token: tokenDiagnostics(token),
         };
-        log.info("CloudKit direct web auth message received", infoArgs11);
+        log.info(
+          "CloudKit direct web auth message received" +
+            " " +
+            JSON.stringify(infoArgs11),
+        );
         if (token.kind === WebAuthTokenLookupKind.Unavailable || settled) {
           return;
         }
@@ -341,11 +379,15 @@ export async function requestDirectCloudKitWebAuthToken(
           return;
         }
         cleanup();
-        const warnArgs3: Parameters<typeof log.warn>[1] = {
+        const warnArgs3 = {
           timeoutMs,
           storage: webAuthTokenStorageDiagnostics(),
         };
-        log.warn("CloudKit direct web auth fallback timed out", warnArgs3);
+        log.warn(
+          "CloudKit direct web auth fallback timed out" +
+            " " +
+            JSON.stringify(warnArgs3),
+        );
         reject(cloudKitSignInTimeoutError());
       }, timeoutMs);
     },

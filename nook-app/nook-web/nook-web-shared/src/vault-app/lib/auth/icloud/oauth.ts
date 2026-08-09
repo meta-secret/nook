@@ -170,7 +170,7 @@ function logCloudKitAuthFailure({
   readonly message: string;
   readonly details: CloudKitAuthErrorDetails;
 }): void {
-  const warnArgs: Parameters<typeof log.warn>[1] = {
+  const warnArgs = {
     code: details.code,
     reason: details.reason,
     message: details.message,
@@ -183,7 +183,7 @@ function logCloudKitAuthFailure({
     storage: webAuthTokenStorageDiagnostics(),
     control: cloudKitSignInControlDiagnostics(),
   };
-  log.warn(message, warnArgs);
+  log.warn(message + " " + JSON.stringify(warnArgs));
 }
 
 export async function initICloudAuth(): Promise<void> {
@@ -192,11 +192,11 @@ export async function initICloudAuth(): Promise<void> {
     return cloudKitInitialization.completion;
   }
   const operation = (async () => {
-    const infoArgs: Parameters<typeof log.info>[1] = {
+    const infoArgs = {
       config: iCloudConfigDiagnostics(),
       browser: currentBrowserDiagnostics(),
     };
-    log.info("CloudKit auth init started", infoArgs);
+    log.info("CloudKit auth init started" + " " + JSON.stringify(infoArgs));
     await loadCloudKitScript();
     const configureArgs: CloudKitConfiguration = {
       containers: [
@@ -222,11 +222,11 @@ export async function initICloudAuth(): Promise<void> {
       },
     };
     window.CloudKit!.configure(configureArgs);
-    const infoArgs2: Parameters<typeof log.info>[1] = {
+    const infoArgs2 = {
       config: iCloudConfigDiagnostics(),
       hasCloudKitGlobal: Boolean(window.CloudKit),
     };
-    log.info("CloudKit auth configured", infoArgs2);
+    log.info("CloudKit auth configured" + " " + JSON.stringify(infoArgs2));
   })();
   cloudKitInitialization = {
     kind: CloudKitInitializationKind.Initializing,
@@ -243,13 +243,13 @@ function setUpCloudKitAuth(
     log.info("CloudKit setUpAuth reused existing promise");
     return existingSetup.completion;
   }
-  const infoArgs3: Parameters<typeof log.info>[1] = {
+  const infoArgs3 = {
     grabAuthToken: true,
     persist: true,
     hasSignInMount: hasCloudKitSignInControl(),
     control: cloudKitSignInControlDiagnostics(),
   };
-  log.info("CloudKit setUpAuth started", infoArgs3);
+  log.info("CloudKit setUpAuth started" + " " + JSON.stringify(infoArgs3));
   const operation = (() => {
     const setUpAuthArgs: Parameters<typeof container.setUpAuth>[0] = {
       grabAuthToken: true,
@@ -259,13 +259,15 @@ function setUpCloudKitAuth(
   })()
     .then((identity) => {
       rememberCloudKitIdentity(identity);
-      const infoArgs4: Parameters<typeof log.info>[1] = {
+      const infoArgs4 = {
         signedIn: identity.kind === CloudKitIdentityKind.SignedIn,
         token: tokenDiagnostics(readStoredWebAuthToken()),
         storage: webAuthTokenStorageDiagnostics(),
         control: cloudKitSignInControlDiagnostics(),
       };
-      log.info("CloudKit setUpAuth completed", infoArgs4);
+      log.info(
+        "CloudKit setUpAuth completed" + " " + JSON.stringify(infoArgs4),
+      );
       return identity;
     })
     .catch((error) => {
@@ -276,13 +278,17 @@ function setUpCloudKitAuth(
         hasSignInControl: hasCloudKitSignInControl(),
       };
       if (isExpectedCloudKitSignInSetupFailure(expectedFailureArgs)) {
-        const infoArgs5: Parameters<typeof log.info>[1] = {
+        const infoArgs5 = {
           details: cloudKitAuthErrorDetails(error),
           hasSignInMount: hasCloudKitSignInControl(),
           storage: webAuthTokenStorageDiagnostics(),
           control: cloudKitSignInControlDiagnostics(),
         };
-        log.info("CloudKit auth setup waiting for Apple sign-in", infoArgs5);
+        log.info(
+          "CloudKit auth setup waiting for Apple sign-in" +
+            " " +
+            JSON.stringify(infoArgs5),
+        );
         const identity: CloudKitIdentity = {
           kind: CloudKitIdentityKind.SignedOut,
         };
@@ -320,13 +326,15 @@ export async function prepareICloudSignInControl(): Promise<void> {
   }
   try {
     await setUpCloudKitAuth(container);
-    const infoArgs6: Parameters<typeof log.info>[1] = {
+    const infoArgs6 = {
       hasSignInMount: hasCloudKitSignInControl(),
       token: tokenDiagnostics(readStoredWebAuthToken()),
       storage: webAuthTokenStorageDiagnostics(),
       control: cloudKitSignInControlDiagnostics(),
     };
-    log.info("CloudKit sign-in control ready", infoArgs6);
+    log.info(
+      "CloudKit sign-in control ready" + " " + JSON.stringify(infoArgs6),
+    );
   } catch (error) {
     const logCloudKitAuthFailureArgs: Parameters<
       typeof logCloudKitAuthFailure
@@ -347,24 +355,28 @@ function clickCloudKitSignInButton(): void {
       'button, [role="button"], iframe, a, .apple-auth-button',
     ) ?? mount;
   if (!control) {
-    const warnArgs2: Parameters<typeof log.warn>[1] = {
+    const warnArgs2 = {
       hasMount: Boolean(mount),
     };
     log.warn(
-      "CloudKit sign-in control click failed: control missing",
-      warnArgs2,
+      "CloudKit sign-in control click failed: control missing " +
+        JSON.stringify(warnArgs2),
     );
     throw new Error(
       "Apple sign-in control is not ready. Reload and try again.",
     );
   }
-  const infoArgs7: Parameters<typeof log.info>[1] = {
+  const infoArgs7 = {
     mountTag: mount?.tagName,
     controlTag: control.tagName,
     controlRole: control.getAttribute("role")?.valueOf(),
     control: cloudKitSignInControlDiagnostics(),
   };
-  log.info("CloudKit sign-in control click forwarded", infoArgs7);
+  log.info(
+    "CloudKit sign-in control click forwarded" +
+      " " +
+      JSON.stringify(infoArgs7),
+  );
   control.click();
 }
 
@@ -620,7 +632,7 @@ async function waitForCloudKitSignIn({
   const shouldClickSignInControl = options.clickSignInControl !== false;
   const useDirectAuthWithoutNativeClick =
     shouldClickSignInControl && isBraveBrowser();
-  const infoArgs8: Parameters<typeof log.info>[1] = {
+  const infoArgs8 = {
     timeoutMs,
     clickSignInControl: shouldClickSignInControl,
     directAuthWithoutNativeClick: useDirectAuthWithoutNativeClick,
@@ -628,15 +640,15 @@ async function waitForCloudKitSignIn({
     storage: webAuthTokenStorageDiagnostics(),
     control: cloudKitSignInControlDiagnostics(),
   };
-  log.info("CloudKit sign-in wait started", infoArgs8);
+  log.info("CloudKit sign-in wait started" + " " + JSON.stringify(infoArgs8));
   if (useDirectAuthWithoutNativeClick) {
     await requestDirectCloudKitWebAuthToken(timeoutMs);
-    const infoArgs9: Parameters<typeof log.info>[1] = {
+    const infoArgs9 = {
       token: tokenDiagnostics(readStoredWebAuthToken()),
     };
     log.info(
-      "CloudKit sign-in succeeded through direct primary auth",
-      infoArgs9,
+      "CloudKit sign-in succeeded through direct primary auth " +
+        JSON.stringify(infoArgs9),
     );
     return currentCloudKitIdentity();
   }
@@ -649,12 +661,14 @@ async function waitForCloudKitSignIn({
     .then((userIdentity) => {
       const identity = cloudKitIdentityFromExternal(userIdentity);
       rememberCloudKitIdentity(identity);
-      const infoArgs10: Parameters<typeof log.info>[1] = {
+      const infoArgs10 = {
         signedIn: identity.kind === CloudKitIdentityKind.SignedIn,
         token: tokenDiagnostics(readStoredWebAuthToken()),
         storage: webAuthTokenStorageDiagnostics(),
       };
-      log.info("CloudKit whenUserSignsIn resolved", infoArgs10);
+      log.info(
+        "CloudKit whenUserSignsIn resolved" + " " + JSON.stringify(infoArgs10),
+      );
       return identity;
     })
     .catch((error) => {
@@ -666,15 +680,15 @@ async function waitForCloudKitSignIn({
       };
       if (isExpectedCloudKitSignInSetupFailure(expectedFailureArgs2)) {
         sawExpectedSignInFailure = true;
-        const infoArgs11: Parameters<typeof log.info>[1] = {
+        const infoArgs11 = {
           details: cloudKitAuthErrorDetails(error),
           hasSignInMount: hasCloudKitSignInControl(),
           storage: webAuthTokenStorageDiagnostics(),
           control: cloudKitSignInControlDiagnostics(),
         };
         log.info(
-          "CloudKit sign-in callback waiting for web auth token",
-          infoArgs11,
+          "CloudKit sign-in callback waiting for web auth token " +
+            JSON.stringify(infoArgs11),
         );
         return { kind: CloudKitIdentityKind.SignedOut } as CloudKitIdentity;
       }
@@ -682,14 +696,14 @@ async function waitForCloudKitSignIn({
       // Keep waiting for the token instead of failing while the popup is open.
       if (!shouldClickSignInControl) {
         sawExpectedSignInFailure = true;
-        const infoArgs12: Parameters<typeof log.info>[1] = {
+        const infoArgs12 = {
           details: cloudKitAuthErrorDetails(error),
           storage: webAuthTokenStorageDiagnostics(),
           control: cloudKitSignInControlDiagnostics(),
         };
         log.info(
-          "CloudKit sign-in callback failed during native click; waiting for token",
-          infoArgs12,
+          "CloudKit sign-in callback failed during native click; waiting for token " +
+            JSON.stringify(infoArgs12),
         );
         return { kind: CloudKitIdentityKind.SignedOut } as CloudKitIdentity;
       }
@@ -709,12 +723,16 @@ async function waitForCloudKitSignIn({
     // tokenPromise so we don't wait for the full timeout.
     const immediateToken = readStoredWebAuthToken();
     if (immediateToken.kind === WebAuthTokenLookupKind.Available) {
-      const infoArgs13: Parameters<typeof log.info>[1] = {
+      const infoArgs13 = {
         signedIn:
           currentCloudKitIdentity().kind === CloudKitIdentityKind.SignedIn,
         token: tokenDiagnostics(immediateToken),
       };
-      log.info("CloudKit sign-in succeeded with immediate token", infoArgs13);
+      log.info(
+        "CloudKit sign-in succeeded with immediate token" +
+          " " +
+          JSON.stringify(infoArgs13),
+      );
       return currentCloudKitIdentity();
     }
     if (sawExpectedSignInFailure && shouldClickSignInControl) {
@@ -722,22 +740,26 @@ async function waitForCloudKitSignIn({
       // After a native CloudKit button click the Apple window is already open;
       // a second window.open is blocked on Brave and fails the flow immediately.
       await requestDirectCloudKitWebAuthToken(timeoutMs);
-      const infoArgs14: Parameters<typeof log.info>[1] = {
+      const infoArgs14 = {
         token: tokenDiagnostics(readStoredWebAuthToken()),
       };
       log.info(
-        "CloudKit sign-in succeeded through direct fallback",
-        infoArgs14,
+        "CloudKit sign-in succeeded through direct fallback " +
+          JSON.stringify(infoArgs14),
       );
       return currentCloudKitIdentity();
     }
     await tokenPromise;
-    const infoArgs15: Parameters<typeof log.info>[1] = {
+    const infoArgs15 = {
       signedIn:
         currentCloudKitIdentity().kind === CloudKitIdentityKind.SignedIn,
       token: tokenDiagnostics(readStoredWebAuthToken()),
     };
-    log.info("CloudKit sign-in succeeded after token wait", infoArgs15);
+    log.info(
+      "CloudKit sign-in succeeded after token wait" +
+        " " +
+        JSON.stringify(infoArgs15),
+    );
     return currentCloudKitIdentity();
   } catch (error) {
     // Allow a fresh setUpAuth attempt on the next user interaction so
@@ -759,7 +781,7 @@ async function waitForCloudKitSignIn({
 export function requestPreparedICloudWebAuthToken(
   options: ICloudWebAuthTokenRequestOptions = {},
 ): Promise<ICloudOAuthTokens> {
-  const infoArgs16: Parameters<typeof log.info>[1] = {
+  const infoArgs16 = {
     hasCloudKitGlobal: Boolean(window.CloudKit),
     hasAuthSetupPromise:
       currentAuthSetup().kind === CloudKitAuthSetupKind.Initializing,
@@ -767,7 +789,11 @@ export function requestPreparedICloudWebAuthToken(
       currentCloudKitIdentity().kind === CloudKitIdentityKind.SignedIn,
     clickSignInControl: options.clickSignInControl !== false,
   };
-  log.info("CloudKit prepared token request started", infoArgs16);
+  log.info(
+    "CloudKit prepared token request started" +
+      " " +
+      JSON.stringify(infoArgs16),
+  );
   if (
     !window.CloudKit ||
     currentAuthSetup().kind === CloudKitAuthSetupKind.NotStarted
@@ -831,10 +857,14 @@ export async function requestICloudWebAuthToken(
     await waitForCloudKitSignIn(waitForCloudKitSignInArgs2);
   }
 
-  const infoArgs17: Parameters<typeof log.info>[1] = {
+  const infoArgs17 = {
     token: tokenDiagnostics(readStoredWebAuthToken()),
   };
-  log.info("CloudKit direct token request returning token", infoArgs17);
+  log.info(
+    "CloudKit direct token request returning token" +
+      " " +
+      JSON.stringify(infoArgs17),
+  );
   return requireStoredWebAuthToken();
 }
 
