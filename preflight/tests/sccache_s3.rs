@@ -283,7 +283,7 @@ fn assert_workflows_scope_cache_credentials() {
         .split_once("\n  ui-demo:\n")
         .and_then(|(_, tail)| tail.split_once("\n  preview:\n"))
         .map(|(job, _)| job)
-        .context("PR workflow must keep the UI demo job")?;
+        .unwrap_or_else(|| panic!("PR workflow must keep the UI demo job"));
     assert!(
         !pr_ui_demo.contains("NOOK_SCCACHE_ACCESS_KEY")
             && !pr_ui_demo.contains("NOOK_SCCACHE_SECRET_KEY")
