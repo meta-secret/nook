@@ -121,12 +121,7 @@ function cloudKitIdentityFromExternal(
 async function fetchCurrentCloudKitIdentity(
   container: CloudKitContainer,
 ): Promise<CloudKitIdentity> {
-  if (!container.fetchCurrentUserIdentity) {
-    return { kind: CloudKitIdentityKind.SignedOut };
-  }
-  return cloudKitIdentityFromExternal(
-    await container.fetchCurrentUserIdentity(),
-  );
+  return container.fetchCurrentUserIdentity();
 }
 
 function rememberCloudKitIdentity(identity: CloudKitIdentity): void {

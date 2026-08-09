@@ -122,7 +122,7 @@ export type CloudKitContainer = {
     persist?: boolean;
   }) => Promise<CloudKitIdentity>;
   whenUserSignsIn: () => Promise<CloudKitUserIdentity>;
-  fetchCurrentUserIdentity?: () => Promise<CloudKitUserIdentity>;
+  fetchCurrentUserIdentity: () => Promise<CloudKitIdentity>;
   acceptShares?: (shortGUIDs: string[]) => Promise<CloudKitRecordInfosResponse>;
   fetchRecordInfos?: (
     shortGUIDs: string[],
@@ -131,11 +131,15 @@ export type CloudKitContainer = {
   sharedCloudDatabase?: CloudKitDatabase;
 };
 
-type ExternalCloudKitContainer = Omit<CloudKitContainer, "setUpAuth"> & {
+type ExternalCloudKitContainer = Omit<
+  CloudKitContainer,
+  "setUpAuth" | "fetchCurrentUserIdentity"
+> & {
   setUpAuth: (options?: {
     grabAuthToken?: boolean;
     persist?: boolean;
   }) => Promise<unknown>;
+  fetchCurrentUserIdentity?: () => Promise<unknown>;
 };
 
 export type CloudKitAuthTokenStore = {
@@ -191,6 +195,16 @@ export function getDefaultCloudKitContainer(): CloudKitContainer {
           grabAuthToken?: boolean;
           persist?: boolean;
         }) => cloudKitIdentityFromTransport(await target.setUpAuth(options));
+      }
+      if (property === "fetchCurrentUserIdentity") {
+        return async () => {
+          if (!target.fetchCurrentUserIdentity) {
+            return { kind: CloudKitIdentityKind.SignedOut };
+          }
+          return cloudKitIdentityFromTransport(
+            await target.fetchCurrentUserIdentity(),
+          );
+        };
       }
       return Reflect.get(target, property, receiver);
     },
