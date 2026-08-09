@@ -240,7 +240,11 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
       state.requireManager().finalizeSentinelUnlock(),
     )) as NookSecretRecord[];
     for (const record of rawRecords) record.free();
-    await state.loadSecretPage("", 0);
+    const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
+      query: "",
+      requestedOffset: 0,
+    };
+    await state.loadSecretPage(loadPageArgs);
     state.sentinelCeremonyPrompt = false;
     state.sentinelUnlockRequest = "";
     const replaceUnlockSessionArgs3: Parameters<

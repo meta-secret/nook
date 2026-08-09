@@ -842,15 +842,15 @@ export async function ensureProviderSaved(
     if (type === "github") {
       const providerDefaultLabelArgs: Parameters<
         typeof providerDefaultLabel
-      >[1] = {
-        detail: repo,
-        oauthPreset,
+      >[0] = {
+        type,
+        options: { detail: repo, oauthPreset },
       };
       provider = {
         ...providerPersistenceDefaults(),
         id: generateId(),
         type,
-        label: providerDefaultLabel(type, providerDefaultLabelArgs),
+        label: providerDefaultLabel(providerDefaultLabelArgs),
         githubPat: storedGithubPat(pat),
         githubRepo: storedGithubRepository(repo),
         storeId: providerStoreId,
@@ -864,18 +864,23 @@ export async function ensureProviderSaved(
               preset: oauthPreset,
               fileName: storedOAuthRemoteFileName(driveFile),
             }
-          : defaultOAuthFileConfig(oauthPreset, driveFile);
+          : (() => {
+              const defaultConfigArgs: Parameters<
+                typeof defaultOAuthFileConfig
+              >[0] = { preset: oauthPreset, fileName: driveFile };
+              return defaultOAuthFileConfig(defaultConfigArgs);
+            })();
       const providerDefaultLabelArgs2: Parameters<
         typeof providerDefaultLabel
-      >[1] = {
-        detail: driveFile,
-        oauthPreset,
+      >[0] = {
+        type,
+        options: { detail: driveFile, oauthPreset },
       };
       provider = {
         ...providerPersistenceDefaults(),
         id: generateId(),
         type,
-        label: providerDefaultLabel(type, providerDefaultLabelArgs2),
+        label: providerDefaultLabel(providerDefaultLabelArgs2),
         oauthFile: configuredOAuthFile(oauthFile),
         storeId: providerStoreId,
         createdAt: isoTimestamp(),
@@ -888,15 +893,18 @@ export async function ensureProviderSaved(
       const localFolder: LocalFolderConfig = state.localFolderDraft.config;
       const providerDefaultLabelArgs3: Parameters<
         typeof providerDefaultLabel
-      >[1] = {
-        detail: localFolderDirectoryValue(localFolder.directoryName),
-        oauthPreset,
+      >[0] = {
+        type,
+        options: {
+          detail: localFolderDirectoryValue(localFolder.directoryName),
+          oauthPreset,
+        },
       };
       provider = {
         ...providerPersistenceDefaults(),
         id: generateId(),
         type,
-        label: providerDefaultLabel(type, providerDefaultLabelArgs3),
+        label: providerDefaultLabel(providerDefaultLabelArgs3),
         localFolder: configuredLocalFolder(localFolder),
         storeId: providerStoreId,
         createdAt: isoTimestamp(),
@@ -931,7 +939,13 @@ export async function ensureProviderSaved(
       ...providerPersistenceDefaults(),
       id: generateId(),
       type: "local",
-      label: providerDefaultLabel("local"),
+      label: (() => {
+        const labelArgs: Parameters<typeof providerDefaultLabel>[0] = {
+          type: "local",
+          options: {},
+        };
+        return providerDefaultLabel(labelArgs);
+      })(),
       storeId: providerStoreId,
       createdAt: isoTimestamp(),
     };

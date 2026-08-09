@@ -45,6 +45,7 @@ import {
   setLocalVaultLabel,
 } from "$app-wasm";
 import {
+  DEFAULT_DRIVE_BACKUP_NAME,
   bindGoogleDriveSharedFolder,
   configuredOAuthFile,
   defaultOAuthFileConfig,
@@ -291,7 +292,10 @@ export async function unlockWithPassword({
           state.secretPageSize,
         ),
     );
-    state.applyConnectedSecretPage(page, "");
+    const connectedPageArgs: Parameters<
+      typeof state.applyConnectedSecretPage
+    >[0] = { page, query: "" };
+    state.applyConnectedSecretPage(connectedPageArgs);
     if (state.deviceProtectionReady) {
       await state.ensureProviderSaved();
       await state.loadProviders();
@@ -687,7 +691,10 @@ export async function connectWithEnrollmentCode({
           state.secretPageSize,
         ),
     );
-    state.applyConnectedSecretPage(page, "");
+    const connectedPageArgs: Parameters<
+      typeof state.applyConnectedSecretPage
+    >[0] = { page, query: "" };
+    state.applyConnectedSecretPage(connectedPageArgs);
     const vaultName = payload.vaultName.trim();
     const vaultStoreId = (
       await state.enqueueStorage(() => state.requireManager().vaultStoreId)

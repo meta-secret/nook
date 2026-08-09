@@ -74,10 +74,11 @@ export async function discoverStagedVaultStoreId(
         )
       ).trim();
     })();
-    const timeout = startVaultDiscoveryTimeout(
-      state.t(I18N_KEYS.AuthStorageSyncFailed),
-      30_000,
-    );
+    const timeoutArgs: Parameters<typeof startVaultDiscoveryTimeout>[0] = {
+      message: state.t(I18N_KEYS.AuthStorageSyncFailed),
+      timeoutMs: 30_000,
+    };
+    const timeout = startVaultDiscoveryTimeout(timeoutArgs);
     try {
       const storeId = await Promise.race([discovery, timeout.completion]);
       if (storeId && state.hasManager) {

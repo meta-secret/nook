@@ -323,7 +323,12 @@ export class VaultState extends VaultLifecycleState {
     readonly newLocale: NookAppLocale;
     readonly options?: { preferWasm?: boolean };
   }) {
-    return localeActions.updateLocale(this, newLocale, options);
+    const updateLocaleArgs: Parameters<typeof localeActions.updateLocale>[0] = {
+      state: this,
+      newLocale,
+      options,
+    };
+    return localeActions.updateLocale(updateLocaleArgs);
   }
 
   resolveErrorMessage(message: string): string {
@@ -367,10 +372,11 @@ export class VaultState extends VaultLifecycleState {
     readonly adopt: (manager: NookVaultManager) => Promise<void>;
     readonly options?: { deferInitialization?: boolean };
   }): Promise<boolean> {
+    const authorizationArgs: Parameters<
+      typeof lifecycleActions.authorizeWithExternalDeviceIdentity
+    >[0] = { state: this, adopt, options };
     return lifecycleActions.authorizeWithExternalDeviceIdentity(
-      this,
-      adopt,
-      options,
+      authorizationArgs,
     );
   }
 
@@ -528,7 +534,10 @@ export class VaultState extends VaultLifecycleState {
     readonly type: StorageProviderType;
     readonly oauthPreset?: OAuthFilePreset;
   }) {
-    return providersActions.beginProviderSetup(this, type, oauthPreset);
+    const beginProviderSetupArgs: Parameters<
+      typeof providersActions.beginProviderSetup
+    >[0] = { state: this, type, oauthPreset };
+    return providersActions.beginProviderSetup(beginProviderSetupArgs);
   }
 
   beginExistingVaultOpen() {
@@ -705,7 +714,9 @@ export class VaultState extends VaultLifecycleState {
     readonly providerId: string;
     readonly options?: { quiet?: boolean; propagateError?: boolean };
   }): Promise<void> {
-    return syncActions.syncProviderById(this, providerId, options);
+    const syncProviderArgs: Parameters<typeof syncActions.syncProviderById>[0] =
+      { state: this, providerId, options };
+    return syncActions.syncProviderById(syncProviderArgs);
   }
 
   fanOutSyncChain: Promise<void> = Promise.resolve();
@@ -753,12 +764,10 @@ export class VaultState extends VaultLifecycleState {
     readonly yaml: string;
     readonly revision: NookProviderSyncRevision;
   }): Promise<void> {
-    return syncActions.updateProviderSyncMetadata(
-      this,
-      providerId,
-      yaml,
-      revision,
-    );
+    const metadataArgs: Parameters<
+      typeof syncActions.updateProviderSyncMetadata
+    >[0] = { state: this, providerId, yaml, revision };
+    return syncActions.updateProviderSyncMetadata(metadataArgs);
   }
 
   async refreshReplacementConflicts(): Promise<void> {
@@ -772,11 +781,10 @@ export class VaultState extends VaultLifecycleState {
     readonly oldSecretId: string;
     readonly chosenSecretId: string;
   }): Promise<void> {
-    return syncActions.resolveReplacementConflict(
-      this,
-      oldSecretId,
-      chosenSecretId,
-    );
+    const resolutionArgs: Parameters<
+      typeof syncActions.resolveReplacementConflict
+    >[0] = { state: this, oldSecretId, chosenSecretId };
+    return syncActions.resolveReplacementConflict(resolutionArgs);
   }
 
   dismissLocalFolderMultipleVaultsIssue() {
@@ -906,7 +914,10 @@ export class VaultState extends VaultLifecycleState {
     readonly query: string;
     readonly requestedOffset: number;
   }) {
-    return secretsActions.loadSecretPage(this, query, requestedOffset);
+    const loadSecretPageArgs: Parameters<
+      typeof secretsActions.loadSecretPage
+    >[0] = { state: this, query, requestedOffset };
+    return secretsActions.loadSecretPage(loadSecretPageArgs);
   }
 
   applyConnectedSecretPage({
@@ -916,7 +927,10 @@ export class VaultState extends VaultLifecycleState {
     readonly page: NookSecretPage;
     readonly query: string;
   }) {
-    return secretsActions.applyConnectedSecretPage(this, page, query);
+    const connectedPageArgs: Parameters<
+      typeof secretsActions.applyConnectedSecretPage
+    >[0] = { state: this, page, query };
+    return secretsActions.applyConnectedSecretPage(connectedPageArgs);
   }
 
   async decryptSecret(id: string): Promise<NookSecretRecord> {
@@ -966,7 +980,10 @@ export class VaultState extends VaultLifecycleState {
     readonly authId: string;
     readonly label: string;
   }) {
-    return multiDeviceActions.renameDevice(this, authId, label);
+    const renameDeviceArgs: Parameters<
+      typeof multiDeviceActions.renameDevice
+    >[0] = { state: this, authId, label };
+    return multiDeviceActions.renameDevice(renameDeviceArgs);
   }
 
   async revokeDevice(authId: string) {
@@ -1003,7 +1020,10 @@ export class VaultState extends VaultLifecycleState {
     readonly label: string;
     readonly password: string;
   }): Promise<void> {
-    return passwordUnlockActions.addVaultPassword(this, label, password);
+    const passwordArgs: Parameters<
+      typeof passwordUnlockActions.addVaultPassword
+    >[0] = { state: this, label, password };
+    return passwordUnlockActions.addVaultPassword(passwordArgs);
   }
 
   async updateVaultPasswordEntry({
@@ -1013,11 +1033,10 @@ export class VaultState extends VaultLifecycleState {
     readonly entryId: PasswordEntryId;
     readonly password: string;
   }): Promise<void> {
-    return passwordUnlockActions.updateVaultPasswordEntry(
-      this,
-      entryId,
-      password,
-    );
+    const passwordEntryArgs: Parameters<
+      typeof passwordUnlockActions.updateVaultPasswordEntry
+    >[0] = { state: this, entryId, password };
+    return passwordUnlockActions.updateVaultPasswordEntry(passwordEntryArgs);
   }
 
   async removeVaultPasswordEntry(entryId: PasswordEntryId): Promise<void> {
@@ -1047,12 +1066,10 @@ export class VaultState extends VaultLifecycleState {
     readonly password: string;
     readonly providerId: string;
   }): Promise<string> {
-    return passwordUnlockActions.issueEnrollmentCode(
-      this,
-      entryId,
-      password,
-      providerId,
-    );
+    const enrollmentArgs: Parameters<
+      typeof passwordUnlockActions.issueEnrollmentCode
+    >[0] = { state: this, entryId, password, providerId };
+    return passwordUnlockActions.issueEnrollmentCode(enrollmentArgs);
   }
 
   clearEnrollmentCode() {
@@ -1069,7 +1086,10 @@ export class VaultState extends VaultLifecycleState {
     readonly entryId: PasswordEntryId;
     readonly password: string;
   }): Promise<void> {
-    return passwordUnlockActions.unlockWithPassword(this, entryId, password);
+    const unlockArgs: Parameters<
+      typeof passwordUnlockActions.unlockWithPassword
+    >[0] = { state: this, entryId, password };
+    return passwordUnlockActions.unlockWithPassword(unlockArgs);
   }
 
   async refreshSentinelUnlockStatus(): Promise<SentinelVaultUnlockState> {
@@ -1090,11 +1110,10 @@ export class VaultState extends VaultLifecycleState {
     readonly code: string;
     readonly password: string;
   }): Promise<void> {
-    return passwordUnlockActions.connectWithEnrollmentCode(
-      this,
-      code,
-      password,
-    );
+    const enrollmentArgs: Parameters<
+      typeof passwordUnlockActions.connectWithEnrollmentCode
+    >[0] = { state: this, code, password };
+    return passwordUnlockActions.connectWithEnrollmentCode(enrollmentArgs);
   }
 
   async handleAddSecret({
@@ -1106,7 +1125,14 @@ export class VaultState extends VaultLifecycleState {
     readonly type: SecretType;
     readonly data: string;
   }) {
-    return secretsActions.handleAddSecret(this, id, type, data);
+    const addSecretArgs: Parameters<typeof secretsActions.handleAddSecret>[0] =
+      {
+        state: this,
+        id,
+        type,
+        data,
+      };
+    return secretsActions.handleAddSecret(addSecretArgs);
   }
 
   async handleBitwardenImport({
@@ -1116,7 +1142,10 @@ export class VaultState extends VaultLifecycleState {
     readonly json: string;
     readonly password: string;
   }): Promise<NookImportResult> {
-    return secretsActions.handleBitwardenImport(this, json, password);
+    const importArgs: Parameters<
+      typeof secretsActions.handleBitwardenImport
+    >[0] = { state: this, json, password };
+    return secretsActions.handleBitwardenImport(importArgs);
   }
 
   async handleKeePassXcImport(csv: string): Promise<NookImportResult> {
@@ -1221,6 +1250,9 @@ export class VaultState extends VaultLifecycleState {
     readonly type: SecretType;
     readonly data: string;
   }) {
-    return secretsActions.handleReplaceSecret(this, oldId, type, data);
+    const replaceSecretArgs: Parameters<
+      typeof secretsActions.handleReplaceSecret
+    >[0] = { state: this, oldId, type, data };
+    return secretsActions.handleReplaceSecret(replaceSecretArgs);
   }
 }

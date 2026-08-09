@@ -181,11 +181,12 @@ function sendExtensionMessage({
       globalThis as typeof globalThis & {
         chrome?: {
           runtime?: {
-            sendMessage?: (args: {
-              readonly extensionId: string;
-              readonly message: unknown;
-              readonly callback: (response?: unknown) => void;
-            }) => void;
+            // eslint-disable-next-line max-params -- Chrome owns this positional API.
+            sendMessage?: (
+              extensionId: string,
+              message: unknown,
+              callback: (response?: unknown) => void,
+            ) => void;
             lastError?: { message?: string };
           };
         };
@@ -223,16 +224,16 @@ function sendExtensionMessage({
       finishUnavailable,
       EXTENSION_MESSAGE_TIMEOUT_MS,
     );
-    runtime.sendMessage(extensionId, message, (...responses) => {
+    runtime.sendMessage(extensionId, message, (response) => {
       if (runtime.lastError?.message) {
         finishUnavailable();
         return;
       }
-      if (responses.length === 0) {
+      if (response === void 0) {
         finishUnavailable();
         return;
       }
-      finishReceived(responses[0]);
+      finishReceived(response);
     });
   });
 }
@@ -471,13 +472,12 @@ function requestIdentityEnvelope({
     globalThis as typeof globalThis & {
       chrome?: {
         runtime?: {
-          sendMessage?: (args: {
-            readonly extensionId: string;
-            readonly message: unknown;
-            readonly callback: (
-              response?: ExtensionIdentityHandoffResponse,
-            ) => void;
-          }) => void;
+          // eslint-disable-next-line max-params -- Chrome owns this positional API.
+          sendMessage?: (
+            extensionId: string,
+            message: unknown,
+            callback: (response?: ExtensionIdentityHandoffResponse) => void,
+          ) => void;
           lastError?: { message?: string };
         };
       };

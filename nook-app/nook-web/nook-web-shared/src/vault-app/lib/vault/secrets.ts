@@ -84,12 +84,12 @@ export async function loadDb(state: VaultState) {
     }
 
     if (!state.isAuthenticated && state.syncProviders.length > 0) {
-      const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[1] =
-        { quiet: true };
-      await state.syncProviderById(
-        state.syncProviders[0]!.id,
-        syncProviderByIdArgs,
-      );
+      const syncProviderRequest: Parameters<typeof state.syncProviderById>[0] =
+        {
+          providerId: state.syncProviders[0]!.id,
+          options: { quiet: true },
+        };
+      await state.syncProviderById(syncProviderRequest);
     }
 
     let accessStatus = await state.assessVaultConnectStatus();
@@ -205,8 +205,7 @@ export async function loadDb(state: VaultState) {
     });
     freeSecretRecords(rawRecords);
     const loadSecretPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
-      state: "",
-      query: 0,
+      query: "",
       requestedOffset: 0,
     };
     await state.loadSecretPage(loadSecretPageArgs);

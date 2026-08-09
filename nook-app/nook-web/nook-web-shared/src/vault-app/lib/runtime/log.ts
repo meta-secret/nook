@@ -299,6 +299,12 @@ function echo({
   }
 }
 
+// eslint-disable-next-line max-params -- Rust owns this browser bridge signature.
+function hostEcho(level: LogLevel, text: string): void {
+  const echoArgs: Parameters<typeof echo>[0] = { level, text };
+  echo(echoArgs);
+}
+
 /** Persist one entry (no console echo). Queues until WASM is ready. */
 function persistMessage({
   level,
@@ -749,7 +755,7 @@ function patchConsole() {
  */
 export function initWasmLogging() {
   if ("window" in globalThis) {
-    window.__nookConsole = { echo };
+    window.__nookConsole = { echo: hostEcho };
   }
   installDiagnosticsCapture();
   patchConsole();

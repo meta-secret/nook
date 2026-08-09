@@ -114,13 +114,14 @@ export async function setupDeviceProtection({
     const localizedPasskeyLabel =
       passkeyLabel.trim() ||
       state.t(I18N_KEYS.DeviceProtectionPasskeyDefaultLabel);
-    await state.enqueueStorage(() =>
-      createPasskeyProtection(
-        state.requireManager(),
-        localizedPasskeyLabel,
+    await state.enqueueStorage(() => {
+      const protectionArgs: Parameters<typeof createPasskeyProtection>[0] = {
+        manager: state.requireManager(),
+        passkeyLabel: localizedPasskeyLabel,
         deviceMode,
-      ),
-    );
+      };
+      return createPasskeyProtection(protectionArgs);
+    });
     deviceIdentityUnlocked = true;
     const finishAuthorizedInitializationArgs: Parameters<
       typeof finishAuthorizedInitialization

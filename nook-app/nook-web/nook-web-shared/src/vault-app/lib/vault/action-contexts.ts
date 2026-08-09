@@ -112,10 +112,10 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
     args: [string, string, string],
   ): Promise<boolean>;
   stagedRemoteStorageArgs(): StagedRemoteStorage;
-  syncProviderById(
-    providerId: string,
-    options?: { quiet?: boolean; propagateError?: boolean },
-  ): Promise<void>;
+  syncProviderById(request: {
+    readonly providerId: string;
+    readonly options?: { quiet?: boolean; propagateError?: boolean };
+  }): Promise<void>;
   wasmStorageArgs(): [string, string, string];
 }
 
@@ -181,7 +181,10 @@ type SyncStateFields = Pick<
 > & {
   fanOutSyncChain: Promise<void>;
   isSyncScheduled(): boolean;
-  scheduleSync(callback: () => void, intervalMs: number): void;
+  scheduleSync(request: {
+    readonly callback: () => void;
+    readonly intervalMs: number;
+  }): void;
 };
 
 interface SyncActionPorts extends SharedStorageActionsContext {
@@ -196,7 +199,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   stopScheduledSync(): boolean;
   clearUnlockedSession(resetManager?: boolean): void;
   beginAddProvider(): void;
-  beginProviderSetup(type: "local-folder"): void;
+  beginProviderSetup(request: { readonly type: "local-folder" }): void;
   openAdmin(accordion: AdminAccordionSection): void;
   ensureOAuthTokensFresh(): Promise<void>;
   ensureProviderSavedAfterConflict(
@@ -213,7 +216,10 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   loadDb(): Promise<void>;
   persistProviders(options?: { replace?: boolean }): Promise<void>;
   providerWasmArgs(provider: StorageProvider): [string, string, string];
-  raceStorageTimeout<T>(promise: Promise<T>, label: string): Promise<T>;
+  raceStorageTimeout<T>(request: {
+    readonly promise: Promise<T>;
+    readonly label: string;
+  }): Promise<T>;
   assessVaultConnectStatus(
     args?: [string, string, string],
   ): Promise<VaultAccessStatus>;
@@ -237,15 +243,15 @@ interface SyncActionPorts extends SharedStorageActionsContext {
     quiet?: boolean;
     force?: boolean;
   }): Promise<void>;
-  syncProviderById(
-    providerId: string,
-    options?: { quiet?: boolean; propagateError?: boolean },
-  ): Promise<void>;
-  updateProviderSyncMetadata(
-    providerId: string,
-    yaml: string,
-    revision: NookProviderSyncRevision,
-  ): Promise<void>;
+  syncProviderById(request: {
+    readonly providerId: string;
+    readonly options?: { quiet?: boolean; propagateError?: boolean };
+  }): Promise<void>;
+  updateProviderSyncMetadata(request: {
+    readonly providerId: string;
+    readonly yaml: string;
+    readonly revision: NookProviderSyncRevision;
+  }): Promise<void>;
   wasmStorageArgs(): [string, string, string];
 }
 

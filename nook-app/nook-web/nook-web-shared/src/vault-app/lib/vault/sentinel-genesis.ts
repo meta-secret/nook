@@ -1,7 +1,9 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
   setActiveVault,
+  type NookSentinelGenesisDelivery,
   type NookSentinelGenesisFinalizeResult,
+  type NookSentinelGenesisParticipantStatus,
   type NookSentinelGenesisStatus,
   type StartSentinelGenesisArgs,
 } from "$app-wasm";
@@ -11,27 +13,27 @@ import { listSentinelStoredDeliveries } from "$lib/vault/sentinel-unlock";
 import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
 import { SentinelGenesisTargetKind } from "$lib/vault/state/sentinel.svelte";
 
+type ReplaceOwnedWasmValuesArgs<T extends { free: () => void }> = {
+  readonly current: T[];
+  readonly replacement: T[];
+};
+
 function replaceOwnedWasmValues<T extends { free: () => void }>({
   current,
   replacement,
-}: {
-  readonly current: T[];
-  readonly replacement: T[];
-}): T[] {
+}: ReplaceOwnedWasmValuesArgs<T>): T[] {
   current.forEach((value) => value.free());
   return replacement;
 }
 
 export function releaseResults(state: VaultState): void {
-  const replaceOwnedWasmValuesArgs: Parameters<
-    typeof replaceOwnedWasmValues
-  >[0] = { current: state.sentinelGenesisDeliveries, replacement: [] };
+  const replaceOwnedWasmValuesArgs: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisDelivery> =
+    { current: state.sentinelGenesisDeliveries, replacement: [] };
   state.sentinelGenesisDeliveries = replaceOwnedWasmValues(
     replaceOwnedWasmValuesArgs,
   );
-  const replaceOwnedWasmValuesArgs2: Parameters<
-    typeof replaceOwnedWasmValues
-  >[0] = { current: state.sentinelGenesisParticipants, replacement: [] };
+  const replaceOwnedWasmValuesArgs2: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisParticipantStatus> =
+    { current: state.sentinelGenesisParticipants, replacement: [] };
   state.sentinelGenesisParticipants = replaceOwnedWasmValues(
     replaceOwnedWasmValuesArgs2,
   );
@@ -47,12 +49,11 @@ export function applyStatus({
 }): void {
   const participants = status.participants;
   state.sentinelGenesisParticipantCount = participants.length;
-  const replaceOwnedWasmValuesArgs3: Parameters<
-    typeof replaceOwnedWasmValues
-  >[0] = {
-    current: state.sentinelGenesisParticipants,
-    replacement: participants,
-  };
+  const replaceOwnedWasmValuesArgs3: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisParticipantStatus> =
+    {
+      current: state.sentinelGenesisParticipants,
+      replacement: participants,
+    };
   state.sentinelGenesisParticipants = replaceOwnedWasmValues(
     replaceOwnedWasmValuesArgs3,
   );
@@ -71,12 +72,11 @@ export function applyFinalizeResult({
   state.selectSentinelGenesisStore(result.storeId);
   state.openActiveVault(result.storeId);
   state.replaceVaultArchitecture(result.architecture as VaultArchitecture);
-  const replaceOwnedWasmValuesArgs4: Parameters<
-    typeof replaceOwnedWasmValues
-  >[0] = {
-    current: state.sentinelGenesisDeliveries,
-    replacement: result.participantDeliveries,
-  };
+  const replaceOwnedWasmValuesArgs4: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisDelivery> =
+    {
+      current: state.sentinelGenesisDeliveries,
+      replacement: result.participantDeliveries,
+    };
   state.sentinelGenesisDeliveries = replaceOwnedWasmValues(
     replaceOwnedWasmValuesArgs4,
   );

@@ -238,7 +238,11 @@ export async function createLocalVaultWithDeviceKeys({
       return state.requireManager().connect("local", "", "");
     })) as NookSecretRecord[];
     for (const record of rawRecords) record.free();
-    await state.loadSecretPage("", 0);
+    const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
+      query: "",
+      requestedOffset: 0,
+    };
+    await state.loadSecretPage(loadPageArgs);
     state.markVaultUnlocked();
     const storeId = requireManagerVaultStoreId(state.requireManager());
     state.openActiveVault(storeId);
@@ -303,7 +307,7 @@ export async function renameLocalVaultLabel({
   state.errorMsg = "";
   state.dismissSuccess();
   state.isVerifying = true;
-  const reduceArgs: Parameters<typeof state.localVaults.reduce>[1] = {
+  const previousLabelInitial: PreviousVaultLabel = {
     kind: PreviousVaultLabelKind.Missing,
   };
   const previousLabel = state.localVaults.reduce<PreviousVaultLabel>(
@@ -312,7 +316,7 @@ export async function renameLocalVaultLabel({
       vault.storeId.trim() === trimmedStoreId
         ? { kind: PreviousVaultLabelKind.Present, label: vault.label }
         : current,
-    reduceArgs,
+    previousLabelInitial,
   );
   let renameCommitted = false;
 

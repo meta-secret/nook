@@ -200,7 +200,11 @@ export async function enrollAndConnect(state: VaultState) {
         .enroll_and_connect(...state.wasmStorageArgs(), secretsKey, membersKey),
     )) as NookSecretRecord[];
     for (const record of rawRecords) record.free();
-    await state.loadSecretPage("", 0);
+    const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
+      query: "",
+      requestedOffset: 0,
+    };
+    await state.loadSecretPage(loadPageArgs);
     state.markVaultUnlocked();
     state.enrollSecretsKey = "";
     state.enrollMembersKey = "";

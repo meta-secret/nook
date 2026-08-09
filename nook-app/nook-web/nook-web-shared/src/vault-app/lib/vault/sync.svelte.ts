@@ -932,11 +932,14 @@ export async function syncProviderById({
     state.applyVaultSyncResult(raw);
     await state.refreshSecretsFromSession();
     await state.refreshReplacementConflicts();
-    await state.updateProviderSyncMetadata(
+    const metadataRequest: Parameters<
+      typeof state.updateProviderSyncMetadata
+    >[0] = {
       providerId,
-      await readLocalVaultYaml(),
-      NookProviderSyncRevision.untracked(),
-    );
+      yaml: await readLocalVaultYaml(),
+      revision: NookProviderSyncRevision.untracked(),
+    };
+    await state.updateProviderSyncMetadata(metadataRequest);
     const debugArgs5: Parameters<typeof log.debug>[1] = {
       providerId,
       type: provider.type,

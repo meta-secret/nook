@@ -73,7 +73,10 @@ export async function initOnce(state: VaultState): Promise<void> {
       localeState.kind === SavedAppLocaleKind.Supported
         ? localeState.locale
         : browserLocale;
-    await state.updateLocale(locale);
+    const initialLocaleArgs: Parameters<typeof state.updateLocale>[0] = {
+      newLocale: locale,
+    };
+    await state.updateLocale(initialLocaleArgs);
     await state.refreshLocalVaultCatalog();
     state.openManager(await getVaultManager());
     const configuredApplication = configuredVaultApplication();
@@ -87,10 +90,11 @@ export async function initOnce(state: VaultState): Promise<void> {
       };
       throw new Error(state.t(tArgs));
     }
-    const updateLocaleArgs: Parameters<typeof state.updateLocale>[1] = {
-      preferWasm: true,
+    const updateLocaleArgs: Parameters<typeof state.updateLocale>[0] = {
+      newLocale: locale,
+      options: { preferWasm: true },
     };
-    await state.updateLocale(locale, updateLocaleArgs);
+    await state.updateLocale(updateLocaleArgs);
     state.deviceProtectionStatus = await state
       .requireManager()
       .deviceProtectionStatus();
@@ -123,9 +127,14 @@ export async function initOnce(state: VaultState): Promise<void> {
       } else if (state.deviceProtectionStatus === DeviceProtectionStatus.Pin) {
         return;
       } else {
-        await state.enqueueStorage(() =>
-          setupDeviceProtection(state.requireManager(), ""),
-        );
+        await state.enqueueStorage(() => {
+          const setupArgs: Parameters<typeof setupDeviceProtection>[0] = {
+            manager: state.requireManager(),
+            passkeyLabel: "",
+            deviceMode: state.draftDeviceMode,
+          };
+          return setupDeviceProtection(setupArgs);
+        });
       }
       deviceIdentityUnlocked = true;
       state.deviceAuthorizationInProgress = true;
@@ -394,7 +403,11 @@ export async function createFreshVault(state: VaultState) {
       }
     });
     for (const record of rawRecords) record.free();
-    await state.loadSecretPage("", 0);
+    const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
+      query: "",
+      requestedOffset: 0,
+    };
+    await state.loadSecretPage(loadPageArgs);
     state.markVaultUnlocked();
     state.openActiveVault(
       localLoginActions.requireManagerVaultStoreId(state.requireManager()),

@@ -71,6 +71,7 @@ import {
   type ICloudAccountName,
 } from "$lib/auth/icloud/auth-state";
 import {
+  ICLOUD_SIGN_IN_TIMEOUT_MS,
   readStoredWebAuthToken,
   requestDirectCloudKitWebAuthToken,
   waitForNativeCloudKitWebAuthToken,
@@ -778,7 +779,11 @@ export function requestPreparedICloudWebAuthToken(
   }
   const container = window.CloudKit.getDefaultContainer();
   const waitForCloudKitSignInArgs: Parameters<typeof waitForCloudKitSignIn>[0] =
-    { container, timeoutMs: options.signInTimeoutMs, options };
+    {
+      container,
+      timeoutMs: options.signInTimeoutMs ?? ICLOUD_SIGN_IN_TIMEOUT_MS,
+      options,
+    };
   return waitForCloudKitSignIn(waitForCloudKitSignInArgs).then((identity) =>
     requireStoredWebAuthToken(identity),
   );
@@ -813,7 +818,11 @@ export async function requestICloudWebAuthToken(
   if (identity.kind === CloudKitIdentityKind.SignedOut) {
     const waitForCloudKitSignInArgs2: Parameters<
       typeof waitForCloudKitSignIn
-    >[0] = { container, timeoutMs: options.signInTimeoutMs, options };
+    >[0] = {
+      container,
+      timeoutMs: options.signInTimeoutMs ?? ICLOUD_SIGN_IN_TIMEOUT_MS,
+      options,
+    };
     await waitForCloudKitSignIn(waitForCloudKitSignInArgs2);
   }
 

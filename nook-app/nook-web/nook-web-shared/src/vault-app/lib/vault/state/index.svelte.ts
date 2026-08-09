@@ -6,15 +6,17 @@ import { VaultSessionState } from "./session.svelte";
 import { VaultSyncState } from "./sync.svelte";
 import { VaultUiState } from "./ui.svelte";
 
-function delegateState<State extends object, Key extends keyof State>({
+type DelegateStateArgs<State extends object> = {
+  readonly target: object;
+  readonly state: State;
+  readonly keys: readonly (keyof State)[];
+};
+
+function delegateState<State extends object>({
   target,
   state,
   keys,
-}: {
-  readonly target: object;
-  readonly state: State;
-  readonly keys: readonly Key[];
-}): void {
+}: DelegateStateArgs<State>): void {
   for (const key of keys) {
     const definePropertyArgs: Parameters<typeof Object.defineProperty>[2] = {
       enumerable: true,
@@ -22,7 +24,7 @@ function delegateState<State extends object, Key extends keyof State>({
         const value = Reflect.get(state, key);
         return typeof value === "function" ? value.bind(state) : value;
       },
-      set: (value: State[Key]) => Reflect.set(state, key, value),
+      set: (value: State[keyof State]) => Reflect.set(state, key, value),
     };
     Object.defineProperty(target, key, definePropertyArgs);
   }
@@ -198,43 +200,43 @@ type VaultStateSliceFields = VaultRuntimeState &
 
 class VaultStateSlicesBase {
   constructor(runtimeState = new VaultRuntimeState()) {
-    const delegateStateArgs: Parameters<typeof delegateState>[0] = {
+    const delegateStateArgs: DelegateStateArgs<VaultRuntimeState> = {
       target: this,
       state: runtimeState,
       keys: runtimeKeys,
     };
     delegateState(delegateStateArgs);
-    const delegateStateArgs2: Parameters<typeof delegateState>[0] = {
+    const delegateStateArgs2: DelegateStateArgs<VaultUiState> = {
       target: this,
       state: new VaultUiState(),
       keys: uiKeys,
     };
     delegateState(delegateStateArgs2);
-    const delegateStateArgs3: Parameters<typeof delegateState>[0] = {
+    const delegateStateArgs3: DelegateStateArgs<VaultProviderState> = {
       target: this,
       state: new VaultProviderState(),
       keys: providerKeys,
     };
     delegateState(delegateStateArgs3);
-    const delegateStateArgs4: Parameters<typeof delegateState>[0] = {
+    const delegateStateArgs4: DelegateStateArgs<VaultSessionState> = {
       target: this,
       state: new VaultSessionState(),
       keys: sessionKeys,
     };
     delegateState(delegateStateArgs4);
-    const delegateStateArgs5: Parameters<typeof delegateState>[0] = {
+    const delegateStateArgs5: DelegateStateArgs<VaultSecretsState> = {
       target: this,
       state: new VaultSecretsState(),
       keys: secretsKeys,
     };
     delegateState(delegateStateArgs5);
-    const delegateStateArgs6: Parameters<typeof delegateState>[0] = {
+    const delegateStateArgs6: DelegateStateArgs<VaultSentinelState> = {
       target: this,
       state: new VaultSentinelState(),
       keys: sentinelKeys,
     };
     delegateState(delegateStateArgs6);
-    const delegateStateArgs7: Parameters<typeof delegateState>[0] = {
+    const delegateStateArgs7: DelegateStateArgs<VaultSyncState> = {
       target: this,
       state: new VaultSyncState(),
       keys: syncKeys,

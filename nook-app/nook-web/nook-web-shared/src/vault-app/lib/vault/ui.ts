@@ -203,10 +203,7 @@ export async function deleteLocalData(state: UiActionsContext): Promise<void> {
   } catch (error) {
     const managerWasZeroized = state.localDataDeletionStarted;
     setVaultSessionLocked(true);
-    const clearUnlockedSessionArgs: Parameters<
-      typeof state.clearUnlockedSession
-    >[0] = { state: !managerWasZeroized, resetManager: true };
-    state.clearUnlockedSession(clearUnlockedSessionArgs);
+    state.clearUnlockedSession(!managerWasZeroized);
     state.localDataDeletionStarted = false;
     state.errorMsg =
       error instanceof Error
@@ -227,10 +224,7 @@ export async function handleRemoteLocalBrowserDataDeletion(
   state.stopIdleSessionTracking();
   state.stopVaultSync();
   setVaultSessionLocked(true);
-  const clearUnlockedSessionArgs2: Parameters<
-    typeof state.clearUnlockedSession
-  >[0] = { state: false, resetManager: true };
-  state.clearUnlockedSession(clearUnlockedSessionArgs2);
+  state.clearUnlockedSession(false);
   await resetManager;
   clearTabScopedBrowserData();
 }
