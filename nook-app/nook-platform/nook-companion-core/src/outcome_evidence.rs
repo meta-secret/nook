@@ -4,7 +4,7 @@
 //! This module owns whether those signals are sufficient to treat a workflow
 //! as complete before durably creating or replacing credentials.
 
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -44,7 +44,7 @@ pub struct AuthenticationOutcomeClassification {
     pub timeout_ms: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi)]
 pub struct AuthenticationOutcomeDecision {
@@ -65,8 +65,7 @@ impl AuthenticationOutcomeDecision {
 
 /// Classification of collected outcome evidence.
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthenticationOutcomeVerdict {
     Sufficient,
     Insufficient,
@@ -98,6 +97,23 @@ impl Serialize for AuthenticationOutcomeVerdict {
         S: Serializer,
     {
         serializer.serialize_u32(*self as u32)
+    }
+}
+
+impl<'de> Deserialize<'de> for AuthenticationOutcomeVerdict {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u32::deserialize(deserializer)? {
+            0 => Ok(Self::Sufficient),
+            1 => Ok(Self::Insufficient),
+            2 => Ok(Self::Conflicting),
+            3 => Ok(Self::Timeout),
+            value => Err(serde::de::Error::custom(format!(
+                "invalid authentication outcome verdict: {value}"
+            ))),
+        }
     }
 }
 
@@ -148,16 +164,30 @@ mod tests {
     }
 
     #[test]
-    fn wasm_decision_serializes_generated_verdict_as_numeric_value() -> anyhow::Result<()> {
+    fn wasm_decision_roundtrips_generated_numeric_verdict() -> anyhow::Result<()> {
         let decision = AuthenticationOutcomeDecision {
             verdict: AuthenticationOutcomeVerdict::Conflicting,
             allows_credential_commit: false,
         };
-        let serialized = serde_json::to_value(decision)?;
-        assert_eq!(
-            serialized["verdict"],
-            serde_json::json!(AuthenticationOutcomeVerdict::Conflicting as u32)
-        );
+        let serialized = serde_json::to_string(&decision)?;
+        let roundtrip: AuthenticationOutcomeDecision = serde_json::from_str(&serialized)?;
+        assert_eq!(roundtrip, decision);
+        for (expected, value) in [
+            AuthenticationOutcomeVerdict::Sufficient,
+            AuthenticationOutcomeVerdict::Insufficient,
+            AuthenticationOutcomeVerdict::Conflicting,
+            AuthenticationOutcomeVerdict::Timeout,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let serialized = serde_json::to_string(&value)?;
+            assert_eq!(serialized, expected.to_string());
+            assert_eq!(
+                serde_json::from_str::<AuthenticationOutcomeVerdict>(&serialized)?,
+                value
+            );
+        }
         Ok(())
     }
 

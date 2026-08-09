@@ -329,6 +329,13 @@ pub(super) fn source_violations(
 
     let mut violations = Vec::new();
     for path in files {
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(".d.ts"))
+        {
+            continue;
+        }
         let contents = fs::read_to_string(&path)?;
         for line in detector(&contents) {
             violations.push(Violation {

@@ -144,7 +144,7 @@ export async function authenticationWorkflowSnapshot(
   await companionWasmReady
   const input: AuthenticationPageObservations = { observations }
   const workflowMatch = classifyCompanionAuthenticationWorkflow(input)
-  if (workflowMatch.kind === 'no-match') {
+  if (workflowMatch.kind === AuthenticationWorkflowSnapshotKind.NoMatch) {
     return { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
   }
   return {

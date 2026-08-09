@@ -8,6 +8,7 @@ import {
   scrubProviderCredentials,
   stageProviderCredentials,
 } from '../../lib/provider-credential-staging'
+import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
   type ExtensionPairingItems,
   extensionPairingGrantStorageItems,
@@ -104,17 +105,17 @@ async function importDecodedApprovedPairing(
     await setPairingStorage(pairingItems)
     try {
       const nookTypedArgs0_1: Parameters<typeof sendSessionMessage>[0] = {
-        type: 'nook:extension-session-migrate-auth-providers',
+        type: ExtensionSessionMessageType.MigrateAuthProviders,
       }
       await sendSessionMessage(nookTypedArgs0_1)
       const nookTypedArgs0_2: Parameters<typeof sendSessionMessage>[0] = {
-        type: 'nook:extension-session-reset',
+        type: ExtensionSessionMessageType.Reset,
       }
       await sendSessionMessage(nookTypedArgs0_2)
       // Snapshot before scrubbing so lazy extension IPC cannot observe
       // emptied credential fields mid-handoff.
       const importMessage: {
-        type: 'nook:extension-session-import-vault'
+        type: ExtensionSessionMessageType.ImportVault
         payload: {
           vaultStoreId: string
           deviceId: string
@@ -124,7 +125,7 @@ async function importDecodedApprovedPairing(
           providers: StorageProvider[]
         }
       } = {
-        type: 'nook:extension-session-import-vault' as const,
+        type: ExtensionSessionMessageType.ImportVault,
         payload: {
           vaultStoreId: grantApproval.vaultStoreId,
           deviceId: grantApproval.deviceId,

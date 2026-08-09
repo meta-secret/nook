@@ -5,13 +5,12 @@
 //! user is in it, and which action Nook may offer next.
 
 use crate::website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthenticationWorkflowKind {
     Login,
     Signup,
@@ -44,9 +43,27 @@ impl Serialize for AuthenticationWorkflowKind {
     }
 }
 
+impl<'de> Deserialize<'de> for AuthenticationWorkflowKind {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u32::deserialize(deserializer)? {
+            0 => Ok(Self::Login),
+            1 => Ok(Self::Signup),
+            2 => Ok(Self::PasswordChange),
+            3 => Ok(Self::TotpChallenge),
+            4 => Ok(Self::TotpEnrollment),
+            5 => Ok(Self::Manual),
+            value => Err(serde::de::Error::custom(format!(
+                "invalid authentication workflow kind: {value}"
+            ))),
+        }
+    }
+}
+
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthenticationWorkflowStage {
     Credentials,
     SecondFactor,
@@ -79,9 +96,27 @@ impl Serialize for AuthenticationWorkflowStage {
     }
 }
 
+impl<'de> Deserialize<'de> for AuthenticationWorkflowStage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u32::deserialize(deserializer)? {
+            0 => Ok(Self::Credentials),
+            1 => Ok(Self::SecondFactor),
+            2 => Ok(Self::Verification),
+            3 => Ok(Self::Setup),
+            4 => Ok(Self::Recovery),
+            5 => Ok(Self::Manual),
+            value => Err(serde::de::Error::custom(format!(
+                "invalid authentication workflow stage: {value}"
+            ))),
+        }
+    }
+}
+
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthenticationWorkflowAction {
     ContinueWithNook,
     GeneratePassword,
@@ -113,6 +148,26 @@ impl Serialize for AuthenticationWorkflowAction {
         S: Serializer,
     {
         serializer.serialize_u32(*self as u32)
+    }
+}
+
+impl<'de> Deserialize<'de> for AuthenticationWorkflowAction {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u32::deserialize(deserializer)? {
+            0 => Ok(Self::ContinueWithNook),
+            1 => Ok(Self::GeneratePassword),
+            2 => Ok(Self::FillTotp),
+            3 => Ok(Self::EnrollAuthenticator),
+            4 => Ok(Self::UsePasskey),
+            5 => Ok(Self::CreatePasskey),
+            6 => Ok(Self::TakeOver),
+            value => Err(serde::de::Error::custom(format!(
+                "invalid authentication workflow action: {value}"
+            ))),
+        }
     }
 }
 
@@ -457,7 +512,7 @@ mod tests {
     }
 
     #[test]
-    fn wasm_view_serializes_generated_enums_as_numeric_values() -> anyhow::Result<()> {
+    fn wasm_workflow_roundtrips_generated_numeric_enums() -> anyhow::Result<()> {
         let workflow = AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::Login,
             AuthenticationWorkflowStage::Credentials,
@@ -465,19 +520,64 @@ mod tests {
             1,
             3,
         ));
-        let serialized = serde_json::to_value(workflow)?;
-        assert_eq!(
-            serialized["snapshot"]["kind"],
-            serde_json::json!(AuthenticationWorkflowKind::Login as u32)
-        );
-        assert_eq!(
-            serialized["snapshot"]["stage"],
-            serde_json::json!(AuthenticationWorkflowStage::Credentials as u32)
-        );
-        assert_eq!(
-            serialized["snapshot"]["action"],
-            serde_json::json!(AuthenticationWorkflowAction::ContinueWithNook as u32)
-        );
+        let serialized = serde_json::to_string(&workflow)?;
+        let roundtrip: AuthenticationWorkflowMatch = serde_json::from_str(&serialized)?;
+        assert_eq!(roundtrip, workflow);
+        for (expected, value) in [
+            AuthenticationWorkflowKind::Login,
+            AuthenticationWorkflowKind::Signup,
+            AuthenticationWorkflowKind::PasswordChange,
+            AuthenticationWorkflowKind::TotpChallenge,
+            AuthenticationWorkflowKind::TotpEnrollment,
+            AuthenticationWorkflowKind::Manual,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let serialized = serde_json::to_string(&value)?;
+            assert_eq!(serialized, expected.to_string());
+            assert_eq!(
+                serde_json::from_str::<AuthenticationWorkflowKind>(&serialized)?,
+                value
+            );
+        }
+        for (expected, value) in [
+            AuthenticationWorkflowStage::Credentials,
+            AuthenticationWorkflowStage::SecondFactor,
+            AuthenticationWorkflowStage::Verification,
+            AuthenticationWorkflowStage::Setup,
+            AuthenticationWorkflowStage::Recovery,
+            AuthenticationWorkflowStage::Manual,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let serialized = serde_json::to_string(&value)?;
+            assert_eq!(serialized, expected.to_string());
+            assert_eq!(
+                serde_json::from_str::<AuthenticationWorkflowStage>(&serialized)?,
+                value
+            );
+        }
+        for (expected, value) in [
+            AuthenticationWorkflowAction::ContinueWithNook,
+            AuthenticationWorkflowAction::GeneratePassword,
+            AuthenticationWorkflowAction::FillTotp,
+            AuthenticationWorkflowAction::EnrollAuthenticator,
+            AuthenticationWorkflowAction::UsePasskey,
+            AuthenticationWorkflowAction::CreatePasskey,
+            AuthenticationWorkflowAction::TakeOver,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let serialized = serde_json::to_string(&value)?;
+            assert_eq!(serialized, expected.to_string());
+            assert_eq!(
+                serde_json::from_str::<AuthenticationWorkflowAction>(&serialized)?,
+                value
+            );
+        }
         Ok(())
     }
 
