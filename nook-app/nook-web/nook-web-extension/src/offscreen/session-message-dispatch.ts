@@ -281,11 +281,11 @@ export class ExtensionSessionMessageDispatcher {
     payload: Record<string, unknown>,
   ): Promise<unknown> {
     const operationGeneration = this.operationGeneration
-    const providerCandidate: StorageProvider[] = Array.isArray(
-      payload.providers,
-    )
-      ? payload.providers
-      : []
+    if (!Array.isArray(payload.providers)) {
+      payload.providers = []
+      return { ok: false, error: 'invalid-provider-payload' }
+    }
+    const providerCandidate: StorageProvider[] = payload.providers
     const stagingArgs = {
       providers: providerCandidate,
       decode: this.context.decodeProviders,

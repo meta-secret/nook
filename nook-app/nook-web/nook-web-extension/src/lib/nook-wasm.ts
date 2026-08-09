@@ -175,7 +175,11 @@ function runtimeMessage(message: ExtensionRuntimeRequest): Promise<object> {
         reject(new Error(chrome.runtime.lastError.message))
         return
       }
-      if (!runtimeResponse || Array.isArray(runtimeResponse)) {
+      if (
+        !runtimeResponse ||
+        typeof runtimeResponse !== 'object' ||
+        Array.isArray(runtimeResponse)
+      ) {
         reject(new Error('Extension session returned a malformed response.'))
         return
       }

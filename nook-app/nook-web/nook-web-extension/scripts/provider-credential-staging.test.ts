@@ -117,6 +117,17 @@ describe('provider credential staging', () => {
     expect(providers[0]).not.toHaveProperty('githubPat')
   })
 
+  test('continues scrubbing after a malformed oauth provider', () => {
+    const providers = [
+      { oauthFile: 'malformed' },
+      { githubPat: 'github_pat_following_secret' },
+    ] as object as StorageProvider[]
+
+    scrubProviderCredentials(providers)
+
+    expect(providers[1]).not.toHaveProperty('githubPat')
+  })
+
   test('rejects values outside the serialized external model', async () => {
     const source = [
       {
