@@ -7,16 +7,19 @@ enum members, class members, and dependencies.
 
 ## Problem Pattern
 
-TypeScript and ESLint catch unused local declarations, while Knip without
-`classMembers` allows abandoned public methods and fields on exported
-state-controller classes to remain indefinitely.
+TypeScript and ESLint catch unused local declarations. The production Knip 5
+graph also checks `classMembers`. Knip 6 removed that issue type, so the isolated
+research graph cannot rely on Knip to find abandoned public methods and fields.
 
 ## Preferred Pattern
 
-- Every checked-in Knip graph under `nook-app/nook-web` includes
-  `classMembers` alongside files, exports, types, and enum members.
-- The main `nook-web-app` graph covers shared vault code, Simple, Sentinel, and
-  the extension; research retains its isolated graph.
+- The main `nook-web-app` Knip 5 graph includes `classMembers` alongside files,
+  exports, types, and enum members.
+- That graph covers shared vault code, Simple, Sentinel, and the extension.
+- Research retains its isolated Knip 6 graph. It checks files, exports, types,
+  and enum members.
+- Research class members require a caller audit because Knip 6 no longer
+  exposes the `classMembers` issue type.
 - A green Knip result is not proof that an exported Svelte store has no dead
   members. Audit exported store methods and accessors against direct,
   optional-chained, test, and internal `this` call sites; delete compatibility

@@ -46,9 +46,7 @@ type BlueprintRef = {
   readonly blueprintPath: string;
   readonly family: RequestFamily;
   readonly operation:
-    | AgentStatsOperation
-    | PrLandOperation
-    | BlueprintOperationMarker.FamilyRoot;
+    AgentStatsOperation | PrLandOperation | BlueprintOperationMarker.FamilyRoot;
 };
 
 const DEFAULT_BLUEPRINT: BlueprintRef = {

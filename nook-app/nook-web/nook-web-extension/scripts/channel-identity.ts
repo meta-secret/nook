@@ -8,8 +8,7 @@ export enum ExtensionReleaseChannel {
 
 export type PullRequestExtensionChannel = `pr-${number}`
 export type ExtensionChannel =
-  | ExtensionReleaseChannel
-  | PullRequestExtensionChannel
+  ExtensionReleaseChannel | PullRequestExtensionChannel
 
 export type ExtensionChannelIdentity = {
   channel: ExtensionChannel

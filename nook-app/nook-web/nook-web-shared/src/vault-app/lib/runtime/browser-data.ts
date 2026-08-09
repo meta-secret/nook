@@ -41,9 +41,7 @@ type LocalDataResetReady = {
 };
 
 type LocalDataResetMessage =
-  | LocalDataResetRequest
-  | LocalDataResetSeen
-  | LocalDataResetReady;
+  LocalDataResetRequest | LocalDataResetSeen | LocalDataResetReady;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

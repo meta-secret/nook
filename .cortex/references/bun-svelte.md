@@ -44,14 +44,18 @@ Unused TypeScript and Svelte code is enforced by `bun run unused` (Knip) in both
 and `preflight` sources. Both run under `bun run lint` / `task check` for the
 vault app; the research package's `bun run check` and research-only workflow run
 its workspace-scoped Knip graph with the correct local `$lib` mapping. Knip
-rejects unreachable files and exports and stays pinned to 5.88 until the sibling
-vault/extension packages become a real root workspace. TypeScript and ESLint
-reject unused locals and parameters inside `.ts`, `.svelte.ts`, and `.svelte`
-files; the extension `check` script explicitly lints its build scripts,
-Playwright config, and E2E spec. Every web Knip graph enables
-`classMembers`, so unused public and private class members are reported across
-the production app family and research project. Treat each finding as a
-call-graph result: delete confirmed dead members rather than adding ignores.
+rejects unreachable files and exports. The production app graph stays pinned to
+5.88 until the sibling vault and extension packages become a real root
+workspace. Its graph enables `classMembers`.
+
+The isolated research graph uses Knip 6. Knip 6 removed the `classMembers` issue
+type, so research relies on TypeScript and ESLint for unused declarations plus a
+manual caller audit for exported class members.
+
+TypeScript and ESLint reject unused locals and parameters inside `.ts`,
+`.svelte.ts`, and `.svelte` files. The extension `check` script explicitly lints
+its build scripts, Playwright config, and E2E spec. Treat each finding as a
+call-graph result. Delete confirmed dead members instead of adding ignores.
 
 **Agent duty:** Knip unused findings and jscpd clone findings are hard failures.
 Delete or wire unused code; extract shared helpers for clones. Do not raise

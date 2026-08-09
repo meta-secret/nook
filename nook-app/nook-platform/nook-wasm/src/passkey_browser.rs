@@ -7,7 +7,7 @@
 //! passkey metadata parsing in Rust/WASM.
 
 use coset::iana;
-use getrandom::getrandom;
+use getrandom::fill;
 use passkey_types::{
     Bytes,
     webauthn::{
@@ -598,7 +598,7 @@ fn prf_extension(
 
 fn random_challenge() -> Result<[u8; CHALLENGE_LEN], JsError> {
     let mut challenge = [0u8; CHALLENGE_LEN];
-    getrandom(&mut challenge)
+    fill(&mut challenge)
         .map_err(|error| JsError::new(&format!("Failed to generate passkey challenge: {error}")))?;
     Ok(challenge)
 }

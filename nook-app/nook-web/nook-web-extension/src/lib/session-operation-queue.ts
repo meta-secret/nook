@@ -66,8 +66,7 @@ enum QueueStateKind {
 }
 
 type QueueState =
-  | { kind: QueueStateKind.Open }
-  | { kind: QueueStateKind.Closed; error: Error }
+  { kind: QueueStateKind.Open } | { kind: QueueStateKind.Closed; error: Error }
 
 export class SessionOperationQueue {
   private entries: QueueEntry[] = []

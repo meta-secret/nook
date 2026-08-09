@@ -17,7 +17,7 @@ pub struct SigningIdentity {
 impl SigningIdentity {
     pub fn generate() -> EventResult<(Self, SigningSeedHex)> {
         let mut seed = [0u8; SIGNING_SEED_LEN];
-        getrandom::getrandom(&mut seed)
+        getrandom::fill(&mut seed)
             .map_err(|error| EventError::SigningSeedGeneration(error.to_string()))?;
         Self::from_seed_hex(&hex::encode(seed))
     }

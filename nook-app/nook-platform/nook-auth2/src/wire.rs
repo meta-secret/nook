@@ -387,7 +387,7 @@ impl SymmetricKey {
 
     pub fn generate() -> ValidationResult<Self> {
         let mut bytes = [0u8; 32];
-        getrandom::getrandom(&mut bytes).map_err(|_| ValidationError::SymmetricKeyInvalid)?;
+        getrandom::fill(&mut bytes).map_err(|_| ValidationError::SymmetricKeyInvalid)?;
         Ok(Self(hex::encode(bytes)))
     }
 }

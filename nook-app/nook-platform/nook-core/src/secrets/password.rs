@@ -1,4 +1,4 @@
-use getrandom::getrandom;
+use getrandom::fill;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -74,7 +74,7 @@ pub fn generate_password(options: PasswordGenerationOptions) -> PasswordResult<S
     let charset_bytes = charset.as_bytes();
     let password_length = options.length as usize;
     let mut random = vec![0u8; password_length * 4];
-    getrandom(&mut random).map_err(|e| PasswordError::RandomBytes(e.to_string()))?;
+    fill(&mut random).map_err(|e| PasswordError::RandomBytes(e.to_string()))?;
 
     let mut password = String::with_capacity(password_length);
     for chunk in random.chunks(4) {

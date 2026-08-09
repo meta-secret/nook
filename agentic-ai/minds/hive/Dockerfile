@@ -2,14 +2,14 @@
 
 ARG RUST_VERSION=1.97
 ARG DEBIAN_RELEASE=trixie
-ARG RUST_DIGEST=sha256:1bcff4befb740599103a2c7cb51058e14479b2e35e3a34a3f0dc4ede09927488
+ARG RUST_DIGEST=sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769
 
 FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS bun
-FROM node:24-trixie-slim@sha256:ae91dcc111a68c9d2d81ff2a17bda61be126426176fde6fe7d08ab13b7f50573 AS node
+FROM node:24-trixie-slim@sha256:0711b541c1c33a8a530ac4f0d391baa9a15b3d804695b1b24a47daa5fb60e74d AS node
 FROM rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST} AS toolchain
 
-ARG SCCACHE_VERSION=0.16.0
-ARG SCCACHE_SHA256=aec995a83ad3dff3d14b6314e08858b7b73d35ca85a5bcf3d3a9ec07dee35588
+ARG SCCACHE_VERSION=0.17.0
+ARG SCCACHE_SHA256=67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006
 ARG SCCACHE_S3_MODE=external
 ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh
 ARG SCCACHE_BUCKET=nook-sccache
@@ -62,10 +62,10 @@ COPY --from=nook-sccache-helpers sccache-report.sh /usr/local/bin/nook-sccache-r
 RUN chmod 0755 /usr/local/bin/nook-sccache /usr/local/bin/nook-sccache-report
 
 RUN curl -fsSL \
-      https://github.com/go-task/task/releases/download/v3.42.1/task_linux_amd64.tar.gz \
+      https://github.com/go-task/task/releases/download/v3.52.0/task_linux_amd64.tar.gz \
       -o /tmp/task.tar.gz \
     && printf '%s  %s\n' \
-      05b41f97e655f56cc8a7617106622dbfb5f647d13ec6013ff7719bc80b52746c \
+      02c679ffae53dca791804847d78b31731615894e292948397c971c87ac9e95bd \
       /tmp/task.tar.gz \
       | sha256sum -c - \
     && tar -xzf /tmp/task.tar.gz -C /usr/local/bin task \
@@ -141,18 +141,19 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
 # metadata and linked dependencies.
 FROM fetched-dependencies AS test-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
-    cargo test --locked -p hive --no-run \
+    cargo test --locked --workspace --no-run \
     && nook-sccache-report hive-test-dependencies \
     && install -D /dev/null /opt/nook/hive-test-dependencies
 
 FROM fetched-dependencies AS clippy-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     printf 'fn main() {}\n' > hive/src/main.rs \
-    && cargo clippy --locked -p hive --all-targets -- -D warnings \
+    && cargo clippy --locked --workspace --all-targets -- -D warnings \
     && nook-sccache-report hive-clippy-dependencies \
     && install -D /dev/null /opt/nook/hive-clippy-dependencies
 
 FROM clippy-dependencies AS check-source
+COPY graph.yaml graph.yaml
 COPY lace/src lace/src
 COPY hive/src hive/src
 COPY hive/tests hive/tests
@@ -161,7 +162,7 @@ RUN find lace/src hive/src hive/tests -type f -exec touch {} +
 FROM check-source AS check
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     cargo fmt --all -- --check \
-    && cargo clippy --locked -p hive --all-targets -- -D warnings \
+    && cargo clippy --locked --workspace --all-targets -- -D warnings \
     && nook-sccache-report hive-clippy \
     && install -D /dev/null /opt/nook/hive-check-passed
 
@@ -175,6 +176,7 @@ COPY hive/tests hive/tests
 RUN cargo fmt --all
 
 FROM test-dependencies AS test-source
+COPY graph.yaml graph.yaml
 COPY lace/src lace/src
 COPY hive/src hive/src
 COPY hive/tests hive/tests
@@ -188,7 +190,7 @@ FROM test-source AS test-compile
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     mkdir -p /opt/nook/hive-tests \
-    && cargo test --locked -p hive --no-run --message-format=json \
+    && cargo test --locked --workspace --no-run --message-format=json \
       > /tmp/hive-test-artifacts.jsonl \
     && jq -r \
       'select(.reason == "compiler-artifact" and .profile.test == true and .executable != null) | .executable' \

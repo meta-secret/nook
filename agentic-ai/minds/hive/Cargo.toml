@@ -15,7 +15,7 @@ name = "hive"
 path = "src/main.rs"
 
 [dependencies]
-async-trait = "0.1.89"
+async-trait = "0.1.92"
 axum = "0.8.8"
 clap = { version = "4.6.4", features = ["derive", "env"] }
 codex = { package = "codex-core-api", git = "https://github.com/openai/codex.git", rev = "d7ba5ff9553a6aa0898a8e3bd5cb3bc00d0c9ddf" }
@@ -27,10 +27,10 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 sha2 = "0.11.0"
 tempfile = "3.27.0"
-thiserror = "2.0.18"
+thiserror = "2.0.20"
 time = { version = "0.3.54", features = ["formatting"] }
 tokio = { version = "1.53.1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
-tower-http = { version = "0.6.8", features = ["fs", "trace"] }
+tower-http = { version = "0.7.0", features = ["fs", "trace"] }
 uuid = { version = "1.24.0", features = ["v4"] }
 
 [dev-dependencies]

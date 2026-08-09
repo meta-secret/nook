@@ -5,11 +5,6 @@ import Root from './card.svelte'
 import Title from './card-title.svelte'
 
 export {
-  Root,
-  Description,
-  Footer,
-  Header,
-  Title,
   Root as Card,
   Description as CardDescription,
   Footer as CardFooter,

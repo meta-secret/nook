@@ -22,7 +22,7 @@ pub mod mock_passkey {
 
     use std::collections::HashMap;
 
-    use getrandom::getrandom;
+    use getrandom::fill;
     use sha2::{Digest, Sha256};
     use thiserror::Error;
 
@@ -294,8 +294,7 @@ pub mod mock_passkey {
 
             let credential_id = self.generate_unique_credential_id()?;
             let mut secret = [0u8; MOCK_PASSKEY_SECRET_LEN];
-            getrandom(&mut secret)
-                .map_err(|error| MockPasskeyError::RandomBytes(error.to_string()))?;
+            fill(&mut secret).map_err(|error| MockPasskeyError::RandomBytes(error.to_string()))?;
             let prf_output = evaluate_mock_prf(&secret, &request.prf_input).to_vec();
 
             let stored = StoredMockPasskey {
@@ -358,7 +357,7 @@ pub mod mock_passkey {
         fn generate_unique_credential_id(&self) -> MockPasskeyResult<Vec<u8>> {
             for _ in 0..8 {
                 let mut credential_id = vec![0u8; MOCK_CREDENTIAL_ID_LEN];
-                getrandom(&mut credential_id)
+                fill(&mut credential_id)
                     .map_err(|error| MockPasskeyError::RandomBytes(error.to_string()))?;
                 if !self.credentials.contains_key(&credential_id) {
                     return Ok(credential_id);

@@ -5,7 +5,7 @@ use aes_gcm::{
     aead::{Aead, KeyInit, array::Array},
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use getrandom::getrandom;
+use getrandom::fill;
 use pbkdf2::{pbkdf2_hmac, sha2::Sha256};
 use percent_encoding::{AsciiSet, CONTROLS, percent_decode_str, utf8_percent_encode};
 use serde::{Deserialize, Serialize};
@@ -369,8 +369,8 @@ pub fn encrypt_enrollment_payload(
     };
     let mut salt = [0u8; SALT_LEN];
     let mut iv = [0u8; IV_LEN];
-    getrandom(&mut salt).map_err(|e| EnrollmentError::RandomBytes(e.to_string()))?;
-    getrandom(&mut iv).map_err(|e| EnrollmentError::RandomBytes(e.to_string()))?;
+    fill(&mut salt).map_err(|e| EnrollmentError::RandomBytes(e.to_string()))?;
+    fill(&mut iv).map_err(|e| EnrollmentError::RandomBytes(e.to_string()))?;
 
     let key = derive_enrollment_key(password, &salt, PBKDF2_ITERATIONS);
     let cipher = Aes256Gcm::new(&Array(key));

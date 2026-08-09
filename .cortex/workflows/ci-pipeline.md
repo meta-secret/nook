@@ -104,7 +104,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 **`rust-dependency-updates.yml`**
 
-- Audits every direct dependency in `nook-app/` and `preflight/`.
+- Audits every direct dependency in each Rust root.
+- The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
 - When an update exists, an AI agent updates all outdated Rust dependencies.
 - Runs the full deterministic suite and opens a PR for explicit review.
 
@@ -408,27 +409,45 @@ Do **not** set `workers` in `playwright.config.ts` — use Playwright defaults l
 [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml)
 runs weekly and can be started manually. It installs the pinned
 `cargo-outdated` orchestration tool and runs it with `--workspace
---root-deps-only` in both Rust roots: `nook-app/` and `preflight/`. Therefore
-the audit covers every direct library declared in their `Cargo.toml` manifests,
-not merely the current lockfile's transitive graph.
+--root-deps-only` in every Rust root. Those roots are:
 
-If either audit reports a newer release, the workflow starts the existing
+- `nook-app/nook-platform/`;
+- `nook-app/nook-platform/fuzz/`;
+- `agentic-ai/minds/`;
+- `preflight/`.
+
+The audit covers every direct library declared in those `Cargo.toml` manifests.
+It does not audit only the current lockfile's transitive graph.
+
+If any audit reports a newer release, the workflow starts the existing
 isolated CI agent on `ubuntu-latest`. The agent updates **all** outdated direct
-Rust dependencies, makes compatibility fixes, commits lockfile updates, opens a
-PR, and runs this required full deterministic validation before the CI-agent
-harness opens the PR:
+Rust dependencies and makes compatibility fixes. It runs the required
+validation before the CI-agent harness commits, pushes, and opens the PR:
 
 ```bash
 WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+task docker:ecosystem:fuzz FUZZ_SECONDS=20
+task hive:verify
 ```
 
-`ci:pr:e2e` includes repository preflight, Rust coverage/unit tests, WASM checks,
-web checks/unit tests/builds, the complete local-provider Playwright suite, and
-extension e2e. Credentialed real-provider `sync-live` e2e remains a separate
-manual validation because it creates disposable external-provider state and
-requires provider secrets. The agent opens a PR after local validation. No
-workflow merges it blindly from a check event; a task-owning agent must run the
-standard readiness audit and squash-merge when it succeeds.
+`ci:pr:e2e` validates the product path:
+
+- repository preflight;
+- Rust coverage and unit tests;
+- WASM checks;
+- web checks, unit tests, and builds;
+- the complete local-provider Playwright suite;
+- extension e2e.
+
+The additional targets validate the separate fuzz workspace. They also compile,
+lint, and test both Hive and Lace in the Minds workspace.
+
+Credentialed real-provider `sync-live` e2e remains a separate manual validation.
+It creates disposable external-provider state. It also requires provider
+secrets.
+
+No workflow merges the harness-owned PR from a check event. A task-owning agent
+must run the standard readiness audit. The agent squash-merges when it succeeds.
 
 **One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
 

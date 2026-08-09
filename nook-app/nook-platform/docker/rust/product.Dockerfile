@@ -15,25 +15,25 @@ ARG DEBIAN_RELEASE=trixie
 # Pin floating registry tags by digest. Unpinned `rust` tags move under us and rewrite the
 # rust-base digest, which orphans every downstream cargo-chef cook layer in the hosted GHA cache
 # and forces PRs to redownload crates on an otherwise unchanged Cargo.lock.
-ARG RUST_DIGEST=sha256:1bcff4befb740599103a2c7cb51058e14479b2e35e3a34a3f0dc4ede09927488
+ARG RUST_DIGEST=sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769
 ARG RUST_IMAGE=rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST}
 
 FROM ${RUST_IMAGE} AS rust-base
 
 # Pinned CLI versions, declared once here because they are used only inside this stage's RUNs
 # (a pre-FROM ARG would not be visible in RUN). Override with --build-arg / bake args.
-ARG TASK_VERSION=3.42.1
+ARG TASK_VERSION=3.52.0
 ARG WASM_PACK_VERSION=0.15.0
 ARG LLVM_COV_VERSION=0.8.7
-ARG SCCACHE_VERSION=0.16.0
-ARG SCCACHE_SHA256=aec995a83ad3dff3d14b6314e08858b7b73d35ca85a5bcf3d3a9ec07dee35588
+ARG SCCACHE_VERSION=0.17.0
+ARG SCCACHE_SHA256=67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006
 ARG SCCACHE_S3_MODE=external
 ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh
 ARG SCCACHE_BUCKET=nook-sccache
 # Binaryen (wasm-opt): pinned to a modern release so wasm-pack uses a correct, local wasm-opt.
 # Debian's binaryen is too old (corrupts externref tables -> table.grow crash); baking it here also
 # avoids wasm-pack downloading it from GitHub at build time (flaky, rate-limited).
-ARG BINARYEN_VERSION=122
+ARG BINARYEN_VERSION=131
 # Node binary only — required for wasm-pack test --node. Pin version + sha256 so rust-base does
 # not track a floating Node image digest. npm/npx are intentionally omitted.
 ARG NODE_VERSION=24.19.0

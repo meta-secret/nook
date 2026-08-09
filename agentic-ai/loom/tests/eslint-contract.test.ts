@@ -171,6 +171,7 @@ describe('Loom ESLint contracts', () => {
     );
 
     expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
+      'no-useless-assignment',
       'loom/no-raw-object-arguments',
       'loom/no-raw-object-arguments',
     ]);

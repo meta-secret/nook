@@ -42,7 +42,7 @@ jobs:
         run: task rust:deps:outdated
 
   update:
-    name: AI update, full test, PR, and merge
+    name: AI update, full test, and PR
     needs: audit
     if: needs.audit.outputs.outdated == 'true'
     runs-on: ubuntu-latest

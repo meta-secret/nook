@@ -66,13 +66,19 @@ pub use nook_auth2::{
 
 #[cfg(test)]
 mod test_support {
+    use core::sync::atomic::{AtomicU64, Ordering};
+
     use crate::{EventId, EventResult, SigningIdentity};
     use ed25519_dalek::SigningKey;
     use nook_auth2::{AuthKeyId, DeviceSigningPublicKey, StoreId};
-    use rand_core::OsRng;
 
     pub(crate) fn signing_key() -> SigningKey {
-        SigningKey::generate(&mut OsRng)
+        static NEXT_SIGNING_KEY: AtomicU64 = AtomicU64::new(1);
+
+        let sequence = NEXT_SIGNING_KEY.fetch_add(1, Ordering::Relaxed);
+        let mut bytes = [0_u8; 32];
+        bytes[..size_of::<u64>()].copy_from_slice(&sequence.to_le_bytes());
+        SigningKey::from_bytes(&bytes)
     }
 
     pub(crate) fn actor(signing_key: &SigningKey) -> EventResult<AuthKeyId> {

@@ -573,7 +573,10 @@ mod tests {
         generate_vault_keys, genesis_auth_record,
     };
     use ed25519_dalek::SigningKey;
-    use rand_core::OsRng;
+
+    fn signing_key() -> SigningKey {
+        SigningKey::from_bytes(&[11_u8; 32])
+    }
 
     fn encrypted_secret(
         id: &str,
@@ -737,7 +740,7 @@ mod tests {
     #[test]
     fn event_payload_diagnostics_report_current_epoch() -> VaultResult<()> {
         let identity = DeviceIdentity::generate()?;
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let actor_id = SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?;
         let store_id = StoreId::parse("store_diagstore11")?;
         let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
@@ -832,7 +835,7 @@ mod tests {
     #[test]
     fn unresolved_projection_schema_marks_event_payload_epoch_unsupported() -> VaultResult<()> {
         let identity = DeviceIdentity::generate()?;
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let signing_key = signing_key();
         let actor_id = SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?;
         let store_id = StoreId::parse("store_diagstore12")?;
         let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;

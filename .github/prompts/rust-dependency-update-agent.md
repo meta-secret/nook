@@ -11,14 +11,19 @@ Read `.cortex/AGENTS.md`, `.cortex/rules.md`, and
 
 ## Required work
 
-1. Inspect **every direct dependency** in every `Cargo.toml` under `nook-app/`
-   and `preflight/`; do not update a subset just because one package is the
-   first one reported. Update all outdated direct Rust dependencies with newer
-   releases, including incompatible releases when the project can be migrated
-   safely.
-2. Preserve Nook's exact-version policy: use explicit standard version strings
-   in `Cargo.toml`, never `=`, `^`, `~`, `>=`, or `*`. Update the corresponding
-   `Cargo.lock` files (`nook-app/nook-platform/Cargo.lock` and/or `preflight/Cargo.lock`).
+1. Inspect **every direct dependency** in these Rust roots:
+   - `nook-app/nook-platform/`
+   - `nook-app/nook-platform/fuzz/`
+   - `agentic-ai/minds/`
+   - `preflight/`
+
+   Do not update a subset because one package was reported first.
+   Update all outdated direct Rust dependencies.
+   Include incompatible releases when the project can be migrated safely.
+2. Preserve Nook's version policy.
+   Use explicit standard version strings in `Cargo.toml`.
+   Never use `=`, `^`, `~`, `>=`, or `*`.
+   Update the lockfile owned by each changed Rust root.
 3. Make the smallest required source, feature-flag, or test changes for the
    upgraded APIs. Maintain the Rust/WASM boundary and add behavior-focused Rust
    tests for changed domain behavior.
@@ -27,11 +32,15 @@ Read `.cortex/AGENTS.md`, `.cortex/rules.md`, and
    PR:
    ```bash
    WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+   task docker:ecosystem:fuzz FUZZ_SECONDS=20
+   task hive:verify
    ```
    This covers repository preflight, Rust coverage/unit tests, WASM checks, web
    checks/unit tests/builds, every local-provider Playwright e2e spec, and the
-   extension e2e. The credentialed real-provider suite remains an explicit
-   manual check through the E2E (PR) workflow.
+   extension e2e. The additional targets cover the separate fuzz workspace and
+   compile, lint, and test both Hive and Lace in the Minds workspace. The
+   credentialed real-provider suite remains an explicit manual
+   check through the E2E (PR) workflow.
 5. If the full suite finds a regression, diagnose it (including persisted app
    logs for any e2e failure), fix it, and repeat the applicable full validation.
 
