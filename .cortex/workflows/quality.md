@@ -156,6 +156,10 @@ Use this workflow for quality, CI, and deployment changes.
     #### BuildKit cache (Zot)
 
     - Private Zot is the authoritative BuildKit cache.
+    - The k0s Zot Pod reserves one CPU and 2 GiB of memory.
+    - It may burst to four CPUs and 8 GiB during parallel cache transfers.
+    - Raise that ceiling only after production telemetry proves Zot is the
+      bottleneck.
     - GitHub Actions cache is forbidden.
     - Delivery Bake restores private Zot registry scopes for:
       - Rust toolchain

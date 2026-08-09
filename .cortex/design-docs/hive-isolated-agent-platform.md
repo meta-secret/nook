@@ -46,7 +46,7 @@ or durable Hive state.
 flowchart TB
   subgraph host["Dedicated Debian host"]
     k0s["k0s + containerd"]
-    registry["Loopback OCI registry"]
+    registry["Authenticated Zot registry"]
 
     subgraph data["hive-data namespace (runc)"]
       neo4j["Neo4j + retained local PVC"]
