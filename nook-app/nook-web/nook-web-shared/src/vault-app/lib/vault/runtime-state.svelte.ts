@@ -30,6 +30,8 @@ import {
   translationReplacements,
   type TranslationRequest,
 } from "$lib/vault/translation";
+import type { ProviderActionsContext } from "$lib/vault/action-contexts";
+import type { VaultState } from "$lib/vault.svelte";
 
 export type VaultEditRestriction =
   | { decision: VaultEditDecision.Allowed }
@@ -51,13 +53,16 @@ export type SyncProviderLabel =
   | { kind: SyncProviderLabelKind.Active; label: string };
 
 /** Shared runtime, provider, locale, and queue capabilities for the vault facade. */
-export class VaultRuntimeState extends VaultLifecycleState {
+export abstract class VaultRuntimeState extends VaultLifecycleState {
   secretPageGeneration = 0;
   secretPageRequestOffset = 0;
   architectureSecretCreationAllowed = $state(true);
   private storageQueue = new SerialOperationQueue();
   localDataDeletionStarted = false;
   deviceAuthorizationInProgress = false;
+
+  protected abstract providerActionsContext(): ProviderActionsContext;
+  protected abstract completeVaultState(): VaultState;
 
   get syncBlocked(): boolean {
     return this.syncConflictRequiresDecision;
@@ -175,40 +180,48 @@ export class VaultRuntimeState extends VaultLifecycleState {
   }
 
   wasmStorageArgs(): [string, string, string] {
-    return providersActions.wasmStorageArgs(this);
+    return providersActions.wasmStorageArgs(this.providerActionsContext());
   }
 
   connectStorageArgs(): [string, string, string] {
-    return providersActions.connectStorageArgs(this);
+    return providersActions.connectStorageArgs(this.providerActionsContext());
   }
 
   shouldUseJoinProviderForConnect(): boolean {
-    return providersActions.shouldUseJoinProviderForConnect(this);
+    return providersActions.shouldUseJoinProviderForConnect(
+      this.providerActionsContext(),
+    );
   }
 
   stagedRemoteStorageArgs(): StagedRemoteStorage {
-    return providersActions.stagedRemoteStorageArgs(this);
+    return providersActions.stagedRemoteStorageArgs(
+      this.providerActionsContext(),
+    );
   }
 
   stagedProviderLabel(): string {
-    return providersActions.stagedProviderLabel(this);
+    return providersActions.stagedProviderLabel(this.providerActionsContext());
   }
 
   hasRemoteCredentials(): boolean {
-    return providersActions.hasRemoteProviderCredentials(this);
+    return providersActions.hasRemoteProviderCredentials(
+      this.providerActionsContext(),
+    );
   }
 
   syncOAuthRemoteRefFromManager() {
-    return providersActions.syncOAuthRemoteRefFromManager(this);
+    return providersActions.syncOAuthRemoteRefFromManager(
+      this.providerActionsContext(),
+    );
   }
 
   async ensureOAuthTokensFresh(): Promise<void> {
-    return oauthActions.ensureOAuthTokensFresh(this);
+    return oauthActions.ensureOAuthTokensFresh(this.completeVaultState());
   }
 
   selectGoogleDriveMode(mode: GoogleDriveMode): void {
     const request: Parameters<typeof oauthActions.selectGoogleDriveMode>[0] = {
-      state: this,
+      state: this.completeVaultState(),
       mode,
     };
     oauthActions.selectGoogleDriveMode(request);
@@ -216,18 +229,20 @@ export class VaultRuntimeState extends VaultLifecycleState {
 
   selectICloudMode(mode: ICloudMode): void {
     const request: Parameters<typeof oauthActions.selectICloudMode>[0] = {
-      state: this,
+      state: this.completeVaultState(),
       mode,
     };
     oauthActions.selectICloudMode(request);
   }
 
   async chooseLocalFolderBackupDirectory(): Promise<void> {
-    return providersActions.chooseLocalFolder(this);
+    return providersActions.chooseLocalFolder(this.providerActionsContext());
   }
 
   refreshLocalFolderBackupSupport(): void {
-    return providersActions.refreshLocalFolderBackupSupport(this);
+    return providersActions.refreshLocalFolderBackupSupport(
+      this.providerActionsContext(),
+    );
   }
 
   dismissSuccess() {
@@ -246,15 +261,15 @@ export class VaultRuntimeState extends VaultLifecycleState {
   }
 
   get localProvider(): LocalProviderLookup {
-    return providersActions.localProvider(this);
+    return providersActions.localProvider(this.providerActionsContext());
   }
 
   get activeVaultProviders(): StorageProvider[] {
-    return providersActions.activeProviders(this);
+    return providersActions.activeProviders(this.providerActionsContext());
   }
 
   get syncProviders(): StorageProvider[] {
-    return providersActions.syncProviders(this);
+    return providersActions.syncProviders(this.providerActionsContext());
   }
 
   get hasMultipleLocalVaults(): boolean {
@@ -262,7 +277,7 @@ export class VaultRuntimeState extends VaultLifecycleState {
   }
 
   get showLoginVaultPicker(): boolean {
-    return providersActions.showLoginVaultPicker(this);
+    return providersActions.showLoginVaultPicker(this.providerActionsContext());
   }
 
   providerWasmArgs(provider: StorageProvider): [string, string, string] {
@@ -277,7 +292,7 @@ export class VaultRuntimeState extends VaultLifecycleState {
     readonly options?: { preferWasm?: boolean };
   }) {
     const request: Parameters<typeof localeActions.updateLocale>[0] = {
-      state: this,
+      state: this.completeVaultState(),
       newLocale,
       options,
     };

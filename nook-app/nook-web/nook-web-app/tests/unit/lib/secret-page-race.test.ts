@@ -55,10 +55,12 @@ describe('loadSecretPage', () => {
     const olderRequest = loadSecretPage({
       state: state,
       query: 'older',
+      requestedOffset: 0,
     })
     const newerRequest = loadSecretPage({
       state: state,
       query: 'newer',
+      requestedOffset: 0,
     })
     newer.resolve(newPage.page)
     await newerRequest

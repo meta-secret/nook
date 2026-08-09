@@ -7,6 +7,7 @@ import {
   NookEventLogSyncIssueState,
   NookLocalFolderHealth,
   NookManualProviderSyncState,
+  NookPendingSyncConflict,
   NookProviderSyncRevision,
   readLocalVaultYaml,
 } from "$app-wasm";
@@ -24,6 +25,70 @@ import {
 import { syncError } from "$lib/vault/sync-runtime";
 
 const log = createLogger("vault-sync");
+
+function localFolderMultipleVaultsHealthFromTypedIssue({
+  provider,
+  storeIds,
+  message,
+}: {
+  readonly provider: StorageProvider;
+  readonly storeIds: string[];
+  readonly message: string;
+}): NookLocalFolderHealth {
+  if (provider.type !== "local-folder") {
+    throw new Error("Multiple-vault storage issue requires a local folder");
+  }
+  return NookLocalFolderHealth.multipleVaults(
+    provider.id,
+    provider.label,
+    storeIds,
+    message,
+  );
+}
+
+async function stageProviderStoreMismatchConflict({
+  state,
+  provider,
+  localStoreId,
+  remoteStoreId,
+}: {
+  readonly state: SyncActionsContext;
+  readonly provider: StorageProvider;
+  readonly localStoreId: string;
+  readonly remoteStoreId: string;
+}): Promise<boolean> {
+  const localYaml = await readLocalVaultYaml().catch(() => "");
+  const args =
+    provider.type === "local-folder"
+      ? (["local-folder", "", ""] as const)
+      : state.providerWasmArgs(provider);
+  const revision = NookProviderSyncRevision.untracked();
+  try {
+    state.stageSyncConflict(
+      NookPendingSyncConflict.storeId(
+        provider.id,
+        provider.label,
+        localYaml,
+        "",
+        args[0],
+        args[1],
+        args[2],
+        revision,
+        localStoreId,
+        remoteStoreId,
+      ),
+    );
+  } finally {
+    revision.free();
+  }
+  const warnArgs: Parameters<typeof log.warn>[1] = {
+    provider: provider.label,
+    localStoreId,
+    remoteStoreId,
+  };
+  log.warn("provider store mismatch staged", warnArgs);
+  return true;
+}
 
 export async function syncLocalFolderProvider({
   state,
@@ -139,9 +204,10 @@ export async function syncProviderById({
           pat,
           repo,
         };
-        const raceStorageTimeoutArgs: Parameters<
-          typeof state.raceStorageTimeout
-        >[0] = {
+        const raceStorageTimeoutArgs: {
+          readonly promise: Promise<NookVaultSyncResult>;
+          readonly label: string;
+        } = {
           promise: syncVaultFromStorage(syncRequest),
           label: "Vault sync",
         };

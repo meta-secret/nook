@@ -38,21 +38,22 @@ describe('sanitizeLogUrl', () => {
 
   it('never persists query or fragment secrets for valid web URLs', () => {
     fc.assert(
-      fc.property({
-        0: fc.webUrl(),
-        1: fc.string(),
-        2: fc.string(),
-        3: (rawUrl, querySecret, fragmentSecret) => {
+      fc.property(
+        fc.webUrl(),
+        fc.string(),
+        fc.string(),
+        (rawUrl, querySecret, fragmentSecret) => {
           const url = new URL(rawUrl)
           url.searchParams.set('credential', querySecret)
           url.hash = fragmentSecret
+
           const sanitized = new URL(sanitizeLogUrl(url.toString()))
           expect(sanitized.search).toBe('')
           expect(sanitized.hash).toBe('')
           expect(sanitized.origin).toBe(url.origin)
           expect(sanitized.pathname).toBe(url.pathname)
         },
-      }),
+      ),
     )
   })
 })

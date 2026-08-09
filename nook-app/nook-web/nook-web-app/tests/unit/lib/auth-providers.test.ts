@@ -84,16 +84,22 @@ describe('providerStorageDetail', () => {
       githubPat: storedGithubPat('github_pat_22CCCCdddd'),
     })
 
-    expect(providerStorageDetail(alpha)).toBe('alpha · github_pat_11A…')
-    expect(providerStorageDetail(beta)).toBe('beta · github_pat_22C…')
-    expect(providerStorageDetail(alpha)).not.toBe(providerStorageDetail(beta))
+    expect(providerStorageDetail({ provider: alpha })).toBe(
+      'alpha · github_pat_11A…',
+    )
+    expect(providerStorageDetail({ provider: beta })).toBe(
+      'beta · github_pat_22C…',
+    )
+    expect(providerStorageDetail({ provider: alpha })).not.toBe(
+      providerStorageDetail({ provider: beta }),
+    )
   })
 
   test('never exposes the full token', () => {
     const pat = 'github_pat_11BBBBCCCCDDDDEEEEFFFF'
-    const detail = providerStorageDetail(
-      githubProvider({ githubPat: storedGithubPat(pat) }),
-    )
+    const detail = providerStorageDetail({
+      provider: githubProvider({ githubPat: storedGithubPat(pat) }),
+    })
     expect(detail).not.toContain(pat)
     expect(detail).toContain('…')
   })
@@ -107,7 +113,7 @@ describe('providerStorageDetail', () => {
       syncCheckpoint: { state: 'neverSynced' },
       createdAt: '2026-06-24T00:00:00.000Z',
     }
-    expect(providerStorageDetail(local)).toBe(
+    expect(providerStorageDetail({ provider: local })).toBe(
       'Vault in browser storage on this device',
     )
   })
@@ -148,12 +154,14 @@ describe('providerStorageDetail', () => {
       createdAt: '2026-06-24T00:00:00.000Z',
     }
 
-    expect(providerStorageDetail(personal)).toBe(
+    expect(providerStorageDetail({ provider: personal })).toBe(
       'personal.yaml · me@example.com',
     )
-    expect(providerStorageDetail(work)).toBe('work.yaml · me@example.com')
-    expect(providerStorageDetail(personal)).not.toBe(
-      providerStorageDetail(work),
+    expect(providerStorageDetail({ provider: work })).toBe(
+      'work.yaml · me@example.com',
+    )
+    expect(providerStorageDetail({ provider: personal })).not.toBe(
+      providerStorageDetail({ provider: work }),
     )
   })
 })

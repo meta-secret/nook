@@ -50,17 +50,14 @@ describe('KeePassXC import panel', () => {
     ) as HTMLButtonElement
 
     expect(submit.disabled).toBe(true)
-    await fireEvent.change({
-      0: input,
-      1: {
-        target: {
-          files: [
-            new File(
-              ['Group,Title,Username,Password,URL,Notes\n'],
-              'keepassxc.csv',
-            ),
-          ],
-        },
+    await fireEvent.change(input, {
+      target: {
+        files: [
+          new File(
+            ['Group,Title,Username,Password,URL,Notes\n'],
+            'keepassxc.csv',
+          ),
+        ],
       },
     })
     expect(submit.disabled).toBe(false)
@@ -96,12 +93,9 @@ describe('LastPass import panel', () => {
     const submit = view.getByTestId(
       'lastpass-import-submit',
     ) as HTMLButtonElement
-    await fireEvent.change({
-      0: input,
-      1: {
-        target: {
-          files: [new File(['url,username,password\n'], 'lastpass.csv')],
-        },
+    await fireEvent.change(input, {
+      target: {
+        files: [new File(['url,username,password\n'], 'lastpass.csv')],
       },
     })
 
@@ -135,12 +129,9 @@ describe('LastPass import panel', () => {
     ) as HTMLButtonElement
 
     expect(submit.disabled).toBe(true)
-    await fireEvent.change({
-      0: input,
-      1: {
-        target: {
-          files: [new File(['url,username,password\n'], 'lastpass.csv')],
-        },
+    await fireEvent.change(input, {
+      target: {
+        files: [new File(['url,username,password\n'], 'lastpass.csv')],
       },
     })
     expect(submit.disabled).toBe(false)
@@ -168,11 +159,8 @@ describe('LastPass import panel', () => {
     const submit = view.getByTestId(
       'lastpass-import-submit',
     ) as HTMLButtonElement
-    await fireEvent.change({
-      0: input,
-      1: {
-        target: { files: [new File(['invalid'], 'lastpass.csv')] },
-      },
+    await fireEvent.change(input, {
+      target: { files: [new File(['invalid'], 'lastpass.csv')] },
     })
     expect(submit.disabled).toBe(true)
 
@@ -206,12 +194,9 @@ describe('Safari / Apple Passwords import panel', () => {
     ) as HTMLButtonElement
 
     expect(submit.disabled).toBe(true)
-    await fireEvent.change({
-      0: input,
-      1: {
-        target: {
-          files: [new File([new Uint8Array([80, 75, 3, 4])], 'Safari.zip')],
-        },
+    await fireEvent.change(input, {
+      target: {
+        files: [new File([new Uint8Array([80, 75, 3, 4])], 'Safari.zip')],
       },
     })
     expect(submit.disabled).toBe(false)
@@ -245,12 +230,9 @@ describe('Dashlane import panel', () => {
     ) as HTMLButtonElement
 
     expect(submit.disabled).toBe(true)
-    await fireEvent.change({
-      0: input,
-      1: {
-        target: {
-          files: [new File([new Uint8Array([80, 75, 3, 4])], 'dashlane.zip')],
-        },
+    await fireEvent.change(input, {
+      target: {
+        files: [new File([new Uint8Array([80, 75, 3, 4])], 'dashlane.zip')],
       },
     })
     expect(submit.disabled).toBe(false)
@@ -286,12 +268,9 @@ describe('Proton Pass import panel', () => {
     ) as HTMLButtonElement
 
     expect(submit.disabled).toBe(true)
-    await fireEvent.change({
-      0: input,
-      1: {
-        target: {
-          files: [new File([new Uint8Array([80, 75, 3, 4])], 'proton.zip')],
-        },
+    await fireEvent.change(input, {
+      target: {
+        files: [new File([new Uint8Array([80, 75, 3, 4])], 'proton.zip')],
       },
     })
     expect(submit.disabled).toBe(false)
@@ -318,11 +297,8 @@ describe('Proton Pass import panel', () => {
     const input = view.getByTestId(
       'proton-pass-export-file',
     ) as HTMLInputElement
-    await fireEvent.change({
-      0: input,
-      1: {
-        target: { files: [new File(['encrypted'], 'proton.zip')] },
-      },
+    await fireEvent.change(input, {
+      target: { files: [new File(['encrypted'], 'proton.zip')] },
     })
     await fireEvent.click(view.getByTestId('proton-pass-import-submit'))
 
@@ -355,18 +331,12 @@ describe('Google Authenticator import panel', () => {
     ) as HTMLButtonElement
 
     expect(submit.disabled).toBe(true)
-    await fireEvent.change({
-      0: input,
-      1: {
-        target: { files: [new File(['first'], 'first.png')] },
-      },
+    await fireEvent.change(input, {
+      target: { files: [new File(['first'], 'first.png')] },
     })
     await waitFor(() => expect(scanImage).toHaveBeenCalledTimes(1))
-    await fireEvent.change({
-      0: input,
-      1: {
-        target: { files: [new File(['second'], 'second.png')] },
-      },
+    await fireEvent.change(input, {
+      target: { files: [new File(['second'], 'second.png')] },
     })
     await waitFor(() => {
       expect(
@@ -403,11 +373,8 @@ describe('Google Authenticator import panel', () => {
     ) as HTMLInputElement
 
     for (const name of ['first.png', 'duplicate.png']) {
-      await fireEvent.change({
-        0: input,
-        1: {
-          target: { files: [new File([name], name)] },
-        },
+      await fireEvent.change(input, {
+        target: { files: [new File([name], name)] },
       })
     }
     await waitFor(() => {
@@ -415,11 +382,8 @@ describe('Google Authenticator import panel', () => {
         view.getByTestId('google-authenticator-import-error').textContent,
       ).toContain(I18N_KEYS.GoogleAuthenticatorImportDuplicateQr)
     })
-    await fireEvent.change({
-      0: input,
-      1: {
-        target: { files: [new File(['other'], 'other.png')] },
-      },
+    await fireEvent.change(input, {
+      target: { files: [new File(['other'], 'other.png')] },
     })
     await waitFor(() => {
       expect(

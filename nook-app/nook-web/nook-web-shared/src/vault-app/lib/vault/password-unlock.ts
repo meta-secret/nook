@@ -2,6 +2,10 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
 import { EnrollmentEntryKind } from "$lib/vault/state/session.svelte";
 import { createLogger, runtimeFailure } from "$lib/runtime/log";
+import {
+  isSentinelPasswordUnlockForbiddenError,
+  isSentinelVault,
+} from "$lib/vault/sentinel-unlock";
 export {
   findSharedGrantProvider,
   SharedGrantProviderKind,

@@ -109,10 +109,7 @@ describe('createVaultIdleSessionTracker', () => {
         'scroll',
         'click',
       ]) {
-        expect(removeListener).toHaveBeenCalledWith({
-          0: event,
-          1: expect.any(Function),
-        })
+        expect(removeListener).toHaveBeenCalledWith(event, expect.any(Function))
       }
     } finally {
       tracker.stop()

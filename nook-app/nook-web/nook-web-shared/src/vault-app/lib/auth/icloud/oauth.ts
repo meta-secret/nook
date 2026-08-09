@@ -123,6 +123,17 @@ function cloudKitIdentityFromExternal(
   };
 }
 
+async function fetchCurrentCloudKitIdentity(
+  container: CloudKitContainer,
+): Promise<CloudKitIdentity> {
+  if (!container.fetchCurrentUserIdentity) {
+    return { kind: CloudKitIdentityKind.SignedOut };
+  }
+  return cloudKitIdentityFromExternal(
+    await container.fetchCurrentUserIdentity(),
+  );
+}
+
 function rememberCloudKitIdentity(identity: CloudKitIdentity): void {
   cloudKitIdentity = identity;
 }
@@ -470,9 +481,7 @@ export async function createICloudSharedVault(
   const identity =
     setupIdentity.kind === CloudKitIdentityKind.SignedIn
       ? setupIdentity
-      : cloudKitIdentityFromExternal(
-          await container.fetchCurrentUserIdentity?.(),
-        );
+      : await fetchCurrentCloudKitIdentity(container);
   const ownerRecordName =
     identity.kind === CloudKitIdentityKind.SignedIn
       ? identity.identity.userRecordName?.trim()
@@ -550,9 +559,7 @@ export async function acceptICloudSharedVault(
   const identity =
     currentIdentity.kind === CloudKitIdentityKind.SignedIn
       ? currentIdentity
-      : cloudKitIdentityFromExternal(
-          await container.fetchCurrentUserIdentity?.(),
-        );
+      : await fetchCurrentCloudKitIdentity(container);
   if (
     encodedTarget.kind === EncodedICloudSharedTargetKind.EncodedTarget &&
     identity.kind === CloudKitIdentityKind.SignedIn &&

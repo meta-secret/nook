@@ -25,7 +25,10 @@ import {
   type StorageProviderType,
 } from "$lib/auth/providers";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
-import type { OpenSettingsArgs } from "$lib/vault/action-contexts";
+import type {
+  OpenSettingsArgs,
+  ProviderActionsContext,
+} from "$lib/vault/action-contexts";
 import * as providersActions from "$lib/vault/providers.svelte";
 import * as localLoginActions from "$lib/vault/local-login";
 import * as syncActions from "$lib/vault/sync.svelte";
@@ -52,6 +55,14 @@ export {
 } from "$lib/vault/runtime-state.svelte";
 
 export class VaultState extends VaultRuntimeState {
+  protected providerActionsContext(): ProviderActionsContext {
+    return this;
+  }
+
+  protected completeVaultState(): VaultState {
+    return this;
+  }
+
   async init() {
     return lifecycleActions.init(this);
   }

@@ -41,6 +41,7 @@ import {
   syncError,
 } from "$lib/vault/sync-runtime";
 import { publishExtensionEventLogUpdateForVault } from "$lib/vault/sync-extension-bridge";
+import { syncLocalFolderProvider } from "$lib/vault/provider-sync.svelte";
 export { publishExtensionEventLogUpdateForVault };
 
 export * from "$lib/vault/sync-resolution";
