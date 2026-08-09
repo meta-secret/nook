@@ -279,13 +279,25 @@ fn assert_workflows_scope_cache_credentials() {
     let pr_docker_setups = pr
         .matches("uses: ./.github/actions/nook-docker-setup")
         .count();
-    assert_eq!(
-        pr.matches("NOOK_SCCACHE_ACCESS_KEY").count(),
-        pr_docker_setups,
-        "same-repository PR Docker jobs must mount SeaweedFS sccache like Hive"
+    let pr_ui_demo = pr
+        .split_once("\n  ui-demo:\n")
+        .and_then(|(_, tail)| tail.split_once("\n  preview:\n"))
+        .map(|(job, _)| job)
+        .context("PR workflow must keep the UI demo job")?;
+    assert!(
+        !pr_ui_demo.contains("NOOK_SCCACHE_ACCESS_KEY")
+            && !pr_ui_demo.contains("NOOK_SCCACHE_SECRET_KEY")
+            && !pr_ui_demo.contains("NOOK_SCCACHE_ENDPOINT")
+            && !pr_ui_demo.contains("NOOK_SCCACHE_BUCKET"),
+        "browser-only PR UI demos must not receive compiler-cache credentials"
     );
     assert_eq!(
-        pr.matches("NOOK_SCCACHE_SECRET_KEY").count(),
+        pr.matches("NOOK_SCCACHE_ACCESS_KEY").count() + 1,
+        pr_docker_setups,
+        "same-repository PR Rust-producing Docker jobs must mount SeaweedFS sccache like Hive"
+    );
+    assert_eq!(
+        pr.matches("NOOK_SCCACHE_SECRET_KEY").count() + 1,
         pr_docker_setups
     );
     assert_eq!(

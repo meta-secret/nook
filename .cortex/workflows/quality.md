@@ -297,7 +297,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Explicit collaborator-dispatched Remote jobs use a separate SeaweedFS identity.
     - Remote identity can read but cannot write `nook-sccache`.
     - Remote jobs restore Main's Zot lineage and write only git-commit refs under `nook/remote-buildcache/**`.
-    - Same-repository PR and Rust ecosystem Docker jobs mount the Main SeaweedFS build identity.
+    - Same-repository PR Rust producers and Rust ecosystem Docker jobs mount the Main SeaweedFS build identity.
     - Forks stay secret-free and cold-compile.
     - PR jobs export only git-commit refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
     - Release and browser-only jobs receive neither cache credential and cannot evict Main.
@@ -307,7 +307,8 @@ Use this workflow for quality, CI, and deployment changes.
     - Main serializes native → WASM → web publisher lanes.
     - Each lane verifies read-only first, then exports its already-solved graph from the same job-scoped builder.
     - WASM dependencies export alone with no hosted reimport and forced zstd compression.
-    - Browser/UI consumers remain read-only.
+    - Browser/UI validation remains read-only and receives no compiler-cache identity.
+    - After UI-demo assertions pass, its lane exports the warm browser graph through a dedicated cache-only publisher.
     - Main runs full local-provider and extension e2e.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 

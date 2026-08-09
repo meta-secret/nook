@@ -258,7 +258,6 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         1,
         "PR CI must not duplicate the verified WASM producer"
     );
-    let verify_job = section(&pr, "  verify:\n", "  preview:\n");
     let preview_job = section(&pr, "  preview:\n", "  coverage:\n");
     assert!(
         verify_job.contains("github.event.action != 'closed'")
