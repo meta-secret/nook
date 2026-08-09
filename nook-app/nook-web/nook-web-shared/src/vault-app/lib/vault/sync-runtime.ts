@@ -6,7 +6,6 @@ const log = createLogger("vault-sync");
 
 export function syncError({
   context,
-  failure,
 }: {
   readonly context: string;
   readonly failure: RuntimeFailure;

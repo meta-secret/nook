@@ -43,7 +43,6 @@ import {
   acceptICloudSharedVault,
   createICloudSharedVault,
   ensureValidICloudOAuthFileConfig,
-  ICloudAccountNameKind,
   isICloudOAuthConfigured,
   oauthTokensToICloudConfig,
   prepareICloudSignInControl,
@@ -66,7 +65,6 @@ import {
 import {
   LoginSetupKind,
   OAuthFileDraftKind,
-  OAuthSetupPresetKind,
 } from "$lib/vault/state/provider.svelte";
 
 const log = createLogger("vault-oauth");
@@ -576,7 +574,6 @@ async function applyICloudOAuthTokens({
     resolvedFileName.kind === OAuthFileNameKind.Resolved
       ? resolvedFileName.fileName
       : DEFAULT_DRIVE_BACKUP_NAME;
-  const accessCredential = oauthAccessToken(oauthFile);
   log.info("iCloud oauth tokens applied to vault state");
 }
 

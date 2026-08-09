@@ -154,7 +154,7 @@ export async function initOnce(state: VaultState): Promise<void> {
           };
           await state.loadProviders(loadProvidersArgs);
           state.applyActiveProviderCredentials();
-        } catch (error) {
+        } catch {
           log.warn("empty-device provider load deferred until passkey ");
           state.providersLoaded = true;
         }
@@ -163,7 +163,7 @@ export async function initOnce(state: VaultState): Promise<void> {
     }
     await continueInitializationAfterDeviceUnlock(state);
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
-  } catch (error) {
+  } catch {
     if (
       state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
       deviceIdentityUnlocked

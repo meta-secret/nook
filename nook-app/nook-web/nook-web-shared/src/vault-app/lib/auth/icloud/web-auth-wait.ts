@@ -13,15 +13,10 @@ import {
 import { createLogger } from "$lib/runtime/log";
 import {
   cloudKitAuthTokenStore,
-  cloudKitSignInControlDiagnostics,
-  currentBrowserDiagnostics,
   normalizeWebAuthToken,
-  sanitizedURLDiagnostics,
   storeCloudKitWebAuthToken,
-  tokenDiagnostics,
   WebAuthTokenLookupKind,
   webAuthTokenListeners,
-  webAuthTokenStorageDiagnostics,
   type CloudKitAuthChallenge,
   type WebAuthTokenLookup,
 } from "$lib/auth/icloud/cloudkit-runtime";

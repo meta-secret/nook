@@ -334,7 +334,7 @@ export async function renameLocalVaultLabel({
       try {
         await setLocalVaultLabel(trimmedStoreId, previousLabel.label);
         await refreshLocalVaultCatalog(state);
-      } catch (rollbackError) {
+      } catch {
         log.warn("local vault rename rollback failed");
       }
     }

@@ -88,7 +88,7 @@ export async function discoverStagedVaultStoreId(
               state.requireManager().vaultRecoveryOptions(),
             ),
           );
-        } catch (error) {
+        } catch {
           state.clearExistingVaultRecoverySummary();
           log.warn("vault recovery summary unavailable");
         }

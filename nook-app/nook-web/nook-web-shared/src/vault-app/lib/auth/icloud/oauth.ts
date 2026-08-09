@@ -38,16 +38,11 @@ import {
   CLOUDKIT_SIGN_IN_BUTTON_ID,
   CLOUDKIT_SIGN_OUT_BUTTON_ID,
   cloudKitAuthTokenStore,
-  cloudKitSignInControlDiagnostics,
-  currentBrowserDiagnostics,
-  iCloudConfigDiagnostics,
   getDefaultCloudKitContainer,
   isBraveBrowser,
   loadCloudKitScript,
-  tokenDiagnostics,
   WebAuthTokenLookupKind,
   webAuthTokenListeners,
-  webAuthTokenStorageDiagnostics,
   type CloudKitContainer,
   type CloudKitAuthErrorDetails,
   type CloudKitConfiguration,
@@ -165,7 +160,6 @@ function hasCloudKitSignInControl(): boolean {
 
 function logCloudKitAuthFailure({
   message,
-  details,
 }: {
   readonly message: string;
   readonly details: CloudKitAuthErrorDetails;

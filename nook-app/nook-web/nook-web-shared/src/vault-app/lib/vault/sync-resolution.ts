@@ -105,8 +105,6 @@ export async function resolveSyncConflictKeepLocal(
     state.isVerifying
   )
     return;
-  const conflict = review;
-
   state.isVerifying = true;
   state.errorMsg = "";
   log.info("sync conflict resolved (keep local)");
@@ -123,7 +121,6 @@ export async function resolveSyncConflictKeepRemote(
     state.isVerifying
   )
     return;
-  const conflict = review;
   log.info("sync conflict resolved (keep remote)");
   state.errorMsg = state.t(I18N_KEYS.ErrorsWholeVaultConflictResolutionRetired);
   state.isVerifying = false;

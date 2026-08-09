@@ -53,7 +53,7 @@ export function refreshVaultArchitectureFromManager(
   try {
     architecture = state.requireManager()
       .vaultArchitecture as VaultArchitecture;
-  } catch (error) {
+  } catch {
     log.warn("vault architecture metadata could not be loaded");
     return;
   }

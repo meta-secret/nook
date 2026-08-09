@@ -294,7 +294,7 @@ export async function flushRemoteEventOutboxNow({
         typeof syncLocalFolderProvider
       >[0] = { state, provider: target.provider };
       await syncLocalFolderProvider(syncLocalFolderProviderArgs2);
-    } catch (error) {
+    } catch {
       log.warn("local backup sync skipped");
     }
     return;
@@ -304,7 +304,7 @@ export async function flushRemoteEventOutboxNow({
     await state.enqueueStorage(() =>
       state.requireManager().flushEventOutboxForProvider(...target.args),
     );
-  } catch (error) {
+  } catch {
     log.warn("event outbox flush skipped");
   }
 }
