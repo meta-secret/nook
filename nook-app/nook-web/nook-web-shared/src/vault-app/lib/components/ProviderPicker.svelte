@@ -16,7 +16,7 @@
     providerPersistenceDefaults,
     storedGithubPat,
     storedGithubRepository,
-    type OAuthFilePreset,
+    type ProviderSetupRequest,
     type StorageProvider,
     type StorageProviderType,
   } from '$lib/auth/providers'
@@ -30,7 +30,7 @@
     excludeLocalFolder = false,
   }: {
     vault: VaultState
-    onSelect: (args: { readonly type: StorageProviderType; readonly oauthPreset?: OAuthFilePreset }) => void
+    onSelect: (request: ProviderSetupRequest) => void
     excludeLocal?: boolean
     excludeLocalFolder?: boolean
   } = $props()
@@ -54,9 +54,9 @@
     type: GITHUB_PROVIDER_TYPE,
   }
 
-  function draftProvider(
-    { type, oauthPreset }: { readonly type: StorageProviderType; readonly oauthPreset?: OAuthFilePreset },
-  ): StorageProvider {
+  function draftProvider(request: ProviderSetupRequest): StorageProvider {
+    const { type } = request
+    const oauthPreset = type === OAUTH_FILE_PROVIDER_TYPE ? request.oauthPreset : 'default'
     const base: StorageProvider = {
       ...providerPersistenceDefaults(),
       id: `draft-${type}-${oauthPreset ?? 'default'}`,
@@ -74,7 +74,7 @@
     }
     if (type === OAUTH_FILE_PROVIDER_TYPE) {
       const defaultConfigRequest: Parameters<typeof defaultOAuthFileConfig>[0] = {
-        preset: oauthPreset ?? GOOGLE_DRIVE_OAUTH_FILE_PRESET,
+        preset: request.oauthPreset,
         fileName: DEFAULT_DRIVE_BACKUP_NAME,
       }
       return {
@@ -87,10 +87,8 @@
     return base
   }
 
-  function blocked(
-    { type, oauthPreset }: { readonly type: StorageProviderType; readonly oauthPreset?: OAuthFilePreset },
-  ): boolean {
-    const draftProviderArgs: Parameters<typeof draftProvider>[0] = { type, oauthPreset };
+  function blocked(request: ProviderSetupRequest): boolean {
+    const draftProviderArgs: Parameters<typeof draftProvider>[0] = request;
     const result = providerReplicationCapability(
       draftProvider(draftProviderArgs),
     )
@@ -103,10 +101,14 @@
     }
   }
 
-  function description(
-    { key, type, oauthPreset }: { readonly key: string; readonly type: StorageProviderType; readonly oauthPreset?: OAuthFilePreset },
-  ): string {
-    if ((() => { const blockedArgs: Parameters<typeof blocked>[0] = { type, oauthPreset }; return blocked(blockedArgs); })()) {
+  function description({
+    key,
+    request,
+  }: {
+    readonly key: string
+    readonly request: ProviderSetupRequest
+  }): string {
+    if (blocked(request)) {
       return vault.t(I18N_KEYS.ProviderPickerUnsupportedReplicationDesc)
     }
     return vault.t(key)
@@ -136,7 +138,7 @@
             <span class="block truncate text-xs text-muted-foreground">
               {(() => { const descriptionRequest: Parameters<typeof description>[0] = {
                 key: I18N_KEYS.ProviderPickerThisDeviceDesc,
-                ...localProviderRequest,
+                request: localProviderRequest,
               }; return description(descriptionRequest); })()}
             </span>
           </span>
@@ -165,7 +167,7 @@
                 ? vault.t(I18N_KEYS.ProviderPickerLocalFolderUnavailableDesc)
                 : (() => { const descriptionRequest: Parameters<typeof description>[0] = {
                     key: I18N_KEYS.ProviderPickerLocalFolderDesc,
-                    ...localFolderProviderRequest,
+                    request: localFolderProviderRequest,
                   }; return description(descriptionRequest); })()}
             </span>
           </span>
@@ -212,7 +214,7 @@
           <span class="block truncate text-xs text-muted-foreground">
             {(() => { const descriptionRequest: Parameters<typeof description>[0] = {
               key: I18N_KEYS.ProviderPickerGoogleDriveDesc,
-              ...googleDriveProviderRequest,
+              request: googleDriveProviderRequest,
             }; return description(descriptionRequest); })()}
           </span>
         </span>
@@ -245,7 +247,7 @@
           <span class="block truncate text-xs text-muted-foreground">
             {(() => { const descriptionRequest: Parameters<typeof description>[0] = {
               key: I18N_KEYS.ProviderPickerIcloudDesc,
-              ...iCloudProviderRequest,
+              request: iCloudProviderRequest,
             }; return description(descriptionRequest); })()}
           </span>
         </span>
@@ -269,7 +271,7 @@
           <span class="block truncate text-xs text-muted-foreground">
             {(() => { const descriptionRequest: Parameters<typeof description>[0] = {
               key: I18N_KEYS.ProviderPickerGithubDesc,
-              ...githubProviderRequest,
+              request: githubProviderRequest,
             }; return description(descriptionRequest); })()}
           </span>
         </span>

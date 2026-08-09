@@ -10,9 +10,8 @@
   } from '@lucide/svelte'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import type {
-    OAuthFilePreset,
+    ProviderSetupRequest,
     StorageProvider,
-    StorageProviderType,
   } from '$lib/auth/providers'
   import {
     GITHUB_PROVIDER_TYPE,
@@ -45,7 +44,7 @@
     open?: boolean
     addingProvider?: boolean
     onBeginSetup?: (
-      args: { readonly type: StorageProviderType; readonly oauthPreset?: OAuthFilePreset },
+      request: ProviderSetupRequest,
     ) => void
     onCancelAddProvider?: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>

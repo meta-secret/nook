@@ -20,7 +20,7 @@
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
   import type {
-    OAuthFilePreset,
+    ProviderSetupRequest,
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth/providers'
@@ -82,9 +82,7 @@
     onSyncProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
-    onBeginSetup: (
-      args: { readonly type: StorageProviderType; readonly oauthPreset?: OAuthFilePreset },
-    ) => void
+    onBeginSetup: (request: ProviderSetupRequest) => void
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
   } = $props()

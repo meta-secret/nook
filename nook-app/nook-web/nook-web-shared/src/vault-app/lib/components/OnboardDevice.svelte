@@ -25,7 +25,7 @@
     isICloudProvider,
     localizeProviderLabel,
     providerStorageDetail,
-    type OAuthFilePreset,
+    type ProviderSetupRequest,
     type StorageProvider,
     type StorageProviderType,
   } from '$lib/auth/providers'
@@ -108,9 +108,7 @@
     onAddPassword: (args: { readonly label: string; readonly password: string }) => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
-    onBeginSetup: (
-      args: { readonly type: StorageProviderType; readonly oauthPreset?: OAuthFilePreset },
-    ) => void
+    onBeginSetup: (request: ProviderSetupRequest) => void
     onCancelSetup: () => void
     onConnectProvider: () => void | Promise<void>
   } = $props()

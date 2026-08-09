@@ -147,6 +147,18 @@ export const GOOGLE_DRIVE_OAUTH_FILE_PRESET =
   "google-drive" satisfies OAuthFilePreset;
 export const ICLOUD_OAUTH_FILE_PRESET = "icloud" satisfies OAuthFilePreset;
 
+export type ProviderSetupRequest =
+  | {
+      readonly type: typeof OAUTH_FILE_PROVIDER_TYPE;
+      readonly oauthPreset: OAuthFilePreset;
+    }
+  | {
+      readonly type:
+        | typeof LOCAL_PROVIDER_TYPE
+        | typeof LOCAL_FOLDER_PROVIDER_TYPE
+        | typeof GITHUB_PROVIDER_TYPE;
+    };
+
 export const DEFAULT_GITHUB_REPO = defaultGithubRepo();
 export const DEFAULT_DRIVE_BACKUP_NAME = defaultDriveBackupName();
 

@@ -49,7 +49,7 @@ import {
   type LocalFolderHandle,
   type OAuthFileConfig,
   type OAuthFileName,
-  type OAuthFilePreset,
+  type ProviderSetupRequest,
   type StorageProvider,
   type StorageProviderType,
 } from "$lib/auth/providers";
@@ -557,13 +557,12 @@ export async function persistProviders({
 
 export function beginProviderSetup({
   state,
-  type,
-  oauthPreset,
+  request,
 }: {
   readonly state: ProviderActionsContext;
-  readonly type: StorageProviderType;
-  readonly oauthPreset?: OAuthFilePreset;
+  readonly request: ProviderSetupRequest;
 }) {
+  const { type } = request;
   if (!state.isAuthenticated) {
     state.resetVaultSessionState();
   }
@@ -573,7 +572,7 @@ export function beginProviderSetup({
   state.githubRepo =
     type === "oauth-file" ? DEFAULT_DRIVE_BACKUP_NAME : DEFAULT_GITHUB_REPO;
   if (type === "oauth-file") {
-    const preset = oauthPreset ?? "google-drive";
+    const preset = request.oauthPreset;
     if (preset === "icloud") {
       resetICloudSignInState(state);
     }

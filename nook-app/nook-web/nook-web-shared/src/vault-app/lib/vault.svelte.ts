@@ -20,9 +20,8 @@ import {
   type StoreId,
 } from "$app-wasm";
 import {
-  type OAuthFilePreset,
+  type ProviderSetupRequest,
   type StorageProvider,
-  type StorageProviderType,
 } from "$lib/auth/providers";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
@@ -244,16 +243,10 @@ export class VaultState extends VaultRuntimeState {
     return providersActions.persistProviders(persistProvidersArgs);
   }
 
-  beginProviderSetup({
-    type,
-    oauthPreset,
-  }: {
-    readonly type: StorageProviderType;
-    readonly oauthPreset?: OAuthFilePreset;
-  }) {
+  beginProviderSetup(request: ProviderSetupRequest) {
     const beginProviderSetupArgs: Parameters<
       typeof providersActions.beginProviderSetup
-    >[0] = { state: this, type, oauthPreset };
+    >[0] = { state: this, request };
     return providersActions.beginProviderSetup(beginProviderSetupArgs);
   }
 
