@@ -816,7 +816,7 @@ It restores the independent lineages from `registry.dev.nokey.sh`.
 - Creates and exports the hosted `docker-container` Buildx builder for wrapped and direct Task callers.
 - Logs into `registry.dev.nokey.sh`.
 - Enables Bake registry cache refs.
-- Trusted Main and same-repository PR/Rust-ecosystem Docker jobs receive the SeaweedFS writer identity.
+- Trusted Main and same-repository PR/Rust-ecosystem Rust producers receive the SeaweedFS writer identity.
 - Explicit Remote compiler vertices receive a read-only identity through stable BuildKit secret IDs.
 - Fork, release, arbitrary-ref, dependency-update, and AI-authored jobs remain secret-free.
 - Delivery does not depend on the daemon's default image store.
@@ -854,7 +854,7 @@ Rust/WASM compiles are wrapped by pinned `sccache`.
 
 Authorized identities:
 
-- Local builds, Hive, trusted Main, same-repository PR, and Rust ecosystem Docker jobs.
+- Local builds, Hive, trusted Main, same-repository PR Rust producers, and Rust ecosystem Docker jobs.
 - They use authenticated SeaweedFS S3 at `https://sccache.dev.nokey.sh` when scoped writer credentials exist.
 
 Explicit Remote tasks:
@@ -921,13 +921,13 @@ Authorized callers can use the authenticated HTTPS endpoint:
 - Local runtime builds
 - Hive
 - Trusted Main
-- Same-repository PR
+- Same-repository PR Rust producers
 - Rust ecosystem Docker jobs
 - Explicit Remote tasks
 
 Write vs read identity:
 
-- Main and same-repository PR/Rust-ecosystem jobs write with the build identity.
+- Main and same-repository PR/Rust-ecosystem Rust producers write with the build identity.
 - Remote reads through a separate identity.
 - Fork, release, and other arbitrary-ref jobs bypass sccache.
 
@@ -1054,7 +1054,7 @@ SeaweedFS compiler-cache rules:
   only under `~/.nook/`.
 - That home directory is shared across worktrees.
 - Never write those materials into a checkout.
-- Trusted Main, same-repository PR, and Rust ecosystem Docker jobs use the
+- Trusted Main, same-repository PR Rust producers, and Rust ecosystem Docker jobs use the
   authoritative read/write identity.
 - Explicit Remote tasks use separate `NOOK_SCCACHE_REMOTE_*` read-only
   credentials for `nook-sccache`.

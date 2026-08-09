@@ -684,7 +684,7 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 - Trusted Main Rust/WASM producers and explicitly dispatched same-repository Remote tasks use authenticated SeaweedFS S3 `sccache`.
 - Compiler vertices receive the bucket-scoped build identity only through stable optional BuildKit secret IDs.
 - Secret contents do not participate in Docker cache checksums, so secret-free solves can still restore Main's exported vertices.
-- Same-repository PR and Rust ecosystem Docker jobs mount SeaweedFS `sccache` with the Main build identity (matching Hive).
+- Same-repository PR Rust producers and Rust ecosystem Docker jobs mount SeaweedFS `sccache` with the Main build identity (matching Hive).
 - Release, browser-only, and arbitrary-ref workflows do not receive those credentials.
 - Fork pull requests also stay secret-free.
 - SeaweedFS remains an optimization and never a correctness input.
