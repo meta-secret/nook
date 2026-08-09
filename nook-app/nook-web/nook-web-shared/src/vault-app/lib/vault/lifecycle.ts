@@ -315,7 +315,7 @@ export async function authorizeWithExternalDeviceIdentity({
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
     log.info("extension identity adopted");
     return true;
-  } catch (error) {
+  } catch {
     await state.enqueueStorage(() =>
       state.requireManager().rollbackExtensionIdentityHandoff(),
     );
