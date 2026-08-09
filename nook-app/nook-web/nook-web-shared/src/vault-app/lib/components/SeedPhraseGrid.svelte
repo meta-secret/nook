@@ -37,14 +37,17 @@
   } = $props();
 
   let wordCount = $state<MnemonicLength>(12);
-  let cells = $state<string[]>(Array.from({ length: 24 }, () => ""));
+  const fromArgs: Parameters<typeof Array.from>[0] = { length: 24 };
+  let cells = $state<string[]>(Array.from(fromArgs, () => ""));
   let syncingFromCells = $state(false);
-  let focusedIndex = $state<FocusedWord>({ kind: FocusedWordKind.None });
+  const stateRuneArgs: Parameters<typeof $state>[0] = { kind: FocusedWordKind.None };
+  let focusedIndex = $state<FocusedWord>(stateRuneArgs);
   let suggestionIndex = $state(0);
   let inputRefs = $state<HTMLInputElement[]>([]);
-  let checksumValid = $state<ChecksumStatus>({
+  const stateRuneArgs2: Parameters<typeof $state>[0] = {
     kind: ChecksumStatusKind.NotChecked,
-  });
+  };
+  let checksumValid = $state<ChecksumStatus>(stateRuneArgs2);
 
   const gridCols = $derived(wordCount === 12 ? "grid-cols-3" : "grid-cols-4");
   const activeCells = $derived(cells.slice(0, wordCount));
@@ -71,7 +74,8 @@
     if (inferred === NookBip39MnemonicLength.Words24) wordCount = 24;
 
     const words = parseBip39Words(seed);
-    const next = Array.from({ length: 24 }, () => "");
+    const fromArgs2: Parameters<typeof Array.from>[0] = { length: 24 };
+    const next = Array.from(fromArgs2, () => "");
     for (let index = 0; index < words.length && index < 24; index += 1) {
       next[index] = words[index] ?? "";
     }
@@ -86,7 +90,7 @@
     });
   }
 
-  function applyPastedMnemonic(text: string, startIndex = 0) {
+  function applyPastedMnemonic({ text, startIndex }: { readonly text: string; readonly startIndex: number }) {
     const words = parseBip39Words(text);
     if (words.length === 0) return;
 
@@ -118,7 +122,8 @@
 
   function clearPhrase() {
     if (readonly) return;
-    cells = Array.from({ length: 24 }, () => "");
+    const fromArgs3: Parameters<typeof Array.from>[0] = { length: 24 };
+    cells = Array.from(fromArgs3, () => "");
     wordCount = 12;
     value = "";
     checksumValid = { kind: ChecksumStatusKind.NotChecked };
@@ -127,33 +132,37 @@
     focusCell(0);
   }
 
-  function setCellValue(index: number, nextValue: string) {
+  function setCellValue({ index, nextValue }: { readonly index: number; readonly nextValue: string }) {
     const next = [...cells];
     next[index] = nextValue.toLowerCase();
     cells = next;
     syncValueFromCells();
   }
 
-  function onCellInput(index: number, nextValue: string) {
+  function onCellInput({ index, nextValue }: { readonly index: number; readonly nextValue: string }) {
     if (/\s/.test(nextValue)) {
-      applyPastedMnemonic(nextValue, index);
+      const applyPastedMnemonicArgs: Parameters<typeof applyPastedMnemonic>[0] = { text: nextValue, startIndex: index };
+      applyPastedMnemonic(applyPastedMnemonicArgs);
       return;
     }
 
-    setCellValue(index, nextValue);
+    const setCellValueArgs: Parameters<typeof setCellValue>[0] = { index, nextValue };
+    setCellValue(setCellValueArgs);
     suggestionIndex = 0;
   }
 
-  function onCellPaste(index: number, event: ClipboardEvent) {
+  function onCellPaste({ index, event }: { readonly index: number; readonly event: ClipboardEvent }) {
     if (readonly) return;
     const text = event.clipboardData?.getData("text");
     if (!text?.trim()) return;
     event.preventDefault();
-    applyPastedMnemonic(text, index);
+    const applyPastedMnemonicArgs2: Parameters<typeof applyPastedMnemonic>[0] = { text, startIndex: index };
+    applyPastedMnemonic(applyPastedMnemonicArgs2);
   }
 
-  function selectSuggestion(word: string, index: number) {
-    setCellValue(index, word);
+  function selectSuggestion({ word, index }: { readonly word: string; readonly index: number }) {
+    const setCellValueArgs2: Parameters<typeof setCellValue>[0] = { index, nextValue: word };
+    setCellValue(setCellValueArgs2);
     focusedIndex = { kind: FocusedWordKind.None };
     suggestionIndex = 0;
     focusCell(index + 1);
@@ -166,7 +175,7 @@
     });
   }
 
-  function onCellKeyDown(index: number, event: KeyboardEvent) {
+  function onCellKeyDown({ index, event }: { readonly index: number; readonly event: KeyboardEvent }) {
     if (
       suggestions.length > 0 &&
       focusedIndex.kind === FocusedWordKind.Focused &&
@@ -184,17 +193,17 @@
       }
       if (event.key === "Enter") {
         event.preventDefault();
+        const selectSuggestionArgs: Parameters<typeof selectSuggestion>[0] = { word: suggestions[suggestionIndex] ?? suggestions[0]!, index };
         selectSuggestion(
-          suggestions[suggestionIndex] ?? suggestions[0]!,
-          index,
+          selectSuggestionArgs,
         );
         return;
       }
       if (event.key === "Tab" && !event.shiftKey) {
         event.preventDefault();
+        const selectSuggestionArgs2: Parameters<typeof selectSuggestion>[0] = { word: suggestions[suggestionIndex] ?? suggestions[0]!, index };
         selectSuggestion(
-          suggestions[suggestionIndex] ?? suggestions[0]!,
-          index,
+          selectSuggestionArgs2,
         );
         return;
       }
@@ -318,8 +327,8 @@
             )
               ? 'border-destructive focus:ring-destructive/40'
               : 'border-border/45'}"
-            oninput={(event) => onCellInput(index, event.currentTarget.value)}
-            onpaste={(event) => onCellPaste(index, event)}
+            oninput={(event) => (() => { const onCellInputArgs: Parameters<typeof onCellInput>[0] = { index, nextValue: event.currentTarget.value }; return onCellInput(onCellInputArgs); })()}
+            onpaste={(event) => (() => { const onCellPasteArgs: Parameters<typeof onCellPaste>[0] = { index, event }; return onCellPaste(onCellPasteArgs); })()}
             onfocus={() => {
               focusedIndex = { kind: FocusedWordKind.Focused, index };
               suggestionIndex = 0;
@@ -340,7 +349,7 @@
                   focusedIndex = { kind: FocusedWordKind.None };
               });
             }}
-            onkeydown={(event) => onCellKeyDown(index, event)}
+            onkeydown={(event) => (() => { const onCellKeyDownArgs: Parameters<typeof onCellKeyDown>[0] = { index, event }; return onCellKeyDown(onCellKeyDownArgs); })()}
           />
           {#if focusedIndex.kind === FocusedWordKind.Focused && focusedIndex.index === index && suggestions.length > 0}
             <ul
@@ -361,7 +370,7 @@
                       ? 'bg-accent text-accent-foreground'
                       : 'text-foreground hover:bg-accent/60'}"
                     onmousedown={(event) => event.preventDefault()}
-                    onclick={() => selectSuggestion(suggestion, index)}
+                    onclick={() => (() => { const selectSuggestionArgs3: Parameters<typeof selectSuggestion>[0] = { word: suggestion, index }; return selectSuggestion(selectSuggestionArgs3); })()}
                   >
                     {suggestion}
                   </button>

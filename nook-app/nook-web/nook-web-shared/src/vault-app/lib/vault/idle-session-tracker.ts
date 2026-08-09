@@ -108,7 +108,10 @@ export function createVaultIdleSessionTracker(options: {
     if (state.kind === SessionStateKind.Tracking || !("document" in globalThis))
       return;
     for (const event of ACTIVITY_EVENTS) {
-      document.addEventListener(event, onActivity, { passive: true });
+      const addEventListenerArgs: Parameters<
+        typeof document.addEventListener
+      >[2] = { passive: true };
+      document.addEventListener(event, onActivity, addEventListenerArgs);
     }
     scheduleTimers();
   };

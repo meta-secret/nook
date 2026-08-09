@@ -37,6 +37,25 @@ import {
   writeExitsBeforeFollowingNode,
 } from './typed-api-analysis.js'
 
+const directObjectArgumentRunes = new Set(['$state', '$derived', '$bindable'])
+
+function isDirectObjectArgumentRune(node) {
+  if (
+    node.callee.type === 'Identifier' &&
+    directObjectArgumentRunes.has(node.callee.name)
+  ) {
+    return true
+  }
+  return (
+    node.callee.type === 'MemberExpression' &&
+    !node.callee.computed &&
+    node.callee.object.type === 'Identifier' &&
+    node.callee.object.name === '$state' &&
+    node.callee.property.type === 'Identifier' &&
+    node.callee.property.name === 'raw'
+  )
+}
+
 export const noRawObjectArgumentsRule = {
   meta: {
     type: 'problem',
@@ -871,8 +890,17 @@ export const noRawObjectArgumentsRule = {
         }
       }
     }
+    function inspectCallArguments(node) {
+      if (isDirectObjectArgumentRune(node)) {
+        // Svelte compiler runes require direct placement and, for $derived,
+        // direct reactive expression capture. A named intermediate either
+        // fails compilation or freezes the initial value.
+        return
+      }
+      inspectArguments(node)
+    }
     return {
-      CallExpression: inspectArguments,
+      CallExpression: inspectCallArguments,
       NewExpression: inspectArguments,
     }
   },

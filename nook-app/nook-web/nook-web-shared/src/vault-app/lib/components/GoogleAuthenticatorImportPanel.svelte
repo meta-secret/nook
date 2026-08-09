@@ -30,7 +30,8 @@
   let scannerState: ScannerLifecycle = { kind: ScannerLifecycleKind.NotCreated };
   let scanning = $state(false);
   let migrationUris = $state<string[]>([]);
-  let result = $state<AuthenticatorImportOutcome>({ kind: AuthenticatorImportOutcomeKind.NotRun });
+  const stateRuneArgs: Parameters<typeof $state>[0] = { kind: AuthenticatorImportOutcomeKind.NotRun };
+  let result = $state<AuthenticatorImportOutcome>(stateRuneArgs);
   let error = $state("");
 
   function stopCamera() {
@@ -63,17 +64,18 @@
     error = "";
     result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     if (scannerState.kind === ScannerLifecycleKind.NotCreated) {
+      const QrScannerArgs: ConstructorParameters<typeof QrScanner>[2] = {
+            preferredCamera: "environment",
+            highlightScanRegion: true,
+            highlightCodeOutline: true,
+            returnDetailedScanResult: true,
+          };
       scannerState = {
         kind: ScannerLifecycleKind.Created,
         scanner: new QrScanner(
           videoElement,
           (scanResult) => addMigrationUri(scanResult.data),
-          {
-            preferredCamera: "environment",
-            highlightScanRegion: true,
-            highlightCodeOutline: true,
-            returnDetailedScanResult: true,
-          },
+          QrScannerArgs,
         ),
       };
     }
@@ -94,9 +96,10 @@
     error = "";
     result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     try {
-      const scanResult = await QrScanner.scanImage(file, {
+      const scanImageArgs: Parameters<typeof QrScanner.scanImage>[1] = {
         returnDetailedScanResult: true,
-      });
+      };
+      const scanResult = await QrScanner.scanImage(file, scanImageArgs);
       addMigrationUri(scanResult.data);
     } catch {
       error = vault.t(I18N_KEYS.GoogleAuthenticatorImportImageFailed);
@@ -204,9 +207,9 @@
           data-testid="google-authenticator-scanned-count"
         >
           <p class="text-sm font-medium text-foreground">
-            {vault.t(I18N_KEYS.GoogleAuthenticatorImportScannedCount, {
+            {(() => { const tArgs: Parameters<typeof vault.t>[1] = {
               count: String(migrationUris.length),
-            })}
+            }; return vault.t(I18N_KEYS.GoogleAuthenticatorImportScannedCount, tArgs); })()}
           </p>
           <Button
             type="button"
@@ -251,15 +254,15 @@
           data-testid="google-authenticator-import-result"
         >
           <p class="font-medium">
-            {vault.t(I18N_KEYS.GoogleAuthenticatorImportResultImported, {
+            {(() => { const tArgs2: Parameters<typeof vault.t>[1] = {
               count: String(result.result.imported),
-            })}
+            }; return vault.t(I18N_KEYS.GoogleAuthenticatorImportResultImported, tArgs2); })()}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
-            {vault.t(I18N_KEYS.GoogleAuthenticatorImportResultSkipped, {
+            {(() => { const tArgs3: Parameters<typeof vault.t>[1] = {
               unsupported: String(result.result.skippedUnsupported),
               duplicates: String(result.result.skippedDuplicates),
-            })}
+            }; return vault.t(I18N_KEYS.GoogleAuthenticatorImportResultSkipped, tArgs3); })()}
           </p>
         </div>
       {/if}

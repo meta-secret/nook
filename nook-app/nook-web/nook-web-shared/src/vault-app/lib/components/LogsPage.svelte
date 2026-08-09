@@ -54,7 +54,8 @@
     loading = true
     try {
       total = await logCount()
-      entries = await dumpLogs({ minLevel, limit: PAGE_SIZE, offset })
+      const dumpLogsArgs: Parameters<typeof dumpLogs>[0] = { minLevel, limit: PAGE_SIZE, offset };
+      entries = await dumpLogs(dumpLogsArgs)
     } finally {
       loading = false
     }
@@ -92,7 +93,7 @@
   async function copyAll() {
     try {
       await navigator.clipboard.writeText(
-        JSON.stringify(newestFirst, (_key, value) => value, 2),
+        JSON.stringify(newestFirst, undefined, 2),
       )
       copied = true
       setTimeout(() => {

@@ -62,8 +62,7 @@
     onBack: () => void
     onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onAddParticipant: (
-      payload: string,
-      participantLabel: string,
+      args: { readonly payload: string; readonly participantLabel: string },
     ) => void | Promise<void>
     onFinalize: () => void | Promise<void>
     onCompleteDelivery: () => void | Promise<void>
@@ -143,13 +142,13 @@
     }
   })
 
-  function changeParticipantCount(value: unknown) {
-    if (typeof value !== 'string' || !value) return
+  function changeParticipantCount(value: string) {
+    if (!value) return
     participantCount = Number(value)
   }
 
-  function changeThreshold(value: unknown) {
-    if (typeof value !== 'string' || !value) return
+  function changeThreshold(value: string) {
+    if (!value) return
     threshold = Number(value)
   }
 
@@ -162,11 +161,12 @@
     if (!initiatorKeyReady || !policyValid || isBusy || actionBusy) return
     actionBusy = true
     try {
-      const started = await onStart({
+      const onStartArgs: Parameters<typeof onStart>[0] = {
         label: name.trim(),
         participantCount,
         threshold,
-      })
+      };
+      const started = await onStart(onStartArgs)
       if (started !== false) {
         onboardingStage = SentinelCardOnboardingStage.Roster
       }
@@ -189,7 +189,8 @@
       return
     actionBusy = true
     try {
-      await onAddParticipant(payload, participantLabel.trim())
+      const onAddParticipantArgs: Parameters<typeof onAddParticipant>[0] = { payload, participantLabel: participantLabel.trim() };
+      await onAddParticipant(onAddParticipantArgs)
       response = ''
       participantLabel = ''
       participantInputError = ''
@@ -408,9 +409,9 @@
                     {vault.t(I18N_KEYS.LoginSentinelCardStackAddParticipant)}
                   </p>
                   <p class="mt-1 font-mono text-[9px] text-[#75818c]">
-                    {vault.t(I18N_KEYS.LoginSentinelCardStackSlotsRemaining, {
+                    {(() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.LoginSentinelCardStackSlotsRemaining, replacements: {
                       count: String(availableRosterSlots),
-                    })}
+                    } }; return vault.t(tArgs); })()}
                   </p>
                 </div>
                 <button
@@ -520,9 +521,9 @@
                 class="font-mono text-[9px] tracking-wider text-[#8f9ca7] uppercase"
                 data-testid="sentinel-onboarding-devices-remaining"
               >
-                {vault.t(I18N_KEYS.LoginSentinelOnboardingDevicesRemaining, {
+                {(() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.LoginSentinelOnboardingDevicesRemaining, replacements: {
                   count: String(availableRosterSlots),
-                })}
+                } }; return vault.t(tArgs2); })()}
               </p>
             </div>
           {/if}
@@ -607,7 +608,7 @@
                       side="top"
                       class="max-h-80 border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
                     >
-                      {#each Array.from({ length: participantCount - 1 }, (_, index) => index + 2) as option (option)}
+                      {#each [...Array(participantCount - 1).keys()].map((index) => index + 2) as option (option)}
                         <Select.Item
                           value={String(option)}
                           class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
@@ -678,9 +679,9 @@
                 data-testid="sentinel-onboarding-continue-devices"
                 onclick={() => void continueToRoster()}
               >
-                {vault.t(I18N_KEYS.LoginSentinelOnboardingContinueWithDevices, {
+                {(() => { const tArgs3: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.LoginSentinelOnboardingContinueWithDevices, replacements: {
                   count: String(participantCount),
-                })}
+                } }; return vault.t(tArgs3); })()}
               </button>
             </div>
           </section>
@@ -693,13 +694,11 @@
               class="rounded-md bg-[#46e56f] px-7 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.18)] disabled:opacity-25"
               data-testid="sentinel-genesis-finalize"
               onclick={() =>
-                void runSentinelDashboardAction(
-                  status === SentinelGenesisPhase.ReadyToFinalize &&
+                void (() => { const runSentinelDashboardActionArgs: Parameters<typeof runSentinelDashboardAction>[0] = { allowed: status === SentinelGenesisPhase.ReadyToFinalize &&
                     !isBusy &&
-                    !actionBusy,
-                  (value) => (actionBusy = value),
-                  onFinalize,
-                )}
+                    !actionBusy, setBusy: (value) => (actionBusy = value), action: onFinalize }; return runSentinelDashboardAction(
+                  runSentinelDashboardActionArgs,
+                ); })()}
             >
               {#if actionBusy}<RefreshCw
                   class="mr-2 inline size-4 animate-spin"
@@ -811,10 +810,10 @@
                 {onboardingStage === SentinelCardOnboardingStage.Identity ||
                 onboardingStage === SentinelCardOnboardingStage.Name
                   ? vault.t(I18N_KEYS.LoginSentinelOnboardingNotSet)
-                  : vault.t(I18N_KEYS.LoginSentinelOnboardingThresholdSummary, {
+                  : (() => { const tArgs4: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.LoginSentinelOnboardingThresholdSummary, replacements: {
                       threshold: String(threshold),
                       count: String(participantCount),
-                    })}
+                    } }; return vault.t(tArgs4); })()}
               </dd>
             </div>
             <div
@@ -887,17 +886,15 @@
                         class="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
                         data-testid="sentinel-genesis-copy-request"
                         onclick={() =>
-                          void copySentinelRequest(
-                            request,
-                            () => {
+                          void (() => { const copySentinelRequestArgs: Parameters<typeof copySentinelRequest>[0] = { request, onCopied: () => {
                               copied = true
                               setTimeout(() => (copied = false), 1500)
-                            },
-                            () =>
+                            }, onFailure: () =>
                               (vault.errorMsg = vault.t(
                                 I18N_KEYS.LoginSentinelGenesisCopyFailed,
-                              )),
-                          )}
+                              )) }; return copySentinelRequest(
+                            copySentinelRequestArgs,
+                          ); })()}
                       >
                         <Copy class="size-4" />
                         {copied

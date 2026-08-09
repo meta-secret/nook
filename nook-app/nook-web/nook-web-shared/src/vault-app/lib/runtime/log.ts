@@ -50,6 +50,26 @@ export type LogEntry = {
   data?: string;
 };
 
+export type RuntimeFailure = {
+  readonly message: string;
+  readonly stack?: string;
+};
+
+/** Narrow an untrusted thrown value at the logging adapter boundary. */
+export function runtimeFailure(cause: unknown): RuntimeFailure {
+  return cause instanceof Error
+    ? {
+        message: cause.message,
+        ...(cause.stack ? { stack: cause.stack } : {}),
+      }
+    : { message: String(cause) };
+}
+
+/** Normalize an untrusted thrown value before application code stores it. */
+export function runtimeError(cause: unknown): Error {
+  return cause instanceof Error ? cause : new Error(String(cause));
+}
+
 const LOG_LEVELS: readonly LogLevel[] = [
   LogLevel.Error,
   LogLevel.Warn,
@@ -203,14 +223,44 @@ function levelRank(level: LogLevel): number {
 
 /** Local `YYYY-MM-DD HH:MM:SS.mmm` timestamp for console echo lines. */
 function formatTimestamp(date = new Date()): string {
-  const pad = (value: number, size = 2) => String(value).padStart(size, "0");
+  const pad = ({
+    value,
+    size,
+  }: {
+    readonly value: number;
+    readonly size: number;
+  }) => String(value).padStart(size, "0");
   const y = date.getFullYear();
-  const mo = pad(date.getMonth() + 1);
-  const d = pad(date.getDate());
-  const h = pad(date.getHours());
-  const mi = pad(date.getMinutes());
-  const s = pad(date.getSeconds());
-  const ms = pad(date.getMilliseconds(), 3);
+  const padArgs: Parameters<typeof pad>[0] = {
+    value: date.getMonth() + 1,
+    size: 2,
+  };
+  const mo = pad(padArgs);
+  const padArgs2: Parameters<typeof pad>[0] = {
+    value: date.getDate(),
+    size: 2,
+  };
+  const d = pad(padArgs2);
+  const padArgs3: Parameters<typeof pad>[0] = {
+    value: date.getHours(),
+    size: 2,
+  };
+  const h = pad(padArgs3);
+  const padArgs4: Parameters<typeof pad>[0] = {
+    value: date.getMinutes(),
+    size: 2,
+  };
+  const mi = pad(padArgs4);
+  const padArgs5: Parameters<typeof pad>[0] = {
+    value: date.getSeconds(),
+    size: 2,
+  };
+  const s = pad(padArgs5);
+  const padArgs6: Parameters<typeof pad>[0] = {
+    value: date.getMilliseconds(),
+    size: 3,
+  };
+  const ms = pad(padArgs6);
   return `${y}-${mo}-${d} ${h}:${mi}:${s}.${ms}`;
 }
 
@@ -225,7 +275,13 @@ function isEnabled(level: LogLevel): boolean {
  * entries. Shared by `createLogger` and Rust `tracing` events
  * (`window.__nookConsole.echo`).
  */
-function echo(level: LogLevel, text: string) {
+function echo({
+  level,
+  text,
+}: {
+  readonly level: LogLevel;
+  readonly text: string;
+}) {
   const line = `${formatTimestamp()} ${text}`;
   switch (level) {
     case LogLevel.Error:
@@ -244,15 +300,24 @@ function echo(level: LogLevel, text: string) {
 }
 
 /** Persist one entry (no console echo). Queues until WASM is ready. */
-function persistMessage(level: LogLevel, scope: string, message: string) {
+function persistMessage({
+  level,
+  scope,
+  message,
+}: {
+  readonly level: LogLevel;
+  readonly scope: string;
+  readonly message: string;
+}) {
   if (!wasmReady) {
     if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
-      preInitQueue.push({
+      const pushArgs: Parameters<typeof preInitQueue.push>[0] = {
         kind: PendingRecordKind.MessageOnly,
         level,
         scope,
         message,
-      });
+      };
+      preInitQueue.push(pushArgs);
     }
     return;
   }
@@ -263,21 +328,27 @@ function persistMessage(level: LogLevel, scope: string, message: string) {
   }
 }
 
-function persistStructured(
-  level: LogLevel,
-  scope: string,
-  message: string,
-  serialized: string,
-) {
+function persistStructured({
+  level,
+  scope,
+  message,
+  serialized,
+}: {
+  readonly level: LogLevel;
+  readonly scope: string;
+  readonly message: string;
+  readonly serialized: string;
+}) {
   if (!wasmReady) {
     if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
-      preInitQueue.push({
+      const pushArgs2: Parameters<typeof preInitQueue.push>[0] = {
         kind: PendingRecordKind.Structured,
         level,
         scope,
         message,
         data: serialized,
-      });
+      };
+      preInitQueue.push(pushArgs2);
     }
     return;
   }
@@ -289,21 +360,45 @@ function persistStructured(
 }
 
 /** `createLogger` path: gate, echo once via originals, then persist. */
-function record(
-  level: LogLevel,
-  scope: string,
-  message: string,
-  payload: LogPayload,
-) {
+function record({
+  level,
+  scope,
+  message,
+  payload,
+}: {
+  readonly level: LogLevel;
+  readonly scope: string;
+  readonly message: string;
+  readonly payload: LogPayload;
+}) {
   if (!isEnabled(level)) return;
   if (payload.kind === LogPayloadKind.MessageOnly) {
-    echo(level, `[${scope}] ${message}`);
-    persistMessage(level, scope, message);
+    const echoArgs: Parameters<typeof echo>[0] = {
+      level,
+      text: `[${scope}] ${message}`,
+    };
+    echo(echoArgs);
+    const persistMessageArgs: Parameters<typeof persistMessage>[0] = {
+      level,
+      scope,
+      message,
+    };
+    persistMessage(persistMessageArgs);
     return;
   }
   const serialized = serializeData(payload);
-  echo(level, `[${scope}] ${message} ${serialized}`);
-  persistStructured(level, scope, message, serialized);
+  const echoArgs2: Parameters<typeof echo>[0] = {
+    level,
+    text: `[${scope}] ${message} ${serialized}`,
+  };
+  echo(echoArgs2);
+  const persistStructuredArgs: Parameters<typeof persistStructured>[0] = {
+    level,
+    scope,
+    message,
+    serialized,
+  };
+  persistStructured(persistStructuredArgs);
 }
 
 /** True for browser-extension scripts we should not persist as app errors. */
@@ -338,13 +433,24 @@ function resolveFetchUrl(input: RequestInfo | URL): string {
 }
 
 /** Global `error` / `unhandledrejection` / non-OK `fetch` capture into app logs. */
-function captureDiagnostic(
-  level: LogLevel,
-  scope: string,
-  message: string,
-  data: unknown,
-) {
-  record(level, scope, message, { kind: LogPayloadKind.Structured, data });
+function captureDiagnostic({
+  level,
+  scope,
+  message,
+  data,
+}: {
+  readonly level: LogLevel;
+  readonly scope: string;
+  readonly message: string;
+  readonly data: unknown;
+}) {
+  const recordArgs: Parameters<typeof record>[0] = {
+    level,
+    scope,
+    message,
+    payload: { kind: LogPayloadKind.Structured, data },
+  };
+  record(recordArgs);
 }
 
 function installGlobalErrorHandlers() {
@@ -352,11 +458,11 @@ function installGlobalErrorHandlers() {
 
   window.addEventListener("error", (event) => {
     if (isIgnoredErrorSource(event.filename)) return;
-    captureDiagnostic(
-      LogLevel.Error,
-      "window",
-      event.message || "Uncaught error",
-      {
+    const captureDiagnosticArgs: Parameters<typeof captureDiagnostic>[0] = {
+      level: LogLevel.Error,
+      scope: "window",
+      message: event.message || "Uncaught error",
+      data: {
         source: event.filename,
         line: event.lineno,
         column: event.colno,
@@ -364,7 +470,8 @@ function installGlobalErrorHandlers() {
           ? { stack: event.error.stack }
           : {}),
       },
-    );
+    };
+    captureDiagnostic(captureDiagnosticArgs);
   });
 
   window.addEventListener("unhandledrejection", (event) => {
@@ -375,14 +482,16 @@ function installGlobalErrorHandlers() {
         ? `${reason.name}: ${reason.message}`
         : stringifyArgs([reason]);
     if (isIgnoredErrorSource(message)) return;
-    captureDiagnostic(
-      LogLevel.Error,
-      "unhandledrejection",
+    const captureDiagnosticArgs2: Parameters<typeof captureDiagnostic>[0] = {
+      level: LogLevel.Error,
+      scope: "unhandledrejection",
       message,
-      reason instanceof Error && reason.stack
-        ? { stack: reason.stack }
-        : { reason: "stack-not-available" },
-    );
+      data:
+        reason instanceof Error && reason.stack
+          ? { stack: reason.stack }
+          : { reason: "stack-not-available" },
+    };
+    captureDiagnostic(captureDiagnosticArgs2);
   });
 }
 
@@ -394,21 +503,24 @@ function installFetchInstrumentation() {
   if (globalThis.fetch === marker.__nookFetchOuter) return;
 
   const originalFetch = globalThis.fetch.bind(globalThis);
+  // eslint-disable-next-line max-params -- Fetch owns this positional callback signature.
   const wrapped: typeof globalThis.fetch = async (input, init) => {
     const response = await originalFetch(input, init);
     if (!response.ok) {
       const url = sanitizeLogUrl(resolveFetchUrl(input));
       if (!isIgnoredErrorSource(url)) {
-        captureDiagnostic(
-          LogLevel.Warn,
-          "fetch",
-          `HTTP ${response.status} ${response.statusText}`,
+        const captureDiagnosticArgs3: Parameters<typeof captureDiagnostic>[0] =
           {
-            url,
-            status: response.status,
-            method: init?.method ?? "GET",
-          },
-        );
+            level: LogLevel.Warn,
+            scope: "fetch",
+            message: `HTTP ${response.status} ${response.statusText}`,
+            data: {
+              url,
+              status: response.status,
+              method: init?.method ?? "GET",
+            },
+          };
+        captureDiagnostic(captureDiagnosticArgs3);
       }
     }
     return response;
@@ -451,13 +563,55 @@ function logPayload(
 export function createLogger(scope: string): ScopedLogger {
   return {
     error: (...args) =>
-      record(LogLevel.Error, scope, args[0], logPayload(args)),
-    warn: (...args) => record(LogLevel.Warn, scope, args[0], logPayload(args)),
-    info: (...args) => record(LogLevel.Info, scope, args[0], logPayload(args)),
+      (() => {
+        const recordArgs2: Parameters<typeof record>[0] = {
+          level: LogLevel.Error,
+          scope,
+          message: args[0],
+          payload: logPayload(args),
+        };
+        return record(recordArgs2);
+      })(),
+    warn: (...args) =>
+      (() => {
+        const recordArgs3: Parameters<typeof record>[0] = {
+          level: LogLevel.Warn,
+          scope,
+          message: args[0],
+          payload: logPayload(args),
+        };
+        return record(recordArgs3);
+      })(),
+    info: (...args) =>
+      (() => {
+        const recordArgs4: Parameters<typeof record>[0] = {
+          level: LogLevel.Info,
+          scope,
+          message: args[0],
+          payload: logPayload(args),
+        };
+        return record(recordArgs4);
+      })(),
     debug: (...args) =>
-      record(LogLevel.Debug, scope, args[0], logPayload(args)),
+      (() => {
+        const recordArgs5: Parameters<typeof record>[0] = {
+          level: LogLevel.Debug,
+          scope,
+          message: args[0],
+          payload: logPayload(args),
+        };
+        return record(recordArgs5);
+      })(),
     trace: (...args) =>
-      record(LogLevel.Trace, scope, args[0], logPayload(args)),
+      (() => {
+        const recordArgs6: Parameters<typeof record>[0] = {
+          level: LogLevel.Trace,
+          scope,
+          message: args[0],
+          payload: logPayload(args),
+        };
+        return record(recordArgs6);
+      })(),
   };
 }
 
@@ -540,20 +694,51 @@ function patchConsole() {
   if (consolePatched || !("console" in globalThis)) return;
   consolePatched = true;
 
-  const wrap = (method: ConsoleMethodKind, level: LogLevel) => {
+  const wrap = ({
+    method,
+    level,
+  }: {
+    readonly method: ConsoleMethodKind;
+    readonly level: LogLevel;
+  }) => {
     console[method] = (...args: unknown[]) => {
       originalConsole[method](...args);
       if (isEnabled(level)) {
-        persistMessage(level, "console", stringifyArgs(args));
+        const persistMessageArgs2: Parameters<typeof persistMessage>[0] = {
+          level,
+          scope: "console",
+          message: stringifyArgs(args),
+        };
+        persistMessage(persistMessageArgs2);
       }
     };
   };
 
-  wrap(ConsoleMethodKind.Error, LogLevel.Error);
-  wrap(ConsoleMethodKind.Warn, LogLevel.Warn);
-  wrap(ConsoleMethodKind.Info, LogLevel.Info);
-  wrap(ConsoleMethodKind.Debug, LogLevel.Debug);
-  wrap(ConsoleMethodKind.Log, LogLevel.Info);
+  const wrapArgs: Parameters<typeof wrap>[0] = {
+    method: ConsoleMethodKind.Error,
+    level: LogLevel.Error,
+  };
+  wrap(wrapArgs);
+  const wrapArgs2: Parameters<typeof wrap>[0] = {
+    method: ConsoleMethodKind.Warn,
+    level: LogLevel.Warn,
+  };
+  wrap(wrapArgs2);
+  const wrapArgs3: Parameters<typeof wrap>[0] = {
+    method: ConsoleMethodKind.Info,
+    level: LogLevel.Info,
+  };
+  wrap(wrapArgs3);
+  const wrapArgs4: Parameters<typeof wrap>[0] = {
+    method: ConsoleMethodKind.Debug,
+    level: LogLevel.Debug,
+  };
+  wrap(wrapArgs4);
+  const wrapArgs5: Parameters<typeof wrap>[0] = {
+    method: ConsoleMethodKind.Log,
+    level: LogLevel.Info,
+  };
+  wrap(wrapArgs5);
 }
 
 /**
@@ -618,6 +803,7 @@ declare global {
     };
     /** Bridge for Rust `tracing` events to reach the original console. */
     __nookConsole?: {
+      // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
       echo: (level: LogLevel, text: string) => void;
     };
   }

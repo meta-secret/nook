@@ -13,19 +13,12 @@ Model concrete domain values.
 Applies to:
 
 - `agentic-ai/loom` authored TypeScript;
-- migrated `nook-app/nook-web` paths selected by the shared ESLint config.
-
-Nook web expands enforcement one green package slice at a time.
+- all authored production TypeScript and Svelte under `nook-app/nook-web`.
 
 Generated bindings are excluded.
 
-The domain-value rule is a staged migration target. It is mandatory for every
-new or changed domain and application API after this rule was adopted.
-
-Existing Loom and Nook web generic-value APIs are migration debt. They are not
-compliant examples or boundary exceptions. Do not add to them, widen them, or
-copy them into new code. Migrate them to concrete domain types when their
-owning slice changes.
+Generic-value APIs are not compliant examples or normal boundary exceptions.
+Do not add them, widen them, or copy them into new code.
 
 ## Problem Pattern
 
@@ -89,11 +82,12 @@ Do not treat this exception as the preferred application type.
 
 If a concrete platform input type exists, use it instead.
 
-The generic type may appear only at that boundary:
+The generic transport type may appear only at that boundary and must describe
+the transport format:
 
 ```ts
 export function decodeDependencyPopularityRequest(
-  value: ExternalValue,
+  value: UntrustedYamlNode,
 ): DecodeOutcome<DependencyPopularityRequest>
 ```
 
@@ -104,9 +98,9 @@ ESLint `@typescript-eslint/no-restricted-types` bans `unknown` in:
 - `agentic-ai/loom/eslint.config.js`;
 - `nook-app/nook-web/eslint.config.js`.
 
-That mechanical rule does not prove generic-value containment. Review enforces
-the domain-value rule prospectively while existing generic APIs are migrated.
-Do not claim full Loom or Nook web compliance until those APIs are removed.
+That mechanical rule does not prove generic-value containment. Review must
+still verify that each allowlisted adapter narrows immediately and returns a
+concrete domain value.
 
 ```bash
 task loom:verify

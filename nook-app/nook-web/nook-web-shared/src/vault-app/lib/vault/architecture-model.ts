@@ -162,12 +162,16 @@ export type CompatibleProviderPreference =
       providerId: string;
     };
 
-export function firstCompatibleProvider(
-  providers: StorageProvider[],
-  replicationType: ReplicationType,
-  preference: CompatibleProviderPreference,
-): CompatibleProviderSelection {
-  const snapshot = {
+export function firstCompatibleProvider({
+  providers,
+  replicationType,
+  preference,
+}: {
+  readonly providers: StorageProvider[];
+  readonly replicationType: ReplicationType;
+  readonly preference: CompatibleProviderPreference;
+}): CompatibleProviderSelection {
+  const snapshot: Parameters<typeof wasmFirstCompatibleProviderId>[0] = {
     providers,
     activeVaultStoreId: unselectedVaultScope(),
   };

@@ -13,7 +13,7 @@
     vault: VaultState
     request: ExtensionConnectRequest
     appVersion: string
-    onClose: (approved?: boolean) => unknown
+    onClose: (approved?: boolean) => void
   } = $props()
 </script>
 

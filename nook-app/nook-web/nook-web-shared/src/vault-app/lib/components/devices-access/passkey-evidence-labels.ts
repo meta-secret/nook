@@ -12,10 +12,13 @@ import type { VaultState } from "$lib/vault.svelte";
  * Plain-language names for the WebAuthn facts a browser reported during a
  * ceremony. Every unsupported or unreported value stays explicitly unknown.
  */
-export function attachmentLabel(
-  vault: VaultState,
-  value: NookPasskeyAttachmentState,
-): string {
+export function attachmentLabel({
+  vault,
+  value,
+}: {
+  readonly vault: VaultState;
+  readonly value: NookPasskeyAttachmentState;
+}): string {
   if (value === NookPasskeyAttachmentState.Platform) {
     return vault.t(I18N_KEYS.DevicesAccessAttachmentPlatform);
   }
@@ -24,10 +27,13 @@ export function attachmentLabel(
     : vault.t(I18N_KEYS.DevicesAccessUnknown);
 }
 
-export function backupLabel(
-  vault: VaultState,
-  value: NookPasskeyBackupState,
-): string {
+export function backupLabel({
+  vault,
+  value,
+}: {
+  readonly vault: VaultState;
+  readonly value: NookPasskeyBackupState;
+}): string {
   if (value === NookPasskeyBackupState.BackedUp) {
     return vault.t(I18N_KEYS.DevicesAccessBackupBackedUp);
   }
@@ -39,7 +45,13 @@ export function backupLabel(
     : vault.t(I18N_KEYS.DevicesAccessUnknown);
 }
 
-function transportLabel(vault: VaultState, value: PasskeyTransport): string {
+function transportLabel({
+  vault,
+  value,
+}: {
+  readonly vault: VaultState;
+  readonly value: PasskeyTransport;
+}): string {
   if (value === PasskeyTransport.Ble) {
     return vault.t(I18N_KEYS.DevicesAccessTransportBle);
   }
@@ -54,21 +66,38 @@ function transportLabel(vault: VaultState, value: PasskeyTransport): string {
     : vault.t(I18N_KEYS.DevicesAccessTransportUsb);
 }
 
-export function transportsLabel(
-  vault: VaultState,
-  values: readonly PasskeyTransport[],
-): string {
+export function transportsLabel({
+  vault,
+  values,
+}: {
+  readonly vault: VaultState;
+  readonly values: readonly PasskeyTransport[];
+}): string {
   if (values.length === 0) return vault.t(I18N_KEYS.DevicesAccessUnknown);
-  return new Intl.ListFormat(vault.locale, {
+  const ListFormatArgs: ConstructorParameters<typeof Intl.ListFormat>[1] = {
     style: "long",
     type: "conjunction",
-  }).format(values.map((value) => transportLabel(vault, value)));
+  };
+  return new Intl.ListFormat(vault.locale, ListFormatArgs).format(
+    values.map((value) =>
+      (() => {
+        const transportLabelArgs: Parameters<typeof transportLabel>[0] = {
+          vault,
+          value,
+        };
+        return transportLabel(transportLabelArgs);
+      })(),
+    ),
+  );
 }
 
-function browserLabel(
-  vault: VaultState,
-  value: PasskeyObservedBrowser,
-): string {
+function browserLabel({
+  vault,
+  value,
+}: {
+  readonly vault: VaultState;
+  readonly value: PasskeyObservedBrowser;
+}): string {
   if (value === PasskeyObservedBrowser.Edge) {
     return vault.t(I18N_KEYS.DevicesAccessBrowserEdge);
   }
@@ -86,10 +115,13 @@ function browserLabel(
     : vault.t(I18N_KEYS.DevicesAccessUnknown);
 }
 
-function platformLabel(
-  vault: VaultState,
-  value: PasskeyObservedPlatform,
-): string {
+function platformLabel({
+  vault,
+  value,
+}: {
+  readonly vault: VaultState;
+  readonly value: PasskeyObservedPlatform;
+}): string {
   if (value === PasskeyObservedPlatform.Android) {
     return vault.t(I18N_KEYS.DevicesAccessPlatformAndroid);
   }
@@ -110,19 +142,36 @@ function platformLabel(
     : vault.t(I18N_KEYS.DevicesAccessUnknown);
 }
 
-export function clientEnvironmentLabel(
-  vault: VaultState,
-  browser: PasskeyObservedBrowser,
-  platform: PasskeyObservedPlatform,
-): string {
+export function clientEnvironmentLabel({
+  vault,
+  browser,
+  platform,
+}: {
+  readonly vault: VaultState;
+  readonly browser: PasskeyObservedBrowser;
+  readonly platform: PasskeyObservedPlatform;
+}): string {
   if (
     browser === PasskeyObservedBrowser.Unknown &&
     platform === PasskeyObservedPlatform.Unknown
   ) {
     return vault.t(I18N_KEYS.DevicesAccessUnknown);
   }
-  return vault.t(I18N_KEYS.DevicesAccessClientDescription, {
-    browser: browserLabel(vault, browser),
-    platform: platformLabel(vault, platform),
-  });
+  const tArgs: Parameters<typeof vault.t>[1] = {
+    browser: (() => {
+      const browserLabelArgs: Parameters<typeof browserLabel>[0] = {
+        vault,
+        value: browser,
+      };
+      return browserLabel(browserLabelArgs);
+    })(),
+    platform: (() => {
+      const platformLabelArgs: Parameters<typeof platformLabel>[0] = {
+        vault,
+        value: platform,
+      };
+      return platformLabel(platformLabelArgs);
+    })(),
+  };
+  return vault.t(I18N_KEYS.DevicesAccessClientDescription, tArgs);
 }

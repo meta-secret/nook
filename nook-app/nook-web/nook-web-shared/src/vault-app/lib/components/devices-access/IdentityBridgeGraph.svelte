@@ -53,8 +53,8 @@
   }
   let compact = $state(false)
   let canvasWidth = $state(0)
-  const graph = $derived(
-    buildIdentityBridge({
+  const graph = $derived.by(() => {
+    const buildIdentityBridgeArgs: Parameters<typeof buildIdentityBridge>[0] = {
       perspective,
       selectedVault,
       compact,
@@ -64,8 +64,9 @@
       deviceIconKind,
       vaults,
       copy,
-    }),
-  )
+    }
+    return buildIdentityBridge(buildIdentityBridgeArgs)
+  })
   const selectedVaultKey = $derived(
     selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected
       ? selectedVault.storeId

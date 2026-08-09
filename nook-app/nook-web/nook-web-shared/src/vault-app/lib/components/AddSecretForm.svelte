@@ -33,11 +33,9 @@
   }: {
     vault: VaultState
     isSaving: boolean
-    onAddSecret: (id: string, type: SecretType, data: string) => Promise<void>
+    onAddSecret: (args: { readonly id: string; readonly type: SecretType; readonly data: string }) => Promise<void>
     onReplaceSecret?: (
-      oldId: string,
-      type: SecretType,
-      data: string,
+      args: { readonly oldId: string; readonly type: SecretType; readonly data: string },
     ) => Promise<void>
     onGeneratePassword: (options: PasswordGenerationOptions) => string
     onCancel: () => void
@@ -119,7 +117,8 @@
 
     let dataYaml: string
     try {
-      dataYaml = buildSecretYaml(state.toFormFields(selectedType, editor))
+      const toFormFieldsArgs: Parameters<typeof state.toFormFields>[0] = { selectedType, editor };
+      dataYaml = buildSecretYaml(state.toFormFields(toFormFieldsArgs))
     } catch (error) {
       state.submitError = vault.resolveErrorMessage(
         error instanceof Error ? error.message : String(error),
@@ -132,9 +131,11 @@
       isEditMode &&
       onReplaceSecret
     ) {
-      await onReplaceSecret(editor.record.id, selectedType, dataYaml)
+      const onReplaceSecretArgs: Parameters<typeof onReplaceSecret>[0] = { oldId: editor.record.id, type: selectedType, data: dataYaml };
+      await onReplaceSecret(onReplaceSecretArgs)
     } else {
-      await onAddSecret(generateSecretId(), selectedType, dataYaml)
+      const onAddSecretArgs: Parameters<typeof onAddSecret>[0] = { id: generateSecretId(), type: selectedType, data: dataYaml };
+      await onAddSecret(onAddSecretArgs)
     }
     resetForm()
     onCancel()
@@ -146,7 +147,7 @@
   )
   const canSubmit = $derived(
     selectedTypeState.kind === SecretTypeSelectionKind.EditingFields &&
-      state.canSubmit(selectedTypeState.itemType, isSaving),
+      (() => { const canSubmitArgs: Parameters<typeof state.canSubmit>[0] = { selectedType: selectedTypeState.itemType, isSaving }; return state.canSubmit(canSubmitArgs); })(),
   )
   const saveLabel = $derived(
     isSaving

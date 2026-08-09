@@ -6,11 +6,8 @@
     type LogsPageState,
   } from './app-logs-api-page-state'
 
-  let state = $state<LogsPageState>({ kind: LogsPageStateKind.Loading })
-
-  function preserveJsonValue(_key: string, value: unknown): unknown {
-    return value
-  }
+  const stateRuneArgs: Parameters<typeof $state>[0] = { kind: LogsPageStateKind.Loading };
+  let state = $state<LogsPageState>(stateRuneArgs)
 
   onMount(() => {
     document.title = 'Nook app logs (JSON)'
@@ -39,21 +36,21 @@
 
 <main class="app-logs-api-page">
   {#if state.kind === LogsPageStateKind.Failed}
-    <pre data-testid="app-logs-error">{JSON.stringify(
-        { error: state.message },
-        preserveJsonValue,
+    <pre data-testid="app-logs-error">{(() => { const stringifyArgs: Parameters<typeof JSON.stringify>[0] = { error: state.message }; return JSON.stringify(
+        stringifyArgs,
+        undefined,
         2,
-      )}</pre>
+      ); })()}</pre>
   {:else if state.kind === LogsPageStateKind.Loaded}
     <pre data-testid="app-logs-json">{JSON.stringify(
         state.payload,
-        preserveJsonValue,
+        undefined,
         2,
       )}</pre>
   {:else}
-    <pre data-testid="app-logs-loading">{JSON.stringify({
+    <pre data-testid="app-logs-loading">{(() => { const stringifyArgs2: Parameters<typeof JSON.stringify>[0] = {
         loading: true,
-      })}</pre>
+      }; return JSON.stringify(stringifyArgs2); })()}</pre>
   {/if}
 </main>
 

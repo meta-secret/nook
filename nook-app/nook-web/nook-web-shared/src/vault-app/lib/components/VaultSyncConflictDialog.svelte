@@ -75,20 +75,20 @@
   )
   const conflictDescription = $derived(
     conflictView.kind === VaultSyncConflictKind.StoreId
-      ? vault.t(
-          isEventLogStoreMismatch
-            ? I18N_KEYS.AuthStorageSyncConflictStoreIdEventDesc
-            : I18N_KEYS.AuthStorageSyncConflictStoreIdDesc,
-          {
+      ? (() => { const tArgs: Parameters<typeof vault.t>[1] = {
             provider: conflict.providerLabel,
             localStore: conflictView.localStoreId,
             remoteStore: conflictView.remoteStoreId,
-          },
-        )
-      : vault.t(I18N_KEYS.AuthStorageSyncConflictDesc, {
+          }; return vault.t(
+          isEventLogStoreMismatch
+            ? I18N_KEYS.AuthStorageSyncConflictStoreIdEventDesc
+            : I18N_KEYS.AuthStorageSyncConflictStoreIdDesc,
+          tArgs,
+        ); })()
+      : (() => { const tArgs2: Parameters<typeof vault.t>[1] = {
           provider: conflict.providerLabel,
           version: versionLabel,
-        }),
+        }; return vault.t(I18N_KEYS.AuthStorageSyncConflictDesc, tArgs2); })(),
   )
   const conflictTitle = $derived(
     isStoreIdConflict
@@ -142,13 +142,13 @@
             </span>
             <span class="block text-xs text-muted-foreground">
               {#if conflictView.kind === VaultSyncConflictKind.StoreId}
-                {vault.t(I18N_KEYS.AuthStorageSyncConflictStoreIdLocal, {
+                {(() => { const tArgs3: Parameters<typeof vault.t>[1] = {
                   store: conflictView.localStoreId,
-                })}
+                }; return vault.t(I18N_KEYS.AuthStorageSyncConflictStoreIdLocal, tArgs3); })()}
               {:else}
-                {vault.t(I18N_KEYS.AuthStorageSyncConflictVersion, {
+                {(() => { const tArgs4: Parameters<typeof vault.t>[1] = {
                   version: String(conflictView.localVersion),
-                })}
+                }; return vault.t(I18N_KEYS.AuthStorageSyncConflictVersion, tArgs4); })()}
               {/if}
             </span>
           </span>
@@ -160,19 +160,19 @@
           <Cloud class="mt-0.5 size-4 shrink-0 text-primary" />
           <span>
             <span class="block font-medium text-foreground">
-              {vault.t(I18N_KEYS.AuthStorageSyncConflictRemoteCopy, {
+              {(() => { const tArgs5: Parameters<typeof vault.t>[1] = {
                 provider: conflict.providerLabel,
-              })}
+              }; return vault.t(I18N_KEYS.AuthStorageSyncConflictRemoteCopy, tArgs5); })()}
             </span>
             <span class="block text-xs text-muted-foreground">
               {#if conflictView.kind === VaultSyncConflictKind.StoreId}
-                {vault.t(I18N_KEYS.AuthStorageSyncConflictStoreIdRemote, {
+                {(() => { const tArgs6: Parameters<typeof vault.t>[1] = {
                   store: conflictView.remoteStoreId,
-                })}
+                }; return vault.t(I18N_KEYS.AuthStorageSyncConflictStoreIdRemote, tArgs6); })()}
               {:else}
-                {vault.t(I18N_KEYS.AuthStorageSyncConflictVersion, {
+                {(() => { const tArgs7: Parameters<typeof vault.t>[1] = {
                   version: String(conflictView.remoteVersion),
-                })}
+                }; return vault.t(I18N_KEYS.AuthStorageSyncConflictVersion, tArgs7); })()}
               {/if}
             </span>
           </span>
@@ -218,9 +218,9 @@
             {#if isBusy}
               <RefreshCw class="size-4 animate-spin" />
             {/if}
-            {vault.t(I18N_KEYS.AuthStorageSyncConflictKeepRemote, {
+            {(() => { const tArgs8: Parameters<typeof vault.t>[1] = {
               provider: conflict.providerLabel,
-            })}
+            }; return vault.t(I18N_KEYS.AuthStorageSyncConflictKeepRemote, tArgs8); })()}
           </Button>
           <Button
             type="button"

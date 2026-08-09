@@ -17,16 +17,24 @@ const SENTINEL_RESPONSE_HASH_PREFIX = "#sentinel-response=";
 
 function sentinelGenesisLinkBase(): string {
   if (!("window" in globalThis)) return getEnrollmentLinkBase();
+  const sentinelGenesisLinkBaseForWorkspaceArgs: Parameters<
+    typeof sentinelGenesisLinkBaseForWorkspace
+  >[0] = {
+    enrollmentLinkBase: getEnrollmentLinkBase(),
+    currentLocation: window.location.href,
+  };
   return sentinelGenesisLinkBaseForWorkspace(
-    getEnrollmentLinkBase(),
-    window.location.href,
+    sentinelGenesisLinkBaseForWorkspaceArgs,
   );
 }
 
-export function sentinelGenesisLinkBaseForWorkspace(
-  enrollmentLinkBase: string,
-  currentLocation: string,
-): string {
+export function sentinelGenesisLinkBaseForWorkspace({
+  enrollmentLinkBase,
+  currentLocation,
+}: {
+  readonly enrollmentLinkBase: string;
+  readonly currentLocation: string;
+}): string {
   const url = new URL(enrollmentLinkBase);
   const workspace = new URL(currentLocation);
   // Workspace routing canonicalizes `/vault/` to `/vault`. Keep ceremony
@@ -43,18 +51,24 @@ export function sentinelGenesisLinkBaseForWorkspace(
   return url.toString();
 }
 
-export function buildSentinelGenesisRequestLink(
-  requestJson: string,
+export function buildSentinelGenesisRequestLink({
+  requestJson,
   baseUrl = sentinelGenesisLinkBase(),
-): string {
+}: {
+  readonly requestJson: string;
+  readonly baseUrl?: string;
+}): string {
   if (!requestJson.trim()) return "";
   return buildRequestLinkCore(requestJson, baseUrl);
 }
 
-export function buildSentinelGenesisParticipantResponseLink(
-  responseJson: string,
+export function buildSentinelGenesisParticipantResponseLink({
+  responseJson,
   baseUrl = sentinelGenesisLinkBase(),
-): string {
+}: {
+  readonly responseJson: string;
+  readonly baseUrl?: string;
+}): string {
   if (!responseJson.trim()) return "";
   return buildParticipantResponseLinkCore(responseJson, baseUrl);
 }
@@ -75,7 +89,8 @@ export function consumeSentinelGenesisRequestFromLocation(): string {
     const request = normalizeSentinelGenesisRequest(url.toString());
     url.hash = "";
     url.searchParams.delete("sentinel-request");
-    history.replaceState({}, "", `${url.pathname}${url.search}`);
+    const replaceStateArgs: Parameters<typeof history.replaceState>[0] = {};
+    history.replaceState(replaceStateArgs, "", `${url.pathname}${url.search}`);
     return request;
   } catch {
     return "";
@@ -94,7 +109,8 @@ export function consumeSentinelGenesisParticipantResponseFromLocation(): string 
     const response = normalizeSentinelGenesisParticipantPayload(url.toString());
     url.hash = "";
     url.searchParams.delete("sentinel-response");
-    history.replaceState({}, "", `${url.pathname}${url.search}`);
+    const replaceStateArgs2: Parameters<typeof history.replaceState>[0] = {};
+    history.replaceState(replaceStateArgs2, "", `${url.pathname}${url.search}`);
     return response;
   } catch {
     return "";

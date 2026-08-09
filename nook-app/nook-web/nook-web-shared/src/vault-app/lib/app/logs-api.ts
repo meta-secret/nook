@@ -40,11 +40,15 @@ const LOG_LEVELS: readonly LogLevel[] = [
   LogLevel.Trace,
 ];
 
-function parseLevel(
-  params: URLSearchParams,
-  name: string,
-  fallback: LogLevel,
-): LogLevel {
+function parseLevel({
+  params,
+  name,
+  fallback,
+}: {
+  readonly params: URLSearchParams;
+  readonly name: string;
+  readonly fallback: LogLevel;
+}): LogLevel {
   const raw = params.get(name);
   const value = raw?.trim().toLowerCase();
   return LOG_LEVELS.includes(value as LogLevel)
@@ -52,12 +56,17 @@ function parseLevel(
     : fallback;
 }
 
-function parsePositiveInt(
-  params: URLSearchParams,
-  name: string,
-  fallback: number,
-  max: number,
-) {
+function parsePositiveInt({
+  params,
+  name,
+  fallback,
+  max,
+}: {
+  readonly params: URLSearchParams;
+  readonly name: string;
+  readonly fallback: number;
+  readonly max: number;
+}) {
   const raw = params.get(name);
   const parsed = Number.parseInt(raw ?? "", 10);
   if (!Number.isFinite(parsed) || parsed < 0) return fallback;
@@ -76,16 +85,42 @@ export function parseAppLogsQuery(search: string): AppLogsQuery {
     search.startsWith("?") ? search.slice(1) : search,
   );
   return {
-    minLevel: parseLevel(params, "minLevel", LogLevel.Trace),
-    limit: parsePositiveInt(params, "limit", 500, 5000),
-    offset: parsePositiveInt(params, "offset", 0, Number.MAX_SAFE_INTEGER),
+    minLevel: (() => {
+      const parseLevelArgs: Parameters<typeof parseLevel>[0] = {
+        params,
+        name: "minLevel",
+        fallback: LogLevel.Trace,
+      };
+      return parseLevel(parseLevelArgs);
+    })(),
+    limit: (() => {
+      const parsePositiveIntArgs: Parameters<typeof parsePositiveInt>[0] = {
+        params,
+        name: "limit",
+        fallback: 500,
+        max: 5000,
+      };
+      return parsePositiveInt(parsePositiveIntArgs);
+    })(),
+    offset: (() => {
+      const parsePositiveIntArgs2: Parameters<typeof parsePositiveInt>[0] = {
+        params,
+        name: "offset",
+        fallback: 0,
+        max: Number.MAX_SAFE_INTEGER,
+      };
+      return parsePositiveInt(parsePositiveIntArgs2);
+    })(),
   };
 }
 
-export function buildAppLogsUrl(
-  query: Partial<AppLogsQuery> = {},
-  basePath = APP_LOGS_PATH,
-): string {
+export function buildAppLogsUrl({
+  query,
+  basePath,
+}: {
+  readonly query: Partial<AppLogsQuery>;
+  readonly basePath: string;
+}): string {
   const params = new URLSearchParams();
   if (query.minLevel) params.set("minLevel", query.minLevel);
   if ("limit" in query) params.set("limit", String(query.limit));
@@ -98,13 +133,14 @@ export function buildAppLogsUrl(
 export async function loadAppLogsResponse(
   query: AppLogsQuery,
 ): Promise<AppLogsResponse> {
+  const dumpLogsArgs: Parameters<typeof dumpLogs>[0] = {
+    minLevel: query.minLevel,
+    limit: query.limit,
+    offset: query.offset,
+  };
   const [total, entries] = await Promise.all([
     logCount(),
-    dumpLogs({
-      minLevel: query.minLevel,
-      limit: query.limit,
-      offset: query.offset,
-    }),
+    dumpLogs(dumpLogsArgs),
   ]);
 
   return {

@@ -73,9 +73,9 @@
       {#each vault.replacementConflicts as conflict (conflict.oldSecretId)}
         <div class="rounded border border-amber-400/30 p-3">
           <p class="text-amber-100">
-            {vault.t(I18N_KEYS.AppConflictOriginal, {
+            {(() => { const tArgs: Parameters<typeof vault.t>[1] = {
               id: shortId(conflict.oldSecretId),
-            })}
+            }; return vault.t(I18N_KEYS.AppConflictOriginal, tArgs); })()}
           </p>
           <div class="mt-2 flex flex-wrap gap-2">
             {#each conflict.candidateSecretIds as candidateSecretId (candidateSecretId)}
@@ -89,9 +89,9 @@
                     candidateSecretId,
                   )}
               >
-                {vault.t(I18N_KEYS.AppConflictKeep, {
+                {(() => { const tArgs2: Parameters<typeof vault.t>[1] = {
                   id: shortId(candidateSecretId),
-                })}
+                }; return vault.t(I18N_KEYS.AppConflictKeep, tArgs2); })()}
               </Button>
             {/each}
           </div>

@@ -91,9 +91,9 @@
             />{verifiedVaultCount}</span
           >
           <span class="sr-only">
-            {vault.t(I18N_KEYS.DevicesAccessBridgeVerifiedVaultCount, {
+            {(() => { const tArgs: Parameters<typeof vault.t>[1] = {
               count: String(verifiedVaultCount),
-            })}
+            }; return vault.t(I18N_KEYS.DevicesAccessBridgeVerifiedVaultCount, tArgs); })()}
           </span>
         </button>
       </li>
@@ -137,9 +137,9 @@
                 : 0}</span
             >
             <span class="sr-only">
-              {vault.t(I18N_KEYS.DevicesAccessBridgeVerifiedDeviceKeyCount, {
+              {(() => { const tArgs2: Parameters<typeof vault.t>[1] = {
                 count: vaultEntry.verified ? '1' : '0',
-              })}
+              }; return vault.t(I18N_KEYS.DevicesAccessBridgeVerifiedDeviceKeyCount, tArgs2); })()}
             </span>
           </button>
         </li>

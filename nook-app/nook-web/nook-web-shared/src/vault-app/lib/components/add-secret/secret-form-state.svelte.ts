@@ -96,10 +96,13 @@ export class SecretFormState {
     }
   }
 
-  toFormFields(
-    selectedType: SecretType,
-    editor: SecretEditor,
-  ): NookSecretFormFields {
+  toFormFields({
+    selectedType,
+    editor,
+  }: {
+    readonly selectedType: SecretType;
+    readonly editor: SecretEditor;
+  }): NookSecretFormFields {
     if (selectedType === SecretType.Login) {
       return NookSecretFormFields.login(
         this.websiteUrl.trim(),
@@ -166,7 +169,13 @@ export class SecretFormState {
     );
   }
 
-  canSubmit(selectedType: SecretType, isSaving: boolean) {
+  canSubmit({
+    selectedType,
+    isSaving,
+  }: {
+    readonly selectedType: SecretType;
+    readonly isSaving: boolean;
+  }) {
     if (isSaving) return false;
     if (selectedType === SecretType.Login) {
       return (

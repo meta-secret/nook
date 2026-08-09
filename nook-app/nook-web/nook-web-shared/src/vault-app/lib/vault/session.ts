@@ -12,10 +12,13 @@ import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
 
 const log = createLogger("vault-session");
 
-export function resetVaultSessionState(
-  state: SessionActionsContext,
-  resetManager = true,
-): void {
+export function resetVaultSessionState({
+  state,
+  resetManager,
+}: {
+  readonly state: SessionActionsContext;
+  readonly resetManager: boolean;
+}): void {
   if (resetManager && state.hasManager) {
     void state
       .enqueueStorage(() => state.requireManager().resetVaultSession())
@@ -54,14 +57,20 @@ export function markVaultUnlocked(state: SessionActionsContext): void {
   state.awaitingJoinApproval = false;
   state.sessionExpiredByIdle = false;
   state.refreshVaultArchitectureFromManager();
-  log.info("vault session unlocked", { secrets: state.secrets.length });
+  const infoArgs: Parameters<typeof log.info>[1] = {
+    secrets: state.secrets.length,
+  };
+  log.info("vault session unlocked", infoArgs);
   void state.publishExtensionEventLogUpdate();
 }
 
-export function clearUnlockedSession(
-  state: SessionActionsContext,
-  resetManager = true,
-): void {
+export function clearUnlockedSession({
+  state,
+  resetManager,
+}: {
+  readonly state: SessionActionsContext;
+  readonly resetManager: boolean;
+}): void {
   state.localLoginPreparation = LocalLoginPreparationState.Idle;
   state.secretPageGeneration += 1;
   state.stopIdleSessionTracking();
@@ -86,7 +95,10 @@ export function clearUnlockedSession(
   state.enrollmentCode = "";
   state.errorMsg = "";
   const wasSentinel = state.vaultArchitecture.vault_type === VaultType.Sentinel;
-  resetVaultSessionState(state, resetManager);
+  const resetVaultSessionStateArgs: Parameters<
+    typeof resetVaultSessionState
+  >[0] = { state, resetManager };
+  resetVaultSessionState(resetVaultSessionStateArgs);
   if (wasSentinel) {
     state.sentinelCeremonyPrompt = true;
     state.sentinelUnlockStatus = SentinelVaultUnlockState.CeremonyRequired;

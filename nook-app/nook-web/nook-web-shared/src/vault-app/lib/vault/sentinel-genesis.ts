@@ -11,59 +11,85 @@ import { listSentinelStoredDeliveries } from "$lib/vault/sentinel-unlock";
 import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
 import { SentinelGenesisTargetKind } from "$lib/vault/state/sentinel.svelte";
 
-function replaceOwnedWasmValues<T extends { free: () => void }>(
-  current: T[],
-  replacement: T[],
-): T[] {
+function replaceOwnedWasmValues<T extends { free: () => void }>({
+  current,
+  replacement,
+}: {
+  readonly current: T[];
+  readonly replacement: T[];
+}): T[] {
   current.forEach((value) => value.free());
   return replacement;
 }
 
 export function releaseResults(state: VaultState): void {
+  const replaceOwnedWasmValuesArgs: Parameters<
+    typeof replaceOwnedWasmValues
+  >[0] = { current: state.sentinelGenesisDeliveries, replacement: [] };
   state.sentinelGenesisDeliveries = replaceOwnedWasmValues(
-    state.sentinelGenesisDeliveries,
-    [],
+    replaceOwnedWasmValuesArgs,
   );
+  const replaceOwnedWasmValuesArgs2: Parameters<
+    typeof replaceOwnedWasmValues
+  >[0] = { current: state.sentinelGenesisParticipants, replacement: [] };
   state.sentinelGenesisParticipants = replaceOwnedWasmValues(
-    state.sentinelGenesisParticipants,
-    [],
+    replaceOwnedWasmValuesArgs2,
   );
   state.sentinelGenesisParticipantCount = 0;
 }
 
-export function applyStatus(
-  state: VaultState,
-  status: NookSentinelGenesisStatus,
-): void {
+export function applyStatus({
+  state,
+  status,
+}: {
+  readonly state: VaultState;
+  readonly status: NookSentinelGenesisStatus;
+}): void {
   const participants = status.participants;
   state.sentinelGenesisParticipantCount = participants.length;
+  const replaceOwnedWasmValuesArgs3: Parameters<
+    typeof replaceOwnedWasmValues
+  >[0] = {
+    current: state.sentinelGenesisParticipants,
+    replacement: participants,
+  };
   state.sentinelGenesisParticipants = replaceOwnedWasmValues(
-    state.sentinelGenesisParticipants,
-    participants,
+    replaceOwnedWasmValuesArgs3,
   );
   state.sentinelGenesisPhase = status.phase;
   status.free();
 }
 
-export function applyFinalizeResult(
-  state: VaultState,
-  result: NookSentinelGenesisFinalizeResult,
-): void {
+export function applyFinalizeResult({
+  state,
+  result,
+}: {
+  readonly state: VaultState;
+  readonly result: NookSentinelGenesisFinalizeResult;
+}): void {
   state.sentinelGenesisPhase = result.phase;
   state.selectSentinelGenesisStore(result.storeId);
   state.openActiveVault(result.storeId);
   state.replaceVaultArchitecture(result.architecture as VaultArchitecture);
+  const replaceOwnedWasmValuesArgs4: Parameters<
+    typeof replaceOwnedWasmValues
+  >[0] = {
+    current: state.sentinelGenesisDeliveries,
+    replacement: result.participantDeliveries,
+  };
   state.sentinelGenesisDeliveries = replaceOwnedWasmValues(
-    state.sentinelGenesisDeliveries,
-    result.participantDeliveries,
+    replaceOwnedWasmValuesArgs4,
   );
   result.free();
 }
 
-export async function start(
-  state: VaultState,
-  args: StartSentinelGenesisArgs,
-): Promise<void> {
+export async function start({
+  state,
+  args,
+}: {
+  readonly state: VaultState;
+  readonly args: StartSentinelGenesisArgs;
+}): Promise<void> {
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return;
   state.isVerifying = true;
@@ -79,7 +105,11 @@ export async function start(
     state.sentinelGenesisRequest = state
       .requireManager()
       .sentinelGenesisRequestJson();
-    applyStatus(state, status);
+    const applyStatusArgs: Parameters<typeof applyStatus>[0] = {
+      state,
+      status,
+    };
+    applyStatus(applyStatusArgs);
   } catch (error) {
     state.sentinelGenesisPhase = state.requireManager().sentinelGenesisPhase;
     state.errorMsg =
@@ -92,11 +122,15 @@ export async function start(
   }
 }
 
-export async function addParticipantResponse(
-  state: VaultState,
-  payload: string,
-  participantLabel = "",
-): Promise<void> {
+export async function addParticipantResponse({
+  state,
+  payload,
+  participantLabel,
+}: {
+  readonly state: VaultState;
+  readonly payload: string;
+  readonly participantLabel: string;
+}): Promise<void> {
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return;
   state.isVerifying = true;
@@ -110,7 +144,11 @@ export async function addParticipantResponse(
           participantLabel.trim(),
         ),
     );
-    applyStatus(state, status);
+    const applyStatusArgs2: Parameters<typeof applyStatus>[0] = {
+      state,
+      status,
+    };
+    applyStatus(applyStatusArgs2);
   } catch (error) {
     state.errorMsg =
       error instanceof Error
@@ -149,10 +187,13 @@ export async function createPublicKeyAnnouncement(
   }
 }
 
-export async function rememberRequest(
-  state: VaultState,
-  requestPayload: string,
-): Promise<void> {
+export async function rememberRequest({
+  state,
+  requestPayload,
+}: {
+  readonly state: VaultState;
+  readonly requestPayload: string;
+}): Promise<void> {
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return;
   state.isVerifying = true;
@@ -174,10 +215,13 @@ export async function rememberRequest(
   }
 }
 
-export async function createParticipantResponse(
-  state: VaultState,
-  requestPayload: string,
-): Promise<string> {
+export async function createParticipantResponse({
+  state,
+  requestPayload,
+}: {
+  readonly state: VaultState;
+  readonly requestPayload: string;
+}): Promise<string> {
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return "";
   state.isVerifying = true;
@@ -212,7 +256,11 @@ export async function finalize(state: VaultState): Promise<void> {
     const result = await state.enqueueStorage(() =>
       state.requireManager().finalizeSentinelGenesis(),
     );
-    applyFinalizeResult(state, result);
+    const applyFinalizeResultArgs: Parameters<typeof applyFinalizeResult>[0] = {
+      state,
+      result,
+    };
+    applyFinalizeResult(applyFinalizeResultArgs);
   } catch (error) {
     state.errorMsg =
       error instanceof Error
@@ -224,10 +272,13 @@ export async function finalize(state: VaultState): Promise<void> {
   }
 }
 
-export async function acceptShareDelivery(
-  state: VaultState,
-  payload: string,
-): Promise<void> {
+export async function acceptShareDelivery({
+  state,
+  payload,
+}: {
+  readonly state: VaultState;
+  readonly payload: string;
+}): Promise<void> {
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return;
   state.isVerifying = true;
@@ -274,10 +325,13 @@ export async function completeDelivery(state: VaultState): Promise<void> {
   }
 }
 
-export async function acceptOnboardingPackage(
-  state: VaultState,
-  packageJson: string,
-): Promise<void> {
+export async function acceptOnboardingPackage({
+  state,
+  packageJson,
+}: {
+  readonly state: VaultState;
+  readonly packageJson: string;
+}): Promise<void> {
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   state.errorMsg = "";
   const storeId = await state.enqueueStorage(() =>

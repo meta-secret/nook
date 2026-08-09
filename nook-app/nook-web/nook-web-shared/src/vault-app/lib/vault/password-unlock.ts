@@ -3,7 +3,7 @@ import { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import { EnrollmentEntryKind } from "$lib/vault/state/session.svelte";
 import { isoTimestamp } from "$lib/nook";
-import { createLogger } from "$lib/runtime/log";
+import { createLogger, runtimeFailure } from "$lib/runtime/log";
 import {
   enrollmentOauthState,
   findSharedGrantProvider,
@@ -99,18 +99,25 @@ import {
 const log = createLogger("vault-password");
 
 type E2ePasswordManager = {
-  addVaultPasswordForE2e?: (label: string, password: string) => Promise<void>;
-  updateVaultPasswordEntryForE2e?: (
-    entryId: string,
-    password: string,
-  ) => Promise<void>;
+  addVaultPasswordForE2e?: (args: {
+    readonly label: string;
+    readonly password: string;
+  }) => Promise<void>;
+  updateVaultPasswordEntryForE2e?: (args: {
+    readonly entryId: string;
+    readonly password: string;
+  }) => Promise<void>;
 };
 
-export async function addVaultPassword(
-  state: VaultState,
-  label: string,
-  password: string,
-): Promise<void> {
+export async function addVaultPassword({
+  state,
+  label,
+  password,
+}: {
+  readonly state: VaultState;
+  readonly label: string;
+  readonly password: string;
+}): Promise<void> {
   if (!state.hasManager) {
     state.passwordError = "Vault engine is not available.";
     return;
@@ -131,12 +138,19 @@ export async function addVaultPassword(
         state.runtimeConfig.e2eExposeVault &&
         e2eManager.addVaultPasswordForE2e
       ) {
-        return e2eManager.addVaultPasswordForE2e(trimmedLabel, password);
+        const addVaultPasswordForE2eArgs: Parameters<
+          typeof e2eManager.addVaultPasswordForE2e
+        >[0] = { label: trimmedLabel, password };
+        return e2eManager.addVaultPasswordForE2e(addVaultPasswordForE2eArgs);
       }
       return manager.addVaultPassword(trimmedLabel, password);
     });
     await state.refreshPasswordEntriesList();
-    log.info("vault password added", { hadPasswords, label: label.trim() });
+    const infoArgs: Parameters<typeof log.info>[1] = {
+      hadPasswords,
+      label: label.trim(),
+    };
+    log.info("vault password added", infoArgs);
     state.showSuccess(
       hadPasswords
         ? state.t(I18N_KEYS.ToastsPasswordAddedRotate)
@@ -153,11 +167,15 @@ export async function addVaultPassword(
   }
 }
 
-export async function updateVaultPasswordEntry(
-  state: VaultState,
-  entryId: string,
-  password: string,
-): Promise<void> {
+export async function updateVaultPasswordEntry({
+  state,
+  entryId,
+  password,
+}: {
+  readonly state: VaultState;
+  readonly entryId: string;
+  readonly password: string;
+}): Promise<void> {
   if (!state.hasManager) {
     state.passwordError = "Vault engine is not available.";
     return;
@@ -172,7 +190,12 @@ export async function updateVaultPasswordEntry(
         state.runtimeConfig.e2eExposeVault &&
         e2eManager.updateVaultPasswordEntryForE2e
       ) {
-        return e2eManager.updateVaultPasswordEntryForE2e(entryId, password);
+        const updateVaultPasswordEntryForE2eArgs: Parameters<
+          typeof e2eManager.updateVaultPasswordEntryForE2e
+        >[0] = { entryId, password };
+        return e2eManager.updateVaultPasswordEntryForE2e(
+          updateVaultPasswordEntryForE2eArgs,
+        );
       }
       return manager.updateVaultPasswordEntry(entryId, password);
     });
@@ -188,10 +211,13 @@ export async function updateVaultPasswordEntry(
   }
 }
 
-export async function removeVaultPasswordEntry(
-  state: VaultState,
-  entryId: string,
-): Promise<void> {
+export async function removeVaultPasswordEntry({
+  state,
+  entryId,
+}: {
+  readonly state: VaultState;
+  readonly entryId: string;
+}): Promise<void> {
   if (!state.hasManager) return;
   state.passwordError = "";
   state.isPasswordBusy = true;
@@ -218,11 +244,15 @@ export async function removeVaultPasswordEntry(
   }
 }
 
-export async function unlockWithPassword(
-  state: VaultState,
-  entryId: string,
-  password: string,
-): Promise<void> {
+export async function unlockWithPassword({
+  state,
+  entryId,
+  password,
+}: {
+  readonly state: VaultState;
+  readonly entryId: string;
+  readonly password: string;
+}): Promise<void> {
   if (!state.hasManager) {
     state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
     return;
@@ -271,11 +301,12 @@ export async function unlockWithPassword(
       void state.hydrateMultiDeviceState();
     }
     state.markVaultUnlocked();
-    log.info("vault unlocked with password", {
+    const infoArgs2: Parameters<typeof log.info>[1] = {
       mode: state.storageMode,
       secrets: state.secretTotal,
       entryId,
-    });
+    };
+    log.info("vault unlocked with password", infoArgs2);
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.loginPasswordPrompt = false;
     state.showSuccess(state.t(I18N_KEYS.ToastsVaultUnlocked));
@@ -287,8 +318,9 @@ export async function unlockWithPassword(
     state.isAuthenticated = false;
     const message =
       e instanceof Error ? e.message : "Failed to unlock with password.";
-    log.warn("vault password unlock failed", { error: message });
-    if (isSentinelPasswordUnlockForbiddenError(e)) {
+    const warnArgs: Parameters<typeof log.warn>[1] = { error: message };
+    log.warn("vault password unlock failed", warnArgs);
+    if (isSentinelPasswordUnlockForbiddenError(runtimeFailure(e))) {
       state.errorMsg = state.t(
         I18N_KEYS.ArchitectureModesSentinelPasswordForbidden,
       );
@@ -315,10 +347,13 @@ type SavedEnrollmentProvider =
   | { kind: SavedEnrollmentProviderKind.Local }
   | { kind: SavedEnrollmentProviderKind.Remote; provider: StorageProvider };
 
-function applySavedEnrollmentProvider(
-  state: VaultState,
-  selection: SavedEnrollmentProvider,
-) {
+function applySavedEnrollmentProvider({
+  state,
+  selection,
+}: {
+  readonly state: VaultState;
+  readonly selection: SavedEnrollmentProvider;
+}) {
   if (
     selection.kind === SavedEnrollmentProviderKind.Local ||
     selection.provider.type === "local"
@@ -381,11 +416,15 @@ async function localVaultHasPasswordEntries(
   }
 }
 
-export async function connectWithEnrollmentCode(
-  state: VaultState,
-  code: string,
-  password = "",
-): Promise<void> {
+export async function connectWithEnrollmentCode({
+  state,
+  code,
+  password,
+}: {
+  readonly state: VaultState;
+  readonly code: string;
+  readonly password: string;
+}): Promise<void> {
   if (!state.hasManager) {
     state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
     return;
@@ -422,10 +461,11 @@ export async function connectWithEnrollmentCode(
         storageTargetId: enrollmentProvider.sharedStorageTargetId,
       };
       await state.loadProviders();
+      const findSharedGrantProviderArgs: Parameters<
+        typeof findSharedGrantProvider
+      >[0] = { providers: state.providers, preset, target: storageTarget };
       const providerSelection = findSharedGrantProvider(
-        state.providers,
-        preset,
-        storageTarget,
+        findSharedGrantProviderArgs,
       );
       let sharedProvider = providerSelection;
       let sharedProviderNeedsSave = false;
@@ -438,18 +478,26 @@ export async function connectWithEnrollmentCode(
             state.t(I18N_KEYS.ProviderSetupGoogleOauthUnconfigured),
           );
         }
-        const tokens = await requestGoogleDriveSharedAccess({
+        const requestGoogleDriveSharedAccessArgs: Parameters<
+          typeof requestGoogleDriveSharedAccess
+        >[0] = {
           prompt: GoogleOAuthPrompt.Consent,
-        });
+        };
+        const tokens = await requestGoogleDriveSharedAccess(
+          requestGoogleDriveSharedAccessArgs,
+        );
+        const defaultOAuthFileConfigArgs2: Parameters<
+          typeof defaultOAuthFileConfig
+        >[0] = { preset: "google-drive", fileName: "nook-events" };
         const initialConfig: OAuthFileConfig = {
-          ...defaultOAuthFileConfig("google-drive", "nook-events"),
+          ...defaultOAuthFileConfig(defaultOAuthFileConfigArgs2),
           folderId: storedGoogleDriveFolder(storageTarget.storageTargetId),
           driveMode: "shared",
         };
-        const oauthFile = oauthTokensToConfig(
-          tokens,
-          configuredOAuthFile(initialConfig),
-        );
+        const oauthTokensToConfigArgs: Parameters<
+          typeof oauthTokensToConfig
+        >[0] = { tokens, existing: configuredOAuthFile(initialConfig) };
+        const oauthFile = oauthTokensToConfig(oauthTokensToConfigArgs);
         sharedProvider = {
           kind: SharedGrantProviderKind.Existing,
           provider: {
@@ -471,7 +519,12 @@ export async function connectWithEnrollmentCode(
             : oauthConfigurationNotApplicable();
         const existingConfig = isConfiguredOAuthFile(existingConfiguration)
           ? existingConfiguration.config
-          : defaultOAuthFileConfig("icloud", "nook-events");
+          : (() => {
+              const defaultOAuthFileConfigArgs3: Parameters<
+                typeof defaultOAuthFileConfig
+              >[0] = { preset: "icloud", fileName: "nook-events" };
+              return defaultOAuthFileConfig(defaultOAuthFileConfigArgs3);
+            })();
         const existingCredential = oauthAccessToken(existingConfig);
         const tokens =
           existingCredential.kind === OAuthAccessTokenKind.Available
@@ -498,6 +551,9 @@ export async function connectWithEnrollmentCode(
               ? existingConfig.fileName
               : storedOAuthRemoteFileName("nook-events"),
         };
+        const oauthTokensToICloudConfigArgs: Parameters<
+          typeof oauthTokensToICloudConfig
+        >[0] = { tokens, existing: configuredOAuthFile(sharedConfig) };
         const provider: StorageProvider = {
           ...providerPersistenceDefaults(),
           id:
@@ -510,10 +566,7 @@ export async function connectWithEnrollmentCode(
               ? existingProvider.provider.label
               : state.t(I18N_KEYS.ProviderPickerIcloud),
           oauthFile: configuredOAuthFile(
-            oauthTokensToICloudConfig(
-              tokens,
-              configuredOAuthFile(sharedConfig),
-            ),
+            oauthTokensToICloudConfig(oauthTokensToICloudConfigArgs),
           ),
           createdAt:
             existingProvider.kind === SharedGrantProviderKind.Existing
@@ -531,7 +584,7 @@ export async function connectWithEnrollmentCode(
       ) {
         throw new Error(state.t(I18N_KEYS.ErrorsSharedProviderAccessRequired));
       }
-      let provider = sharedProvider.provider;
+      let provider: StorageProvider = sharedProvider.provider;
       const providerConfiguration = provider.oauthFile;
       if (
         storageTarget.kind === SharedStorageTargetKind.Bound &&
@@ -539,28 +592,41 @@ export async function connectWithEnrollmentCode(
         isConfiguredOAuthFile(providerConfiguration) &&
         providerConfiguration.config.folderId.state === "root"
       ) {
+        const configuredOAuthFileArgs: Parameters<
+          typeof configuredOAuthFile
+        >[0] = {
+          ...providerConfiguration.config,
+          folderId: storedGoogleDriveFolder(storageTarget.storageTargetId),
+        };
         provider = {
           ...provider,
-          oauthFile: configuredOAuthFile({
-            ...providerConfiguration.config,
-            folderId: storedGoogleDriveFolder(storageTarget.storageTargetId),
-          }),
+          oauthFile: configuredOAuthFile(configuredOAuthFileArgs),
         };
       }
-      applySavedEnrollmentProvider(state, {
-        kind: SavedEnrollmentProviderKind.Remote,
-        provider,
-      });
+      const applySavedEnrollmentProviderArgs2: Parameters<
+        typeof applySavedEnrollmentProvider
+      >[0] = {
+        state,
+        selection: {
+          kind: SavedEnrollmentProviderKind.Remote,
+          provider,
+        },
+      };
+      applySavedEnrollmentProvider(applySavedEnrollmentProviderArgs2);
       if (sharedProviderNeedsSave) {
         state.activateLoginSetup("oauth-file");
       }
       enrollmentStorageArgs = state.providerWasmArgs(provider);
     } else if (enrollmentProvider.type === OAUTH_FILE_PROVIDER_TYPE) {
       const enrollmentState = enrollmentOauthState(enrollmentProvider);
+      const defaultOAuthFileConfigArgs: Parameters<
+        typeof defaultOAuthFileConfig
+      >[0] = {
+        preset: enrollmentProvider.oauthPreset as OAuthFilePreset,
+        fileName: DEFAULT_DRIVE_BACKUP_NAME,
+      };
       const oauthFile: OAuthFileConfig = {
-        ...defaultOAuthFileConfig(
-          enrollmentProvider.oauthPreset as OAuthFilePreset,
-        ),
+        ...defaultOAuthFileConfig(defaultOAuthFileConfigArgs),
         accessToken: storedOAuthCredential(enrollmentProvider.oauthAccessToken),
         ...enrollmentState,
       };
@@ -599,7 +665,10 @@ export async function connectWithEnrollmentCode(
           };
         }
       }
-      applySavedEnrollmentProvider(state, selection);
+      const applySavedEnrollmentProviderArgs: Parameters<
+        typeof applySavedEnrollmentProvider
+      >[0] = { state, selection };
+      applySavedEnrollmentProvider(applySavedEnrollmentProviderArgs);
       enrollmentStorageArgs =
         selection.kind === SavedEnrollmentProviderKind.Remote
           ? state.providerWasmArgs(selection.provider)
@@ -658,12 +727,17 @@ export async function connectWithEnrollmentCode(
   }
 }
 
-export async function issueEnrollmentCode(
-  state: VaultState,
-  entryId: string,
-  password: string,
-  providerId = state.syncProviders[0]?.id ?? "",
-): Promise<string> {
+export async function issueEnrollmentCode({
+  state,
+  entryId,
+  password,
+  providerId,
+}: {
+  readonly state: VaultState;
+  readonly entryId: string;
+  readonly password: string;
+  readonly providerId: string;
+}): Promise<string> {
   if (!state.hasManager) {
     throw new Error("Vault engine is not available.");
   }
@@ -672,7 +746,8 @@ export async function issueEnrollmentCode(
   // wait for any *already in-flight* `&mut self` storage future to release its
   // borrow before verify runs, or wasm-bindgen's borrow detector trips.
   state.isPasswordBusy = true;
-  log.info("enrollment code issue started", { providerId });
+  const infoArgs3: Parameters<typeof log.info>[1] = { providerId };
+  log.info("enrollment code issue started", infoArgs3);
   try {
     // Wait for the queued wasm op to settle. We deliberately do NOT
     // `resetStorageChain()` on timeout: abandoning an in-flight `&mut self`
@@ -680,10 +755,10 @@ export async function issueEnrollmentCode(
     // "database is not open" and poisons subsequent borrows. Surface a
     // retriable error instead.
     try {
-      await state.raceStorageTimeout(
-        state.waitForStorageChain(),
-        "Vault storage",
-      );
+      const raceStorageTimeoutArgs: Parameters<
+        typeof state.raceStorageTimeout
+      >[0] = { promise: state.waitForStorageChain(), label: "Vault storage" };
+      await state.raceStorageTimeout(raceStorageTimeoutArgs);
     } catch {
       throw new Error("Vault storage is busy. Try again.");
     }
@@ -721,7 +796,8 @@ export async function issueEnrollmentCode(
     if (!verified) {
       throw new Error("Password does not match the vault.");
     }
-    log.info("enrollment password verified", { providerId });
+    const infoArgs4: Parameters<typeof log.info>[1] = { providerId };
+    log.info("enrollment password verified", infoArgs4);
     const selectedProvider = state.providers.find((p) => p.id === providerId);
     if (!selectedProvider) {
       throw new Error("Choose a sync provider.");
@@ -747,11 +823,12 @@ export async function issueEnrollmentCode(
       usesSharedProviderGrant &&
       isConfiguredOAuthFile(selectedOauth) &&
       selectedOauth.config.preset === "icloud";
-    log.info("enrollment provider selected", {
+    const infoArgs5: Parameters<typeof log.info>[1] = {
       providerId,
       providerType: selectedProvider.type,
       usesSharedProviderGrant,
-    });
+    };
+    log.info("enrollment provider selected", infoArgs5);
     if (usesSharedProviderGrant && !usesSharedICloud && !sharedJoinerIdentity) {
       throw new Error(
         state.t(I18N_KEYS.ErrorsValidationSharedJoinerIdentityRequired),
@@ -770,7 +847,7 @@ export async function issueEnrollmentCode(
     let sharedStorageTarget: SharedStorageTarget = {
       kind: SharedStorageTargetKind.NotBound,
     };
-    let enrollmentProviderRow = selectedProvider;
+    let enrollmentProviderRow: StorageProvider = selectedProvider;
     if (usesSharedProviderGrant) {
       if (usesSharedICloud) {
         if (selectedOauth.config.iCloudShareTarget.state === "personal") {
@@ -788,14 +865,17 @@ export async function issueEnrollmentCode(
           throw new Error(state.t(I18N_KEYS.ErrorsSharedProviderOauthRequired));
         }
         const accessCredential = oauthAccessToken(selectedOauth.config);
-        log.info("shared enrollment grant started", { providerId });
+        const infoArgs6: Parameters<typeof log.info>[1] = { providerId };
+        log.info("shared enrollment grant started", infoArgs6);
         const fileName = oauthFileName(selectedOauth.config);
         const storageTargetHint =
           fileName.kind === OAuthFileNameKind.Resolved
             ? fileName.fileName
             : githubRepo;
         const folderId = selectedOauth.config.folderId;
-        const grant = await prepareSharedStorageGrant({
+        const prepareSharedStorageGrantArgs: Parameters<
+          typeof prepareSharedStorageGrant
+        >[0] = {
           providerType: selectedProvider.type,
           oauthPreset: providerOauthPresetForProvider(selectedProvider),
           joinerIdentityKind: "email",
@@ -811,11 +891,15 @@ export async function issueEnrollmentCode(
             accessCredential.kind === OAuthAccessTokenKind.Available
               ? sharedStorageGrantAccessToken(accessCredential.token)
               : unavailableSharedStorageGrantCredential(),
-        });
-        log.info("shared enrollment grant prepared", {
+        };
+        const grant = await prepareSharedStorageGrant(
+          prepareSharedStorageGrantArgs,
+        );
+        const infoArgs7: Parameters<typeof log.info>[1] = {
           providerId,
           grantKind: grant.kind,
-        });
+        };
+        log.info("shared enrollment grant prepared", infoArgs7);
         if (grant.kind === "unsupported") {
           throw new Error(state.t(grant.reasonKey));
         }
@@ -830,13 +914,17 @@ export async function issueEnrollmentCode(
             kind: SharedStorageTargetKind.Bound,
             storageTargetId: grantTarget.storageTargetId,
           };
-          state.sharedGrantInstructions = state.t(grant.note, {
-            email: sharedJoinerIdentity,
-            folder:
-              grantTarget.state === "named"
-                ? grantTarget.storageTargetName
-                : grantTarget.storageTargetId,
-          });
+          const tArgs2: Parameters<typeof state.t>[0] = {
+            key: grant.note,
+            replacements: {
+              email: sharedJoinerIdentity,
+              folder:
+                grantTarget.state === "named"
+                  ? grantTarget.storageTargetName
+                  : grantTarget.storageTargetId,
+            },
+          };
+          state.sharedGrantInstructions = state.t(tArgs2);
         } else if (grant.kind === "manual-grant-required") {
           if (grantTarget.state !== "unavailable") {
             sharedStorageTarget = {
@@ -844,15 +932,19 @@ export async function issueEnrollmentCode(
               storageTargetId: grantTarget.storageTargetId,
             };
           }
-          state.sharedGrantInstructions = state.t(grant.instructionsKey, {
-            email: grant.joinerIdentity,
-            folder:
-              grantTarget.state === "named"
-                ? grantTarget.storageTargetName
-                : grantTarget.state === "identified"
-                  ? grantTarget.storageTargetId
-                  : "shared folder",
-          });
+          const tArgs: Parameters<typeof state.t>[0] = {
+            key: grant.instructionsKey,
+            replacements: {
+              email: grant.joinerIdentity,
+              folder:
+                grantTarget.state === "named"
+                  ? grantTarget.storageTargetName
+                  : grantTarget.state === "identified"
+                    ? grantTarget.storageTargetId
+                    : "shared folder",
+            },
+          };
+          state.sharedGrantInstructions = state.t(tArgs);
         }
         if (
           sharedStorageTarget.kind === SharedStorageTargetKind.Bound &&
@@ -872,11 +964,21 @@ export async function issueEnrollmentCode(
           );
           await state.persistProviders();
 
-          if (shouldFlushSharedDriveGrant(grant, accessCredential)) {
+          if (
+            (() => {
+              const shouldFlushSharedDriveGrantArgs: Parameters<
+                typeof shouldFlushSharedDriveGrant
+              >[0] = { grant, accessCredential };
+              return shouldFlushSharedDriveGrant(
+                shouldFlushSharedDriveGrantArgs,
+              );
+            })()
+          ) {
             // The target is not usable until it contains the current vault
             // event log, even when collaborator access needs manual completion.
             // Await Rust/WASM fan-out before issuing the enrollment code.
-            const targetArgs = state.providerWasmArgs(enrollmentProviderRow);
+            const targetArgs: ReturnType<typeof state.providerWasmArgs> =
+              state.providerWasmArgs(enrollmentProviderRow);
             await state.enqueueStorage(() =>
               state.requireManager().flushEventOutboxForProvider(...targetArgs),
             );
@@ -884,7 +986,8 @@ export async function issueEnrollmentCode(
         }
       }
       if (usesSharedICloud) {
-        const targetArgs = state.providerWasmArgs(enrollmentProviderRow);
+        const targetArgs: ReturnType<typeof state.providerWasmArgs> =
+          state.providerWasmArgs(enrollmentProviderRow);
         await state.enqueueStorage(() =>
           state.requireManager().flushEventOutboxForProvider(...targetArgs),
         );
@@ -909,7 +1012,8 @@ export async function issueEnrollmentCode(
             enrollmentProviderRow,
             state.vaultArchitecture,
           );
-    log.info("enrollment provider payload prepared", { providerId });
+    const infoArgs8: Parameters<typeof log.info>[1] = { providerId };
+    log.info("enrollment provider payload prepared", infoArgs8);
     let catalogVaultName: CatalogVaultLabel = {
       kind: CatalogVaultLabelKind.Missing,
     };
@@ -936,10 +1040,11 @@ export async function issueEnrollmentCode(
             label: manager.vaultName,
           }
         : catalogVaultName;
-    log.info("enrollment vault name loaded", {
+    const infoArgs9: Parameters<typeof log.info>[1] = {
       providerId,
       hasVaultName: vaultName.kind === CatalogVaultLabelKind.Present,
-    });
+    };
+    log.info("enrollment vault name loaded", infoArgs9);
     const payload =
       vaultName.kind === CatalogVaultLabelKind.Present
         ? NookEnrollmentIssueInput.named(
@@ -962,7 +1067,8 @@ export async function issueEnrollmentCode(
         : encryptUnlabeledEnrollmentPayload(payload, password);
     state.enrollmentCode = code;
     state.beginEnrollmentEntry(entryId);
-    log.info("enrollment code issued", { providerId });
+    const infoArgs10: Parameters<typeof log.info>[1] = { providerId };
+    log.info("enrollment code issued", infoArgs10);
     return code;
   } finally {
     state.isPasswordBusy = false;

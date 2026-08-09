@@ -61,21 +61,25 @@
     hasPasswordEnvelope?: boolean
     onApproveJoin: (deviceId: string) => void | Promise<void>
     onDenyJoin: (deviceId: string) => void | Promise<void>
-    onRenameDevice: (authId: string, label: string) => void | Promise<void>
+    onRenameDevice: (args: { readonly authId: string; readonly label: string }) => void | Promise<void>
     onRevokeDevice: (authId: string) => void | Promise<void>
   } = $props()
 
-  let detailsAuthId = $state<MemberDetails>({
+  const stateRuneArgs: Parameters<typeof $state>[0] = {
     kind: MemberDetailsKind.Collapsed,
-  })
-  let renameAuthId = $state<MemberRename>({ kind: MemberRenameKind.Idle })
+  };
+  let detailsAuthId = $state<MemberDetails>(stateRuneArgs)
+  const stateRuneArgs2: Parameters<typeof $state>[0] = { kind: MemberRenameKind.Idle };
+  let renameAuthId = $state<MemberRename>(stateRuneArgs2)
   let renameLabel = $state('')
-  let revokeAuthId = $state<MemberRevocation>({
+  const stateRuneArgs3: Parameters<typeof $state>[0] = {
     kind: MemberRevocationKind.Idle,
-  })
-  let extensionSetupState = $state<ExtensionSetupOffer>({
+  };
+  let revokeAuthId = $state<MemberRevocation>(stateRuneArgs3)
+  const stateRuneArgs4: Parameters<typeof $state>[0] = {
     kind: ExtensionSetupOfferKind.Hidden,
-  })
+  };
+  let extensionSetupState = $state<ExtensionSetupOffer>(stateRuneArgs4)
   let extensionInstallBusy = $state(false)
   let extensionConnectError = $state(false)
   const isSentinelVault = $derived(
@@ -85,7 +89,7 @@
   async function refreshExtensionSetupStatus() {
     if (!SUPPORTS_EXTENSION) return
     const state = await resolveExtensionSetupState(vault.activeVault)
-    extensionSetupState = shouldOfferExtensionSetup(state.status)
+    extensionSetupState = (() => { const shouldOfferExtensionSetupArgs: Parameters<typeof shouldOfferExtensionSetup>[0] = { status: state.status, environment: navigator }; return shouldOfferExtensionSetup(shouldOfferExtensionSetupArgs); })()
       ? { kind: ExtensionSetupOfferKind.Visible, setup: state }
       : { kind: ExtensionSetupOfferKind.Hidden }
   }
@@ -147,10 +151,11 @@
     const observer = new MutationObserver(() => {
       void refreshExtensionSetupStatus()
     })
-    observer.observe(document.documentElement, {
+    const observeArgs: Parameters<typeof observer.observe>[1] = {
       attributes: true,
       attributeFilter: ['data-nook-extension-runtime-id'],
-    })
+    };
+    observer.observe(document.documentElement, observeArgs)
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange)
@@ -159,7 +164,8 @@
   })
 
   const sortedMembers = $derived(
-    [...vaultMembers].sort((a, b) => {
+    [...vaultMembers].sort(// eslint-disable-next-line max-params -- Host API owns this positional callback signature.
+    (a, b) => {
       if (a.deviceId === deviceId) return -1
       if (b.deviceId === deviceId) return 1
       return displayName(a).localeCompare(displayName(b))
@@ -185,7 +191,7 @@
     return `${browser} ${vault.t(I18N_KEYS.DevicesCardOn)} ${os}`
   }
 
-  function truncate(value: string, head = 8, tail = 6) {
+  function truncate({ value, head, tail }: { readonly value: string; readonly head: number; readonly tail: number }) {
     if (value.length <= head + tail + 3) return value
     return `${value.slice(0, head)}…${value.slice(-tail)}`
   }
@@ -208,7 +214,8 @@
     const label = member.label.trim()
     if (label) return label
     if (member.deviceId === deviceId) return currentDeviceName()
-    return `${vault.t(I18N_KEYS.DevicesCardDevicePrefix)}${truncate(member.deviceId, 6, 4)}`
+    const truncateArgs: Parameters<typeof truncate>[0] = { value: member.deviceId, head: 6, tail: 4 };
+    return `${vault.t(I18N_KEYS.DevicesCardDevicePrefix)}${truncate(truncateArgs)}`
   }
 
   function beginRename(member: VaultMember) {
@@ -218,7 +225,8 @@
   }
 
   async function saveRename(member: VaultMember) {
-    await onRenameDevice(member.authId, renameLabel)
+    const onRenameDeviceArgs: Parameters<typeof onRenameDevice>[0] = { authId: member.authId, label: renameLabel };
+    await onRenameDevice(onRenameDeviceArgs)
     renameAuthId = { kind: MemberRenameKind.Idle }
     renameLabel = ''
   }
@@ -260,10 +268,10 @@
           class="font-mono text-[11px] leading-relaxed text-amber-700 dark:text-amber-300"
           data-testid="extension-setup-settings-connected-vault"
         >
-          {vault.t(I18N_KEYS.ExtensionSetupConnectedVault, {
+          {(() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.ExtensionSetupConnectedVault, replacements: {
             vault: extensionSetup.connectedVaultName ?? '',
             store: extensionSetup.connectedVaultStoreId ?? '',
-          })}
+          } }; return vault.t(tArgs); })()}
         </p>
       {/if}
       {#if extensionSetup.status === ExtensionSetupStatus.InstalledUnpaired || extensionSetup.status === ExtensionSetupStatus.PairedElsewhere}
@@ -347,9 +355,9 @@
         <span class="text-xs text-muted-foreground">
           {pendingJoins.length === 1
             ? vault.t(I18N_KEYS.DevicesCardRequestsCountSingular)
-            : vault.t(I18N_KEYS.DevicesCardRequestsCountPlural, {
+            : (() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.DevicesCardRequestsCountPlural, replacements: {
                 count: String(pendingJoins.length),
-              })}
+              } }; return vault.t(tArgs2); })()}
         </span>
       </div>
       <ul class="space-y-2">
@@ -367,9 +375,9 @@
                 </div>
                 <div class="min-w-0">
                   <p class="truncate text-sm font-medium text-foreground">
-                    {vault.t(I18N_KEYS.DevicesCardDevicePrefix)}{truncate(
-                      join.deviceId,
-                    )}
+                    {vault.t(I18N_KEYS.DevicesCardDevicePrefix)}{(() => { const truncateArgs2: Parameters<typeof truncate>[0] = { value: join.deviceId, head: 14, tail: 10 }; return truncate(
+                      truncateArgs2,
+                    ); })()}
                   </p>
                   <p class="text-xs text-muted-foreground">
                     {vault.t(
@@ -417,9 +425,9 @@
       <span class="text-xs text-muted-foreground">
         {vaultMembers.length === 1
           ? vault.t(I18N_KEYS.DevicesCardDeviceCountSingular)
-          : vault.t(I18N_KEYS.DevicesCardDeviceCountPlural, {
+          : (() => { const tArgs3: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.DevicesCardDeviceCountPlural, replacements: {
               count: String(vaultMembers.length),
-            })}
+            } }; return vault.t(tArgs3); })()}
       </span>
     </div>
 
@@ -663,7 +671,7 @@
                     {vault.t(I18N_KEYS.DevicesCardAuthId)}
                   </dt>
                   <dd class="font-mono" title={member.authId}>
-                    {truncate(member.authId, 10, 8)}
+                    {(() => { const truncateArgs3: Parameters<typeof truncate>[0] = { value: member.authId, head: 10, tail: 8 }; return truncate(truncateArgs3); })()}
                   </dd>
                 </div>
                 <div class="flex items-start justify-between gap-3">
@@ -672,7 +680,7 @@
                   </dt>
                   <dd class="flex min-w-0 items-center gap-1 font-mono">
                     <span class="truncate" title={member.publicKey}>
-                      {truncate(member.publicKey, 12, 10)}
+                      {(() => { const truncateArgs4: Parameters<typeof truncate>[0] = { value: member.publicKey, head: 12, tail: 10 }; return truncate(truncateArgs4); })()}
                     </span>
                     <button
                       type="button"

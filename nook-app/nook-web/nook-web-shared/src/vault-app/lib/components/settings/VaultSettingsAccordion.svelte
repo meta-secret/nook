@@ -36,7 +36,7 @@
     hasPasswordEnvelope?: boolean
     onApproveJoin: (deviceId: string) => void | Promise<void>
     onDenyJoin: (deviceId: string) => void | Promise<void>
-    onRenameDevice: (authId: string, label: string) => void | Promise<void>
+    onRenameDevice: (args: { readonly authId: string; readonly label: string }) => void | Promise<void>
     onRevokeDevice: (authId: string) => void | Promise<void>
     accordionSection?: SettingsAccordionSection
   } = $props()
@@ -67,9 +67,9 @@
         <Laptop class="size-3" />
         {vaultMembers.length === 1
           ? vault.t(I18N_KEYS.SettingsDeviceCountSingular)
-          : vault.t(I18N_KEYS.SettingsDeviceCountPlural, {
+          : (() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.SettingsDeviceCountPlural, replacements: {
               count: String(vaultMembers.length),
-            })}
+            } }; return vault.t(tArgs); })()}
       </span>
     {/snippet}
     <VaultDevicesCard

@@ -102,7 +102,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   handleRemoteVaultAssessStatus(
     accessStatus: VaultAccessStatus,
   ): Promise<boolean>;
-  loadDb(): Promise<unknown>;
+  loadDb(): Promise<void>;
   persistProviders(options?: { replace?: boolean }): Promise<void>;
   resetVaultSessionState(resetManager?: boolean): void;
   refreshPasswordEntriesList(): Promise<boolean>;
@@ -209,7 +209,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   initDeviceIdentity(options?: {
     allowPendingAuthorization?: boolean;
   }): Promise<void>;
-  loadDb(): Promise<unknown>;
+  loadDb(): Promise<void>;
   persistProviders(options?: { replace?: boolean }): Promise<void>;
   providerWasmArgs(provider: StorageProvider): [string, string, string];
   raceStorageTimeout<T>(promise: Promise<T>, label: string): Promise<T>;
@@ -347,7 +347,7 @@ export type UiActionsContext = Pick<
     clearUnlockedSession(resetManager?: boolean): void;
     dismissSuccess(): void;
     enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T>;
-    refreshDeviceState(): Promise<unknown>;
+    refreshDeviceState(): Promise<void>;
     refreshLocalVaultCatalog(): Promise<void>;
     stopIdleSessionTracking(): void;
     stopVaultSync(): void;

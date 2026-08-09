@@ -74,10 +74,13 @@ export type ProviderSaveFocus =
  * unmounts the input the save would return focus to. Focus then belongs to the
  * link the person is actually looking at, never to the document body.
  */
-export function providerSaveFocus(
-  unlockSelected: boolean,
-  control: DashboardElement,
-): ProviderSaveFocus {
+export function providerSaveFocus({
+  unlockSelected,
+  control,
+}: {
+  readonly unlockSelected: boolean;
+  readonly control: DashboardElement;
+}): ProviderSaveFocus {
   return unlockSelected && control.kind === DashboardElementKind.Mounted
     ? { kind: ProviderSaveFocusKind.Control, element: control.element }
     : { kind: ProviderSaveFocusKind.SelectedChainLink };
@@ -88,11 +91,15 @@ export enum DevicesAccessNudgePreference {
   Dismissed = "dismissed",
 }
 
-export function shouldShowDevicesAccessNudge(
-  hasActiveLocalVault: boolean,
-  localVaultCount: number,
-  preference: DevicesAccessNudgePreference,
-): boolean {
+export function shouldShowDevicesAccessNudge({
+  hasActiveLocalVault,
+  localVaultCount,
+  preference,
+}: {
+  readonly hasActiveLocalVault: boolean;
+  readonly localVaultCount: number;
+  readonly preference: DevicesAccessNudgePreference;
+}): boolean {
   return (
     !hasActiveLocalVault &&
     localVaultCount === 0 &&
@@ -129,10 +136,13 @@ export type DevicesAccessNudgeStorageState =
       serialized: string;
     };
 
-export function readDevicesAccessNudgeStorage(
-  storage: Storage,
-  storageKey: string,
-): DevicesAccessNudgeStorageState {
+export function readDevicesAccessNudgeStorage({
+  storage,
+  storageKey,
+}: {
+  readonly storage: Storage;
+  readonly storageKey: string;
+}): DevicesAccessNudgeStorageState {
   const serialized = storage.getItem(storageKey);
   return typeof serialized === "string"
     ? { kind: DevicesAccessNudgeStorageKind.Stored, serialized }

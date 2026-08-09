@@ -29,10 +29,13 @@ type EnrollmentUrlCode =
   | { kind: EnrollmentUrlCodeKind.Absent }
   | { kind: EnrollmentUrlCodeKind.Present; code: string };
 
-export function enrollmentAppRootUrl(
-  siteRoot: string,
-  appKind: VaultApplication = configuredVaultApplication(),
-): string {
+export function enrollmentAppRootUrl({
+  siteRoot,
+  appKind,
+}: {
+  readonly siteRoot: string;
+  readonly appKind: VaultApplication;
+}): string {
   const normalized = siteRoot.replace(/\/$/, "");
   if (
     appKind === VaultApplication.Simple ||
@@ -50,17 +53,27 @@ export function getEnrollmentLinkBase(): string {
   }
   const configured = import.meta.env.VITE_PUBLIC_APP_URL?.trim();
   if (configured) {
-    return enrollmentAppRootUrl(configured);
+    const enrollmentAppRootUrlArgs: Parameters<typeof enrollmentAppRootUrl>[0] =
+      { siteRoot: configured, appKind: configuredVaultApplication() };
+    return enrollmentAppRootUrl(enrollmentAppRootUrlArgs);
   }
   const basePath = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
-  return enrollmentAppRootUrl(`${window.location.origin}${basePath}`);
+  const enrollmentAppRootUrlArgs2: Parameters<typeof enrollmentAppRootUrl>[0] =
+    {
+      siteRoot: `${window.location.origin}${basePath}`,
+      appKind: configuredVaultApplication(),
+    };
+  return enrollmentAppRootUrl(enrollmentAppRootUrlArgs2);
 }
 
 /** Deep link scanned from a QR code — opens the browser and carries the raw code in the hash. */
-export function buildEnrollmentLink(
-  code: string,
-  baseUrl = getEnrollmentLinkBase(),
-): string {
+export function buildEnrollmentLink({
+  code,
+  baseUrl,
+}: {
+  readonly code: string;
+  readonly baseUrl: string;
+}): string {
   return buildEnrollmentLinkCore(code, baseUrl);
 }
 
@@ -80,8 +93,11 @@ export function consumeEnrollmentFromLocation(): EnrollmentLocation {
     return { kind: EnrollmentLocationKind.Absent };
   }
 
+  const replaceStateArgs: Parameters<typeof history.replaceState>[0] = {
+    state: EnrollmentHistoryState.EnrollmentConsumed,
+  };
   history.replaceState(
-    { state: EnrollmentHistoryState.EnrollmentConsumed },
+    replaceStateArgs,
     "",
     `${url.pathname}${url.search}${url.hash}`,
   );

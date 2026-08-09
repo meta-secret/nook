@@ -10,19 +10,22 @@ export function ensureIdleSessionTracker(state: VaultState): void {
   if (state.hasIdleSessionTracker()) return;
   const idleTimeoutConfig = import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS;
   const idleWarningConfig = import.meta.env.VITE_VAULT_IDLE_WARNING_MS;
+  const createVaultIdleSessionTrackerArgs: Parameters<
+    typeof createVaultIdleSessionTracker
+  >[0] = {
+    timeoutMs:
+      typeof idleTimeoutConfig === "string"
+        ? state.runtimeConfig.resolveVaultIdleTimeoutMs(idleTimeoutConfig)
+        : state.runtimeConfig.resolveDefaultVaultIdleTimeoutMs(),
+    warningMs:
+      typeof idleWarningConfig === "string"
+        ? state.runtimeConfig.resolveVaultIdleWarningMs(idleWarningConfig)
+        : state.runtimeConfig.resolveDefaultVaultIdleWarningMs(),
+    onExpire: () => lockVaultDueToIdle(state),
+    onWarning: () => showIdleLockWarning(state),
+  };
   state.setIdleSessionTracker(
-    createVaultIdleSessionTracker({
-      timeoutMs:
-        typeof idleTimeoutConfig === "string"
-          ? state.runtimeConfig.resolveVaultIdleTimeoutMs(idleTimeoutConfig)
-          : state.runtimeConfig.resolveDefaultVaultIdleTimeoutMs(),
-      warningMs:
-        typeof idleWarningConfig === "string"
-          ? state.runtimeConfig.resolveVaultIdleWarningMs(idleWarningConfig)
-          : state.runtimeConfig.resolveDefaultVaultIdleWarningMs(),
-      onExpire: () => lockVaultDueToIdle(state),
-      onWarning: () => showIdleLockWarning(state),
-    }),
+    createVaultIdleSessionTracker(createVaultIdleSessionTrackerArgs),
   );
 }
 
@@ -49,10 +52,11 @@ export function stopIdleSessionTracking(state: VaultState) {
 }
 
 export function lockVault(state: VaultState) {
-  log.info("vault locked", {
+  const infoArgs: Parameters<typeof log.info>[1] = {
     idle: state.sessionExpiredByIdle,
     secrets: state.secrets.length,
-  });
+  };
+  log.info("vault locked", infoArgs);
   state.helpOpen = false;
   state.stopIdleSessionTracking();
   setVaultSessionLocked(true);

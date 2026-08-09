@@ -108,12 +108,13 @@
   const oauthOriginUnsupported = $derived(!oauthOriginSupport.supported)
   const oauthOriginUnsupportedMessage = $derived.by(() => {
     if (oauthOriginSupport.supported) return ''
+    const tArgs: Parameters<typeof vault.t>[1] = { origin: oauthOriginSupport.origin };
     return vault.t(
       oauthOriginSupport.reason ===
         OAuthOriginUnsupportedReason.CloudflarePrPreview
         ? I18N_KEYS.ProviderSetupOauthPreviewOriginUnsupported
         : I18N_KEYS.ProviderSetupOauthOriginUnsupported,
-      { origin: oauthOriginSupport.origin },
+      tArgs,
     )
   })
 
@@ -204,7 +205,7 @@
       ) {
         return
       }
-      log.info('CloudKit native sign-in click observed', {
+      const infoArgs: Parameters<typeof log.info>[1] = {
         eventPhase: event.eventPhase,
         ...(event.target instanceof Element
           ? { targetTag: event.target.tagName }
@@ -214,7 +215,8 @@
           : {}),
         isTrusted: event.isTrusted,
         defaultPrevented: event.defaultPrevented,
-      })
+      };
+      log.info('CloudKit native sign-in click observed', infoArgs)
       if (deferredSignInPending) {
         log.info('CloudKit native sign-in click ignored: wait already pending')
         return
@@ -228,23 +230,27 @@
           vault.icloudOAuthBusy ||
           oauthSignedIn
         ) {
-          log.info('CloudKit native sign-in deferred wait skipped', {
+          const infoArgs2: Parameters<typeof log.info>[1] = {
             ready: vault.icloudOAuthReady,
             busy: vault.icloudOAuthBusy,
             signedIn: oauthSignedIn,
-          })
+          };
+          log.info('CloudKit native sign-in deferred wait skipped', infoArgs2)
           return
         }
         log.info('CloudKit native sign-in deferred wait started')
-        void oauthActions.signInWithICloud(vault, {
+        const signInWithICloudArgs: Parameters<typeof oauthActions.signInWithICloud>[1] = {
           clickPreparedControl: false,
-        })
+        };
+        void oauthActions.signInWithICloud(vault, signInWithICloudArgs)
       }, 0)
     }
-    node.addEventListener('click', handleClick, { capture: true })
+    const addEventListenerArgs: Parameters<typeof node.addEventListener>[2] = { capture: true };
+    node.addEventListener('click', handleClick, addEventListenerArgs)
     return {
       destroy() {
-        node.removeEventListener('click', handleClick, { capture: true })
+        const removeEventListenerArgs: Parameters<typeof node.removeEventListener>[2] = { capture: true };
+        node.removeEventListener('click', handleClick, removeEventListenerArgs)
       },
     }
   }
@@ -500,7 +506,7 @@
           {#if oauthBusy || icloudSignInPreparing}
             <div
               class={cn(
-                buttonVariants({ variant: 'default', size: 'sm' }),
+                (() => { const buttonVariantsArgs: Parameters<typeof buttonVariants>[0] = { variant: 'default', size: 'sm' }; return buttonVariants(buttonVariantsArgs); })(),
                 'absolute inset-0 w-full sm:w-auto',
               )}
             >
@@ -512,7 +518,7 @@
         <button
           type="button"
           class={cn(
-            buttonVariants({ variant: 'default', size: 'sm' }),
+            (() => { const buttonVariantsArgs2: Parameters<typeof buttonVariants>[0] = { variant: 'default', size: 'sm' }; return buttonVariants(buttonVariantsArgs2); })(),
             'w-full sm:w-auto',
           )}
           data-testid="google-sign-in-btn"
@@ -555,14 +561,14 @@
             : 'google-account-status'}
         >
           {isICloud
-            ? vault.t(I18N_KEYS.ProviderSetupIcloudSignedInAs, {
+            ? (() => { const tArgs2: Parameters<typeof vault.t>[1] = {
                 account:
                   oauthAccount || vault.t(I18N_KEYS.AuthStorageIcloudSignedIn),
-              })
-            : vault.t(I18N_KEYS.ProviderSetupGoogleSignedInAs, {
+              }; return vault.t(I18N_KEYS.ProviderSetupIcloudSignedInAs, tArgs2); })()
+            : (() => { const tArgs3: Parameters<typeof vault.t>[1] = {
                 account:
                   oauthAccount || vault.t(I18N_KEYS.AuthStorageGoogleSignedIn),
-              })}
+              }; return vault.t(I18N_KEYS.ProviderSetupGoogleSignedInAs, tArgs3); })()}
         </p>
       {/if}
 

@@ -38,7 +38,13 @@ export function siteUrlFromEnv(env: typeof process.env = process.env): string {
   return DEFAULT_SITE_URL;
 }
 
-export function absoluteSiteUrl(siteUrl: string, path: string): string {
+export function absoluteSiteUrl({
+  siteUrl,
+  path,
+}: {
+  readonly siteUrl: string;
+  readonly path: string;
+}): string {
   const base = siteUrl.replace(/\/$/, "");
   if (path === "/") {
     return `${base}/`;
@@ -54,14 +60,25 @@ function escapeXml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export function buildSitemapXml(
-  siteUrl: string,
-  lastmod: Date = new Date(),
-): string {
+export function buildSitemapXml({
+  siteUrl,
+  lastmod = new Date(),
+}: {
+  readonly siteUrl: string;
+  readonly lastmod?: Date;
+}): string {
   const isoDate = lastmod.toISOString().slice(0, 10);
   const body = PUBLIC_SITEMAP_ENTRIES.map(
     (entry) => `  <url>
-    <loc>${escapeXml(absoluteSiteUrl(siteUrl, entry.path))}</loc>
+    <loc>${escapeXml(
+      (() => {
+        const absoluteSiteUrlArgs: Parameters<typeof absoluteSiteUrl>[0] = {
+          siteUrl,
+          path: entry.path,
+        };
+        return absoluteSiteUrl(absoluteSiteUrlArgs);
+      })(),
+    )}</loc>
     <lastmod>${isoDate}</lastmod>
     <changefreq>${entry.changefreq}</changefreq>
     <priority>${entry.priority}</priority>

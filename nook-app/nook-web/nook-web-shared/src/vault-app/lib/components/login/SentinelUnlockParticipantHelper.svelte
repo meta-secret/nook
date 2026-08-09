@@ -30,9 +30,10 @@
   let actionBusy = $state(false)
   let loaded = $state(false)
   let open = $state(false)
-  let selectedDelivery = $state<GenesisDeliverySelection>({
+  const stateRuneArgs: Parameters<typeof $state>[0] = {
     kind: GenesisDeliverySelectionKind.NotSelected,
-  })
+  };
+  let selectedDelivery = $state<GenesisDeliverySelection>(stateRuneArgs)
   let request = $state('')
   let response = $state('')
   let copied = $state(false)

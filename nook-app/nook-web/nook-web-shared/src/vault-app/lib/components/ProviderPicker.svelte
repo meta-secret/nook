@@ -23,7 +23,7 @@
     excludeLocalFolder = false,
   }: {
     vault: VaultState
-    onSelect: (type: StorageProviderType, oauthPreset?: OAuthFilePreset) => void
+    onSelect: (args: { readonly type: StorageProviderType; readonly oauthPreset?: OAuthFilePreset }) => void
     excludeLocal?: boolean
     excludeLocalFolder?: boolean
   } = $props()
@@ -31,8 +31,7 @@
   const localFolderUnavailable = $derived(!vault.localFolderBackupSupported)
 
   function draftProvider(
-    type: StorageProviderType,
-    oauthPreset?: OAuthFilePreset,
+    { type, oauthPreset }: { readonly type: StorageProviderType; readonly oauthPreset?: OAuthFilePreset },
   ): StorageProvider {
     const base: StorageProvider = {
       ...providerPersistenceDefaults(),
@@ -61,11 +60,11 @@
   }
 
   function blocked(
-    type: StorageProviderType,
-    oauthPreset?: OAuthFilePreset,
+    { type, oauthPreset }: { readonly type: StorageProviderType; readonly oauthPreset?: OAuthFilePreset },
   ): boolean {
+    const draftProviderArgs: Parameters<typeof draftProvider>[0] = { type, oauthPreset };
     const result = providerReplicationCapability(
-      draftProvider(type, oauthPreset),
+      draftProvider(draftProviderArgs),
     )
     try {
       return vault.draftReplicationType === ReplicationType.Shared
@@ -77,11 +76,9 @@
   }
 
   function description(
-    key: string,
-    type: StorageProviderType,
-    oauthPreset?: OAuthFilePreset,
+    { key, type, oauthPreset }: { readonly key: string; readonly type: StorageProviderType; readonly oauthPreset?: OAuthFilePreset },
   ): string {
-    if (blocked(type, oauthPreset)) {
+    if ((() => { const blockedArgs: Parameters<typeof blocked>[0] = { type, oauthPreset }; return blocked(blockedArgs); })()) {
       return vault.t(I18N_KEYS.ProviderPickerUnsupportedReplicationDesc)
     }
     return vault.t(key)
@@ -149,10 +146,10 @@
         type="button"
         class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
         data-testid="provider-option-oauth-file"
-        disabled={blocked('oauth-file', 'google-drive')}
+        disabled={(() => { const blockedArgs2: Parameters<typeof blocked>[0] = { type: 'oauth-file', oauthPreset: 'google-drive' }; return blocked(blockedArgs2); })()}
         onclick={() => {
-          if (!blocked('oauth-file', 'google-drive'))
-            onSelect('oauth-file', 'google-drive')
+          if (!(() => { const blockedArgs3: Parameters<typeof blocked>[0] = { type: 'oauth-file', oauthPreset: 'google-drive' }; return blocked(blockedArgs3); })())
+            (() => { const onSelectArgs: Parameters<typeof onSelect>[0] = { type: 'oauth-file', oauthPreset: 'google-drive' }; return onSelect(onSelectArgs); })()
         }}
       >
         <svg
@@ -182,11 +179,9 @@
             >{vault.t(I18N_KEYS.ProviderPickerGoogleDrive)}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            {description(
-              I18N_KEYS.ProviderPickerGoogleDriveDesc,
-              'oauth-file',
-              'google-drive',
-            )}
+            {(() => { const descriptionArgs: Parameters<typeof description>[0] = { key: I18N_KEYS.ProviderPickerGoogleDriveDesc, type: 'oauth-file', oauthPreset: 'google-drive' }; return description(
+              descriptionArgs,
+            ); })()}
           </span>
         </span>
       </button>
@@ -196,9 +191,9 @@
         type="button"
         class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
         data-testid="provider-option-icloud"
-        disabled={blocked('oauth-file', 'icloud')}
+        disabled={(() => { const blockedArgs4: Parameters<typeof blocked>[0] = { type: 'oauth-file', oauthPreset: 'icloud' }; return blocked(blockedArgs4); })()}
         onclick={() => {
-          if (!blocked('oauth-file', 'icloud')) onSelect('oauth-file', 'icloud')
+          if (!(() => { const blockedArgs5: Parameters<typeof blocked>[0] = { type: 'oauth-file', oauthPreset: 'icloud' }; return blocked(blockedArgs5); })()) (() => { const onSelectArgs2: Parameters<typeof onSelect>[0] = { type: 'oauth-file', oauthPreset: 'icloud' }; return onSelect(onSelectArgs2); })()
         }}
       >
         <svg
@@ -216,7 +211,7 @@
             >{vault.t(I18N_KEYS.ProviderPickerIcloud)}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            {description(I18N_KEYS.ProviderPickerIcloudDesc, 'oauth-file', 'icloud')}
+            {(() => { const descriptionArgs2: Parameters<typeof description>[0] = { key: I18N_KEYS.ProviderPickerIcloudDesc, type: 'oauth-file', oauthPreset: 'icloud' }; return description(descriptionArgs2); })()}
           </span>
         </span>
       </button>

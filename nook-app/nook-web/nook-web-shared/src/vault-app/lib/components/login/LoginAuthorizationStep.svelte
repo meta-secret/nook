@@ -79,10 +79,11 @@
         passwordEntries.length === 1 &&
         selectedPasswordEntry.kind === PasswordEntrySelectionKind.NotSelected
       ) {
-        onSelectPasswordEntry({
+        const onSelectPasswordEntryArgs: Parameters<typeof onSelectPasswordEntry>[0] = {
           kind: PasswordEntrySelectionKind.Selected,
           entryId: passwordEntries[0]!.id,
-        })
+        };
+        onSelectPasswordEntry(onSelectPasswordEntryArgs)
       }
       onConsumeLoginPasswordPrompt()
     }
@@ -104,10 +105,11 @@
       passwordEntries.length === 1 &&
       selectedPasswordEntry.kind === PasswordEntrySelectionKind.NotSelected
     ) {
-      onSelectPasswordEntry({
+      const onSelectPasswordEntryArgs2: Parameters<typeof onSelectPasswordEntry>[0] = {
         kind: PasswordEntrySelectionKind.Selected,
         entryId: passwordEntries[0]!.id,
-      })
+      };
+      onSelectPasswordEntry(onSelectPasswordEntryArgs2)
     }
   })
 
@@ -211,10 +213,11 @@
                   : 'border-border bg-muted/20 text-muted-foreground hover:bg-accent hover:text-foreground'}"
                 data-testid="login-password-entry-{entry.id}"
                 onclick={() => {
-                  onSelectPasswordEntry({
+                  const onSelectPasswordEntryArgs3: Parameters<typeof onSelectPasswordEntry>[0] = {
                     kind: PasswordEntrySelectionKind.Selected,
                     entryId: entry.id,
-                  })
+                  };
+                  onSelectPasswordEntry(onSelectPasswordEntryArgs3)
                 }}
               >
                 <UserRound class="size-4 shrink-0 text-primary" />

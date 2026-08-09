@@ -37,16 +37,32 @@
         })
     )
 
-  let props: Props = $props()
-  let selectedFile = $state<ImportFileSelection>({
+  let {
+    accept,
+    embedded,
+    errorTestId,
+    fileTestId,
+    format,
+    icon,
+    isSaving,
+    messages,
+    onImport,
+    panelTestId,
+    resultTestId,
+    submitTestId,
+    vault,
+  }: Props = $props()
+  const stateRuneArgs: Parameters<typeof $state>[0] = {
     kind: ImportFileSelectionKind.NotSelected,
-  })
-  let result = $state<PasswordImportOutcome>({
+  };
+  let selectedFile = $state<ImportFileSelection>(stateRuneArgs)
+  const stateRuneArgs2: Parameters<typeof $state>[0] = {
     kind: PasswordImportOutcomeKind.NotRun,
-  })
+  };
+  let result = $state<PasswordImportOutcome>(stateRuneArgs2)
   let error = $state('')
   let isImporting = $state(false)
-  const busy = $derived(isImporting || props.isSaving)
+  const busy = $derived(isImporting || isSaving)
 
   function selectFile(event: Event) {
     const file = (event.currentTarget as HTMLInputElement).files?.[0]
@@ -65,8 +81,8 @@
     error = ''
     isImporting = true
     try {
-      if (props.format === PasswordImportFormat.Text) {
-        const imported = await importTextFile(file, false, props.onImport)
+      if (format === PasswordImportFormat.Text) {
+        const imported = await importTextFile(file, false, onImport)
         if (imported.kind === ImportAttemptKind.Completed) {
           result = {
             kind: PasswordImportOutcomeKind.Completed,
@@ -77,7 +93,7 @@
         }
         return
       }
-      const imported = await importBinaryFile(file, false, props.onImport)
+      const imported = await importBinaryFile(file, false, onImport)
       if (imported.kind === ImportAttemptKind.Completed) {
         result = {
           kind: PasswordImportOutcomeKind.Completed,
@@ -92,14 +108,14 @@
   }
 </script>
 
-<div class="space-y-4" data-testid={props.panelTestId}>
-  {#if !props.embedded}
+<div class="space-y-4" data-testid={panelTestId}>
+  {#if !embedded}
     <div>
       <h2 class="text-lg font-semibold text-foreground">
-        {props.vault.t(props.messages.title)}
+        {vault.t(messages.title)}
       </h2>
       <p class="mt-1 text-sm text-muted-foreground">
-        {props.vault.t(props.messages.description)}
+        {vault.t(messages.description)}
       </p>
     </div>
   {/if}
@@ -107,27 +123,27 @@
   <Card class="gap-0 border-border/60 bg-card py-0">
     <CardContent class="space-y-4 p-4 sm:p-5">
       <div class="flex items-start gap-3">
-        {#if props.icon === PasswordImportIcon.Archive}
+        {#if icon === PasswordImportIcon.Archive}
           <Archive class="mt-0.5 size-5 shrink-0 text-primary" />
         {:else}
           <FileSpreadsheet class="mt-0.5 size-5 shrink-0 text-primary" />
         {/if}
         <div class="space-y-1 text-sm">
           <p class="font-medium text-foreground">
-            {props.vault.t(props.messages.exportHintTitle)}
+            {vault.t(messages.exportHintTitle)}
           </p>
           <p class="text-muted-foreground">
-            {props.vault.t(props.messages.exportHint)}
+            {vault.t(messages.exportHint)}
           </p>
         </div>
       </div>
 
       <label class="block space-y-2 text-sm font-medium text-foreground">
-        <span>{props.vault.t(props.messages.fileLabel)}</span>
+        <span>{vault.t(messages.fileLabel)}</span>
         <input
           type="file"
-          accept={props.accept}
-          data-testid={props.fileTestId}
+          accept={accept}
+          data-testid={fileTestId}
           disabled={busy}
           onchange={selectFile}
           class="block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground"
@@ -135,30 +151,30 @@
       </label>
 
       <p class="text-xs text-muted-foreground">
-        {props.vault.t(props.messages.supportedTypes)}
+        {vault.t(messages.supportedTypes)}
       </p>
 
       <Button
-        data-testid={props.submitTestId}
+        data-testid={submitTestId}
         disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected ||
           busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
         {busy
-          ? props.vault.t(props.messages.importing)
-          : props.vault.t(props.messages.import)}
+          ? vault.t(messages.importing)
+          : vault.t(messages.import)}
       </Button>
 
       {#if isImporting}
         <ImportProgress
-          vault={props.vault}
-          testId={`${props.panelTestId}-progress`}
+          vault={vault}
+          testId={`${panelTestId}-progress`}
         />
       {/if}
 
       {#if error}
-        <p class="text-sm text-destructive" data-testid={props.errorTestId}>
+        <p class="text-sm text-destructive" data-testid={errorTestId}>
           {error}
         </p>
       {/if}
@@ -166,18 +182,18 @@
       {#if result.kind === PasswordImportOutcomeKind.Completed}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
-          data-testid={props.resultTestId}
+          data-testid={resultTestId}
         >
           <p class="font-medium">
-            {props.vault.t(props.messages.resultImported, {
+            {(() => { const tArgs: Parameters<typeof vault.t>[1] = {
               count: String(result.result.imported),
-            })}
+            }; return vault.t(messages.resultImported, tArgs); })()}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
-            {props.vault.t(props.messages.resultSkipped, {
+            {(() => { const tArgs2: Parameters<typeof vault.t>[1] = {
               unsupported: String(result.result.skippedUnsupported),
               duplicates: String(result.result.skippedDuplicates),
-            })}
+            }; return vault.t(messages.resultSkipped, tArgs2); })()}
           </p>
         </div>
       {/if}

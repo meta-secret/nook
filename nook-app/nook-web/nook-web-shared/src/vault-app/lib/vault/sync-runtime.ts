@@ -1,14 +1,21 @@
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
-import { createLogger } from "$lib/runtime/log";
+import { createLogger, type RuntimeFailure } from "$lib/runtime/log";
 import { isVaultSessionLocked } from "$app-wasm";
 
 const log = createLogger("vault-sync");
 
-export function syncError(context: string, error: unknown): void {
-  log.warn(`${context} failed`, {
-    error: error instanceof Error ? error.message : String(error),
-    ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
-  });
+export function syncError({
+  context,
+  failure,
+}: {
+  readonly context: string;
+  readonly failure: RuntimeFailure;
+}): void {
+  const warnArgs: Parameters<typeof log.warn>[1] = {
+    error: failure.message,
+    ...(failure.stack ? { stack: failure.stack } : {}),
+  };
+  log.warn(`${context} failed`, warnArgs);
 }
 
 export function scheduleAutoConnectAfterApproval(

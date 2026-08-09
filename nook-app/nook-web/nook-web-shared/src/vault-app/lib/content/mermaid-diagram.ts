@@ -27,17 +27,21 @@ async function loadMermaid() {
   return loaded.default;
 }
 
-export async function renderMermaidDiagram(
-  source: string,
-  theme: MermaidTheme,
-): Promise<string> {
+export async function renderMermaidDiagram({
+  source,
+  theme,
+}: {
+  readonly source: string;
+  readonly theme: MermaidTheme;
+}): Promise<string> {
   const mermaid = await loadMermaid();
-  mermaid.initialize({
+  const initializeArgs: Parameters<typeof mermaid.initialize>[0] = {
     startOnLoad: false,
     theme: theme === MermaidTheme.Dark ? "dark" : "default",
     securityLevel: "strict",
     fontFamily: "inherit",
-  });
+  };
+  mermaid.initialize(initializeArgs);
 
   const id = `nook-mermaid-${crypto.randomUUID()}`;
   const { svg } = await mermaid.render(id, source.trim());

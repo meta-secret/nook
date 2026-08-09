@@ -18,5 +18,8 @@ export function syncConflictLabel(state: SyncConflictLabelState): string {
     conflict.conflictKind === VaultSyncConflictKind.StoreId
       ? I18N_KEYS.AuthStorageSyncConflictStoreIdBanner
       : I18N_KEYS.AuthStorageSyncConflictBanner;
-  return state.t(key, { provider: conflict.providerLabel });
+  const tArgs: Parameters<typeof state.t>[1] = {
+    provider: conflict.providerLabel,
+  };
+  return state.t(key, tArgs);
 }

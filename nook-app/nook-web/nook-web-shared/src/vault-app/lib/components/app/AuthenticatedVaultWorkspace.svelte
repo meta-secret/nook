@@ -66,20 +66,22 @@
 
   const appVersion = '0.1.0'
   let secretsAddOpen = $state(false)
-  let secretsAddFormType = $state<SecretEditorMode>({
+  const stateRuneArgs: Parameters<typeof $state>[0] = {
     kind: SecretEditorModeKind.Closed,
-  })
+  };
+  let secretsAddFormType = $state<SecretEditorMode>(stateRuneArgs)
   let secretsEditorResetKey = $state(0)
-  let devicesAccessHost = $state<DevicesAccessHostMount>({
+  const stateRuneArgs2: Parameters<typeof $state>[0] = {
     kind: DevicesAccessHostMountKind.Unmounted,
-  })
+  };
+  let devicesAccessHost = $state<DevicesAccessHostMount>(stateRuneArgs2)
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen &&
       secretsAddFormType.kind === SecretEditorModeKind.Adding &&
       secretsAddFormType.itemType === SecretType.SecureNote,
   )
 
-  function setAddMode(open: boolean, selection: SecretTypeSelection) {
+  function setAddMode({ open, selection }: { readonly open: boolean; readonly selection: SecretTypeSelection }) {
     secretsAddOpen = open
     secretsAddFormType =
       open && selection.kind === SecretTypeSelectionKind.EditingFields
@@ -216,16 +218,16 @@
           onSyncProvider={(id) => vault.syncProviderById(id)}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
-          onBeginSetup={(type, preset) =>
+          onBeginSetup={({ type, preset }) =>
             vault.beginProviderSetup(type, preset)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onRemoveProvider={(id) => vault.removeProvider(id)}
-          onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
-          onUpdatePassword={(id, pw) => vault.updateVaultPasswordEntry(id, pw)}
+          onAddPassword={({ label, pw }) => vault.addVaultPassword(label, pw)}
+          onUpdatePassword={({ id, pw }) => vault.updateVaultPasswordEntry(id, pw)}
           onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
-          onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
+          onIssueCode={({ id, pw }) => vault.issueEnrollmentCode(id, pw)}
           onClearCode={() => vault.clearEnrollmentCode()}
-          onImportBitwarden={(json, password) =>
+          onImportBitwarden={({ json, password }) =>
             vault.handleBitwardenImport(json, password)}
           onImportKeePassXc={(csv) => vault.handleKeePassXcImport(csv)}
           onImportLastPass={(csv) => vault.handleLastPassImport(csv)}
@@ -257,13 +259,13 @@
           loginSetup={vault.loginSetup}
           bind:githubPat={vault.githubPat}
           bind:githubRepo={vault.githubRepo}
-          onIssueCode={(entryId, pw, providerId) =>
+          onIssueCode={({ entryId, pw, providerId }) =>
             vault.issueEnrollmentCode(entryId, pw, providerId)}
           onClearCode={() => vault.clearEnrollmentCode()}
-          onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
+          onAddPassword={({ label, pw }) => vault.addVaultPassword(label, pw)}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
-          onBeginSetup={(type, preset) =>
+          onBeginSetup={({ type, preset }) =>
             vault.beginProviderSetup(type, preset)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onConnectProvider={onSettingsReconnect}
@@ -281,7 +283,7 @@
           hasPasswordEnvelope={vault.hasPasswordEnvelope}
           onApproveJoin={(id) => vault.approveJoin(id)}
           onDenyJoin={(id) => vault.denyJoin(id)}
-          onRenameDevice={(id, label) => vault.renameDevice(id, label)}
+          onRenameDevice={({ id, label }) => vault.renameDevice(id, label)}
           onRevokeDevice={(id) => vault.revokeDevice(id)}
         />
       {:else}
@@ -307,9 +309,9 @@
               editRestriction={vault.editRestriction}
               secrets={vault.secrets}
               onAddModeChange={setAddMode}
-              onAddSecret={(id, type, data) =>
+              onAddSecret={({ id, type, data }) =>
                 vault.handleAddSecret(id, type, data)}
-              onReplaceSecret={(oldId, type, data) =>
+              onReplaceSecret={({ oldId, type, data }) =>
                 vault.handleReplaceSecret(oldId, type, data)}
               onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
               onGeneratePassword={generatePassword}

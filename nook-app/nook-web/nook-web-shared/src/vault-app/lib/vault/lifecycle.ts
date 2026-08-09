@@ -78,14 +78,19 @@ export async function initOnce(state: VaultState): Promise<void> {
     state.openManager(await getVaultManager());
     const configuredApplication = configuredVaultApplication();
     if (state.requireManager().vaultApplication !== configuredApplication) {
-      throw new Error(
-        state.t(I18N_KEYS.AppCapabilityMismatch, {
+      const tArgs: Parameters<typeof state.t>[0] = {
+        key: I18N_KEYS.AppCapabilityMismatch,
+        replacements: {
           app: String(configuredApplication),
           wasm: String(state.requireManager().vaultApplication),
-        }),
-      );
+        },
+      };
+      throw new Error(state.t(tArgs));
     }
-    await state.updateLocale(locale, { preferWasm: true });
+    const updateLocaleArgs: Parameters<typeof state.updateLocale>[1] = {
+      preferWasm: true,
+    };
+    await state.updateLocale(locale, updateLocaleArgs);
     state.deviceProtectionStatus = await state
       .requireManager()
       .deviceProtectionStatus();
@@ -135,12 +140,19 @@ export async function initOnce(state: VaultState): Promise<void> {
       }
       if (!state.localVaultPresent && state.localVaults.length === 0) {
         try {
-          await state.loadProviders({ ensureLocalRow: true });
+          const loadProvidersArgs: Parameters<typeof state.loadProviders>[0] = {
+            ensureLocalRow: true,
+          };
+          await state.loadProviders(loadProvidersArgs);
           state.applyActiveProviderCredentials();
         } catch (error) {
-          log.warn("empty-device provider load deferred until passkey", {
+          const warnArgs: Parameters<typeof log.warn>[1] = {
             error: error instanceof Error ? error.message : String(error),
-          });
+          };
+          log.warn(
+            "empty-device provider load deferred until passkey",
+            warnArgs,
+          );
           state.providersLoaded = true;
         }
       }
@@ -173,7 +185,9 @@ export async function continueInitializationAfterDeviceUnlock(
   state: VaultState,
 ): Promise<void> {
   if (!state.hasManager) return;
-  await state.initDeviceIdentity({ allowPendingAuthorization: true });
+  const initDeviceIdentityArgs: Parameters<typeof state.initDeviceIdentity>[0] =
+    { allowPendingAuthorization: true };
+  await state.initDeviceIdentity(initDeviceIdentityArgs);
   if (
     await state.enqueueStorage(() =>
       state.requireManager().hasPendingSentinelGenesisFinalization(),
@@ -182,9 +196,15 @@ export async function continueInitializationAfterDeviceUnlock(
     const rawResult = await state.enqueueStorage(() =>
       state.requireManager().resumePendingSentinelGenesisFinalization(),
     );
-    sentinelGenesisActions.applyFinalizeResult(state, rawResult);
+    const applyFinalizeResultArgs: Parameters<
+      typeof sentinelGenesisActions.applyFinalizeResult
+    >[0] = { state, result: rawResult };
+    sentinelGenesisActions.applyFinalizeResult(applyFinalizeResultArgs);
   }
-  await state.loadProviders({ ensureLocalRow: true });
+  const loadProvidersArgs2: Parameters<typeof state.loadProviders>[0] = {
+    ensureLocalRow: true,
+  };
+  await state.loadProviders(loadProvidersArgs2);
   await state.refreshLocalVaultCatalog();
   if (
     state.activeVault.kind === ActiveVaultKind.Closed &&
@@ -237,19 +257,23 @@ export async function continueInitializationAfterDeviceUnlock(
     state.startVaultSync();
   }
 
-  log.info("app init finished", {
+  const infoArgs: Parameters<typeof log.info>[1] = {
     localVaultPresent: state.localVaultPresent,
     authenticated: state.isAuthenticated,
     providers: state.providers.length,
     syncProviders: state.syncProviders.length,
     ...(state.deviceId ? { deviceId: state.deviceId } : {}),
-  });
+  };
+  log.info("app init finished", infoArgs);
 }
 
-export async function initDeviceIdentity(
-  state: VaultState,
-  options?: { allowPendingAuthorization?: boolean },
-): Promise<void> {
+export async function initDeviceIdentity({
+  state,
+  options,
+}: {
+  readonly state: VaultState;
+  readonly options?: { allowPendingAuthorization?: boolean };
+}): Promise<void> {
   if (
     !state.hasManager ||
     (!state.deviceProtectionReady &&
@@ -268,11 +292,15 @@ export async function initDeviceIdentity(
   state.devicePublicKey = identity.devicePublicKey;
 }
 
-export async function authorizeWithExternalDeviceIdentity(
-  state: VaultState,
-  adopt: (manager: NookVaultManager) => Promise<void>,
-  options?: { deferInitialization?: boolean },
-): Promise<boolean> {
+export async function authorizeWithExternalDeviceIdentity({
+  state,
+  adopt,
+  options,
+}: {
+  readonly state: VaultState;
+  readonly adopt: (manager: NookVaultManager) => Promise<void>;
+  readonly options?: { deferInitialization?: boolean };
+}): Promise<boolean> {
   if (!state.hasManager) return false;
   const priorDeviceProtectionStatus = state.deviceProtectionStatus;
   state.errorMsg = "";
@@ -281,12 +309,19 @@ export async function authorizeWithExternalDeviceIdentity(
   try {
     await state.enqueueStorage(() => adopt(state.requireManager()));
     if (options?.deferInitialization) {
-      await initDeviceIdentity(state, { allowPendingAuthorization: true });
+      const initDeviceIdentityArgs: Parameters<typeof initDeviceIdentity>[0] = {
+        state,
+        options: { allowPendingAuthorization: true },
+      };
+      await initDeviceIdentity(initDeviceIdentityArgs);
     } else {
       await continueInitializationAfterDeviceUnlock(state);
     }
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
-    log.info("extension identity adopted", { deviceId: state.deviceId });
+    const infoArgs2: Parameters<typeof log.info>[1] = {
+      deviceId: state.deviceId,
+    };
+    log.info("extension identity adopted", infoArgs2);
     return true;
   } catch (error) {
     await state.enqueueStorage(() =>
@@ -299,9 +334,10 @@ export async function authorizeWithExternalDeviceIdentity(
         ? state.deviceProtectionLockedStatus
         : priorDeviceProtectionStatus;
     state.errorMsg = state.t(I18N_KEYS.ExtensionConnectIdentityHandoffFailed);
-    log.warn("extension identity handoff failed", {
+    const warnArgs2: Parameters<typeof log.warn>[1] = {
       error: error instanceof Error ? error.message : String(error),
-    });
+    };
+    log.warn("extension identity handoff failed", warnArgs2);
     return false;
   } finally {
     state.deviceAuthorizationInProgress = false;
@@ -324,7 +360,8 @@ export async function createFreshVault(state: VaultState) {
   state.errorMsg = "";
   state.dismissSuccess();
   state.isVerifying = true;
-  log.info("creating fresh remote vault", { mode: state.storageMode });
+  const infoArgs3: Parameters<typeof log.info>[1] = { mode: state.storageMode };
+  log.info("creating fresh remote vault", infoArgs3);
   try {
     await state.initDeviceIdentity();
     const creatingAdditionalVault = state.localVaults.length > 0;
@@ -338,9 +375,14 @@ export async function createFreshVault(state: VaultState) {
       const connectPromise = state
         .requireManager()
         .connect_fresh(...state.wasmStorageArgs());
+      const startVaultDiscoveryTimeoutArgs: Parameters<
+        typeof startVaultDiscoveryTimeout
+      >[0] = {
+        message: state.t(I18N_KEYS.ToastsErrorTimeout),
+        timeoutMs: 30_000,
+      };
       const timeout = startVaultDiscoveryTimeout(
-        state.t(I18N_KEYS.ToastsErrorTimeout),
-        30_000,
+        startVaultDiscoveryTimeoutArgs,
       );
       try {
         return (await Promise.race([
@@ -362,17 +404,19 @@ export async function createFreshVault(state: VaultState) {
     await state.syncActiveVaultStoreIdToAuth();
     await state.hydrateMultiDeviceState();
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-    log.info("fresh remote vault created", {
+    const infoArgs4: Parameters<typeof log.info>[1] = {
       mode: state.storageMode,
       secrets: rawRecords.length,
-    });
+    };
+    log.info("fresh remote vault created", infoArgs4);
     state.showSuccess(state.t(I18N_KEYS.ToastsVaultCreated));
     state.startIdleSessionTracking();
   } catch (e) {
     state.isAuthenticated = false;
     const message =
       e instanceof Error ? e.message : "Failed to create a new vault.";
-    log.warn("fresh vault create failed", { error: message });
+    const warnArgs3: Parameters<typeof log.warn>[1] = { error: message };
+    log.warn("fresh vault create failed", warnArgs3);
     state.errorMsg = message;
   } finally {
     state.isVerifying = false;

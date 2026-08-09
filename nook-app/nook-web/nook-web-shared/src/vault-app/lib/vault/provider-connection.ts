@@ -89,9 +89,10 @@ export async function discoverStagedVaultStoreId(
           );
         } catch (error) {
           state.clearExistingVaultRecoverySummary();
-          log.warn("vault recovery summary unavailable", {
+          const warnArgs: Parameters<typeof log.warn>[1] = {
             error: error instanceof Error ? error.message : String(error),
-          });
+          };
+          log.warn("vault recovery summary unavailable", warnArgs);
         }
       }
       return storeId;
@@ -130,10 +131,11 @@ export async function connectAndSyncStagedProvider(
       return;
     }
     await state.flushRemoteEventOutboxNow(provider);
-    await state.syncProviderById(provider.id, {
+    const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[1] = {
       quiet: true,
       propagateError: true,
-    });
+    };
+    await state.syncProviderById(provider.id, syncProviderByIdArgs);
     state.clearLoginSetup();
     state.addProviderOpen = false;
   } catch (error) {

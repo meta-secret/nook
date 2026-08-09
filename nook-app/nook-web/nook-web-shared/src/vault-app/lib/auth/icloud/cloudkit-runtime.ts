@@ -63,6 +63,7 @@ export type CloudKitRecordInfosResponse = {
 
 export type CloudKitDatabase = {
   saveRecordZones: (zones: CloudKitZoneID[]) => Promise<unknown>;
+  // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
   saveRecords: (
     records: CloudKitRecord | CloudKitRecord[],
     options: { zoneID: string | CloudKitZoneID },
@@ -115,7 +116,7 @@ export type CloudKitContainer = {
   setUpAuth: (options?: {
     grabAuthToken?: boolean;
     persist?: boolean;
-  }) => Promise<unknown>;
+  }) => Promise<CloudKitUserIdentity | undefined>;
   whenUserSignsIn: () => Promise<CloudKitUserIdentity>;
   fetchCurrentUserIdentity?: () => Promise<CloudKitUserIdentity>;
   acceptShares?: (shortGUIDs: string[]) => Promise<CloudKitRecordInfosResponse>;
@@ -127,32 +128,35 @@ export type CloudKitContainer = {
 };
 
 export type CloudKitAuthTokenStore = {
+  // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
   putToken: (containerIdentifier: string, authToken: unknown) => void;
   getToken: (containerIdentifier: string) => unknown;
 };
 
-export type CloudKitGlobal = {
-  configure: (config: {
-    containers: Array<{
-      containerIdentifier: string;
-      environment: CloudKitEnvironment;
-      apiTokenAuth: {
-        apiToken: string;
-        persist: boolean;
-        signInButton: {
-          id: string;
-          theme?: CloudKitButtonTheme;
-        };
-        signOutButton: {
-          id: string;
-          theme?: CloudKitButtonTheme;
-        };
+export type CloudKitConfiguration = {
+  containers: Array<{
+    containerIdentifier: string;
+    environment: CloudKitEnvironment;
+    apiTokenAuth: {
+      apiToken: string;
+      persist: boolean;
+      signInButton: {
+        id: string;
+        theme?: CloudKitButtonTheme;
       };
-    }>;
-    services?: {
-      authTokenStore?: CloudKitAuthTokenStore;
+      signOutButton: {
+        id: string;
+        theme?: CloudKitButtonTheme;
+      };
     };
-  }) => void;
+  }>;
+  services?: {
+    authTokenStore?: CloudKitAuthTokenStore;
+  };
+};
+
+export type CloudKitGlobal = {
+  configure: (config: CloudKitConfiguration) => void;
   getDefaultContainer: () => CloudKitContainer;
 };
 
@@ -360,27 +364,32 @@ export function normalizeWebAuthToken(stored: unknown): WebAuthTokenLookup {
   return { kind: WebAuthTokenLookupKind.Unavailable };
 }
 
-export function storeCloudKitWebAuthToken(
-  containerIdentifier: string,
-  authToken: unknown,
-): WebAuthTokenLookup {
+export function storeCloudKitWebAuthToken({
+  containerIdentifier,
+  authToken,
+}: {
+  readonly containerIdentifier: string;
+  readonly authToken: unknown;
+}): WebAuthTokenLookup {
   const key = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`;
   if (!authToken) {
     sessionStorage.removeItem(key);
-    log.info("CloudKit web auth token cleared", {
+    const infoArgs: Parameters<typeof log.info>[1] = {
       container: containerIdentifier,
       expectedContainer: containerIdentifier === ICLOUD_CONTAINER_ID,
-    });
+    };
+    log.info("CloudKit web auth token cleared", infoArgs);
     return { kind: WebAuthTokenLookupKind.Unavailable };
   }
   sessionStorage.setItem(key, JSON.stringify(authToken));
   const token = normalizeWebAuthToken(authToken);
-  log.info("CloudKit web auth token stored", {
+  const infoArgs2: Parameters<typeof log.info>[1] = {
     container: containerIdentifier,
     expectedContainer: containerIdentifier === ICLOUD_CONTAINER_ID,
     tokenType: typeof authToken,
     normalized: tokenDiagnostics(token),
-  });
+  };
+  log.info("CloudKit web auth token stored", infoArgs2);
   if (
     containerIdentifier === ICLOUD_CONTAINER_ID &&
     token.kind === WebAuthTokenLookupKind.Available
@@ -393,13 +402,18 @@ export function storeCloudKitWebAuthToken(
 }
 
 export const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
+  // eslint-disable-next-line max-params -- CloudKit owns this positional token-store callback signature.
   putToken(containerIdentifier, authToken) {
-    log.debug("CloudKit putToken", {
+    const debugArgs: Parameters<typeof log.debug>[1] = {
       container: containerIdentifier,
       tokenType: typeof authToken,
       hasValue: Boolean(authToken),
-    });
-    storeCloudKitWebAuthToken(containerIdentifier, authToken);
+    };
+    log.debug("CloudKit putToken", debugArgs);
+    const storeCloudKitWebAuthTokenArgs: Parameters<
+      typeof storeCloudKitWebAuthToken
+    >[0] = { containerIdentifier, authToken };
+    storeCloudKitWebAuthToken(storeCloudKitWebAuthTokenArgs);
   },
   getToken(containerIdentifier) {
     const raw = sessionStorage.getItem(
@@ -423,57 +437,73 @@ declare global {
 }
 
 export function loadCloudKitScript(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.CloudKit) {
-      log.info("CloudKit JS already loaded", currentBrowserDiagnostics());
-      resolve();
-      return;
-    }
-    const existing = document.querySelector(
-      `script[src="${CLOUDKIT_SCRIPT_URL}"]`,
-    );
-    if (existing) {
-      log.info("CloudKit JS load waiting on existing script", {
-        scriptUrl: CLOUDKIT_SCRIPT_URL,
-      });
-      existing.addEventListener(
-        "load",
-        () => {
-          log.info("CloudKit JS loaded from existing script");
-          resolve();
-        },
-        { once: true },
+  return new Promise(
+    // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
+    (resolve, reject) => {
+      if (window.CloudKit) {
+        log.info("CloudKit JS already loaded", currentBrowserDiagnostics());
+        resolve();
+        return;
+      }
+      const existing = document.querySelector(
+        `script[src="${CLOUDKIT_SCRIPT_URL}"]`,
       );
-      existing.addEventListener(
-        "error",
-        () => {
-          log.warn("CloudKit JS existing script failed to load", {
-            scriptUrl: CLOUDKIT_SCRIPT_URL,
-          });
-          reject(new Error("Failed to load CloudKit JS."));
-        },
-        { once: true },
-      );
-      return;
-    }
-    log.info("CloudKit JS load started", {
-      scriptUrl: CLOUDKIT_SCRIPT_URL,
-      ...currentBrowserDiagnostics(),
-    });
-    const script = document.createElement("script");
-    script.src = CLOUDKIT_SCRIPT_URL;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      log.info("CloudKit JS loaded", { scriptUrl: CLOUDKIT_SCRIPT_URL });
-      resolve();
-    };
-    script.onerror = () => {
-      log.warn("CloudKit JS failed to load", {
+      if (existing) {
+        const infoArgs3: Parameters<typeof log.info>[1] = {
+          scriptUrl: CLOUDKIT_SCRIPT_URL,
+        };
+        log.info("CloudKit JS load waiting on existing script", infoArgs3);
+        const errorListenerArgs: Parameters<
+          typeof existing.addEventListener
+        >[2] = { once: true };
+        existing.addEventListener(
+          "load",
+          () => {
+            log.info("CloudKit JS loaded from existing script");
+            resolve();
+          },
+          errorListenerArgs,
+        );
+        const addEventListenerArgs: Parameters<
+          typeof existing.addEventListener
+        >[2] = { once: true };
+        existing.addEventListener(
+          "error",
+          () => {
+            const warnArgs: Parameters<typeof log.warn>[1] = {
+              scriptUrl: CLOUDKIT_SCRIPT_URL,
+            };
+            log.warn("CloudKit JS existing script failed to load", warnArgs);
+            reject(new Error("Failed to load CloudKit JS."));
+          },
+          addEventListenerArgs,
+        );
+        return;
+      }
+      const infoArgs4: Parameters<typeof log.info>[1] = {
         scriptUrl: CLOUDKIT_SCRIPT_URL,
-      });
-      reject(new Error("Failed to load CloudKit JS."));
-    };
-    document.head.appendChild(script);
-  });
+        ...currentBrowserDiagnostics(),
+      };
+      log.info("CloudKit JS load started", infoArgs4);
+      const script = document.createElement("script");
+      script.src = CLOUDKIT_SCRIPT_URL;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        const infoArgs5: Parameters<typeof log.info>[1] = {
+          scriptUrl: CLOUDKIT_SCRIPT_URL,
+        };
+        log.info("CloudKit JS loaded", infoArgs5);
+        resolve();
+      };
+      script.onerror = () => {
+        const warnArgs2: Parameters<typeof log.warn>[1] = {
+          scriptUrl: CLOUDKIT_SCRIPT_URL,
+        };
+        log.warn("CloudKit JS failed to load", warnArgs2);
+        reject(new Error("Failed to load CloudKit JS."));
+      };
+      document.head.appendChild(script);
+    },
+  );
 }

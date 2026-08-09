@@ -10,9 +10,7 @@ Build a named, typed argument value first.
 Applies to:
 
 - `agentic-ai/loom` authored TypeScript;
-- migrated `nook-app/nook-web` paths selected by the shared ESLint config.
-
-Nook web expands enforcement one green package slice at a time.
+- all authored production TypeScript and Svelte under `nook-app/nook-web`.
 
 Generated bindings are excluded.
 
@@ -49,6 +47,10 @@ Rules:
    returning a value from a function/`build` callback.
 4. Do not bypass the rule with `fn({ ... } as SomeType)` — name the value
    first, then cast if a host boundary truly requires it.
+5. Direct object arguments to Svelte's `$state`, `$state.raw`, `$derived`, and
+   `$bindable` compiler runes are the narrow exception. Moving those values can
+   violate rune placement or freeze reactive capture. This exception does not
+   apply to `$state.snapshot` or ordinary calls.
 
 ## Enforcement
 

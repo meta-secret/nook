@@ -154,13 +154,14 @@ function stagedProviderType(
 }
 
 function providerSnapshot(state: ProviderActionsContext) {
-  return $state.snapshot({
+  const snapshotArgs: Parameters<typeof $state.snapshot>[0] = {
     providers: state.providers,
     activeVaultStoreId:
       state.activeVault.kind === ActiveVaultKind.Open
         ? activeVaultScope(state.activeVault.storeId)
         : unselectedVaultScope(),
-  });
+  };
+  return $state.snapshot(snapshotArgs);
 }
 
 export function wasmStorageArgs(
@@ -327,10 +328,13 @@ export async function chooseLocalFolder(
   }
   const folder = await chooseLocalFolderBackupDirectory();
   try {
-    state.configureLocalFolder({
+    const configureLocalFolderArgs: Parameters<
+      typeof state.configureLocalFolder
+    >[0] = {
       directoryName: storedLocalFolderDirectory(folder.directoryName),
       handleId: storedLocalFolderHandle(folder.handleId),
-    });
+    };
+    state.configureLocalFolder(configureLocalFolderArgs);
   } finally {
     folder.free();
   }
@@ -403,19 +407,25 @@ export function showLoginVaultPicker(state: ProviderActionsContext): boolean {
   );
 }
 
-export async function assessVaultConnectStatus(
-  state: ProviderActionsContext,
-  args: [string, string, string],
-): Promise<VaultAccessStatus> {
+export async function assessVaultConnectStatus({
+  state,
+  args,
+}: {
+  readonly state: ProviderActionsContext;
+  readonly args: [string, string, string];
+}): Promise<VaultAccessStatus> {
   if (!state.hasManager)
     throw new Error(state.t(I18N_KEYS.ErrorsEngineUnavailable));
   const manager = state.requireManager();
   return (await state.enqueueStorage(async () => {
     const assessPromise = manager.assess_vault_connect(...args);
-    const timeout = startVaultDiscoveryTimeout(
-      state.t(I18N_KEYS.ToastsErrorTimeout),
-      30_000,
-    );
+    const startVaultDiscoveryTimeoutArgs: Parameters<
+      typeof startVaultDiscoveryTimeout
+    >[0] = {
+      message: state.t(I18N_KEYS.ToastsErrorTimeout),
+      timeoutMs: 30_000,
+    };
+    const timeout = startVaultDiscoveryTimeout(startVaultDiscoveryTimeoutArgs);
     try {
       return await Promise.race([assessPromise, timeout.completion]);
     } finally {
@@ -424,10 +434,13 @@ export async function assessVaultConnectStatus(
   })) as VaultAccessStatus;
 }
 
-export async function handleRemoteVaultAssessStatus(
-  state: ProviderActionsContext,
-  accessStatus: VaultAccessStatus,
-): Promise<boolean> {
+export async function handleRemoteVaultAssessStatus({
+  state,
+  accessStatus,
+}: {
+  readonly state: ProviderActionsContext;
+  readonly accessStatus: VaultAccessStatus;
+}): Promise<boolean> {
   const decision = state.clientPolicy.remoteVaultAssessDecision(
     accessStatus,
     state.loginRequiresExistingVault,
@@ -483,10 +496,13 @@ function resetICloudSignInState(state: ProviderActionsContext) {
   state.icloudOAuthBusy = false;
 }
 
-export async function loadProviders(
-  state: ProviderActionsContext,
-  options?: { ensureLocalRow?: boolean },
-) {
+export async function loadProviders({
+  state,
+  options,
+}: {
+  readonly state: ProviderActionsContext;
+  readonly options?: { ensureLocalRow?: boolean };
+}) {
   const snapshot = await state.enqueueStorage(() =>
     options?.ensureLocalRow
       ? state.requireManager().loadAuthProvidersWithLocalRow()
@@ -499,28 +515,38 @@ export async function loadProviders(
     state.openActiveVault(snapshot.activeVaultStoreId.value);
   }
   state.providersLoaded = true;
-  log.debug("providers loaded", {
+  const debugArgs: Parameters<typeof log.debug>[1] = {
     count: state.providers.length,
     localVaultPresent: state.localVaultPresent,
-  });
+  };
+  log.debug("providers loaded", debugArgs);
 }
 
 export async function promoteSessionVaultToLocalIfNeeded(
   state: ProviderActionsContext,
 ): Promise<void> {
+  const ensureLocalAuthProviderSnapshotArgs: Parameters<
+    ReturnType<typeof state.requireManager>["ensureLocalAuthProviderSnapshot"]
+  >[0] = {
+    providers: state.providers,
+    activeVaultStoreId:
+      state.activeVault.kind === ActiveVaultKind.Open
+        ? activeVaultScope(state.activeVault.storeId)
+        : unselectedVaultScope(),
+  };
   const snapshot = await state
     .requireManager()
-    .ensureLocalAuthProviderSnapshot({
-      providers: state.providers,
-      activeVaultStoreId:
-        state.activeVault.kind === ActiveVaultKind.Open
-          ? activeVaultScope(state.activeVault.storeId)
-          : unselectedVaultScope(),
-    });
+    .ensureLocalAuthProviderSnapshot(ensureLocalAuthProviderSnapshotArgs);
   if (snapshot.providers.length !== state.providers.length) {
     state.providers = snapshot.providers;
     await state.enqueueStorage(() =>
-      saveAuthProviders(state.requireManager(), snapshot),
+      (() => {
+        const saveAuthProvidersArgs: Parameters<typeof saveAuthProviders>[0] = {
+          manager: state.requireManager(),
+          snapshot,
+        };
+        return saveAuthProviders(saveAuthProvidersArgs);
+      })(),
     );
   }
   state.localVaultPresent = await hasLocalVault();
@@ -601,10 +627,13 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
   }
 }
 
-export async function persistProviders(
-  state: ProviderActionsContext,
-  opts?: { replace?: boolean },
-) {
+export async function persistProviders({
+  state,
+  opts,
+}: {
+  readonly state: ProviderActionsContext;
+  readonly opts?: { replace?: boolean };
+}) {
   if (!opts?.replace && state.localVaultPresent) {
     const snapshot = await state.enqueueStorage(() =>
       state.requireManager().loadAuthProviders(),
@@ -618,20 +647,30 @@ export async function persistProviders(
     }
   }
   await state.enqueueStorage(() =>
-    saveAuthProviders(state.requireManager(), {
-      providers: state.providers,
-      activeVaultStoreId: state.hasActiveVaultStore
-        ? activeVaultScope(state.requireActiveVaultStoreId())
-        : unselectedVaultScope(),
-    }),
+    (() => {
+      const saveAuthProvidersArgs2: Parameters<typeof saveAuthProviders>[0] = {
+        manager: state.requireManager(),
+        snapshot: {
+          providers: state.providers,
+          activeVaultStoreId: state.hasActiveVaultStore
+            ? activeVaultScope(state.requireActiveVaultStoreId())
+            : unselectedVaultScope(),
+        },
+      };
+      return saveAuthProviders(saveAuthProvidersArgs2);
+    })(),
   );
 }
 
-export function beginProviderSetup(
-  state: ProviderActionsContext,
-  type: StorageProviderType,
-  oauthPreset?: OAuthFilePreset,
-) {
+export function beginProviderSetup({
+  state,
+  type,
+  oauthPreset,
+}: {
+  readonly state: ProviderActionsContext;
+  readonly type: StorageProviderType;
+  readonly oauthPreset?: OAuthFilePreset;
+}) {
   if (!state.isAuthenticated) {
     state.resetVaultSessionState();
   }
@@ -646,7 +685,9 @@ export function beginProviderSetup(
       resetICloudSignInState(state);
     }
     state.selectOauthSetupPreset(preset);
-    state.configureOauthFile({
+    const configureOauthFileArgs: Parameters<
+      typeof state.configureOauthFile
+    >[0] = {
       preset,
       accessToken: signedOutOAuthCredential(),
       refreshToken: oauthRefreshCredentialNotIssued(),
@@ -658,7 +699,8 @@ export function beginProviderSetup(
       folderId: rootGoogleDriveFolder(),
       iCloudMode: "private",
       iCloudShareTarget: personalICloudShareTarget(),
-    });
+    };
+    state.configureOauthFile(configureOauthFileArgs);
   } else {
     state.clearOauthSetupPreset();
     state.clearOauthFile();
@@ -667,7 +709,8 @@ export function beginProviderSetup(
   state.clearExistingVaultRecoverySummary();
   state.errorMsg = "";
   state.dismissSuccess();
-  log.debug("provider setup started", { type, oauthPreset });
+  const debugArgs2: Parameters<typeof log.debug>[1] = { type, oauthPreset };
+  log.debug("provider setup started", debugArgs2);
 }
 
 export function beginAddProvider(state: ProviderActionsContext) {
@@ -713,10 +756,13 @@ export function cancelProviderSetup(state: ProviderActionsContext) {
   state.errorMsg = "";
 }
 
-export async function removeProvider(
-  state: ProviderActionsContext,
-  id: string,
-): Promise<void> {
+export async function removeProvider({
+  state,
+  id,
+}: {
+  readonly state: ProviderActionsContext;
+  readonly id: string;
+}): Promise<void> {
   const target = state.providers.find((p) => p.id === id);
   if (!target || target.type === "local") return;
 
@@ -736,12 +782,18 @@ export async function removeProvider(
   }
 
   state.applyActiveProviderCredentials();
-  await state.persistProviders({ replace: true });
+  const persistProvidersArgs: Parameters<typeof state.persistProviders>[0] = {
+    replace: true,
+  };
+  await state.persistProviders(persistProvidersArgs);
 
-  log.info("sync provider removed", { id, label: target.label });
-  state.showSuccess(
-    state.t(I18N_KEYS.ToastsRemovedDevice, { label: target.label }),
-  );
+  const infoArgs: Parameters<typeof log.info>[1] = { id, label: target.label };
+  log.info("sync provider removed", infoArgs);
+  const tArgs: Parameters<typeof state.t>[0] = {
+    key: I18N_KEYS.ToastsRemovedDevice,
+    replacements: { label: target.label },
+  };
+  state.showSuccess(state.t(tArgs));
 }
 
 export async function ensureProviderSaved(
@@ -788,14 +840,17 @@ export async function ensureProviderSaved(
   if (isNewSetup && type !== "local") {
     let provider: StorageProvider;
     if (type === "github") {
+      const providerDefaultLabelArgs: Parameters<
+        typeof providerDefaultLabel
+      >[1] = {
+        detail: repo,
+        oauthPreset,
+      };
       provider = {
         ...providerPersistenceDefaults(),
         id: generateId(),
         type,
-        label: providerDefaultLabel(type, {
-          detail: repo,
-          oauthPreset,
-        }),
+        label: providerDefaultLabel(type, providerDefaultLabelArgs),
         githubPat: storedGithubPat(pat),
         githubRepo: storedGithubRepository(repo),
         storeId: providerStoreId,
@@ -810,14 +865,17 @@ export async function ensureProviderSaved(
               fileName: storedOAuthRemoteFileName(driveFile),
             }
           : defaultOAuthFileConfig(oauthPreset, driveFile);
+      const providerDefaultLabelArgs2: Parameters<
+        typeof providerDefaultLabel
+      >[1] = {
+        detail: driveFile,
+        oauthPreset,
+      };
       provider = {
         ...providerPersistenceDefaults(),
         id: generateId(),
         type,
-        label: providerDefaultLabel(type, {
-          detail: driveFile,
-          oauthPreset,
-        }),
+        label: providerDefaultLabel(type, providerDefaultLabelArgs2),
         oauthFile: configuredOAuthFile(oauthFile),
         storeId: providerStoreId,
         createdAt: isoTimestamp(),
@@ -828,22 +886,27 @@ export async function ensureProviderSaved(
         return false;
       }
       const localFolder: LocalFolderConfig = state.localFolderDraft.config;
+      const providerDefaultLabelArgs3: Parameters<
+        typeof providerDefaultLabel
+      >[1] = {
+        detail: localFolderDirectoryValue(localFolder.directoryName),
+        oauthPreset,
+      };
       provider = {
         ...providerPersistenceDefaults(),
         id: generateId(),
         type,
-        label: providerDefaultLabel(type, {
-          detail: localFolderDirectoryValue(localFolder.directoryName),
-          oauthPreset,
-        }),
+        label: providerDefaultLabel(type, providerDefaultLabelArgs3),
         localFolder: configuredLocalFolder(localFolder),
         storeId: providerStoreId,
         createdAt: isoTimestamp(),
       };
     }
+    const findDuplicateSyncProviderArgs: Parameters<
+      typeof findDuplicateSyncProvider
+    >[0] = { providers: state.activeVaultProviders, candidate: provider };
     const duplicateProvider = findDuplicateSyncProvider(
-      state.activeVaultProviders,
-      provider,
+      findDuplicateSyncProviderArgs,
     );
     if (duplicateProvider.state === NookDuplicateSyncProviderState.Duplicate) {
       if (isExplicitAdd) {
@@ -884,11 +947,14 @@ export async function ensureProviderSaved(
         : provider,
     );
   } else if (vaultStoreId.kind === ProviderSaveStoreIdKind.Available) {
+    const ensureLocalProviderRowWasmArgs: Parameters<
+      typeof ensureLocalProviderRowWasm
+    >[0] = {
+      providers: state.providers,
+      activeVaultStoreId: activeVaultScope(vaultStoreId.storeId),
+    } as AuthProvidersSnapshot;
     const snapshot = ensureLocalProviderRowWasm(
-      {
-        providers: state.providers,
-        activeVaultStoreId: activeVaultScope(vaultStoreId.storeId),
-      } as AuthProvidersSnapshot,
+      ensureLocalProviderRowWasmArgs,
       vaultStoreId.storeId,
     );
     state.providers = snapshot.providers;
@@ -902,14 +968,22 @@ export async function ensureProviderSaved(
     const activeOauthFile = state.oauthFileDraft.config;
     const activePreset = activeOauthFile.preset;
     if (oauthProviderToUpdate.kind === OAuthProviderUpdateKind.NotRequired) {
-      const duplicate = findDuplicateSyncProvider(state.syncProviders, {
-        ...providerPersistenceDefaults(),
-        id: "oauth-provider-update-target",
-        type: "oauth-file",
-        label: "",
-        oauthFile: configuredOAuthFile(activeOauthFile),
-        createdAt: "",
-      });
+      const findDuplicateSyncProviderArgs2: Parameters<
+        typeof findDuplicateSyncProvider
+      >[0] = {
+        providers: state.syncProviders,
+        candidate: {
+          ...providerPersistenceDefaults(),
+          id: "oauth-provider-update-target",
+          type: "oauth-file",
+          label: "",
+          oauthFile: configuredOAuthFile(activeOauthFile),
+          createdAt: "",
+        },
+      };
+      const duplicate = findDuplicateSyncProvider(
+        findDuplicateSyncProviderArgs2,
+      );
       if (duplicate.state === NookDuplicateSyncProviderState.Duplicate) {
         oauthProviderToUpdate = {
           kind: OAuthProviderUpdateKind.Required,
@@ -986,6 +1060,10 @@ export async function ensureProviderSaved(
   state.addProviderOpen = false;
   state.applyActiveProviderCredentials();
   await state.persistProviders();
-  log.info("sync provider saved", { type, explicitAdd: isExplicitAdd });
+  const infoArgs2: Parameters<typeof log.info>[1] = {
+    type,
+    explicitAdd: isExplicitAdd,
+  };
+  log.info("sync provider saved", infoArgs2);
   return true;
 }

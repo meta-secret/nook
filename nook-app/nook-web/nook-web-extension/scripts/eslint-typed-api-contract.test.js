@@ -51,6 +51,35 @@ describe('typed API named arguments', () => {
     expect(messages).toEqual([])
   })
 
+  test('allows direct object arguments only for placement-sensitive Svelte runes', () => {
+    const messages = lint(`
+      declare function $state<T>(value: T): T
+      declare namespace $state { function raw<T>(value: T): T }
+      declare function $derived<T>(value: T): T
+      declare function $bindable<T>(value: T): T
+      $state({ count: 0 })
+      $state.raw({ entries: [] })
+      $derived({ enabled: true })
+      $bindable({ label: 'Nook' })
+    `)
+
+    expect(messages).toEqual([])
+  })
+
+  test('does not exempt unrelated state members or normal calls', () => {
+    const messages = lint(`
+      declare namespace $state { function snapshot<T>(value: T): T }
+      declare function consume<T>(value: T): T
+      $state.snapshot({ count: 0 })
+      consume({ count: 0 })
+    `)
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+      'namedArgument',
+    ])
+  })
+
   test('rejects untyped names initialized by object-producing expressions', () => {
     const messages = lint(`
       declare const flag: boolean

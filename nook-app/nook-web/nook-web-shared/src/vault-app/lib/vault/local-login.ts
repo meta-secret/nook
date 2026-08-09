@@ -42,18 +42,24 @@ export function beginLoginVaultPicker(state: VaultState): void {
   state.resetVaultSessionState();
 }
 
-export async function chooseLoginVault(
-  state: VaultState,
-  storeId: string,
-): Promise<void> {
+export async function chooseLoginVault({
+  state,
+  storeId,
+}: {
+  readonly state: VaultState;
+  readonly storeId: string;
+}): Promise<void> {
   await state.selectVaultForUnlock(storeId);
   state.selectLoginVault(storeId);
 }
 
-export async function switchToVault(
-  state: VaultState,
-  storeId: string,
-): Promise<void> {
+export async function switchToVault({
+  state,
+  storeId,
+}: {
+  readonly state: VaultState;
+  readonly storeId: string;
+}): Promise<void> {
   const switchDecision = state.clientPolicy.vaultSwitchTarget(
     storeId,
     state.hasActiveVaultStore,
@@ -77,10 +83,15 @@ export async function switchToVault(
     setVaultSessionLocked(true);
     state.clearUnlockedSession();
     await state.waitForStorageChain();
-    await chooseLoginVault(state, target);
+    const chooseLoginVaultArgs: Parameters<typeof chooseLoginVault>[0] = {
+      state,
+      storeId: target,
+    };
+    await chooseLoginVault(chooseLoginVaultArgs);
     state.isVerifying = true;
     await state.lockDeviceProtection();
-    log.info("vault switch completed", { storeId: target });
+    const infoArgs: Parameters<typeof log.info>[1] = { storeId: target };
+    log.info("vault switch completed", infoArgs);
   } catch (error) {
     state.errorMsg =
       error instanceof Error ? error.message : "Failed to switch vaults.";
@@ -134,10 +145,13 @@ export async function prepareLocalLogin(state: VaultState): Promise<void> {
   }
 }
 
-export async function selectVaultForUnlock(
-  state: VaultState,
-  storeId: string,
-): Promise<void> {
+export async function selectVaultForUnlock({
+  state,
+  storeId,
+}: {
+  readonly state: VaultState;
+  readonly storeId: string;
+}): Promise<void> {
   state.errorMsg = "";
   state.dismissSuccess();
   state.isVerifying = true;
@@ -180,10 +194,13 @@ export async function prepareExistingVaultImportSlot(
   state.localLoginPreparation = LocalLoginPreparationState.Idle;
 }
 
-export async function createLocalVaultWithDeviceKeys(
-  state: VaultState,
-  label?: string,
-): Promise<void> {
+export async function createLocalVaultWithDeviceKeys({
+  state,
+  label,
+}: {
+  readonly state: VaultState;
+  readonly label?: string;
+}): Promise<void> {
   if (!state.hasManager) {
     state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
     return;
@@ -234,11 +251,12 @@ export async function createLocalVaultWithDeviceKeys(
     await state.ensureProviderSaved();
     await state.syncActiveVaultStoreIdToAuth();
     await state.hydrateMultiDeviceState();
-    log.info("local vault created (device keys)", {
+    const infoArgs2: Parameters<typeof log.info>[1] = {
       secrets: rawRecords.length,
       deviceId: state.deviceId,
       storeId,
-    });
+    };
+    log.info("local vault created (device keys)", infoArgs2);
     state.showSuccess(state.t(I18N_KEYS.ToastsLocalLoaded));
     state.startIdleSessionTracking();
     state.startVaultSync();
@@ -248,7 +266,8 @@ export async function createLocalVaultWithDeviceKeys(
       e instanceof Error
         ? e.message
         : state.t(I18N_KEYS.ErrorsVaultCreationFailed);
-    log.warn("local vault create failed", { error: message });
+    const warnArgs: Parameters<typeof log.warn>[1] = { error: message };
+    log.warn("local vault create failed", warnArgs);
     state.errorMsg = message;
   } finally {
     state.isVerifying = false;
@@ -264,11 +283,15 @@ type PreviousVaultLabel =
   | { kind: PreviousVaultLabelKind.Missing }
   | { kind: PreviousVaultLabelKind.Present; label: string };
 
-export async function renameLocalVaultLabel(
-  state: VaultState,
-  storeId: string,
-  label: string,
-): Promise<void> {
+export async function renameLocalVaultLabel({
+  state,
+  storeId,
+  label,
+}: {
+  readonly state: VaultState;
+  readonly storeId: string;
+  readonly label: string;
+}): Promise<void> {
   const trimmedStoreId = storeId.trim();
   const trimmedLabel = label.trim();
   if (!trimmedStoreId) return;
@@ -280,12 +303,16 @@ export async function renameLocalVaultLabel(
   state.errorMsg = "";
   state.dismissSuccess();
   state.isVerifying = true;
+  const reduceArgs: Parameters<typeof state.localVaults.reduce>[1] = {
+    kind: PreviousVaultLabelKind.Missing,
+  };
   const previousLabel = state.localVaults.reduce<PreviousVaultLabel>(
+    // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
     (current, vault) =>
       vault.storeId.trim() === trimmedStoreId
         ? { kind: PreviousVaultLabelKind.Present, label: vault.label }
         : current,
-    { kind: PreviousVaultLabelKind.Missing },
+    reduceArgs,
   );
   let renameCommitted = false;
 
@@ -311,12 +338,13 @@ export async function renameLocalVaultLabel(
         await setLocalVaultLabel(trimmedStoreId, previousLabel.label);
         await refreshLocalVaultCatalog(state);
       } catch (rollbackError) {
-        log.warn("local vault rename rollback failed", {
+        const warnArgs2: Parameters<typeof log.warn>[1] = {
           error:
             rollbackError instanceof Error
               ? rollbackError.message
               : String(rollbackError),
-        });
+        };
+        log.warn("local vault rename rollback failed", warnArgs2);
       }
     }
     state.errorMsg =
@@ -335,17 +363,26 @@ export async function syncActiveVaultStoreIdToAuth(
   const storeId = state.activeVault.storeId.trim();
   if (!storeId) return;
   await state.enqueueStorage(() =>
-    saveAuthProviders(state.requireManager(), {
-      providers: state.providers,
-      activeVaultStoreId: activeVaultScope(storeId),
-    }),
+    (() => {
+      const saveAuthProvidersArgs: Parameters<typeof saveAuthProviders>[0] = {
+        manager: state.requireManager(),
+        snapshot: {
+          providers: state.providers,
+          activeVaultStoreId: activeVaultScope(storeId),
+        },
+      };
+      return saveAuthProviders(saveAuthProvidersArgs);
+    })(),
   );
 }
 
-export async function activateConnectedExistingVault(
-  state: VaultState,
-  storeId: string,
-): Promise<void> {
+export async function activateConnectedExistingVault({
+  state,
+  storeId,
+}: {
+  readonly state: VaultState;
+  readonly storeId: string;
+}): Promise<void> {
   if (!state.hasManager || !state.isAuthenticated) return;
   const connectedStoreId = requireManagerVaultStoreId(state.requireManager());
   if (connectedStoreId !== storeId) {

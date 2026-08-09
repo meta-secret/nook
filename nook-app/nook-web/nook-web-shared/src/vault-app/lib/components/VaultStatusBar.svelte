@@ -71,17 +71,17 @@
     if (secs < 5) return vault ? vault.t(I18N_KEYS.StatusBarJustNow) : 'just now'
     if (secs < 60)
       return vault
-        ? vault.t(I18N_KEYS.StatusBarSecsAgo, { secs: String(secs) })
+        ? (() => { const tArgs: Parameters<typeof vault.t>[1] = { secs: String(secs) }; return vault.t(I18N_KEYS.StatusBarSecsAgo, tArgs); })()
         : `${secs}s ago`
     const mins = Math.floor(secs / 60)
     if (mins < 60)
       return vault
-        ? vault.t(I18N_KEYS.StatusBarMinsAgo, { mins: String(mins) })
+        ? (() => { const tArgs2: Parameters<typeof vault.t>[1] = { mins: String(mins) }; return vault.t(I18N_KEYS.StatusBarMinsAgo, tArgs2); })()
         : `${mins}m ago`
     return vault
-      ? vault.t(I18N_KEYS.StatusBarHoursAgo, {
+      ? (() => { const tArgs3: Parameters<typeof vault.t>[1] = {
           hours: String(Math.floor(mins / 60)),
-        })
+        }; return vault.t(I18N_KEYS.StatusBarHoursAgo, tArgs3); })()
       : `${Math.floor(mins / 60)}h ago`
   }
 
@@ -110,9 +110,10 @@
   const syncDetail = $derived.by(() => {
     if (!vault || !showSyncStatus) return ''
     if (vault.syncingProviderLabel.kind === SyncProviderLabelKind.Active) {
-      return vault.t(I18N_KEYS.StatusBarSyncingTo, {
+      const tArgs4: Parameters<typeof vault.t>[1] = {
         provider: vault.syncingProviderLabel.label,
-      })
+      };
+      return vault.t(I18N_KEYS.StatusBarSyncingTo, tArgs4)
     }
     if (vault.isFanOutSyncing) {
       return vault.t(I18N_KEYS.StatusBarSyncingProviders)
@@ -120,9 +121,9 @@
     if (vault.syncProviderCount > 0) {
       return vault.syncProviderCount === 1
         ? vault.t(I18N_KEYS.StatusBarSyncProvidersSingular)
-        : vault.t(I18N_KEYS.StatusBarSyncProvidersPlural, {
+        : (() => { const tArgs5: Parameters<typeof vault.t>[1] = {
             count: String(vault.syncProviderCount),
-          })
+          }; return vault.t(I18N_KEYS.StatusBarSyncProvidersPlural, tArgs5); })()
     }
     return vault.t(I18N_KEYS.StatusBarSavedLocalOnly)
   })

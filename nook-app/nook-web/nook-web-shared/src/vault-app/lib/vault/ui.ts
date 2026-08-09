@@ -16,6 +16,10 @@ import {
 } from "$lib/vault/state/ui.svelte";
 import { WorkspaceRoute, workspacePath } from "$lib/app/workspace-route";
 
+export type OpenSettingsRequest = OpenSettingsArgs & {
+  readonly state: UiActionsContext;
+};
+
 function pushWorkspaceRoute(route: WorkspaceRoute): void {
   if (!("window" in globalThis)) return;
   const path = workspacePath(route);
@@ -27,14 +31,19 @@ function pushWorkspaceRoute(route: WorkspaceRoute): void {
   ) {
     return;
   }
-  window.history.pushState({}, "", path);
+  const pushStateArgs: Parameters<typeof window.history.pushState>[0] = {};
+  window.history.pushState(pushStateArgs, "", path);
 }
 
-function applySettings(
-  state: UiActionsContext,
-  section: SettingsSection,
-  accordion: SettingsAccordionSection,
-): void {
+function applySettings({
+  state,
+  section,
+  accordion,
+}: {
+  readonly state: UiActionsContext;
+  readonly section: SettingsSection;
+  readonly accordion: SettingsAccordionSection;
+}): void {
   state.helpOpen = false;
   state.settingsSection = section;
   if (section === SettingsSection.Storage) {
@@ -46,10 +55,13 @@ function applySettings(
   void state.refreshDeviceState();
 }
 
-function applyAdmin(
-  state: UiActionsContext,
-  accordion: OpenAdminAccordion,
-): void {
+function applyAdmin({
+  state,
+  accordion,
+}: {
+  readonly state: UiActionsContext;
+  readonly accordion: OpenAdminAccordion;
+}): void {
   state.helpOpen = false;
   state.cancelProviderSetup();
   state.cancelAddProvider();
@@ -68,37 +80,55 @@ function applyVault(state: UiActionsContext): void {
 }
 
 /** Apply browser history to UI state without creating another history entry. */
-export function applyWorkspaceRoute(
-  state: UiActionsContext,
-  route: WorkspaceRoute,
-): void {
+export function applyWorkspaceRoute({
+  state,
+  route,
+}: {
+  readonly state: UiActionsContext;
+  readonly route: WorkspaceRoute;
+}): void {
   switch (route) {
     case WorkspaceRoute.Vault:
       applyVault(state);
       return;
     case WorkspaceRoute.DevicesAccess:
-      applySettings(
-        state,
-        SettingsSection.DevicesAccess,
-        SettingsAccordionSection.Devices,
-      );
+      (() => {
+        const applySettingsArgs: Parameters<typeof applySettings>[0] = {
+          state,
+          section: SettingsSection.DevicesAccess,
+          accordion: SettingsAccordionSection.Devices,
+        };
+        return applySettings(applySettingsArgs);
+      })();
       return;
     case WorkspaceRoute.Admin:
-      applyAdmin(state, AdminAccordionSection.Vaults);
+      (() => {
+        const applyAdminArgs: Parameters<typeof applyAdmin>[0] = {
+          state,
+          accordion: AdminAccordionSection.Vaults,
+        };
+        return applyAdmin(applyAdminArgs);
+      })();
       return;
     case WorkspaceRoute.Onboard:
-      applySettings(
-        state,
-        SettingsSection.Onboard,
-        SettingsAccordionSection.Devices,
-      );
+      (() => {
+        const applySettingsArgs2: Parameters<typeof applySettings>[0] = {
+          state,
+          section: SettingsSection.Onboard,
+          accordion: SettingsAccordionSection.Devices,
+        };
+        return applySettings(applySettingsArgs2);
+      })();
       return;
     case WorkspaceRoute.Settings:
-      applySettings(
-        state,
-        SettingsSection.Storage,
-        SettingsAccordionSection.Devices,
-      );
+      (() => {
+        const applySettingsArgs3: Parameters<typeof applySettings>[0] = {
+          state,
+          section: SettingsSection.Storage,
+          accordion: SettingsAccordionSection.Devices,
+        };
+        return applySettings(applySettingsArgs3);
+      })();
       return;
     case WorkspaceRoute.Help:
       state.settingsOpen = false;
@@ -119,22 +149,32 @@ function workspaceRouteForSettings(section: SettingsSection): WorkspaceRoute {
   }
 }
 
-export function openSettings(
-  state: UiActionsContext,
-  {
-    section = SettingsSection.Storage,
-    accordion = SettingsAccordionSection.Devices,
-  }: OpenSettingsArgs = {},
-): void {
-  applySettings(state, section, accordion);
+export function openSettings({
+  state,
+  section = SettingsSection.Storage,
+  accordion = SettingsAccordionSection.Devices,
+}: OpenSettingsRequest): void {
+  const applySettingsArgs4: Parameters<typeof applySettings>[0] = {
+    state,
+    section,
+    accordion,
+  };
+  applySettings(applySettingsArgs4);
   pushWorkspaceRoute(workspaceRouteForSettings(section));
 }
 
-export function openAdmin(
-  state: UiActionsContext,
-  accordion: OpenAdminAccordion = AdminAccordionSection.Vaults,
-): void {
-  applyAdmin(state, accordion);
+export function openAdmin({
+  state,
+  accordion,
+}: {
+  readonly state: UiActionsContext;
+  readonly accordion: OpenAdminAccordion;
+}): void {
+  const applyAdminArgs2: Parameters<typeof applyAdmin>[0] = {
+    state,
+    accordion,
+  };
+  applyAdmin(applyAdminArgs2);
   pushWorkspaceRoute(WorkspaceRoute.Admin);
 }
 
@@ -163,7 +203,10 @@ export async function deleteLocalData(state: UiActionsContext): Promise<void> {
   } catch (error) {
     const managerWasZeroized = state.localDataDeletionStarted;
     setVaultSessionLocked(true);
-    state.clearUnlockedSession(!managerWasZeroized);
+    const clearUnlockedSessionArgs: Parameters<
+      typeof state.clearUnlockedSession
+    >[0] = { state: !managerWasZeroized, resetManager: true };
+    state.clearUnlockedSession(clearUnlockedSessionArgs);
     state.localDataDeletionStarted = false;
     state.errorMsg =
       error instanceof Error
@@ -184,7 +227,10 @@ export async function handleRemoteLocalBrowserDataDeletion(
   state.stopIdleSessionTracking();
   state.stopVaultSync();
   setVaultSessionLocked(true);
-  state.clearUnlockedSession(false);
+  const clearUnlockedSessionArgs2: Parameters<
+    typeof state.clearUnlockedSession
+  >[0] = { state: false, resetManager: true };
+  state.clearUnlockedSession(clearUnlockedSessionArgs2);
   await resetManager;
   clearTabScopedBrowserData();
 }

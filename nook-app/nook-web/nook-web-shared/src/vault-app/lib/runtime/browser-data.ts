@@ -1,5 +1,5 @@
 import { appPath } from "$lib/content/legal";
-import { suspendWasmLogging } from "$lib/runtime/log";
+import { runtimeError, suspendWasmLogging } from "$lib/runtime/log";
 
 const LOCAL_DATA_RESET_CHANNEL = "nook-local-data-reset";
 const TAB_ID = crypto.randomUUID();
@@ -43,12 +43,8 @@ type LocalDataResetReady = {
 type LocalDataResetMessage =
   LocalDataResetRequest | LocalDataResetSeen | LocalDataResetReady;
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function combineErrors(errors: unknown[]): Error {
-  return new Error(errors.map(errorMessage).join("; "));
+function combineErrors(errors: Error[]): Error {
+  return new Error(errors.map((error) => error.message).join("; "));
 }
 
 function visibleCookiePaths(): string[] {
@@ -99,7 +95,7 @@ export function clearTabScopedBrowserData(): void {
 }
 
 async function clearBrowserManagedStorage(): Promise<void> {
-  const errors: unknown[] = [];
+  const errors: Error[] = [];
   const operations: Array<() => void | Promise<void>> = [
     () => localStorage.clear(),
     () => sessionStorage.clear(),
@@ -114,7 +110,7 @@ async function clearBrowserManagedStorage(): Promise<void> {
     try {
       await operation();
     } catch (error) {
-      errors.push(error);
+      errors.push(runtimeError(error));
     }
   }
   if (errors.length > 0) {
@@ -138,32 +134,35 @@ export function subscribeToLocalBrowserDataDeletion(
       return;
     }
     handledRequests.add(message.requestId);
-    channel.postMessage({
+    const postMessageArgs: Parameters<typeof channel.postMessage>[0] = {
       type: LocalDataResetMessageType.Seen,
       requestId: message.requestId,
       senderId: message.senderId,
       responderId: TAB_ID,
-    } satisfies LocalDataResetMessage);
+    } satisfies LocalDataResetMessage;
+    channel.postMessage(postMessageArgs);
     try {
       await handler();
-      channel.postMessage({
+      const postMessageArgs2: Parameters<typeof channel.postMessage>[0] = {
         type: LocalDataResetMessageType.Ready,
         requestId: message.requestId,
         senderId: message.senderId,
         responderId: TAB_ID,
         readiness: { kind: LocalDataResetReadinessKind.Ready },
-      } satisfies LocalDataResetMessage);
+      } satisfies LocalDataResetMessage;
+      channel.postMessage(postMessageArgs2);
     } catch (error) {
-      channel.postMessage({
+      const postMessageArgs3: Parameters<typeof channel.postMessage>[0] = {
         type: LocalDataResetMessageType.Ready,
         requestId: message.requestId,
         senderId: message.senderId,
         responderId: TAB_ID,
         readiness: {
           kind: LocalDataResetReadinessKind.Failed,
-          error: errorMessage(error),
+          error: runtimeError(error).message,
         },
-      } satisfies LocalDataResetMessage);
+      } satisfies LocalDataResetMessage;
+      channel.postMessage(postMessageArgs3);
     }
   };
 
@@ -233,18 +232,18 @@ async function quiesceOtherTabs(): Promise<void> {
 export async function deleteLocalBrowserData(
   clearNookDatabases: () => Promise<void>,
 ): Promise<void> {
-  const errors: unknown[] = [];
+  const errors: Error[] = [];
   await suspendWasmLogging();
   await quiesceOtherTabs();
   try {
     await clearNookDatabases();
   } catch (error) {
-    errors.push(error);
+    errors.push(runtimeError(error));
   }
   try {
     await clearBrowserManagedStorage();
   } catch (error) {
-    errors.push(error);
+    errors.push(runtimeError(error));
   }
   if (errors.length > 0) {
     throw combineErrors(errors);

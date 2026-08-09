@@ -69,17 +69,19 @@ export async function getVaultManager(): Promise<NookVaultManager> {
     return manager;
   };
 
-  const timeout = new Promise<never>((_, reject) => {
-    setTimeout(
-      () =>
-        reject(
-          new Error(
-            "Vault engine timed out while loading. Refresh and try again.",
+  const timeout =
+    new Promise<never> // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
+    ((_, reject) => {
+      setTimeout(
+        () =>
+          reject(
+            new Error(
+              "Vault engine timed out while loading. Refresh and try again.",
+            ),
           ),
-        ),
-      15_000,
-    );
-  });
+        15_000,
+      );
+    });
 
   return Promise.race([loadWasm(), timeout]);
 }

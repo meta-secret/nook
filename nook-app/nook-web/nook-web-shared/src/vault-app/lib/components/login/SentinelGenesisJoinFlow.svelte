@@ -46,7 +46,12 @@
   let joinPasskeyRequested = $state(false);
 
   const generatedParticipantResponseLink = $derived(
-    buildSentinelGenesisParticipantResponseLink(generatedParticipantResponse),
+    (() => {
+      const linkArgs: Parameters<
+        typeof buildSentinelGenesisParticipantResponseLink
+      >[0] = { responseJson: generatedParticipantResponse }
+      return buildSentinelGenesisParticipantResponseLink(linkArgs)
+    })(),
   );
 
   $effect(() => {

@@ -26,11 +26,15 @@ function wasmTranslationCatalog(
   }
 }
 
-export async function updateLocale(
-  state: VaultState,
-  newLocale: NookAppLocale,
-  options?: { preferWasm?: boolean },
-): Promise<void> {
+export async function updateLocale({
+  state,
+  newLocale,
+  options,
+}: {
+  readonly state: VaultState;
+  readonly newLocale: NookAppLocale;
+  readonly options?: { preferWasm?: boolean };
+}): Promise<void> {
   state.locale = newLocale;
   localStorage.setItem("nook_locale", newLocale);
   if ("document" in globalThis) {

@@ -70,12 +70,12 @@ to open, plus the unlocked vault's own device and backup-password roster.
               </p>
               <p class="text-xs text-muted-foreground">
                 {knownText(entry.lastLocalUpdateAt)
-                  ? vault.t(I18N_KEYS.DevicesAccessLastLocalUpdate, {
+                  ? (() => { const tArgs: Parameters<typeof vault.t>[1] = {
                       date: formatAccessDate(
                         vault,
                         textValue(entry.lastLocalUpdateAt),
                       ),
-                    })
+                    }; return vault.t(I18N_KEYS.DevicesAccessLastLocalUpdate, tArgs); })()
                   : vault.t(I18N_KEYS.DevicesAccessNoLocalUpdate)}
               </p>
             {/if}

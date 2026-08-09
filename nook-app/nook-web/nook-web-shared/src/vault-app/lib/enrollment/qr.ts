@@ -5,10 +5,13 @@ export const enrollmentQrSize = 360;
 const ink = "#090b10";
 const nookQrBadgeImage = "/nook-qr-badge.png";
 
-export function createEnrollmentQrOptions(
-  enrollmentLink: string,
-  dense = false,
-) {
+export function createEnrollmentQrOptions({
+  enrollmentLink,
+  dense,
+}: {
+  readonly enrollmentLink: string;
+  readonly dense: boolean;
+}) {
   return {
     width: enrollmentQrSize,
     height: enrollmentQrSize,

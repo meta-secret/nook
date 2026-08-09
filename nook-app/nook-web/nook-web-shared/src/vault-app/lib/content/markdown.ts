@@ -1,10 +1,11 @@
 import MarkdownIt from "markdown-it";
 
-const md = new MarkdownIt({
+const MarkdownItArgs: ConstructorParameters<typeof MarkdownIt>[0] = {
   html: false,
   linkify: true,
   breaks: true,
-});
+};
+const md = new MarkdownIt(MarkdownItArgs);
 
 md.disable("image");
 

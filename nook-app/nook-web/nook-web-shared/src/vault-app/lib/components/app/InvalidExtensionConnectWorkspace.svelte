@@ -8,7 +8,7 @@
     onClose,
   }: {
     vault: VaultState
-    onClose: () => unknown
+    onClose: () => void
   } = $props()
 </script>
 

@@ -34,9 +34,10 @@
   } = $props();
 
   let passwordInput = $state("");
-  let passwordField = $state<PasswordFieldMount>({
+  const stateRuneArgs: Parameters<typeof $state>[0] = {
     kind: PasswordFieldMountKind.Unmounted,
-  });
+  };
+  let passwordField = $state<PasswordFieldMount>(stateRuneArgs);
 
   function capturePasswordField(element: HTMLInputElement) {
     passwordField = { kind: PasswordFieldMountKind.Mounted, element };

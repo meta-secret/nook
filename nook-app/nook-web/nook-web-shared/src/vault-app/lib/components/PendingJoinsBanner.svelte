@@ -22,7 +22,7 @@
     onOpenDevicesSettings?: () => void
   } = $props()
 
-  function truncate(value: string, head = 10, tail = 8) {
+  function truncate({ value, head, tail }: { readonly value: string; readonly head: number; readonly tail: number }) {
     if (value.length <= head + tail + 3) return value
     return `${value.slice(0, head)}…${value.slice(-tail)}`
   }
@@ -41,9 +41,9 @@
           <UserPlus class="size-4 shrink-0 text-primary" />
           {pendingJoins.length === 1
             ? vault.t(I18N_KEYS.PendingJoinsOneWantsJoin)
-            : vault.t(I18N_KEYS.PendingJoinsCountWantsJoin, {
+            : (() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.PendingJoinsCountWantsJoin, replacements: {
                 count: String(pendingJoins.length),
-              })}
+              } }; return vault.t(tArgs); })()}
         </p>
         <p class="text-xs leading-relaxed text-muted-foreground">
           {vault.t(I18N_KEYS.PendingJoinsInstructions)}
@@ -91,7 +91,7 @@
               class="truncate text-[11px] text-muted-foreground"
               title={join.publicKey}
             >
-              {truncate(join.publicKey, 10, 8)}
+              {(() => { const truncateArgs: Parameters<typeof truncate>[0] = { value: join.publicKey, head: 10, tail: 8 }; return truncate(truncateArgs); })()}
             </p>
           </div>
           <Button

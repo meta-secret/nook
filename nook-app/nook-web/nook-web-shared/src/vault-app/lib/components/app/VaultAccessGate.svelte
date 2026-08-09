@@ -41,9 +41,9 @@
     sentinelParticipantResponse: string
     sentinelOnboardingPackage: string
     onUnlock: (skipExtensionDiscovery?: boolean) => Promise<void>
-    onUseEnrollmentCode: (code: string, password: string) => Promise<void>
+    onUseEnrollmentCode: (args: { readonly code: string; readonly password: string }) => Promise<void>
     onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
-    onUnlockWithPassword: (entryId: string, password: string) => Promise<void>
+    onUnlockWithPassword: (args: { readonly entryId: string; readonly password: string }) => Promise<void>
     onSwitchVault: () => Promise<void>
     onSentinelUnlocked: () => Promise<void>
     onCreateDeviceVault: (label: string) => Promise<void>
@@ -76,7 +76,7 @@
         {onUnlock}
         onBeginAddProvider={() => vault.beginAddProvider()}
         onCancelAddProvider={() => vault.cancelAddProvider()}
-        onBeginSetup={(type, preset) => vault.beginProviderSetup(type, preset)}
+        onBeginSetup={({ type, preset }) => vault.beginProviderSetup(type, preset)}
         onCancelSetup={() => vault.cancelProviderSetup()}
         onOpenHelp={() => vault.openHelp()}
         {onUseEnrollmentCode}

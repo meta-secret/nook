@@ -44,10 +44,11 @@ export function observeExtensionSetupChanges(
   document.addEventListener("visibilitychange", onVisibilityChange);
 
   const observer = new MutationObserver(() => void refresh());
-  observer.observe(document.documentElement, {
+  const observeArgs: Parameters<typeof observer.observe>[1] = {
     attributes: true,
     attributeFilter: ["data-nook-extension-runtime-id"],
-  });
+  };
+  observer.observe(document.documentElement, observeArgs);
 
   return () => {
     document.removeEventListener("visibilitychange", onVisibilityChange);

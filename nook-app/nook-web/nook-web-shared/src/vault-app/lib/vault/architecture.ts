@@ -18,10 +18,13 @@ export function draftVaultArchitecture(
   );
 }
 
-export function replaceVaultArchitecture(
-  state: ArchitectureActionsContext,
-  architecture: VaultArchitecture,
-): void {
+export function replaceVaultArchitecture({
+  state,
+  architecture,
+}: {
+  readonly state: ArchitectureActionsContext;
+  readonly architecture: VaultArchitecture;
+}): void {
   const previous = state.vaultArchitecture;
   state.vaultArchitecture = architecture;
   if (previous !== architecture) previous.free();
@@ -30,7 +33,10 @@ export function replaceVaultArchitecture(
 export function applyDraftVaultArchitecture(
   state: ArchitectureActionsContext,
 ): void {
-  replaceVaultArchitecture(state, draftVaultArchitecture(state));
+  const replaceVaultArchitectureArgs: Parameters<
+    typeof replaceVaultArchitecture
+  >[0] = { state, architecture: draftVaultArchitecture(state) };
+  replaceVaultArchitecture(replaceVaultArchitectureArgs);
   state.architectureSecretCreationAllowed = canCreateSecret(
     state.vaultArchitecture,
   );
@@ -48,12 +54,16 @@ export function refreshVaultArchitectureFromManager(
     architecture = state.requireManager()
       .vaultArchitecture as VaultArchitecture;
   } catch (error) {
-    log.warn("vault architecture metadata could not be loaded", {
+    const warnArgs: Parameters<typeof log.warn>[1] = {
       error: error instanceof Error ? error.message : String(error),
-    });
+    };
+    log.warn("vault architecture metadata could not be loaded", warnArgs);
     return;
   }
-  replaceVaultArchitecture(state, architecture);
+  const replaceVaultArchitectureArgs2: Parameters<
+    typeof replaceVaultArchitecture
+  >[0] = { state, architecture };
+  replaceVaultArchitecture(replaceVaultArchitectureArgs2);
   state.architectureSecretCreationAllowed = canCreateSecret(
     state.vaultArchitecture,
   );

@@ -12,6 +12,7 @@ import {
   type ExtensionPairedVaultIdentityDiscoveryMessage,
   type ExtensionPairedVaultIdentityHandoffRequestMessage,
   type ExtensionPairedVaultUnlockRequestMessage,
+  type ExtensionPairingApprovedMessage,
   type OpenCompanionLauncherMessage,
 } from "$web-shared/extension/runtime-messages";
 import {
@@ -148,6 +149,17 @@ type ExtensionMessageDelivery =
   | { kind: ExtensionMessageDeliveryKind.Unavailable }
   | { kind: ExtensionMessageDeliveryKind.Received; response: unknown };
 
+export enum ExtensionPairingDeliveryKind {
+  Delivered = "delivered",
+  MessagingUnavailable = "messaging-unavailable",
+  PlaintextProviderMigrationRequired = "plaintext-provider-migration-required",
+  Rejected = "rejected",
+}
+
+export type ExtensionPairingDelivery = {
+  readonly kind: ExtensionPairingDeliveryKind;
+};
+
 export function readInstalledExtensionRuntimeId(): InstalledExtensionRuntime {
   const extensionRuntimeId = document.documentElement
     .getAttribute(extensionRuntimeIdAttribute)
@@ -157,27 +169,33 @@ export function readInstalledExtensionRuntimeId(): InstalledExtensionRuntime {
     : { kind: InstalledExtensionRuntimeKind.NotInstalled };
 }
 
-function sendExtensionMessage(
-  extensionId: string,
-  message: unknown,
-): Promise<ExtensionMessageDelivery> {
+function sendExtensionMessage({
+  extensionId,
+  message,
+}: {
+  readonly extensionId: string;
+  readonly message: unknown;
+}): Promise<ExtensionMessageDelivery> {
   return new Promise((resolve) => {
     const runtime = (
       globalThis as typeof globalThis & {
         chrome?: {
           runtime?: {
-            sendMessage?: (
-              extensionId: string,
-              message: unknown,
-              callback: (response?: unknown) => void,
-            ) => void;
+            sendMessage?: (args: {
+              readonly extensionId: string;
+              readonly message: unknown;
+              readonly callback: (response?: unknown) => void;
+            }) => void;
             lastError?: { message?: string };
           };
         };
       }
     ).chrome?.runtime;
     if (!runtime?.sendMessage) {
-      resolve({ kind: ExtensionMessageDeliveryKind.Unavailable });
+      const resolveArgs: Parameters<typeof resolve>[0] = {
+        kind: ExtensionMessageDeliveryKind.Unavailable,
+      };
+      resolve(resolveArgs);
       return;
     }
 
@@ -186,13 +204,20 @@ function sendExtensionMessage(
       if (settled) return;
       settled = true;
       window.clearTimeout(timer);
-      resolve({ kind: ExtensionMessageDeliveryKind.Unavailable });
+      const resolveArgs2: Parameters<typeof resolve>[0] = {
+        kind: ExtensionMessageDeliveryKind.Unavailable,
+      };
+      resolve(resolveArgs2);
     };
     const finishReceived = (response: unknown) => {
       if (settled) return;
       settled = true;
       window.clearTimeout(timer);
-      resolve({ kind: ExtensionMessageDeliveryKind.Received, response });
+      const resolveArgs3: Parameters<typeof resolve>[0] = {
+        kind: ExtensionMessageDeliveryKind.Received,
+        response,
+      };
+      resolve(resolveArgs3);
     };
     const timer = window.setTimeout(
       finishUnavailable,
@@ -212,6 +237,61 @@ function sendExtensionMessage(
   });
 }
 
+function pairingDeliveryFromResponse(
+  response: unknown,
+): ExtensionPairingDelivery {
+  if (
+    response &&
+    typeof response === "object" &&
+    "ok" in response &&
+    response.ok === true
+  ) {
+    return { kind: ExtensionPairingDeliveryKind.Delivered };
+  }
+  const migrationRequired =
+    response &&
+    typeof response === "object" &&
+    (("reason" in response &&
+      response.reason === "auth-provider-plaintext-migration-required") ||
+      ("error" in response &&
+        response.error === "auth-provider-plaintext-migration-required"));
+  return {
+    kind: migrationRequired
+      ? ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired
+      : ExtensionPairingDeliveryKind.Rejected,
+  };
+}
+
+export async function deliverExtensionPairingApproval({
+  request,
+  message,
+}: {
+  readonly request: ExtensionConnectRequest;
+  readonly message: ExtensionPairingApprovedMessage;
+}): Promise<ExtensionPairingDelivery> {
+  let lastDelivery: ExtensionPairingDelivery = {
+    kind: ExtensionPairingDeliveryKind.MessagingUnavailable,
+  };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const sendArgs: Parameters<typeof sendExtensionMessage>[0] = {
+      extensionId: request.extensionRuntimeId,
+      message,
+    };
+    const delivery = await sendExtensionMessage(sendArgs);
+    lastDelivery =
+      delivery.kind === ExtensionMessageDeliveryKind.Received
+        ? pairingDeliveryFromResponse(delivery.response)
+        : { kind: ExtensionPairingDeliveryKind.MessagingUnavailable };
+    if (lastDelivery.kind === ExtensionPairingDeliveryKind.Delivered) {
+      return lastDelivery;
+    }
+    if (attempt < 2) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 150));
+    }
+  }
+  return lastDelivery;
+}
+
 export async function openInstalledExtension(): Promise<boolean> {
   const installedExtension = readInstalledExtensionRuntimeId();
   if (installedExtension.kind === InstalledExtensionRuntimeKind.NotInstalled) {
@@ -222,10 +302,11 @@ export async function openInstalledExtension(): Promise<boolean> {
     type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
     payload: { intent: "pair" },
   };
-  const delivery = await sendExtensionMessage(
-    installedExtension.extensionRuntimeId,
+  const sendExtensionMessageArgs: Parameters<typeof sendExtensionMessage>[0] = {
+    extensionId: installedExtension.extensionRuntimeId,
     message,
-  );
+  };
+  const delivery = await sendExtensionMessage(sendExtensionMessageArgs);
   if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
   const response = delivery.response;
   return (
@@ -260,10 +341,9 @@ async function discoverPairedExtensionIdentityOnce(
     },
   };
 
-  const delivery = await sendExtensionMessage(
-    installedExtension.extensionRuntimeId,
-    message,
-  );
+  const sendExtensionMessageArgs2: Parameters<typeof sendExtensionMessage>[0] =
+    { extensionId: installedExtension.extensionRuntimeId, message };
+  const delivery = await sendExtensionMessage(sendExtensionMessageArgs2);
   if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return delivery;
   const statusMessage = delivery.response;
   if (
@@ -354,10 +434,9 @@ export async function requestPairedExtensionUnlock(
     type: ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
     payload: { requestId: unlockRequestId, vaultStoreId },
   };
-  const delivery = await sendExtensionMessage(
-    installedExtension.extensionRuntimeId,
-    message,
-  );
+  const sendExtensionMessageArgs3: Parameters<typeof sendExtensionMessage>[0] =
+    { extensionId: installedExtension.extensionRuntimeId, message };
+  const delivery = await sendExtensionMessage(sendExtensionMessageArgs3);
   if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
   const response = delivery.response;
   return (
@@ -379,21 +458,26 @@ type ExtensionIdentityHandoffResponse = {
   reason?: unknown;
 };
 
-function requestIdentityEnvelope(
-  request: ExtensionConnectRequest,
-  message:
+function requestIdentityEnvelope({
+  request,
+  message,
+}: {
+  readonly request: ExtensionConnectRequest;
+  readonly message:
     | ExtensionIdentityHandoffRequestMessage
-    | ExtensionPairedVaultIdentityHandoffRequestMessage,
-): Promise<{ envelope: string; nextNonce: string }> {
+    | ExtensionPairedVaultIdentityHandoffRequestMessage;
+}): Promise<{ envelope: string; nextNonce: string }> {
   const runtime = (
     globalThis as typeof globalThis & {
       chrome?: {
         runtime?: {
-          sendMessage?: (
-            extensionId: string,
-            message: unknown,
-            callback: (response?: ExtensionIdentityHandoffResponse) => void,
-          ) => void;
+          sendMessage?: (args: {
+            readonly extensionId: string;
+            readonly message: unknown;
+            readonly callback: (
+              response?: ExtensionIdentityHandoffResponse,
+            ) => void;
+          }) => void;
           lastError?: { message?: string };
         };
       };
@@ -405,34 +489,38 @@ function requestIdentityEnvelope(
     );
   }
 
-  return new Promise((resolve, reject) => {
-    runtime.sendMessage?.(request.extensionRuntimeId, message, (response) => {
-      const runtimeError = runtime.lastError?.message;
-      if (runtimeError) {
-        reject(new Error(runtimeError));
-        return;
-      }
-      if (
-        response?.ok === true &&
-        typeof response.envelope === "string" &&
-        typeof response.nextNonce === "string" &&
-        response.nextNonce.length > 0
-      ) {
-        resolve({
-          envelope: response.envelope,
-          nextNonce: response.nextNonce,
-        });
-        return;
-      }
-      reject(
-        new Error(
-          typeof response?.reason === "string"
-            ? response.reason
-            : "extension-identity-handoff-rejected",
-        ),
-      );
-    });
-  });
+  return new Promise(
+    // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
+    (resolve, reject) => {
+      runtime.sendMessage?.(request.extensionRuntimeId, message, (response) => {
+        const runtimeError = runtime.lastError?.message;
+        if (runtimeError) {
+          reject(new Error(runtimeError));
+          return;
+        }
+        if (
+          response?.ok === true &&
+          typeof response.envelope === "string" &&
+          typeof response.nextNonce === "string" &&
+          response.nextNonce.length > 0
+        ) {
+          const resolveArgs4: Parameters<typeof resolve>[0] = {
+            envelope: response.envelope,
+            nextNonce: response.nextNonce,
+          };
+          resolve(resolveArgs4);
+          return;
+        }
+        reject(
+          new Error(
+            typeof response?.reason === "string"
+              ? response.reason
+              : "extension-identity-handoff-rejected",
+          ),
+        );
+      });
+    },
+  );
 }
 
 /** Adopt the unlocked extension identity without exposing private key material
@@ -466,9 +554,11 @@ export async function adoptExtensionIdentity(
           type: ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
           payload: handoffPayload,
         };
+  const requestIdentityEnvelopeArgs: Parameters<
+    typeof requestIdentityEnvelope
+  >[0] = { request, message };
   const { envelope, nextNonce } = await requestIdentityEnvelope(
-    request,
-    message,
+    requestIdentityEnvelopeArgs,
   );
   await manager.finishExtensionIdentityHandoff(
     envelope,

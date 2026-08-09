@@ -121,10 +121,13 @@ export function browserSupportsExtensionInstallation(
   return !isDesktopModeIPad;
 }
 
-export function shouldOfferExtensionSetup(
-  status: ExtensionSetupStatus,
-  environment: BrowserExtensionEnvironment = navigator,
-): boolean {
+export function shouldOfferExtensionSetup({
+  status,
+  environment,
+}: {
+  readonly status: ExtensionSetupStatus;
+  readonly environment: BrowserExtensionEnvironment;
+}): boolean {
   return (
     status !== ExtensionSetupStatus.NotInstalled ||
     browserSupportsExtensionInstallation(environment)
@@ -192,10 +195,11 @@ async function fetchExtensionMetadata(
   url: string,
 ): Promise<ExtensionMetadataFetch> {
   try {
-    const response = await fetch(url, {
+    const fetchArgs: Parameters<typeof fetch>[1] = {
       cache: "no-store",
       headers: { Accept: "application/json" },
-    });
+    };
+    const response = await fetch(url, fetchArgs);
     if (!response.ok) return { kind: ExtensionMetadataFetchKind.Unavailable };
     const parsed = parseExtensionMetadata(await response.json());
     return parsed.kind === ExtensionMetadataParseKind.Valid

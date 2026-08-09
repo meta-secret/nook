@@ -5,21 +5,33 @@ export type VaultDiscoveryTimeout = {
   cancel(): void;
 };
 
-export function startVaultDiscoveryTimeout(
-  message: string,
-  timeoutMs: number,
-): VaultDiscoveryTimeout {
+export function startVaultDiscoveryTimeout({
+  message,
+  timeoutMs,
+}: {
+  readonly message: string;
+  readonly timeoutMs: number;
+}): VaultDiscoveryTimeout {
   const controller = new AbortController();
-  const completion = new Promise<never>((_, reject) => {
-    const timer = setTimeout(() => {
-      const timeoutError = new Error(message);
-      timeoutError.name = VAULT_ASSESS_TIMEOUT_ERROR_NAME;
-      reject(timeoutError);
-    }, timeoutMs);
-    controller.signal.addEventListener("abort", () => clearTimeout(timer), {
-      once: true,
+  const completion =
+    new Promise<never> // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
+    ((_, reject) => {
+      const timer = setTimeout(() => {
+        const timeoutError = new Error(message);
+        timeoutError.name = VAULT_ASSESS_TIMEOUT_ERROR_NAME;
+        reject(timeoutError);
+      }, timeoutMs);
+      const addEventListenerArgs: Parameters<
+        typeof controller.signal.addEventListener
+      >[2] = {
+        once: true,
+      };
+      controller.signal.addEventListener(
+        "abort",
+        () => clearTimeout(timer),
+        addEventListenerArgs,
+      );
     });
-  });
   return {
     completion,
     cancel: () => controller.abort(),

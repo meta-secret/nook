@@ -55,9 +55,10 @@
       return;
     }
     if (file.size > FILE_ATTACHMENT_MAX_BYTES) {
-      state.fileInputError = vault.t(I18N_KEYS.AddSecretFileTooLarge, {
+      const tArgs: Parameters<typeof vault.t>[1] = {
         max: formatFileSize(FILE_ATTACHMENT_MAX_BYTES),
-      });
+      };
+      state.fileInputError = vault.t(I18N_KEYS.AddSecretFileTooLarge, tArgs);
       input.value = "";
       return;
     }
@@ -72,13 +73,14 @@
   }
 
   function generatePassword() {
-    state.password = onGeneratePassword({
+    const onGeneratePasswordArgs: Parameters<typeof onGeneratePassword>[0] = {
       length: state.generationLength,
       lowercase: state.generationLowercase,
       uppercase: state.generationUppercase,
       numbers: state.generationNumbers,
       symbols: state.generationSymbols,
-    });
+    };
+    state.password = onGeneratePassword(onGeneratePasswordArgs);
   }
 </script>
 
@@ -523,9 +525,9 @@
           class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
         <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t(I18N_KEYS.AddSecretFileAttachmentHint, {
+          {(() => { const tArgs2: Parameters<typeof vault.t>[1] = {
             max: formatFileSize(FILE_ATTACHMENT_MAX_BYTES),
-          })}
+          }; return vault.t(I18N_KEYS.AddSecretFileAttachmentHint, tArgs2); })()}
         </p>
         {#if state.fileInputError}
           <p

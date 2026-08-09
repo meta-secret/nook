@@ -127,7 +127,13 @@ export class VaultLifecycleState extends VaultStateSlices {
     return this.syncSchedule.kind === SyncScheduleKind.Scheduled;
   }
 
-  scheduleSync(callback: () => void, intervalMs: number): void {
+  scheduleSync({
+    callback,
+    intervalMs,
+  }: {
+    readonly callback: () => void;
+    readonly intervalMs: number;
+  }): void {
     this.stopScheduledSync();
     this.syncSchedule = {
       kind: SyncScheduleKind.Scheduled,
