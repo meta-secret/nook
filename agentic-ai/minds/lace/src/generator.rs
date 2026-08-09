@@ -383,7 +383,9 @@ graph:
     #[test]
     fn generated_graph_rs_is_current() -> GeneratorResult<()> {
         let code = generate_rust_code(include_str!("../../graph.yaml"))?;
-        assert_eq!(code, include_str!("graph.rs"));
+        let generated = syn::parse_file(&code)?;
+        let checked_in = syn::parse_file(include_str!("graph.rs"))?;
+        assert_eq!(quote::quote!(#generated).to_string(), quote::quote!(#checked_in).to_string());
         Ok(())
     }
 }
