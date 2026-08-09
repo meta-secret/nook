@@ -1,11 +1,12 @@
 import tailwindcss from "@tailwindcss/vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
-import { defineConfig } from "vitest/config";
+import { defineConfig, type UserConfig } from "vitest/config";
 import {
   VAULT_WORKSPACE_OUTPUT_ALIASES,
   VAULT_WORKSPACE_SPA_PATHS,
   vaultAppAliases,
   vaultSpaPlugin,
+  type VaultSpaOptions,
 } from "../nook-web-shared/vite-config";
 
 const sentinelAppUrl =
@@ -13,7 +14,7 @@ const sentinelAppUrl =
 const simpleAppUrl =
   process.env.VITE_SIMPLE_APP_URL?.trim() || "https://simple.nokey.sh";
 
-const sentinelSpa = vaultSpaPlugin({
+const sentinelSpaOptions: VaultSpaOptions = {
   name: "sentinel-vault-spa",
   spaPaths: [
     ...VAULT_WORKSPACE_SPA_PATHS,
@@ -24,9 +25,10 @@ const sentinelSpa = vaultSpaPlugin({
   ],
   denyPath: (pathname) => pathname === "/extension-connect",
   outputAliases: [...VAULT_WORKSPACE_OUTPUT_ALIASES, "app-logs", "logs"],
-});
+};
+const sentinelSpa = vaultSpaPlugin(sentinelSpaOptions);
 
-export default defineConfig({
+const sentinelViteConfig: UserConfig = {
   base: "./",
   define: {
     "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(sentinelAppUrl),
@@ -53,4 +55,6 @@ export default defineConfig({
     },
   },
   server: { fs: { allow: [".."] } },
-});
+};
+
+export default defineConfig(sentinelViteConfig);

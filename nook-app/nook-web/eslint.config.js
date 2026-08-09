@@ -913,7 +913,6 @@ export default [
     },
   },
   {
-    // The shared config is invoked from both nook-web and nook-web-extension.
     files: ['nook-web-extension/src/**/*.{ts,svelte}', 'src/**/*.{ts,svelte}'],
     languageOptions: {
       globals: {
@@ -982,10 +981,8 @@ export default [
     },
   },
   {
-    // Migrate the extension from reusable boundaries outward. Keep both path
-    // forms because extension lint runs from its package directory while the
-    // application lint runs from the nook-web directory.
-    files: ['nook-web-extension/src/lib/**/*.ts', 'src/lib/**/*.ts'],
+    files: ['nook-web-extension/src/lib/**/*.ts', 'src/lib/**/*.ts',
+      'nook-vault-{simple,sentinel}/**/*.{ts,svelte}'],
     plugins: {
       'nook-typed-api': nookTypedApiPlugin,
     },

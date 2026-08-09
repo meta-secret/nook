@@ -30,6 +30,11 @@ export type ExtensionConnectRequest =
 export type PairedExtensionIdentityDiscovery =
   PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>;
 
+export type AdoptExtensionIdentityArgs = {
+  manager: NookVaultManager;
+  request: ExtensionConnectRequest;
+};
+
 export enum ExtensionConnectRequestStateKind {
   Absent = "absent",
   Requested = "requested",
@@ -434,9 +439,9 @@ function requestIdentityEnvelope(
  * to JavaScript. Only an age-encrypted, nonce-bound envelope crosses the
  * extension boundary; Rust/WASM validates and installs its contents. */
 export async function adoptExtensionIdentity(
-  manager: NookVaultManager,
-  request: ExtensionConnectRequest,
+  args: AdoptExtensionIdentityArgs,
 ): Promise<void> {
+  const { manager, request } = args;
   const nonce = request.nonce;
   const recipientPublicKey = manager.beginExtensionIdentityHandoff();
   const handoffPayload = {
