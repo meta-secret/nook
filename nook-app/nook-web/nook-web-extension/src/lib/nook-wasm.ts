@@ -144,8 +144,7 @@ type ExtensionSessionRequest =
   | ExtensionUnlockPinRequest
 
 type ExtensionRuntimeRequest =
-  | { type: ExtensionRuntimeRequestType.EnsureRuntime }
-  | ExtensionSessionRequest
+  { type: ExtensionRuntimeRequestType.EnsureRuntime } | ExtensionSessionRequest
 
 type ExtensionDeviceResponse = { device: ExtensionDeviceProtectionResult }
 type ExtensionStatusResponse = ExtensionDeviceResponse & { status: number }

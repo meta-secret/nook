@@ -160,8 +160,7 @@ export function parsedWebsitePasskeyRequest(
 ): WebsitePasskeyRequestParse {
   try {
     const parsed = JSON.parse(args.requestJson) as
-      | WebsitePasskeyCreateRequestCandidate
-      | WebsitePasskeyGetRequestCandidate
+      WebsitePasskeyCreateRequestCandidate | WebsitePasskeyGetRequestCandidate
     if (
       !parsed ||
       typeof parsed !== 'object' ||
