@@ -432,8 +432,9 @@ task hive:verify
 
 `ci:pr:e2e` includes repository preflight, Rust coverage/unit tests, WASM checks,
 web checks/unit tests/builds, the complete local-provider Playwright suite, and
-extension e2e. The additional targets validate the separate fuzz and Minds
-workspaces. Credentialed real-provider `sync-live` e2e remains a separate manual
+extension e2e. The additional targets validate the separate fuzz workspace and
+compile, lint, and test both Hive and Lace in the Minds workspace. Credentialed
+real-provider `sync-live` e2e remains a separate manual
 validation because it creates disposable external-provider state and requires
 provider secrets. No workflow merges the harness-owned PR blindly from a check
 event. A task-owning agent must run the standard readiness audit and squash-merge

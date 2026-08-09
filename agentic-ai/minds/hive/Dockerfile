@@ -141,14 +141,14 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
 # metadata and linked dependencies.
 FROM fetched-dependencies AS test-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
-    cargo test --locked -p hive --no-run \
+    cargo test --locked --workspace --no-run \
     && nook-sccache-report hive-test-dependencies \
     && install -D /dev/null /opt/nook/hive-test-dependencies
 
 FROM fetched-dependencies AS clippy-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     printf 'fn main() {}\n' > hive/src/main.rs \
-    && cargo clippy --locked -p hive --all-targets -- -D warnings \
+    && cargo clippy --locked --workspace --all-targets -- -D warnings \
     && nook-sccache-report hive-clippy-dependencies \
     && install -D /dev/null /opt/nook/hive-clippy-dependencies
 
@@ -161,7 +161,7 @@ RUN find lace/src hive/src hive/tests -type f -exec touch {} +
 FROM check-source AS check
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     cargo fmt --all -- --check \
-    && cargo clippy --locked -p hive --all-targets -- -D warnings \
+    && cargo clippy --locked --workspace --all-targets -- -D warnings \
     && nook-sccache-report hive-clippy \
     && install -D /dev/null /opt/nook/hive-check-passed
 
@@ -188,7 +188,7 @@ FROM test-source AS test-compile
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     mkdir -p /opt/nook/hive-tests \
-    && cargo test --locked -p hive --no-run --message-format=json \
+    && cargo test --locked --workspace --no-run --message-format=json \
       > /tmp/hive-test-artifacts.jsonl \
     && jq -r \
       'select(.reason == "compiler-artifact" and .profile.test == true and .executable != null) | .executable' \

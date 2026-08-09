@@ -122,7 +122,7 @@ tasks:
         BASH
 
   verify:
-    desc: Run Hive Clippy and behavior tests concurrently inside BuildKit.
+    desc: Run Hive and Lace Clippy and behavior tests concurrently inside BuildKit.
     dir: '{{.HIVE_DIR}}'
     cmds:
       - |

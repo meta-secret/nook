@@ -381,11 +381,9 @@ graph:
     }
 
     #[test]
-    fn regenerate_graph_rs() -> GeneratorResult<()> {
-        let yaml_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../graph.yaml");
-        let target_rs = concat!(env!("CARGO_MANIFEST_DIR"), "/src/graph.rs");
-        let code = generate_from_file(yaml_path)?;
-        std::fs::write(target_rs, code)?;
+    fn generated_graph_rs_is_current() -> GeneratorResult<()> {
+        let code = generate_rust_code(include_str!("../../graph.yaml"))?;
+        assert_eq!(code, include_str!("graph.rs"));
         Ok(())
     }
 }
