@@ -26,12 +26,7 @@ import type {
   StoredExtensionPairingGrant,
 } from '../pairing-grants'
 import {
-  firstStoredPairingGrant,
-  isStoredExtensionPairingGrant,
-  migratedLegacyPairingStorageItems,
-  pairingGrantStorageKey,
-  selectedPairingGrant,
-  selectedPairingGrantFirst,
+  extensionPairingGrantPolicyReady,
   setupStorageKey,
 } from '../pairing-grants'
 import {
@@ -212,11 +207,12 @@ async function pairedVaultGrantIsCurrent(
     { kind: PendingIdentityHandoffKind.PairedVault }
   >,
 ): Promise<boolean> {
-  const key = pairingGrantStorageKey(pending.vaultStoreId)
+  const pairingPolicy = await extensionPairingGrantPolicyReady
+  const key = pairingPolicy.pairingGrantStorageKey(pending.vaultStoreId)
   const stored = await getPairingStorage(key)
   const grant = stored[key]
   return (
-    isStoredExtensionPairingGrant(grant) &&
+    pairingPolicy.isStoredExtensionPairingGrant(grant) &&
     grant.deviceId === pending.deviceId &&
     grant.devicePublicKey === pending.devicePublicKey &&
     grant.deviceSigningPublicKey === pending.deviceSigningPublicKey
@@ -372,10 +368,11 @@ export async function discoverPairedVaultIdentity(
     },
   } satisfies ExtensionPairedVaultIdentityStatusMessage
   try {
-    const key = pairingGrantStorageKey(vaultStoreId)
+    const pairingPolicy = await extensionPairingGrantPolicyReady
+    const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
     const stored = await getPairingStorage()
     const grant = stored[key]
-    const selectedGrant = selectedPairingGrant(stored)
+    const selectedGrant = pairingPolicy.selectedPairingGrant(stored)
     if (
       selectedGrant.kind === 'selected' &&
       selectedGrant.grant.vaultStoreId !== vaultStoreId
@@ -392,11 +389,11 @@ export async function discoverPairedVaultIdentity(
         },
       }
     }
-    if (!isStoredExtensionPairingGrant(grant)) {
+    if (!pairingPolicy.isStoredExtensionPairingGrant(grant)) {
       const connectedGrant =
         selectedGrant.kind === 'selected'
           ? selectedGrant
-          : firstStoredPairingGrant(stored)
+          : pairingPolicy.firstStoredPairingGrant(stored)
       if (connectedGrant.kind === 'selected') {
         return {
           type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
@@ -477,9 +474,10 @@ export async function requestPairedVaultUnlock(
   message: ExtensionPairedVaultUnlockRequestMessage,
 ): Promise<Record<string, unknown>> {
   const { requestId, vaultStoreId } = message.payload
-  const key = pairingGrantStorageKey(vaultStoreId)
+  const pairingPolicy = await extensionPairingGrantPolicyReady
+  const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
   const stored = await getPairingStorage(key)
-  if (!isStoredExtensionPairingGrant(stored[key])) {
+  if (!pairingPolicy.isStoredExtensionPairingGrant(stored[key])) {
     return {
       ok: false,
       requestId,
@@ -592,7 +590,8 @@ export function ensureLegacyPairingMigration(): Promise<void> {
     const legacyKeys = legacyPairingStorageKeys(legacy)
     if (legacyKeys.length === 0) return
     const current = await readExtensionPairingState()
-    const migrated = migratedLegacyPairingStorageItems(legacy)
+    const pairingPolicy = await extensionPairingGrantPolicyReady
+    const migrated = pairingPolicy.migratedLegacyPairingStorageItems(legacy)
     if (Object.keys(current).length > 0) {
       const completedKeys = Object.keys(migrated).filter(
         (key) =>
@@ -693,19 +692,25 @@ export function isAuthorizedWebsiteSender({
 export async function passkeyPairingGrants(): Promise<
   StoredExtensionPairingGrant[]
 > {
+  const pairingPolicy = await extensionPairingGrantPolicyReady
   const stored = await getPairingStorage()
-  return selectedPairingGrantFirst(stored).filter((grant) =>
-    grant.scopes.includes(ExtensionConnectScope.PasskeyManagement),
-  )
+  return pairingPolicy
+    .selectedPairingGrantFirst(stored)
+    .filter((grant) =>
+      grant.scopes.includes(ExtensionConnectScope.PasskeyManagement),
+    )
 }
 
 export async function passwordPairingGrants(): Promise<
   StoredExtensionPairingGrant[]
 > {
+  const pairingPolicy = await extensionPairingGrantPolicyReady
   const stored = await getPairingStorage()
-  return selectedPairingGrantFirst(stored).filter((grant) =>
-    grant.scopes.includes(ExtensionConnectScope.PasswordFilling),
-  )
+  return pairingPolicy
+    .selectedPairingGrantFirst(stored)
+    .filter((grant) =>
+      grant.scopes.includes(ExtensionConnectScope.PasswordFilling),
+    )
 }
 
 export async function availableWebsiteGrants({

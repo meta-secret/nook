@@ -25,8 +25,6 @@ import type {
   StoredExtensionPairingGrant,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
-void companionWasmReady
-
 export const setupStorageKey = 'nook:extension-setup'
 
 export type ExtensionReadySetupState = ExtensionReadySetup
@@ -68,11 +66,11 @@ function transportJson(value: unknown): TransportJsonResult {
   }
 }
 
-export function pairingGrantStorageKey(vaultStoreId: string): string {
+function pairingGrantStorageKey(vaultStoreId: string): string {
   return extensionPairingGrantStorageKey(vaultStoreId)
 }
 
-export function isStoredExtensionPairingGrant(
+function isStoredExtensionPairingGrant(
   value: unknown,
 ): value is StoredExtensionPairingGrant {
   const result = transportJson(value)
@@ -82,7 +80,7 @@ export function isStoredExtensionPairingGrant(
   )
 }
 
-export function isExtensionReadySetupState(
+function isExtensionReadySetupState(
   value: unknown,
 ): value is ExtensionReadySetupState {
   const result = transportJson(value)
@@ -97,7 +95,7 @@ type ExtensionPairingGrantStorageItemsArgs = {
   imported: ImportedEventLogState
 }
 
-export function extensionPairingGrantStorageItems(
+function extensionPairingGrantStorageItems(
   args: ExtensionPairingGrantStorageItemsArgs,
 ): ExtensionPairingItems {
   const input: CreateExtensionPairingStateInput = {
@@ -114,7 +112,7 @@ type ExtensionStoredPairingGrantStorageItemsArgs = {
   select: boolean
 }
 
-export function extensionStoredPairingGrantStorageItems(
+function extensionStoredPairingGrantStorageItems(
   args: ExtensionStoredPairingGrantStorageItemsArgs,
 ): ExtensionPairingItems {
   const input: RefreshExtensionPairingGrantInput = {
@@ -129,7 +127,7 @@ type SetupAfterPairingGrantRemovalArgs = {
   removedVaultStoreId: string
 }
 
-export function setupAfterPairingGrantRemoval(
+function setupAfterPairingGrantRemoval(
   args: SetupAfterPairingGrantRemovalArgs,
 ): PairingSetupAfterRemoval {
   const input: ExtensionPairingGrantRemovalInput = {
@@ -139,25 +137,25 @@ export function setupAfterPairingGrantRemoval(
   return extensionSetupAfterPairingGrantRemoval(input)
 }
 
-export function selectedPairingGrantFirst(
+function selectedPairingGrantFirst(
   stored: ExtensionPairingItems,
 ): StoredExtensionPairingGrant[] {
   return orderedExtensionPairingGrants(stateFromItems(stored))
 }
 
-export function selectedPairingGrant(
+function selectedPairingGrant(
   stored: ExtensionPairingItems,
 ): SelectedPairingGrant {
   return selectedExtensionPairingGrant(stateFromItems(stored))
 }
 
-export function firstStoredPairingGrant(
+function firstStoredPairingGrant(
   stored: ExtensionPairingItems,
 ): SelectedPairingGrant {
   return firstExtensionPairingGrant(stateFromItems(stored))
 }
 
-export function migratedLegacyPairingStorageItems(
+function migratedLegacyPairingStorageItems(
   legacy: Record<string, unknown>,
 ): ExtensionPairingItems {
   const result = transportJson(legacy)
@@ -168,3 +166,30 @@ export function migratedLegacyPairingStorageItems(
     return {}
   }
 }
+
+export type ExtensionPairingGrantPolicy = {
+  pairingGrantStorageKey: typeof pairingGrantStorageKey
+  isStoredExtensionPairingGrant: typeof isStoredExtensionPairingGrant
+  isExtensionReadySetupState: typeof isExtensionReadySetupState
+  extensionPairingGrantStorageItems: typeof extensionPairingGrantStorageItems
+  extensionStoredPairingGrantStorageItems: typeof extensionStoredPairingGrantStorageItems
+  setupAfterPairingGrantRemoval: typeof setupAfterPairingGrantRemoval
+  selectedPairingGrantFirst: typeof selectedPairingGrantFirst
+  selectedPairingGrant: typeof selectedPairingGrant
+  firstStoredPairingGrant: typeof firstStoredPairingGrant
+  migratedLegacyPairingStorageItems: typeof migratedLegacyPairingStorageItems
+}
+
+export const extensionPairingGrantPolicyReady: Promise<ExtensionPairingGrantPolicy> =
+  companionWasmReady.then(() => ({
+    pairingGrantStorageKey,
+    isStoredExtensionPairingGrant,
+    isExtensionReadySetupState,
+    extensionPairingGrantStorageItems,
+    extensionStoredPairingGrantStorageItems,
+    setupAfterPairingGrantRemoval,
+    selectedPairingGrantFirst,
+    selectedPairingGrant,
+    firstStoredPairingGrant,
+    migratedLegacyPairingStorageItems,
+  }))

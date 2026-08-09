@@ -11,12 +11,7 @@ import {
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
   type ExtensionPairingItems,
-  extensionPairingGrantStorageItems,
-  extensionStoredPairingGrantStorageItems,
-  isExtensionReadySetupState,
-  isStoredExtensionPairingGrant,
-  pairingGrantStorageKey,
-  setupAfterPairingGrantRemoval,
+  extensionPairingGrantPolicyReady,
   setupStorageKey,
 } from '../pairing-grants'
 import {
@@ -75,6 +70,7 @@ async function importDecodedApprovedPairing(
   args: ImportDecodedApprovedPairingArgs,
 ): Promise<PairingImportResult> {
   const { message, providers } = args
+  const pairingPolicy = await extensionPairingGrantPolicyReady
   const grantApproval: ExtensionPairingGrantApproval = {
     vaultType: message.payload.vaultType,
     deviceId: message.payload.deviceId,
@@ -98,9 +94,10 @@ async function importDecodedApprovedPairing(
     }
     await ensureExtensionSessionDocument()
     const pairingItemsArgs: Parameters<
-      typeof extensionPairingGrantStorageItems
+      typeof pairingPolicy.extensionPairingGrantStorageItems
     >[0] = { grant: grantApproval, imported }
-    const pairingItems = extensionPairingGrantStorageItems(pairingItemsArgs)
+    const pairingItems =
+      pairingPolicy.extensionPairingGrantStorageItems(pairingItemsArgs)
     const previousPairingState = await getPairingStorage()
     await setPairingStorage(pairingItems)
     try {
@@ -218,11 +215,12 @@ export async function importLocalEventLogUpdate({
   vaultStoreId: string
   eventLogRecords: Parameters<typeof importExtensionEventLog>[0]['records']
 }): Promise<PairingImportResult> {
-  const key = pairingGrantStorageKey(vaultStoreId)
+  const pairingPolicy = await extensionPairingGrantPolicyReady
+  const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
   try {
     const stored = await getPairingStorage()
     const grant = stored[key]
-    if (!isStoredExtensionPairingGrant(grant)) {
+    if (!pairingPolicy.isStoredExtensionPairingGrant(grant)) {
       return { ok: false, reason: 'vault-not-paired' }
     }
     const nookTypedArgs0_3: Parameters<typeof importExtensionEventLog>[0] = {
@@ -231,11 +229,13 @@ export async function importLocalEventLogUpdate({
     }
     const imported = await importExtensionEventLog(nookTypedArgs0_3)
     if (!imported.accessGranted) {
-      const setupArgs: Parameters<typeof setupAfterPairingGrantRemoval>[0] = {
+      const setupArgs: Parameters<
+        typeof pairingPolicy.setupAfterPairingGrantRemoval
+      >[0] = {
         stored,
         removedVaultStoreId: vaultStoreId,
       }
-      const setup = setupAfterPairingGrantRemoval(setupArgs)
+      const setup = pairingPolicy.setupAfterPairingGrantRemoval(setupArgs)
       const items: ExtensionPairingItems =
         setup.kind === 'ready' ? { [setupStorageKey]: setup.setup } : {}
       const reconcileArgs: Parameters<typeof reconcilePairingStorage>[0] = {
@@ -250,13 +250,13 @@ export async function importLocalEventLogUpdate({
     }
     const setup = stored[setupStorageKey]
     const select =
-      isExtensionReadySetupState(setup) &&
+      pairingPolicy.isExtensionReadySetupState(setup) &&
       setup.selectedVaultStoreId === vaultStoreId
     const pairingItemsArgs: Parameters<
-      typeof extensionStoredPairingGrantStorageItems
+      typeof pairingPolicy.extensionStoredPairingGrantStorageItems
     >[0] = { grant, imported, select }
     const pairingItems =
-      extensionStoredPairingGrantStorageItems(pairingItemsArgs)
+      pairingPolicy.extensionStoredPairingGrantStorageItems(pairingItemsArgs)
     await setPairingStorage(pairingItems)
     await ensureExtensionSessionDocument()
     const nookTypedArgs0_4: Parameters<typeof sendSessionMessage>[0] = {

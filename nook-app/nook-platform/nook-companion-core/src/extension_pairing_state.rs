@@ -424,7 +424,7 @@ pub fn is_ready_pairing_setup_json(value: &str) -> bool {
         .is_ok()
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LegacyStoredExtensionPairingGrant {
     vault_type: ExtensionPairingVaultType,
@@ -439,7 +439,7 @@ struct LegacyStoredExtensionPairingGrant {
     sync_provider_count: u32,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LegacyExtensionReadySetup {
     status: ExtensionReadySetupStatus,
@@ -452,7 +452,7 @@ struct LegacyExtensionReadySetup {
     last_local_sync_at: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 enum LegacyExtensionPairingRecord {
     Grant(LegacyStoredExtensionPairingGrant),
@@ -535,6 +535,50 @@ mod tests {
         }
     }
 
+    fn legacy_grant(vault_store_id: &str) -> LegacyStoredExtensionPairingGrant {
+        LegacyStoredExtensionPairingGrant {
+            vault_type: ExtensionPairingVaultType::Simple,
+            device_id: "device-test".to_owned(),
+            device_public_key: "age1test".to_owned(),
+            device_signing_public_key: "signing-test".to_owned(),
+            device_label: "Nook Extension".to_owned(),
+            vault_store_id: vault_store_id.to_owned(),
+            vault_name: "Personal".to_owned(),
+            approved_at: "2026-07-25T00:00:00.000Z".to_owned(),
+            scopes: vec![ExtensionConnectScope::PasswordFilling],
+            sync_provider_count: 1,
+        }
+    }
+
+    fn legacy_setup() -> LegacyExtensionReadySetup {
+        LegacyExtensionReadySetup {
+            status: ExtensionReadySetupStatus::Ready,
+            device_label: "Nook Extension".to_owned(),
+            paired_vaults: vec!["Personal".to_owned()],
+            selected_vault_name: "Personal".to_owned(),
+            sync_provider_count: 1,
+            event_count: 2,
+            event_log_heads: vec!["event-2".to_owned()],
+            last_local_sync_at: "2026-07-25T00:00:01.000Z".to_owned(),
+        }
+    }
+
+    fn legacy_pairing_state(
+        grant: LegacyStoredExtensionPairingGrant,
+        setup: LegacyExtensionReadySetup,
+    ) -> HashMap<String, LegacyExtensionPairingRecord> {
+        let mut records = HashMap::new();
+        records.insert(
+            grant_storage_key(&grant.vault_store_id),
+            LegacyExtensionPairingRecord::Grant(grant),
+        );
+        records.insert(
+            EXTENSION_SETUP_KEY.to_owned(),
+            LegacyExtensionPairingRecord::Setup(setup),
+        );
+        records
+    }
+
     #[test]
     fn validates_grant_against_its_domain_key() -> anyhow::Result<()> {
         let mut entries = HashMap::new();
@@ -614,5 +658,61 @@ mod tests {
             create_pairing_state(input),
             Err(ExtensionPairingStateError::ImportedVaultMismatch)
         );
+    }
+
+    #[test]
+    fn migrates_a_valid_legacy_pairing_state_into_typed_domain_records() -> anyhow::Result<()> {
+        let records = legacy_pairing_state(legacy_grant("store-test"), legacy_setup());
+        let serialized = serde_json::to_string(&records)?;
+
+        let migrated = migrate_legacy_pairing_state_json(&serialized)?;
+        let selected = migrated
+            .selected_grant()
+            .ok_or_else(|| anyhow::anyhow!("migrated state must select its grant"))?;
+
+        assert_eq!(selected.vault_store_id, "store-test");
+        assert_eq!(selected.event_count, 2);
+        assert_eq!(selected.event_log_heads, vec!["event-2"]);
+        assert_eq!(selected.last_local_sync_at, "2026-07-25T00:00:01.000Z");
+        migrated.validate()?;
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_malformed_legacy_pairing_state_json() {
+        assert_eq!(
+            migrate_legacy_pairing_state_json("{"),
+            Err(ExtensionPairingStateError::InvalidLegacyState)
+        );
+    }
+
+    #[test]
+    fn rejects_ambiguous_legacy_pairing_grants_for_the_selected_vault() -> anyhow::Result<()> {
+        let mut records = legacy_pairing_state(legacy_grant("store-one"), legacy_setup());
+        records.insert(
+            grant_storage_key("store-two"),
+            LegacyExtensionPairingRecord::Grant(legacy_grant("store-two")),
+        );
+        let serialized = serde_json::to_string(&records)?;
+
+        assert_eq!(
+            migrate_legacy_pairing_state_json(&serialized),
+            Err(ExtensionPairingStateError::InvalidLegacyState)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_inconsistent_legacy_pairing_metadata() -> anyhow::Result<()> {
+        let mut setup = legacy_setup();
+        setup.sync_provider_count = 2;
+        let records = legacy_pairing_state(legacy_grant("store-test"), setup);
+        let serialized = serde_json::to_string(&records)?;
+
+        assert_eq!(
+            migrate_legacy_pairing_state_json(&serialized),
+            Err(ExtensionPairingStateError::InvalidLegacyState)
+        );
+        Ok(())
     }
 }
