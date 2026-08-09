@@ -17,7 +17,8 @@
     paired: boolean
   }
 
-  let { navigate: _navigate }: ExperimentProps = $props()
+  let { navigate }: ExperimentProps = $props()
+  void navigate
   let vaultName = $state('Alpha Vault Safe')
   let total = $state(3)
   let threshold = $state(2)

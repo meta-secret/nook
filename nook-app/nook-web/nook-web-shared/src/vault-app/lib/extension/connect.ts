@@ -199,6 +199,7 @@ function sendExtensionMessage({
       resolve(resolveArgs);
       return;
     }
+    const activeRuntime = runtime;
 
     let settled = false;
     const finishUnavailable = () => {
@@ -225,7 +226,7 @@ function sendExtensionMessage({
       EXTENSION_MESSAGE_TIMEOUT_MS,
     );
     function receiveExtensionResponse(response?: unknown): void {
-      if (runtime.lastError?.message) {
+      if (activeRuntime.lastError?.message) {
         finishUnavailable();
         return;
       }
@@ -235,7 +236,7 @@ function sendExtensionMessage({
       }
       finishReceived(response);
     }
-    runtime.sendMessage(extensionId, message, receiveExtensionResponse);
+    activeRuntime.sendMessage(extensionId, message, receiveExtensionResponse);
   });
 }
 

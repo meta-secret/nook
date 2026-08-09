@@ -1,7 +1,3 @@
-<script lang="ts" module>
-  export { ButtonSize, ButtonVariant, buttonVariants } from './button-state'
-</script>
-
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { HTMLButtonAttributes } from 'svelte/elements'
