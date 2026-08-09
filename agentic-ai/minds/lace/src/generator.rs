@@ -385,7 +385,9 @@ graph:
         let code = generate_rust_code(include_str!("../../graph.yaml"))?;
         let generated = syn::parse_file(&code)?;
         let checked_in = syn::parse_file(include_str!("graph.rs"))?;
-        assert_eq!(quote::quote!(#generated).to_string(), quote::quote!(#checked_in).to_string());
+        let generated_tokens = quote::quote!(#generated).to_string();
+        let checked_in_tokens = quote::quote!(#checked_in).to_string();
+        assert_eq!(generated_tokens, checked_in_tokens);
         Ok(())
     }
 }
