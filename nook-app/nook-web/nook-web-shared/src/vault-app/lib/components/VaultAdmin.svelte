@@ -35,7 +35,6 @@
   import type {
     ProviderSetupRequest,
     StorageProvider,
-    StorageProviderType,
   } from '$lib/auth/providers'
   import {
     ActiveVaultKind,

@@ -8,7 +8,6 @@ import type { NookVaultSyncResult, VaultAccessStatus } from "$lib/nook";
 import type {
   ProviderSetupRequest,
   StorageProvider,
-  StorageProviderType,
 } from "$lib/auth/providers";
 import type {
   LocalProviderLookup,

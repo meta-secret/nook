@@ -20,6 +20,7 @@ import {
   isExtensionLocalEventLogUpdatedMessage,
   isOpenCompanionLauncherMessage,
   ExtensionPairingVaultType,
+  ExtensionPairingApprovedMessageType,
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairedVaultIdentityStatusMessage,
@@ -187,7 +188,7 @@ describe('extension pairing approved message', () => {
         scopes: [ExtensionConnectScope.VaultAccess],
       },
       message: {
-        type: 'nook:extension-pairing-approved',
+        type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
         payload: {
           vaultType: ExtensionPairingVaultType.Simple,
           deviceId: 'device-1',
