@@ -658,6 +658,12 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         manifest.contains("\"compat\": [\"docker2s2\"]"),
         "Zot must accept legacy Docker Schema 2 manifests without changing their digests"
     );
+    assert!(
+        manifest.contains(
+            "resources:\n            requests:\n              cpu: \"1\"\n              memory: 2Gi\n            limits:\n              cpu: \"4\"\n              memory: 8Gi"
+        ),
+        "Zot must reserve capacity and allow enough burst headroom for concurrent BuildKit cache traffic"
+    );
     for required in [
         "\"nook/buildcache/**\"",
         "\"nook/remote-buildcache/**\"",
