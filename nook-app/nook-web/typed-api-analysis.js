@@ -46,8 +46,35 @@ export function staticArrayAtAccessor(args) {
   const { expression, staticPropertyKey } = args
   if (
     expression.type !== 'CallExpression' ||
-    expression.callee.type !== 'MemberExpression' ||
-    staticPropertyKey(expression.callee).value !== 'at' ||
+    expression.callee.type !== 'MemberExpression'
+  ) {
+    return { kind: StaticKeyLookupKind.NotFound }
+  }
+  const method = staticPropertyKey(expression.callee)
+  if (
+    method.value === 'pop' &&
+    expression.arguments.length === 0
+  ) {
+    return {
+      kind: StaticKeyLookupKind.Found,
+      array: expression.callee.object,
+      index: -1,
+      limit: Number.POSITIVE_INFINITY,
+    }
+  }
+  if (
+    method.value === 'shift' &&
+    expression.arguments.length === 0
+  ) {
+    return {
+      kind: StaticKeyLookupKind.Found,
+      array: expression.callee.object,
+      index: 0,
+      limit: 0,
+    }
+  }
+  if (
+    method.value !== 'at' ||
     expression.arguments.length !== 1 ||
     expression.arguments[0].type === 'SpreadElement'
   ) {

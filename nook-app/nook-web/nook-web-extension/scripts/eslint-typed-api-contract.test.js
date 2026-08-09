@@ -577,6 +577,18 @@ describe('typed API named arguments', () => {
     ])
   })
 
+  test('projects destructured array callback parameters', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      ;[{ picked: { name: 'Nook' } }].forEach(({ picked }) => consume(picked))
+      ;[[{ name: 'Vault' }]].map(([picked]) => consume(picked))
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'typedArgument',
+      'typedArgument',
+    ])
+  })
+
   test('tracks reducer element parameters', () => {
     const messages = lint(`
       declare function consume(value: { name: string }): void
@@ -613,6 +625,18 @@ describe('typed API named arguments', () => {
       declare function consume(value: { name: string }): void
       consume([{ name: 'Nook' }].at(0)!)
       consume([{ name: 'Vault' }].at(-1)!)
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+      'namedArgument',
+    ])
+  })
+
+  test('inspects statically resolvable mutating array accessor results', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      consume([{ name: 'Nook' }].pop()!)
+      consume([{ name: 'Vault' }].shift()!)
     `)
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',

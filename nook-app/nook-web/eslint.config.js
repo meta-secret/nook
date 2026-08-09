@@ -360,26 +360,31 @@ export const noRawObjectArgumentsRule = {
       if (bindingPatternHasTypeAnnotation(definition.name)) return []
       const callback = definition.node
       const call = callback.parent
-      const elementParameter =
-        call?.type === 'CallExpression' &&
-        call.callee.type === 'MemberExpression'
-          ? arrayCallbackElementParameter(staticPropertyKey(call.callee).value)
-          : { kind: StaticKeyLookupKind.NotFound }
       if (
         call?.type !== 'CallExpression' ||
         call.arguments[0] !== callback ||
-        call.callee.type !== 'MemberExpression' ||
-        elementParameter.kind === StaticKeyLookupKind.NotFound ||
-        callback.params.indexOf(definition.name) !== elementParameter.value
+        call.callee.type !== 'MemberExpression'
       ) {
         return []
       }
+      const elementParameter = arrayCallbackElementParameter(
+        staticPropertyKey(call.callee).value,
+      )
+      if (elementParameter.kind === StaticKeyLookupKind.NotFound) return []
+      const parameter = callback.params[elementParameter.value]
+      if (!parameter) return []
+      const pathLookup = bindingProjectionPath(parameter, definition.name)
+      if (pathLookup.kind === ProjectionPathLookupKind.NotFound) return []
       return spreadArrayElements({
         expression: call.callee.object,
         seenVariables,
       }).flatMap((element) =>
         element
-          ? possibleExpressionValues({ expression: element, seenVariables })
+          ? projectValuesAlongPath({
+              expression: element,
+              path: pathLookup.path,
+              seenVariables,
+            })
           : [],
       )
     }
