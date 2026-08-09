@@ -163,7 +163,7 @@ export async function initOnce(state: VaultState): Promise<void> {
     }
     await continueInitializationAfterDeviceUnlock(state);
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
-  } catch {
+  } catch (error) {
     if (
       state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
       deviceIdentityUnlocked
