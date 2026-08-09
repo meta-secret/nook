@@ -14,11 +14,11 @@ type BarcodeDetectorLike = {
 }
 
 type BarcodeDetectorOptions = {
-  formats?: string[]
+  formats: string[]
 }
 
 type BarcodeDetectorConstructor = new (
-  options?: BarcodeDetectorOptions,
+  options: BarcodeDetectorOptions,
 ) => BarcodeDetectorLike
 
 enum BarcodeDetectorAvailabilityKind {
@@ -45,8 +45,8 @@ type QrBitmapCapture =
 function barcodeDetectorConstructor(): BarcodeDetectorAvailability {
   const candidate = (
     globalThis as typeof globalThis & {
-      BarcodeDetector?: new (options?: {
-        formats?: string[]
+      BarcodeDetector?: new (options: {
+        formats: string[]
       }) => BarcodeDetectorLike
     }
   ).BarcodeDetector

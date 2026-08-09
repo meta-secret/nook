@@ -25,6 +25,7 @@ import {
   staticArrayAtAccessor,
   staticExpressionKey as resolveStaticExpressionKey,
   staticMemberPath,
+  thisClassFieldValueExpressions,
   unwrapResultExpression,
   writeBindingPattern,
   writeExitsBeforeFollowingNode,
@@ -492,6 +493,7 @@ export const noRawObjectArgumentsRule = {
         )
       }
       projected.push(
+        ...thisClassFieldValueExpressions({ expression, staticObjectKey }),
         ...projectedMemberWriteValues({
           expression,
           selectedKey,

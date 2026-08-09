@@ -68,7 +68,7 @@ export function staticArrayAtAccessor(args) {
         kind: StaticKeyLookupKind.Found,
         array: expression.callee.object,
         index: value,
-        limit: Math.max(0, Math.abs(value)),
+        limit: value < 0 ? Number.POSITIVE_INFINITY : value,
       }
     : { kind: StaticKeyLookupKind.NotFound }
 }
@@ -187,11 +187,85 @@ export function inlineCallReturnExpressions(expression) {
   }
   const callable = unwrapTypeScriptExpression(expression.callee)
   if (
-    !['ArrowFunctionExpression', 'FunctionExpression'].includes(callable.type)
+    ['ArrowFunctionExpression', 'FunctionExpression'].includes(callable.type)
   ) {
-    return []
+    return functionReturnExpressions(callable)
   }
-  return functionReturnExpressions(callable)
+  if (callable.type !== 'MemberExpression') return []
+  const container = unwrapTypeScriptExpression(callable.object)
+  if (container.type !== 'ObjectExpression') return []
+  const selectedKey = inlineMemberKey(callable)
+  if (selectedKey.kind === StaticKeyLookupKind.NotFound) return []
+  return container.properties.flatMap((property) => {
+    const propertyKey =
+      property.type === 'Property'
+        ? inlinePropertyKey(property)
+        : { kind: StaticKeyLookupKind.NotFound }
+    if (
+      property.type !== 'Property' ||
+      propertyKey.kind === StaticKeyLookupKind.NotFound ||
+      propertyKey.value !== selectedKey.value ||
+      !['ArrowFunctionExpression', 'FunctionExpression'].includes(
+        property.value.type,
+      )
+    ) {
+      return []
+    }
+    return functionReturnExpressions(property.value)
+  })
+}
+
+function inlineMemberKey(member) {
+  if (!member.computed && member.property.type === 'Identifier') {
+    return { kind: StaticKeyLookupKind.Found, value: member.property.name }
+  }
+  if (
+    member.computed &&
+    member.property.type === 'Literal' &&
+    (typeof member.property.value === 'string' ||
+      typeof member.property.value === 'number')
+  ) {
+    return {
+      kind: StaticKeyLookupKind.Found,
+      value: String(member.property.value),
+    }
+  }
+  return { kind: StaticKeyLookupKind.NotFound }
+}
+
+function inlinePropertyKey(property) {
+  if (!property.computed && property.key.type === 'Identifier') {
+    return { kind: StaticKeyLookupKind.Found, value: property.key.name }
+  }
+  if (
+    property.key.type === 'Literal' &&
+    (typeof property.key.value === 'string' ||
+      typeof property.key.value === 'number')
+  ) {
+    return {
+      kind: StaticKeyLookupKind.Found,
+      value: String(property.key.value),
+    }
+  }
+  return { kind: StaticKeyLookupKind.NotFound }
+}
+
+export function thisClassFieldValueExpressions(args) {
+  const { expression, staticObjectKey } = args
+  if (expression.object.type !== 'ThisExpression') return []
+  const selectedKey = inlineMemberKey(expression)
+  if (selectedKey.kind === StaticKeyLookupKind.NotFound) return []
+  let current = expression.parent
+  while (current && current.type !== 'ClassBody') current = current.parent
+  if (!current) return []
+  return current.body.flatMap((field) =>
+    field.type === 'PropertyDefinition' &&
+    !field.typeAnnotation &&
+    field.value &&
+    staticObjectKey(field).value === selectedKey.value
+      ? [field.value]
+      : [],
+  )
 }
 
 export function inlineObjectResultExpressions(args) {

@@ -155,6 +155,27 @@ describe('Loom ESLint contracts', () => {
     ]);
   });
 
+  test('rejects conditional and reassigned spread arrays', async () => {
+    const eslint = new ESLint();
+    const options: LintTextOptions = { filePath: 'src/cli.ts' };
+    const results = await eslint.lintText(
+      `
+        declare const flag: boolean;
+        declare function consume(...args: { name: string }[]): void;
+        let packed = [];
+        packed = [{ name: 'Vault' }];
+        consume(...(flag ? [{ name: 'Nook' }] : []));
+        consume(...packed);
+      `,
+      options,
+    );
+
+    expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
+      'loom/no-raw-object-arguments',
+      'loom/no-raw-object-arguments',
+    ]);
+  });
+
   test('allows explicitly typed named spread arrays', async () => {
     const eslint = new ESLint();
     const options: LintTextOptions = { filePath: 'src/cli.ts' };

@@ -620,6 +620,19 @@ describe('typed API named arguments', () => {
     ])
   })
 
+  test('preserves tail values for negative array accessors', () => {
+    const messages = lint(`
+      type ConsumeArgs = { name: string }
+      declare const typedA: ConsumeArgs
+      declare const typedB: ConsumeArgs
+      declare function consume(value: ConsumeArgs): void
+      consume([typedA, typedB, { name: 'Nook' }].at(-1)!)
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
   test('tracks writes to projected member arguments', () => {
     const messages = lint(`
       type Holder = { value: number | { name: string } }
@@ -657,6 +670,34 @@ describe('typed API named arguments', () => {
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
       'namedArgument',
+      'namedArgument',
+    ])
+  })
+
+  test('inspects invoked inline object method results', () => {
+    const messages = lint(`
+      declare function consume(value: { name: string }): void
+      consume(({ make() { return { name: 'Nook' } } }).make())
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
+  test('requires explicit types for object-valued this fields', () => {
+    const messages = lint(`
+      type ConsumeArgs = { name: string }
+      declare function consume(value: ConsumeArgs): void
+      class UntypedHandler {
+        args = { name: 'Nook' }
+        run(): void { consume(this.args) }
+      }
+      class TypedHandler {
+        args: ConsumeArgs = { name: 'Vault' }
+        run(): void { consume(this.args) }
+      }
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
     ])
   })

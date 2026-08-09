@@ -49,7 +49,7 @@ const noRawObjectArguments = {
     const sourceCode = context.sourceCode;
 
     function spreadObjectExpressions(args) {
-      const { expression, seenVariables } = args;
+      const { activeCall, expression, seenVariables } = args;
       let current = expression;
       while (transparentTypeScriptWrappers.has(current.type)) {
         current = current.expression;
@@ -69,20 +69,67 @@ const noRawObjectArguments = {
             if (!definition || definition.name.typeAnnotation) return [];
             const nextSeen = new Set(seenVariables);
             nextSeen.add(variable);
-            return spreadObjectExpressions({
-              expression: definition.node.init,
-              seenVariables: nextSeen,
-            });
+            const values = [definition.node.init];
+            for (const reference of variable.references) {
+              if (
+                reference.isWrite() &&
+                !reference.init &&
+                reference.writeExpr &&
+                reference.identifier.range[0] < activeCall.range[0]
+              ) {
+                values.push(reference.writeExpr);
+              }
+            }
+            return values.flatMap((value) =>
+              spreadObjectExpressions({
+                activeCall,
+                expression: value,
+                seenVariables: nextSeen,
+              }),
+            );
           }
           scope = scope.upper;
         }
         return [];
+      }
+      if (current.type === 'AssignmentExpression') {
+        return spreadObjectExpressions({
+          activeCall,
+          expression: current.right,
+          seenVariables,
+        });
+      }
+      if (current.type === 'ConditionalExpression') {
+        return [current.consequent, current.alternate].flatMap((branch) =>
+          spreadObjectExpressions({
+            activeCall,
+            expression: branch,
+            seenVariables,
+          }),
+        );
+      }
+      if (current.type === 'LogicalExpression') {
+        return [current.left, current.right].flatMap((branch) =>
+          spreadObjectExpressions({
+            activeCall,
+            expression: branch,
+            seenVariables,
+          }),
+        );
+      }
+      if (current.type === 'SequenceExpression') {
+        return spreadObjectExpressions({
+          activeCall,
+          expression: current.expressions.at(-1),
+          seenVariables,
+        });
       }
       if (current.type !== 'ArrayExpression') return [];
       return current.elements.flatMap((element) => {
         if (!element) return [];
         return element.type === 'SpreadElement'
           ? spreadObjectExpressions({
+              activeCall,
               expression: element.argument,
               seenVariables,
             })
@@ -94,6 +141,7 @@ const noRawObjectArguments = {
       for (const argument of node.arguments) {
         if (argument.type === 'SpreadElement') {
           const spreadArgs = {
+            activeCall: node,
             expression: argument.argument,
             seenVariables: new Set(),
           };
