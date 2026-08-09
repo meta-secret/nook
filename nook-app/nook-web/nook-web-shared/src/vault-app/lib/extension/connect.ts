@@ -192,15 +192,14 @@ function sendExtensionMessage({
         };
       }
     ).chrome?.runtime;
-    if (!runtime?.sendMessage) {
+    const sendMessage = runtime?.sendMessage?.bind(runtime);
+    if (!sendMessage) {
       const resolveArgs: Parameters<typeof resolve>[0] = {
         kind: ExtensionMessageDeliveryKind.Unavailable,
       };
       resolve(resolveArgs);
       return;
     }
-    const activeRuntime = runtime;
-
     let settled = false;
     const finishUnavailable = () => {
       if (settled) return;
@@ -226,7 +225,7 @@ function sendExtensionMessage({
       EXTENSION_MESSAGE_TIMEOUT_MS,
     );
     function receiveExtensionResponse(response?: unknown): void {
-      if (activeRuntime.lastError?.message) {
+      if (runtime?.lastError?.message) {
         finishUnavailable();
         return;
       }
@@ -236,7 +235,7 @@ function sendExtensionMessage({
       }
       finishReceived(response);
     }
-    activeRuntime.sendMessage(extensionId, message, receiveExtensionResponse);
+    sendMessage(extensionId, message, receiveExtensionResponse);
   });
 }
 
