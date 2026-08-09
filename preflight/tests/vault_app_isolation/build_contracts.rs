@@ -661,6 +661,8 @@ fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() -> 
         "`preflight/`",
         "all outdated direct Rust dependencies",
         "WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000",
+        "task docker:ecosystem:fuzz FUZZ_SECONDS=20",
+        "task hive:verify",
         "every local-provider Playwright e2e spec, and the\n   extension e2e",
     ] {
         assert!(

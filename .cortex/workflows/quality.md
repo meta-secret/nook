@@ -356,7 +356,8 @@ Use this workflow for quality, CI, and deployment changes.
     - The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
     - A finding starts an isolated AI agent.
     - The agent updates all outdated Rust dependencies.
-    - It must run `WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000` before its PR can be merged.
+    - It must run `WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000`.
+    - It must also run `task docker:ecosystem:fuzz FUZZ_SECONDS=20` and `task hive:verify` before the harness opens its PR.
     - `.github/workflows/runner-cleanup.yml` remains on `nook` for registered-host maintenance.
 
     #### Main failure incidents (Hive)

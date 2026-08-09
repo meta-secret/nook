@@ -421,21 +421,23 @@ It does not audit only the current lockfile's transitive graph.
 
 If any audit reports a newer release, the workflow starts the existing
 isolated CI agent on `ubuntu-latest`. The agent updates **all** outdated direct
-Rust dependencies, makes compatibility fixes, commits lockfile updates, opens a
-PR, and runs this required full deterministic validation before the CI-agent
-harness opens the PR:
+Rust dependencies and makes compatibility fixes. It runs the required
+validation before the CI-agent harness commits, pushes, and opens the PR:
 
 ```bash
 WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+task docker:ecosystem:fuzz FUZZ_SECONDS=20
+task hive:verify
 ```
 
 `ci:pr:e2e` includes repository preflight, Rust coverage/unit tests, WASM checks,
 web checks/unit tests/builds, the complete local-provider Playwright suite, and
-extension e2e. Credentialed real-provider `sync-live` e2e remains a separate
-manual validation because it creates disposable external-provider state and
-requires provider secrets. The agent opens a PR after local validation. No
-workflow merges it blindly from a check event; a task-owning agent must run the
-standard readiness audit and squash-merge when it succeeds.
+extension e2e. The additional targets validate the separate fuzz and Minds
+workspaces. Credentialed real-provider `sync-live` e2e remains a separate manual
+validation because it creates disposable external-provider state and requires
+provider secrets. No workflow merges the harness-owned PR blindly from a check
+event. A task-owning agent must run the standard readiness audit and squash-merge
+when it succeeds.
 
 **One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
 
