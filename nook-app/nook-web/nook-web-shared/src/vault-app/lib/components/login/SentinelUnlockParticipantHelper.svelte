@@ -30,10 +30,9 @@
   let actionBusy = $state(false)
   let loaded = $state(false)
   let open = $state(false)
-  const stateRuneArgs: Parameters<typeof $state>[0] = {
+  let selectedDelivery = $state<GenesisDeliverySelection>({
     kind: GenesisDeliverySelectionKind.NotSelected,
-  };
-  let selectedDelivery = $state<GenesisDeliverySelection>(stateRuneArgs)
+  })
   let request = $state('')
   let response = $state('')
   let copied = $state(false)
@@ -99,7 +98,12 @@
     actionBusy = true
     vault.errorMsg = ''
     try {
-      response = await createSentinelUnlockResponse(vault, storeId, payload)
+      const responseRequest: Parameters<typeof createSentinelUnlockResponse>[0] = {
+        state: vault,
+        storeId,
+        request: payload,
+      }
+      response = await createSentinelUnlockResponse(responseRequest)
     } catch (error) {
       vault.errorMsg =
         error instanceof Error

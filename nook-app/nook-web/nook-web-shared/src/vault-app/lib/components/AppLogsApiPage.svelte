@@ -6,8 +6,7 @@
     type LogsPageState,
   } from './app-logs-api-page-state'
 
-  const stateRuneArgs: Parameters<typeof $state>[0] = { kind: LogsPageStateKind.Loading };
-  let state = $state<LogsPageState>(stateRuneArgs)
+  let state = $state<LogsPageState>({ kind: LogsPageStateKind.Loading })
 
   onMount(() => {
     document.title = 'Nook app logs (JSON)'

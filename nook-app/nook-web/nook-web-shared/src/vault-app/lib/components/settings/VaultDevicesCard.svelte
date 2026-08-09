@@ -65,21 +65,17 @@
     onRevokeDevice: (authId: string) => void | Promise<void>
   } = $props()
 
-  const stateRuneArgs: Parameters<typeof $state>[0] = {
+  let detailsAuthId = $state<MemberDetails>({
     kind: MemberDetailsKind.Collapsed,
-  };
-  let detailsAuthId = $state<MemberDetails>(stateRuneArgs)
-  const stateRuneArgs2: Parameters<typeof $state>[0] = { kind: MemberRenameKind.Idle };
-  let renameAuthId = $state<MemberRename>(stateRuneArgs2)
+  })
+  let renameAuthId = $state<MemberRename>({ kind: MemberRenameKind.Idle })
   let renameLabel = $state('')
-  const stateRuneArgs3: Parameters<typeof $state>[0] = {
+  let revokeAuthId = $state<MemberRevocation>({
     kind: MemberRevocationKind.Idle,
-  };
-  let revokeAuthId = $state<MemberRevocation>(stateRuneArgs3)
-  const stateRuneArgs4: Parameters<typeof $state>[0] = {
+  })
+  let extensionSetupState = $state<ExtensionSetupOffer>({
     kind: ExtensionSetupOfferKind.Hidden,
-  };
-  let extensionSetupState = $state<ExtensionSetupOffer>(stateRuneArgs4)
+  })
   let extensionInstallBusy = $state(false)
   let extensionConnectError = $state(false)
   const isSentinelVault = $derived(

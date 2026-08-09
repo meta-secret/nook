@@ -58,9 +58,12 @@
               <code
                 class="shrink-0 rounded bg-background px-1.5 py-0.5 text-[11px] text-foreground"
               >
-                {(() => { const tArgs: Parameters<typeof vault.t>[1] = {
+                {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.VaultRecoveryDeviceHint,
+  replacements: {
                   hint: device.passkeyHint,
-                }; return vault.t(I18N_KEYS.VaultRecoveryDeviceHint, tArgs); })()}
+                },
+}; return vault.t(translationRequest); })()}
               </code>
             </li>
           {/each}

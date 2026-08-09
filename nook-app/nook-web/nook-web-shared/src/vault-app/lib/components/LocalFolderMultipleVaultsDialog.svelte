@@ -59,9 +59,12 @@
             {vault.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsTitle)}
           </CardTitle>
           <CardDescription class="text-pretty">
-            {(() => { const tArgs: Parameters<typeof vault.t>[1] = {
+            {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageLocalFolderMultipleVaultsDesc,
+  replacements: {
               provider: health.providerLabel,
-            }; return vault.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsDesc, tArgs); })()}
+            },
+}; return vault.t(translationRequest); })()}
           </CardDescription>
         </div>
         <button

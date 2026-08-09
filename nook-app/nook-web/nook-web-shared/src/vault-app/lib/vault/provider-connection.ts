@@ -132,11 +132,14 @@ export async function connectAndSyncStagedProvider(
       return;
     }
     await state.flushRemoteEventOutboxNow(provider);
-    const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[1] = {
-      quiet: true,
-      propagateError: true,
+    const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[0] = {
+      providerId: provider.id,
+      options: {
+        quiet: true,
+        propagateError: true,
+      },
     };
-    await state.syncProviderById(provider.id, syncProviderByIdArgs);
+    await state.syncProviderById(syncProviderByIdArgs);
     state.clearLoginSetup();
     state.addProviderOpen = false;
   } catch (error) {

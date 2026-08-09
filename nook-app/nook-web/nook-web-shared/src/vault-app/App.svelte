@@ -130,10 +130,9 @@
   )
   let extensionBackedVaultSession = $state(false)
   let extensionDiscoveryStoreId = $state('')
-  const stateRuneArgs: Parameters<typeof $state>[0] = {
+  let extensionSetupStateValue = $state<ExtensionSetupOffer>({
     kind: ExtensionSetupOfferKind.Hidden,
-  };
-  let extensionSetupStateValue = $state<ExtensionSetupOffer>(stateRuneArgs)
+  })
   let extensionInstallBusy = $state(false)
   let extensionConnectError = $state(false)
   const EXTENSION_LOCKED_RETRY_MS = 3_000
@@ -311,15 +310,17 @@
       extensionIdentityRequestState.request.vaultStoreId === activeStoreId
     ) {
       const connectRequest = extensionIdentityRequestState.request
-      const authorizeWithExternalDeviceIdentityArgs: Parameters<typeof vault.authorizeWithExternalDeviceIdentity>[1] = { deferInitialization: existingVaultImport };
-      const adopted = await vault.authorizeWithExternalDeviceIdentity(
-        (manager) => {
+      const authorizeWithExternalDeviceIdentityArgs: Parameters<typeof vault.authorizeWithExternalDeviceIdentity>[0] = {
+        adopt: (manager) => {
           const adoptionArgs: AdoptExtensionIdentityArgs = {
             manager,
             request: connectRequest,
           }
           return adoptExtensionIdentity(adoptionArgs)
         },
+        options: { deferInitialization: existingVaultImport },
+      };
+      const adopted = await vault.authorizeWithExternalDeviceIdentity(
         authorizeWithExternalDeviceIdentityArgs,
       )
       if (!adopted) return
@@ -361,15 +362,17 @@
             extensionBackedVaultSession ||
             vault.deviceProtectionStatus === DeviceProtectionStatus.Missing)
         if (extensionIdentityCanUnlock) {
-          const authorizeWithExternalDeviceIdentityArgs2: Parameters<typeof vault.authorizeWithExternalDeviceIdentity>[1] = { deferInitialization: existingVaultImport };
-          const adopted = await vault.authorizeWithExternalDeviceIdentity(
-            (manager) => {
+          const authorizeWithExternalDeviceIdentityArgs2: Parameters<typeof vault.authorizeWithExternalDeviceIdentity>[0] = {
+            adopt: (manager) => {
               const adoptionArgs: AdoptExtensionIdentityArgs = {
                 manager,
                 request: connectRequest,
               }
               return adoptExtensionIdentity(adoptionArgs)
             },
+            options: { deferInitialization: existingVaultImport },
+          };
+          const adopted = await vault.authorizeWithExternalDeviceIdentity(
             authorizeWithExternalDeviceIdentityArgs2,
           )
           if (!adopted) return
@@ -439,16 +442,14 @@
   const showLoginWithoutPasskey = $derived(
     !requiresPasskeyFirst && vault.providersLoaded,
   )
-  const stateRuneArgs2: Parameters<typeof $state>[0] = {
+  let pendingVaultCreationState = $state<VaultCreationQueue>({
     kind: VaultCreationQueueKind.Idle,
-  };
-  let pendingVaultCreationState = $state<VaultCreationQueue>(stateRuneArgs2)
+  })
   let pendingExistingVaultUnlock = $state(false)
   let pendingEnrollmentDeviceUnlock = $state(false)
-  const stateRuneArgs3: Parameters<typeof $state>[0] = {
+  let pendingEnrollmentSubmitState = $state<EnrollmentSubmitQueue>({
     kind: EnrollmentSubmitQueueKind.Idle,
-  };
-  let pendingEnrollmentSubmitState = $state<EnrollmentSubmitQueue>(stateRuneArgs3)
+  })
   const showPasskeyOverlay = $derived(
     pendingVaultCreationState.kind ===
       VaultCreationQueueKind.WaitingForDevice &&
@@ -540,14 +541,19 @@
       vault.deviceId !== extensionIdentityRequestState.request.deviceId
     ) {
       const connectRequest = extensionIdentityRequestState.request
-      const adopted = await vault.authorizeWithExternalDeviceIdentity(
-        (manager) => {
+      const authorizationRequest: Parameters<
+        typeof vault.authorizeWithExternalDeviceIdentity
+      >[0] = {
+        adopt: (manager) => {
           const adoptionArgs: AdoptExtensionIdentityArgs = {
             manager,
             request: connectRequest,
           }
           return adoptExtensionIdentity(adoptionArgs)
         },
+      }
+      const adopted = await vault.authorizeWithExternalDeviceIdentity(
+        authorizationRequest,
       )
       if (!adopted) return
     }

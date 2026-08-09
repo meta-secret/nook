@@ -49,7 +49,10 @@ identifier and the boundary a backup password does not cross.
         {vault.t(I18N_KEYS.DevicesAccessProtectionLabel)}
       </dt>
       <dd class="mt-1.5 text-sm text-foreground">
-        {protectionLabel(vault, protection)}
+        {(() => { const labelRequest: Parameters<typeof protectionLabel>[0] = {
+          vault,
+          protection,
+        }; return protectionLabel(labelRequest); })()}
       </dd>
     </div>
   </dl>

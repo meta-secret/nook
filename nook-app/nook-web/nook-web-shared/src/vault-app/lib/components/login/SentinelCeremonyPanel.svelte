@@ -55,7 +55,10 @@
     const payload = responseInput.trim()
     if (!payload) return
     await runAction(async () => {
-      await sentinelUnlockActions.addSentinelUnlockResponse(vault, payload)
+      const responseRequest: Parameters<
+        typeof sentinelUnlockActions.addSentinelUnlockResponse
+      >[0] = { state: vault, response: payload }
+      await sentinelUnlockActions.addSentinelUnlockResponse(responseRequest)
       responseInput = ''
     })
   }

@@ -21,7 +21,11 @@ export async function loadExtensionSetupOffer(
   activeVault: ActiveVault,
 ): Promise<ExtensionSetupOffer> {
   const setup = await resolveExtensionSetupState(activeVault);
-  return shouldOfferExtensionSetup(setup.status)
+  const offerRequest: Parameters<typeof shouldOfferExtensionSetup>[0] = {
+    status: setup.status,
+    environment: navigator,
+  };
+  return shouldOfferExtensionSetup(offerRequest)
     ? { kind: ExtensionSetupOfferKind.Visible, setup }
     : { kind: ExtensionSetupOfferKind.Hidden };
 }

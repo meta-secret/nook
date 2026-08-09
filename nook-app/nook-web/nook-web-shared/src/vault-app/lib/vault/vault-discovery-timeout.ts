@@ -13,25 +13,24 @@ export function startVaultDiscoveryTimeout({
   readonly timeoutMs: number;
 }): VaultDiscoveryTimeout {
   const controller = new AbortController();
-  const completion =
-    new Promise<never> // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-    ((_, reject) => {
-      const timer = setTimeout(() => {
-        const timeoutError = new Error(message);
-        timeoutError.name = VAULT_ASSESS_TIMEOUT_ERROR_NAME;
-        reject(timeoutError);
-      }, timeoutMs);
-      const addEventListenerArgs: Parameters<
-        typeof controller.signal.addEventListener
-      >[2] = {
-        once: true,
-      };
-      controller.signal.addEventListener(
-        "abort",
-        () => clearTimeout(timer),
-        addEventListenerArgs,
-      );
-    });
+  const completion = new Promise<never>((_, reject) => {
+    // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
+    const timer = setTimeout(() => {
+      const timeoutError = new Error(message);
+      timeoutError.name = VAULT_ASSESS_TIMEOUT_ERROR_NAME;
+      reject(timeoutError);
+    }, timeoutMs);
+    const addEventListenerArgs: Parameters<
+      typeof controller.signal.addEventListener
+    >[2] = {
+      once: true,
+    };
+    controller.signal.addEventListener(
+      "abort",
+      () => clearTimeout(timer),
+      addEventListenerArgs,
+    );
+  });
   return {
     completion,
     cancel: () => controller.abort(),

@@ -55,10 +55,13 @@
       return;
     }
     if (file.size > FILE_ATTACHMENT_MAX_BYTES) {
-      const tArgs: Parameters<typeof vault.t>[1] = {
+      const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AddSecretFileTooLarge,
+  replacements: {
         max: formatFileSize(FILE_ATTACHMENT_MAX_BYTES),
-      };
-      state.fileInputError = vault.t(I18N_KEYS.AddSecretFileTooLarge, tArgs);
+      },
+};
+      state.fileInputError = vault.t(translationRequest);
       input.value = "";
       return;
     }
@@ -525,9 +528,12 @@
           class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
         <p class="text-xs text-muted-foreground text-pretty">
-          {(() => { const tArgs2: Parameters<typeof vault.t>[1] = {
+          {(() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AddSecretFileAttachmentHint,
+  replacements: {
             max: formatFileSize(FILE_ATTACHMENT_MAX_BYTES),
-          }; return vault.t(I18N_KEYS.AddSecretFileAttachmentHint, tArgs2); })()}
+          },
+}; return vault.t(translationRequest2); })()}
         </p>
         {#if state.fileInputError}
           <p

@@ -21,14 +21,12 @@
   let { vault }: { vault: VaultState } = $props()
 
   let open = $state(false)
-  const stateRuneArgs: Parameters<typeof $state>[0] = {
+  let root = $state<VaultSwitcherRoot>({
     kind: VaultSwitcherRootKind.Unmounted,
-  };
-  let root = $state<VaultSwitcherRoot>(stateRuneArgs)
-  const stateRuneArgs2: Parameters<typeof $state>[0] = {
+  })
+  let switchState = $state<VaultSwitchState>({
     kind: VaultSwitchStateKind.Idle,
-  };
-  let switchState = $state<VaultSwitchState>(stateRuneArgs2)
+  })
 
   const activeStoreId = $derived(
     vault.activeVault.kind === ActiveVaultKind.Open
@@ -164,9 +162,12 @@
         >
           {vaultCount === 1
             ? vault.t(I18N_KEYS.VaultSwitcherOneOnDevice)
-            : (() => { const tArgs: Parameters<typeof vault.t>[1] = {
+            : (() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.VaultSwitcherCountOnDevice,
+  replacements: {
                 count: String(vaultCount),
-              }; return vault.t(I18N_KEYS.VaultSwitcherCountOnDevice, tArgs); })()}
+              },
+}; return vault.t(translationRequest); })()}
         </p>
         <ul class="max-h-64 space-y-0.5 overflow-y-auto">
           {#each vaults as entry (entry.storeId)}

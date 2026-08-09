@@ -27,12 +27,10 @@
     embedded?: boolean
   } = $props()
 
-  const stateRuneArgs: Parameters<typeof $state>[0] = {
+  let selectedFile = $state<ImportFileSelection>({
     kind: ImportFileSelectionKind.NotSelected,
-  };
-  let selectedFile = $state<ImportFileSelection>(stateRuneArgs)
-  const stateRuneArgs2: Parameters<typeof $state>[0] = { kind: ImportOutcomeKind.NotRun };
-  let result = $state<ImportOutcome>(stateRuneArgs2)
+  })
+  let result = $state<ImportOutcome>({ kind: ImportOutcomeKind.NotRun })
   let error = $state('')
   let password = $state('')
   let isImporting = $state(false)

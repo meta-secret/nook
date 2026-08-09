@@ -132,7 +132,11 @@
     ) {
       const trimmed = passwordInput.trim()
       if (!trimmed) return
-      void passwordUnlock.unlock(selectedPasswordEntry.entryId, trimmed)
+      const unlockRequest: Parameters<typeof passwordUnlock.unlock>[0] = {
+        entryId: selectedPasswordEntry.entryId,
+        password: trimmed,
+      }
+      void passwordUnlock.unlock(unlockRequest)
       return
     }
     void onUnlock()

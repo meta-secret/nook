@@ -145,26 +145,21 @@
   } = $props()
 
   let newVaultName = $state('')
-  const stateRuneArgs: Parameters<typeof $state>[0] = {};
-  let drafts = $state<Record<string, string>>(stateRuneArgs)
+  let drafts = $state<Record<string, string>>({})
   let draftSeed = $state('')
   let creating = $state(false)
-  const stateRuneArgs2: Parameters<typeof $state>[0] = {
+  let editingStoreId = $state<VaultLabelEditor>({
     kind: VaultLabelEditorKind.Closed,
-  };
-  let editingStoreId = $state<VaultLabelEditor>(stateRuneArgs2)
-  const stateRuneArgs3: Parameters<typeof $state>[0] = {
+  })
+  let renamingStoreId = $state<VaultRenameOperation>({
     kind: VaultRenameOperationKind.Idle,
-  };
-  let renamingStoreId = $state<VaultRenameOperation>(stateRuneArgs3)
-  const stateRuneArgs4: Parameters<typeof $state>[0] = {
+  })
+  let switchingTo = $state<VaultSwitchOperation>({
     kind: VaultSwitchOperationKind.Idle,
-  };
-  let switchingTo = $state<VaultSwitchOperation>(stateRuneArgs4)
-  const stateRuneArgs5: Parameters<typeof $state>[0] = {
+  })
+  let activeImportProvider = $state<ImportProviderSection>({
     kind: ImportProviderSectionKind.Closed,
-  };
-  let activeImportProvider = $state<ImportProviderSection>(stateRuneArgs5)
+  })
   function toggleAdminSection(section: AdminAccordionSection): void {
     activeSection =
       activeSection === section ? AdminAccordionSection.Closed : section

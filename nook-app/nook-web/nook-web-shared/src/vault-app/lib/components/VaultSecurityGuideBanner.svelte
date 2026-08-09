@@ -92,12 +92,12 @@
         <span
           class="block truncate text-xs leading-5 text-amber-900/75 dark:text-amber-100/75"
         >
-          {(() => { const tArgs: Parameters<typeof vault.t>[1] = { count: String(recommendationCount) }; return vault.t(
-            recommendationCount === 1
+          {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+            key: recommendationCount === 1
               ? I18N_KEYS.SecurityGuideRecommendationCountSingular
               : I18N_KEYS.SecurityGuideRecommendationCountPlural,
-            tArgs,
-          ); })()}
+            replacements: { count: String(recommendationCount) },
+          }; return vault.t(translationRequest); })()}
         </span>
       {/if}
     </span>

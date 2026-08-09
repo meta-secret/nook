@@ -109,10 +109,9 @@
   let chosenPath = $state<ChosenVaultPath>(ChosenVaultPath.Undecided)
   let vaultName = $state('')
   let sentinelName = $state('')
-  const stateRuneArgs: Parameters<typeof $state>[0] = {
+  let sentinelDashboardState = $state<SentinelDashboardChoice>({
     kind: SentinelDashboardChoiceKind.NotChosen,
-  };
-  let sentinelDashboardState = $state<SentinelDashboardChoice>(stateRuneArgs)
+  })
   function dashboardIs(dashboard: SentinelDashboard): boolean {
     return (
       sentinelDashboardState.kind === SentinelDashboardChoiceKind.Chosen &&
@@ -156,7 +155,10 @@
       return
     }
     importedParticipantResponse = response
-    void onAddSentinelGenesisParticipantResponse(response)
+    const participantRequest: Parameters<
+      NonNullable<typeof onAddSentinelGenesisParticipantResponse>
+    >[0] = { payload: response }
+    void onAddSentinelGenesisParticipantResponse(participantRequest)
   })
 
   $effect(() => {
@@ -423,8 +425,12 @@
       onPrepareInitiator={() => prepareInitiatorDeviceKeys()}
       onBack={goBack}
       onStart={() => startSentinelGenesis()}
-      onAddParticipant={({ payload, participantLabel }) =>
-        (() => { const onAddSentinelGenesisParticipantResponseArgs: Parameters<typeof onAddSentinelGenesisParticipantResponse>[0] = { payload, participantLabel }; return onAddSentinelGenesisParticipantResponse?.(onAddSentinelGenesisParticipantResponseArgs); })()}
+      onAddParticipant={({ payload, participantLabel }) => {
+        const participantRequest: Parameters<
+          NonNullable<typeof onAddSentinelGenesisParticipantResponse>
+        >[0] = { payload, participantLabel }
+        return onAddSentinelGenesisParticipantResponse?.(participantRequest)
+      }}
       onFinalize={() => onFinalizeSentinelGenesis?.()}
       onCompleteDelivery={() => onCompleteSentinelGenesisDelivery?.()}
     />
@@ -441,8 +447,12 @@
       isBusy={isBusy || sentinelActionBusy}
       onBack={goBack}
       onStart={() => startSentinelGenesis()}
-      onAddParticipant={(payload) =>
-        onAddSentinelGenesisParticipantResponse?.(payload)}
+      onAddParticipant={(payload) => {
+        const participantRequest: Parameters<
+          NonNullable<typeof onAddSentinelGenesisParticipantResponse>
+        >[0] = { payload }
+        return onAddSentinelGenesisParticipantResponse?.(participantRequest)
+      }}
       onFinalize={() => onFinalizeSentinelGenesis?.()}
       onCompleteDelivery={() => onCompleteSentinelGenesisDelivery?.()}
     />

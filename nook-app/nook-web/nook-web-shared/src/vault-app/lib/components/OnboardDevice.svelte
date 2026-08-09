@@ -18,9 +18,10 @@
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import { Button } from '$lib/components/ui/button'
-  import { buildEnrollmentLink } from '$lib/enrollment/code'
+  import { buildEnrollmentLink, getEnrollmentLinkBase } from '$lib/enrollment/code'
   import {
     GITHUB_PROVIDER_TYPE,
+    GOOGLE_DRIVE_OAUTH_FILE_PRESET,
     isICloudProvider,
     localizeProviderLabel,
     providerStorageDetail,
@@ -140,7 +141,7 @@
       ? vault.oauthFileDraft.config.preset
       : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
         ? vault.oauthSetupSelection.preset
-        : 'google-drive',
+        : GOOGLE_DRIVE_OAUTH_FILE_PRESET,
   )
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
@@ -152,14 +153,12 @@
     vault.vaultArchitecture.sentinel_required_participants ?? 0,
   )
 
-  const stateRuneArgs: Parameters<typeof $state>[0] = {
+  let selectedProviderIdState = $state<ProviderSelection>({
     kind: ProviderSelectionKind.Automatic,
-  };
-  let selectedProviderIdState = $state<ProviderSelection>(stateRuneArgs)
-  const stateRuneArgs2: Parameters<typeof $state>[0] = {
+  })
+  let passwordEntry = $state<PasswordEntrySelection>({
     kind: PasswordEntrySelectionKind.NotSelected,
-  };
-  let passwordEntry = $state<PasswordEntrySelection>(stateRuneArgs2)
+  })
   let passwordInput = $state('')
   let localError = $state('')
   let isGenerating = $state(false)
@@ -239,9 +238,14 @@
   const wizardReady = $derived(
     hasPasswordSelection && hasCompatibleSyncProviders,
   )
-  const enrollmentLink = $derived.by(() =>
-    enrollmentCode ? buildEnrollmentLink(enrollmentCode) : '',
-  )
+  const enrollmentLink = $derived.by(() => {
+    if (!enrollmentCode) return ''
+    const enrollmentLinkRequest: Parameters<typeof buildEnrollmentLink>[0] = {
+      code: enrollmentCode,
+      baseUrl: getEnrollmentLinkBase(),
+    }
+    return buildEnrollmentLink(enrollmentLinkRequest)
+  })
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return ''
     return peekEnrollmentIssuedAt(enrollmentCode)
@@ -267,11 +271,15 @@
   const syncStepSubtitle = $derived(
     hasCompatibleSyncProviders
       ? compatibleSyncProviders.length === 1
-        ? (() => { const tArgs: Parameters<typeof vault.t>[1] = {
-            label: (() => { const localizeProviderLabelArgs: Parameters<typeof localizeProviderLabel>[0] = { label: compatibleSyncProviders[0]?.label ?? '', t: vault.t }; return localizeProviderLabel(
-              localizeProviderLabelArgs,
-            ); })(),
-          }; return vault.t(I18N_KEYS.OnboardDeviceWizardSyncReadySingular, tArgs); })()
+        ? (() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+            key: I18N_KEYS.OnboardDeviceWizardSyncReadySingular,
+            replacements: {
+              label: (() => { const localizeProviderLabelArgs: Parameters<typeof localizeProviderLabel>[0] = {
+                label: compatibleSyncProviders[0]?.label ?? '',
+                t: vault.t,
+              }; return localizeProviderLabel(localizeProviderLabelArgs); })(),
+            },
+          }; return vault.t(translationRequest); })()
         : (() => { const tArgs3: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.OnboardDeviceWizardSyncReadyPlural, replacements: {
             count: String(compatibleSyncProviders.length),
           } }; return vault.t(tArgs3); })()
@@ -364,11 +372,12 @@
     }
     isGenerating = true
     try {
-      await onIssueCode(
-        selectedPassword.entry.id,
-        passwordInput,
-        selectedProvider.provider.id,
-      )
+      const issueRequest: Parameters<typeof onIssueCode>[0] = {
+        entryId: selectedPassword.entry.id,
+        password: passwordInput,
+        providerId: selectedProvider.provider.id,
+      }
+      await onIssueCode(issueRequest)
       passwordInput = ''
     } catch (e) {
       localError =
@@ -478,11 +487,13 @@
           type="button"
           size="sm"
           data-testid="sentinel-review-joins"
-          onclick={() =>
-            vault.openSettings(
-              SettingsSection.Storage,
-              SettingsAccordionSection.Devices,
-            )}
+          onclick={() => {
+            const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
+              section: SettingsSection.Storage,
+              accordion: SettingsAccordionSection.Devices,
+            }
+            vault.openSettings(settingsRequest)
+          }}
         >
           <ShieldCheck class="size-4" />
           {vault.t(I18N_KEYS.OnboardDeviceSentinelReviewJoins)}

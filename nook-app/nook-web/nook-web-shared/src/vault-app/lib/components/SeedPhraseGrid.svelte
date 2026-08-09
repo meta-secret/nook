@@ -40,14 +40,12 @@
   const fromArgs: Parameters<typeof Array.from>[0] = { length: 24 };
   let cells = $state<string[]>(Array.from(fromArgs, () => ""));
   let syncingFromCells = $state(false);
-  const stateRuneArgs: Parameters<typeof $state>[0] = { kind: FocusedWordKind.None };
-  let focusedIndex = $state<FocusedWord>(stateRuneArgs);
+  let focusedIndex = $state<FocusedWord>({ kind: FocusedWordKind.None });
   let suggestionIndex = $state(0);
   let inputRefs = $state<HTMLInputElement[]>([]);
-  const stateRuneArgs2: Parameters<typeof $state>[0] = {
+  let checksumValid = $state<ChecksumStatus>({
     kind: ChecksumStatusKind.NotChecked,
-  };
-  let checksumValid = $state<ChecksumStatus>(stateRuneArgs2);
+  });
 
   const gridCols = $derived(wordCount === 12 ? "grid-cols-3" : "grid-cols-4");
   const activeCells = $derived(cells.slice(0, wordCount));

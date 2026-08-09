@@ -75,20 +75,23 @@
   )
   const conflictDescription = $derived(
     conflictView.kind === VaultSyncConflictKind.StoreId
-      ? (() => { const tArgs: Parameters<typeof vault.t>[1] = {
+      ? (() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+          key: isEventLogStoreMismatch
+            ? I18N_KEYS.AuthStorageSyncConflictStoreIdEventDesc
+            : I18N_KEYS.AuthStorageSyncConflictStoreIdDesc,
+          replacements: {
             provider: conflict.providerLabel,
             localStore: conflictView.localStoreId,
             remoteStore: conflictView.remoteStoreId,
-          }; return vault.t(
-          isEventLogStoreMismatch
-            ? I18N_KEYS.AuthStorageSyncConflictStoreIdEventDesc
-            : I18N_KEYS.AuthStorageSyncConflictStoreIdDesc,
-          tArgs,
-        ); })()
-      : (() => { const tArgs2: Parameters<typeof vault.t>[1] = {
+          },
+        }; return vault.t(translationRequest); })()
+      : (() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictDesc,
+  replacements: {
           provider: conflict.providerLabel,
           version: versionLabel,
-        }; return vault.t(I18N_KEYS.AuthStorageSyncConflictDesc, tArgs2); })(),
+        },
+}; return vault.t(translationRequest2); })(),
   )
   const conflictTitle = $derived(
     isStoreIdConflict
@@ -142,13 +145,19 @@
             </span>
             <span class="block text-xs text-muted-foreground">
               {#if conflictView.kind === VaultSyncConflictKind.StoreId}
-                {(() => { const tArgs3: Parameters<typeof vault.t>[1] = {
+                {(() => { const translationRequest3: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictStoreIdLocal,
+  replacements: {
                   store: conflictView.localStoreId,
-                }; return vault.t(I18N_KEYS.AuthStorageSyncConflictStoreIdLocal, tArgs3); })()}
+                },
+}; return vault.t(translationRequest3); })()}
               {:else}
-                {(() => { const tArgs4: Parameters<typeof vault.t>[1] = {
+                {(() => { const translationRequest4: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictVersion,
+  replacements: {
                   version: String(conflictView.localVersion),
-                }; return vault.t(I18N_KEYS.AuthStorageSyncConflictVersion, tArgs4); })()}
+                },
+}; return vault.t(translationRequest4); })()}
               {/if}
             </span>
           </span>
@@ -160,19 +169,28 @@
           <Cloud class="mt-0.5 size-4 shrink-0 text-primary" />
           <span>
             <span class="block font-medium text-foreground">
-              {(() => { const tArgs5: Parameters<typeof vault.t>[1] = {
+              {(() => { const translationRequest5: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictRemoteCopy,
+  replacements: {
                 provider: conflict.providerLabel,
-              }; return vault.t(I18N_KEYS.AuthStorageSyncConflictRemoteCopy, tArgs5); })()}
+              },
+}; return vault.t(translationRequest5); })()}
             </span>
             <span class="block text-xs text-muted-foreground">
               {#if conflictView.kind === VaultSyncConflictKind.StoreId}
-                {(() => { const tArgs6: Parameters<typeof vault.t>[1] = {
+                {(() => { const translationRequest6: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictStoreIdRemote,
+  replacements: {
                   store: conflictView.remoteStoreId,
-                }; return vault.t(I18N_KEYS.AuthStorageSyncConflictStoreIdRemote, tArgs6); })()}
+                },
+}; return vault.t(translationRequest6); })()}
               {:else}
-                {(() => { const tArgs7: Parameters<typeof vault.t>[1] = {
+                {(() => { const translationRequest7: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictVersion,
+  replacements: {
                   version: String(conflictView.remoteVersion),
-                }; return vault.t(I18N_KEYS.AuthStorageSyncConflictVersion, tArgs7); })()}
+                },
+}; return vault.t(translationRequest7); })()}
               {/if}
             </span>
           </span>
@@ -218,9 +236,12 @@
             {#if isBusy}
               <RefreshCw class="size-4 animate-spin" />
             {/if}
-            {(() => { const tArgs8: Parameters<typeof vault.t>[1] = {
+            {(() => { const translationRequest8: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictKeepRemote,
+  replacements: {
               provider: conflict.providerLabel,
-            }; return vault.t(I18N_KEYS.AuthStorageSyncConflictKeepRemote, tArgs8); })()}
+            },
+}; return vault.t(translationRequest8); })()}
           </Button>
           <Button
             type="button"

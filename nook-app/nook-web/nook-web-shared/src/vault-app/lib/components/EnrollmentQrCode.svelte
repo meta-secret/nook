@@ -20,14 +20,18 @@
     dense?: boolean;
   } = $props();
 
-  const stateRuneArgs: Parameters<typeof $state>[0] = {
+  let container = $state<QrCodeContainerMount>({
     kind: QrCodeContainerMountKind.Unmounted,
-  };
-  let container = $state<QrCodeContainerMount>(stateRuneArgs);
-  const rawArgs: Parameters<typeof $state.raw>[0] = { kind: QrCodeMountKind.Unmounted };
-  let qrCode = $state.raw<QrCodeMount>(rawArgs);
+  });
+  let qrCode = $state.raw<QrCodeMount>({ kind: QrCodeMountKind.Unmounted });
   let isReady = $state(false);
-  const options = $derived(createEnrollmentQrOptions(enrollmentLink, dense));
+  const options = $derived.by(() => {
+    const optionsRequest: Parameters<typeof createEnrollmentQrOptions>[0] = {
+      enrollmentLink,
+      dense,
+    };
+    return createEnrollmentQrOptions(optionsRequest);
+  });
 
   onMount(() => {
     if (container.kind === QrCodeContainerMountKind.Unmounted) return;

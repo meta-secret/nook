@@ -85,22 +85,16 @@
     editRestriction.decision !== VaultEditDecision.Allowed,
   )
   let searchPattern = $derived(vault.secretQuery)
-  const stateRuneArgs: Parameters<typeof $state>[0] = {};
-  let decryptedSecrets = $state<DecryptedSecrets>(stateRuneArgs)
-  const stateRuneArgs2: Parameters<typeof $state>[0] = {};
-  let expandedSecrets = $state<Record<string, boolean>>(stateRuneArgs2)
-  const stateRuneArgs3: Parameters<typeof $state>[0] = { kind: ClipboardNoticeKind.Hidden };
-  let copiedKey = $state<ClipboardNotice>(stateRuneArgs3)
+  let decryptedSecrets = $state<DecryptedSecrets>({})
+  let expandedSecrets = $state<Record<string, boolean>>({})
+  let copiedKey = $state<ClipboardNotice>({ kind: ClipboardNoticeKind.Hidden })
   let addSecretOpen = $state(false)
-  const stateRuneArgs4: Parameters<typeof $state>[0] = {
+  let formSelectedType = $state<SecretTypeSelection>({
     kind: SecretTypeSelectionKind.ChoosingType,
-  };
-  let formSelectedType = $state<SecretTypeSelection>(stateRuneArgs4)
-  const stateRuneArgs5: Parameters<typeof $state>[0] = { kind: SecretEditorKind.Creating };
-  let editingItem = $state<SecretEditor>(stateRuneArgs5)
+  })
+  let editingItem = $state<SecretEditor>({ kind: SecretEditorKind.Creating })
   let editLoadSequence = 0
-  const stateRuneArgs6: Parameters<typeof $state>[0] = {};
-  let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>(stateRuneArgs6)
+  let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({})
 
   const typeFilters: Array<{
     value: SecretType
@@ -211,14 +205,18 @@
   })
 
   function notifyAddMode() {
-    const onAddModeChangeArgs: Parameters<typeof onAddModeChange>[0] = { open: addSecretOpen, selection: formSelectedType };
+    const onAddModeChangeArgs: Parameters<NonNullable<typeof onAddModeChange>>[0] = { open: addSecretOpen, selection: formSelectedType };
     onAddModeChange?.(onAddModeChangeArgs)
   }
 
   function selectTypeFilter(value: string) {
     if (value === 'all') {
       vault.secretTypeFilter = NookSecretTypeFilter.All
-      void vault.loadSecretPage(searchPattern.trim(), 0)
+      const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
+        query: searchPattern.trim(),
+        requestedOffset: 0,
+      }
+      void vault.loadSecretPage(pageRequest)
       return
     }
     const nextFilter = typeFilters.find(
@@ -226,7 +224,11 @@
     )
     if (!nextFilter) return
     vault.secretTypeFilter = nextFilter.filter
-    void vault.loadSecretPage(searchPattern.trim(), 0)
+    const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
+      query: searchPattern.trim(),
+      requestedOffset: 0,
+    }
+    void vault.loadSecretPage(pageRequest)
   }
 
   function resetTransientSecretViews() {
@@ -285,7 +287,11 @@
     const query = searchPattern.trim()
     if (query === vault.secretQuery) return
     const timer = setTimeout(() => {
-      void vault.loadSecretPage(query, 0)
+      const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
+        query,
+        requestedOffset: 0,
+      }
+      void vault.loadSecretPage(pageRequest)
     }, 200)
     return () => clearTimeout(timer)
   })
@@ -349,12 +355,13 @@
   }
 
   async function copySecret(id: string) {
-    await withDecryptedSecret(
-      decryptedSecrets,
+    const exposureRequest: Parameters<typeof withDecryptedSecret>[0] = {
+      records: decryptedSecrets,
       id,
-      (secretId) => vault.decryptSecret(secretId),
-      (record) => (() => { const copyToClipboardArgs: Parameters<typeof copyToClipboard>[0] = { text: record.primaryCredential, id, field: 'secret' }; return copyToClipboard(copyToClipboardArgs); })(),
-    )
+      load: (secretId) => vault.decryptSecret(secretId),
+      action: (record) => (() => { const copyToClipboardArgs: Parameters<typeof copyToClipboard>[0] = { text: record.primaryCredential, id, field: 'secret' }; return copyToClipboard(copyToClipboardArgs); })(),
+    }
+    await withDecryptedSecret(exposureRequest)
   }
 
   async function refreshAuthenticatorCode(id: string) {
@@ -629,11 +636,16 @@
                 variant="outline"
                 data-testid="secret-page-previous"
                 disabled={vault.secretPageOffset === 0}
-                onclick={() =>
-                  vault.loadSecretPage(
-                    vault.secretQuery,
-                    Math.max(0, vault.secretPageOffset - vault.secretPageSize),
-                  )}
+                onclick={() => {
+                  const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
+                    query: vault.secretQuery,
+                    requestedOffset: Math.max(
+                      0,
+                      vault.secretPageOffset - vault.secretPageSize,
+                    ),
+                  }
+                  vault.loadSecretPage(pageRequest)
+                }}
               >
                 <ChevronLeft class="size-3.5" />
                 {vault.t(I18N_KEYS.VaultPreviousPage)}
@@ -650,11 +662,14 @@
                 data-testid="secret-page-next"
                 disabled={vault.secretPageOffset + vault.secretPageSize >=
                   vault.secretTotal}
-                onclick={() =>
-                  vault.loadSecretPage(
-                    vault.secretQuery,
-                    vault.secretPageOffset + vault.secretPageSize,
-                  )}
+                onclick={() => {
+                  const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
+                    query: vault.secretQuery,
+                    requestedOffset:
+                      vault.secretPageOffset + vault.secretPageSize,
+                  }
+                  vault.loadSecretPage(pageRequest)
+                }}
               >
                 {vault.t(I18N_KEYS.VaultNextPage)}
                 <ChevronRight class="size-3.5" />

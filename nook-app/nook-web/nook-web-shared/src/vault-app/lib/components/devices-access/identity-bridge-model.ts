@@ -502,19 +502,23 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           };
           return stageNode(stageNodeArgs);
         })(),
-        graphNode(
-          "protection-current",
-          (() => {
+        (() => {
+          const data = (() => {
             const protectionDataArgs: Parameters<typeof protectionData>[0] = {
               input,
               flow: IdentityBridgeFlow.Vertical,
             };
             return protectionData(protectionDataArgs);
-          })(),
-          20,
-          44,
-          300,
-        ),
+          })();
+          const nodeRequest: Parameters<typeof graphNode>[0] = {
+            id: "protection-current",
+            data,
+            x: 20,
+            y: 44,
+            width: 300,
+          };
+          return graphNode(nodeRequest);
+        })(),
         (() => {
           const stageNodeArgs2: Parameters<typeof stageNode>[0] = {
             id: "stage-device",
@@ -526,9 +530,8 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           };
           return stageNode(stageNodeArgs2);
         })(),
-        graphNode(
-          "device-current",
-          (() => {
+        (() => {
+          const data = (() => {
             const deviceDataArgs: Parameters<typeof deviceData>[0] = {
               input,
               flow: IdentityBridgeFlow.Vertical,
@@ -536,11 +539,16 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
               incomingRelation: input.copy.protectionDeviceRelation,
             };
             return deviceData(deviceDataArgs);
-          })(),
-          20,
-          244,
-          300,
-        ),
+          })();
+          const nodeRequest: Parameters<typeof graphNode>[0] = {
+            id: "device-current",
+            data,
+            x: 20,
+            y: 244,
+            width: 300,
+          };
+          return graphNode(nodeRequest);
+        })(),
         (() => {
           const stageNodeArgs3: Parameters<typeof stageNode>[0] = {
             id: "stage-identity",
@@ -715,22 +723,25 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
         };
         return stageNode(stageNodeArgs8);
       })(),
-      graphNode(
-        "protection-current",
-        (() => {
+      (() => {
+        const data = (() => {
           const protectionDataArgs2: Parameters<typeof protectionData>[0] = {
             input,
             flow: IdentityBridgeFlow.Horizontal,
           };
           return protectionData(protectionDataArgs2);
-        })(),
-        0,
-        identityY,
-        250,
-      ),
-      graphNode(
-        "device-current",
-        (() => {
+        })();
+        const nodeRequest: Parameters<typeof graphNode>[0] = {
+          id: "protection-current",
+          data,
+          x: 0,
+          y: identityY,
+          width: 250,
+        };
+        return graphNode(nodeRequest);
+      })(),
+      (() => {
+        const data = (() => {
           const deviceDataArgs2: Parameters<typeof deviceData>[0] = {
             input,
             flow: IdentityBridgeFlow.Horizontal,
@@ -738,11 +749,16 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
             incomingRelation: input.copy.protectionDeviceRelation,
           };
           return deviceData(deviceDataArgs2);
-        })(),
-        280,
-        identityY,
-        180,
-      ),
+        })();
+        const nodeRequest: Parameters<typeof graphNode>[0] = {
+          id: "device-current",
+          data,
+          x: 280,
+          y: identityY,
+          width: 180,
+        };
+        return graphNode(nodeRequest);
+      })(),
       (() => {
         const identityDataArgs2: Parameters<typeof identityData>[0] = {
           input,
@@ -901,9 +917,8 @@ function vaultGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
   ];
   if (verifiedDeviceAccess) {
     nodes.push(
-      graphNode(
-        "device-current",
-        (() => {
+      (() => {
+        const data = (() => {
           const deviceDataArgs3: Parameters<typeof deviceData>[0] = {
             input,
             flow,
@@ -913,11 +928,16 @@ function vaultGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
             ),
           };
           return deviceData(deviceDataArgs3);
-        })(),
-        deviceX,
-        deviceY,
-        deviceWidth,
-      ),
+        })();
+        const nodeRequest: Parameters<typeof graphNode>[0] = {
+          id: "device-current",
+          data,
+          x: deviceX,
+          y: deviceY,
+          width: deviceWidth,
+        };
+        return graphNode(nodeRequest);
+      })(),
     );
   } else {
     const graphNodeArgs14: Parameters<typeof graphNode>[0] = {

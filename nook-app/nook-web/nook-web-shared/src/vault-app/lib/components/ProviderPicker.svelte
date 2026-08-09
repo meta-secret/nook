@@ -5,7 +5,14 @@
   import { Cloud, FolderOpen, HardDrive } from '@lucide/svelte'
   import {
     configuredOAuthFile,
+    DEFAULT_DRIVE_BACKUP_NAME,
     defaultOAuthFileConfig,
+    GITHUB_PROVIDER_TYPE,
+    GOOGLE_DRIVE_OAUTH_FILE_PRESET,
+    ICLOUD_OAUTH_FILE_PRESET,
+    LOCAL_FOLDER_PROVIDER_TYPE,
+    LOCAL_PROVIDER_TYPE,
+    OAUTH_FILE_PROVIDER_TYPE,
     providerPersistenceDefaults,
     storedGithubPat,
     storedGithubRepository,
@@ -29,6 +36,23 @@
   } = $props()
 
   const localFolderUnavailable = $derived(!vault.localFolderBackupSupported)
+  const localProviderRequest: Parameters<typeof blocked>[0] = {
+    type: LOCAL_PROVIDER_TYPE,
+  }
+  const localFolderProviderRequest: Parameters<typeof blocked>[0] = {
+    type: LOCAL_FOLDER_PROVIDER_TYPE,
+  }
+  const googleDriveProviderRequest: Parameters<typeof blocked>[0] = {
+    type: OAUTH_FILE_PROVIDER_TYPE,
+    oauthPreset: GOOGLE_DRIVE_OAUTH_FILE_PRESET,
+  }
+  const iCloudProviderRequest: Parameters<typeof blocked>[0] = {
+    type: OAUTH_FILE_PROVIDER_TYPE,
+    oauthPreset: ICLOUD_OAUTH_FILE_PRESET,
+  }
+  const githubProviderRequest: Parameters<typeof blocked>[0] = {
+    type: GITHUB_PROVIDER_TYPE,
+  }
 
   function draftProvider(
     { type, oauthPreset }: { readonly type: StorageProviderType; readonly oauthPreset?: OAuthFilePreset },
@@ -41,18 +65,22 @@
       syncCheckpoint: { state: 'neverSynced' },
       createdAt: new Date(0).toISOString(),
     }
-    if (type === 'github') {
+    if (type === GITHUB_PROVIDER_TYPE) {
       return {
         ...base,
         githubPat: storedGithubPat('github_pat_draft'),
         githubRepo: storedGithubRepository('nook'),
       }
     }
-    if (type === 'oauth-file') {
+    if (type === OAUTH_FILE_PROVIDER_TYPE) {
+      const defaultConfigRequest: Parameters<typeof defaultOAuthFileConfig>[0] = {
+        preset: oauthPreset ?? GOOGLE_DRIVE_OAUTH_FILE_PRESET,
+        fileName: DEFAULT_DRIVE_BACKUP_NAME,
+      }
       return {
         ...base,
         oauthFile: configuredOAuthFile(
-          defaultOAuthFileConfig(oauthPreset ?? 'google-drive'),
+          defaultOAuthFileConfig(defaultConfigRequest),
         ),
       }
     }
@@ -97,8 +125,8 @@
           type="button"
           class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
           data-testid="provider-option-local"
-          disabled={blocked('local')}
-          onclick={() => onSelect('local')}
+          disabled={blocked(localProviderRequest)}
+          onclick={() => onSelect(localProviderRequest)}
         >
           <HardDrive class="size-4 shrink-0 text-foreground" />
           <span class="min-w-0 flex-1">
@@ -106,7 +134,10 @@
               >{vault.t(I18N_KEYS.ProviderPickerThisDevice)}</span
             >
             <span class="block truncate text-xs text-muted-foreground">
-              {description(I18N_KEYS.ProviderPickerThisDeviceDesc, 'local')}
+              {(() => { const descriptionRequest: Parameters<typeof description>[0] = {
+                key: I18N_KEYS.ProviderPickerThisDeviceDesc,
+                ...localProviderRequest,
+              }; return description(descriptionRequest); })()}
             </span>
           </span>
         </button>
@@ -118,10 +149,10 @@
           type="button"
           class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent disabled:cursor-not-allowed disabled:border-border disabled:bg-muted/10 disabled:opacity-60 disabled:hover:bg-muted/10"
           data-testid="provider-option-local-folder"
-          disabled={localFolderUnavailable || blocked('local-folder')}
+          disabled={localFolderUnavailable || blocked(localFolderProviderRequest)}
           onclick={() => {
-            if (!localFolderUnavailable && !blocked('local-folder'))
-              onSelect('local-folder')
+            if (!localFolderUnavailable && !blocked(localFolderProviderRequest))
+              onSelect(localFolderProviderRequest)
           }}
         >
           <FolderOpen class="size-4 shrink-0 text-foreground" />
@@ -132,10 +163,10 @@
             <span class="block truncate text-xs text-muted-foreground">
               {localFolderUnavailable
                 ? vault.t(I18N_KEYS.ProviderPickerLocalFolderUnavailableDesc)
-                : description(
-                    I18N_KEYS.ProviderPickerLocalFolderDesc,
-                    'local-folder',
-                  )}
+                : (() => { const descriptionRequest: Parameters<typeof description>[0] = {
+                    key: I18N_KEYS.ProviderPickerLocalFolderDesc,
+                    ...localFolderProviderRequest,
+                  }; return description(descriptionRequest); })()}
             </span>
           </span>
         </button>
@@ -146,10 +177,10 @@
         type="button"
         class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
         data-testid="provider-option-oauth-file"
-        disabled={(() => { const blockedArgs2: Parameters<typeof blocked>[0] = { type: 'oauth-file', oauthPreset: 'google-drive' }; return blocked(blockedArgs2); })()}
+        disabled={blocked(googleDriveProviderRequest)}
         onclick={() => {
-          if (!(() => { const blockedArgs3: Parameters<typeof blocked>[0] = { type: 'oauth-file', oauthPreset: 'google-drive' }; return blocked(blockedArgs3); })())
-            (() => { const onSelectArgs: Parameters<typeof onSelect>[0] = { type: 'oauth-file', oauthPreset: 'google-drive' }; return onSelect(onSelectArgs); })()
+          if (!blocked(googleDriveProviderRequest))
+            onSelect(googleDriveProviderRequest)
         }}
       >
         <svg
@@ -179,9 +210,10 @@
             >{vault.t(I18N_KEYS.ProviderPickerGoogleDrive)}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            {(() => { const descriptionArgs: Parameters<typeof description>[0] = { key: I18N_KEYS.ProviderPickerGoogleDriveDesc, type: 'oauth-file', oauthPreset: 'google-drive' }; return description(
-              descriptionArgs,
-            ); })()}
+            {(() => { const descriptionRequest: Parameters<typeof description>[0] = {
+              key: I18N_KEYS.ProviderPickerGoogleDriveDesc,
+              ...googleDriveProviderRequest,
+            }; return description(descriptionRequest); })()}
           </span>
         </span>
       </button>
@@ -191,9 +223,9 @@
         type="button"
         class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
         data-testid="provider-option-icloud"
-        disabled={(() => { const blockedArgs4: Parameters<typeof blocked>[0] = { type: 'oauth-file', oauthPreset: 'icloud' }; return blocked(blockedArgs4); })()}
+        disabled={blocked(iCloudProviderRequest)}
         onclick={() => {
-          if (!(() => { const blockedArgs5: Parameters<typeof blocked>[0] = { type: 'oauth-file', oauthPreset: 'icloud' }; return blocked(blockedArgs5); })()) (() => { const onSelectArgs2: Parameters<typeof onSelect>[0] = { type: 'oauth-file', oauthPreset: 'icloud' }; return onSelect(onSelectArgs2); })()
+          if (!blocked(iCloudProviderRequest)) onSelect(iCloudProviderRequest)
         }}
       >
         <svg
@@ -211,7 +243,10 @@
             >{vault.t(I18N_KEYS.ProviderPickerIcloud)}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            {(() => { const descriptionArgs2: Parameters<typeof description>[0] = { key: I18N_KEYS.ProviderPickerIcloudDesc, type: 'oauth-file', oauthPreset: 'icloud' }; return description(descriptionArgs2); })()}
+            {(() => { const descriptionRequest: Parameters<typeof description>[0] = {
+              key: I18N_KEYS.ProviderPickerIcloudDesc,
+              ...iCloudProviderRequest,
+            }; return description(descriptionRequest); })()}
           </span>
         </span>
       </button>
@@ -221,9 +256,9 @@
         type="button"
         class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
         data-testid="provider-option-github"
-        disabled={blocked('github')}
+        disabled={blocked(githubProviderRequest)}
         onclick={() => {
-          if (!blocked('github')) onSelect('github')
+          if (!blocked(githubProviderRequest)) onSelect(githubProviderRequest)
         }}
       >
         <Cloud class="size-4 shrink-0 text-foreground" />
@@ -232,7 +267,10 @@
             >{vault.t(I18N_KEYS.ProviderPickerGithub)}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            {description(I18N_KEYS.ProviderPickerGithubDesc, 'github')}
+            {(() => { const descriptionRequest: Parameters<typeof description>[0] = {
+              key: I18N_KEYS.ProviderPickerGithubDesc,
+              ...githubProviderRequest,
+            }; return description(descriptionRequest); })()}
           </span>
         </span>
       </button>

@@ -173,10 +173,9 @@
 
   let devicesAccessOpen = $state(loginDevicesAccessRouteOpen())
   let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header)
-  const stateRuneArgs: Parameters<typeof $state>[0] = {
+  let devicesAccessHost = $state<DevicesAccessHostMount>({
     kind: DevicesAccessHostMountKind.Unmounted,
-  };
-  let devicesAccessHost = $state<DevicesAccessHostMount>(stateRuneArgs)
+  })
   let devicesAccessNudgePreference = $state(
     DevicesAccessNudgePreference.Visible,
   )
@@ -474,8 +473,12 @@
       passwordEntryId={peekEnrollmentEntryId(prefillEnrollmentCode)}
       passwordEntryLabel={prefillEnrollmentEntryLabel}
       {isVerifying}
-      onSubmit={(password) =>
-        onUseEnrollmentCode!(prefillEnrollmentCode, password)}
+      onSubmit={(password) => {
+        const enrollmentRequest: Parameters<
+          NonNullable<typeof onUseEnrollmentCode>
+        >[0] = { code: prefillEnrollmentCode, password }
+        return onUseEnrollmentCode!(enrollmentRequest)
+      }}
     />
   {:else if showCreateVault || sentinelInvitationRequest.trim()}
     <LoginCreateVaultChooser
@@ -486,12 +489,16 @@
       {usesExtensionDeviceIdentity}
       {onCreateDeviceVault}
       {onStartSentinelGenesis}
-      onAddSentinelGenesisParticipantResponse={({ payload, participantLabel }) =>
-        sentinelGenesisActions.addParticipantResponse(
-          vault,
+      onAddSentinelGenesisParticipantResponse={({ payload, participantLabel }) => {
+        const participantRequest: Parameters<
+          typeof sentinelGenesisActions.addParticipantResponse
+        >[0] = {
+          state: vault,
           payload,
-          participantLabel,
-        )}
+          participantLabel: participantLabel ?? '',
+        }
+        return sentinelGenesisActions.addParticipantResponse(participantRequest)
+      }}
       onFinalizeSentinelGenesis={() => sentinelGenesisActions.finalize(vault)}
       onCreateSentinelGenesisParticipantResponse={onCreateSentinelGenesisParticipantResponse ??
         ((payload) =>

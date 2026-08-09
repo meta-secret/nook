@@ -196,11 +196,12 @@ export async function syncFromSyncProviders({
   try {
     for (const provider of state.syncProviders) {
       if (state.syncBlocked) break;
-      const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[1] =
+      const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[0] =
         {
-          quiet: options?.quiet ?? true,
+          providerId: provider.id,
+          options: { quiet: options?.quiet ?? true },
         };
-      await state.syncProviderById(provider.id, syncProviderByIdArgs);
+      await state.syncProviderById(syncProviderByIdArgs);
     }
     if (state.isAuthenticated) {
       await hydrateMultiDeviceState(state);
@@ -228,10 +229,11 @@ export async function runFanOutSyncToProviders({
       if (state.syncBlocked) break;
       const syncProviderByIdArgs2: Parameters<
         typeof state.syncProviderById
-      >[1] = {
-        quiet: options?.quiet ?? true,
+      >[0] = {
+        providerId: provider.id,
+        options: { quiet: options?.quiet ?? true },
       };
-      await state.syncProviderById(provider.id, syncProviderByIdArgs2);
+      await state.syncProviderById(syncProviderByIdArgs2);
     }
   } finally {
     state.isFanOutSyncing = false;
@@ -405,7 +407,10 @@ export async function chooseReplacementLocalFolderForIssue(
   state.errorMsg = "";
   state.openAdmin(AdminAccordionSection.Storage);
   state.beginAddProvider();
-  state.beginProviderSetup(LOCAL_FOLDER_PROVIDER_TYPE);
+  const setupRequest: Parameters<typeof state.beginProviderSetup>[0] = {
+    type: LOCAL_FOLDER_PROVIDER_TYPE,
+  };
+  state.beginProviderSetup(setupRequest);
 }
 
 export function finishStagedProviderConnectAfterConflict({
@@ -589,11 +594,14 @@ export async function syncLocalFolderProvider({
     manager.syncLocalFolderProvider(handle.handleId),
   )) as string;
   if (localYaml.trim()) {
-    await state.updateProviderSyncMetadata(
-      provider.id,
-      localYaml,
-      NookProviderSyncRevision.untracked(),
-    );
+    const metadataRequest: Parameters<
+      typeof state.updateProviderSyncMetadata
+    >[0] = {
+      providerId: provider.id,
+      yaml: localYaml,
+      revision: NookProviderSyncRevision.untracked(),
+    };
+    await state.updateProviderSyncMetadata(metadataRequest);
   }
 }
 
@@ -786,7 +794,10 @@ export async function manualSync(state: SyncActionsContext) {
       return;
     }
     for (const provider of state.syncProviders) {
-      await state.syncProviderById(provider.id);
+      const syncRequest: Parameters<typeof state.syncProviderById>[0] = {
+        providerId: provider.id,
+      };
+      await state.syncProviderById(syncRequest);
     }
     if (state.isAuthenticated) {
       await state.hydrateMultiDeviceState();
@@ -916,7 +927,7 @@ export async function syncProviderById({
     const [mode, pat, repo] = state.providerWasmArgs(provider);
     // `sync_vault_from_storage` checks the IDB event-log flag; the in-memory
     // `eventLogMode()` bit can be false after reload until connect finishes.
-    const raw = await state.enqueueStorage(() =>
+    const raw = await state.enqueueStorage<NookVaultSyncResult>(() =>
       (() => {
         const raceStorageTimeoutArgs: Parameters<
           typeof state.raceStorageTimeout
@@ -926,7 +937,9 @@ export async function syncProviderById({
             .sync_vault_from_storage(mode, pat, repo),
           label: "Vault sync",
         };
-        return state.raceStorageTimeout(raceStorageTimeoutArgs);
+        return state.raceStorageTimeout<NookVaultSyncResult>(
+          raceStorageTimeoutArgs,
+        );
       })(),
     );
     state.applyVaultSyncResult(raw);

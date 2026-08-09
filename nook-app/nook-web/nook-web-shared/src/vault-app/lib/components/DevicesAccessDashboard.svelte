@@ -105,16 +105,14 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
   const PANEL_ID = 'devices-access-panel'
   const PANEL_CONTENT_ID = 'devices-access-panel-content'
 
-  const stateRuneArgs: Parameters<typeof $state>[0] = {
+  let loadState = $state<DashboardLoadState<DashboardView>>({
     kind: DashboardLoadKind.Loading,
-  };
-  let loadState = $state<DashboardLoadState<DashboardView>>(stateRuneArgs)
+  })
   let selectedStage = $state(AccessChainStage.Unlock)
   let selectedPerspective = $state(IdentityBridgePerspective.Identities)
-  const stateRuneArgs2: Parameters<typeof $state>[0] = {
+  let selectedVault = $state<IdentityBridgeVaultSelection>({
     kind: IdentityBridgeVaultSelectionKind.Empty,
-  };
-  let selectedVault = $state<IdentityBridgeVaultSelection>(stateRuneArgs2)
+  })
   let providerDraft = $state('')
   let providerSaveState = $state<ProviderSaveKind>(ProviderSaveKind.Idle)
   let pendingFocusTarget = $state<DashboardFocusTargetKind>(

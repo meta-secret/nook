@@ -108,14 +108,14 @@
   const oauthOriginUnsupported = $derived(!oauthOriginSupport.supported)
   const oauthOriginUnsupportedMessage = $derived.by(() => {
     if (oauthOriginSupport.supported) return ''
-    const tArgs: Parameters<typeof vault.t>[1] = { origin: oauthOriginSupport.origin };
-    return vault.t(
-      oauthOriginSupport.reason ===
+    const translationRequest: Parameters<typeof vault.t>[0] = {
+      key: oauthOriginSupport.reason ===
         OAuthOriginUnsupportedReason.CloudflarePrPreview
         ? I18N_KEYS.ProviderSetupOauthPreviewOriginUnsupported
         : I18N_KEYS.ProviderSetupOauthOriginUnsupported,
-      tArgs,
-    )
+      replacements: { origin: oauthOriginSupport.origin },
+    };
+    return vault.t(translationRequest)
   })
 
   let connectionStepOpen = $state(true)
@@ -149,7 +149,10 @@
       if (isSharedICloud) {
         await oauthActions.createICloudSharedProvider(vault)
       } else {
-        await oauthActions.createGoogleSharedFolder(vault, collaboratorEmail)
+        const createRequest: Parameters<
+          typeof oauthActions.createGoogleSharedFolder
+        >[0] = { state: vault, collaboratorEmail }
+        await oauthActions.createGoogleSharedFolder(createRequest)
       }
       sharedFolderStepOpen = false
       syncStepOpen = true
@@ -173,9 +176,15 @@
     vault.errorMsg = ''
     try {
       if (isSharedICloud) {
-        await oauthActions.useICloudSharedProvider(vault, sharedFolderRef)
+        const useRequest: Parameters<
+          typeof oauthActions.useICloudSharedProvider
+        >[0] = { state: vault, shareReference: sharedFolderRef }
+        await oauthActions.useICloudSharedProvider(useRequest)
       } else {
-        await oauthActions.useGoogleSharedFolder(vault, sharedFolderRef)
+        const useRequest: Parameters<
+          typeof oauthActions.useGoogleSharedFolder
+        >[0] = { state: vault, folderRef: sharedFolderRef }
+        await oauthActions.useGoogleSharedFolder(useRequest)
       }
       sharedFolderStepOpen = false
       syncStepOpen = true
@@ -239,10 +248,11 @@
           return
         }
         log.info('CloudKit native sign-in deferred wait started')
-        const signInWithICloudArgs: Parameters<typeof oauthActions.signInWithICloud>[1] = {
-          clickPreparedControl: false,
+        const signInWithICloudArgs: Parameters<typeof oauthActions.signInWithICloud>[0] = {
+          state: vault,
+          options: { clickPreparedControl: false },
         };
-        void oauthActions.signInWithICloud(vault, signInWithICloudArgs)
+        void oauthActions.signInWithICloud(signInWithICloudArgs)
       }, 0)
     }
     const addEventListenerArgs: Parameters<typeof node.addEventListener>[2] = { capture: true };
@@ -561,14 +571,20 @@
             : 'google-account-status'}
         >
           {isICloud
-            ? (() => { const tArgs2: Parameters<typeof vault.t>[1] = {
+            ? (() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.ProviderSetupIcloudSignedInAs,
+  replacements: {
                 account:
                   oauthAccount || vault.t(I18N_KEYS.AuthStorageIcloudSignedIn),
-              }; return vault.t(I18N_KEYS.ProviderSetupIcloudSignedInAs, tArgs2); })()
-            : (() => { const tArgs3: Parameters<typeof vault.t>[1] = {
+              },
+}; return vault.t(translationRequest2); })()
+            : (() => { const translationRequest3: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.ProviderSetupGoogleSignedInAs,
+  replacements: {
                 account:
                   oauthAccount || vault.t(I18N_KEYS.AuthStorageGoogleSignedIn),
-              }; return vault.t(I18N_KEYS.ProviderSetupGoogleSignedInAs, tArgs3); })()}
+              },
+}; return vault.t(translationRequest3); })()}
         </p>
       {/if}
 

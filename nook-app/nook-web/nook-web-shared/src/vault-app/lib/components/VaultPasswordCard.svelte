@@ -13,7 +13,7 @@
   } from '@lucide/svelte'
   import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
   import { Button } from '$lib/components/ui/button'
-  import { buildEnrollmentLink } from '$lib/enrollment/code'
+  import { buildEnrollmentLink, getEnrollmentLinkBase } from '$lib/enrollment/code'
   import {
     isVaultPasswordLongEnough,
     peekEnrollmentIssuedAt,
@@ -68,10 +68,9 @@
   }
 
   let panel = $state<VaultPasswordPanel>(resolveInitialPanel())
-  const stateRuneArgs: Parameters<typeof $state>[0] = {
+  let activeEntryId = $state<ActivePasswordEntry>({
     kind: ActivePasswordEntryKind.None,
-  };
-  let activeEntryId = $state<ActivePasswordEntry>(stateRuneArgs)
+  })
 
   let labelInput = $state('')
   let passwordInput = $state('')
@@ -97,9 +96,14 @@
     if (!enrollmentCode) return ''
     return peekEnrollmentIssuedAt(enrollmentCode)
   })
-  const enrollmentLink = $derived.by(() =>
-    enrollmentCode ? buildEnrollmentLink(enrollmentCode) : '',
-  )
+  const enrollmentLink = $derived.by(() => {
+    if (!enrollmentCode) return ''
+    const enrollmentLinkRequest: Parameters<typeof buildEnrollmentLink>[0] = {
+      code: enrollmentCode,
+      baseUrl: getEnrollmentLinkBase(),
+    }
+    return buildEnrollmentLink(enrollmentLinkRequest)
+  })
   const issuedAgo = $derived.by(() => {
     if (!issuedAt) return ''
     const ms = Date.parse(issuedAt)
@@ -202,7 +206,11 @@
       return
     }
     try {
-      await onIssueCode(activeEntryId.entryId, passwordInput)
+      const issueRequest: Parameters<typeof onIssueCode>[0] = {
+        entryId: activeEntryId.entryId,
+        password: passwordInput,
+      }
+      await onIssueCode(issueRequest)
       passwordInput = ''
       confirmInput = ''
     } catch (e) {

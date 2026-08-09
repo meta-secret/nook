@@ -29,7 +29,10 @@ export type PasswordUnlockCapability =
   | { kind: PasswordUnlockCapabilityKind.Unavailable }
   | {
       kind: PasswordUnlockCapabilityKind.Available;
-      unlock(entryId: string, password: string): void | Promise<void>;
+      unlock(request: {
+        readonly entryId: string;
+        readonly password: string;
+      }): void | Promise<void>;
     };
 
 export enum DeviceKeysUnlockCapabilityKind {

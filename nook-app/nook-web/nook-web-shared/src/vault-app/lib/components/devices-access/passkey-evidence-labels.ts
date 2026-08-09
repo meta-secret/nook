@@ -157,21 +157,24 @@ export function clientEnvironmentLabel({
   ) {
     return vault.t(I18N_KEYS.DevicesAccessUnknown);
   }
-  const tArgs: Parameters<typeof vault.t>[1] = {
-    browser: (() => {
-      const browserLabelArgs: Parameters<typeof browserLabel>[0] = {
-        vault,
-        value: browser,
-      };
-      return browserLabel(browserLabelArgs);
-    })(),
-    platform: (() => {
-      const platformLabelArgs: Parameters<typeof platformLabel>[0] = {
-        vault,
-        value: platform,
-      };
-      return platformLabel(platformLabelArgs);
-    })(),
+  const translationRequest: Parameters<typeof vault.t>[0] = {
+    key: I18N_KEYS.DevicesAccessClientDescription,
+    replacements: {
+      browser: (() => {
+        const browserLabelArgs: Parameters<typeof browserLabel>[0] = {
+          vault,
+          value: browser,
+        };
+        return browserLabel(browserLabelArgs);
+      })(),
+      platform: (() => {
+        const platformLabelArgs: Parameters<typeof platformLabel>[0] = {
+          vault,
+          value: platform,
+        };
+        return platformLabel(platformLabelArgs);
+      })(),
+    },
   };
-  return vault.t(I18N_KEYS.DevicesAccessClientDescription, tArgs);
+  return vault.t(translationRequest);
 }

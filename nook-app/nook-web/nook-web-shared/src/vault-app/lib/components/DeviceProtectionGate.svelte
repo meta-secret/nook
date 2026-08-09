@@ -143,13 +143,12 @@
         disabled={vault.isVerifying}
         data-testid="device-protection-pin-setup-btn"
         onclick={() =>
-          void completeProtectionAction(() =>
-            deviceProtectionActions.setupPinDeviceProtection(
-              vault,
-              pin,
-              pinConfirm,
-            ),
-          )}
+          void completeProtectionAction(() => {
+            const setupRequest: Parameters<
+              typeof deviceProtectionActions.setupPinDeviceProtection
+            >[0] = { state: vault, pin, confirmPin: pinConfirm }
+            return deviceProtectionActions.setupPinDeviceProtection(setupRequest)
+          })}
       >
         {vault.isVerifying
           ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
@@ -235,13 +234,16 @@
             disabled={vault.isVerifying}
             data-testid="device-protection-setup-btn"
             onclick={() =>
-              void completeProtectionAction(() =>
-                deviceProtectionActions.setupDeviceProtection(
-                  vault,
+              void completeProtectionAction(() => {
+                const setupRequest: Parameters<
+                  typeof deviceProtectionActions.setupDeviceProtection
+                >[0] = {
+                  state: vault,
                   passkeyLabel,
-                  vault.draftDeviceMode,
-                ),
-              )}
+                  deviceMode: vault.draftDeviceMode,
+                }
+                return deviceProtectionActions.setupDeviceProtection(setupRequest)
+              })}
           >
             {vault.isVerifying
               ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
@@ -293,8 +295,12 @@
         class="w-full"
         disabled={vault.isVerifying}
         data-testid="device-protection-pin-unlock-btn"
-        onclick={() =>
-          deviceProtectionActions.unlockPinDeviceProtection(vault, pin)}
+        onclick={() => {
+          const unlockRequest: Parameters<
+            typeof deviceProtectionActions.unlockPinDeviceProtection
+          >[0] = { state: vault, pin }
+          return deviceProtectionActions.unlockPinDeviceProtection(unlockRequest)
+        }}
       >
         {vault.isVerifying
           ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)

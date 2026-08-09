@@ -52,14 +52,12 @@
     submitTestId,
     vault,
   }: Props = $props()
-  const stateRuneArgs: Parameters<typeof $state>[0] = {
+  let selectedFile = $state<ImportFileSelection>({
     kind: ImportFileSelectionKind.NotSelected,
-  };
-  let selectedFile = $state<ImportFileSelection>(stateRuneArgs)
-  const stateRuneArgs2: Parameters<typeof $state>[0] = {
+  })
+  let result = $state<PasswordImportOutcome>({
     kind: PasswordImportOutcomeKind.NotRun,
-  };
-  let result = $state<PasswordImportOutcome>(stateRuneArgs2)
+  })
   let error = $state('')
   let isImporting = $state(false)
   const busy = $derived(isImporting || isSaving)
@@ -82,7 +80,12 @@
     isImporting = true
     try {
       if (format === PasswordImportFormat.Text) {
-        const imported = await importTextFile(file, false, onImport)
+        const importRequest: Parameters<typeof importTextFile>[0] = {
+          file,
+          isSaving: false,
+          onImport,
+        }
+        const imported = await importTextFile(importRequest)
         if (imported.kind === ImportAttemptKind.Completed) {
           result = {
             kind: PasswordImportOutcomeKind.Completed,
@@ -93,7 +96,12 @@
         }
         return
       }
-      const imported = await importBinaryFile(file, false, onImport)
+      const importRequest: Parameters<typeof importBinaryFile>[0] = {
+        file,
+        isSaving: false,
+        onImport,
+      }
+      const imported = await importBinaryFile(importRequest)
       if (imported.kind === ImportAttemptKind.Completed) {
         result = {
           kind: PasswordImportOutcomeKind.Completed,
@@ -185,15 +193,21 @@
           data-testid={resultTestId}
         >
           <p class="font-medium">
-            {(() => { const tArgs: Parameters<typeof vault.t>[1] = {
+            {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: messages.resultImported,
+  replacements: {
               count: String(result.result.imported),
-            }; return vault.t(messages.resultImported, tArgs); })()}
+            },
+}; return vault.t(translationRequest); })()}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
-            {(() => { const tArgs2: Parameters<typeof vault.t>[1] = {
+            {(() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
+  key: messages.resultSkipped,
+  replacements: {
               unsupported: String(result.result.skippedUnsupported),
               duplicates: String(result.result.skippedDuplicates),
-            }; return vault.t(messages.resultSkipped, tArgs2); })()}
+            },
+}; return vault.t(translationRequest2); })()}
           </p>
         </div>
       {/if}

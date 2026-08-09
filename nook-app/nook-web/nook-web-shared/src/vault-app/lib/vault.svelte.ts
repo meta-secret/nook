@@ -206,8 +206,8 @@ export class VaultState extends VaultLifecycleState {
     const timeoutMs = VaultState.storageOpTimeoutMs;
     return Promise.race([
       promise,
-      new Promise<T> // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-      ((_, reject) => {
+      new Promise<T>((_, reject) => {
+        // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
         setTimeout(
           () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
           timeoutMs,

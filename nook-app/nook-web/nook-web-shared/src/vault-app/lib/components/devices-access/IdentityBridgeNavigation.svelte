@@ -91,9 +91,12 @@
             />{verifiedVaultCount}</span
           >
           <span class="sr-only">
-            {(() => { const tArgs: Parameters<typeof vault.t>[1] = {
+            {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.DevicesAccessBridgeVerifiedVaultCount,
+  replacements: {
               count: String(verifiedVaultCount),
-            }; return vault.t(I18N_KEYS.DevicesAccessBridgeVerifiedVaultCount, tArgs); })()}
+            },
+}; return vault.t(translationRequest); })()}
           </span>
         </button>
       </li>
@@ -137,9 +140,12 @@
                 : 0}</span
             >
             <span class="sr-only">
-              {(() => { const tArgs2: Parameters<typeof vault.t>[1] = {
+              {(() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.DevicesAccessBridgeVerifiedDeviceKeyCount,
+  replacements: {
                 count: vaultEntry.verified ? '1' : '0',
-              }; return vault.t(I18N_KEYS.DevicesAccessBridgeVerifiedDeviceKeyCount, tArgs2); })()}
+              },
+}; return vault.t(translationRequest2); })()}
             </span>
           </button>
         </li>

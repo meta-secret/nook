@@ -58,7 +58,10 @@ to open, plus the unlocked vault's own device and backup-password roster.
               </p>
               <p class="text-xs text-muted-foreground">
                 {knownText(entry.verifiedAt)
-                  ? formatAccessDate(vault, textValue(entry.verifiedAt))
+                  ? (() => { const dateRequest: Parameters<typeof formatAccessDate>[0] = {
+                      vault,
+                      value: textValue(entry.verifiedAt),
+                    }; return formatAccessDate(dateRequest); })()
                   : vault.t(I18N_KEYS.DevicesAccessUnknown)}
               </p>
             {:else}
@@ -70,12 +73,15 @@ to open, plus the unlocked vault's own device and backup-password roster.
               </p>
               <p class="text-xs text-muted-foreground">
                 {knownText(entry.lastLocalUpdateAt)
-                  ? (() => { const tArgs: Parameters<typeof vault.t>[1] = {
-                      date: formatAccessDate(
+                  ? (() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.DevicesAccessLastLocalUpdate,
+  replacements: {
+                      date: (() => { const dateRequest: Parameters<typeof formatAccessDate>[0] = {
                         vault,
-                        textValue(entry.lastLocalUpdateAt),
-                      ),
-                    }; return vault.t(I18N_KEYS.DevicesAccessLastLocalUpdate, tArgs); })()
+                        value: textValue(entry.lastLocalUpdateAt),
+                      }; return formatAccessDate(dateRequest); })(),
+                    },
+}; return vault.t(translationRequest); })()
                   : vault.t(I18N_KEYS.DevicesAccessNoLocalUpdate)}
               </p>
             {/if}

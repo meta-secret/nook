@@ -27,7 +27,7 @@ type AuthProviderDebugHooks = {
   ): AuthProvidersSnapshot["activeVaultStoreId"];
   loadAuthProviders(): Promise<AuthProvidersSnapshot>;
   saveAuthProviders(
-    snapshot: Parameters<typeof saveAuthProviders>[1],
+    snapshot: AuthProvidersSnapshot,
   ): ReturnType<typeof saveAuthProviders>;
   unselectedVaultScope(): AuthProvidersSnapshot["activeVaultStoreId"];
 };
@@ -74,9 +74,7 @@ export function mountBrowserLifecycle({
           vault.enqueueStorage(() =>
             vault.requireManager().loadAuthProviders(),
           ),
-        saveAuthProviders: (
-          snapshot: Parameters<typeof saveAuthProviders>[1],
-        ) =>
+        saveAuthProviders: (snapshot: AuthProvidersSnapshot) =>
           vault.enqueueStorage(() =>
             (() => {
               const saveAuthProvidersArgs: Parameters<

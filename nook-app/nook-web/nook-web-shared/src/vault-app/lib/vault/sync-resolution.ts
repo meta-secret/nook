@@ -206,9 +206,9 @@ async function resumeConnectAfterSyncConflict({
 }): Promise<void> {
   if (state.isAuthenticated) {
     if (!pendingProvider) {
-      const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[1] =
-        { quiet: true };
-      await state.syncProviderById(providerId, syncProviderByIdArgs);
+      const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[0] =
+        { providerId, options: { quiet: true } };
+      await state.syncProviderById(syncProviderByIdArgs);
     }
     await state.hydrateMultiDeviceState();
     return;
@@ -303,11 +303,14 @@ export async function resolveSyncConflictImportRemote(
     providerSave = { kind: ConflictProviderSaveKind.Saved, providerId };
     if (conflict.remoteYaml.trim()) {
       const remoteRevision = conflict.remoteRevision;
-      await state.updateProviderSyncMetadata(
+      const metadataRequest: Parameters<
+        typeof state.updateProviderSyncMetadata
+      >[0] = {
         providerId,
-        conflict.remoteYaml,
-        remoteRevision,
-      );
+        yaml: conflict.remoteYaml,
+        revision: remoteRevision,
+      };
+      await state.updateProviderSyncMetadata(metadataRequest);
     } else {
       state.providers = state.providers.map((provider) =>
         provider.id === providerId

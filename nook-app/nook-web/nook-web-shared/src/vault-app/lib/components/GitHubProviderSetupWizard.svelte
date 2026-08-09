@@ -131,9 +131,12 @@
             class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
           />
           <p class="text-[11px] text-muted-foreground text-pretty">
-            {(() => { const tArgs: Parameters<typeof vault.t>[1] = {
+            {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.ProviderSetupStoredLocallyDesc,
+  replacements: {
               repo: githubRepo.trim() || DEFAULT_GITHUB_REPO,
-            }; return vault.t(I18N_KEYS.ProviderSetupStoredLocallyDesc, tArgs); })()}
+            },
+}; return vault.t(translationRequest); })()}
           </p>
         </div>
       </div>
