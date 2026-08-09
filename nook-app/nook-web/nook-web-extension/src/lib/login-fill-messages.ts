@@ -1,4 +1,3 @@
-import type { ExternalValue } from './external-value'
 import { hasOriginPayload } from './origin-runtime-message'
 
 export type WebsiteLoginAccountOption = {
@@ -67,7 +66,7 @@ export type WebsiteAuthenticatorFillMessage = {
 }
 
 export function isWebsiteLoginOptionsMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteLoginOptionsMessage {
   if (
     !message ||
@@ -80,12 +79,13 @@ export function isWebsiteLoginOptionsMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload = message.payload as WebsiteLoginOptionsMessage['payload']
+
   return typeof payload.origin === 'string' && payload.origin.length > 0
 }
 
 export function isWebsiteAuthenticatorOptionsMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteAuthenticatorOptionsMessage {
   return (
     hasOriginPayload(message) &&
@@ -95,7 +95,7 @@ export function isWebsiteAuthenticatorOptionsMessage(
 }
 
 export function isWebsiteAuthenticatorFillMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteAuthenticatorFillMessage {
   if (
     !hasOriginPayload(message) ||
@@ -104,7 +104,8 @@ export function isWebsiteAuthenticatorFillMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload = message.payload as WebsiteAuthenticatorFillMessage['payload']
+
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
@@ -114,7 +115,7 @@ export function isWebsiteAuthenticatorFillMessage(
 }
 
 export function isWebsiteLoginRevealMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteLoginRevealMessage {
   if (
     !message ||
@@ -127,7 +128,8 @@ export function isWebsiteLoginRevealMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload = message.payload as WebsiteLoginRevealMessage['payload']
+
   return (
     typeof payload.origin === 'string' &&
     payload.origin.length > 0 &&

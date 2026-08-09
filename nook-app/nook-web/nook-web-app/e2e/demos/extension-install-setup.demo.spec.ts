@@ -99,8 +99,8 @@ test('offer browser extension install on vault home and in Devices', async ({
     /nook:extension-paired-vault-identity-discovery/,
   )
   await page.getByTestId('extension-install-setup-connect').click()
-  // The named AdoptExtensionIdentityArgs migration must preserve the exact
-  // companion message envelope consumed by the browser runtime boundary.
+  // Concrete companion request and response domains must preserve the exact
+  // message envelope while the browser boundary rejects unnamed value bags.
   await expect(page.locator('html')).toHaveAttribute(
     'data-demo-extension-message',
     JSON.stringify({

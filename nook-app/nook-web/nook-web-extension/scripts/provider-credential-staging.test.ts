@@ -9,8 +9,9 @@ import {
 import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 async function stageFixture(providers: object) {
-  const args = {
-    providers,
+  const providerCandidates = providers as StorageProvider[]
+  const args: Parameters<typeof stageProviderCredentials>[0] = {
+    providers: providerCandidates,
     decode: async (candidate: object) =>
       structuredClone(candidate) as object as StorageProvider[],
   }
@@ -114,6 +115,18 @@ describe('provider credential staging', () => {
       'handoff failed',
     )
     expect(providers[0]).not.toHaveProperty('githubPat')
+  })
+
+  test('continues scrubbing after a malformed oauth provider', () => {
+    const providers = [
+      { oauthFile: 'malformed' },
+      { oauthFile: { config: 'malformed' } },
+      { githubPat: 'github_pat_following_secret' },
+    ] as object as StorageProvider[]
+
+    scrubProviderCredentials(providers)
+
+    expect(providers[2]).not.toHaveProperty('githubPat')
   })
 
   test('rejects values outside the serialized external model', async () => {

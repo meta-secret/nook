@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import type { ExternalObject } from '../src/lib/external-value'
 import {
   decodePasskeySetupResponse,
   decodePasskeyUnlockResponse,
   type PasskeySetupMaterial,
+  type PasskeySetupResponse,
+  type PasskeyUnlockResponse,
 } from '../src/lib/passkey-session-response'
 
 const fixedByteArrayArgs: { length: number } = { length: 32 }
@@ -11,7 +12,7 @@ const fixedBytes = Array.from(fixedByteArrayArgs, () => 7)
 
 describe('passkey session response decoding', () => {
   test('accepts fixed-size setup key material', () => {
-    const response: ExternalObject = {
+    const response: PasskeySetupResponse = {
       setup: { userHandle: fixedBytes, prfInput: fixedBytes },
     }
 
@@ -23,10 +24,10 @@ describe('passkey session response decoding', () => {
   })
 
   test('leaves setup key-material policy to the Rust option builder', () => {
-    const emptyResponse: ExternalObject = {
+    const emptyResponse: PasskeySetupResponse = {
       setup: { userHandle: [], prfInput: fixedBytes },
     }
-    const shortResponse: ExternalObject = {
+    const shortResponse: PasskeySetupResponse = {
       setup: { userHandle: fixedBytes, prfInput: [1] },
     }
 
@@ -35,10 +36,10 @@ describe('passkey session response decoding', () => {
   })
 
   test('leaves unlock material policy to the Rust option builder', () => {
-    const emptyCredential: ExternalObject = {
+    const emptyCredential: PasskeyUnlockResponse = {
       material: { credentialId: [], prfInput: fixedBytes },
     }
-    const shortPrfInput: ExternalObject = {
+    const shortPrfInput: PasskeyUnlockResponse = {
       material: { credentialId: [1], prfInput: [2] },
     }
 

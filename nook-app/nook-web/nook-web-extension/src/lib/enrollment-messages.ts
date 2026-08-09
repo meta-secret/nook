@@ -1,4 +1,3 @@
-import type { ExternalValue } from './external-value'
 import { hasOriginPayload } from './origin-runtime-message'
 
 export enum WebsiteAuthenticatorEnrollPreviewMessageType {
@@ -105,12 +104,12 @@ export type OtpauthEnrollmentPreview = {
   period: number
 }
 
-function isOtpauthTotpUri(value: ExternalValue): value is string {
+function isOtpauthTotpUri(value: string): value is string {
   return typeof value === 'string' && value.startsWith('otpauth://totp/')
 }
 
 export function isWebsiteAuthenticatorEnrollPreviewMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteAuthenticatorEnrollPreviewMessage {
   if (
     !hasOriginPayload(message) ||
@@ -119,12 +118,14 @@ export function isWebsiteAuthenticatorEnrollPreviewMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload =
+    message.payload as WebsiteAuthenticatorEnrollPreviewMessage['payload']
+
   return isOtpauthTotpUri(payload.otpauthUri)
 }
 
 export function isWebsiteAuthenticatorEnrollStageMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteAuthenticatorEnrollStageMessage {
   if (
     !hasOriginPayload(message) ||
@@ -133,7 +134,9 @@ export function isWebsiteAuthenticatorEnrollStageMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload =
+    message.payload as WebsiteAuthenticatorEnrollStageMessage['payload']
+
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
@@ -142,7 +145,7 @@ export function isWebsiteAuthenticatorEnrollStageMessage(
 }
 
 export function isWebsiteAuthenticatorEnrollCodeMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteAuthenticatorEnrollCodeMessage {
   if (
     !hasOriginPayload(message) ||
@@ -151,12 +154,14 @@ export function isWebsiteAuthenticatorEnrollCodeMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload =
+    message.payload as WebsiteAuthenticatorEnrollCodeMessage['payload']
+
   return typeof payload.stageId === 'string' && payload.stageId.length > 0
 }
 
 export function isWebsiteAuthenticatorEnrollConfirmMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteAuthenticatorEnrollConfirmMessage {
   if (
     !hasOriginPayload(message) ||
@@ -165,7 +170,9 @@ export function isWebsiteAuthenticatorEnrollConfirmMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload =
+    message.payload as WebsiteAuthenticatorEnrollConfirmMessage['payload']
+
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
@@ -175,7 +182,7 @@ export function isWebsiteAuthenticatorEnrollConfirmMessage(
 }
 
 export function isWebsiteAuthenticatorEnrollDismissMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteAuthenticatorEnrollDismissMessage {
   if (
     !hasOriginPayload(message) ||
@@ -184,12 +191,14 @@ export function isWebsiteAuthenticatorEnrollDismissMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload =
+    message.payload as WebsiteAuthenticatorEnrollDismissMessage['payload']
+
   return typeof payload.stageId === 'string' && payload.stageId.length > 0
 }
 
 export function isWebsiteAuthenticatorEnrollPendingMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteAuthenticatorEnrollPendingMessage {
   return (
     hasOriginPayload(message) &&
@@ -199,7 +208,7 @@ export function isWebsiteAuthenticatorEnrollPendingMessage(
 }
 
 export function isWebsiteAuthenticatorBackupAttachMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteAuthenticatorBackupAttachMessage {
   if (
     !hasOriginPayload(message) ||
@@ -208,7 +217,9 @@ export function isWebsiteAuthenticatorBackupAttachMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload =
+    message.payload as WebsiteAuthenticatorBackupAttachMessage['payload']
+
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&

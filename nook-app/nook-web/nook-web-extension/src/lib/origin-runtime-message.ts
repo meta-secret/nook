@@ -1,11 +1,10 @@
-import type { ExternalValue } from './external-value'
 export type OriginRuntimeMessage = {
   type: string
-  payload: Record<string, ExternalValue> & { origin: string }
+  payload: { origin: string }
 }
 
 export function hasOriginPayload(
-  message: ExternalValue,
+  message: object,
 ): message is OriginRuntimeMessage {
   return Boolean(
     message &&

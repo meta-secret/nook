@@ -1,4 +1,3 @@
-import type { ExternalValue } from './external-value'
 import { hasOriginPayload } from './origin-runtime-message'
 import type { WebsiteLoginAccountOption } from './login-fill-messages'
 
@@ -76,12 +75,12 @@ export type WebsiteLoginCanceledMessage = {
   }
 }
 
-function isNonEmptyString(value: ExternalValue): value is string {
+function isNonEmptyString(value: string): value is string {
   return typeof value === 'string' && value.length > 0
 }
 
 export function isWebsiteLoginPickerOpenMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteLoginPickerOpenMessage {
   return (
     hasOriginPayload(message) &&
@@ -91,7 +90,7 @@ export function isWebsiteLoginPickerOpenMessage(
 }
 
 export function isLoginPickerQueryMessage(
-  message: ExternalValue,
+  message: object,
 ): message is LoginPickerQueryMessage {
   if (
     !message ||
@@ -104,7 +103,7 @@ export function isLoginPickerQueryMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload = message.payload as LoginPickerQueryMessage['payload']
   return (
     isNonEmptyString(payload.requestId) &&
     typeof payload.query === 'string' &&
@@ -113,7 +112,7 @@ export function isLoginPickerQueryMessage(
 }
 
 export function isLoginPickerSelectMessage(
-  message: ExternalValue,
+  message: object,
 ): message is LoginPickerSelectMessage {
   if (
     !message ||
@@ -126,7 +125,8 @@ export function isLoginPickerSelectMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload = message.payload as LoginPickerSelectMessage['payload']
+
   return (
     isNonEmptyString(payload.requestId) &&
     isNonEmptyString(payload.vaultStoreId) &&
@@ -135,7 +135,7 @@ export function isLoginPickerSelectMessage(
 }
 
 export function isLoginPickerCancelMessage(
-  message: ExternalValue,
+  message: object,
 ): message is LoginPickerCancelMessage {
   if (
     !message ||
@@ -148,12 +148,13 @@ export function isLoginPickerCancelMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload = message.payload as LoginPickerCancelMessage['payload']
+
   return isNonEmptyString(payload.requestId)
 }
 
 export function isWebsiteLoginSelectedMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteLoginSelectedMessage {
   if (
     !message ||
@@ -166,7 +167,8 @@ export function isWebsiteLoginSelectedMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload = message.payload as WebsiteLoginSelectedMessage['payload']
+
   if (
     !isNonEmptyString(payload.origin) ||
     !isNonEmptyString(payload.requestId) ||
@@ -175,18 +177,22 @@ export function isWebsiteLoginSelectedMessage(
   ) {
     return false
   }
-  const account = payload.account as Record<string, ExternalValue>
+  const account =
+    payload.account as WebsiteLoginSelectedMessage['payload']['account']
+
   return (
     isNonEmptyString(account.vaultStoreId) && isNonEmptyString(account.secretId)
   )
 }
 
 export function isWebsiteLoginCanceledMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteLoginCanceledMessage {
+  if (!hasOriginPayload(message)) return false
+  const payload = message.payload as WebsiteLoginCanceledMessage['payload']
+
   return (
-    hasOriginPayload(message) &&
     message.type === WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled &&
-    isNonEmptyString(message.payload.requestId)
+    isNonEmptyString(payload.requestId)
   )
 }

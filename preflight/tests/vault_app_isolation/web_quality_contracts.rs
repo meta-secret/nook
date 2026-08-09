@@ -28,16 +28,23 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
     }
 
     let eslint = format!(
-        "{}\n{}",
+        "{}\n{}\n{}",
         read(&root, "nook-app/nook-web/eslint.config.js"),
-        read(&root, "nook-app/nook-web/typed-api-analysis.js")
+        read(&root, "nook-app/nook-web/typed-api-analysis.js"),
+        read(&root, "nook-app/nook-web/typed-api-rules.js")
     );
     for required in [
+        "import { typedApiRules } from './typed-api-rules.js'",
+        "rules: typedApiRules",
         "'max-params': ['error', { max: 1 }]",
         "'@typescript-eslint/no-restricted-types'",
         "Nook web forbids unknown",
         "Model a concrete domain type",
         "must be narrowed immediately",
+        "ExternalValue: { message: 'Use a concrete Nook domain value.' }",
+        "ExternalObject: { message: 'Use a concrete Nook domain object.' }",
+        "JsonValue: { message: 'Use a concrete Nook domain value.' }",
+        "GenericValue: { message: 'Use a concrete Nook domain value.' }",
         "'nook-typed-api/no-raw-object-arguments': 'error'",
         "TSAsExpression",
         "TSTypeAssertion",

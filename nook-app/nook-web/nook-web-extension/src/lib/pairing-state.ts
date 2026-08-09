@@ -1,4 +1,3 @@
-import type { ExternalValue } from './external-value'
 import {
   isExtensionReadySetupState,
   type ExtensionReadySetupState,
@@ -22,7 +21,7 @@ export type ExtensionSetupLoad =
   | { kind: ExtensionSetupLoadKind.Unavailable }
 
 export function isExtensionPairingStateQueryMessage(
-  message: ExternalValue,
+  message: object,
 ): message is ExtensionPairingStateQueryMessage {
   return (
     !!message &&
@@ -38,7 +37,11 @@ export function loadExtensionSetupState(): Promise<ExtensionSetupLoad> {
     const queryMessage: ExtensionPairingStateQueryMessage = {
       type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
     }
-    chrome.runtime.sendMessage(queryMessage, (response: ExternalValue) => {
+    chrome.runtime.sendMessage(queryMessage, (runtimeResponse: object) => {
+      const response = runtimeResponse as Partial<{
+        ok: true
+        setup: ExtensionReadySetupState
+      }>
       if (
         chrome.runtime.lastError ||
         !response ||

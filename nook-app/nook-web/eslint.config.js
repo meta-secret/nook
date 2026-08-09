@@ -3,6 +3,7 @@ import noUnsanitized from 'eslint-plugin-no-unsanitized'
 import svelte from 'eslint-plugin-svelte'
 import globals from 'globals'
 import ts from 'typescript-eslint'
+import { typedApiRules } from './typed-api-rules.js'
 import {
   ActiveCallScopeKind,
   arrayAtSummaryValues,
@@ -878,22 +879,6 @@ const nookTypedApiPlugin = {
   },
 }
 
-const typedApiRules = {
-  'max-params': ['error', { max: 1 }],
-  '@typescript-eslint/no-restricted-types': [
-    'error',
-    {
-      types: {
-        unknown: {
-          message:
-            'Nook web forbids unknown. Model a concrete domain type. A generic transport value is allowed only inside a dedicated untrusted-input adapter and must be narrowed immediately.',
-        },
-      },
-    },
-  ],
-  'nook-typed-api/no-raw-object-arguments': 'error',
-}
-
 export default [
   {
     ignores: [
@@ -981,8 +966,7 @@ export default [
     },
   },
   {
-    files: ['nook-web-extension/src/lib/**/*.ts', 'src/lib/**/*.ts',
-      'nook-vault-{simple,sentinel}/**/*.{ts,svelte}'],
+    files: ['nook-web-extension/src/lib/**/*.ts', 'src/lib/**/*.ts', 'nook-vault-{simple,sentinel}/**/*.{ts,svelte}'],
     plugins: {
       'nook-typed-api': nookTypedApiPlugin,
     },

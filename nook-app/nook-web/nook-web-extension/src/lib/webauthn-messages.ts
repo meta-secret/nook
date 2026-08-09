@@ -1,4 +1,3 @@
-import type { ExternalValue } from './external-value'
 export enum WebsitePasskeyCeremony {
   Create = 'create',
   Get = 'get',
@@ -41,7 +40,7 @@ export type WebsitePasskeyCancelMessage = {
   }
 }
 
-function validBase(message: ExternalValue): message is {
+function validBase(message: object): message is {
   payload: WebsitePasskeyOptionsMessage['payload']
 } {
   if (!message || typeof message !== 'object' || !('payload' in message)) {
@@ -70,7 +69,7 @@ function validBase(message: ExternalValue): message is {
 }
 
 export function isWebsitePasskeyOptionsMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsitePasskeyOptionsMessage {
   return (
     validBase(message) &&
@@ -80,7 +79,7 @@ export function isWebsitePasskeyOptionsMessage(
 }
 
 export function isWebsitePasskeyPerformMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsitePasskeyPerformMessage {
   return (
     validBase(message) &&
@@ -97,7 +96,7 @@ export function isWebsitePasskeyPerformMessage(
 }
 
 export function isWebsitePasskeyCancelMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsitePasskeyCancelMessage {
   return Boolean(
     message &&
@@ -145,11 +144,23 @@ export type ParseWebsitePasskeyRequestArgs = {
   requestJson: string
 }
 
+type WebsitePasskeyCreateRequestCandidate = {
+  origin?: string
+  relyingParty?: { id?: string }
+}
+
+type WebsitePasskeyGetRequestCandidate = {
+  origin?: string
+  rpId?: string
+  allowCredentials?: { id: string }[]
+}
+
 export function parsedWebsitePasskeyRequest(
   args: ParseWebsitePasskeyRequestArgs,
 ): WebsitePasskeyRequestParse {
   try {
-    const parsed = JSON.parse(args.requestJson) as ExternalValue
+    const parsed = JSON.parse(args.requestJson) as
+      WebsitePasskeyCreateRequestCandidate | WebsitePasskeyGetRequestCandidate
     if (
       !parsed ||
       typeof parsed !== 'object' ||
@@ -223,7 +234,9 @@ export function websitePasskeyRequestJson(
   if (args.credentialSelection.credentialId.length === 0) {
     throw new Error('Selected passkey credential ID must not be empty.')
   }
-  const parsed: ExternalValue = JSON.parse(args.request.requestJson)
+  const parsed = JSON.parse(
+    args.request.requestJson,
+  ) as WebsitePasskeyGetRequestCandidate
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('Validated passkey request could not be reconstructed.')
   }

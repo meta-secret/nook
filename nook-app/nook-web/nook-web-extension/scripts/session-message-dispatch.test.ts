@@ -73,6 +73,31 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(providers[0]).not.toHaveProperty('githubPat')
   })
 
+  test('rejects a vault import without a provider array', async () => {
+    const payload: Record<string, unknown> = { providers: 'missing-array' }
+    let handled = false
+    const dispatcher = new ExtensionSessionMessageDispatcher({
+      messagePayload,
+      decodeProviders,
+      handleMessage: async () => {
+        handled = true
+        return { ok: true }
+      },
+    })
+
+    const response = await dispatcher.enqueue({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload,
+    })
+
+    expect(response).toEqual({
+      ok: false,
+      error: 'invalid-provider-payload',
+    })
+    expect(handled).toBe(false)
+    expect(payload.providers).toEqual([])
+  })
+
   test('scrubs an accepted caller provider array after staging', async () => {
     const providers = [{ githubPat: 'github_pat_accepted_secret' }]
     const payload: Record<string, unknown> = { providers }
