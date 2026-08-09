@@ -3,11 +3,16 @@ export type CompactProgressState = {
   accessibleLabel: string
 }
 
+export type CompactProgressStateArgs = {
+  pilotLabel: string
+  currentStep: number
+  totalSteps: number
+}
+
 export function compactProgressState(
-  pilotLabel: string,
-  currentStep: number,
-  totalSteps: number,
+  args: CompactProgressStateArgs,
 ): CompactProgressState {
+  const { pilotLabel, currentStep, totalSteps } = args
   const badge = `${currentStep}/${totalSteps}`
   return {
     badge,

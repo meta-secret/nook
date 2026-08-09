@@ -69,24 +69,29 @@ describe('channel-agnostic Nook vault app hosts', () => {
   })
 
   test('runtime URL check ignores build channel mismatch', () => {
-    expect(isNookVaultAppUrl('https://simple.dev.nokey.sh/unlock')).toBe(true)
     expect(
-      isNookVaultAppUrl(
-        'https://simple.dev.nokey.sh/unlock',
-        'https://simple.nokey.sh/',
-      ),
+      isNookVaultAppUrl({
+        candidateUrl: 'https://simple.dev.nokey.sh/unlock',
+        baseUrl: '',
+      }),
     ).toBe(true)
     expect(
-      isNookVaultAppUrl(
-        'https://pr-466.nokey-simple.pages.dev/',
-        'https://simple.dev.nokey.sh/',
-      ),
+      isNookVaultAppUrl({
+        candidateUrl: 'https://simple.dev.nokey.sh/unlock',
+        baseUrl: 'https://simple.nokey.sh/',
+      }),
     ).toBe(true)
     expect(
-      isNookVaultAppUrl(
-        'https://example.com/login',
-        'https://simple.nokey.sh/',
-      ),
+      isNookVaultAppUrl({
+        candidateUrl: 'https://pr-466.nokey-simple.pages.dev/',
+        baseUrl: 'https://simple.dev.nokey.sh/',
+      }),
+    ).toBe(true)
+    expect(
+      isNookVaultAppUrl({
+        candidateUrl: 'https://example.com/login',
+        baseUrl: 'https://simple.nokey.sh/',
+      }),
     ).toBe(false)
   })
 
@@ -97,10 +102,10 @@ describe('channel-agnostic Nook vault app hosts', () => {
     expect(exclusions).toContain('https://pr-408.nook-1n8.pages.dev/simple/*')
     expect(exclusions).toContain('https://pr-408.nook-1n8.pages.dev/sentinel/*')
     expect(
-      isNookVaultAppUrl(
-        'https://pr-408.nook-1n8.pages.dev/simple/',
-        'https://pr-408.nook-1n8.pages.dev/simple/',
-      ),
+      isNookVaultAppUrl({
+        candidateUrl: 'https://pr-408.nook-1n8.pages.dev/simple/',
+        baseUrl: 'https://pr-408.nook-1n8.pages.dev/simple/',
+      }),
     ).toBe(true)
   })
 })

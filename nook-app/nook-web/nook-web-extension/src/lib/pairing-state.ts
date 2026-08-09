@@ -1,3 +1,4 @@
+import type { ExternalValue } from './external-value'
 import {
   isExtensionReadySetupState,
   type ExtensionReadySetupState,
@@ -21,7 +22,7 @@ export type ExtensionSetupLoad =
   | { kind: ExtensionSetupLoadKind.Unavailable }
 
 export function isExtensionPairingStateQueryMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is ExtensionPairingStateQueryMessage {
   return (
     !!message &&
@@ -34,25 +35,30 @@ export function isExtensionPairingStateQueryMessage(
 
 export function loadExtensionSetupState(): Promise<ExtensionSetupLoad> {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage(
-      {
-        type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
-      },
-      (response: unknown) => {
-        if (
-          chrome.runtime.lastError ||
-          !response ||
-          typeof response !== 'object' ||
-          !('ok' in response) ||
-          response.ok !== true ||
-          !('setup' in response) ||
-          !isExtensionReadySetupState(response.setup)
-        ) {
-          resolve({ kind: ExtensionSetupLoadKind.Unavailable })
-          return
+    const queryMessage: ExtensionPairingStateQueryMessage = {
+      type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
+    }
+    chrome.runtime.sendMessage(queryMessage, (response: ExternalValue) => {
+      if (
+        chrome.runtime.lastError ||
+        !response ||
+        typeof response !== 'object' ||
+        !('ok' in response) ||
+        response.ok !== true ||
+        !('setup' in response) ||
+        !isExtensionReadySetupState(response.setup)
+      ) {
+        const unavailable: ExtensionSetupLoad = {
+          kind: ExtensionSetupLoadKind.Unavailable,
         }
-        resolve({ kind: ExtensionSetupLoadKind.Ready, setup: response.setup })
-      },
-    )
+        resolve(unavailable)
+        return
+      }
+      const ready: ExtensionSetupLoad = {
+        kind: ExtensionSetupLoadKind.Ready,
+        setup: response.setup,
+      }
+      resolve(ready)
+    })
   })
 }

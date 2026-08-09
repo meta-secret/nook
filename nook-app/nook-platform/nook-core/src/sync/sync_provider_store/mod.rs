@@ -588,6 +588,23 @@ mod tests {
         }
     }
 
+    #[test]
+    fn storage_provider_defaults_missing_legacy_sync_checkpoint() -> anyhow::Result<()> {
+        let mut value = serde_json::to_value(github_provider("github", "owner/repo", "pat"))?;
+        value
+            .as_object_mut()
+            .ok_or_else(|| std::io::Error::other("provider must serialize as an object"))?
+            .remove("syncCheckpoint");
+
+        let provider: StorageProviderData = serde_json::from_value(value)?;
+
+        assert_eq!(
+            provider.sync_checkpoint,
+            ProviderSyncCheckpoint::NeverSynced
+        );
+        Ok(())
+    }
+
     fn local_folder_provider(id: &str, handle_id: &str) -> StorageProviderData {
         StorageProviderData {
             id: id.to_owned(),

@@ -1,4 +1,7 @@
-import { spawnSync } from 'node:child_process';
+import {
+  spawnSync,
+  type SpawnSyncOptionsWithStringEncoding,
+} from 'node:child_process';
 import {
   LoomFailure,
   LoomFailureCode,
@@ -19,11 +22,12 @@ export type RunCommandArgs = {
 
 export function runCommand(input: RunCommandArgs): CommandOutput {
   const { command, args, cwd } = input;
-  const result = spawnSync(command, [...args], {
+  const spawnOptions: SpawnSyncOptionsWithStringEncoding = {
     cwd,
     encoding: 'utf8',
     env: process.env,
-  });
+  };
+  const result = spawnSync(command, [...args], spawnOptions);
   if (result.error) {
     const loomFailureArgs = {
       code: LoomFailureCode.CommandFailedToStart,

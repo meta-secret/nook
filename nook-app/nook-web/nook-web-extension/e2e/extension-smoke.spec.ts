@@ -13,6 +13,7 @@ import {
   e2eSentinelVaultBaseUrl,
   openSimpleVaultConnection,
   pairingGrantStorageKey,
+  readExtensionPersistenceSnapshot,
   readExtensionStorage,
   sendExternalMessage,
   setupPasskeyExtensionPopup,
@@ -27,6 +28,12 @@ import {
 } from './helpers/extension-smoke-runtime'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { ExtensionPairingVaultType } from '../../nook-web-shared/src/extension/runtime-messages'
+import {
+  ensurePinProtectedPopup,
+  installForcePinDeviceProtection,
+} from './helpers/pin-device'
+import { lockExtensionSession } from './helpers/paired-pin-extension'
+import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
 
 const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
@@ -47,13 +54,17 @@ test('sets up the extension device first and sends its public keys to Simple Vau
 
   await context.route('**/*', (route) => {
     const url = route.request().url()
-    if (belongsToSimpleVault(simpleVaultBaseUrl, url)) {
+    if (
+      belongsToSimpleVault({ baseUrl: simpleVaultBaseUrl, candidateUrl: url })
+    ) {
       return route.fulfill({
         contentType: 'text/html',
         body: '<!doctype html><html><body><h1>Simple Vault</h1></body></html>',
       })
     }
-    if (belongsToSentinelVault(simpleVaultBaseUrl, url)) {
+    if (
+      belongsToSentinelVault({ baseUrl: simpleVaultBaseUrl, candidateUrl: url })
+    ) {
       return route.fulfill({
         contentType: 'text/html',
         body: '<form><input autocomplete="username"><input type="password"></form>',
@@ -114,7 +125,10 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const simplePage = await openedConnectPage
     await expect(simplePage).toHaveURL((url) => {
       const expected = new URL(
-        simpleVaultUrl(simpleVaultBaseUrl, 'extension-connect'),
+        simpleVaultUrl({
+          baseUrl: simpleVaultBaseUrl,
+          path: 'extension-connect',
+        }),
       )
       return (
         url.origin === expected.origin &&
@@ -315,6 +329,38 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     expect(
       await sendExternalMessage(simplePage, extensionId, forgedGrant),
     ).toEqual({ ok: false, reason: 'invalid-pairing-grant' })
+
+    const persistenceBeforeMalformedProvider =
+      await readExtensionPersistenceSnapshot(worker)
+    const malformedProviderGrant = {
+      type: 'nook:extension-pairing-approved',
+      payload: {
+        vaultType: ExtensionPairingVaultType.Simple,
+        deviceId: 'device-e2e',
+        devicePublicKey: 'age1extension',
+        deviceSigningPublicKey: 'extension-signing-key',
+        deviceLabel: 'Nook Extension - Chromium test profile',
+        vaultStoreId: 'store-e2e',
+        vaultName: 'Personal',
+        approvedAt: '2026-07-07T00:00:00.000Z',
+        scopes: [
+          ExtensionConnectScope.VaultAccess,
+          ExtensionConnectScope.PasswordFilling,
+        ],
+        providers: [{ githubPat: 'github_pat_malformed_e2e_secret' }],
+      },
+      eventLogRecords: syntheticEventLogRecords,
+    }
+    expect(
+      await sendExternalMessage(
+        simplePage,
+        extensionId,
+        malformedProviderGrant,
+      ),
+    ).toEqual({ ok: false, reason: 'invalid-provider-payload' })
+    expect(await readExtensionPersistenceSnapshot(worker)).toEqual(
+      persistenceBeforeMalformedProvider,
+    )
 
     const approvedGrant: ExtensionPairingApprovedMessage = {
       type: 'nook:extension-pairing-approved',
@@ -527,6 +573,98 @@ test('shows extension unlock when a paired device identity is unavailable', asyn
 
     await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
     await expect(popupPage.getByTestId('open-simple-vault-btn')).toHaveCount(0)
+  } finally {
+    await context.close()
+  }
+})
+
+test('translates malformed device-action responses in the popup', async ({
+  browserName,
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+  const userDataDir = testInfo.outputPath('chromium-profile-translated-error')
+  const context = await launchExtensionContext(userDataDir)
+  await context.addInitScript(installForcePinDeviceProtection)
+
+  try {
+    const worker = await getServiceWorker(context)
+    const extensionId = new URL(worker.url()).host
+    const popupPage = await context.newPage()
+    await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
+    await ensurePinProtectedPopup(popupPage)
+    await lockExtensionSession(context)
+    await popupPage.evaluate(() => {
+      localStorage.setItem('nook_locale', 'ru')
+    })
+    await popupPage.reload()
+    await expect(
+      popupPage.getByTestId('device-protection-pin-unlock-btn'),
+    ).toBeVisible()
+
+    await popupPage.evaluate(
+      (unlockMessageType: ExtensionSessionMessageType) => {
+        type MalformedDeviceResponse = {
+          ok: true
+          device: {
+            deviceId: string
+            devicePublicKey: string
+            deviceSigningPublicKey: string
+          }
+        }
+        type UnlockPinRuntimeMessage = {
+          type: ExtensionSessionMessageType
+        }
+        type UnlockPinRuntimeCallback = (
+          response: MalformedDeviceResponse,
+        ) => void
+        type UnlockPinRuntimeArguments =
+          | [message: UnlockPinRuntimeMessage]
+          | [
+              message: UnlockPinRuntimeMessage,
+              callback: UnlockPinRuntimeCallback,
+            ]
+        const runtime = globalThis.chrome.runtime
+        const originalSendMessage = runtime.sendMessage.bind(runtime)
+        const descriptor: PropertyDescriptor = {
+          configurable: true,
+          value(...args: UnlockPinRuntimeArguments) {
+            const [message, callback] = args
+            if (message.type === unlockMessageType && callback) {
+              const malformedResponse: MalformedDeviceResponse = {
+                ok: true,
+                device: {
+                  deviceId: '',
+                  devicePublicKey: '',
+                  deviceSigningPublicKey: '',
+                },
+              }
+              callback(malformedResponse)
+              return
+            }
+            if (callback) {
+              originalSendMessage(message, callback)
+              return
+            }
+            return originalSendMessage(message)
+          },
+        }
+        Object.defineProperty(runtime, 'sendMessage', descriptor)
+      },
+      ExtensionSessionMessageType.UnlockPin,
+    )
+
+    await popupPage
+      .getByTestId('device-protection-pin-unlock-input')
+      .fill('123456')
+    await popupPage.getByTestId('device-protection-pin-unlock-btn').click()
+    const error = popupPage.getByTestId('device-protection-error')
+    await expect(error).toHaveText(
+      'PIN или кодовая фраза не разблокировали этот браузер. Проверьте их и повторите попытку.',
+    )
+    await expect(error).not.toContainText(
+      'Extension session returned malformed device identity.',
+    )
   } finally {
     await context.close()
   }

@@ -19,6 +19,7 @@ import {
   parsedWebsitePasskeyRequest,
   WebsitePasskeyRequestParseKind,
   type WebsitePasskeyCeremony,
+  type WebsitePasskeyRequest,
 } from '../../lib/webauthn-messages'
 import type { StoredExtensionPairingGrant } from '../pairing-grants'
 import {
@@ -613,43 +614,24 @@ export type WebsitePasskeyRequestContext =
       kind: WebsitePasskeyRequestContextKind.Validated
       origin: string
       rpId: string
-      request: Record<string, unknown>
+      request: WebsitePasskeyRequest
     }
 
 export function requestOriginAndRpId(
   ceremony: WebsitePasskeyCeremony,
   requestJson: string,
 ): WebsitePasskeyRequestContext {
-  const parsed = parsedWebsitePasskeyRequest(requestJson)
+  const parseArgs = { ceremony, requestJson }
+  const parsed = parsedWebsitePasskeyRequest(parseArgs)
   if (parsed.kind === WebsitePasskeyRequestParseKind.Rejected) {
     return { kind: WebsitePasskeyRequestContextKind.Rejected }
   }
-  const { request } = parsed
-  if (typeof request.origin !== 'string') {
-    return { kind: WebsitePasskeyRequestContextKind.Rejected }
+  return {
+    kind: WebsitePasskeyRequestContextKind.Validated,
+    origin: parsed.request.origin,
+    rpId: parsed.request.rpId,
+    request: parsed.request,
   }
-  if (ceremony === 'get') {
-    return typeof request.rpId === 'string'
-      ? {
-          kind: WebsitePasskeyRequestContextKind.Validated,
-          origin: request.origin,
-          rpId: request.rpId,
-          request,
-        }
-      : { kind: WebsitePasskeyRequestContextKind.Rejected }
-  }
-  const relyingParty = request.relyingParty
-  return relyingParty &&
-    typeof relyingParty === 'object' &&
-    'id' in relyingParty &&
-    typeof relyingParty.id === 'string'
-    ? {
-        kind: WebsitePasskeyRequestContextKind.Validated,
-        origin: request.origin,
-        rpId: relyingParty.id,
-        request,
-      }
-    : { kind: WebsitePasskeyRequestContextKind.Rejected }
 }
 
 export function isAuthorizedWebsiteSender(

@@ -3,7 +3,10 @@ import {
   scrubProviderCredentials,
   stageProviderCredentials,
 } from '../lib/provider-credential-staging'
+import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
+  SessionOperationCleanupKind,
+  SessionOperationExpiryKind,
   SessionOperationPriority,
   SessionOperationQueue,
 } from '../lib/session-operation-queue'
@@ -25,6 +28,7 @@ type SensitivePayloadResidency =
 type SessionMessageDispatchContext = {
   handleMessage: (message: unknown) => Promise<unknown>
   messagePayload: (message: unknown) => Record<string, unknown>
+  decodeProviders: (providers: object) => Promise<StorageProvider[]>
 }
 
 export enum ExtensionSessionMessageType {
@@ -190,17 +194,26 @@ function clearSensitiveValue(value: unknown): void {
   if (Array.isArray(value) || value instanceof Uint8Array) value.fill(0)
 }
 
+enum StagingOwnership {
+  Queue = 'queue',
+  Operation = 'operation',
+  Cleared = 'cleared',
+}
+
 export class ExtensionSessionMessageDispatcher {
   private operations = new SessionOperationQueue()
+  private operationGeneration = 0
 
   constructor(private readonly context: SessionMessageDispatchContext) {}
 
   resetOperations(): void {
+    this.operationGeneration += 1
     this.operations = new SessionOperationQueue()
   }
 
   replaceOperations(error: Error): void {
     const previous = this.operations
+    this.operationGeneration += 1
     this.operations = new SessionOperationQueue()
     previous.close(error)
   }
@@ -230,8 +243,8 @@ export class ExtensionSessionMessageDispatcher {
       }
       payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
     }
-    return this.operations.enqueue(
-      async () => {
+    return this.operations.enqueue({
+      operation: async () => {
         if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
           throw new Error('Extension session request expired.')
         }
@@ -249,76 +262,99 @@ export class ExtensionSessionMessageDispatcher {
           }
         }
       },
-      {
+      options: {
         priority: SessionOperationPriority.Interactive,
-        expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
-        onExpire: clearPending,
+        expiry: {
+          kind: SessionOperationExpiryKind.Deadline,
+          expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+        },
+        cleanup: {
+          kind: SessionOperationCleanupKind.OnExpire,
+          run: clearPending,
+        },
       },
-    )
+    })
   }
 
-  private enqueueVaultImport(
+  private async enqueueVaultImport(
     message: Record<string, unknown>,
     payload: Record<string, unknown>,
   ): Promise<unknown> {
-    const staging = stageProviderCredentials(payload.providers)
-    // Pairing imports are one-shot and may run against a cold offscreen WASM
-    // runtime. Never expire them with the short interactive probe budget.
-    if (
-      staging.kind === ProviderCredentialStagingKind.InvalidInput ||
-      staging.providers.length === 0
-    ) {
-      return this.operations.enqueue(
-        () =>
-          this.context.handleMessage({
+    const operationGeneration = this.operationGeneration
+    const providerCandidate = payload.providers
+    const stagingArgs = {
+      providers:
+        providerCandidate && typeof providerCandidate === 'object'
+          ? providerCandidate
+          : {},
+      decode: this.context.decodeProviders,
+    }
+    const stagingOperation = stageProviderCredentials(stagingArgs)
+    let stagingOwnership = StagingOwnership.Queue
+    const clearQueuedStaging = () => {
+      if (stagingOwnership !== StagingOwnership.Queue) return
+      stagingOwnership = StagingOwnership.Cleared
+      void stagingOperation.then((staging) => {
+        if (staging.kind === ProviderCredentialStagingKind.Staged) {
+          scrubProviderCredentials(staging.providers)
+        }
+      })
+    }
+    payload.providers = []
+    if (providerCandidate && typeof providerCandidate === 'object') {
+      scrubProviderCredentials(providerCandidate)
+    }
+    // Reserve the queue position before cold WASM decoding can yield. Reset
+    // must remain a terminal barrier after every import accepted before it.
+    return this.operations.enqueue({
+      operation: async () => {
+        stagingOwnership = StagingOwnership.Operation
+        const staging = await stagingOperation
+        if (operationGeneration !== this.operationGeneration) {
+          if (staging.kind === ProviderCredentialStagingKind.Staged) {
+            scrubProviderCredentials(staging.providers)
+          }
+          stagingOwnership = StagingOwnership.Cleared
+          throw new Error('Extension session request expired.')
+        }
+        if (staging.kind === ProviderCredentialStagingKind.InvalidInput) {
+          stagingOwnership = StagingOwnership.Cleared
+          return {
+            ok: false,
+            error: 'invalid-provider-payload',
+          }
+        }
+        if (staging.providers.length === 0) {
+          stagingOwnership = StagingOwnership.Cleared
+          return this.context.handleMessage({
             ...message,
             payload: {
               ...payload,
-              providers:
-                staging.kind === ProviderCredentialStagingKind.Staged
-                  ? staging.providers
-                  : Array.isArray(payload.providers)
-                    ? payload.providers
-                    : [],
+              providers: staging.providers,
             },
-          }),
-        { priority: SessionOperationPriority.Interactive },
-      )
-    }
-    const stagedProviders = staging.providers
-    payload.providers = []
-    let payloadResidency: SensitivePayloadResidency = {
-      kind: SensitivePayloadResidencyKind.Resident,
-      payload: { ...payload, providers: stagedProviders },
-    }
-    const clearPending = () => {
-      if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared)
-        return
-      scrubProviderCredentials(payloadResidency.payload.providers)
-      payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
-    }
-    return this.operations.enqueue(
-      async () => {
-        if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
-          throw new Error('Extension session request expired.')
+          })
         }
-        const operationPayload = payloadResidency.payload
-        payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
+        const stagedProviders = staging.providers
         try {
           return await this.context.handleMessage({
             ...message,
-            payload: operationPayload,
+            payload: { ...payload, providers: stagedProviders },
           })
         } finally {
-          scrubProviderCredentials(operationPayload.providers)
-          operationPayload.providers = []
+          scrubProviderCredentials(stagedProviders)
+          payload.providers = []
+          stagingOwnership = StagingOwnership.Cleared
         }
       },
-      {
+      options: {
         priority: SessionOperationPriority.Interactive,
-        onExpire: clearPending,
+        expiry: { kind: SessionOperationExpiryKind.None },
+        cleanup: {
+          kind: SessionOperationCleanupKind.OnExpire,
+          run: clearQueuedStaging,
+        },
       },
-    )
+    })
   }
 
   enqueue(message: unknown): Promise<unknown> {
@@ -350,13 +386,24 @@ export class ExtensionSessionMessageDispatcher {
       )
     }
 
-    return this.operations.enqueue(() => this.context.handleMessage(message), {
-      priority,
-      ...(requestedExpiry.kind === RequestedQueueExpiryKind.Requested
-        ? { expiresAt: requestedExpiry.expiresAt }
-        : priority === SessionOperationPriority.Interactive
-          ? { expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS }
-          : {}),
+    return this.operations.enqueue({
+      operation: () => this.context.handleMessage(message),
+      options: {
+        priority,
+        expiry:
+          requestedExpiry.kind === RequestedQueueExpiryKind.Requested
+            ? {
+                kind: SessionOperationExpiryKind.Deadline,
+                expiresAt: requestedExpiry.expiresAt,
+              }
+            : priority === SessionOperationPriority.Interactive
+              ? {
+                  kind: SessionOperationExpiryKind.Deadline,
+                  expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+                }
+              : { kind: SessionOperationExpiryKind.None },
+        cleanup: { kind: SessionOperationCleanupKind.None },
+      },
     })
   }
 

@@ -212,7 +212,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await pairingLauncher.getByTestId('connect-simple-vault-btn').click()
     const reconnectPage = await reopenedConnectPage
     await expect(reconnectPage).toHaveURL((url) =>
-      belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
+      belongsToSimpleVault({
+        baseUrl: simpleVaultBaseUrl,
+        candidateUrl: url.toString(),
+      }),
     )
     await reconnectPage.close()
     await pairingLauncher.close()
@@ -638,7 +641,10 @@ test('re-approves an existing local vault after reload without event-log-access-
     await pairPopup.getByTestId('connect-simple-vault-btn').click()
     const connectPage = await openedConnect
     await expect(connectPage).toHaveURL((url) =>
-      belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
+      belongsToSimpleVault({
+        baseUrl: simpleVaultBaseUrl,
+        candidateUrl: url.toString(),
+      }),
     )
 
     const consent = connectPage.getByTestId('extension-connect-consent')
@@ -710,7 +716,10 @@ test('re-approves an existing local vault after reload without event-log-access-
     await repairPopup.getByTestId('connect-simple-vault-btn').click()
     const reconnectPage = await reopenedConnect
     await expect(reconnectPage).toHaveURL((url) =>
-      belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
+      belongsToSimpleVault({
+        baseUrl: simpleVaultBaseUrl,
+        candidateUrl: url.toString(),
+      }),
     )
 
     const reconnectConsent = reconnectPage.getByTestId(

@@ -116,12 +116,15 @@ export async function runCortexAudit(
 function listMarkdownFiles(root: string): string[] {
   const out: string[] = [];
   const stack = [root];
+  const directoryReadOptions: { readonly withFileTypes: true } = {
+    withFileTypes: true,
+  };
   while (stack.length > 0) {
     const current = stack.pop();
     if (typeof current !== 'string') {
       break;
     }
-    for (const entry of readdirSync(current, { withFileTypes: true })) {
+    for (const entry of readdirSync(current, directoryReadOptions)) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
         stack.push(full);

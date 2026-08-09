@@ -1,3 +1,4 @@
+import type { ExternalValue } from './external-value'
 import { hasOriginPayload } from './origin-runtime-message'
 import type { WebsiteAuthenticatorOption } from './login-fill-messages'
 
@@ -75,18 +76,22 @@ export type WebsiteAuthenticatorCanceledMessage = {
   }
 }
 
-function isNonEmptyString(value: unknown): value is string {
+function isNonEmptyString(value: ExternalValue): value is string {
   return typeof value === 'string' && value.length > 0
 }
 
 export function isWebsiteAuthenticatorPickerOpenMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteAuthenticatorPickerOpenMessage {
-  return hasOriginPayload(message, 'nook:website-authenticator-picker-open')
+  return (
+    hasOriginPayload(message) &&
+    message.type ===
+      WebsiteAuthenticatorPickerOpenMessageType.NookWebsiteAuthenticatorPickerOpen
+  )
 }
 
 export function isAuthenticatorPickerQueryMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is AuthenticatorPickerQueryMessage {
   if (
     !message ||
@@ -100,7 +105,7 @@ export function isAuthenticatorPickerQueryMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   return (
     isNonEmptyString(payload.requestId) &&
     typeof payload.query === 'string' &&
@@ -109,7 +114,7 @@ export function isAuthenticatorPickerQueryMessage(
 }
 
 export function isAuthenticatorPickerSelectMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is AuthenticatorPickerSelectMessage {
   if (
     !message ||
@@ -123,7 +128,7 @@ export function isAuthenticatorPickerSelectMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   return (
     isNonEmptyString(payload.requestId) &&
     isNonEmptyString(payload.vaultStoreId) &&
@@ -132,7 +137,7 @@ export function isAuthenticatorPickerSelectMessage(
 }
 
 export function isAuthenticatorPickerCancelMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is AuthenticatorPickerCancelMessage {
   if (
     !message ||
@@ -146,12 +151,12 @@ export function isAuthenticatorPickerCancelMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   return isNonEmptyString(payload.requestId)
 }
 
 export function isWebsiteAuthenticatorSelectedMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteAuthenticatorSelectedMessage {
   if (
     !message ||
@@ -165,7 +170,7 @@ export function isWebsiteAuthenticatorSelectedMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   if (
     !isNonEmptyString(payload.origin) ||
     !isNonEmptyString(payload.requestId) ||
@@ -174,17 +179,19 @@ export function isWebsiteAuthenticatorSelectedMessage(
   ) {
     return false
   }
-  const account = payload.account as Record<string, unknown>
+  const account = payload.account as Record<string, ExternalValue>
   return (
     isNonEmptyString(account.vaultStoreId) && isNonEmptyString(account.secretId)
   )
 }
 
 export function isWebsiteAuthenticatorCanceledMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteAuthenticatorCanceledMessage {
   return (
-    hasOriginPayload(message, 'nook:website-authenticator-canceled') &&
+    hasOriginPayload(message) &&
+    message.type ===
+      WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled &&
     isNonEmptyString(message.payload.requestId)
   )
 }

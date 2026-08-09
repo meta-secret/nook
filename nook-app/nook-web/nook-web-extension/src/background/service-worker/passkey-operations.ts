@@ -2,7 +2,11 @@ import {
   isWebsitePasskeyCancelMessage,
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
+  websitePasskeyRequestJson,
+  type WebsitePasskeyCredentialSelection,
+  WebsitePasskeyCredentialSelectionKind,
   WebsitePasskeyCeremony,
+  type WebsitePasskeyRequestJsonArgs,
 } from '../../lib/webauthn-messages'
 import {
   isAuthorizedWebsiteSender,
@@ -203,11 +207,16 @@ export async function performWebsitePasskey(
       (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
     )
     if (!grant) return { ok: false, reason: 'passkey-vault-not-granted' }
-    if (
-      message.payload.ceremony === WebsitePasskeyCeremony.Get &&
-      message.payload.credentialId
-    ) {
-      context.request.allowCredentials = [{ id: message.payload.credentialId }]
+    const credentialSelection: WebsitePasskeyCredentialSelection = message
+      .payload.credentialId
+      ? {
+          kind: WebsitePasskeyCredentialSelectionKind.Selected,
+          credentialId: message.payload.credentialId,
+        }
+      : { kind: WebsitePasskeyCredentialSelectionKind.RequestDefaults }
+    const requestJsonArgs: WebsitePasskeyRequestJsonArgs = {
+      request: context.request,
+      credentialSelection,
     }
     await ensureExtensionSessionDocument()
     return sendSessionMessage({
@@ -218,7 +227,7 @@ export async function performWebsitePasskey(
       payload: {
         ...grant,
         requestId: message.payload.requestId,
-        requestJson: JSON.stringify(context.request),
+        requestJson: websitePasskeyRequestJson(requestJsonArgs),
         queueExpiresAt: message.payload.expiresAt,
         queuePriority: 'interactive',
       },

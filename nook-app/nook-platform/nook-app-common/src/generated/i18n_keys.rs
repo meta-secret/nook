@@ -414,9 +414,11 @@ pub const DEVICE_PROTECTION_PIN_RECOVERY_WARNING: &str = "device_protection.pin_
 pub const DEVICE_PROTECTION_PIN_SECURITY_NOTE: &str = "device_protection.pin_security_note";
 pub const DEVICE_PROTECTION_PIN_SETUP_ACTION: &str = "device_protection.pin_setup_action";
 pub const DEVICE_PROTECTION_PIN_SETUP_DESCRIPTION: &str = "device_protection.pin_setup_description";
+pub const DEVICE_PROTECTION_PIN_SETUP_FAILED: &str = "device_protection.pin_setup_failed";
 pub const DEVICE_PROTECTION_PIN_UNLOCK_ACTION: &str = "device_protection.pin_unlock_action";
 pub const DEVICE_PROTECTION_PIN_UNLOCK_DESCRIPTION: &str =
     "device_protection.pin_unlock_description";
+pub const DEVICE_PROTECTION_PIN_UNLOCK_FAILED: &str = "device_protection.pin_unlock_failed";
 pub const DEVICE_PROTECTION_RECOVERY_ACTION: &str = "device_protection.recovery_action";
 pub const DEVICE_PROTECTION_RECOVERY_COMPLETE: &str = "device_protection.recovery_complete";
 pub const DEVICE_PROTECTION_RECOVERY_CONFIRM: &str = "device_protection.recovery_confirm";
