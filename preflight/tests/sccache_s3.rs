@@ -287,7 +287,11 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     ];
     for (job_name, start, end) in [
         ("Native Rust verification", "\n  rust:\n", "\n  wasm:\n"),
-        ("WASM build and artifact", "\n  wasm:\n", "\n  wasm-node-test:\n"),
+        (
+            "WASM build and artifact",
+            "\n  wasm:\n",
+            "\n  wasm-node-test:\n",
+        ),
         ("WASM Node tests", "\n  wasm-node-test:\n", "\n  verify:\n"),
     ] {
         let job = pr
