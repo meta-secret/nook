@@ -205,11 +205,11 @@ spec:
             failureThreshold: 4
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
               cpu: "1"
-              memory: 1Gi
+              memory: 2Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
           volumeMounts:
             - name: config
               mountPath: /etc/zot/config.json
