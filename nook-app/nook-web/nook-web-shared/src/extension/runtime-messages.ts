@@ -54,13 +54,22 @@ export type ExtensionPairingApprovedGrant = {
   vaultName: string
   approvedAt: string
   scopes: ExtensionConnectScope[]
-  providers: unknown[]
+  providers: ExtensionStorageProviderPayload[]
+}
+
+export type ExtensionStorageProviderPayload = {
+  id: string
+  type: 'local' | 'local-folder' | 'github' | 'oauth-file'
+}
+
+export type ExtensionVaultEventPayload = {
+  schema_version: number
 }
 
 export type ExtensionEventLogRecord = {
   eventId: string
   path: string
-  event: Record<string, unknown>
+  event: ExtensionVaultEventPayload
 }
 
 export enum ExtensionPairingApprovedMessageType {
@@ -199,7 +208,9 @@ function isExtensionEventLogRecord(
     typeof record.path === 'string' &&
     record.path.length > 0 &&
     Boolean(record.event) &&
-    typeof record.event === 'object'
+    typeof record.event === 'object' &&
+    'schema_version' in record.event &&
+    typeof record.event.schema_version === 'number'
   )
 }
 
@@ -479,7 +490,23 @@ export function isExtensionPairingApprovedGrant(
     typeof payload.approvedAt === 'string' &&
     Array.isArray(payload.scopes) &&
     payload.scopes.every(isExtensionConnectScope) &&
-    Array.isArray(payload.providers)
+    Array.isArray(payload.providers) &&
+    payload.providers.every(isExtensionStorageProviderPayload)
+  )
+}
+
+function isExtensionStorageProviderPayload(
+  value: unknown,
+): value is ExtensionStorageProviderPayload {
+  if (!value || typeof value !== 'object') return false
+  const provider = value as Record<string, unknown>
+  return (
+    typeof provider.id === 'string' &&
+    provider.id.length > 0 &&
+    (provider.type === 'local' ||
+      provider.type === 'local-folder' ||
+      provider.type === 'github' ||
+      provider.type === 'oauth-file')
   )
 }
 

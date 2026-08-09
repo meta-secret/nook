@@ -11,7 +11,7 @@
     "check": "test -e node_modules || ln -s ../nook-web-app/node_modules node_modules; node ../nook-web-app/scripts/generate-i18n-keys.mjs --check && bun run lint && bun test scripts src/lib && node_modules/.bin/svelte-check --tsconfig tsconfig.json && node_modules/.bin/tsc -p tsconfig.json --noEmit",
     "format": "../nook-web-app/node_modules/.bin/prettier --write .",
     "format:check": "../nook-web-app/node_modules/.bin/prettier --check .",
-    "lint": "node_modules/.bin/eslint --config ../eslint.config.js scripts src e2e playwright.config.ts",
+    "lint": "cd .. && nook-web-app/node_modules/.bin/eslint --config eslint.config.js nook-web-extension/scripts nook-web-extension/src nook-web-extension/e2e nook-web-extension/playwright.config.ts nook-web-shared/src/extension nook-web-shared/src/components nook-web-shared/src/generated",
     "test:e2e": "bash scripts/test-e2e.sh"
   }
 }
