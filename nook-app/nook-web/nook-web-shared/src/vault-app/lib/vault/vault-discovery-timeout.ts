@@ -13,8 +13,8 @@ export function startVaultDiscoveryTimeout({
   readonly timeoutMs: number;
 }): VaultDiscoveryTimeout {
   const controller = new AbortController();
+  // eslint-disable-next-line max-params -- Promise owns this positional executor signature.
   const completion = new Promise<never>((_, reject) => {
-    // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
     const timer = setTimeout(() => {
       const timeoutError = new Error(message);
       timeoutError.name = VAULT_ASSESS_TIMEOUT_ERROR_NAME;

@@ -180,11 +180,11 @@ describe('extension install target', () => {
       source: ExtensionInstallSource.Metadata,
     })
 
-    expect(open).toHaveBeenCalledWith({
-      0: installUrl,
-      1: '_blank',
-      2: 'noopener,noreferrer',
-    })
+    expect(open).toHaveBeenCalledWith(
+      installUrl,
+      '_blank',
+      'noopener,noreferrer',
+    )
   })
 })
 

@@ -14,6 +14,17 @@
     type ScannerLifecycle,
   } from "./google-authenticator-import-state";
 
+  type CameraScannerOptions = {
+    readonly preferredCamera: "environment";
+    readonly highlightScanRegion: boolean;
+    readonly highlightCodeOutline: boolean;
+    readonly returnDetailedScanResult: true;
+  };
+
+  type QrImageScanOptions = {
+    readonly returnDetailedScanResult: true;
+  };
+
   let {
     vault,
     isSaving,
@@ -63,7 +74,7 @@
     error = "";
     result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     if (scannerState.kind === ScannerLifecycleKind.NotCreated) {
-      const scannerOptions = {
+      const scannerOptions: CameraScannerOptions = {
         preferredCamera: "environment" as const,
         highlightScanRegion: true,
         highlightCodeOutline: true,
@@ -95,7 +106,7 @@
     error = "";
     result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     try {
-      const scanImageOptions = {
+      const scanImageOptions: QrImageScanOptions = {
         returnDetailedScanResult: true as const,
       };
       const scanResult = await QrScanner.scanImage(file, scanImageOptions);

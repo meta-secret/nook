@@ -117,7 +117,7 @@
           const localeRequest: Parameters<typeof vault.updateLocale>[0] = {
             newLocale: e.currentTarget.value as NookAppLocale,
           }
-          vault.updateLocale(localeRequest)
+          void vault.updateLocale(localeRequest)
         }}
       >
         <option value="en">English</option>

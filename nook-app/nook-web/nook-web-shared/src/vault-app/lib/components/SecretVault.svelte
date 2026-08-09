@@ -644,7 +644,7 @@
                       vault.secretPageOffset - vault.secretPageSize,
                     ),
                   }
-                  vault.loadSecretPage(pageRequest)
+                  void vault.loadSecretPage(pageRequest)
                 }}
               >
                 <ChevronLeft class="size-3.5" />
@@ -668,7 +668,7 @@
                     requestedOffset:
                       vault.secretPageOffset + vault.secretPageSize,
                   }
-                  vault.loadSecretPage(pageRequest)
+                  void vault.loadSecretPage(pageRequest)
                 }}
               >
                 {vault.t(I18N_KEYS.VaultNextPage)}

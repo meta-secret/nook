@@ -138,15 +138,15 @@ describe('icloud-oauth', () => {
           zoneName: 'nook-shared-11111111-1111-4111-8111-111111111111',
         },
       ])
-      expect(saveRecords).toHaveBeenCalledWith({
-        0: expect.objectContaining({
+      expect(saveRecords).toHaveBeenCalledWith(
+        expect.objectContaining({
           recordType: 'NookVault',
           createShortGUID: true,
         }),
-        1: {
+        {
           zoneID: 'nook-shared-11111111-1111-4111-8111-111111111111',
         },
-      })
+      )
       expect(shareWithUI).toHaveBeenCalledWith(
         expect.objectContaining({
           shareTitle: 'nook-events',
@@ -547,11 +547,11 @@ describe('icloud-oauth', () => {
       })
 
       await vi.waitFor(() => {
-        expect(open).toHaveBeenCalledWith({
-          0: 'https://idmsa.apple.com/IDMSWebAuth/auth?oauth_token=test',
-          1: 'nook-icloud-auth',
-          2: 'popup,width=520,height=720',
-        })
+        expect(open).toHaveBeenCalledWith(
+          'https://idmsa.apple.com/IDMSWebAuth/auth?oauth_token=test',
+          'nook-icloud-auth',
+          'popup,width=520,height=720',
+        )
       })
       window.dispatchEvent(
         new MessageEvent('message', {
@@ -651,11 +651,11 @@ describe('icloud-oauth', () => {
       })
 
       await vi.waitFor(() => {
-        expect(open).toHaveBeenCalledWith({
-          0: 'https://idmsa.apple.com/IDMSWebAuth/auth?oauth_token=brave',
-          1: 'nook-icloud-auth',
-          2: 'popup,width=520,height=720',
-        })
+        expect(open).toHaveBeenCalledWith(
+          'https://idmsa.apple.com/IDMSWebAuth/auth?oauth_token=brave',
+          'nook-icloud-auth',
+          'popup,width=520,height=720',
+        )
       })
       expect(nativeClick).not.toHaveBeenCalled()
       expect(whenUserSignsIn).not.toHaveBeenCalled()

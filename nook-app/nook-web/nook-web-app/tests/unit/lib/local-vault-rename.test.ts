@@ -65,10 +65,10 @@ describe('renameLocalVaultLabel', () => {
     })
 
     expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledOnce()
-    expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledWith({
-      0: 'store-1',
-      1: 'New name',
-    })
+    expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledWith(
+      'store-1',
+      'New name',
+    )
     expect(setVaultName).toHaveBeenCalledOnce()
     expect(setVaultName).toHaveBeenCalledWith('New name')
     expect(state.errorMsg).toBe('catalog refresh failed')

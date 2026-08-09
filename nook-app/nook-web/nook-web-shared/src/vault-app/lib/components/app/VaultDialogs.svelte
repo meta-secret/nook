@@ -93,7 +93,7 @@
                     oldSecretId: conflict.oldSecretId,
                     chosenSecretId: candidateSecretId,
                   }
-                  vault.resolveReplacementConflict(resolutionRequest)
+                  void vault.resolveReplacementConflict(resolutionRequest)
                 }}
               >
                 {(() => { const translationRequest2: Parameters<typeof vault.t>[0] = {

@@ -104,8 +104,8 @@ describe('ExistingVaultImportLifecycle', () => {
     })
 
     expect(state.unlockWithPassword).toHaveBeenCalledWith({
-      0: 'password-entry',
-      1: 'vault-password',
+      entryId: 'password-entry',
+      password: 'vault-password',
     })
     expect(state.activateConnectedExistingVault).toHaveBeenCalledWith(
       'incoming-vault',

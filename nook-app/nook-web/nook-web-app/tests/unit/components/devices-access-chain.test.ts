@@ -70,7 +70,10 @@ describe('access chain nodes', () => {
     expect(vaults.title).toBe('Family')
     expect(vaults.detail).toEqual({
       kind: AccessNodeDetailKind.Summary,
-      value: `${I18N_KEYS.DevicesAccessVerifiedSummary}({"verified":"1","total":"2"})`,
+      value: {
+        key: I18N_KEYS.DevicesAccessVerifiedSummary,
+        replacements: { verified: '1', total: '2' },
+      },
     })
     expect(vaults.incoming).toEqual({
       kind: AccessChainLinkKind.Relation,
@@ -94,9 +97,10 @@ describe('access chain nodes', () => {
       },
     })
 
-    expect(vaults.title).toBe(
-      `${I18N_KEYS.DevicesAccessVerifiedPlusMore}({"label":"Family","count":"2"})`,
-    )
+    expect(vaults.title).toEqual({
+      key: I18N_KEYS.DevicesAccessVerifiedPlusMore,
+      replacements: { label: 'Family', count: '2' },
+    })
   })
 
   test('does not claim access to vaults this device key never opened', () => {
@@ -114,7 +118,10 @@ describe('access chain nodes', () => {
     expect(vaults.title).toBe(I18N_KEYS.DevicesAccessNoVerifiedVaultsShort)
     expect(vaults.detail).toEqual({
       kind: AccessNodeDetailKind.Summary,
-      value: `${I18N_KEYS.DevicesAccessVerifiedSummary}({"verified":"0","total":"2"})`,
+      value: {
+        key: I18N_KEYS.DevicesAccessVerifiedSummary,
+        replacements: { verified: '0', total: '2' },
+      },
     })
     expect(vaults.incoming).toEqual({
       kind: AccessChainLinkKind.Relation,
