@@ -199,7 +199,10 @@ export type DecodeExactlyOneOperationArgs<T extends string> = {
 
 export function decodeExactlyOneOperation<T extends string>(
   args: DecodeExactlyOneOperationArgs<T>,
-): DecodeOutcome<{ readonly operation: T; readonly payload: UntrustedYamlNode }> {
+): DecodeOutcome<{
+  readonly operation: T;
+  readonly payload: UntrustedYamlNode;
+}> {
   const keys = Object.keys(args.record);
   const operationKeys = keys.filter((key) =>
     args.operations.includes(key as T),

@@ -123,12 +123,16 @@ export function loadScratchEventLog(scratchPath: string): ScratchEventLog {
     record: parsed,
     key: 'cache_telemetry',
   };
-  const cacheTelemetryProperty = untrustedYamlProperty(cacheTelemetryPropertyArgs);
+  const cacheTelemetryProperty = untrustedYamlProperty(
+    cacheTelemetryPropertyArgs,
+  );
   const testInventoryPropertyArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'test_inventory',
   };
-  const testInventoryProperty = untrustedYamlProperty(testInventoryPropertyArgs);
+  const testInventoryProperty = untrustedYamlProperty(
+    testInventoryPropertyArgs,
+  );
 
   return {
     started_at: startedAt,
@@ -139,7 +143,8 @@ export function loadScratchEventLog(scratchPath: string): ScratchEventLog {
     comparison,
     waste_assessment: wasteAssessment,
     cache_telemetry:
-      cacheTelemetryProperty.presence === UntrustedYamlPropertyPresence.Present &&
+      cacheTelemetryProperty.presence ===
+        UntrustedYamlPropertyPresence.Present &&
       isRecord(cacheTelemetryProperty.value)
         ? {
             kind: OptionalRecordKind.Present,
@@ -147,7 +152,8 @@ export function loadScratchEventLog(scratchPath: string): ScratchEventLog {
           }
         : { kind: OptionalRecordKind.Missing },
     test_inventory:
-      testInventoryProperty.presence === UntrustedYamlPropertyPresence.Present &&
+      testInventoryProperty.presence ===
+        UntrustedYamlPropertyPresence.Present &&
       isRecord(testInventoryProperty.value)
         ? {
             kind: OptionalRecordKind.Present,
@@ -184,7 +190,9 @@ export async function assembleAgentStats(
 
   let pr: UntrustedYamlMap;
   try {
-    const parsed = asUntrustedYamlNode(JSON.parse(prJson.stdout) as UntrustedYamlNode);
+    const parsed = asUntrustedYamlNode(
+      JSON.parse(prJson.stdout) as UntrustedYamlNode,
+    );
     if (!isRecord(parsed)) {
       const loomFailureDetailArgs11: LoomFailureDetailArgs = {
         code: LoomFailureCode.PrMetadataInvalid,
@@ -202,7 +210,10 @@ export async function assembleAgentStats(
     loomFailureDetail(loomFailureDetailArgs10);
   }
 
-  const statePropertyArgs: UntrustedYamlPropertyArgs = { record: pr, key: 'state' };
+  const statePropertyArgs: UntrustedYamlPropertyArgs = {
+    record: pr,
+    key: 'state',
+  };
   const stateProperty = untrustedYamlProperty(statePropertyArgs);
   if (
     stateProperty.presence === UntrustedYamlPropertyPresence.Absent ||
@@ -754,7 +765,9 @@ function optionalExternalString(args: OptionalExternalFieldArgs): string {
   return '';
 }
 
-function optionalUntrustedYamlNode(args: OptionalExternalFieldArgs): UntrustedYamlNode {
+function optionalUntrustedYamlNode(
+  args: OptionalExternalFieldArgs,
+): UntrustedYamlNode {
   const property = untrustedYamlProperty(args);
   if (property.presence === UntrustedYamlPropertyPresence.Present) {
     return property.value;

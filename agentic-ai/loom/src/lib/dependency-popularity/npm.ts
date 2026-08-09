@@ -119,7 +119,9 @@ async function resolveGitHubStars(
   if (!response.ok) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const json = asUntrustedYamlNode((await response.json()) as UntrustedYamlNode);
+  const json = asUntrustedYamlNode(
+    (await response.json()) as UntrustedYamlNode,
+  );
   if (!isRecord(json)) {
     return { presence: GitHubStarsPresence.Unavailable };
   }

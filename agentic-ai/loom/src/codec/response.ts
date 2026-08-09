@@ -1,4 +1,7 @@
-import type { UntrustedYamlMapBuilder, UntrustedYamlNode } from '../lib/guards.ts';
+import type {
+  UntrustedYamlMapBuilder,
+  UntrustedYamlNode,
+} from '../lib/guards.ts';
 import { sealUntrustedYamlMap } from '../lib/guards.ts';
 import {
   BlueprintExplanationKind,

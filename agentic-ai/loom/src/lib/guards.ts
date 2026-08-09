@@ -43,7 +43,9 @@ export function isNonEmptyString(value: UntrustedYamlNode): value is string {
 }
 
 /** Boundary-only bridge for a host parse result before immediate decoding. */
-export function asUntrustedYamlNode(value: UntrustedYamlNode): UntrustedYamlNode {
+export function asUntrustedYamlNode(
+  value: UntrustedYamlNode,
+): UntrustedYamlNode {
   return value;
 }
 
@@ -53,7 +55,9 @@ export type UntrustedYamlPropertyArgs = {
 };
 
 /** Read one property without authoring `undefined` from index access. */
-export function untrustedYamlProperty(args: UntrustedYamlPropertyArgs): UntrustedYamlProperty {
+export function untrustedYamlProperty(
+  args: UntrustedYamlPropertyArgs,
+): UntrustedYamlProperty {
   for (const [entryKey, value] of Object.entries(args.record)) {
     if (entryKey === args.key) {
       return {

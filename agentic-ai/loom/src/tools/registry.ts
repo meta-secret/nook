@@ -157,11 +157,15 @@ export async function executeRequest(
       switch (request.operation) {
         case AgentStatsOperation.Assemble:
           return asUntrustedYamlNode(
-            (await runAgentStatsAssemble(request.assemble)) as UntrustedYamlNode,
+            (await runAgentStatsAssemble(
+              request.assemble,
+            )) as UntrustedYamlNode,
           );
         case AgentStatsOperation.Validate:
           return asUntrustedYamlNode(
-            (await runAgentStatsValidate(request.validate)) as UntrustedYamlNode,
+            (await runAgentStatsValidate(
+              request.validate,
+            )) as UntrustedYamlNode,
           );
         case AgentStatsOperation.Publish:
           return asUntrustedYamlNode(
@@ -186,7 +190,9 @@ export async function executeRequest(
           );
         case PrLandOperation.MergeCheck:
           return asUntrustedYamlNode(
-            (await runPrLandMergeCheck(request.mergeCheck)) as UntrustedYamlNode,
+            (await runPrLandMergeCheck(
+              request.mergeCheck,
+            )) as UntrustedYamlNode,
           );
       }
       break;

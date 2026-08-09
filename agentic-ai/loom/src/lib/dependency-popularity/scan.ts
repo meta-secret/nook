@@ -115,7 +115,8 @@ function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
     workspaceMembersPropertyArgs,
   );
   if (
-    workspaceMembersProperty.presence === UntrustedYamlPropertyPresence.Absent ||
+    workspaceMembersProperty.presence ===
+      UntrustedYamlPropertyPresence.Absent ||
     !Array.isArray(workspaceMembersProperty.value)
   ) {
     const loomFailureDetailArgs: LoomFailureDetailArgs = {
@@ -134,7 +135,10 @@ function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
     if (!isRecord(pkg)) {
       continue;
     }
-    const idPropertyArgs: UntrustedYamlPropertyArgs = { record: pkg, key: 'id' };
+    const idPropertyArgs: UntrustedYamlPropertyArgs = {
+      record: pkg,
+      key: 'id',
+    };
     const idProperty = untrustedYamlProperty(idPropertyArgs);
     if (
       idProperty.presence === UntrustedYamlPropertyPresence.Absent ||
@@ -149,7 +153,9 @@ function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
       record: pkg,
       key: 'dependencies',
     };
-    const dependenciesProperty = untrustedYamlProperty(dependenciesPropertyArgs);
+    const dependenciesProperty = untrustedYamlProperty(
+      dependenciesPropertyArgs,
+    );
     if (
       dependenciesProperty.presence === UntrustedYamlPropertyPresence.Absent ||
       !Array.isArray(dependenciesProperty.value)

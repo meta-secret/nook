@@ -146,7 +146,10 @@ export function validateAgentStatsYaml(
       'agent_requested_rerun_count',
       'merge_attempt_count',
     ] as const) {
-      const propertyArgs3: UntrustedYamlPropertyArgs = { record: summary, key: key };
+      const propertyArgs3: UntrustedYamlPropertyArgs = {
+        record: summary,
+        key: key,
+      };
       const property = untrustedYamlProperty(propertyArgs3);
       if (
         property.presence === UntrustedYamlPropertyPresence.Absent ||
@@ -261,7 +264,10 @@ export function validateAgentStatsYaml(
     'pr_retriggers',
     'merge_attempts',
   ] as const) {
-    const propertyArgs: UntrustedYamlPropertyArgs = { record: parsed, key: key };
+    const propertyArgs: UntrustedYamlPropertyArgs = {
+      record: parsed,
+      key: key,
+    };
     const property = untrustedYamlProperty(propertyArgs);
     if (
       property.presence === UntrustedYamlPropertyPresence.Absent ||

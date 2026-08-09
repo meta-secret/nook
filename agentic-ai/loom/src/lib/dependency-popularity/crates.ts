@@ -29,7 +29,9 @@ export async function fetchCrateMetrics(name: string): Promise<CrateMetrics> {
       `crates.io lookup failed for ${name}: HTTP ${response.status}`,
     );
   }
-  const json = asUntrustedYamlNode((await response.json()) as UntrustedYamlNode);
+  const json = asUntrustedYamlNode(
+    (await response.json()) as UntrustedYamlNode,
+  );
   if (!isRecord(json)) {
     throw new Error(`crates.io payload invalid for ${name}`);
   }
@@ -130,7 +132,9 @@ async function resolveCrateGitHubStars(
   if (!response.ok) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const json = asUntrustedYamlNode((await response.json()) as UntrustedYamlNode);
+  const json = asUntrustedYamlNode(
+    (await response.json()) as UntrustedYamlNode,
+  );
   if (!isRecord(json)) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
