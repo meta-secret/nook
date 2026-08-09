@@ -189,7 +189,7 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
 #[test]
 fn trusted_github_actions_share_compiler_objects_without_weakening_prs() -> anyhow::Result<()> {
     assert_hosted_docker_builds_connect_scoped_compiler_cache();
-    assert_workflows_scope_cache_credentials();
+    assert_workflows_scope_cache_credentials()?;
     assert_rust_build_cache_boundary();
     Ok(())
 }
@@ -245,7 +245,7 @@ fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
     assert!(!cache_action_main.contains("REDIS"));
 }
 
-fn assert_workflows_scope_cache_credentials() {
+fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     for path in [
         ".github/workflows/agent-implement.yml",
         ".github/workflows/e2e-pr.yml",
@@ -279,15 +279,40 @@ fn assert_workflows_scope_cache_credentials() {
     let pr_docker_setups = pr
         .matches("uses: ./.github/actions/nook-docker-setup")
         .count();
-    assert_eq!(
-        pr.matches("NOOK_SCCACHE_ACCESS_KEY").count(),
-        pr_docker_setups,
-        "same-repository PR Docker jobs must mount SeaweedFS sccache like Hive"
-    );
-    assert_eq!(
-        pr.matches("NOOK_SCCACHE_SECRET_KEY").count(),
-        pr_docker_setups
-    );
+    let compiler_credentials = [
+        "NOOK_SCCACHE_ACCESS_KEY",
+        "NOOK_SCCACHE_SECRET_KEY",
+        "NOOK_SCCACHE_ENDPOINT",
+        "NOOK_SCCACHE_BUCKET",
+    ];
+    for (job_name, start, end) in [
+        ("Native Rust verification", "\n  rust:\n", "\n  wasm:\n"),
+        (
+            "WASM build and artifact",
+            "\n  wasm:\n",
+            "\n  wasm-node-test:\n",
+        ),
+        ("WASM Node tests", "\n  wasm-node-test:\n", "\n  verify:\n"),
+    ] {
+        let job = pr
+            .split_once(start)
+            .and_then(|(_, tail)| tail.split_once(end))
+            .map(|(job, _)| job)
+            .with_context(|| format!("PR workflow must keep the {job_name} job"))?;
+        for credential in compiler_credentials {
+            assert!(
+                job.contains(credential),
+                "Rust-producing PR job {job_name} must receive {credential}"
+            );
+        }
+    }
+    for credential in compiler_credentials {
+        assert_eq!(
+            pr.matches(credential).count(),
+            3,
+            "only the three Rust-producing PR jobs may receive {credential}"
+        );
+    }
     assert_eq!(
         pr.matches("isolated-cache-write: \"true\"").count(),
         pr_docker_setups,
@@ -340,6 +365,7 @@ fn assert_workflows_scope_cache_credentials() {
     assert!(hive.contains("uses: ./.github/actions/nook-docker-setup"));
     assert!(hive.contains("isolated-cache-write: \"true\""));
     assert!(!hive.contains("NOOK_CACHE_REDIS_PASSWORD"));
+    Ok(())
 }
 
 fn assert_rust_build_cache_boundary() {

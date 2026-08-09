@@ -161,8 +161,11 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
             && web_image_bake.contains("web_e2e_cache_from =")
             && web_image_bake.contains("web_e2e_cache_to =")
             && web_image_bake.contains("target \"web-base\"")
-            && web_image_bake.contains("target \"web-e2e-base\""),
-        "final web/e2e image cache scopes must live next to web-base in web.docker-bake.hcl"
+            && web_image_bake.contains("target \"web-e2e-base\"")
+            && web_app_bake.contains("target \"nook-web-e2e-publish\"")
+            && bake_target_assigns_cache_to(web_app_bake.as_str(), "nook-web-e2e-publish")
+            && !bake_target_assigns_cache_to(web_app_bake.as_str(), "nook-web-e2e"),
+        "final web/e2e scopes must use a dedicated cache-only browser publisher"
     );
     let platform_docker_tasks = read(root, "nook-app/nook-platform/docker/Taskfile.yml");
     let web_docker_tasks = read(root, "nook-app/nook-web/docker/Taskfile.yml");
@@ -218,9 +221,11 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         "Publish git-scoped native BuildKit cache",
         "Publish git-scoped WASM BuildKit cache",
         "Publish git-scoped web BuildKit cache",
+        "Publish verified browser BuildKit cache",
         "task ci:main:publish-native-cache",
         "task ci:main:publish-wasm-cache",
         "task ci:main:publish-web-cache",
+        "task ci:main:publish-web-e2e-cache",
     ] {
         assert!(
             pr.contains(marker),
@@ -245,6 +250,20 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let web_publish = pr
         .find("task ci:main:publish-web-cache")
         .context("PR web job must publish its cache")?;
+    let ui_demo = section(&pr, "  ui-demo:\n", "\n  preview:\n");
+    let ui_demo_verify = ui_demo
+        .find("task ci:pr:ui-demo")
+        .context("PR UI demo job must verify")?;
+    let ui_demo_publish = ui_demo
+        .find("task ci:main:publish-web-e2e-cache")
+        .context("PR UI demo job must publish its cache")?;
+    let full_e2e = section(&pr, "  full-e2e:\n", "\n  full-extension-e2e:\n");
+    let full_e2e_verify = full_e2e
+        .find("task ci:pr:e2e:web:artifacts")
+        .context("PR full-e2e job must verify the browser image")?;
+    let full_e2e_publish = full_e2e
+        .find("task ci:main:publish-web-e2e-cache")
+        .context("PR full-e2e job must publish its verified browser cache")?;
     assert!(
         rust_verify < rust_publish
             && pr[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
@@ -254,7 +273,16 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && pr[wasm_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && web_verify < web_publish
             && pr[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && pr[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\""),
+            && pr[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && ui_demo_verify < ui_demo_publish
+            && ui_demo[ui_demo_verify..ui_demo_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && ui_demo[ui_demo_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && ui_demo[..ui_demo_publish]
+                .contains("!contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')")
+            && full_e2e_verify < full_e2e_publish
+            && full_e2e[full_e2e_verify..full_e2e_publish]
+                .contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && full_e2e[full_e2e_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\""),
         "PR producers must verify read-only, then publish from warm builders with writes enabled"
     );
     Ok(())
@@ -279,6 +307,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let rust = section(&main, "  rust:\n", "\n  wasm:\n");
     let wasm = section(&main, "  wasm:\n", "\n  web:\n");
     let web = section(&main, "  web:\n", "\n  web-e2e:\n");
+    let ui_demo = section(&main, "  ui-demos:\n", "\n  deploy:\n");
     let rust_verify = rust
         .find("task ci:pr:rust")
         .context("Main Rust job must verify")?;
@@ -300,6 +329,15 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let web_publish = web
         .find("task ci:main:publish-web-cache")
         .context("Main web job must publish its cache")?;
+    let ui_demo_step = ui_demo
+        .find("- name: Headless UI demos")
+        .context("Main UI demo job must declare its verification step")?;
+    let ui_demo_verify = ui_demo
+        .find("task ci:main:ui-demo:artifacts")
+        .context("Main UI demo job must verify the browser image")?;
+    let ui_demo_publish = ui_demo
+        .find("task ci:main:publish-web-e2e-cache")
+        .context("Main UI demo job must publish its verified browser cache")?;
     assert!(
         rust_verify < rust_publish
             && rust[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
@@ -312,6 +350,10 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && web_verify < web_publish
             && web[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && web[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && ui_demo_step < ui_demo_verify
+            && ui_demo_verify < ui_demo_publish
+            && ui_demo[ui_demo_step..ui_demo_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && ui_demo[ui_demo_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && !main.contains("\n  publish-cache:\n")
             && !main.contains("task ci:main:warm-gha-cache")
             && !main.contains("task ci:main:publish-gha-cache"),
@@ -343,11 +385,13 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("docker:ci:cache:publish:native:")
             && docker_tasks.contains("docker:ci:cache:publish:wasm:")
             && docker_tasks.contains("docker:ci:cache:publish:web:")
+            && docker_tasks.contains("docker:ci:cache:publish:web-e2e:")
             && docker_tasks.contains("task: docker:ci:cache:publish:rust-base")
             && docker_tasks.contains("rust-base-publish")
             && docker_tasks.contains("builder-core-deps-publish")
             && docker_tasks.contains("builder-wasm-deps-publish")
             && docker_tasks.contains("web-deps-publish")
+            && docker_tasks.contains("nook-web-e2e-publish")
             && docker_tasks.contains("preflight-test")
             && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh")
             && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX"),

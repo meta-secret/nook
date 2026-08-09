@@ -191,6 +191,23 @@ tasks:
         --set "*.output=type=cacheonly"
         web-deps-publish
 
+  docker:ci:cache:publish:web-e2e:
+    desc: Export the already-verified browser web graph from this job's builder.
+    env:
+      GHA_CACHE_WRITE_ENABLED: "1"
+    vars:
+      CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/joined" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        artifacts="{{.CI_ARTIFACT_DIR}}";
+        case "$artifacts" in /*) ;; *) artifacts="{{.REPO_ROOT}}/$artifacts" ;; esac;
+        test -s "$artifacts/nook-wasm/nook_wasm.js";
+        test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
+        mkdir -p "$artifacts/coverage/nook-core";
+        : > "$artifacts/coverage/nook-core/.web-only";
+        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:cache:publish:web-e2e" {{.DOCKER}} buildx bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web-e2e-publish'
+
   docker:ci:web:build:
     desc: Build the sealed web image from the same-runner CI WASM artifact.
     deps: [registry-cache:ensure]

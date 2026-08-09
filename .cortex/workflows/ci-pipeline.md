@@ -45,10 +45,13 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - Those ecosystem jobs run in parallel with native Rust, WASM, and verify.
 - Ordinary pushes do not start this workflow.
 - Only `ci:validate` / `ci:full-e2e` label events start it.
-- Changed headless UI demo specs + 90-day artifact when UI changes.
+- Changed headless UI demo specs run beside web verification when UI changes.
+- Those demos retain a 90-day artifact.
 - Internal harness plus isolated native Pages aliases.
 - `github-pages` deployment status.
 - `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite.
+- Keep independent long-running gates on separate hosted runners.
+- Combine jobs only when measured setup savings exceed lost parallelism.
 
 **`rust-ecosystem.yml`**
 
@@ -76,7 +79,9 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 - On `ubuntu-latest`: native Rust → WASM → browser-free web verify read-only.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
-- Local-provider web e2e, extension e2e, and headless UI demos consume verified WASM on separate read-only runners.
+- Local-provider web e2e, extension e2e, and headless UI demos consume verified WASM on separate runners.
+- Each browser solve is read-only.
+- The successful UI-demo lane publishes the warm browser-image graph.
 - 90-day artifact + 10 largest recordings on the merged PR's Linear issue.
 - Deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify + web e2e.
 
@@ -308,7 +313,7 @@ PR, main, release, AI, scheduled, manual e2e, and research jobs use GitHub-hoste
 - Loadable `nook-rust*` tags live in the platform core/wasm bake files.
 - `nook-app/docker-bake.hcl` stays thin: shared GHA/registry/sccache
   variables, `_sccache`, and cross-lineage prepare groups.
-- Main verifies every publication from a fresh BuildKit builder before accepting it.
+- Main verifies the published WASM dependency fingerprint from a fresh BuildKit builder.
 - Repository invariants in `preflight/tests/sccache_s3.rs` and `preflight/tests/vault_app_isolation.rs` enforce the topology and proof.
 
 **Exact-input handoffs:**
@@ -332,7 +337,10 @@ PR, main, release, AI, scheduled, manual e2e, and research jobs use GitHub-hoste
 - On a native producer miss, preflight must finish before the native application Docker solve begins.
 - `Web verification` declares `needs` on the WASM build producer.
 - It downloads the run-stable WASM artifact directly after that job succeeds.
-- `Verify and preview` declares `needs` on Native Rust, web verification, and WASM Node tests.
+- `Headless UI demo` declares `needs` on the WASM build producer.
+- Required demos therefore overlap browser-free web verification.
+- `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
+- It also waits for the UI demo job.
 - That keeps the merge-gate check red when Native fails.
 - Preview deploys from a host dist handoff with pinned wrangler.
 - No consumer polls GitHub for a sibling producer.
@@ -365,9 +373,13 @@ the Chromium image and run deterministic local-provider plus split-app tests
 and extension e2e on separate hosted runners through
 `task ci:pr:e2e:web:artifacts` and
 `task ci:pr:e2e:extension:artifacts`. Both tasks use the same bounded BuildKit
-health/recovery wrapper as Main. The extension consumer owns the shared e2e
-cache export; the longer web consumer restores that cache without spending
-another two minutes uploading identical browser layers. Adding
+health/recovery wrapper as Main. Pull-request browser consumers publish only
+isolated exact-head cache refs. Each consumer probes its exact browser ref.
+An available exact ref is imported alone. A missing exact ref falls back to
+the browser-image seed owned by trusted Main. The web full-e2e job publishes
+the verified exact-head browser graph after its assertions pass. The UI-demo
+publisher is suppressed in that mode so the two jobs never write the same ref
+concurrently. Adding
 or removing the label retriggers PR Actions for the current head. Because the
 readiness audit already requires the exact-head `PR` workflow to succeed, a
 labeled PR cannot be ready while this job is queued, red, or cancelled.
@@ -476,8 +488,14 @@ git fetch origin main
 Combine with unconditional `task format` — see
 [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
-The `ui-demo` Playwright project runs Chromium headlessly at 1280x720 and always
-records WebM video. Demo-only waits are allowed to hold meaningful before/after
+The `ui-demo` Playwright project runs Chromium headlessly at 1280x720.
+It always records WebM video.
+The pull-request demo job starts beside web verification.
+It starts after the WASM handoff is ready.
+Its browser-image solve is read-only.
+After Playwright succeeds, a dedicated cache-only publisher exports the warm
+graph to the isolated exact-head scope.
+Demo-only waits are allowed to hold meaningful before/after
 states long enough for a reviewer to understand them; ordinary regression specs
 must remain full-speed. CI keeps the GitHub Actions result for 90 days and, after
 a successful recording, uploads the 10 largest WebMs to Linear's private file storage. A
@@ -574,7 +592,10 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 - `Web verification` depends on the build job and downloads the package with `actions/download-artifact`.
 - It can run browser-free web validation while Node tests continue.
 - It exports host dist trees for preview deploy.
-- `Verify and preview` depends on Native Rust, web verification, and WASM Node tests.
+- `Headless UI demo` also depends on the WASM build job.
+- It runs changed demo specs in parallel with web verification.
+- `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
+- It also waits for the UI demo job.
 - Optional web and extension e2e consumers need both WASM jobs and receive only a fully verified handoff.
 - A separate `Rust coverage report` job declares `needs: rust`, downloads the native handoff directly, and performs reporting without occupying or delaying the preview runner.
 
@@ -663,7 +684,7 @@ The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-lo
 - Trusted Main Rust/WASM producers and explicitly dispatched same-repository Remote tasks use authenticated SeaweedFS S3 `sccache`.
 - Compiler vertices receive the bucket-scoped build identity only through stable optional BuildKit secret IDs.
 - Secret contents do not participate in Docker cache checksums, so secret-free solves can still restore Main's exported vertices.
-- Same-repository PR and Rust ecosystem Docker jobs mount SeaweedFS `sccache` with the Main build identity (matching Hive).
+- Same-repository PR Rust producers and Rust ecosystem Docker jobs mount SeaweedFS `sccache` with the Main build identity (matching Hive).
 - Release, browser-only, and arbitrary-ref workflows do not receive those credentials.
 - Fork pull requests also stay secret-free.
 - SeaweedFS remains an optimization and never a correctness input.

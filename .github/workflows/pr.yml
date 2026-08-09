@@ -417,25 +417,12 @@ jobs:
       - name: Test cache telemetry collector
         run: node --test .github/scripts/cache-telemetry.test.cjs
 
-      - name: Enforce the UI demo contract
-        id: ui-demo-contract
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          git fetch origin "$BASE_SHA" --depth=1
-          bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
-
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: "true"
@@ -479,6 +466,66 @@ jobs:
         env:
           GHA_CACHE_WRITE_ENABLED: "1"
 
+      - name: Extract preview dist to the host
+        run: task docker:extract:dist
+        env:
+          CI: true
+
+      - name: Upload preview dist handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-web-dist-${{ github.run_id }}
+          path: |
+            nook-app/nook-web/nook-web-app/dist
+            nook-app/nook-web/nook-vault-simple/dist
+            nook-app/nook-web/nook-vault-sentinel/dist
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
+  ui-demo:
+    name: Headless UI demo
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e')
+    needs: [validation-request, wasm]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Enforce the UI demo contract
+        id: ui-demo-contract
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$BASE_SHA" --depth=1
+          bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
+
+      - name: Docker setup
+        if: steps.ui-demo-contract.outputs.required == 'true'
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          cache-write: "false"
+          main-cache-only: "true"
+          isolated-cache-write: "true"
+
+      - name: Download built WASM handoff
+        if: steps.ui-demo-contract.outputs.required == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-wasm-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
+
       - name: Record headless UI demo
         id: record-ui-demo
         if: steps.ui-demo-contract.outputs.required == 'true'
@@ -496,6 +543,29 @@ jobs:
             WASM_BUILD_MODE=dev
         env:
           CI: true
+          # A failed demo must not publish its image graph. Publish explicitly below.
+          GHA_CACHE_WRITE_ENABLED: ""
+          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+          NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
+          NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
+          NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
+
+      - name: Publish verified browser BuildKit cache
+        if: >-
+          steps.ui-demo-contract.outputs.required == 'true' &&
+          !contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+        run: >-
+          task ci:main:publish-web-e2e-cache
+          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
+          VITE_BASE=/
+          VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
+          VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
+          VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
+          VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
+          WASM_BUILD_MODE=dev
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
           NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
           NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
@@ -557,39 +627,49 @@ jobs:
               })
             }
 
-      - name: Extract preview dist to the host
-        run: task docker:extract:dist
-        env:
-          CI: true
-
-      - name: Upload preview dist handoff
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr-web-dist-${{ github.run_id }}
-          path: |
-            nook-app/nook-web/nook-web-app/dist
-            nook-app/nook-web/nook-vault-simple/dist
-            nook-app/nook-web/nook-vault-sentinel/dist
-          retention-days: 1
-          if-no-files-found: error
-          overwrite: true
-
       - name: Preserve cache telemetry
-        if: always()
+        if: always() && steps.ui-demo-contract.outputs.required == 'true'
         uses: ./.github/actions/nook-cache-telemetry
 
 
   preview:
     name: Verify and preview
     if: >-
+      always() &&
       github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     # Native must succeed before the merge gate check can go green. A green
     # preview with a failed Native job previously allowed false readiness.
-    needs: [rust, verify, wasm-node-test]
+    needs: [rust, wasm, verify, wasm-node-test, ui-demo]
     runs-on: ubuntu-latest
     steps:
+      - name: Enforce required verification results
+        env:
+          NATIVE_RESULT: ${{ needs.rust.result }}
+          WASM_RESULT: ${{ needs.wasm.result }}
+          WEB_RESULT: ${{ needs.verify.result }}
+          WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}
+          UI_DEMO_RESULT: ${{ needs.ui-demo.result }}
+        run: |
+          set -euo pipefail
+          failed=0
+          for dependency in \
+            "Native Rust=$NATIVE_RESULT" \
+            "WASM build=$WASM_RESULT" \
+            "Web verification=$WEB_RESULT" \
+            "WASM Node tests=$WASM_NODE_RESULT" \
+            "Headless UI demo=$UI_DEMO_RESULT"
+          do
+            name="${dependency%%=*}"
+            result="${dependency#*=}"
+            if [ "$result" != "success" ]; then
+              echo "::error::$name finished with $result"
+              failed=1
+            fi
+          done
+          test "$failed" -eq 0
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -772,10 +852,6 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: "true"
@@ -799,9 +875,28 @@ jobs:
           WASM_BUILD_MODE=dev
         env:
           CI: true
+          GHA_CACHE_WRITE_ENABLED: ""
           GIT_COMMIT_ID: ${{ github.event.pull_request.head.sha }}
           NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
           NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/
+          NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
+          NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
+          NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
+
+      - name: Publish verified full-e2e browser BuildKit cache
+        run: >-
+          task ci:main:publish-web-e2e-cache
+          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
+          VITE_BASE=/
+          VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
+          VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
+          VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
+          VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
+          WASM_BUILD_MODE=dev
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
+          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
           NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
@@ -827,10 +922,6 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: "true"

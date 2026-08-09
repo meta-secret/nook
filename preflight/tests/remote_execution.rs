@@ -591,7 +591,7 @@ fn broad_remote_tasks_export_native_layers_without_main_write_access() {
 }
 
 #[test]
-fn complete_pr_validation_is_explicit_and_exact_head_bound() {
+fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     let pr = read(".github/workflows/pr.yml");
     let remote_doc = read(".cortex/workflows/remote-execution.md");
@@ -617,11 +617,28 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() {
             "PR validation Task command must own {label}"
         );
     }
-    assert_eq!(
-        pr.matches("contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')")
-            .count(),
-        2,
+    let ui_demo = pr
+        .split_once("\n  ui-demo:\n")
+        .and_then(|(_, tail)| tail.split_once("\n  preview:\n"))
+        .map(|(job, _)| job)
+        .context("PR workflow must keep the UI demo job")?;
+    let full_e2e = pr
+        .split_once("\n  full-e2e:\n")
+        .and_then(|(_, tail)| tail.split_once("\n  full-extension-e2e:\n"))
+        .map(|(job, _)| job)
+        .context("PR workflow must keep the full browser e2e job")?;
+    let full_extension_e2e = pr
+        .split_once("\n  full-extension-e2e:\n")
+        .map(|(_, job)| job)
+        .context("PR workflow must keep the full extension e2e job")?;
+    let full_e2e_label = "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')";
+    assert!(
+        full_e2e.contains(full_e2e_label) && full_extension_e2e.contains(full_e2e_label),
         "a persistent Main-fix label must keep both full e2e jobs active"
+    );
+    assert!(
+        ui_demo.contains(&format!("!{full_e2e_label}")),
+        "the UI demo publisher must yield exact-head cache ownership to full e2e"
     );
     for required in [
         "E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts",
@@ -648,6 +665,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() {
             "remote execution contract missing: {required}"
         );
     }
+    Ok(())
 }
 
 fn workflow_or_remote_tasks(required: &str) -> bool {

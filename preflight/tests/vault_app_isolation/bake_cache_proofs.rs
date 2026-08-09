@@ -145,6 +145,7 @@ fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Res
     let root = repository_root();
     let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let preflight_bake = read(&root, "preflight/docker-bake.hcl");
+    let web_image_bake = read(&root, "nook-app/nook-web/docker/web.docker-bake.hcl");
     for (bake, name, availability, exact_marker, main_ref) in [
         (
             rust_bake.as_str(),
@@ -229,6 +230,13 @@ fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Res
             "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE",
             "nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}",
             "nook/buildcache/nook-preflight-v1",
+        ),
+        (
+            web_image_bake.as_str(),
+            "web_e2e_cache_from",
+            "GHA_CACHE_EXACT_WEB_E2E_AVAILABLE",
+            "nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-web-e2e-v1",
         ),
     ] {
         let body = assignment_body(bake, name)?;
@@ -459,6 +467,7 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE",
         "GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE",
         "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE",
+        "GHA_CACHE_EXACT_WEB_E2E_AVAILABLE",
     ] {
         assert!(
             app_bake.contains(&format!("variable \"{availability}\""))

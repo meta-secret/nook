@@ -297,7 +297,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Explicit collaborator-dispatched Remote jobs use a separate SeaweedFS identity.
     - Remote identity can read but cannot write `nook-sccache`.
     - Remote jobs restore Main's Zot lineage and write only git-commit refs under `nook/remote-buildcache/**`.
-    - Same-repository PR and Rust ecosystem Docker jobs mount the Main SeaweedFS build identity.
+    - Same-repository PR Rust producers and Rust ecosystem Docker jobs mount the Main SeaweedFS build identity.
     - Forks stay secret-free and cold-compile.
     - PR jobs export only git-commit refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
     - Release and browser-only jobs receive neither cache credential and cannot evict Main.
@@ -307,7 +307,8 @@ Use this workflow for quality, CI, and deployment changes.
     - Main serializes native → WASM → web publisher lanes.
     - Each lane verifies read-only first, then exports its already-solved graph from the same job-scoped builder.
     - WASM dependencies export alone with no hosted reimport and forced zstd compression.
-    - Browser/UI consumers remain read-only.
+    - Browser/UI validation remains read-only and receives no compiler-cache identity.
+    - After UI-demo assertions pass, its lane exports the warm browser graph through a dedicated cache-only publisher.
     - Main runs full local-provider and extension e2e.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 
@@ -317,7 +318,8 @@ Use this workflow for quality, CI, and deployment changes.
     - The WASM producer uploads one small run-stable package.
     - That package is consumed by `PR / Verify and preview`.
     - Main-fix PRs carrying `ci:full-e2e` also feed separate local-provider web and extension browser jobs.
-    - `Verify and preview` uses `always()` and fails explicitly when the WASM producer fails.
+    - `Verify and preview` uses `always()`.
+    - It fails explicitly when any required producer or consumer fails.
     - The established required check cannot be skipped by dependency failure.
     - `Verify and preview` also needs Native Rust verification.
     - A failed Native job must keep the merge-gate check from going green.

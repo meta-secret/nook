@@ -670,7 +670,13 @@ PR consumer behavior:
 - `Web verification` depends on the WASM build producer through `needs`.
 - It downloads the clippy-clean WASM package with `actions/download-artifact`.
 - `WASM Node tests` can finish in parallel with web verification.
-- `Verify and preview` depends on Native Rust, web verification, and WASM Node tests.
+- The conditional `Headless UI demo` job also starts from the WASM handoff.
+- It overlaps web verification on UI-changing pull requests.
+- It solves the browser image without writing cache state.
+- Playwright must succeed before cache publication starts.
+- A dedicated cache-only target publishes the isolated exact-head browser graph.
+- `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
+- It also waits for the UI demo job.
 - It deploys from the exported host dist handoff.
 - Rust coverage reporting is a separate native-dependent job.
 - That job downloads the completed handoff directly.
@@ -707,9 +713,9 @@ Local on-demand images:
 - The CI-only web target runs format, lint, check, and tests as a sibling of the production web/extension build.
 - It joins both successful branches into the same sealed image.
 - Verification is not serialized after the build.
-- `web-e2e-base` adds Playwright Chromium only for main/manual e2e.
+- `web-e2e-base` adds Playwright Chromium for Main, manual e2e, and changed PR demos.
 - It uses a separate `:web-e2e-*` cache.
-- PR cache imports never pull the browser layer.
+- Browser-free PR web solves never pull the browser layer.
 - Neither lineage contains Cargo or `target/`.
 
 **Common task image** (`nook-web:local`):
@@ -810,7 +816,7 @@ It restores the independent lineages from `registry.dev.nokey.sh`.
 - Creates and exports the hosted `docker-container` Buildx builder for wrapped and direct Task callers.
 - Logs into `registry.dev.nokey.sh`.
 - Enables Bake registry cache refs.
-- Trusted Main and same-repository PR/Rust-ecosystem Docker jobs receive the SeaweedFS writer identity.
+- Trusted Main and same-repository PR/Rust-ecosystem Rust producers receive the SeaweedFS writer identity.
 - Explicit Remote compiler vertices receive a read-only identity through stable BuildKit secret IDs.
 - Fork, release, arbitrary-ref, dependency-update, and AI-authored jobs remain secret-free.
 - Delivery does not depend on the daemon's default image store.
@@ -848,7 +854,7 @@ Rust/WASM compiles are wrapped by pinned `sccache`.
 
 Authorized identities:
 
-- Local builds, Hive, trusted Main, same-repository PR, and Rust ecosystem Docker jobs.
+- Local builds, Hive, trusted Main, same-repository PR Rust producers, and Rust ecosystem Docker jobs.
 - They use authenticated SeaweedFS S3 at `https://sccache.dev.nokey.sh` when scoped writer credentials exist.
 
 Explicit Remote tasks:
@@ -915,13 +921,13 @@ Authorized callers can use the authenticated HTTPS endpoint:
 - Local runtime builds
 - Hive
 - Trusted Main
-- Same-repository PR
+- Same-repository PR Rust producers
 - Rust ecosystem Docker jobs
 - Explicit Remote tasks
 
 Write vs read identity:
 
-- Main and same-repository PR/Rust-ecosystem jobs write with the build identity.
+- Main and same-repository PR/Rust-ecosystem Rust producers write with the build identity.
 - Remote reads through a separate identity.
 - Fork, release, and other arbitrary-ref jobs bypass sccache.
 
@@ -1014,17 +1020,23 @@ Write vs read identity:
 **CI Docker builds**
 
 - PR CI builds verified WASM once and uploads its small generated package.
-- Parallel preview and `ci:full-e2e` consumers download that artifact.
+- Parallel web, UI-demo, and `ci:full-e2e` consumers download that artifact.
 - Independent web and extension e2e consumers each build only the Chromium web image from that artifact.
 - They run on separate hosted runners.
-- The extension job owns the shared e2e cache export.
-- The web job restores it without duplicating that upload.
+- Pull-request browser jobs write only isolated exact-head cache refs.
+- Each browser job probes its isolated exact-head ref before solving.
+- An available exact browser ref is imported alone.
+- A missing exact browser ref falls back to the trusted Main seed.
+- The UI-demo lane publishes after a successful ordinary PR demo.
+- The web full-e2e lane owns publication on `ci:full-e2e` pull requests.
 - Changed PR demo specs and Main's complete demo project retain 90-day Actions artifacts.
 - The 10 largest WebMs per run are best-effort published into one private Linear `nook-ui` issue per PR.
 - Main serializes native → WASM → web cache-writing lanes.
 - Each lane verifies read-only and then exports its already-solved local graph.
 - Isolated no-import WASM dependency publication runs separately.
-- Parallel web e2e / extension e2e / UI demo consumers rebuild from the verified WASM handoff and remain read-only.
+- Parallel Main browser consumers build and test read-only from the verified WASM handoff.
+- The successful Main UI-demo lane publishes its warm `nook-web-e2e-v1` graph.
+- This is the trusted browser-image seed for later pull requests.
 - Deploy waits on web verify + web e2e only.
 - Main also publishes commit-keyed Rust coverage.
 - A dedicated PR reporting job reuses trusted exact-commit artifacts when available.
@@ -1042,7 +1054,7 @@ SeaweedFS compiler-cache rules:
   only under `~/.nook/`.
 - That home directory is shared across worktrees.
 - Never write those materials into a checkout.
-- Trusted Main, same-repository PR, and Rust ecosystem Docker jobs use the
+- Trusted Main, same-repository PR Rust producers, and Rust ecosystem Docker jobs use the
   authoritative read/write identity.
 - Explicit Remote tasks use separate `NOOK_SCCACHE_REMOTE_*` read-only
   credentials for `nook-sccache`.

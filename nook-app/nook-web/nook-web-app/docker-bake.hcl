@@ -130,6 +130,17 @@ target "nook-web-e2e" {
   tags       = [DOCKER_IMAGE, DOCKER_E2E_IMAGE]
   output     = ["type=docker"]
   cache-from = web_e2e_cache_from
+}
+
+// Explicit writer for the browser-image scope. Validation uses nook-web-e2e
+// read-only; a successful producer invokes this cache-only target afterward.
+target "nook-web-e2e-publish" {
+  inherits = ["_nook-web-common"]
+  contexts = {
+    web-base = "target:web-e2e-base"
+  }
+  output     = ["type=cacheonly"]
+  cache-from = web_e2e_cache_from
   cache-to   = web_e2e_cache_to
 }
 
