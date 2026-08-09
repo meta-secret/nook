@@ -4,7 +4,7 @@
 //! This module owns whether those signals are sufficient to treat a workflow
 //! as complete before durably creating or replacing credentials.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -44,9 +44,9 @@ pub struct AuthenticationOutcomeClassification {
     pub timeout_ms: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[tsify(into_wasm_abi)]
 pub struct AuthenticationOutcomeDecision {
     pub verdict: AuthenticationOutcomeVerdict,
     pub allows_credential_commit: bool,
@@ -65,7 +65,7 @@ impl AuthenticationOutcomeDecision {
 
 /// Classification of collected outcome evidence.
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AuthenticationOutcomeVerdict {
     Sufficient,
@@ -89,6 +89,15 @@ impl AuthenticationOutcomeVerdict {
     #[must_use]
     pub const fn allows_credential_commit(self) -> bool {
         matches!(self, Self::Sufficient)
+    }
+}
+
+impl Serialize for AuthenticationOutcomeVerdict {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u32(*self as u32)
     }
 }
 
@@ -136,6 +145,20 @@ mod tests {
 
     fn base() -> AuthenticationOutcomeObservation {
         AuthenticationOutcomeObservation::default()
+    }
+
+    #[test]
+    fn wasm_decision_serializes_generated_verdict_as_numeric_value() -> anyhow::Result<()> {
+        let decision = AuthenticationOutcomeDecision {
+            verdict: AuthenticationOutcomeVerdict::Conflicting,
+            allows_credential_commit: false,
+        };
+        let serialized = serde_json::to_value(decision)?;
+        assert_eq!(
+            serialized["verdict"],
+            serde_json::json!(AuthenticationOutcomeVerdict::Conflicting as u32)
+        );
+        Ok(())
     }
 
     #[test]

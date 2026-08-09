@@ -11,6 +11,7 @@ import {
   submitLoginForm,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
+import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { LoginPickerKind, pickerState, widgetState } from './state'
 import type {
   LoginFillResponse,
@@ -19,10 +20,9 @@ import type {
 } from './workflow-ui'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
 
-export enum PasskeyWidgetAction {
-  UsePasskey = 'use-passkey',
-  CreatePasskey = 'create-passkey',
-}
+export type PasskeyWidgetAction =
+  | AuthenticationWorkflowAction.UsePasskey
+  | AuthenticationWorkflowAction.CreatePasskey
 
 export enum RuntimeMessageDeliveryKind {
   Delivered = 'delivered',
@@ -492,7 +492,7 @@ export async function proposePasskeyWithNook({
     description,
     continueButton,
     text: translatedMessage(
-      action === PasskeyWidgetAction.UsePasskey
+      action === AuthenticationWorkflowAction.UsePasskey
         ? BROWSER_MESSAGE_KEYS.WidgetUsePasskeyWorking
         : BROWSER_MESSAGE_KEYS.WidgetCreatePasskeyWorking,
     ),

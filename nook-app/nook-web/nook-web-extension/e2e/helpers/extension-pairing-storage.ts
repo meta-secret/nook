@@ -4,6 +4,7 @@ import {
   classifyExtensionPersistenceDatabases,
   ExtensionPersistenceArea,
   ExtensionPersistenceDatabaseState,
+  type ExtensionPersistenceObservation,
   extensionPersistenceDatabaseName,
   matchingExtensionPersistenceStores,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -61,16 +62,22 @@ async function readDatabaseSnapshot(
 ): Promise<string> {
   await companionWasmReady
   const databaseNames = await observedDatabaseNames(args.scope)
-  const databaseState = classifyExtensionPersistenceDatabases(
-    args.area,
-    databaseNames,
-  )
+  const databaseObservation: ExtensionPersistenceObservation = {
+    area: args.area,
+    observedNames: databaseNames,
+  }
+  const databaseState =
+    classifyExtensionPersistenceDatabases(databaseObservation)
   if (databaseState === ExtensionPersistenceDatabaseState.Absent) {
     return 'database:absent'
   }
 
   const stores = await observedStoreNames(args)
-  const storeNames = matchingExtensionPersistenceStores(args.area, stores)
+  const storeObservation: ExtensionPersistenceObservation = {
+    area: args.area,
+    observedNames: stores,
+  }
+  const storeNames = matchingExtensionPersistenceStores(storeObservation)
   if (storeNames.length === 0) return 'stores:absent'
 
   const readArgs: IndexedDbReadArgs = {

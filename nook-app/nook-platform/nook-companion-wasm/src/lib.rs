@@ -176,8 +176,8 @@ pub fn matching_extension_persistence_stores(
 #[allow(clippy::needless_pass_by_value)]
 pub fn classify_companion_authentication_workflow(
     input: nook_companion_core::AuthenticationPageObservations,
-) -> nook_companion_core::AuthenticationWorkflowViewMatch {
-    nook_companion_core::classify_authentication_workflow_candidates(&input.observations).into()
+) -> nook_companion_core::AuthenticationWorkflowMatch {
+    nook_companion_core::classify_authentication_workflow_candidates(&input.observations)
 }
 
 #[wasm_bindgen(js_name = classifyCompanionAuthenticationOutcome)]

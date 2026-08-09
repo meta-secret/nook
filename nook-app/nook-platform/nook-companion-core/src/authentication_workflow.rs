@@ -5,12 +5,12 @@
 //! user is in it, and which action Nook may offer next.
 
 use crate::website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AuthenticationWorkflowKind {
     Login,
@@ -35,8 +35,17 @@ impl AuthenticationWorkflowKind {
     }
 }
 
+impl Serialize for AuthenticationWorkflowKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u32(*self as u32)
+    }
+}
+
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AuthenticationWorkflowStage {
     Credentials,
@@ -61,8 +70,17 @@ impl AuthenticationWorkflowStage {
     }
 }
 
+impl Serialize for AuthenticationWorkflowStage {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u32(*self as u32)
+    }
+}
+
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AuthenticationWorkflowAction {
     ContinueWithNook,
@@ -89,6 +107,15 @@ impl AuthenticationWorkflowAction {
     }
 }
 
+impl Serialize for AuthenticationWorkflowAction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u32(*self as u32)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -109,29 +136,6 @@ pub struct AuthenticationPageObservation {
     pub passkey_control_present: bool,
     /// Unlocked vault match count for the requesting RP (0 when locked).
     pub matching_passkey_account_count: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct AuthenticationWorkflowView {
-    pub kind: String,
-    pub stage: String,
-    pub action: String,
-    pub current_step: u32,
-    pub total_steps: u32,
-    pub requires_human_approval: bool,
-    pub observation_index: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub enum AuthenticationWorkflowViewMatch {
-    NoMatch,
-    Matched {
-        snapshot: AuthenticationWorkflowView,
-    },
 }
 
 impl AuthenticationPageObservation {
@@ -189,25 +193,6 @@ impl AuthenticationWorkflowMatch {
         match self {
             Self::NoMatch => Err(AuthenticationWorkflowNotDetected),
             Self::Matched(snapshot) => Ok(snapshot),
-        }
-    }
-}
-
-impl From<AuthenticationWorkflowMatch> for AuthenticationWorkflowViewMatch {
-    fn from(workflow_match: AuthenticationWorkflowMatch) -> Self {
-        match workflow_match {
-            AuthenticationWorkflowMatch::NoMatch => Self::NoMatch,
-            AuthenticationWorkflowMatch::Matched(snapshot) => Self::Matched {
-                snapshot: AuthenticationWorkflowView {
-                    kind: snapshot.kind.as_str().to_owned(),
-                    stage: snapshot.stage.as_str().to_owned(),
-                    action: snapshot.action.as_str().to_owned(),
-                    current_step: u32::from(snapshot.current_step),
-                    total_steps: u32::from(snapshot.total_steps),
-                    requires_human_approval: snapshot.requires_human_approval,
-                    observation_index: snapshot.observation_index,
-                },
-            },
         }
     }
 }
@@ -469,6 +454,31 @@ mod tests {
 
     fn observation() -> AuthenticationPageObservation {
         AuthenticationPageObservation::default()
+    }
+
+    #[test]
+    fn wasm_view_serializes_generated_enums_as_numeric_values() -> anyhow::Result<()> {
+        let workflow = AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
+            AuthenticationWorkflowKind::Login,
+            AuthenticationWorkflowStage::Credentials,
+            AuthenticationWorkflowAction::ContinueWithNook,
+            1,
+            3,
+        ));
+        let serialized = serde_json::to_value(workflow)?;
+        assert_eq!(
+            serialized["snapshot"]["kind"],
+            serde_json::json!(AuthenticationWorkflowKind::Login as u32)
+        );
+        assert_eq!(
+            serialized["snapshot"]["stage"],
+            serde_json::json!(AuthenticationWorkflowStage::Credentials as u32)
+        );
+        assert_eq!(
+            serialized["snapshot"]["action"],
+            serde_json::json!(AuthenticationWorkflowAction::ContinueWithNook as u32)
+        );
+        Ok(())
     }
 
     #[test]

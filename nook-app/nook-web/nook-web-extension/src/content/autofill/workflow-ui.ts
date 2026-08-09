@@ -5,6 +5,7 @@ import {
 import { compactProgressState } from '../../lib/auth-widget-policy'
 import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
 import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
+import { AuthenticationWorkflowKind } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   ExtensionSetupLoadKind,
   loadExtensionSetupState,
@@ -60,29 +61,30 @@ export type WorkflowCopy = {
   descriptionKey: BrowserMessageKey
 }
 
-export function workflowCopy(kind: string): WorkflowCopy {
+export function workflowCopy(kind: AuthenticationWorkflowKind): WorkflowCopy {
   switch (kind) {
-    case 'login':
+    case AuthenticationWorkflowKind.Login:
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetLoginDescription,
       }
-    case 'signup':
+    case AuthenticationWorkflowKind.Signup:
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetSignupTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetSignupDescription,
       }
-    case 'password-change':
+    case AuthenticationWorkflowKind.PasswordChange:
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeDescription,
       }
-    case 'totp-challenge':
+    case AuthenticationWorkflowKind.TotpChallenge:
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorDescription,
       }
-    default:
+    case AuthenticationWorkflowKind.TotpEnrollment:
+    case AuthenticationWorkflowKind.Manual:
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetManualTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetManualDescription,

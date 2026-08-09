@@ -5,7 +5,7 @@ import {
   readLoginCredentials,
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { AuthenticationOutcomeVerdict } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { AuthenticationOutcomeVerdict } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import {
   NookWebsiteLoginSaveDecision,

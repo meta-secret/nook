@@ -378,11 +378,13 @@ this crate.
   - It then removes its temporary browser and vault state.
   - Production is intentionally rejected because the smoke creates vault data.
 - **Domain boundary:** The extension uses Rust/WASM for portable policy,
-  validation, protocol classification, and workflow decisions.
+  domain-payload validation, persistence classification, and workflow decisions.
   - TypeScript owns Chrome APIs, DOM access, WebAuthn ceremony calls, timers,
     and browser lifecycle orchestration.
   - TypeScript passes concrete browser observations into Rust.
   - Rust returns typed decisions that TypeScript applies through browser APIs.
+  - TypeScript may validate Chrome and DOM transport envelopes before it passes
+    their concrete domain payloads to Rust.
   - The extension must not reimplement vault format logic, crypto, validation,
     password generation, search filtering, or portable observation
     classification in TypeScript.

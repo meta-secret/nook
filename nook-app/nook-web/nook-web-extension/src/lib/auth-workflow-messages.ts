@@ -1,4 +1,5 @@
 import type { PasswordFormSummary } from '../../../nook-web-shared/src/extension/password-forms'
+import type { AuthenticationWorkflowSnapshot } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 const MAX_OBSERVED_FIELD_COUNT = 100
 const MAX_WORKFLOW_OBSERVATIONS = 20
@@ -18,15 +19,7 @@ export type AuthenticationPageObservationView = Pick<
   matchingPasskeyAccountCount: number
 }
 
-export type AuthenticationWorkflowSnapshotView = {
-  kind: string
-  stage: string
-  action: string
-  currentStep: number
-  totalSteps: number
-  requiresHumanApproval: boolean
-  observationIndex: number
-}
+export type AuthenticationWorkflowSnapshotView = AuthenticationWorkflowSnapshot
 
 export enum AuthenticationWorkflowSnapshotMessageType {
   NookAuthenticationWorkflowSnapshot = 'nook:authentication-workflow-snapshot',

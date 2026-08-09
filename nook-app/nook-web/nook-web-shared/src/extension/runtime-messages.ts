@@ -214,11 +214,16 @@ function isExtensionEventLogRecord(
     record.eventId.length > 0 &&
     typeof record.path === "string" &&
     record.path.length > 0 &&
-    record.event !== null &&
-    typeof record.event === "object" &&
+    isExtensionEventObject(record.event) &&
     "schema_version" in record.event &&
     typeof record.event.schema_version === "number"
   );
+}
+
+function isExtensionEventObject(
+  value: unknown,
+): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
 }
 
 function isExtensionEventLogRecords(

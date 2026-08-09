@@ -22,8 +22,7 @@ mod website_passkey_proposal;
 pub use authentication_workflow::{
     AuthenticationPageObservation, AuthenticationPageObservations, AuthenticationWorkflowAction,
     AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowNotDetected,
-    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage, AuthenticationWorkflowView,
-    AuthenticationWorkflowViewMatch, classify_authentication_workflow,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage, classify_authentication_workflow,
     classify_authentication_workflow_candidates,
 };
 pub use backup_code_candidates::{extract_backup_code_candidates, page_has_backup_code_hint};

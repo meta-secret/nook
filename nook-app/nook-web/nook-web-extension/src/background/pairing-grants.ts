@@ -48,11 +48,23 @@ function itemsFromState(state: ExtensionPairingState): ExtensionPairingItems {
   )
 }
 
-function transportJson(value: unknown): string | undefined {
+enum TransportJsonResultKind {
+  Serialized = 'serialized',
+  SerializationFailed = 'serialization-failed',
+}
+
+type TransportJsonResult =
+  | { kind: TransportJsonResultKind.Serialized; json: string }
+  | { kind: TransportJsonResultKind.SerializationFailed }
+
+function transportJson(value: unknown): TransportJsonResult {
   try {
-    return JSON.stringify(value)
+    return {
+      kind: TransportJsonResultKind.Serialized,
+      json: JSON.stringify(value),
+    }
   } catch {
-    return undefined
+    return { kind: TransportJsonResultKind.SerializationFailed }
   }
 }
 
@@ -63,15 +75,21 @@ export function pairingGrantStorageKey(vaultStoreId: string): string {
 export function isStoredExtensionPairingGrant(
   value: unknown,
 ): value is StoredExtensionPairingGrant {
-  const json = transportJson(value)
-  return json !== undefined && isStoredExtensionPairingGrantJson(json)
+  const result = transportJson(value)
+  return (
+    result.kind === TransportJsonResultKind.Serialized &&
+    isStoredExtensionPairingGrantJson(result.json)
+  )
 }
 
 export function isExtensionReadySetupState(
   value: unknown,
 ): value is ExtensionReadySetupState {
-  const json = transportJson(value)
-  return json !== undefined && isExtensionReadySetupJson(json)
+  const result = transportJson(value)
+  return (
+    result.kind === TransportJsonResultKind.Serialized &&
+    isExtensionReadySetupJson(result.json)
+  )
 }
 
 type ExtensionPairingGrantStorageItemsArgs = {
@@ -142,10 +160,10 @@ export function firstStoredPairingGrant(
 export function migratedLegacyPairingStorageItems(
   legacy: Record<string, unknown>,
 ): ExtensionPairingItems {
-  const json = transportJson(legacy)
-  if (json === undefined) return {}
+  const result = transportJson(legacy)
+  if (result.kind === TransportJsonResultKind.SerializationFailed) return {}
   try {
-    return itemsFromState(migrateLegacyExtensionPairingStateJson(json))
+    return itemsFromState(migrateLegacyExtensionPairingStateJson(result.json))
   } catch {
     return {}
   }
