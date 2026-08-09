@@ -5,6 +5,11 @@
     LogsPageStateKind,
     type LogsPageState,
   } from './app-logs-api-page-state'
+  import {
+    formatAppLogsError,
+    formatAppLogsLoading,
+    formatAppLogsPayload,
+  } from './app-logs-json-serialization'
 
   let state = $state<LogsPageState>({ kind: LogsPageStateKind.Loading })
 
@@ -35,21 +40,11 @@
 
 <main class="app-logs-api-page">
   {#if state.kind === LogsPageStateKind.Failed}
-    <pre data-testid="app-logs-error">{(() => { const stringifyArgs: Parameters<typeof JSON.stringify>[0] = { error: state.message }; return JSON.stringify(
-        stringifyArgs,
-        undefined,
-        2,
-      ); })()}</pre>
+    <pre data-testid="app-logs-error">{formatAppLogsError(state.message)}</pre>
   {:else if state.kind === LogsPageStateKind.Loaded}
-    <pre data-testid="app-logs-json">{JSON.stringify(
-        state.payload,
-        undefined,
-        2,
-      )}</pre>
+    <pre data-testid="app-logs-json">{formatAppLogsPayload(state.payload)}</pre>
   {:else}
-    <pre data-testid="app-logs-loading">{(() => { const stringifyArgs2: Parameters<typeof JSON.stringify>[0] = {
-        loading: true,
-      }; return JSON.stringify(stringifyArgs2); })()}</pre>
+    <pre data-testid="app-logs-loading">{formatAppLogsLoading()}</pre>
   {/if}
 </main>
 

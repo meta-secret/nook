@@ -1,16 +1,41 @@
 //! Portable classification of browser-collected extension persistence state.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Extension persistence area inspected by smoke and migration checks.
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExtensionPersistenceArea {
     Pairing,
     EventLog,
     Provider,
+}
+
+impl Serialize for ExtensionPersistenceArea {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u32(*self as u32)
+    }
+}
+
+impl<'de> Deserialize<'de> for ExtensionPersistenceArea {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u32::deserialize(deserializer)? {
+            0 => Ok(Self::Pairing),
+            1 => Ok(Self::EventLog),
+            2 => Ok(Self::Provider),
+            value => Err(serde::de::Error::custom(format!(
+                "invalid extension persistence area: {value}"
+            ))),
+        }
+    }
 }
 
 impl ExtensionPersistenceArea {
@@ -151,5 +176,19 @@ mod tests {
             ExtensionPersistenceArea::Provider.store_names(),
             vec!["auth".to_owned()]
         );
+    }
+
+    #[test]
+    fn persistence_area_uses_the_wasm_numeric_representation() {
+        match serde_json::to_string(&ExtensionPersistenceArea::EventLog) {
+            Ok(serialized) => assert_eq!(serialized, "1"),
+            Err(error) => panic!("persistence area should serialize: {error}"),
+        }
+
+        match serde_json::from_str::<ExtensionPersistenceArea>("2") {
+            Ok(decoded) => assert_eq!(decoded, ExtensionPersistenceArea::Provider),
+            Err(error) => panic!("numeric persistence area should deserialize: {error}"),
+        }
+        assert!(serde_json::from_str::<ExtensionPersistenceArea>("3").is_err());
     }
 }

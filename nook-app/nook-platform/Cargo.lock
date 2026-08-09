@@ -1910,7 +1910,9 @@ name = "nook-companion-wasm"
 version = "1.0.0"
 dependencies = [
  "nook-companion-core",
+ "serde-wasm-bindgen",
  "wasm-bindgen",
+ "wasm-bindgen-test",
 ]
 
 [[package]]

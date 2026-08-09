@@ -19,14 +19,14 @@ import { JoinEnrollmentState } from "$app-wasm";
 const log = createLogger("vault-password");
 
 type E2ePasswordManager = {
-  addVaultPasswordForE2e?: (args: {
-    readonly label: string;
-    readonly password: string;
-  }) => Promise<void>;
-  updateVaultPasswordEntryForE2e?: (args: {
-    readonly entryId: string;
-    readonly password: string;
-  }) => Promise<void>;
+  // Generated wasm-bindgen methods are positional host bindings.
+  // eslint-disable-next-line max-params
+  addVaultPasswordForE2e?: (label: string, password: string) => Promise<void>;
+  // eslint-disable-next-line max-params
+  updateVaultPasswordEntryForE2e?: (
+    entryId: string,
+    password: string,
+  ) => Promise<void>;
 };
 
 export async function addVaultPassword({
@@ -58,10 +58,7 @@ export async function addVaultPassword({
         state.runtimeConfig.e2eExposeVault &&
         e2eManager.addVaultPasswordForE2e
       ) {
-        const addVaultPasswordForE2eArgs: Parameters<
-          typeof e2eManager.addVaultPasswordForE2e
-        >[0] = { label: trimmedLabel, password };
-        return e2eManager.addVaultPasswordForE2e(addVaultPasswordForE2eArgs);
+        return e2eManager.addVaultPasswordForE2e(trimmedLabel, password);
       }
       return manager.addVaultPassword(trimmedLabel, password);
     });
@@ -106,12 +103,7 @@ export async function updateVaultPasswordEntry({
         state.runtimeConfig.e2eExposeVault &&
         e2eManager.updateVaultPasswordEntryForE2e
       ) {
-        const updateVaultPasswordEntryForE2eArgs: Parameters<
-          typeof e2eManager.updateVaultPasswordEntryForE2e
-        >[0] = { entryId, password };
-        return e2eManager.updateVaultPasswordEntryForE2e(
-          updateVaultPasswordEntryForE2eArgs,
-        );
+        return e2eManager.updateVaultPasswordEntryForE2e(entryId, password);
       }
       return manager.updateVaultPasswordEntry(entryId, password);
     });
