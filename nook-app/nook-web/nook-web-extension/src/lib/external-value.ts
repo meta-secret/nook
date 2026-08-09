@@ -1,6 +1,10 @@
 /** Value received from an untrusted browser message or serialized boundary. */
 export type ExternalValue =
-  string | number | boolean | readonly ExternalValue[] | ExternalObject
+  | string
+  | number
+  | boolean
+  | readonly ExternalValue[]
+  | ExternalObject
 
 /** Runtime input that may contain an external value and still needs validation. */
 export type ExternalValueCandidate = object | string | number | boolean

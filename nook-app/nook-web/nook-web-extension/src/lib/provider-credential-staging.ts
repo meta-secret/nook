@@ -18,7 +18,11 @@ export type ProviderCredentialStaging =
     }
 
 type MutableExternalValue =
-  string | number | boolean | MutableExternalValue[] | MutableExternalObject
+  | string
+  | number
+  | boolean
+  | MutableExternalValue[]
+  | MutableExternalObject
 
 interface MutableExternalObject {
   [key: string]: MutableExternalValue

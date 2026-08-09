@@ -58,7 +58,8 @@ type ImportDecodedApprovedPairingArgs = {
 }
 
 export type PairingImportResult =
-  { ok: true; eventCount: number } | { ok: false; reason: string }
+  | { ok: true; eventCount: number }
+  | { ok: false; reason: string }
 
 async function importDecodedApprovedPairing(
   args: ImportDecodedApprovedPairingArgs,
