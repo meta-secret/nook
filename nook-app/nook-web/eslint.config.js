@@ -5,11 +5,12 @@ import globals from 'globals'
 import ts from 'typescript-eslint'
 import {
   ActiveCallScopeKind,
+  arrayAtSummaryValues,
   arrayCallbackElementParameter,
   bindingPatternHasTypeAnnotation,
   concatenateArraySummaries,
   executionScope,
-  inlineCallReturnExpressions,
+  inlineObjectResultExpressions,
   objectPropertyValueExpressions,
   isObjectRestBinding,
   memberAssignmentPath,
@@ -21,6 +22,7 @@ import {
   VariableLookupKind,
   nodesUseExclusiveBranches,
   staticArrayIndex,
+  staticArrayAtAccessor,
   staticExpressionKey as resolveStaticExpressionKey,
   staticMemberPath,
   unwrapResultExpression,
@@ -113,35 +115,24 @@ export const noRawObjectArgumentsRule = {
     }
 
     function inlineObjectExpressions(expression) {
-      const unwrapped = unwrapResultExpression(expression)
-      if (unwrapped.type === 'ObjectExpression') {
-        return [expression]
-      }
-      if (unwrapped.type === 'AssignmentExpression') {
-        return inlineObjectExpressions(unwrapped.right)
-      }
-      if (unwrapped.type === 'ConditionalExpression') {
-        return [
-          ...inlineObjectExpressions(unwrapped.consequent),
-          ...inlineObjectExpressions(unwrapped.alternate),
-        ]
-      }
-      if (unwrapped.type === 'LogicalExpression') {
-        return [
-          ...inlineObjectExpressions(unwrapped.left),
-          ...inlineObjectExpressions(unwrapped.right),
-        ]
-      }
-      if (unwrapped.type === 'SequenceExpression') {
-        return inlineObjectExpressions(unwrapped.expressions.at(-1))
-      }
-      if (unwrapped.type === 'MemberExpression') {
-        return projectedMemberExpressions({
-          expression: unwrapped,
-          seenVariables: new Set(),
-        }).flatMap(inlineObjectExpressions)
-      }
-      return inlineCallReturnExpressions(unwrapped).flatMap(inlineObjectExpressions)
+      return inlineObjectResultExpressions({
+        expression,
+        projectMemberExpressions: projectedMemberExpressions,
+        projectArrayAccessorExpressions: arrayAccessorExpressions,
+      })
+    }
+    function arrayAccessorExpressions(expression) {
+      const accessor = staticArrayAtAccessor({
+        expression,
+        staticPropertyKey,
+      })
+      if (accessor.kind === StaticKeyLookupKind.NotFound) return []
+      const summary = arrayProjectionSummary({
+        expression: accessor.array,
+        seenVariables: new Set(),
+        limit: accessor.limit,
+      })
+      return arrayAtSummaryValues({ summary, index: accessor.index })
     }
     function staticPropertyKey(member) {
       if (!member.computed && member.property.type === 'Identifier') {
@@ -311,7 +302,10 @@ export const noRawObjectArgumentsRule = {
         definition.node.type === 'VariableDeclarator'
       ) {
         const forOf = definition.node.parent?.parent
-        if (forOf?.type === 'ForOfStatement' && forOf.left === definition.node.parent) {
+        if (
+          forOf?.type === 'ForOfStatement' &&
+          forOf.left === definition.node.parent
+        ) {
           const pathLookup = bindingProjectionPath(
             definition.node.id,
             definition.name,
@@ -435,7 +429,10 @@ export const noRawObjectArgumentsRule = {
               }),
             )
             possibleValues.push(...projections.flat())
-            if (projections.length > 0 && projections.every((values) => values.length > 0)) {
+            if (
+              projections.length > 0 &&
+              projections.every((values) => values.length > 0)
+            ) {
               return possibleValues
             }
             continue
@@ -445,7 +442,8 @@ export const noRawObjectArgumentsRule = {
             objectKeyLookup.kind === StaticKeyLookupKind.Found &&
             objectKeyLookup.value === selectedKey
           ) {
-            const projectedExpressions = objectPropertyValueExpressions(property)
+            const projectedExpressions =
+              objectPropertyValueExpressions(property)
             return [
               ...possibleValues,
               ...projectedExpressions.flatMap((expression) =>
@@ -467,7 +465,8 @@ export const noRawObjectArgumentsRule = {
           limit: arrayIndexLookup.value,
         })
         return [...(summary.values.get(arrayIndexLookup.value) ?? [])].flatMap(
-          (element) => possibleExpressionValues({ expression: element, seenVariables }),
+          (element) =>
+            possibleExpressionValues({ expression: element, seenVariables }),
         )
       }
       return []
@@ -493,7 +492,11 @@ export const noRawObjectArgumentsRule = {
         )
       }
       projected.push(
-        ...projectedMemberWriteValues({ expression, selectedKey, seenVariables }),
+        ...projectedMemberWriteValues({
+          expression,
+          selectedKey,
+          seenVariables,
+        }),
       )
       return projected
     }
@@ -622,10 +625,7 @@ export const noRawObjectArgumentsRule = {
         const patternLookup = writeBindingPattern(reference.identifier)
         if (
           patternLookup.kind === ProjectionPathLookupKind.Found &&
-          isObjectRestBinding(
-            patternLookup.pattern,
-            reference.identifier,
-          )
+          isObjectRestBinding(patternLookup.pattern, reference.identifier)
         ) {
           return true
         }
@@ -689,7 +689,10 @@ export const noRawObjectArgumentsRule = {
         )
       }
       if (unwrapped.type === 'AssignmentExpression') {
-        return spreadArrayElements({ expression: unwrapped.right, seenVariables })
+        return spreadArrayElements({
+          expression: unwrapped.right,
+          seenVariables,
+        })
       }
       if (unwrapped.type === 'ConditionalExpression') {
         return [
@@ -706,7 +709,10 @@ export const noRawObjectArgumentsRule = {
       if (unwrapped.type === 'LogicalExpression') {
         return [
           ...spreadArrayElements({ expression: unwrapped.left, seenVariables }),
-          ...spreadArrayElements({ expression: unwrapped.right, seenVariables }),
+          ...spreadArrayElements({
+            expression: unwrapped.right,
+            seenVariables,
+          }),
         ]
       }
       if (unwrapped.type === 'SequenceExpression') {
@@ -767,9 +773,15 @@ export const noRawObjectArgumentsRule = {
                 })
               : {
                   lengths: new Set([1]),
-                  values: element ? new Map([[0, new Set([element])]]) : new Map(),
+                  values: element
+                    ? new Map([[0, new Set([element])]])
+                    : new Map(),
                 }
-          summary = concatenateArraySummaries({ first: summary, second: addition, limit })
+          summary = concatenateArraySummaries({
+            first: summary,
+            second: addition,
+            limit,
+          })
         }
         return summary
       }
@@ -804,8 +816,12 @@ export const noRawObjectArgumentsRule = {
           limit,
         })
       }
-      const namedValues = namedArrayValues({ expression: unwrapped, seenVariables })
-      if (namedValues.length === 0) return { lengths: new Set([0]), values: new Map() }
+      const namedValues = namedArrayValues({
+        expression: unwrapped,
+        seenVariables,
+      })
+      if (namedValues.length === 0)
+        return { lengths: new Set([0]), values: new Map() }
       return mergeArraySummaries(
         namedValues.map((entry) =>
           arrayProjectionSummary({
@@ -891,10 +907,7 @@ export default [
   },
   {
     // The shared config is invoked from both nook-web and nook-web-extension.
-    files: [
-      'nook-web-extension/src/**/*.{ts,svelte}',
-      'src/**/*.{ts,svelte}',
-    ],
+    files: ['nook-web-extension/src/**/*.{ts,svelte}', 'src/**/*.{ts,svelte}'],
     languageOptions: {
       globals: {
         ...globals.webextensions,
@@ -965,10 +978,7 @@ export default [
     // Migrate the extension from reusable boundaries outward. Keep both path
     // forms because extension lint runs from its package directory while the
     // application lint runs from the nook-web directory.
-    files: [
-      'nook-web-extension/src/lib/**/*.ts',
-      'src/lib/**/*.ts',
-    ],
+    files: ['nook-web-extension/src/lib/**/*.ts', 'src/lib/**/*.ts'],
     plugins: {
       'nook-typed-api': nookTypedApiPlugin,
     },

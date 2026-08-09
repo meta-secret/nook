@@ -22,7 +22,7 @@ describe('passkey session response decoding', () => {
     expect(decodePasskeySetupResponse(response)).toEqual(expected)
   })
 
-  test('rejects empty and wrong-sized setup key material', () => {
+  test('leaves setup key-material policy to the Rust option builder', () => {
     const emptyResponse: ExternalObject = {
       setup: { userHandle: [], prfInput: fixedBytes },
     }
@@ -30,15 +30,11 @@ describe('passkey session response decoding', () => {
       setup: { userHandle: fixedBytes, prfInput: [1] },
     }
 
-    expect(() => decodePasskeySetupResponse(emptyResponse)).toThrow(
-      'malformed passkey byte material',
-    )
-    expect(() => decodePasskeySetupResponse(shortResponse)).toThrow(
-      'malformed passkey byte material',
-    )
+    expect(decodePasskeySetupResponse(emptyResponse).userHandle).toEqual([])
+    expect(decodePasskeySetupResponse(shortResponse).prfInput).toEqual([1])
   })
 
-  test('requires a nonempty credential ID and fixed-size unlock PRF input', () => {
+  test('leaves unlock material policy to the Rust option builder', () => {
     const emptyCredential: ExternalObject = {
       material: { credentialId: [], prfInput: fixedBytes },
     }
@@ -46,11 +42,9 @@ describe('passkey session response decoding', () => {
       material: { credentialId: [1], prfInput: [2] },
     }
 
-    expect(() => decodePasskeyUnlockResponse(emptyCredential)).toThrow(
-      'malformed passkey credential ID',
+    expect(decodePasskeyUnlockResponse(emptyCredential).credentialId).toEqual(
+      [],
     )
-    expect(() => decodePasskeyUnlockResponse(shortPrfInput)).toThrow(
-      'malformed passkey byte material',
-    )
+    expect(decodePasskeyUnlockResponse(shortPrfInput).prfInput).toEqual([2])
   })
 })

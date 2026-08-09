@@ -42,6 +42,49 @@ export function unwrapResultExpression(expression) {
   return current
 }
 
+export function staticArrayAtAccessor(args) {
+  const { expression, staticPropertyKey } = args
+  if (
+    expression.type !== 'CallExpression' ||
+    expression.callee.type !== 'MemberExpression' ||
+    staticPropertyKey(expression.callee).value !== 'at' ||
+    expression.arguments.length !== 1 ||
+    expression.arguments[0].type === 'SpreadElement'
+  ) {
+    return { kind: StaticKeyLookupKind.NotFound }
+  }
+  const index = unwrapResultExpression(expression.arguments[0])
+  const value =
+    index.type === 'Literal' && typeof index.value === 'number'
+      ? index.value
+      : index.type === 'UnaryExpression' &&
+          index.operator === '-' &&
+          index.argument.type === 'Literal' &&
+          typeof index.argument.value === 'number'
+        ? -index.argument.value
+        : Number.NaN
+  return Number.isInteger(value)
+    ? {
+        kind: StaticKeyLookupKind.Found,
+        array: expression.callee.object,
+        index: value,
+        limit: Math.max(0, Math.abs(value)),
+      }
+    : { kind: StaticKeyLookupKind.NotFound }
+}
+
+export function arrayAtSummaryValues(args) {
+  const { summary, index } = args
+  const selected = new Set()
+  for (const length of summary.lengths) {
+    const selectedIndex = index < 0 ? length + index : index
+    for (const value of summary.values.get(selectedIndex) ?? []) {
+      selected.add(value)
+    }
+  }
+  return [...selected]
+}
+
 export function executionScope(scope) {
   let current = scope
   while (
@@ -97,7 +140,8 @@ export function bindingPatternHasTypeAnnotation(identifier) {
 
 export function objectPropertyValueExpressions(property) {
   if (property.kind === 'init') return [property.value]
-  if (property.kind !== 'get' || property.value.type !== 'FunctionExpression') return []
+  if (property.kind !== 'get' || property.value.type !== 'FunctionExpression')
+    return []
   return functionReturnExpressions(property.value)
 }
 
@@ -111,9 +155,11 @@ export function functionReturnExpressions(callable) {
     }
     if (
       node !== callable.body &&
-      ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(
-        node.type,
-      )
+      [
+        'FunctionDeclaration',
+        'FunctionExpression',
+        'ArrowFunctionExpression',
+      ].includes(node.type)
     ) {
       return
     }
@@ -121,7 +167,11 @@ export function functionReturnExpressions(callable) {
       if (key === 'parent') continue
       const children = Array.isArray(value) ? value : [value]
       for (const child of children) {
-        if (child && typeof child === 'object' && typeof child.type === 'string') {
+        if (
+          child &&
+          typeof child === 'object' &&
+          typeof child.type === 'string'
+        ) {
           visit(child)
         }
       }
@@ -136,10 +186,45 @@ export function inlineCallReturnExpressions(expression) {
     return []
   }
   const callable = unwrapTypeScriptExpression(expression.callee)
-  if (!['ArrowFunctionExpression', 'FunctionExpression'].includes(callable.type)) {
+  if (
+    !['ArrowFunctionExpression', 'FunctionExpression'].includes(callable.type)
+  ) {
     return []
   }
   return functionReturnExpressions(callable)
+}
+
+export function inlineObjectResultExpressions(args) {
+  const {
+    expression,
+    projectMemberExpressions,
+    projectArrayAccessorExpressions,
+  } = args
+  function visit(selected) {
+    const unwrapped = unwrapResultExpression(selected)
+    if (unwrapped.type === 'ObjectExpression') return [selected]
+    if (unwrapped.type === 'AssignmentExpression') return visit(unwrapped.right)
+    if (unwrapped.type === 'ConditionalExpression') {
+      return [...visit(unwrapped.consequent), ...visit(unwrapped.alternate)]
+    }
+    if (unwrapped.type === 'LogicalExpression') {
+      return [...visit(unwrapped.left), ...visit(unwrapped.right)]
+    }
+    if (unwrapped.type === 'SequenceExpression') {
+      return visit(unwrapped.expressions.at(-1))
+    }
+    if (unwrapped.type === 'MemberExpression') {
+      return projectMemberExpressions({
+        expression: unwrapped,
+        seenVariables: new Set(),
+      }).flatMap(visit)
+    }
+    return [
+      ...projectArrayAccessorExpressions(unwrapped),
+      ...inlineCallReturnExpressions(unwrapped),
+    ].flatMap(visit)
+  }
+  return visit(expression)
 }
 
 export function staticMemberPath(args) {
@@ -229,16 +314,20 @@ export function arrayCallbackElementParameter(method) {
   if (method === 'reduce' || method === 'reduceRight') {
     return { kind: StaticKeyLookupKind.Found, value: 1 }
   }
-  if ([
-    'every',
-    'filter',
-    'find',
-    'findIndex',
-    'flatMap',
-    'forEach',
-    'map',
-    'some',
-  ].includes(method)) {
+  if (
+    [
+      'every',
+      'filter',
+      'find',
+      'findIndex',
+      'findLast',
+      'findLastIndex',
+      'flatMap',
+      'forEach',
+      'map',
+      'some',
+    ].includes(method)
+  ) {
     return { kind: StaticKeyLookupKind.Found, value: 0 }
   }
   return { kind: StaticKeyLookupKind.NotFound }
@@ -404,7 +493,10 @@ export function nodesUseExclusiveBranches(args) {
 
 function statementAlwaysTerminates(statement) {
   if (!statement) return false
-  if (statement.type === 'ReturnStatement' || statement.type === 'ThrowStatement') {
+  if (
+    statement.type === 'ReturnStatement' ||
+    statement.type === 'ThrowStatement'
+  ) {
     return true
   }
   if (statement.type === 'BlockStatement') {
@@ -446,11 +538,7 @@ export function staticArrayIndex(key) {
       : String(Number(key)) === key
         ? Number(key)
         : Number.NaN
-  if (
-    Number.isInteger(value) &&
-    value >= 0 &&
-    value <= maximumArrayIndex
-  ) {
+  if (Number.isInteger(value) && value >= 0 && value <= maximumArrayIndex) {
     return { kind: StaticKeyLookupKind.Found, value }
   }
   return { kind: StaticKeyLookupKind.NotFound }

@@ -202,15 +202,18 @@ enum StagingOwnership {
 
 export class ExtensionSessionMessageDispatcher {
   private operations = new SessionOperationQueue()
+  private operationGeneration = 0
 
   constructor(private readonly context: SessionMessageDispatchContext) {}
 
   resetOperations(): void {
+    this.operationGeneration += 1
     this.operations = new SessionOperationQueue()
   }
 
   replaceOperations(error: Error): void {
     const previous = this.operations
+    this.operationGeneration += 1
     this.operations = new SessionOperationQueue()
     previous.close(error)
   }
@@ -277,6 +280,7 @@ export class ExtensionSessionMessageDispatcher {
     message: Record<string, unknown>,
     payload: Record<string, unknown>,
   ): Promise<unknown> {
+    const operationGeneration = this.operationGeneration
     const providerCandidate = payload.providers
     const stagingArgs = {
       providers:
@@ -306,6 +310,13 @@ export class ExtensionSessionMessageDispatcher {
       operation: async () => {
         stagingOwnership = StagingOwnership.Operation
         const staging = await stagingOperation
+        if (operationGeneration !== this.operationGeneration) {
+          if (staging.kind === ProviderCredentialStagingKind.Staged) {
+            scrubProviderCredentials(staging.providers)
+          }
+          stagingOwnership = StagingOwnership.Cleared
+          throw new Error('Extension session request expired.')
+        }
         if (staging.kind === ProviderCredentialStagingKind.InvalidInput) {
           stagingOwnership = StagingOwnership.Cleared
           return {

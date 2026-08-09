@@ -200,6 +200,43 @@ describe('ExtensionSessionMessageDispatcher', () => {
     await expect(blockerResponse).resolves.toEqual({ ok: true })
   })
 
+  test('cancels a running import when the session generation changes', async () => {
+    let finishDecode: (providers: StorageProvider[]) => void = () => {
+      throw new Error('provider decoder was not initialized')
+    }
+    const decodedProviders = new Promise<StorageProvider[]>((resolve) => {
+      finishDecode = resolve
+    })
+    const stagedProviders = [
+      { githubPat: 'github_pat_expired_staged_secret' },
+    ] as object as StorageProvider[]
+    const handledTypes: string[] = []
+    const dispatcher = new ExtensionSessionMessageDispatcher({
+      messagePayload,
+      decodeProviders: () => decodedProviders,
+      handleMessage: async (message) => {
+        const type =
+          message && typeof message === 'object' && 'type' in message
+            ? String(message.type)
+            : ''
+        handledTypes.push(type)
+        return { ok: true }
+      },
+    })
+
+    const importResponse = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: { providers: [{ githubPat: 'caller-secret' }] },
+    })
+    await Promise.resolve()
+    dispatcher.replaceOperations(new Error('session expired'))
+    finishDecode(stagedProviders)
+
+    await expect(importResponse).rejects.toThrow('request expired')
+    expect(handledTypes).toEqual([])
+    expect(stagedProviders[0]).not.toHaveProperty('githubPat')
+  })
+
   test('rejects runtime messages from another extension', () => {
     type RuntimeListener = (
       message: unknown,

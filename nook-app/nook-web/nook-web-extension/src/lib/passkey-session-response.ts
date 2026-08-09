@@ -1,8 +1,5 @@
 import type { ExternalObject, ExternalValue } from './external-value'
 
-const PASSKEY_KEY_MATERIAL_LENGTH = 32
-const PASSKEY_CREDENTIAL_ID_MAX_LENGTH = 1024
-
 export type PasskeySetupMaterial = {
   userHandle: number[]
   prfInput: number[]
@@ -40,36 +37,13 @@ function byteArray(value: ExternalValue): number[] {
   return [...value]
 }
 
-function fixedPasskeyByteArray(value: ExternalValue): number[] {
-  const decoded = byteArray(value)
-  if (decoded.length !== PASSKEY_KEY_MATERIAL_LENGTH) {
-    throw new Error(
-      'Extension session returned malformed passkey byte material.',
-    )
-  }
-  return decoded
-}
-
-function passkeyCredentialId(value: ExternalValue): number[] {
-  const decoded = byteArray(value)
-  if (
-    decoded.length === 0 ||
-    decoded.length > PASSKEY_CREDENTIAL_ID_MAX_LENGTH
-  ) {
-    throw new Error(
-      'Extension session returned malformed passkey credential ID.',
-    )
-  }
-  return decoded
-}
-
 export function decodePasskeySetupResponse(
   response: ExternalObject,
 ): PasskeySetupMaterial {
   const setup = responseObject(response.setup)
   return {
-    userHandle: fixedPasskeyByteArray(setup.userHandle),
-    prfInput: fixedPasskeyByteArray(setup.prfInput),
+    userHandle: byteArray(setup.userHandle),
+    prfInput: byteArray(setup.prfInput),
   }
 }
 
@@ -78,7 +52,7 @@ export function decodePasskeyUnlockResponse(
 ): PasskeyUnlockMaterial {
   const material = responseObject(response.material)
   return {
-    credentialId: passkeyCredentialId(material.credentialId),
-    prfInput: fixedPasskeyByteArray(material.prfInput),
+    credentialId: byteArray(material.credentialId),
+    prfInput: byteArray(material.prfInput),
   }
 }
