@@ -82,11 +82,25 @@ export type ExtensionManifestDeployment = {
   versionName: string
 }
 
-export type CreateExtensionManifestArgs = {
-  version: string
-  simpleVaultBaseUrl?: string
-  deployment?: ExtensionManifestDeployment
+export enum ExtensionManifestBuildKind {
+  StoreRelease = 'store-release',
+  Channel = 'channel',
 }
+
+type StoreReleaseManifestArgs = {
+  kind: ExtensionManifestBuildKind.StoreRelease
+  version: string
+}
+
+type ChannelManifestArgs = {
+  kind: ExtensionManifestBuildKind.Channel
+  version: string
+  simpleVaultBaseUrl: string
+  deployment: ExtensionManifestDeployment
+}
+
+export type CreateExtensionManifestArgs =
+  StoreReleaseManifestArgs | ChannelManifestArgs
 
 const iconSet: ManifestIconSet = {
   [ManifestIconSize.Small]: 'icons/nook.png',
@@ -95,25 +109,30 @@ const iconSet: ManifestIconSet = {
   [ManifestIconSize.Store]: 'icons/nook.png',
 }
 
-export function createManifest({
-  version,
-  simpleVaultBaseUrl = defaultSimpleVaultBaseUrl(),
-  deployment,
-}: CreateExtensionManifestArgs): ExtensionManifest {
+export function createManifest(
+  args: CreateExtensionManifestArgs,
+): ExtensionManifest {
+  const simpleVaultBaseUrl =
+    args.kind === ExtensionManifestBuildKind.StoreRelease
+      ? defaultSimpleVaultBaseUrl()
+      : args.simpleVaultBaseUrl
   const simpleVaultMatch = simpleVaultMatchPattern(simpleVaultBaseUrl)
   const vaultAppExclusions =
     nookVaultAppExcludeMatchPatterns(simpleVaultBaseUrl)
-  return {
+  const manifest: ExtensionManifest = {
     manifest_version: 3,
     default_locale: 'en',
-    name: deployment?.name ?? 'Nook Passwords',
-    short_name: deployment?.shortName ?? 'Nook',
+    name:
+      args.kind === ExtensionManifestBuildKind.StoreRelease
+        ? 'Nook Passwords'
+        : args.deployment.name,
+    short_name:
+      args.kind === ExtensionManifestBuildKind.StoreRelease
+        ? 'Nook'
+        : args.deployment.shortName,
     description:
       'Nook browser companion for password form detection and future autofill.',
-    version,
-    ...(deployment
-      ? { key: deployment.key, version_name: deployment.versionName }
-      : {}),
+    version: args.version,
     action: {
       default_title: 'Nook',
       default_icon: iconSet,
@@ -178,5 +197,13 @@ export function createManifest({
         matches: ['<all_urls>'],
       },
     ],
+  }
+  if (args.kind === ExtensionManifestBuildKind.StoreRelease) {
+    return manifest
+  }
+  return {
+    ...manifest,
+    key: args.deployment.key,
+    version_name: args.deployment.versionName,
   }
 }

@@ -5,9 +5,21 @@ import { describe, expect, test } from 'bun:test'
 import {
   createManifest,
   type CreateExtensionManifestArgs,
+  ExtensionManifestBuildKind,
+  type ExtensionManifestDeployment,
 } from '../src/manifest'
 
-const defaultManifestArgs: CreateExtensionManifestArgs = { version: '1.0.0' }
+const defaultManifestArgs: CreateExtensionManifestArgs = {
+  kind: ExtensionManifestBuildKind.StoreRelease,
+  version: '1.0.0',
+}
+
+const testDeployment: ExtensionManifestDeployment = {
+  key: 'test-key',
+  name: 'Nook Passwords Preview',
+  shortName: 'Nook Preview',
+  versionName: '1.0.0 (preview)',
+}
 
 function defaultManifest() {
   return createManifest(defaultManifestArgs)
@@ -32,8 +44,10 @@ describe('extension origin isolation', () => {
   for (const environment of environments) {
     test(`connects only to ${environment.simple}`, () => {
       const manifestArgs: CreateExtensionManifestArgs = {
+        kind: ExtensionManifestBuildKind.Channel,
         version: '1.0.0',
         simpleVaultBaseUrl: environment.simple,
+        deployment: testDeployment,
       }
       const manifest = createManifest(manifestArgs)
       const simpleMatch = `${environment.simple}*`

@@ -715,4 +715,78 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn removal_preserves_setup_when_a_non_selected_vault_is_removed() {
+        let selected = grant();
+        let mut removed = grant();
+        removed.vault_store_id = "store-removed".to_owned();
+        removed.vault_name = "Removed".to_owned();
+        removed.approved_at = "2026-07-26T00:00:00.000Z".to_owned();
+        let expected = setup_from_grant(&selected);
+        let state = ExtensionPairingState {
+            entries: vec![
+                ExtensionPairingEntry {
+                    key: EXTENSION_SETUP_KEY.to_owned(),
+                    record: ExtensionPairingRecord::Setup(expected.clone()),
+                },
+                ExtensionPairingEntry {
+                    key: grant_storage_key(&selected.vault_store_id),
+                    record: ExtensionPairingRecord::Grant(selected),
+                },
+                ExtensionPairingEntry {
+                    key: grant_storage_key(&removed.vault_store_id),
+                    record: ExtensionPairingRecord::Grant(removed),
+                },
+            ],
+        };
+
+        assert_eq!(state.setup_after_removal("store-removed"), Some(expected));
+    }
+
+    #[test]
+    fn removal_selects_the_newest_remaining_grant_when_selected_vault_is_removed() {
+        let selected = grant();
+        let mut older = grant();
+        older.vault_store_id = "store-older".to_owned();
+        older.vault_name = "Older".to_owned();
+        older.approved_at = "2026-07-23T00:00:00.000Z".to_owned();
+        let mut newer = grant();
+        newer.vault_store_id = "store-newer".to_owned();
+        newer.vault_name = "Newer".to_owned();
+        newer.approved_at = "2026-07-27T00:00:00.000Z".to_owned();
+        let state = ExtensionPairingState {
+            entries: vec![
+                ExtensionPairingEntry {
+                    key: EXTENSION_SETUP_KEY.to_owned(),
+                    record: ExtensionPairingRecord::Setup(setup_from_grant(&selected)),
+                },
+                ExtensionPairingEntry {
+                    key: grant_storage_key(&selected.vault_store_id),
+                    record: ExtensionPairingRecord::Grant(selected),
+                },
+                ExtensionPairingEntry {
+                    key: grant_storage_key(&older.vault_store_id),
+                    record: ExtensionPairingRecord::Grant(older),
+                },
+                ExtensionPairingEntry {
+                    key: grant_storage_key(&newer.vault_store_id),
+                    record: ExtensionPairingRecord::Grant(newer.clone()),
+                },
+            ],
+        };
+
+        assert_eq!(
+            state.setup_after_removal("store-test"),
+            Some(setup_from_grant(&newer))
+        );
+    }
+
+    #[test]
+    fn removal_reports_no_setup_when_the_final_grant_is_removed() {
+        let selected = grant();
+        let state = state_for_grant(&selected, true);
+
+        assert_eq!(state.setup_after_removal("store-test"), None);
+    }
 }

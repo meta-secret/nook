@@ -18,6 +18,7 @@ import {
 import {
   createManifest,
   type CreateExtensionManifestArgs,
+  ExtensionManifestBuildKind,
 } from '../src/manifest'
 import { extensionChannelIdentity } from './channel-identity'
 
@@ -597,6 +598,7 @@ await Promise.all([
 await Promise.all([buildSveltePage('popup'), buildChromeLocales()])
 
 const manifestArgs: CreateExtensionManifestArgs = {
+  kind: ExtensionManifestBuildKind.Channel,
   version: manifestVersion,
   simpleVaultBaseUrl,
   deployment: {
