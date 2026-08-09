@@ -44,9 +44,10 @@ export function scrubProviderCredentials(providers: StorageProvider[]): void {
       provider.githubPat = { state: 'missing' }
     }
     if (provider.oauthFile && typeof provider.oauthFile === 'object') {
-      if (provider.oauthFile.config) {
-        provider.oauthFile.config.accessToken = { state: 'signedOut' }
-        provider.oauthFile.config.refreshToken = { state: 'notIssued' }
+      const config = provider.oauthFile.config
+      if (config && typeof config === 'object' && !Array.isArray(config)) {
+        config.accessToken = { state: 'signedOut' }
+        config.refreshToken = { state: 'notIssued' }
       }
       if (typeof provider.oauthFile.accessToken === 'string') {
         provider.oauthFile.accessToken = ''
