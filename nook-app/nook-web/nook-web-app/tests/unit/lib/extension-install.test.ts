@@ -114,13 +114,16 @@ describe('extension install target', () => {
   ])('does not support installation in an $label', ({ environment }) => {
     expect(browserSupportsExtensionInstallation(environment)).toBe(false)
     expect(
-      shouldOfferExtensionSetup(ExtensionSetupStatus.NotInstalled, environment),
+      shouldOfferExtensionSetup({
+        status: ExtensionSetupStatus.NotInstalled,
+        environment: environment,
+      }),
     ).toBe(false)
     expect(
-      shouldOfferExtensionSetup(
-        ExtensionSetupStatus.InstalledUnpaired,
-        environment,
-      ),
+      shouldOfferExtensionSetup({
+        status: ExtensionSetupStatus.InstalledUnpaired,
+        environment: environment,
+      }),
     ).toBe(true)
   })
 
@@ -177,11 +180,11 @@ describe('extension install target', () => {
       source: ExtensionInstallSource.Metadata,
     })
 
-    expect(open).toHaveBeenCalledWith(
-      installUrl,
-      '_blank',
-      'noopener,noreferrer',
-    )
+    expect(open).toHaveBeenCalledWith({
+      0: installUrl,
+      1: '_blank',
+      2: 'noopener,noreferrer',
+    })
   })
 })
 

@@ -98,12 +98,15 @@ describe('ExistingVaultImportLifecycle', () => {
     expect(state.connectStagedProvider).toHaveBeenCalledOnce()
     expect(lifecycle.waitingForDevice).toBe(true)
 
-    await lifecycle.unlockWithPassword('password-entry', 'vault-password')
+    await lifecycle.unlockWithPassword({
+      entryId: 'password-entry',
+      password: 'vault-password',
+    })
 
-    expect(state.unlockWithPassword).toHaveBeenCalledWith(
-      'password-entry',
-      'vault-password',
-    )
+    expect(state.unlockWithPassword).toHaveBeenCalledWith({
+      0: 'password-entry',
+      1: 'vault-password',
+    })
     expect(state.activateConnectedExistingVault).toHaveBeenCalledWith(
       'incoming-vault',
     )

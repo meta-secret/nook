@@ -69,8 +69,8 @@ export async function getVaultManager(): Promise<NookVaultManager> {
     return manager;
   };
 
+  // eslint-disable-next-line max-params -- Promise owns this positional executor signature.
   const timeout = new Promise<never>((_, reject) => {
-    // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
     setTimeout(
       () =>
         reject(
@@ -83,6 +83,25 @@ export async function getVaultManager(): Promise<NookVaultManager> {
   });
 
   return Promise.race([loadWasm(), timeout]);
+}
+
+/** Narrow the generated wasm transport result at its API boundary. */
+export function syncVaultFromStorage({
+  manager,
+  mode,
+  pat,
+  repo,
+}: {
+  readonly manager: NookVaultManager;
+  readonly mode: string;
+  readonly pat: string;
+  readonly repo: string;
+}): Promise<NookVaultSyncResult> {
+  return manager.sync_vault_from_storage(
+    mode,
+    pat,
+    repo,
+  ) as Promise<NookVaultSyncResult>;
 }
 
 const wasmLog = createLogger("wasm");

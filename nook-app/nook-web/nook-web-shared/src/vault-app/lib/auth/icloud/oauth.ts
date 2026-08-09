@@ -41,6 +41,7 @@ import {
   cloudKitSignInControlDiagnostics,
   currentBrowserDiagnostics,
   iCloudConfigDiagnostics,
+  getDefaultCloudKitContainer,
   isBraveBrowser,
   loadCloudKitScript,
   tokenDiagnostics,
@@ -114,14 +115,12 @@ function currentCloudKitIdentity(): CloudKitIdentity {
 }
 
 function cloudKitIdentityFromExternal(
-  identity: CloudKitUserIdentity | undefined,
+  identity: CloudKitUserIdentity,
 ): CloudKitIdentity {
-  return identity
-    ? {
-        kind: CloudKitIdentityKind.SignedIn,
-        identity: identity as CloudKitUserIdentity,
-      }
-    : { kind: CloudKitIdentityKind.SignedOut };
+  return {
+    kind: CloudKitIdentityKind.SignedIn,
+    identity,
+  };
 }
 
 function rememberCloudKitIdentity(identity: CloudKitIdentity): void {
@@ -247,8 +246,7 @@ function setUpCloudKitAuth(
     };
     return container.setUpAuth(setUpAuthArgs);
   })()
-    .then((userIdentity) => {
-      const identity = cloudKitIdentityFromExternal(userIdentity);
+    .then((identity) => {
       rememberCloudKitIdentity(identity);
       const infoArgs4: Parameters<typeof log.info>[1] = {
         signedIn: identity.kind === CloudKitIdentityKind.SignedIn,
@@ -294,7 +292,7 @@ function setUpCloudKitAuth(
 export async function prepareICloudSignInControl(): Promise<void> {
   log.info("CloudKit sign-in control prepare started");
   await initICloudAuth();
-  const container = window.CloudKit!.getDefaultContainer();
+  const container = getDefaultCloudKitContainer();
   const mount = document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID);
   const existingControl = mount?.querySelector(
     'button, [role="button"], iframe, a, .apple-auth-button',
@@ -463,7 +461,7 @@ export async function createICloudSharedVault(
 ): Promise<ICloudSharedStorageTarget> {
   await initICloudAuth();
   await initNookWasm();
-  const container = window.CloudKit!.getDefaultContainer();
+  const container = getDefaultCloudKitContainer();
   const currentIdentity = currentCloudKitIdentity();
   const setupIdentity =
     currentIdentity.kind === CloudKitIdentityKind.SignedIn
@@ -538,7 +536,7 @@ export async function acceptICloudSharedVault(
 ): Promise<ICloudSharedStorageTarget> {
   await initICloudAuth();
   await initNookWasm();
-  const container = window.CloudKit!.getDefaultContainer();
+  const container = getDefaultCloudKitContainer();
   const encodedTarget: EncodedICloudSharedTarget = shareReference
     .trim()
     .startsWith("icloud-share-v1:")
@@ -777,7 +775,7 @@ export function requestPreparedICloudWebAuthToken(
     log.info("CloudKit prepared token request using existing identity");
     return Promise.resolve(requireStoredWebAuthToken());
   }
-  const container = window.CloudKit.getDefaultContainer();
+  const container = getDefaultCloudKitContainer();
   const waitForCloudKitSignInArgs: Parameters<typeof waitForCloudKitSignIn>[0] =
     {
       container,
@@ -794,7 +792,7 @@ export async function requestICloudWebAuthToken(
 ): Promise<ICloudOAuthTokens> {
   log.info("CloudKit direct token request started");
   await initICloudAuth();
-  const container = window.CloudKit!.getDefaultContainer();
+  const container = getDefaultCloudKitContainer();
   const identity = await setUpCloudKitAuth(container).catch((error) => {
     const logCloudKitAuthFailureArgs3: Parameters<
       typeof logCloudKitAuthFailure

@@ -4,19 +4,21 @@ import { sentinelGenesisLinkBaseForWorkspace } from '$lib/enrollment/sentinel-ge
 describe('Sentinel Genesis links', () => {
   test('uses the configured public origin and the current canonical workspace', () => {
     expect(
-      sentinelGenesisLinkBaseForWorkspace(
-        'https://public.nook.example/app/',
-        'https://preview.internal.example/vault/?preview=919#ignored',
-      ),
+      sentinelGenesisLinkBaseForWorkspace({
+        enrollmentLinkBase: 'https://public.nook.example/app/',
+        currentLocation:
+          'https://preview.internal.example/vault/?preview=919#ignored',
+      }),
     ).toBe('https://public.nook.example/vault')
   })
 
   test('strips the unified preview mount from the public ceremony link', () => {
     expect(
-      sentinelGenesisLinkBaseForWorkspace(
-        'https://public.nook.example/',
-        'https://preview.internal.example/sentinel/vault#ignored',
-      ),
+      sentinelGenesisLinkBaseForWorkspace({
+        enrollmentLinkBase: 'https://public.nook.example/',
+        currentLocation:
+          'https://preview.internal.example/sentinel/vault#ignored',
+      }),
     ).toBe('https://public.nook.example/vault')
   })
 })

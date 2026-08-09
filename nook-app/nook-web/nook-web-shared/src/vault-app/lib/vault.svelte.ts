@@ -8,37 +8,24 @@ import {
 } from "$lib/nook";
 import {
   isVaultSessionLocked,
-  DeviceProtectionStatus,
-  NookManualProviderSyncState,
   RemoteVaultRecoveryState,
   SentinelVaultUnlockState,
-  VaultEditDecision,
-  providerLabelById,
-  resolveErrorMessage as wasmResolveErrorMessage,
-  translateWithReplacements,
   type NookPendingSyncConflict,
   type NookProviderSyncRevision,
   type NookSyncConflictReview,
   type NookSecretPage,
   type NookVaultManager,
-  type NookAppLocale,
   type PasswordEntryId,
   type StartSentinelGenesisArgs,
   type StoreId,
 } from "$app-wasm";
 import {
-  activeVaultScope,
-  type GoogleDriveMode,
-  type ICloudMode,
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
-  unselectedVaultScope,
 } from "$lib/auth/providers";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type { OpenSettingsArgs } from "$lib/vault/action-contexts";
-import * as localeActions from "$lib/vault/locale";
-import * as oauthActions from "$lib/vault/oauth";
 import * as providersActions from "$lib/vault/providers.svelte";
 import * as localLoginActions from "$lib/vault/local-login";
 import * as syncActions from "$lib/vault/sync.svelte";
@@ -53,299 +40,18 @@ import * as idleSessionActions from "$lib/vault/idle-session";
 import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
 import * as lifecycleActions from "$lib/vault/lifecycle";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
-import { SerialOperationQueue } from "$lib/runtime/serial-operation-queue";
-import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
-import { VaultLifecycleState } from "$lib/vault/state/lifecycle.svelte";
 import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
-import {
-  LoginSetupKind,
-  type LocalProviderLookup,
-  type StagedRemoteStorage,
-} from "$lib/vault/state/provider.svelte";
+import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
 import type { EventOutboxTarget } from "$lib/vault/sync-operation-state";
-import {
-  translationKey,
-  translationReplacements,
-  type TranslationRequest,
-} from "$lib/vault/translation";
+import { VaultRuntimeState } from "$lib/vault/runtime-state.svelte";
 
-export type VaultEditRestriction =
-  | { decision: VaultEditDecision.Allowed }
-  | {
-      decision:
-        | VaultEditDecision.BlockedSecurityConflict
-        | VaultEditDecision.BlockedSyncConflict
-        | VaultEditDecision.BlockedByArchitecture;
-      reason: string;
-    };
+export {
+  SyncProviderLabelKind,
+  type SyncProviderLabel,
+  type VaultEditRestriction,
+} from "$lib/vault/runtime-state.svelte";
 
-export enum SyncProviderLabelKind {
-  Idle = "idle",
-  Active = "active",
-}
-
-export type SyncProviderLabel =
-  | { kind: SyncProviderLabelKind.Idle }
-  | { kind: SyncProviderLabelKind.Active; label: string };
-
-export class VaultState extends VaultLifecycleState {
-  secretPageGeneration = 0;
-  secretPageRequestOffset = 0;
-  architectureSecretCreationAllowed = $state(true);
-
-  get syncBlocked(): boolean {
-    return this.syncConflictRequiresDecision;
-  }
-
-  get syncConflictLabel(): string {
-    return syncActions.syncConflictLabel(this);
-  }
-
-  get editsBlocked(): boolean {
-    return this.clientPolicy.editsBlocked(
-      this.securityConflicts.length,
-      this.syncBlocked,
-      this.architectureCanCreateSecret,
-    );
-  }
-
-  get architectureCanCreateSecret(): boolean {
-    return this.architectureSecretCreationAllowed;
-  }
-
-  get editRestriction(): VaultEditRestriction {
-    const decision = this.clientPolicy.editBlockReason(
-      this.securityConflicts.length,
-      this.syncBlocked,
-      this.architectureCanCreateSecret,
-    );
-    if (decision === VaultEditDecision.Allowed) {
-      return { decision };
-    }
-    const reason = this.clientPolicy.editBlockMessage(
-      this.securityConflicts.length,
-      this.syncBlocked,
-      this.architectureCanCreateSecret,
-      this.translations,
-      this.locale,
-    );
-    return { decision, reason };
-  }
-
-  get deviceProtectionReady(): boolean {
-    return this.deviceProtectionStatus === DeviceProtectionStatus.Unlocked;
-  }
-
-  get syncProviderCount(): number {
-    return this.syncProviders.length;
-  }
-
-  get syncingProviderLabel(): SyncProviderLabel {
-    if (this.manualProviderSync.state === NookManualProviderSyncState.Idle) {
-      return { kind: SyncProviderLabelKind.Idle };
-    }
-    const snapshotArgs: Parameters<typeof $state.snapshot>[0] = {
-      providers: this.providers,
-      activeVaultStoreId:
-        this.activeVault.kind === ActiveVaultKind.Open
-          ? activeVaultScope(this.activeVault.storeId)
-          : unselectedVaultScope(),
-    };
-    return {
-      kind: SyncProviderLabelKind.Active,
-      label: providerLabelById(
-        $state.snapshot(snapshotArgs),
-        this.manualProviderSync.providerId,
-      ),
-    };
-  }
-
-  get isSyncActivityVisible(): boolean {
-    return this.clientPolicy.isSyncActivityVisible(
-      this.isFanOutSyncing,
-      this.manualProviderSyncRunning,
-      this.isSyncing,
-      this.isSaving,
-    );
-  }
-
-  get hasPasswordEnvelope(): boolean {
-    return this.passwordEntries.length > 0;
-  }
-
-  private storageQueue = new SerialOperationQueue();
-  localDataDeletionStarted = false;
-  /** Internal browser-orchestration flag shared with the device-protection actions. */
-  deviceAuthorizationInProgress = false;
-  enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T> {
-    if (this.localDataDeletionStarted) {
-      return Promise.reject(new Error("Local browser data deletion is active"));
-    }
-    return this.storageQueue.enqueue(operation);
-  }
-
-  /** E2E/dev: wait for the serialized wasm storage queue to finish. */
-  waitForStorageChain(): Promise<void> {
-    return this.storageQueue.onIdle();
-  }
-
-  /** E2E/dev: reset a stuck storage queue (abandons in-flight wasm work). */
-  resetStorageChain(): void {
-    this.storageQueue.reset();
-  }
-
-  static storageOpTimeoutMs = 20_000;
-
-  raceStorageTimeout<T>({
-    promise,
-    label,
-  }: {
-    readonly promise: Promise<T>;
-    readonly label: string;
-  }): Promise<T> {
-    const timeoutMs = VaultState.storageOpTimeoutMs;
-    return Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-        setTimeout(
-          () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
-          timeoutMs,
-        );
-      }),
-    ]);
-  }
-
-  wasmStorageArgs(): [string, string, string] {
-    return providersActions.wasmStorageArgs(this);
-  }
-
-  /** WASM connect always uses the local cache when one exists (unified vault). */
-  connectStorageArgs(): [string, string, string] {
-    return providersActions.connectStorageArgs(this);
-  }
-
-  shouldUseJoinProviderForConnect(): boolean {
-    return providersActions.shouldUseJoinProviderForConnect(this);
-  }
-
-  stagedRemoteStorageArgs(): StagedRemoteStorage {
-    return providersActions.stagedRemoteStorageArgs(this);
-  }
-
-  stagedProviderLabel(): string {
-    return providersActions.stagedProviderLabel(this);
-  }
-
-  hasRemoteCredentials(): boolean {
-    return providersActions.hasRemoteProviderCredentials(this);
-  }
-
-  syncOAuthRemoteRefFromManager() {
-    return providersActions.syncOAuthRemoteRefFromManager(this);
-  }
-
-  async ensureOAuthTokensFresh(): Promise<void> {
-    return oauthActions.ensureOAuthTokensFresh(this);
-  }
-
-  selectGoogleDriveMode(mode: GoogleDriveMode): void {
-    const selectGoogleDriveModeArgs: Parameters<
-      typeof oauthActions.selectGoogleDriveMode
-    >[0] = { state: this, mode };
-    oauthActions.selectGoogleDriveMode(selectGoogleDriveModeArgs);
-  }
-
-  selectICloudMode(mode: ICloudMode): void {
-    const selectICloudModeArgs: Parameters<
-      typeof oauthActions.selectICloudMode
-    >[0] = { state: this, mode };
-    oauthActions.selectICloudMode(selectICloudModeArgs);
-  }
-
-  async chooseLocalFolderBackupDirectory(): Promise<void> {
-    return providersActions.chooseLocalFolder(this);
-  }
-
-  refreshLocalFolderBackupSupport(): void {
-    return providersActions.refreshLocalFolderBackupSupport(this);
-  }
-
-  dismissSuccess() {
-    this.cancelSuccessDismissTimer();
-    this.successMsg = "";
-  }
-
-  dismissError() {
-    this.errorMsg = "";
-  }
-
-  showSuccess(message: string) {
-    this.dismissSuccess();
-    this.successMsg = message;
-    this.scheduleSuccessDismiss(
-      setTimeout(() => {
-        this.dismissSuccess();
-      }, 5000),
-    );
-  }
-
-  get localProvider(): LocalProviderLookup {
-    return providersActions.localProvider(this);
-  }
-
-  /** Providers belonging to the active vault only. */
-  get activeVaultProviders(): StorageProvider[] {
-    return providersActions.activeProviders(this);
-  }
-
-  /** Cloud sync destinations for the active vault — local row omitted. */
-  get syncProviders(): StorageProvider[] {
-    return providersActions.syncProviders(this);
-  }
-
-  get hasMultipleLocalVaults(): boolean {
-    return this.localVaults.length > 1;
-  }
-
-  get showLoginVaultPicker(): boolean {
-    return providersActions.showLoginVaultPicker(this);
-  }
-
-  providerWasmArgs(provider: StorageProvider): [string, string, string] {
-    return providersActions.providerWasmArgs(provider);
-  }
-
-  async updateLocale({
-    newLocale,
-    options,
-  }: {
-    readonly newLocale: NookAppLocale;
-    readonly options?: { preferWasm?: boolean };
-  }) {
-    const updateLocaleArgs: Parameters<typeof localeActions.updateLocale>[0] = {
-      state: this,
-      newLocale,
-      options,
-    };
-    return localeActions.updateLocale(updateLocaleArgs);
-  }
-
-  resolveErrorMessage(message: string): string {
-    return wasmResolveErrorMessage(this.translations, this.locale, message);
-  }
-
-  t = (request: TranslationRequest): string => {
-    const entries = Object.entries(translationReplacements(request));
-    return translateWithReplacements(
-      this.translations,
-      this.locale,
-      translationKey(request),
-      entries.map(([name]) => name),
-      entries.map(([, value]) => value),
-    );
-  };
-
+export class VaultState extends VaultRuntimeState {
   async init() {
     return lifecycleActions.init(this);
   }

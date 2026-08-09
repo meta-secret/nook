@@ -18,7 +18,11 @@ describe('secret exposure lifecycle', () => {
     const load = vi.fn(async () => fakeRecord('credential'))
     expect(load).not.toHaveBeenCalled()
 
-    const records = await toggleSecretExposure({}, 'secret-1', load)
+    const records = await toggleSecretExposure({
+      records: {},
+      id: 'secret-1',
+      load: load,
+    })
 
     expect(load).toHaveBeenCalledOnce()
     expect(records['secret-1']?.primaryCredential).toBe('credential')
@@ -26,11 +30,11 @@ describe('secret exposure lifecycle', () => {
 
   test('hiding a revealed secret frees and removes plaintext', async () => {
     const record = fakeRecord('credential')
-    const records = await toggleSecretExposure(
-      { 'secret-1': record },
-      'secret-1',
-      vi.fn(),
-    )
+    const records = await toggleSecretExposure({
+      records: { 'secret-1': record },
+      id: 'secret-1',
+      load: vi.fn(),
+    })
 
     expect(record.free).toHaveBeenCalledOnce()
     expect(Object.hasOwn(records, 'secret-1')).toBe(false)
@@ -40,12 +44,12 @@ describe('secret exposure lifecycle', () => {
     const record = fakeRecord('credential')
     const copied = vi.fn()
 
-    await withDecryptedSecret(
-      {},
-      'secret-1',
-      async () => record,
-      (secret) => copied(secret.primaryCredential),
-    )
+    await withDecryptedSecret({
+      records: {},
+      id: 'secret-1',
+      load: async () => record,
+      action: (secret) => copied(secret.primaryCredential),
+    })
 
     expect(copied).toHaveBeenCalledWith('credential')
     expect(record.free).toHaveBeenCalledOnce()
@@ -55,12 +59,12 @@ describe('secret exposure lifecycle', () => {
     const record = fakeRecord('credential')
     const load = vi.fn()
 
-    await withDecryptedSecret(
-      { 'secret-1': record },
-      'secret-1',
-      load,
-      () => {},
-    )
+    await withDecryptedSecret({
+      records: { 'secret-1': record },
+      id: 'secret-1',
+      load: load,
+      action: () => {},
+    })
 
     expect(load).not.toHaveBeenCalled()
     expect(record.free).not.toHaveBeenCalled()
@@ -70,14 +74,14 @@ describe('secret exposure lifecycle', () => {
     const record = fakeRecord('credential')
 
     await expect(
-      withDecryptedSecret(
-        {},
-        'secret-1',
-        async () => record,
-        () => {
+      withDecryptedSecret({
+        records: {},
+        id: 'secret-1',
+        load: async () => record,
+        action: () => {
           throw new Error('clipboard denied')
         },
-      ),
+      }),
     ).rejects.toThrow('clipboard denied')
     expect(record.free).toHaveBeenCalledOnce()
   })

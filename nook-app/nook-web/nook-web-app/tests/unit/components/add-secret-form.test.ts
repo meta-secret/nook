@@ -34,7 +34,13 @@ const legacyAuthenticator = {
 
 function renderLegacyAuthenticatorEditor() {
   const onReplaceSecret = vi
-    .fn<(oldId: string, type: SecretType, data: string) => Promise<void>>()
+    .fn<
+      (request: {
+        readonly oldId: string
+        readonly type: SecretType
+        readonly data: string
+      }) => Promise<void>
+    >()
     .mockResolvedValue()
   const view = render(AddSecretForm, {
     vault,
@@ -107,8 +113,11 @@ describe('AddSecretForm authenticator editing', () => {
     const { onReplaceSecret, view } = renderLegacyAuthenticatorEditor()
 
     const setupKey = await view.findByTestId('authenticator-secret')
-    await fireEvent.input(setupKey, {
-      target: { value: 'jbsw-y3dp ehpk-3pxp====' },
+    await fireEvent.input({
+      0: setupKey,
+      1: {
+        target: { value: 'jbsw-y3dp ehpk-3pxp====' },
+      },
     })
     await fireEvent.click(view.getByTestId('save-secret-btn'))
 
@@ -126,8 +135,11 @@ describe('AddSecretForm authenticator editing', () => {
     const { onReplaceSecret, view } = renderLegacyAuthenticatorEditor()
 
     const setupKey = await view.findByTestId('authenticator-secret')
-    await fireEvent.input(setupKey, {
-      target: { value: 'KRUGS4ZANFZSAYJA' },
+    await fireEvent.input({
+      0: setupKey,
+      1: {
+        target: { value: 'KRUGS4ZANFZSAYJA' },
+      },
     })
     await fireEvent.click(view.getByTestId('save-secret-btn'))
 

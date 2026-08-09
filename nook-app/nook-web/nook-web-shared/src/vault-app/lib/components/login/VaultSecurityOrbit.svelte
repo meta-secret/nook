@@ -82,12 +82,13 @@
     }
 
     function schedule({ item, initial }: { readonly item: Signal; readonly initial: boolean }) {
-      later(
-        () => rotate(item),
-        initial
+      const laterArgs: Parameters<typeof later>[0] = {
+        callback: () => rotate(item),
+        delay: initial
           ? 1300 + item.id * 1050 + (() => { const randomBetweenArgs6: Parameters<typeof randomBetween>[0] = { min: 0, max: 450 }; return randomBetween(randomBetweenArgs6); })()
           : 4800 + (() => { const randomBetweenArgs5: Parameters<typeof randomBetween>[0] = { min: 0, max: 3700 }; return randomBetween(randomBetweenArgs5); })(),
-      )
+      }
+      later(laterArgs)
     }
 
     function rotate(item: Signal) {
@@ -98,7 +99,8 @@
       }
 
       item.changing = true
-      later(() => {
+      const laterArgs: Parameters<typeof later>[0] = {
+        callback: () => {
         const visibleTerms = new Set(
           signals.map((candidate) => candidate.label),
         )
@@ -122,7 +124,10 @@
         item.changing = false
         const scheduleArgs2: Parameters<typeof schedule>[0] = { item, initial: false };
         schedule(scheduleArgs2)
-      }, 420)
+        },
+        delay: 420,
+      }
+      later(laterArgs)
     }
 
     for (const item of signals) (() => { const scheduleArgs3: Parameters<typeof schedule>[0] = { item, initial: true }; return schedule(scheduleArgs3); })()

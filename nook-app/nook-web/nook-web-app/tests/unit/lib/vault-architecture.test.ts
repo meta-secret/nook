@@ -11,6 +11,7 @@ import initNookWasm, {
 } from '$app-wasm'
 import {
   configuredOAuthFile,
+  DEFAULT_DRIVE_BACKUP_NAME,
   defaultOAuthFileConfig,
   isConfiguredOAuthFile,
   providerPersistenceDefaults,
@@ -51,7 +52,10 @@ function googleDriveProvider(): StorageProvider {
     type: 'oauth-file',
     label: 'Google Drive',
     oauthFile: configuredOAuthFile({
-      ...defaultOAuthFileConfig('google-drive'),
+      ...defaultOAuthFileConfig({
+        preset: 'google-drive',
+        fileName: DEFAULT_DRIVE_BACKUP_NAME,
+      }),
       accessToken: storedOAuthCredential('ya29.test'),
       fileName: storedOAuthRemoteFileName('nook.yaml'),
       accountEmail: storedOAuthAccountEmail('alex@example.com'),
@@ -84,7 +88,10 @@ function sharedICloudProvider(): StorageProvider {
     type: 'oauth-file',
     label: 'iCloud',
     oauthFile: configuredOAuthFile({
-      ...defaultOAuthFileConfig('icloud'),
+      ...defaultOAuthFileConfig({
+        preset: 'icloud',
+        fileName: DEFAULT_DRIVE_BACKUP_NAME,
+      }),
       accessToken: storedOAuthCredential('cloudkit-web-token'),
       driveMode: 'private',
       iCloudMode: 'shared',
@@ -100,7 +107,10 @@ function privateICloudProvider(): StorageProvider {
     ...sharedICloudProvider(),
     id: 'icloud-private-1',
     oauthFile: configuredOAuthFile({
-      ...defaultOAuthFileConfig('icloud'),
+      ...defaultOAuthFileConfig({
+        preset: 'icloud',
+        fileName: DEFAULT_DRIVE_BACKUP_NAME,
+      }),
       accessToken: storedOAuthCredential('cloudkit-web-token'),
     }),
   }
@@ -254,27 +264,39 @@ describe('vault architecture adapter', () => {
       true,
     )
     expect(
-      firstCompatibleProvider(providers, ReplicationType.Shared, {
-        kind: CompatibleProviderPreferenceKind.Selected,
-        providerId: github.id,
+      firstCompatibleProvider({
+        providers: providers,
+        replicationType: ReplicationType.Shared,
+        preference: {
+          kind: CompatibleProviderPreferenceKind.Selected,
+          providerId: github.id,
+        },
       }),
     ).toEqual({
       kind: CompatibleProviderSelectionKind.Selected,
       provider: drive,
     })
     expect(
-      firstCompatibleProvider(providers, ReplicationType.Personal, {
-        kind: CompatibleProviderPreferenceKind.Selected,
-        providerId: github.id,
+      firstCompatibleProvider({
+        providers: providers,
+        replicationType: ReplicationType.Personal,
+        preference: {
+          kind: CompatibleProviderPreferenceKind.Selected,
+          providerId: github.id,
+        },
       }),
     ).toEqual({
       kind: CompatibleProviderSelectionKind.Selected,
       provider: github,
     })
     expect(
-      firstCompatibleProvider([github], ReplicationType.Shared, {
-        kind: CompatibleProviderPreferenceKind.Selected,
-        providerId: github.id,
+      firstCompatibleProvider({
+        providers: [github],
+        replicationType: ReplicationType.Shared,
+        preference: {
+          kind: CompatibleProviderPreferenceKind.Selected,
+          providerId: github.id,
+        },
       }),
     ).toEqual({ kind: CompatibleProviderSelectionKind.Unavailable })
   })
@@ -293,14 +315,14 @@ describe('vault architecture adapter', () => {
       providerSupportsReplication(sharedICloud, ReplicationType.Shared),
     ).toBe(true)
     expect(
-      firstCompatibleProvider(
-        [privateICloud, sharedICloud],
-        ReplicationType.Shared,
-        {
+      firstCompatibleProvider({
+        providers: [privateICloud, sharedICloud],
+        replicationType: ReplicationType.Shared,
+        preference: {
           kind: CompatibleProviderPreferenceKind.Selected,
           providerId: privateICloud.id,
         },
-      ),
+      }),
     ).toEqual({
       kind: CompatibleProviderSelectionKind.Selected,
       provider: sharedICloud,

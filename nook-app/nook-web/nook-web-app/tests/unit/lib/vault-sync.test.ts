@@ -8,6 +8,7 @@ import {
   VaultSyncConflictKind,
 } from '$app-wasm'
 import { syncConflictLabel } from '$lib/vault/sync.svelte'
+import type { TranslationRequest } from '$lib/vault/translation'
 
 function buildConflict(kind: VaultSyncConflictKind): NookPendingSyncConflict {
   const revision = NookProviderSyncRevision.untracked()
@@ -46,7 +47,8 @@ function labelFor(review: NookSyncConflictReview): string {
   try {
     return syncConflictLabel({
       syncConflictReview: review,
-      t: (key, values) => `${key}:${values?.provider ?? ''}`,
+      t: (request: TranslationRequest) =>
+        `${request.key}:${request.replacements?.provider ?? ''}`,
     })
   } finally {
     review.free()

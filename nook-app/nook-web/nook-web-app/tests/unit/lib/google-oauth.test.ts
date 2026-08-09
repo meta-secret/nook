@@ -17,14 +17,16 @@ describe('google-oauth', () => {
   })
 
   it('detects expired oauth access tokens with skew', () => {
-    const expired = oauthTokensToConfig(
-      {
+    const expired = oauthTokensToConfig({
+      tokens: {
         accessToken: 'token',
-        expiresAt: new Date(Date.now() - 1_000).toISOString(),
+        expiresAt: new Date(Date.now() - 1000).toISOString(),
       },
-      oauthConfigurationNotApplicable(),
+      existing: oauthConfigurationNotApplicable(),
+    })
+    expect(isOAuthAccessTokenExpired({ config: expired, skewMs: 60_000 })).toBe(
+      true,
     )
-    expect(isOAuthAccessTokenExpired(expired)).toBe(true)
   })
 
   it('settles concurrent token requests independently by scope', async () => {

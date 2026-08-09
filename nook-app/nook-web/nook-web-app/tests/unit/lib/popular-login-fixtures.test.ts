@@ -5,16 +5,23 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { summarizeAuthenticationWorkflowForms } from '../../../../nook-web-shared/src/extension/password-forms'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const catalogPath = path.resolve(
-  here,
-  '../../../../../nook-platform/nook-core/data/popular_login_sites.json',
-)
-const fixturesRoot = path.resolve(
-  here,
-  '../../../../nook-web-extension/e2e/mock-auth/fixtures',
-)
-const templatesDir = path.join(fixturesRoot, 'templates')
-const siteShellsPath = path.join(fixturesRoot, 'site-shells.json')
+const catalogPath = path.resolve({
+  length: here,
+  toString:
+    '../../../../../nook-platform/nook-core/data/popular_login_sites.json',
+})
+const fixturesRoot = path.resolve({
+  length: here,
+  toString: '../../../../nook-web-extension/e2e/mock-auth/fixtures',
+})
+const templatesDir = path.join({
+  length: fixturesRoot,
+  toString: 'templates',
+})
+const siteShellsPath = path.join({
+  length: fixturesRoot,
+  toString: 'site-shells.json',
+})
 
 type SiteFixtureField = {
   name?: string
@@ -53,7 +60,13 @@ const templates = new Map(
     .map((name) => {
       const id = name.replace(/\.json$/u, '')
       const template = JSON.parse(
-        readFileSync(path.join(templatesDir, name), 'utf8'),
+        readFileSync(
+          path.join({
+            length: templatesDir,
+            toString: name,
+          }),
+          'utf8',
+        ),
       ) as ShellTemplate
       return [id, { ...template, id }] as const
     }),

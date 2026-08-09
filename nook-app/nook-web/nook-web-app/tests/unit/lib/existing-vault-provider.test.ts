@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { NookExistingVaultProviderReadiness } from '$app-wasm'
 import {
+  DEFAULT_DRIVE_BACKUP_NAME,
   GITHUB_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
@@ -17,7 +18,10 @@ import {
 } from '$lib/vault/state/provider.svelte'
 
 function providerState(): ProviderActionsContext {
-  const oauthFile = defaultOAuthFileConfig('google-drive')
+  const oauthFile = defaultOAuthFileConfig({
+    preset: 'google-drive',
+    fileName: DEFAULT_DRIVE_BACKUP_NAME,
+  })
   const localFolder = {
     directoryName: storedLocalFolderDirectory('Vaults'),
     handleId: storedLocalFolderHandle('folder'),
@@ -39,13 +43,22 @@ describe('existing vault provider snapshot', () => {
   test('uses the Rust-owned provider type as its only discriminant', () => {
     const state = providerState()
 
-    const local = prepareExistingVaultProvider(state, LOCAL_PROVIDER_TYPE)
-    const github = prepareExistingVaultProvider(state, GITHUB_PROVIDER_TYPE)
-    const oauth = prepareExistingVaultProvider(state, OAUTH_FILE_PROVIDER_TYPE)
-    const folder = prepareExistingVaultProvider(
-      state,
-      LOCAL_FOLDER_PROVIDER_TYPE,
-    )
+    const local = prepareExistingVaultProvider({
+      state: state,
+      setupType: LOCAL_PROVIDER_TYPE,
+    })
+    const github = prepareExistingVaultProvider({
+      state: state,
+      setupType: GITHUB_PROVIDER_TYPE,
+    })
+    const oauth = prepareExistingVaultProvider({
+      state: state,
+      setupType: OAUTH_FILE_PROVIDER_TYPE,
+    })
+    const folder = prepareExistingVaultProvider({
+      state: state,
+      setupType: LOCAL_FOLDER_PROVIDER_TYPE,
+    })
 
     expect(local).toEqual({
       kind: NookExistingVaultProviderReadiness.Ready,

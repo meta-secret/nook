@@ -60,8 +60,11 @@ describe('sitemap', () => {
   })
 
   test('absoluteSiteUrl normalizes trailing slashes', () => {
-    expect(absoluteSiteUrl('https://nokey.sh/', '/privacy.html')).toBe(
-      'https://nokey.sh/privacy.html',
-    )
+    expect(
+      absoluteSiteUrl({
+        siteUrl: 'https://nokey.sh/',
+        path: '/privacy.html',
+      }),
+    ).toBe('https://nokey.sh/privacy.html')
   })
 })

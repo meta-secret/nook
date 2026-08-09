@@ -41,8 +41,10 @@ describe('maskGithubPat', () => {
   test('masks fine-grained tokens with github_pat_ prefix', () => {
     expect(
       maskGithubPat({
-        kind: GithubPatDisplayKind.Stored,
-        pat: 'github_pat_11AAAAAAAAAA',
+        state: {
+          kind: GithubPatDisplayKind.Stored,
+          pat: 'github_pat_11AAAAAAAAAA',
+        },
       }),
     ).toBe('github_pat_11A…')
   })
@@ -50,16 +52,20 @@ describe('maskGithubPat', () => {
   test('masks classic tokens with shorter prefix', () => {
     expect(
       maskGithubPat({
-        kind: GithubPatDisplayKind.Stored,
-        pat: 'ghp_1234567890ABCDEF',
+        state: {
+          kind: GithubPatDisplayKind.Stored,
+          pat: 'ghp_1234567890ABCDEF',
+        },
       }),
     ).toBe('ghp_123456…')
   })
 
   test('handles missing token', () => {
-    expect(maskGithubPat({ kind: GithubPatDisplayKind.NoToken })).toBe(
-      'No token saved',
-    )
+    expect(
+      maskGithubPat({
+        state: { kind: GithubPatDisplayKind.NoToken },
+      }),
+    ).toBe('No token saved')
   })
 })
 
@@ -113,7 +119,10 @@ describe('providerStorageDetail', () => {
       type: 'oauth-file',
       label: 'Google Drive · personal.yaml',
       oauthFile: configuredOAuthFile({
-        ...defaultOAuthFileConfig('google-drive'),
+        ...defaultOAuthFileConfig({
+          preset: 'google-drive',
+          fileName: DEFAULT_DRIVE_BACKUP_NAME,
+        }),
         accessToken: storedOAuthCredential('ya29.test'),
         fileName: storedOAuthRemoteFileName('personal.yaml'),
         accountEmail: storedOAuthAccountEmail('me@example.com'),
@@ -127,7 +136,10 @@ describe('providerStorageDetail', () => {
       type: 'oauth-file',
       label: 'Google Drive · work.yaml',
       oauthFile: configuredOAuthFile({
-        ...defaultOAuthFileConfig('google-drive'),
+        ...defaultOAuthFileConfig({
+          preset: 'google-drive',
+          fileName: DEFAULT_DRIVE_BACKUP_NAME,
+        }),
         accessToken: storedOAuthCredential('ya29.test'),
         fileName: storedOAuthRemoteFileName('work.yaml'),
         accountEmail: storedOAuthAccountEmail('me@example.com'),
@@ -149,59 +161,76 @@ describe('providerStorageDetail', () => {
 describe('formatDriveStorageRef', () => {
   test('includes cached file id when present', () => {
     expect(
-      formatDriveStorageRef(
-        { kind: DriveFileIdentityKind.Existing, fileId: 'abc123' },
-        'work.yaml',
-      ),
+      formatDriveStorageRef({
+        identity: { kind: DriveFileIdentityKind.Existing, fileId: 'abc123' },
+        fileName: 'work.yaml',
+      }),
     ).toBe('abc123\twork.yaml')
   })
 
   test('omits empty file id for new vaults', () => {
     expect(
-      formatDriveStorageRef({ kind: DriveFileIdentityKind.New }, 'work.yaml'),
+      formatDriveStorageRef({
+        identity: { kind: DriveFileIdentityKind.New },
+        fileName: 'work.yaml',
+      }),
     ).toBe('work.yaml')
     expect(
-      formatDriveStorageRef(
-        { kind: DriveFileIdentityKind.New },
-        DEFAULT_DRIVE_BACKUP_NAME,
-      ),
+      formatDriveStorageRef({
+        identity: { kind: DriveFileIdentityKind.New },
+        fileName: DEFAULT_DRIVE_BACKUP_NAME,
+      }),
     ).toBe(DEFAULT_DRIVE_BACKUP_NAME)
   })
 
   test('formats without validating draft file names', () => {
     expect(
-      formatDriveStorageRef(
-        { kind: DriveFileIdentityKind.Existing, fileId: ' abc ' },
-        ' work vault.yaml ',
-      ),
+      formatDriveStorageRef({
+        identity: { kind: DriveFileIdentityKind.Existing, fileId: ' abc ' },
+        fileName: ' work vault.yaml ',
+      }),
     ).toBe('abc\twork vault.yaml')
   })
 })
 
 describe('providerDefaultLabel', () => {
   test('includes repo name for non-default GitHub repositories', () => {
-    expect(providerDefaultLabel('github', { detail: 'team-vault' })).toBe(
-      'GitHub · team-vault',
-    )
+    expect(
+      providerDefaultLabel({
+        type: 'github',
+        options: { detail: 'team-vault' },
+      }),
+    ).toBe('GitHub · team-vault')
   })
 
   test('includes file name for non-default Google Drive vaults', () => {
-    expect(providerDefaultLabel('oauth-file', { detail: 'work.yaml' })).toBe(
-      'Google Drive · work.yaml',
+    expect(
+      providerDefaultLabel({
+        type: 'oauth-file',
+        options: { detail: 'work.yaml' },
+      }),
+    ).toBe('Google Drive · work.yaml')
+    expect(providerDefaultLabel({ type: 'oauth-file', options: {} })).toBe(
+      'Google Drive',
     )
-    expect(providerDefaultLabel('oauth-file')).toBe('Google Drive')
   })
 
   test('includes file name for non-default iCloud vaults', () => {
     expect(
-      providerDefaultLabel('oauth-file', {
-        detail: 'work.yaml',
-        oauthPreset: 'icloud',
+      providerDefaultLabel({
+        type: 'oauth-file',
+        options: {
+          detail: 'work.yaml',
+          oauthPreset: 'icloud',
+        },
       }),
     ).toBe('iCloud · work.yaml')
-    expect(providerDefaultLabel('oauth-file', { oauthPreset: 'icloud' })).toBe(
-      'iCloud',
-    )
+    expect(
+      providerDefaultLabel({
+        type: 'oauth-file',
+        options: { oauthPreset: 'icloud' },
+      }),
+    ).toBe('iCloud')
   })
 })
 
@@ -217,7 +246,12 @@ describe('findDuplicateSyncProvider', () => {
       githubRepo: storedGithubRepository('nook-crdt-test-1'),
       githubPat: storedGithubPat('github_pat_11AAAAAAAAAA'),
     })
-    expect(findDuplicateSyncProvider([existing], candidate)).toEqual({
+    expect(
+      findDuplicateSyncProvider({
+        providers: [existing],
+        candidate: candidate,
+      }),
+    ).toEqual({
       state: NookDuplicateSyncProviderState.Duplicate,
       provider: existing,
     })
@@ -226,7 +260,11 @@ describe('findDuplicateSyncProvider', () => {
   test('ignores the excluded provider id', () => {
     const existing = githubProvider({ id: 'gh-self' })
     expect(
-      findDuplicateSyncProviderExcluding([existing], existing, 'gh-self'),
+      findDuplicateSyncProviderExcluding({
+        providers: [existing],
+        candidate: existing,
+        excludeId: 'gh-self',
+      }),
     ).toEqual({ state: NookDuplicateSyncProviderState.Unique })
   })
 
@@ -239,7 +277,12 @@ describe('findDuplicateSyncProvider', () => {
       githubRepo: storedGithubRepository('beta'),
       githubPat: storedGithubPat('github_pat_11AAAA'),
     })
-    expect(findDuplicateSyncProvider([existing], candidate)).toEqual({
+    expect(
+      findDuplicateSyncProvider({
+        providers: [existing],
+        candidate: candidate,
+      }),
+    ).toEqual({
       state: NookDuplicateSyncProviderState.Unique,
     })
   })

@@ -16,7 +16,7 @@ const { default: App } = await import('$vault-shared/App.svelte')
 // point left to hydrate, and mounting would throw after the replacement page
 // has already become active.
 if (target?.isConnected) {
-  const mountArgs: Parameters<typeof mount>[1] = { target }
+  const mountArgs: { readonly target: HTMLElement } = { target }
   mount(App, mountArgs)
 }
 

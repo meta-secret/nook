@@ -56,30 +56,36 @@ function decodeOuterJson(code: string): Record<string, unknown> {
 describe('enrollment-code links', () => {
   test('isolated applications generate links at their own root', () => {
     expect(
-      enrollmentAppRootUrl('https://simple.nokey.sh', VaultApplication.Simple),
+      enrollmentAppRootUrl({
+        siteRoot: 'https://simple.nokey.sh',
+        appKind: VaultApplication.Simple,
+      }),
     ).toBe('https://simple.nokey.sh/')
     expect(
-      enrollmentAppRootUrl(
-        'https://sentinel.nokey.sh/',
-        VaultApplication.Sentinel,
-      ),
+      enrollmentAppRootUrl({
+        siteRoot: 'https://sentinel.nokey.sh/',
+        appKind: VaultApplication.Sentinel,
+      }),
     ).toBe('https://sentinel.nokey.sh/')
   })
 
   test('the unified development application keeps its /app route', () => {
     expect(
-      enrollmentAppRootUrl(
-        'https://nokey.sh',
-        VaultApplication.UnifiedDevelopment,
-      ),
+      enrollmentAppRootUrl({
+        siteRoot: 'https://nokey.sh',
+        appKind: VaultApplication.UnifiedDevelopment,
+      }),
     ).toBe('https://nokey.sh/app/')
   })
 
   test('buildEnrollmentLink wraps the raw code in a hash URL', async () => {
     const code = encryptUnlabeledEnrollmentPayload(samplePayload(), 'hunter2')
-    expect(buildEnrollmentLink(code, 'https://nook.example')).toBe(
-      `https://nook.example/#enroll=${encodeURIComponent(code)}`,
-    )
+    expect(
+      buildEnrollmentLink({
+        code: code,
+        baseUrl: 'https://nook.example',
+      }),
+    ).toBe(`https://nook.example/#enroll=${encodeURIComponent(code)}`)
   })
 
   test('normalizeEnrollmentCode accepts raw base64url codes', async () => {
@@ -89,7 +95,10 @@ describe('enrollment-code links', () => {
 
   test('normalizeEnrollmentCode extracts codes from hash links', async () => {
     const code = encryptUnlabeledEnrollmentPayload(samplePayload(), 'hunter2')
-    const link = buildEnrollmentLink(code, 'https://nook.example')
+    const link = buildEnrollmentLink({
+      code: code,
+      baseUrl: 'https://nook.example',
+    })
     expect(normalizeEnrollmentCode(link)).toBe(code)
   })
 
@@ -99,7 +108,10 @@ describe('enrollment-code links', () => {
       'hunter2',
       'Desk',
     )
-    const link = buildEnrollmentLink(code, 'https://nook.example')
+    const link = buildEnrollmentLink({
+      code: code,
+      baseUrl: 'https://nook.example',
+    })
     expect(peekEnrollmentEntryId(link)).toBe('entry-local')
     expect(enrollmentEntryLabel(link)).toBe('Desk')
     expect(peekEnrollmentIssuedAt(link)).toBe('2026-06-23T12:00:00Z')

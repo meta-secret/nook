@@ -6,14 +6,15 @@ import initNookWasm, {
   VaultApplication,
 } from '$app-wasm'
 
-const wasmPath = join(
-  process.cwd(),
-  '../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
-)
-const companionWasmPath = join(
-  process.cwd(),
-  '../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm',
-)
+const wasmPath = join({
+  length: process.cwd(),
+  toString: '../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
+})
+const companionWasmPath = join({
+  length: process.cwd(),
+  toString:
+    '../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm',
+})
 const originalFetch = globalThis.fetch?.bind(globalThis)
 
 Reflect.deleteProperty(WebAssembly, 'instantiateStreaming')

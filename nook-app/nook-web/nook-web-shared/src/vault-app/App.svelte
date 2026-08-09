@@ -476,7 +476,11 @@
     pendingEnrollmentSubmitState = {
       kind: EnrollmentSubmitQueueKind.Idle,
     }
-    await vault.connectWithEnrollmentCode(code, password)
+    const enrollmentRequest: Parameters<typeof vault.connectWithEnrollmentCode>[0] = {
+      code,
+      password,
+    }
+    await vault.connectWithEnrollmentCode(enrollmentRequest)
   }
 
   async function resumePairedExtensionVault(
@@ -778,7 +782,7 @@
       kind: EnrollmentSubmitQueueKind.Idle,
     }
     pendingEnrollmentDeviceUnlock = false
-    void vault.connectWithEnrollmentCode(pending.code, pending.password)
+    void vault.connectWithEnrollmentCode(pending)
   })
 </script>
 
@@ -839,8 +843,8 @@
           onUnlock={handleUnlock}
           onUseEnrollmentCode={handleUseEnrollmentCode}
           onAcceptSentinelOnboardingPackage={handleAcceptSentinelOnboarding}
-          onUnlockWithPassword={({ entryId, password }) =>
-            existingVaultImportLifecycle.unlockWithPassword(entryId, password)}
+          onUnlockWithPassword={(unlockRequest) =>
+            existingVaultImportLifecycle.unlockWithPassword(unlockRequest)}
           onSwitchVault={() => existingVaultImportLifecycle.leave()}
           onSentinelUnlocked={() => existingVaultImportLifecycle.finish()}
           onCreateDeviceVault={handleCreateDeviceVault}

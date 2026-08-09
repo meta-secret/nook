@@ -58,13 +58,17 @@ describe('renameLocalVaultLabel', () => {
       isVerifying: false,
     } as unknown as VaultState
 
-    await renameLocalVaultLabel(state, 'store-1', 'New name')
+    await renameLocalVaultLabel({
+      state: state,
+      storeId: 'store-1',
+      label: 'New name',
+    })
 
     expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledOnce()
-    expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledWith(
-      'store-1',
-      'New name',
-    )
+    expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledWith({
+      0: 'store-1',
+      1: 'New name',
+    })
     expect(setVaultName).toHaveBeenCalledOnce()
     expect(setVaultName).toHaveBeenCalledWith('New name')
     expect(state.errorMsg).toBe('catalog refresh failed')

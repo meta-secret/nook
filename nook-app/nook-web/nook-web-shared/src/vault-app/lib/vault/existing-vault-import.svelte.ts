@@ -145,7 +145,11 @@ export class ExistingVaultImportLifecycle {
     readonly entryId: string;
     readonly password: string;
   }): Promise<void> {
-    await this.vault.unlockWithPassword(entryId, password);
+    const unlockRequest: Parameters<typeof this.vault.unlockWithPassword>[0] = {
+      entryId,
+      password,
+    };
+    await this.vault.unlockWithPassword(unlockRequest);
     if (!this.vault.isAuthenticated) return;
     if (this.waitingForDevice) {
       await this.activatePendingVault();

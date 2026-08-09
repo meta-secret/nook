@@ -1,6 +1,7 @@
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test } from 'vitest'
 import {
+  DEFAULT_DRIVE_BACKUP_NAME,
   configuredOAuthFile,
   defaultOAuthFileConfig,
   missingOAuthAccessToken,
@@ -20,7 +21,10 @@ import {
 
 function driveProvider(id: string, folderId: string): StorageProvider {
   const config = {
-    ...defaultOAuthFileConfig('google-drive'),
+    ...defaultOAuthFileConfig({
+      preset: 'google-drive',
+      fileName: DEFAULT_DRIVE_BACKUP_NAME,
+    }),
     accessToken: storedOAuthCredential(`token-${id}`),
     folderId: folderId
       ? storedGoogleDriveFolder(folderId)
@@ -44,14 +48,14 @@ describe('shared enrollment provider selection', () => {
     const otherSharedDrive = driveProvider('other', 'folder-other')
 
     expect(
-      findSharedGrantProvider(
-        [privateDrive, otherSharedDrive],
-        'google-drive',
-        {
+      findSharedGrantProvider({
+        providers: [privateDrive, otherSharedDrive],
+        preset: 'google-drive',
+        target: {
           kind: SharedStorageTargetKind.Bound,
           storageTargetId: 'folder-required',
         },
-      ),
+      }),
     ).toEqual({ kind: SharedGrantProviderKind.AuthorizationRequired })
   })
 
@@ -59,14 +63,14 @@ describe('shared enrollment provider selection', () => {
     const matchingDrive = driveProvider('matching', 'folder-required')
 
     expect(
-      findSharedGrantProvider(
-        [driveProvider('other', 'folder-other'), matchingDrive],
-        'google-drive',
-        {
+      findSharedGrantProvider({
+        providers: [driveProvider('other', 'folder-other'), matchingDrive],
+        preset: 'google-drive',
+        target: {
           kind: SharedStorageTargetKind.Bound,
           storageTargetId: 'folder-required',
         },
-      ),
+      }),
     ).toEqual({
       kind: SharedGrantProviderKind.Existing,
       provider: matchingDrive,
@@ -75,13 +79,16 @@ describe('shared enrollment provider selection', () => {
 
   test('flushes every created Drive target when the owner token is usable', () => {
     const available = oauthAccessToken({
-      ...defaultOAuthFileConfig('google-drive'),
+      ...defaultOAuthFileConfig({
+        preset: 'google-drive',
+        fileName: DEFAULT_DRIVE_BACKUP_NAME,
+      }),
       accessToken: storedOAuthCredential('token-owner'),
     })
     const missing = missingOAuthAccessToken()
     expect(
-      shouldFlushSharedDriveGrant(
-        {
+      shouldFlushSharedDriveGrant({
+        grant: {
           kind: 'granted',
           note: 'architecture_modes.shared_grant_created',
           target: {
@@ -89,12 +96,12 @@ describe('shared enrollment provider selection', () => {
             storageTargetId: 'folder-required',
           },
         },
-        available,
-      ),
+        accessCredential: available,
+      }),
     ).toBe(true)
     expect(
-      shouldFlushSharedDriveGrant(
-        {
+      shouldFlushSharedDriveGrant({
+        grant: {
           kind: 'manual-grant-required',
           instructionsKey:
             I18N_KEYS.ArchitectureModesSharedGrantManualInstructions,
@@ -104,12 +111,12 @@ describe('shared enrollment provider selection', () => {
             storageTargetId: 'folder-required',
           },
         },
-        available,
-      ),
+        accessCredential: available,
+      }),
     ).toBe(true)
     expect(
-      shouldFlushSharedDriveGrant(
-        {
+      shouldFlushSharedDriveGrant({
+        grant: {
           kind: 'manual-grant-required',
           instructionsKey:
             I18N_KEYS.ArchitectureModesSharedGrantManualInstructions,
@@ -119,8 +126,8 @@ describe('shared enrollment provider selection', () => {
             storageTargetId: 'folder-required',
           },
         },
-        missing,
-      ),
+        accessCredential: missing,
+      }),
     ).toBe(false)
   })
 })

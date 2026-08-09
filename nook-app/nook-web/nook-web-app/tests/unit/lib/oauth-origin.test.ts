@@ -13,61 +13,61 @@ function loc(origin: string, hostname: string) {
 describe('oauth origin support', () => {
   test('allows the configured Google stable, development, and local origins', () => {
     expect(
-      resolveOAuthOriginSupport(
-        BrowserOAuthProvider.GoogleDrive,
-        loc('https://simple.nokey.sh', 'simple.nokey.sh'),
-      ).supported,
+      resolveOAuthOriginSupport({
+        provider: BrowserOAuthProvider.GoogleDrive,
+        location: loc('https://simple.nokey.sh', 'simple.nokey.sh'),
+      }).supported,
     ).toBe(true)
     expect(
-      resolveOAuthOriginSupport(
-        BrowserOAuthProvider.GoogleDrive,
-        loc('https://sentinel.dev.nokey.sh', 'sentinel.dev.nokey.sh'),
-      ).supported,
+      resolveOAuthOriginSupport({
+        provider: BrowserOAuthProvider.GoogleDrive,
+        location: loc('https://sentinel.dev.nokey.sh', 'sentinel.dev.nokey.sh'),
+      }).supported,
     ).toBe(true)
     expect(
-      resolveOAuthOriginSupport(
-        BrowserOAuthProvider.GoogleDrive,
-        loc('https://localhost:5173', 'localhost'),
-      ).supported,
+      resolveOAuthOriginSupport({
+        provider: BrowserOAuthProvider.GoogleDrive,
+        location: loc('https://localhost:5173', 'localhost'),
+      }).supported,
     ).toBe(true)
     expect(
-      resolveOAuthOriginSupport(
-        BrowserOAuthProvider.GoogleDrive,
-        loc('http://localhost:5173', 'localhost'),
-      ).supported,
+      resolveOAuthOriginSupport({
+        provider: BrowserOAuthProvider.GoogleDrive,
+        location: loc('http://localhost:5173', 'localhost'),
+      }).supported,
     ).toBe(true)
     expect(
-      resolveOAuthOriginSupport(
-        BrowserOAuthProvider.GoogleDrive,
-        loc('http://127.0.0.1:5173', '127.0.0.1'),
-      ).supported,
+      resolveOAuthOriginSupport({
+        provider: BrowserOAuthProvider.GoogleDrive,
+        location: loc('http://127.0.0.1:5173', '127.0.0.1'),
+      }).supported,
     ).toBe(true)
   })
 
   test('allows the configured iCloud stable, development, and local HTTPS origins', () => {
     expect(
-      resolveOAuthOriginSupport(
-        BrowserOAuthProvider.ICloud,
-        loc('https://sentinel.nokey.sh', 'sentinel.nokey.sh'),
-      ).supported,
+      resolveOAuthOriginSupport({
+        provider: BrowserOAuthProvider.ICloud,
+        location: loc('https://sentinel.nokey.sh', 'sentinel.nokey.sh'),
+      }).supported,
     ).toBe(true)
     expect(
-      resolveOAuthOriginSupport(
-        BrowserOAuthProvider.ICloud,
-        loc('https://simple.dev.nokey.sh', 'simple.dev.nokey.sh'),
-      ).supported,
+      resolveOAuthOriginSupport({
+        provider: BrowserOAuthProvider.ICloud,
+        location: loc('https://simple.dev.nokey.sh', 'simple.dev.nokey.sh'),
+      }).supported,
     ).toBe(true)
     expect(
-      resolveOAuthOriginSupport(
-        BrowserOAuthProvider.ICloud,
-        loc('https://localhost:5173', 'localhost'),
-      ).supported,
+      resolveOAuthOriginSupport({
+        provider: BrowserOAuthProvider.ICloud,
+        location: loc('https://localhost:5173', 'localhost'),
+      }).supported,
     ).toBe(true)
     expect(
-      resolveOAuthOriginSupport(
-        BrowserOAuthProvider.ICloud,
-        loc('https://localhost:5175', 'localhost'),
-      ).supported,
+      resolveOAuthOriginSupport({
+        provider: BrowserOAuthProvider.ICloud,
+        location: loc('https://localhost:5175', 'localhost'),
+      }).supported,
     ).toBe(true)
   })
 
@@ -75,19 +75,19 @@ describe('oauth origin support', () => {
     for (const origin of ['https://nokey.sh', 'https://dev.nokey.sh']) {
       const hostname = new URL(origin).hostname
       expect(
-        resolveOAuthOriginSupport(
-          BrowserOAuthProvider.GoogleDrive,
-          loc(origin, hostname),
-        ),
+        resolveOAuthOriginSupport({
+          provider: BrowserOAuthProvider.GoogleDrive,
+          location: loc(origin, hostname),
+        }),
       ).toMatchObject({
         supported: false,
         reason: OAuthOriginUnsupportedReason.UnregisteredOrigin,
       })
       expect(
-        resolveOAuthOriginSupport(
-          BrowserOAuthProvider.ICloud,
-          loc(origin, hostname),
-        ),
+        resolveOAuthOriginSupport({
+          provider: BrowserOAuthProvider.ICloud,
+          location: loc(origin, hostname),
+        }),
       ).toMatchObject({
         supported: false,
         reason: OAuthOriginUnsupportedReason.UnregisteredOrigin,
@@ -96,10 +96,13 @@ describe('oauth origin support', () => {
   })
 
   test('blocks Cloudflare PR preview origins with a preview reason', () => {
-    const support = resolveOAuthOriginSupport(
-      BrowserOAuthProvider.GoogleDrive,
-      loc('https://pr-191.nook-1n8.pages.dev', 'pr-191.nook-1n8.pages.dev'),
-    )
+    const support = resolveOAuthOriginSupport({
+      provider: BrowserOAuthProvider.GoogleDrive,
+      location: loc(
+        'https://pr-191.nook-1n8.pages.dev',
+        'pr-191.nook-1n8.pages.dev',
+      ),
+    })
 
     expect(support).toEqual({
       supported: false,
@@ -110,10 +113,10 @@ describe('oauth origin support', () => {
 
   test('distinguishes non-preview unregistered origins', () => {
     expect(
-      resolveOAuthOriginSupport(
-        BrowserOAuthProvider.ICloud,
-        loc('http://localhost:5173', 'localhost'),
-      ),
+      resolveOAuthOriginSupport({
+        provider: BrowserOAuthProvider.ICloud,
+        location: loc('http://localhost:5173', 'localhost'),
+      }),
     ).toEqual({
       supported: false,
       origin: 'http://localhost:5173',

@@ -11,6 +11,10 @@ import {
   CloudKitShareAccess,
   CloudKitSharePermission,
 } from "$lib/auth/icloud/cloudkit-state";
+import {
+  CloudKitIdentityKind,
+  type CloudKitIdentity,
+} from "$lib/auth/icloud/auth-state";
 
 const CLOUDKIT_SCRIPT_URL = "https://cdn.apple-cloudkit.com/ck/2/cloudkit.js";
 export const CLOUDKIT_SIGN_IN_BUTTON_ID = "apple-sign-in-button";
@@ -116,7 +120,7 @@ export type CloudKitContainer = {
   setUpAuth: (options?: {
     grabAuthToken?: boolean;
     persist?: boolean;
-  }) => Promise<CloudKitUserIdentity | undefined>;
+  }) => Promise<CloudKitIdentity>;
   whenUserSignsIn: () => Promise<CloudKitUserIdentity>;
   fetchCurrentUserIdentity?: () => Promise<CloudKitUserIdentity>;
   acceptShares?: (shortGUIDs: string[]) => Promise<CloudKitRecordInfosResponse>;
@@ -125,6 +129,13 @@ export type CloudKitContainer = {
   ) => Promise<CloudKitRecordInfosResponse>;
   privateCloudDatabase?: CloudKitDatabase;
   sharedCloudDatabase?: CloudKitDatabase;
+};
+
+type ExternalCloudKitContainer = Omit<CloudKitContainer, "setUpAuth"> & {
+  setUpAuth: (options?: {
+    grabAuthToken?: boolean;
+    persist?: boolean;
+  }) => Promise<unknown>;
 };
 
 export type CloudKitAuthTokenStore = {
@@ -157,8 +168,35 @@ export type CloudKitConfiguration = {
 
 export type CloudKitGlobal = {
   configure: (config: CloudKitConfiguration) => void;
-  getDefaultContainer: () => CloudKitContainer;
+  getDefaultContainer: () => ExternalCloudKitContainer;
 };
+
+function cloudKitIdentityFromTransport(value: unknown): CloudKitIdentity {
+  return Boolean(value) && typeof value === "object"
+    ? {
+        kind: CloudKitIdentityKind.SignedIn,
+        identity: value as CloudKitUserIdentity,
+      }
+    : { kind: CloudKitIdentityKind.SignedOut };
+}
+
+/** Return a domain-typed view that narrows CloudKit's generic auth result immediately. */
+export function getDefaultCloudKitContainer(): CloudKitContainer {
+  const external = window.CloudKit!.getDefaultContainer();
+  const handler: ProxyHandler<ExternalCloudKitContainer> = {
+    // eslint-disable-next-line max-params -- Proxy owns this positional boundary callback.
+    get(target, property, receiver) {
+      if (property === "setUpAuth") {
+        return async (options?: {
+          grabAuthToken?: boolean;
+          persist?: boolean;
+        }) => cloudKitIdentityFromTransport(await target.setUpAuth(options));
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  };
+  return new Proxy(external, handler) as CloudKitContainer;
+}
 
 const ICLOUD_AUTH_TOKEN_STORAGE_PREFIX = "nook.icloud.webAuthToken.";
 

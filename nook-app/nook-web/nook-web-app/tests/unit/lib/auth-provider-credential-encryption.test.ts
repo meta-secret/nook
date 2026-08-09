@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, test } from 'vitest'
 import { default as initNookWasm, NookVaultManager } from '$app-wasm'
 import {
+  DEFAULT_DRIVE_BACKUP_NAME,
   configuredOAuthFile,
   defaultOAuthFileConfig,
   githubPatValue,
@@ -195,7 +196,10 @@ describe.sequential(
       const access = 'ya29.unit-oauth-access-token'
       const refresh = '1//unit-refresh-token-secret'
       const oauthFile = {
-        ...defaultOAuthFileConfig('google-drive'),
+        ...defaultOAuthFileConfig({
+          preset: 'google-drive',
+          fileName: DEFAULT_DRIVE_BACKUP_NAME,
+        }),
         accessToken: storedOAuthCredential(access),
         refreshToken: storedOAuthRefreshCredential(refresh),
         accountEmail: storedOAuthAccountEmail('me@example.com'),

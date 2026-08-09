@@ -17,6 +17,6 @@ export async function mountVaultApp(
   if (!target) throw new Error("Vault app mount target is missing");
   if (!target) throw new Error("Vault application root is missing.");
   const { default: App } = await import("./App.svelte");
-  const mountArgs: Parameters<typeof mount>[1] = { target };
+  const mountArgs: { readonly target: HTMLElement } = { target };
   mount(App, mountArgs);
 }
