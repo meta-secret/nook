@@ -9,7 +9,7 @@
   }: {
     vault: VaultState
     request: ExtensionConnectRequest
-    onClose: (approved?: boolean) => void
+    onClose: (approved: boolean) => void
   } = $props()
 
   const disabled = $derived(Boolean(vault && request && onClose))
