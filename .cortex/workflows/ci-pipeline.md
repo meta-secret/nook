@@ -430,15 +430,24 @@ task docker:ecosystem:fuzz FUZZ_SECONDS=20
 task hive:verify
 ```
 
-`ci:pr:e2e` includes repository preflight, Rust coverage/unit tests, WASM checks,
-web checks/unit tests/builds, the complete local-provider Playwright suite, and
-extension e2e. The additional targets validate the separate fuzz workspace and
-compile, lint, and test both Hive and Lace in the Minds workspace. Credentialed
-real-provider `sync-live` e2e remains a separate manual
-validation because it creates disposable external-provider state and requires
-provider secrets. No workflow merges the harness-owned PR blindly from a check
-event. A task-owning agent must run the standard readiness audit and squash-merge
-when it succeeds.
+`ci:pr:e2e` validates the product path:
+
+- repository preflight;
+- Rust coverage and unit tests;
+- WASM checks;
+- web checks, unit tests, and builds;
+- the complete local-provider Playwright suite;
+- extension e2e.
+
+The additional targets validate the separate fuzz workspace. They also compile,
+lint, and test both Hive and Lace in the Minds workspace.
+
+Credentialed real-provider `sync-live` e2e remains a separate manual validation.
+It creates disposable external-provider state. It also requires provider
+secrets.
+
+No workflow merges the harness-owned PR from a check event. A task-owning agent
+must run the standard readiness audit. The agent squash-merges when it succeeds.
 
 **One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
 
