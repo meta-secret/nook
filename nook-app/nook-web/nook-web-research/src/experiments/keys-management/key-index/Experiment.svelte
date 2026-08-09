@@ -82,12 +82,36 @@ it connects to.
   let selected = $state<NodeRef>(defaultNode(graphById(GraphId.Tangle)))
 
   const graph = $derived(graphById(graphId))
-  const highlight = $derived(highlightFor(graph, selected))
+  const highlight = $derived.by(() => {
+    const selectionContext: Parameters<typeof highlightFor>[0] = {
+      graph,
+      node: selected,
+    }
+    return highlightFor(selectionContext)
+  })
   const others = $derived(
-    graph.devices.filter((device) => !isHere(graph, device)),
+    graph.devices.filter((device) => {
+      const nookNamedArgument204: Parameters<typeof isHere>[0] = {
+        graph,
+        device,
+      }
+      return !isHere(nookNamedArgument204)
+    }),
   )
-  const groups = $derived(groupsFor(graph, selected))
-  const headerLabel = $derived(labelFor(graph, selected))
+  const groups = $derived.by(() => {
+    const detailContext: Parameters<typeof groupsFor>[0] = {
+      source: graph,
+      node: selected,
+    }
+    return groupsFor(detailContext)
+  })
+  const headerLabel = $derived.by(() => {
+    const labelContext: Parameters<typeof labelFor>[0] = {
+      source: graph,
+      node: selected,
+    }
+    return labelFor(labelContext)
+  })
   const pickedPasskeys = $derived(
     graph.passkeys.filter(
       (passkey) =>
@@ -106,11 +130,21 @@ it connects to.
     ),
   )
 
-  function labelFor(source: KeyGraph, node: NodeRef): string {
+  function labelFor({
+    source,
+    node,
+  }: {
+    source: KeyGraph
+    node: NodeRef
+  }): string {
     if (node.kind !== NodeKind.Device) return kindLabel(node.kind)
-    const mine = source.devices.some(
-      (device) => device.id === node.id && isHere(source, device),
-    )
+    const mine = source.devices.some((device) => {
+      const nookNamedArgument207: Parameters<typeof isHere>[0] = {
+        graph: source,
+        device,
+      }
+      return device.id === node.id && isHere(nookNamedArgument207)
+    })
     return mine ? 'My device' : 'Other device'
   }
 
@@ -126,7 +160,17 @@ it connects to.
     }
   }
 
-  function deviceChip(source: KeyGraph, device: Device): DetailChip {
+  function deviceChip({
+    source,
+    device,
+  }: {
+    source: KeyGraph
+    device: Device
+  }): DetailChip {
+    const nookNamedArgument208: Parameters<typeof isHere>[0] = {
+      graph: source,
+      device,
+    }
     return {
       key: `dev-${device.id}`,
       kind: NodeKind.Device,
@@ -134,11 +178,21 @@ it connects to.
       shortId: device.shortId,
       note: device.label,
       tint: '#7d8892',
-      mark: isHere(source, device) ? ChipMark.Mine : ChipMark.Away,
+      mark: isHere(nookNamedArgument208) ? ChipMark.Mine : ChipMark.Away,
     }
   }
 
-  function vaultChip(source: KeyGraph, vault: Vault): DetailChip {
+  function vaultChip({
+    source,
+    vault,
+  }: {
+    source: KeyGraph
+    vault: Vault
+  }): DetailChip {
+    const nookNamedArgument209: Parameters<typeof openableHere>[0] = {
+      graph: source,
+      vault,
+    }
     return {
       key: `vault-${vault.id}`,
       kind: NodeKind.Vault,
@@ -146,59 +200,123 @@ it connects to.
       shortId: vault.shortId,
       note: vault.label,
       tint: '#7d8892',
-      mark: openableHere(source, vault) ? ChipMark.Plain : ChipMark.Away,
+      mark: openableHere(nookNamedArgument209) ? ChipMark.Plain : ChipMark.Away,
     }
   }
 
-  function groupsFor(source: KeyGraph, node: NodeRef): DetailGroup[] {
+  function groupsFor({
+    source,
+    node,
+  }: {
+    source: KeyGraph
+    node: NodeRef
+  }): DetailGroup[] {
     if (node.kind === NodeKind.Passkey) {
-      const devices = devicesForPasskey(source, node.id)
+      const nookNamedArgument210: Parameters<typeof devicesForPasskey>[0] = {
+        graph: source,
+        passkeyId: node.id,
+      }
+      const devices = devicesForPasskey(nookNamedArgument210)
+      const nookNamedArgument215: Parameters<typeof vaultsForPasskey>[0] = {
+        graph: source,
+        passkeyId: node.id,
+      }
       return [
         {
           key: 'mine',
           title: 'My device',
           empty: 'not enrolled here',
           chips: devices
-            .filter((device) => isHere(source, device))
-            .map((device) => deviceChip(source, device)),
+            .filter((device) => {
+              const nookNamedArgument211: Parameters<typeof isHere>[0] = {
+                graph: source,
+                device,
+              }
+              return isHere(nookNamedArgument211)
+            })
+            .map((device) => {
+              const nookNamedArgument212: Parameters<typeof deviceChip>[0] = {
+                source,
+                device,
+              }
+              return deviceChip(nookNamedArgument212)
+            }),
         },
         {
           key: 'other-devices',
           title: 'Other devices',
           empty: 'none',
           chips: devices
-            .filter((device) => !isHere(source, device))
-            .map((device) => deviceChip(source, device)),
+            .filter((device) => {
+              const nookNamedArgument213: Parameters<typeof isHere>[0] = {
+                graph: source,
+                device,
+              }
+              return !isHere(nookNamedArgument213)
+            })
+            .map((device) => {
+              const nookNamedArgument214: Parameters<typeof deviceChip>[0] = {
+                source,
+                device,
+              }
+              return deviceChip(nookNamedArgument214)
+            }),
         },
         {
           key: 'vaults',
           title: 'Opens',
           empty: 'none',
-          chips: vaultsForPasskey(source, node.id).map((vault) =>
-            vaultChip(source, vault),
-          ),
+          chips: vaultsForPasskey(nookNamedArgument215).map((vault) => {
+            const nookNamedArgument216: Parameters<typeof vaultChip>[0] = {
+              source,
+              vault,
+            }
+            return vaultChip(nookNamedArgument216)
+          }),
         },
       ]
     }
 
     if (node.kind === NodeKind.Device) {
       const devices = source.devices.filter((device) => device.id === node.id)
+      const nookNamedArgument217: Parameters<typeof vaultsForDevice>[0] = {
+        graph: source,
+        deviceId: node.id,
+      }
       const vaults: DetailGroup = {
         key: 'vaults',
         title: 'Opens',
         empty: 'none',
-        chips: vaultsForDevice(source, node.id).map((vault) =>
-          vaultChip(source, vault),
-        ),
+        chips: vaultsForDevice(nookNamedArgument217).map((vault) => {
+          const nookNamedArgument218: Parameters<typeof vaultChip>[0] = {
+            source,
+            vault,
+          }
+          return vaultChip(nookNamedArgument218)
+        }),
       }
-      if (!devices.some((device) => isHere(source, device))) return [vaults]
+      if (
+        !devices.some((device) => {
+          const nookNamedArgument219: Parameters<typeof isHere>[0] = {
+            graph: source,
+            device,
+          }
+          return isHere(nookNamedArgument219)
+        })
+      )
+        return [vaults]
       return [
         {
           key: 'passkeys',
           title: 'Unlocked by',
           empty: 'no passkey enrolled',
           chips: devices
-            .flatMap((device) => passkeysForDevice(source, device))
+            .flatMap((device) => {
+              const nookNamedArgument220: Parameters<
+                typeof passkeysForDevice
+              >[0] = { graph: source, device }
+              return passkeysForDevice(nookNamedArgument220)
+            })
             .map(passkeyChip),
         },
         vaults,
@@ -208,69 +326,109 @@ it connects to.
     return source.vaults
       .filter((vault) => vault.id === node.id)
       .flatMap((vault) => {
-        const devices = devicesForVault(source, vault)
+        const nookNamedArgument221: Parameters<typeof devicesForVault>[0] = {
+          graph: source,
+          vault,
+        }
+        const devices = devicesForVault(nookNamedArgument221)
+        const nookNamedArgument226: Parameters<typeof passkeysForVault>[0] = {
+          graph: source,
+          vault,
+        }
         return [
           {
             key: 'mine',
             title: 'My device',
             empty: 'not enrolled',
             chips: devices
-              .filter((device) => isHere(source, device))
-              .map((device) => deviceChip(source, device)),
+              .filter((device) => {
+                const nookNamedArgument222: Parameters<typeof isHere>[0] = {
+                  graph: source,
+                  device,
+                }
+                return isHere(nookNamedArgument222)
+              })
+              .map((device) => {
+                const nookNamedArgument223: Parameters<typeof deviceChip>[0] = {
+                  source,
+                  device,
+                }
+                return deviceChip(nookNamedArgument223)
+              }),
           },
           {
             key: 'other-devices',
             title: 'Other devices',
             empty: 'none',
             chips: devices
-              .filter((device) => !isHere(source, device))
-              .map((device) => deviceChip(source, device)),
+              .filter((device) => {
+                const nookNamedArgument224: Parameters<typeof isHere>[0] = {
+                  graph: source,
+                  device,
+                }
+                return !isHere(nookNamedArgument224)
+              })
+              .map((device) => {
+                const nookNamedArgument225: Parameters<typeof deviceChip>[0] = {
+                  source,
+                  device,
+                }
+                return deviceChip(nookNamedArgument225)
+              }),
           },
           {
             key: 'passkeys',
             title: 'Opened by',
             empty: 'none',
-            chips: passkeysForVault(source, vault).map(passkeyChip),
+            chips: passkeysForVault(nookNamedArgument226).map(passkeyChip),
           },
         ]
       })
   }
 
-  function pick(kind: NodeKind, id: string) {
+  function pick({ kind, id }: { kind: NodeKind; id: string }) {
     selected = { kind, id }
   }
 
-  function chosen(kind: NodeKind, id: string): boolean {
+  function chosen({ kind, id }: { kind: NodeKind; id: string }): boolean {
     return selected.kind === kind && selected.id === id
   }
 
-  function marked(kind: NodeKind, id: string): boolean {
+  function marked({ kind, id }: { kind: NodeKind; id: string }): boolean {
     if (kind === NodeKind.Passkey) return highlight.passkeyIds.includes(id)
     if (kind === NodeKind.Device) return highlight.deviceIds.includes(id)
     return highlight.vaultIds.includes(id)
   }
 
-  function rowClass(kind: NodeKind, id: string): string {
+  function rowClass({ kind, id }: { kind: NodeKind; id: string }): string {
     const base =
       'flex w-full items-center gap-2.5 py-1.5 text-left transition duration-200 motion-reduce:transition-none'
-    if (chosen(kind, id) || marked(kind, id)) return base
+    const nookNamedArgument227: Parameters<typeof chosen>[0] = { kind, id }
+    const nookNamedArgument228: Parameters<typeof marked>[0] = { kind, id }
+    if (chosen(nookNamedArgument227) || marked(nookNamedArgument228))
+      return base
     return `${base} opacity-30 hover:opacity-70`
   }
 
-  function tickClass(kind: NodeKind, id: string): string {
+  function tickClass({ kind, id }: { kind: NodeKind; id: string }): string {
     const base = 'block w-[2px] shrink-0 rounded-full'
-    if (chosen(kind, id)) return `${base} h-10`
-    return marked(kind, id) ? `${base} h-7` : `${base} h-4`
+    const nookNamedArgument229: Parameters<typeof chosen>[0] = { kind, id }
+    if (chosen(nookNamedArgument229)) return `${base} h-10`
+    const nookNamedArgument230: Parameters<typeof marked>[0] = { kind, id }
+    return marked(nookNamedArgument230) ? `${base} h-7` : `${base} h-4`
   }
 
-  function tickInk(kind: NodeKind, id: string): string {
-    if (chosen(kind, id)) return ACCENT
-    return marked(kind, id) ? 'rgba(240,112,58,0.5)' : '#2b3037'
+  function tickInk({ kind, id }: { kind: NodeKind; id: string }): string {
+    const nookNamedArgument231: Parameters<typeof chosen>[0] = { kind, id }
+    if (chosen(nookNamedArgument231)) return ACCENT
+    const nookNamedArgument232: Parameters<typeof marked>[0] = { kind, id }
+    return marked(nookNamedArgument232) ? 'rgba(240,112,58,0.5)' : '#2b3037'
   }
 
-  function idClass(kind: NodeKind, id: string): string {
+  function idClass({ kind, id }: { kind: NodeKind; id: string }): string {
     const base = 'font-mono text-[13px] tracking-wide'
-    return chosen(kind, id)
+    const nookNamedArgument233: Parameters<typeof chosen>[0] = { kind, id }
+    return chosen(nookNamedArgument233)
       ? `${base} text-[#f7f5f2]`
       : `${base} text-[#c4ccd4]`
   }
@@ -278,7 +436,11 @@ it connects to.
   function chipClass(chip: DetailChip): string {
     const base =
       'flex min-w-0 items-center gap-1.5 rounded-md border px-2 py-1.5 text-left transition duration-200 motion-reduce:transition-none'
-    if (chosen(chip.kind, chip.id)) {
+    const nookNamedArgument234: Parameters<typeof chosen>[0] = {
+      kind: chip.kind,
+      id: chip.id,
+    }
+    if (chosen(nookNamedArgument234)) {
       return `${base} border-[#f0703a] bg-[#20120c]`
     }
     if (chip.mark === ChipMark.Mine) {
@@ -309,9 +471,21 @@ it connects to.
       aria-label="Key index"
     >
       {#each hereDevices(graph) as device (device.id)}
+        {@const deviceSelection: Parameters<typeof chosen>[0] = {
+          kind: NodeKind.Device,
+          id: device.id,
+        }}
+        {@const passkeyLookup: Parameters<typeof passkeysForDevice>[0] = {
+          graph,
+          device,
+        }}
+        {@const vaultLookup: Parameters<typeof vaultsForDevice>[0] = {
+          graph,
+          deviceId: device.id,
+        }}
         <section
           class={`rounded-lg border p-3 transition duration-200 motion-reduce:transition-none ${
-            chosen(NodeKind.Device, device.id)
+            chosen(deviceSelection)
               ? 'border-[#f0703a] bg-[#170e09]'
               : 'border-[#f0703a]/40 bg-[#120d0a]'
           }`}
@@ -325,10 +499,10 @@ it connects to.
           </p>
           <button
             type="button"
-            aria-pressed={chosen(NodeKind.Device, device.id)}
+            aria-pressed={chosen(deviceSelection)}
             aria-label={`My device key ${device.shortId}`}
             class="mt-1.5 flex items-center gap-2 font-mono text-[20px] leading-none tracking-wide text-[#f7f5f2]"
-            onclick={() => pick(NodeKind.Device, device.id)}
+            onclick={() => pick(deviceSelection)}
           >
             <Laptop class="size-4 shrink-0" aria-hidden="true" />
             {device.shortId}
@@ -336,10 +510,10 @@ it connects to.
           <p class="mt-2 text-[11px] text-[#9aa4ad]">{device.platform}</p>
           <p class="mt-2 flex flex-wrap items-center gap-1.5">
             <span class="{STATE} bg-[#12161b] text-[#c4ccd4]">
-              {passkeysForDevice(graph, device).length} passkeys
+              {passkeysForDevice(passkeyLookup).length} passkeys
             </span>
             <span class="{STATE} bg-[#12161b] text-[#c4ccd4]">
-              {vaultsForDevice(graph, device.id).length} vaults
+              {vaultsForDevice(vaultLookup).length} vaults
             </span>
           </p>
         </section>
@@ -372,16 +546,20 @@ it connects to.
         class="mt-1 grid border-t border-[#1a1e24] sm:grid-cols-2 lg:grid-cols-1"
       >
         {#each graph.passkeys as passkey (passkey.id)}
+          {@const passkeySelection: Parameters<typeof chosen>[0] = {
+            kind: NodeKind.Passkey,
+            id: passkey.id,
+          }}
           <li class="min-w-0">
             <button
               type="button"
-              aria-pressed={chosen(NodeKind.Passkey, passkey.id)}
-              class={rowClass(NodeKind.Passkey, passkey.id)}
-              onclick={() => pick(NodeKind.Passkey, passkey.id)}
+              aria-pressed={chosen(passkeySelection)}
+              class={rowClass(passkeySelection)}
+              onclick={() => pick(passkeySelection)}
             >
               <span
-                class={tickClass(NodeKind.Passkey, passkey.id)}
-                style={`background:${tickInk(NodeKind.Passkey, passkey.id)}`}
+                class={tickClass(passkeySelection)}
+                style={`background:${tickInk(passkeySelection)}`}
                 aria-hidden="true"
               ></span>
               <span class="min-w-0 flex-1">
@@ -393,7 +571,7 @@ it connects to.
                   >
                     <Fingerprint class="size-3" />
                   </span>
-                  <span class={idClass(NodeKind.Passkey, passkey.id)}>
+                  <span class={idClass(passkeySelection)}>
                     {passkey.shortId}
                   </span>
                   {#if passkey.reach === Reach.Here}
@@ -406,7 +584,7 @@ it connects to.
                   {storeLabel(passkey.store)} · {passkey.label}
                 </span>
               </span>
-              {#if marked(NodeKind.Passkey, passkey.id) && !chosen(NodeKind.Passkey, passkey.id)}
+              {#if marked(passkeySelection) && !chosen(passkeySelection)}
                 <span
                   class="flex shrink-0"
                   style={`color:${ACCENT}`}
@@ -427,16 +605,24 @@ it connects to.
         class="mt-1 grid border-t border-[#1a1e24] sm:grid-cols-2 lg:grid-cols-1"
       >
         {#each graph.vaults as vault (vault.id)}
+          {@const vaultSelection: Parameters<typeof chosen>[0] = {
+            kind: NodeKind.Vault,
+            id: vault.id,
+          }}
+          {@const vaultAvailability: Parameters<typeof openableHere>[0] = {
+            graph,
+            vault,
+          }}
           <li class="min-w-0">
             <button
               type="button"
-              aria-pressed={chosen(NodeKind.Vault, vault.id)}
-              class={rowClass(NodeKind.Vault, vault.id)}
-              onclick={() => pick(NodeKind.Vault, vault.id)}
+              aria-pressed={chosen(vaultSelection)}
+              class={rowClass(vaultSelection)}
+              onclick={() => pick(vaultSelection)}
             >
               <span
-                class={tickClass(NodeKind.Vault, vault.id)}
-                style={`background:${tickInk(NodeKind.Vault, vault.id)}`}
+                class={tickClass(vaultSelection)}
+                style={`background:${tickInk(vaultSelection)}`}
                 aria-hidden="true"
               ></span>
               <span class="min-w-0 flex-1">
@@ -445,10 +631,10 @@ it connects to.
                     class="size-3 shrink-0 text-[#7d8892]"
                     aria-hidden="true"
                   />
-                  <span class={idClass(NodeKind.Vault, vault.id)}>
+                  <span class={idClass(vaultSelection)}>
                     {vault.shortId}
                   </span>
-                  {#if openableHere(graph, vault)}
+                  {#if openableHere(vaultAvailability)}
                     <span class="{STATE} text-[#5fd39f]">Opens here</span>
                   {:else}
                     <span class="{STATE} text-[#e0a33b]">Not here</span>
@@ -458,7 +644,7 @@ it connects to.
                   {vault.label} · {vault.secrets} secrets
                 </span>
               </span>
-              {#if marked(NodeKind.Vault, vault.id) && !chosen(NodeKind.Vault, vault.id)}
+              {#if marked(vaultSelection) && !chosen(vaultSelection)}
                 <span
                   class="flex shrink-0"
                   style={`color:${ACCENT}`}
@@ -478,18 +664,21 @@ it connects to.
         </p>
         <ul class="mt-1 border-t border-[#14171c]">
           {#each others as device (device.id)}
+            {@const otherDeviceSelection: Parameters<typeof chosen>[0] = {
+              kind: NodeKind.Device,
+              id: device.id,
+            }}
             <li class="min-w-0">
               <button
                 type="button"
-                aria-pressed={chosen(NodeKind.Device, device.id)}
+                aria-pressed={chosen(otherDeviceSelection)}
                 aria-label={`Device key ${device.shortId}, ${device.label}`}
                 class={`flex w-full items-center gap-2 py-1 text-left transition duration-200 motion-reduce:transition-none ${
-                  chosen(NodeKind.Device, device.id) ||
-                  marked(NodeKind.Device, device.id)
+                  chosen(otherDeviceSelection) || marked(otherDeviceSelection)
                     ? 'opacity-90'
                     : 'opacity-55 hover:opacity-80'
                 }`}
-                onclick={() => pick(NodeKind.Device, device.id)}
+                onclick={() => pick(otherDeviceSelection)}
               >
                 <span class="font-mono text-[12px] text-[#9aa4ad]">
                   {device.shortId}
@@ -545,6 +734,10 @@ it connects to.
       {/each}
 
       {#each pickedDevices as device (device.id)}
+        {@const pickedDeviceLocation: Parameters<typeof isHere>[0] = {
+          graph,
+          device,
+        }}
         <p class="mt-2 font-mono text-[2rem] leading-none tracking-tight">
           {device.shortId}
         </p>
@@ -553,14 +746,14 @@ it connects to.
           <span class="{STATE} bg-[#12161b] text-[#c4ccd4]">
             {device.platform}
           </span>
-          {#if isHere(graph, device)}
+          {#if isHere(pickedDeviceLocation)}
             <span class="{STATE} bg-[#241209] text-[#f0703a]">This browser</span
             >
           {:else}
             <span class="{STATE} bg-[#12161b] text-[#7d8892]">Read only</span>
           {/if}
         </div>
-        {#if isHere(graph, device)}
+        {#if isHere(pickedDeviceLocation)}
           <div class="mt-4 flex flex-wrap items-center gap-1.5">
             <button type="button" class={ACTION}>rename</button>
             <button type="button" class={ACTION}>enrol passkey</button>
@@ -575,6 +768,10 @@ it connects to.
       {/each}
 
       {#each pickedVaults as vault (vault.id)}
+        {@const pickedVaultAvailability: Parameters<typeof openableHere>[0] = {
+          graph,
+          vault,
+        }}
         <p class="mt-2 font-mono text-[2rem] leading-none tracking-tight">
           {vault.shortId}
         </p>
@@ -583,7 +780,7 @@ it connects to.
           <span class="{STATE} bg-[#12161b] text-[#c4ccd4]">
             {vault.secrets} secrets
           </span>
-          {#if openableHere(graph, vault)}
+          {#if openableHere(pickedVaultAvailability)}
             <span class="{STATE} bg-[#132119] text-[#5fd39f]">Opens here</span>
           {:else}
             <span class="{STATE} bg-[#241a12] text-[#e0a33b]">
@@ -599,12 +796,16 @@ it connects to.
         </p>
         <ul class="mt-2 flex max-w-xl flex-wrap gap-1.5">
           {#each group.chips as chip (chip.key)}
+            {@const chipSelection: Parameters<typeof chosen>[0] = {
+              kind: chip.kind,
+              id: chip.id,
+            }}
             <li class="min-w-0">
               <button
                 type="button"
-                aria-pressed={chosen(chip.kind, chip.id)}
+                aria-pressed={chosen(chipSelection)}
                 class={chipClass(chip)}
-                onclick={() => pick(chip.kind, chip.id)}
+                onclick={() => pick(chipSelection)}
               >
                 {#if chip.kind === NodeKind.Passkey}
                   <span

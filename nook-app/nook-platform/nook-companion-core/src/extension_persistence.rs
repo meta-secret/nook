@@ -1,10 +1,12 @@
 //! Portable classification of browser-collected extension persistence state.
 
+use serde::{Deserialize, Serialize};
+use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Extension persistence area inspected by smoke and migration checks.
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExtensionPersistenceArea {
     Pairing,
     EventLog,
@@ -51,6 +53,14 @@ pub enum ExtensionPersistenceDatabaseState {
 pub enum ExtensionPersistenceStoreState {
     Absent,
     Present,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct ExtensionPersistenceObservation {
+    pub area: ExtensionPersistenceArea,
+    pub observed_names: Vec<String>,
 }
 
 #[must_use]

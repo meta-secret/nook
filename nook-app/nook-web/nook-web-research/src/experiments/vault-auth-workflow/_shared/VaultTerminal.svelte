@@ -51,13 +51,11 @@
   let choiceElement = $state<HTMLElement>()
 
   const rosterCount = $derived(1 + participants.length)
-  const choices = $derived(
-    step === VaultTerminalStep.Total
-      ? [2, 3, 4, 5]
-      : step === VaultTerminalStep.Threshold
-        ? Array.from({ length: total - 1 }, (_, index) => index + 2)
-        : [],
-  )
+  const choices = $derived.by(() => {
+    if (step === VaultTerminalStep.Total) return [2, 3, 4, 5]
+    if (step !== VaultTerminalStep.Threshold) return []
+    return [...Array<number>(total - 1).keys()].map((index) => index + 2)
+  })
   const workflowStage = $derived(
     step === VaultTerminalStep.Name
       ? 1
@@ -106,10 +104,13 @@
   ]
   let lines = $state<Line[]>([...openingLines])
 
-  function write(
-    text: string,
-    tone: Line['tone'] = VaultTerminalLineTone.Muted,
-  ) {
+  function write({
+    text,
+    tone = VaultTerminalLineTone.Muted,
+  }: {
+    text: string
+    tone?: Line['tone']
+  }) {
     lines = [...lines, { text, tone }]
   }
 
@@ -139,11 +140,16 @@
 
     if (step === VaultTerminalStep.Name) {
       name = value
-      write(`◆ Vault name  ${name}`, VaultTerminalLineTone.Answer)
-      write(
-        'Draft created in volatile memory. No vault exists yet.',
-        VaultTerminalLineTone.Muted,
-      )
+      const nookNamedArgument188: Parameters<typeof write>[0] = {
+        text: `◆ Vault name  ${name}`,
+        tone: VaultTerminalLineTone.Answer,
+      }
+      write(nookNamedArgument188)
+      const nookNamedArgument189: Parameters<typeof write>[0] = {
+        text: 'Draft created in volatile memory. No vault exists yet.',
+        tone: VaultTerminalLineTone.Muted,
+      }
+      write(nookNamedArgument189)
       step = VaultTerminalStep.Total
       choiceIndex = 1
     } else if (step === VaultTerminalStep.DeviceName) {
@@ -153,29 +159,32 @@
             participant.name.toLocaleLowerCase() === value.toLocaleLowerCase(),
         )
       ) {
-        write(
-          'Name already used. Choose a distinct device label.',
-          VaultTerminalLineTone.Error,
-        )
+        const nookNamedArgument190: Parameters<typeof write>[0] = {
+          text: 'Name already used. Choose a distinct device label.',
+          tone: VaultTerminalLineTone.Error,
+        }
+        write(nookNamedArgument190)
         promptValue = ''
         await focusPrompt()
         return
       }
       pendingDeviceName = value
-      write(
-        `◆ Participant ${String(participants.length + 2).padStart(2, '0')}  ${pendingDeviceName}`,
-        VaultTerminalLineTone.Answer,
-      )
+      const nookNamedArgument191: Parameters<typeof write>[0] = {
+        text: `◆ Participant ${String(participants.length + 2).padStart(2, '0')}  ${pendingDeviceName}`,
+        tone: VaultTerminalLineTone.Answer,
+      }
+      write(nookNamedArgument191)
       step = VaultTerminalStep.PublicKey
     } else if (step === VaultTerminalStep.PublicKey) {
       if (
         value === 'pk_local_a9f2…91cc' ||
         participants.some((participant) => participant.publicKey === value)
       ) {
-        write(
-          'Public key already belongs to another participant.',
-          VaultTerminalLineTone.Error,
-        )
+        const nookNamedArgument192: Parameters<typeof write>[0] = {
+          text: 'Public key already belongs to another participant.',
+          tone: VaultTerminalLineTone.Error,
+        }
+        write(nookNamedArgument192)
         promptValue = ''
         await focusPrompt()
         return
@@ -184,19 +193,25 @@
         ...participants,
         { name: pendingDeviceName, publicKey: value },
       ]
-      write(`✓ Key verified  ${shortKey(value)}`, VaultTerminalLineTone.Success)
+      const nookNamedArgument193: Parameters<typeof write>[0] = {
+        text: `✓ Key verified  ${shortKey(value)}`,
+        tone: VaultTerminalLineTone.Success,
+      }
+      write(nookNamedArgument193)
       pendingDeviceName = ''
       if (participants.length < total - 1) {
-        write(
-          `${total - 1 - participants.length} participant device(s) remaining.`,
-          VaultTerminalLineTone.Muted,
-        )
+        const nookNamedArgument194: Parameters<typeof write>[0] = {
+          text: `${total - 1 - participants.length} participant device(s) remaining.`,
+          tone: VaultTerminalLineTone.Muted,
+        }
+        write(nookNamedArgument194)
         step = VaultTerminalStep.DeviceName
       } else {
-        write(
-          `ROSTER COMPLETE  ${total}/${total} verified public keys`,
-          VaultTerminalLineTone.Accent,
-        )
+        const nookNamedArgument195: Parameters<typeof write>[0] = {
+          text: `ROSTER COMPLETE  ${total}/${total} verified public keys`,
+          tone: VaultTerminalLineTone.Accent,
+        }
+        write(nookNamedArgument195)
         step = VaultTerminalStep.Confirm
       }
     }
@@ -210,19 +225,25 @@
     if (!value) return
     if (step === VaultTerminalStep.Total) {
       total = value
-      write(`◆ Total participants  ${total}`, VaultTerminalLineTone.Answer)
+      const nookNamedArgument196: Parameters<typeof write>[0] = {
+        text: `◆ Total participants  ${total}`,
+        tone: VaultTerminalLineTone.Answer,
+      }
+      write(nookNamedArgument196)
       step = VaultTerminalStep.Threshold
       choiceIndex = 0
     } else if (step === VaultTerminalStep.Threshold) {
       threshold = value
-      write(
-        `◆ Unlock threshold  ${threshold}-of-${total}`,
-        VaultTerminalLineTone.Answer,
-      )
-      write(
-        `Collect ${total - 1} external participant public key(s).`,
-        VaultTerminalLineTone.Muted,
-      )
+      const nookNamedArgument197: Parameters<typeof write>[0] = {
+        text: `◆ Unlock threshold  ${threshold}-of-${total}`,
+        tone: VaultTerminalLineTone.Answer,
+      }
+      write(nookNamedArgument197)
+      const nookNamedArgument198: Parameters<typeof write>[0] = {
+        text: `Collect ${total - 1} external participant public key(s).`,
+        tone: VaultTerminalLineTone.Muted,
+      }
+      write(nookNamedArgument198)
       step = VaultTerminalStep.DeviceName
     }
     await focusPrompt()
@@ -242,13 +263,26 @@
   }
 
   async function sealVault() {
-    write('VERIFYING PARTICIPANT ROSTER .... OK', VaultTerminalLineTone.Muted)
-    write(
-      `SPLITTING ROOT ${threshold}-OF-${total} ........ OK`,
-      VaultTerminalLineTone.Muted,
-    )
-    write('ENCRYPTING MEMBER SHARES ....... OK', VaultTerminalLineTone.Muted)
-    write(`VAULT SEALED  ${name}`, VaultTerminalLineTone.Success)
+    const nookNamedArgument199: Parameters<typeof write>[0] = {
+      text: 'VERIFYING PARTICIPANT ROSTER .... OK',
+      tone: VaultTerminalLineTone.Muted,
+    }
+    write(nookNamedArgument199)
+    const nookNamedArgument200: Parameters<typeof write>[0] = {
+      text: `SPLITTING ROOT ${threshold}-OF-${total} ........ OK`,
+      tone: VaultTerminalLineTone.Muted,
+    }
+    write(nookNamedArgument200)
+    const nookNamedArgument201: Parameters<typeof write>[0] = {
+      text: 'ENCRYPTING MEMBER SHARES ....... OK',
+      tone: VaultTerminalLineTone.Muted,
+    }
+    write(nookNamedArgument201)
+    const nookNamedArgument202: Parameters<typeof write>[0] = {
+      text: `VAULT SEALED  ${name}`,
+      tone: VaultTerminalLineTone.Success,
+    }
+    write(nookNamedArgument202)
     step = VaultTerminalStep.Sealed
     await focusPrompt()
   }

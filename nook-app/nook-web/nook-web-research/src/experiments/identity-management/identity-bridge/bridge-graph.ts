@@ -108,7 +108,10 @@ export type StageGraphData = {
 }
 
 export type BridgeGraphData =
-  DeviceGraphData | IdentityGraphData | StageGraphData | VaultGraphData
+  | DeviceGraphData
+  | IdentityGraphData
+  | StageGraphData
+  | VaultGraphData
 export type BridgeGraphNode = Node<BridgeGraphData, BridgeGraphNodeType.Graph>
 export type BridgeGraphEdgeData = { lane: number }
 export type BridgeGraphEdge = Edge<BridgeGraphEdgeData, BridgeGraphEdgeType>
@@ -131,13 +134,19 @@ function graphDevice(
   }
 }
 
-function graphNode(
-  id: string,
-  data: BridgeGraphData,
-  x: number,
-  y: number,
-  width: number,
-): BridgeGraphNode {
+function graphNode({
+  id,
+  data,
+  x,
+  y,
+  width,
+}: {
+  id: string
+  data: BridgeGraphData
+  x: number
+  y: number
+  width: number
+}): BridgeGraphNode {
   return {
     id,
     type: BridgeGraphNodeType.Graph,
@@ -150,14 +159,21 @@ function graphNode(
   }
 }
 
-function stageNode(
-  id: string,
-  label: string,
-  flow: BridgeGraphFlow,
-  x: number,
-  y: number,
-  width: number,
-): BridgeGraphNode {
+function stageNode({
+  id,
+  label,
+  flow,
+  x,
+  y,
+  width,
+}: {
+  id: string
+  label: string
+  flow: BridgeGraphFlow
+  x: number
+  y: number
+  width: number
+}): BridgeGraphNode {
   return {
     id,
     type: BridgeGraphNodeType.Graph,
@@ -175,12 +191,17 @@ function stageNode(
   }
 }
 
-function graphEdge(
-  id: string,
-  source: string,
-  target: string,
-  authorized: boolean,
-): BridgeGraphEdge {
+function graphEdge({
+  id,
+  source,
+  target,
+  authorized,
+}: {
+  id: string
+  source: string
+  target: string
+  authorized: boolean
+}): BridgeGraphEdge {
   const color = authorized ? '#ff6b3d' : '#777774'
   return {
     id,
@@ -196,12 +217,17 @@ function graphEdge(
   }
 }
 
-function compactGrantEdge(
-  id: string,
-  source: string,
-  target: string,
-  sourceIndex: number,
-): BridgeGraphEdge {
+function compactGrantEdge({
+  id,
+  source,
+  target,
+  sourceIndex,
+}: {
+  id: string
+  source: string
+  target: string
+  sourceIndex: number
+}): BridgeGraphEdge {
   const color = '#ff6b3d'
   return {
     id,
@@ -219,10 +245,8 @@ function compactGrantEdge(
 function buildIdentityGraph(identityId: string): BridgeGraphDefinition {
   const identity = identityById(identityId)
   const grants = grantsForIdentity(identityId)
-  const keyCount = identity.devices.reduce(
-    (total, device) => total + device.installations.length,
-    0,
-  )
+  let keyCount = 0
+  for (const device of identity.devices) keyCount += device.installations.length
   const deviceGap = 195
   const vaultGap = 205
   const deviceSpan = Math.max(0, (identity.devices.length - 1) * deviceGap)
@@ -231,10 +255,10 @@ function buildIdentityGraph(identityId: string): BridgeGraphDefinition {
   const vaultStartY = Math.max(0, identityY - vaultSpan / 2)
   const identityNodeId = `identity-${identity.id}`
 
-  const deviceNodes = identity.devices.map((device, index) =>
-    graphNode(
-      `device-${device.id}`,
-      {
+  const deviceNodes = [...identity.devices.entries()].map(([index, device]) => {
+    const nookNamedArgument2: Parameters<typeof graphNode>[0] = {
+      id: `device-${device.id}`,
+      data: {
         kind: BridgeGraphDataKind.Device,
         portMode: BridgeGraphPortMode.Source,
         flow: BridgeGraphFlow.Horizontal,
@@ -243,15 +267,16 @@ function buildIdentityGraph(identityId: string): BridgeGraphDefinition {
           ...installation,
         })),
       },
-      0,
-      index * deviceGap,
-      280,
-    ),
-  )
+      x: 0,
+      y: index * deviceGap,
+      width: 280,
+    }
+    return graphNode(nookNamedArgument2)
+  })
 
-  const identityNode = graphNode(
-    identityNodeId,
-    {
+  const nookNamedArgs0_0: Parameters<typeof graphNode>[0] = {
+    id: identityNodeId,
+    data: {
       kind: BridgeGraphDataKind.Identity,
       portMode: BridgeGraphPortMode.Both,
       flow: BridgeGraphFlow.Horizontal,
@@ -264,16 +289,17 @@ function buildIdentityGraph(identityId: string): BridgeGraphDefinition {
       devices: identity.devices.map(graphDevice),
       keyCount,
     },
-    350,
-    identityY,
-    220,
-  )
+    x: 350,
+    y: identityY,
+    width: 220,
+  }
+  const identityNode = graphNode(nookNamedArgs0_0)
 
-  const vaultNodes = grants.map((grant, index) => {
+  const vaultNodes = [...grants.entries()].map(([index, grant]) => {
     const vault = vaultById(grant.vaultId)
-    return graphNode(
-      `vault-${vault.id}`,
-      {
+    const nookNamedArgs0_1: Parameters<typeof graphNode>[0] = {
+      id: `vault-${vault.id}`,
+      data: {
         kind: BridgeGraphDataKind.Vault,
         portMode: BridgeGraphPortMode.Target,
         flow: BridgeGraphFlow.Horizontal,
@@ -283,54 +309,60 @@ function buildIdentityGraph(identityId: string): BridgeGraphDefinition {
         grantRole: grant.role,
         itemCount: vault.itemCount,
       },
-      650,
-      vaultStartY + index * vaultGap,
-      330,
-    )
+      x: 650,
+      y: vaultStartY + index * vaultGap,
+      width: 330,
+    }
+    return graphNode(nookNamedArgs0_1)
   })
 
-  const evidenceEdges = identity.devices.map((device) =>
-    graphEdge(
-      `edge-${device.id}-${identity.id}`,
-      `device-${device.id}`,
-      identityNodeId,
-      false,
-    ),
-  )
-  const grantEdges = grants.map((grant) =>
-    graphEdge(
-      `edge-${identity.id}-${grant.vaultId}`,
-      identityNodeId,
-      `vault-${grant.vaultId}`,
-      true,
-    ),
-  )
+  const evidenceEdges = identity.devices.map((device) => {
+    const nookNamedArgument3: Parameters<typeof graphEdge>[0] = {
+      id: `edge-${device.id}-${identity.id}`,
+      source: `device-${device.id}`,
+      target: identityNodeId,
+      authorized: false,
+    }
+    return graphEdge(nookNamedArgument3)
+  })
+  const grantEdges = grants.map((grant) => {
+    const nookNamedArgument4: Parameters<typeof graphEdge>[0] = {
+      id: `edge-${identity.id}-${grant.vaultId}`,
+      source: identityNodeId,
+      target: `vault-${grant.vaultId}`,
+      authorized: true,
+    }
+    return graphEdge(nookNamedArgument4)
+  })
 
+  const nookNamedArgs0_2: Parameters<typeof stageNode>[0] = {
+    id: 'stage-devices',
+    label: 'Device evidence',
+    flow: BridgeGraphFlow.Horizontal,
+    x: 0,
+    y: -58,
+    width: 280,
+  }
+  const nookNamedArgs0_3: Parameters<typeof stageNode>[0] = {
+    id: 'stage-identity',
+    label: 'Distributed identity',
+    flow: BridgeGraphFlow.Horizontal,
+    x: 350,
+    y: -58,
+    width: 220,
+  }
+  const nookNamedArgs0_4: Parameters<typeof stageNode>[0] = {
+    id: 'stage-vaults',
+    label: 'Vault grants',
+    flow: BridgeGraphFlow.Horizontal,
+    x: 650,
+    y: -58,
+    width: 330,
+  }
   const stageNodes = [
-    stageNode(
-      'stage-devices',
-      'Device evidence',
-      BridgeGraphFlow.Horizontal,
-      0,
-      -58,
-      280,
-    ),
-    stageNode(
-      'stage-identity',
-      'Distributed identity',
-      BridgeGraphFlow.Horizontal,
-      350,
-      -58,
-      220,
-    ),
-    stageNode(
-      'stage-vaults',
-      'Vault grants',
-      BridgeGraphFlow.Horizontal,
-      650,
-      -58,
-      330,
-    ),
+    stageNode(nookNamedArgs0_2),
+    stageNode(nookNamedArgs0_3),
+    stageNode(nookNamedArgs0_4),
   ]
 
   return {
@@ -343,16 +375,14 @@ function buildIdentityGraph(identityId: string): BridgeGraphDefinition {
 function buildCompactIdentityGraph(identityId: string): BridgeGraphDefinition {
   const identity = identityById(identityId)
   const grants = grantsForIdentity(identityId)
-  const keyCount = identity.devices.reduce(
-    (total, device) => total + device.installations.length,
-    0,
-  )
+  let keyCount = 0
+  for (const device of identity.devices) keyCount += device.installations.length
   const identityNodeId = `identity-${identity.id}`
   let deviceY = 50
   const deviceNodes = identity.devices.map((device) => {
-    const node = graphNode(
-      `device-${device.id}`,
-      {
+    const nookNamedArgs0_5: Parameters<typeof graphNode>[0] = {
+      id: `device-${device.id}`,
+      data: {
         kind: BridgeGraphDataKind.Device,
         portMode: BridgeGraphPortMode.Source,
         flow: BridgeGraphFlow.EvidenceTree,
@@ -361,10 +391,11 @@ function buildCompactIdentityGraph(identityId: string): BridgeGraphDefinition {
           ...installation,
         })),
       },
-      30,
-      deviceY,
-      270,
-    )
+      x: 30,
+      y: deviceY,
+      width: 270,
+    }
+    const node = graphNode(nookNamedArgs0_5)
     deviceY += 89 + device.installations.length * 58
     return node
   })
@@ -372,9 +403,9 @@ function buildCompactIdentityGraph(identityId: string): BridgeGraphDefinition {
   const identityY = identityStageY + 50
   const vaultStageY = identityY + 200
   const vaultStartY = vaultStageY + 50
-  const identityNode = graphNode(
-    identityNodeId,
-    {
+  const nookNamedArgs0_6: Parameters<typeof graphNode>[0] = {
+    id: identityNodeId,
+    data: {
       kind: BridgeGraphDataKind.Identity,
       portMode: BridgeGraphPortMode.Both,
       flow: BridgeGraphFlow.Vertical,
@@ -387,15 +418,16 @@ function buildCompactIdentityGraph(identityId: string): BridgeGraphDefinition {
       devices: identity.devices.map(graphDevice),
       keyCount,
     },
-    40,
-    identityY,
-    220,
-  )
-  const vaultNodes = grants.map((grant, index) => {
+    x: 40,
+    y: identityY,
+    width: 220,
+  }
+  const identityNode = graphNode(nookNamedArgs0_6)
+  const vaultNodes = [...grants.entries()].map(([index, grant]) => {
     const vault = vaultById(grant.vaultId)
-    return graphNode(
-      `vault-${vault.id}`,
-      {
+    const nookNamedArgs0_7: Parameters<typeof graphNode>[0] = {
+      id: `vault-${vault.id}`,
+      data: {
         kind: BridgeGraphDataKind.Vault,
         portMode: BridgeGraphPortMode.Target,
         flow: BridgeGraphFlow.Tree,
@@ -405,53 +437,59 @@ function buildCompactIdentityGraph(identityId: string): BridgeGraphDefinition {
         grantRole: grant.role,
         itemCount: vault.itemCount,
       },
-      30,
-      vaultStartY + index * 190,
-      270,
-    )
+      x: 30,
+      y: vaultStartY + index * 190,
+      width: 270,
+    }
+    return graphNode(nookNamedArgs0_7)
   })
-  const evidenceEdges = identity.devices.map((device) =>
-    graphEdge(
-      `edge-${device.id}-${identity.id}`,
-      `device-${device.id}`,
-      identityNodeId,
-      false,
-    ),
-  )
-  const grantEdges = grants.map((grant, index) =>
-    compactGrantEdge(
-      `edge-${identity.id}-${grant.vaultId}`,
-      identityNodeId,
-      `vault-${grant.vaultId}`,
-      index,
-    ),
-  )
+  const evidenceEdges = identity.devices.map((device) => {
+    const nookNamedArgument5: Parameters<typeof graphEdge>[0] = {
+      id: `edge-${device.id}-${identity.id}`,
+      source: `device-${device.id}`,
+      target: identityNodeId,
+      authorized: false,
+    }
+    return graphEdge(nookNamedArgument5)
+  })
+  const grantEdges = [...grants.entries()].map(([index, grant]) => {
+    const nookNamedArgument6: Parameters<typeof compactGrantEdge>[0] = {
+      id: `edge-${identity.id}-${grant.vaultId}`,
+      source: identityNodeId,
+      target: `vault-${grant.vaultId}`,
+      sourceIndex: index,
+    }
+    return compactGrantEdge(nookNamedArgument6)
+  })
 
+  const nookNamedArgs0_8: Parameters<typeof stageNode>[0] = {
+    id: 'stage-devices',
+    label: 'Device evidence',
+    flow: BridgeGraphFlow.Vertical,
+    x: 30,
+    y: 0,
+    width: 270,
+  }
+  const nookNamedArgs0_9: Parameters<typeof stageNode>[0] = {
+    id: 'stage-identity',
+    label: 'Distributed identity',
+    flow: BridgeGraphFlow.Vertical,
+    x: 30,
+    y: identityStageY,
+    width: 270,
+  }
+  const nookNamedArgs0_10: Parameters<typeof stageNode>[0] = {
+    id: 'stage-vaults',
+    label: 'Vault grants',
+    flow: BridgeGraphFlow.Vertical,
+    x: 30,
+    y: vaultStageY,
+    width: 270,
+  }
   const stageNodes = [
-    stageNode(
-      'stage-devices',
-      'Device evidence',
-      BridgeGraphFlow.Vertical,
-      30,
-      0,
-      270,
-    ),
-    stageNode(
-      'stage-identity',
-      'Distributed identity',
-      BridgeGraphFlow.Vertical,
-      30,
-      identityStageY,
-      270,
-    ),
-    stageNode(
-      'stage-vaults',
-      'Vault grants',
-      BridgeGraphFlow.Vertical,
-      30,
-      vaultStageY,
-      270,
-    ),
+    stageNode(nookNamedArgs0_8),
+    stageNode(nookNamedArgs0_9),
+    stageNode(nookNamedArgs0_10),
   ]
 
   return {
@@ -470,9 +508,9 @@ function buildVaultGraph(vaultId: string): BridgeGraphDefinition {
   const graphWidth = Math.max(780, identityGroupWidth)
   const vaultNodeId = `vault-${vault.id}`
 
-  const vaultNode = graphNode(
-    vaultNodeId,
-    {
+  const nookNamedArgs0_11: Parameters<typeof graphNode>[0] = {
+    id: vaultNodeId,
+    data: {
       kind: BridgeGraphDataKind.Vault,
       portMode: BridgeGraphPortMode.Source,
       flow: BridgeGraphFlow.Vertical,
@@ -482,20 +520,20 @@ function buildVaultGraph(vaultId: string): BridgeGraphDefinition {
       grantRole: `${grants.length} ${grants.length === 1 ? 'grant' : 'grants'}`,
       itemCount: vault.itemCount,
     },
-    (graphWidth - 340) / 2,
-    0,
-    340,
-  )
+    x: (graphWidth - 340) / 2,
+    y: 0,
+    width: 340,
+  }
+  const vaultNode = graphNode(nookNamedArgs0_11)
 
-  const identityNodes = grants.map((grant, index) => {
+  const identityNodes = [...grants.entries()].map(([index, grant]) => {
     const identity = identityById(grant.identityId)
-    const keyCount = identity.devices.reduce(
-      (total, device) => total + device.installations.length,
-      0,
-    )
-    return graphNode(
-      `identity-${identity.id}`,
-      {
+    let keyCount = 0
+    for (const device of identity.devices)
+      keyCount += device.installations.length
+    const nookNamedArgs0_12: Parameters<typeof graphNode>[0] = {
+      id: `identity-${identity.id}`,
+      data: {
         kind: BridgeGraphDataKind.Identity,
         portMode: BridgeGraphPortMode.Target,
         flow: BridgeGraphFlow.Vertical,
@@ -508,38 +546,42 @@ function buildVaultGraph(vaultId: string): BridgeGraphDefinition {
         devices: identity.devices.map(graphDevice),
         keyCount,
       },
-      (graphWidth - identitySpan - 360) / 2 + index * identityGap,
-      260,
-      360,
-    )
+      x: (graphWidth - identitySpan - 360) / 2 + index * identityGap,
+      y: 260,
+      width: 360,
+    }
+    return graphNode(nookNamedArgs0_12)
   })
 
-  const grantEdges = grants.map((grant) =>
-    graphEdge(
-      `edge-${vault.id}-${grant.identityId}`,
-      vaultNodeId,
-      `identity-${grant.identityId}`,
-      true,
-    ),
-  )
+  const grantEdges = grants.map((grant) => {
+    const nookNamedArgument7: Parameters<typeof graphEdge>[0] = {
+      id: `edge-${vault.id}-${grant.identityId}`,
+      source: vaultNodeId,
+      target: `identity-${grant.identityId}`,
+      authorized: true,
+    }
+    return graphEdge(nookNamedArgument7)
+  })
 
+  const nookNamedArgs0_13: Parameters<typeof stageNode>[0] = {
+    id: 'stage-selected-vault',
+    label: 'Selected vault',
+    flow: BridgeGraphFlow.Vertical,
+    x: (graphWidth - 340) / 2,
+    y: -58,
+    width: 340,
+  }
+  const nookNamedArgs0_14: Parameters<typeof stageNode>[0] = {
+    id: 'stage-authorized-identities',
+    label: 'Authorized identities',
+    flow: BridgeGraphFlow.Vertical,
+    x: (graphWidth - identityGroupWidth) / 2,
+    y: 194,
+    width: identityGroupWidth,
+  }
   const stageNodes = [
-    stageNode(
-      'stage-selected-vault',
-      'Selected vault',
-      BridgeGraphFlow.Vertical,
-      (graphWidth - 340) / 2,
-      -58,
-      340,
-    ),
-    stageNode(
-      'stage-authorized-identities',
-      'Authorized identities',
-      BridgeGraphFlow.Vertical,
-      (graphWidth - identityGroupWidth) / 2,
-      194,
-      identityGroupWidth,
-    ),
+    stageNode(nookNamedArgs0_13),
+    stageNode(nookNamedArgs0_14),
   ]
 
   return {
@@ -553,9 +595,9 @@ function buildCompactVaultGraph(vaultId: string): BridgeGraphDefinition {
   const vault = vaultById(vaultId)
   const grants = grantsForVault(vaultId)
   const vaultNodeId = `vault-${vault.id}`
-  const vaultNode = graphNode(
-    vaultNodeId,
-    {
+  const nookNamedArgs0_15: Parameters<typeof graphNode>[0] = {
+    id: vaultNodeId,
+    data: {
       kind: BridgeGraphDataKind.Vault,
       portMode: BridgeGraphPortMode.Source,
       flow: BridgeGraphFlow.Vertical,
@@ -565,20 +607,20 @@ function buildCompactVaultGraph(vaultId: string): BridgeGraphDefinition {
       grantRole: `${grants.length} ${grants.length === 1 ? 'grant' : 'grants'}`,
       itemCount: vault.itemCount,
     },
-    50,
-    50,
-    300,
-  )
+    x: 50,
+    y: 50,
+    width: 300,
+  }
+  const vaultNode = graphNode(nookNamedArgs0_15)
   let identityY = 370
   const identityNodes = grants.map((grant) => {
     const identity = identityById(grant.identityId)
-    const keyCount = identity.devices.reduce(
-      (total, device) => total + device.installations.length,
-      0,
-    )
-    const node = graphNode(
-      `identity-${identity.id}`,
-      {
+    let keyCount = 0
+    for (const device of identity.devices)
+      keyCount += device.installations.length
+    const nookNamedArgs0_16: Parameters<typeof graphNode>[0] = {
+      id: `identity-${identity.id}`,
+      data: {
         kind: BridgeGraphDataKind.Identity,
         portMode: BridgeGraphPortMode.Target,
         flow: BridgeGraphFlow.Tree,
@@ -591,39 +633,43 @@ function buildCompactVaultGraph(vaultId: string): BridgeGraphDefinition {
         devices: identity.devices.map(graphDevice),
         keyCount,
       },
-      30,
-      identityY,
-      270,
-    )
+      x: 30,
+      y: identityY,
+      width: 270,
+    }
+    const node = graphNode(nookNamedArgs0_16)
     identityY += 235 + identity.devices.length * 58
     return node
   })
-  const grantEdges = grants.map((grant) =>
-    graphEdge(
-      `edge-${vault.id}-${grant.identityId}`,
-      vaultNodeId,
-      `identity-${grant.identityId}`,
-      true,
-    ),
-  )
+  const grantEdges = grants.map((grant) => {
+    const nookNamedArgument8: Parameters<typeof graphEdge>[0] = {
+      id: `edge-${vault.id}-${grant.identityId}`,
+      source: vaultNodeId,
+      target: `identity-${grant.identityId}`,
+      authorized: true,
+    }
+    return graphEdge(nookNamedArgument8)
+  })
 
+  const nookNamedArgs0_17: Parameters<typeof stageNode>[0] = {
+    id: 'stage-selected-vault',
+    label: 'Selected vault',
+    flow: BridgeGraphFlow.Vertical,
+    x: 0,
+    y: 0,
+    width: 300,
+  }
+  const nookNamedArgs0_18: Parameters<typeof stageNode>[0] = {
+    id: 'stage-authorized-identities',
+    label: 'Authorized identities',
+    flow: BridgeGraphFlow.Vertical,
+    x: 30,
+    y: 320,
+    width: 270,
+  }
   const stageNodes = [
-    stageNode(
-      'stage-selected-vault',
-      'Selected vault',
-      BridgeGraphFlow.Vertical,
-      0,
-      0,
-      300,
-    ),
-    stageNode(
-      'stage-authorized-identities',
-      'Authorized identities',
-      BridgeGraphFlow.Vertical,
-      30,
-      320,
-      270,
-    ),
+    stageNode(nookNamedArgs0_17),
+    stageNode(nookNamedArgs0_18),
   ]
 
   return {
@@ -633,12 +679,17 @@ function buildCompactVaultGraph(vaultId: string): BridgeGraphDefinition {
   }
 }
 
-export function buildBridgeGraph(
-  perspective: BridgePerspective,
-  identityId: string,
-  vaultId: string,
-  compact: boolean,
-): BridgeGraphDefinition {
+export function buildBridgeGraph({
+  perspective,
+  identityId,
+  vaultId,
+  compact,
+}: {
+  perspective: BridgePerspective
+  identityId: string
+  vaultId: string
+  compact: boolean
+}): BridgeGraphDefinition {
   if (compact && perspective === BridgePerspective.Identities) {
     return buildCompactIdentityGraph(identityId)
   }

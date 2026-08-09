@@ -1898,7 +1898,9 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "serde",
+ "serde_json",
  "thiserror 2.0.20",
+ "tsify",
  "url",
  "wasm-bindgen",
 ]
@@ -1999,6 +2001,7 @@ dependencies = [
  "gloo-utils",
  "hex",
  "js-sys",
+ "nook-companion-core",
  "nook-core",
  "passkey-types",
  "reqwest",

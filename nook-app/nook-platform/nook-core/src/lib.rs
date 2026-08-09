@@ -12,9 +12,8 @@ mod sync;
 mod vault;
 
 pub(crate) use auth::{
-    authentication_workflow, device_key_protection, enrollment, extension_identity_handoff,
-    multi_device, outcome_evidence, password_envelope, website_login_save,
-    website_passkey_proposal,
+    device_key_protection, enrollment, extension_identity_handoff, multi_device, password_envelope,
+    website_login_save,
 };
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub use device_access::{
@@ -50,12 +49,6 @@ pub(crate) use vault::{
 pub use apple_passwords_import::{
     ApplePasswordsImportError, ApplePasswordsImportPlan, plan_apple_passwords_export,
     plan_apple_passwords_import,
-};
-pub use authentication_workflow::{
-    AuthenticationPageObservation, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
-    AuthenticationWorkflowMatch, AuthenticationWorkflowNotDetected, AuthenticationWorkflowSnapshot,
-    AuthenticationWorkflowStage, classify_authentication_workflow,
-    classify_authentication_workflow_candidates,
 };
 pub use authenticator::{
     AuthenticatorSecret, BackupCodeAttachMode, MAX_AUTHENTICATOR_BACKUP_CODE_LEN,
@@ -141,23 +134,26 @@ pub use nook_auth2::{
     sentinel_unlock_request, sentinel_unlock_status,
 };
 pub use nook_companion_core::{
-    BrowserOAuthProvider, DEFAULT_SIMPLE_VAULT_URL, LoginContextObservation, OAuthOriginSupport,
-    OAuthOriginUnsupportedReason, PageInputFieldObservation, PageInputType, VaultHostPolicyError,
-    belongs_to_sentinel_vault, belongs_to_simple_vault, expand_identity_text,
+    AuthenticationOutcomeDecision, AuthenticationOutcomeObservation, AuthenticationOutcomeVerdict,
+    AuthenticationPageObservation, AuthenticationPageObservations, AuthenticationWorkflowAction,
+    AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowNotDetected,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage, BrowserOAuthProvider,
+    DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS, DEFAULT_SIMPLE_VAULT_URL, LoginContextObservation,
+    OAuthOriginSupport, OAuthOriginUnsupportedReason, PageInputFieldObservation, PageInputType,
+    VaultHostPolicyError, WebsitePasskeyProposal, belongs_to_sentinel_vault,
+    belongs_to_simple_vault, classify_authentication_outcome, classify_authentication_workflow,
+    classify_authentication_workflow_candidates, expand_identity_text,
     extract_backup_code_candidates, has_login_context, is_cloudflare_pr_preview_host,
     is_nook_vault_app_url, is_sentinel_vault_hostname, is_simple_vault_hostname,
     looks_like_email_verification_body, looks_like_manual_checkpoint_label,
     looks_like_one_time_code_field, looks_like_passkey_control_label, looks_like_username_field,
     matching_sentinel_vault_base_url, nook_vault_app_exclude_match_patterns,
-    normalize_simple_vault_base_url, page_has_backup_code_hint, resolve_oauth_origin_support,
-    sentinel_vault_match_patterns, simple_vault_match_pattern, simple_vault_url,
+    normalize_simple_vault_base_url, page_has_backup_code_hint, propose_website_passkey,
+    resolve_oauth_origin_support, sentinel_vault_match_patterns, simple_vault_match_pattern,
+    simple_vault_url,
 };
 pub use onepassword_import::{
     OnePasswordImportError, OnePasswordImportPlan, plan_onepassword_import,
-};
-pub use outcome_evidence::{
-    AuthenticationOutcomeObservation, AuthenticationOutcomeVerdict,
-    DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS, classify_authentication_outcome,
 };
 pub use passkey_authenticator::{
     PasskeyAssertionRequest as WebsitePasskeyAssertionRequest, PasskeyAssertionResult,
@@ -197,7 +193,6 @@ pub use vault_sync_state::{
 pub use website_login_save::{
     WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, decide_website_login_save,
 };
-pub use website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
 
 pub use nook_auth2::{
     SentinelGenesisIssued, SentinelGenesisParticipant, SentinelGenesisParticipantResponse,

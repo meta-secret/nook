@@ -15,7 +15,10 @@ import {
   defaultSimpleVaultBaseUrl,
   normalizeSimpleVaultBaseUrl,
 } from '../src/lib/simple-vault-target'
-import { createManifest } from '../src/manifest'
+import {
+  createManifest,
+  type CreateExtensionManifestArgs,
+} from '../src/manifest'
 import { extensionChannelIdentity } from './channel-identity'
 
 await companionWasmReady
@@ -593,15 +596,21 @@ await Promise.all([
 
 await Promise.all([buildSveltePage('popup'), buildChromeLocales()])
 
+const manifestArgs: CreateExtensionManifestArgs = {
+  version: manifestVersion,
+  simpleVaultBaseUrl,
+  deployment: {
+    key: deployment.manifestKey,
+    name: deployment.name,
+    shortName: deployment.shortName,
+    versionName,
+  },
+}
+
 await writeFile(
   join(distDir, 'manifest.json'),
   `${JSON.stringify(
-    createManifest(manifestVersion, simpleVaultBaseUrl, {
-      key: deployment.manifestKey,
-      name: deployment.name,
-      shortName: deployment.shortName,
-      versionName,
-    }),
+    createManifest(manifestArgs),
     (_key, value) => value,
     2,
   )}\n`,

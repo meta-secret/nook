@@ -27,5 +27,8 @@ if (!publishExtensionRuntimeId()) {
     if (!publishExtensionRuntimeId()) return
     observer.disconnect()
   })
-  observer.observe(document, { childList: true })
+  const nookTypedArgs0_0: Parameters<typeof observer.observe>[1] = {
+    childList: true,
+  }
+  observer.observe(document, nookTypedArgs0_0)
 }

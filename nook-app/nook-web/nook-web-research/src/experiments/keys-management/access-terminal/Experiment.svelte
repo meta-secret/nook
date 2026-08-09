@@ -11,45 +11,30 @@ vaults they touch.
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import GraphSwitch from '../_shared/GraphSwitch.svelte'
   import {
-    type Device,
     GraphId,
     graphById,
     HereKind,
     hereDevices,
     isHere,
     type KeyGraph,
-    kindLabel,
-    NodeKind,
-    openableHere,
-    type Passkey,
     passkeysForDevice,
-    passkeysForVault,
     Reach,
     storeLabel,
-    type Vault,
     vaultsForDevice,
-    vaultsForPasskey,
   } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
   import { Ink } from './terminal-ink'
-
-  interface Block {
-    id: number
-    prompt: string
-    lines: string[]
-  }
+  import {
+    banner,
+    opening,
+    outputFor,
+    type TerminalBlock,
+  } from './terminal-reports'
 
   interface Segment {
     key: string
     text: string
     ink: Ink
-  }
-
-  interface Match {
-    kind: NodeKind
-    id: string
-    shortId: string
-    label: string
   }
 
   const INPUT_ID = 'access-terminal-input'
@@ -67,409 +52,20 @@ vaults they touch.
   let history = $state<string[]>([])
   let historyIndex = $state(0)
   let nextId = $state(2)
-  let transcript = $state<Block[]>(opening(graphById(GraphId.Tangle)))
+  let transcript = $state<TerminalBlock[]>(opening(graphById(GraphId.Tangle)))
 
   const graph = $derived(graphById(graphId))
   const mine = $derived(hereDevices(graph))
   const mineId = $derived(mine.map((device) => device.shortId).join(''))
   const otherDevices = $derived(
-    graph.devices.filter((device) => !isHere(graph, device)),
+    graph.devices.filter((device) => {
+      const nookNamedArgument116: Parameters<typeof isHere>[0] = {
+        graph,
+        device,
+      }
+      return !isHere(nookNamedArgument116)
+    }),
   )
-
-  function pad(text: string, width: number): string {
-    return text.length >= width ? text : text + ' '.repeat(width - text.length)
-  }
-
-  function columns(cells: string[], widths: number[]): string {
-    return cells
-      .map((cell, index) => pad(cell, widths[index] ? widths[index] : 0))
-      .join('')
-      .trimEnd()
-  }
-
-  function ids(shortIds: string[]): string {
-    return shortIds.length > 0 ? shortIds.join('  ') : '—'
-  }
-
-  /** The identifier of this browser's device key, or an empty string. */
-  function hereId(graph: KeyGraph): string {
-    return hereDevices(graph)
-      .map((device) => device.shortId)
-      .join('')
-  }
-
-  function reachWord(passkey: Passkey): string {
-    return passkey.reach === Reach.Here ? 'here' : 'elsewhere'
-  }
-
-  /** Whether this passkey opens this vault through the key of this browser. */
-  function routeHere(graph: KeyGraph, passkeyId: string, vault: Vault) {
-    return hereDevices(graph).some(
-      (device) =>
-        vault.deviceIds.includes(device.id) &&
-        device.passkeyIds.includes(passkeyId),
-    )
-  }
-
-  /** `here`, or the identifiers of the other devices the route depends on. */
-  function routeWord(graph: KeyGraph, passkeyId: string, vault: Vault): string {
-    if (routeHere(graph, passkeyId, vault)) return 'here'
-    const via = graph.devices
-      .filter(
-        (device) =>
-          vault.deviceIds.includes(device.id) &&
-          device.passkeyIds.includes(passkeyId),
-      )
-      .map((device) => device.shortId)
-    return via.length > 0 ? `via ${via.join(' ')}` : 'no route'
-  }
-
-  function branch(index: number, count: number): string {
-    return index === count - 1 ? '└─' : '├─'
-  }
-
-  function vaultBlock(graph: KeyGraph, vault: Vault): string[] {
-    const head = columns(
-      [
-        vault.shortId,
-        vault.label,
-        `${vault.secrets}`,
-        openableHere(graph, vault) ? 'opens here' : 'locked',
-      ],
-      [8, 16, 5, 12],
-    )
-    const openers = passkeysForVault(graph, vault)
-    if (openers.length === 0) return [head, '  ╳  no passkey']
-    return [
-      head,
-      ...openers.map((passkey, index) =>
-        columns(
-          [
-            `  ${branch(index, openers.length)} ${passkey.shortId}`,
-            storeLabel(passkey.store),
-            routeWord(graph, passkey.id, vault),
-          ],
-          [14, 18, 14],
-        ),
-      ),
-    ]
-  }
-
-  function mapLines(graph: KeyGraph): string[] {
-    const here = hereId(graph)
-    return [
-      'vaults · what opens each',
-      '',
-      ...graph.vaults.flatMap((vault) => [...vaultBlock(graph, vault), '']),
-      here.length > 0
-        ? `here = through my device key ${here}`
-        : 'no device key in this browser',
-    ]
-  }
-
-  function myLines(graph: KeyGraph): string[] {
-    const devices = hereDevices(graph)
-    const open = graph.vaults
-      .filter((vault) => openableHere(graph, vault))
-      .map((vault) => vault.shortId)
-    const shut = graph.vaults
-      .filter((vault) => !openableHere(graph, vault))
-      .map((vault) => vault.shortId)
-    const head = devices.flatMap((device) => [
-      columns(['my device', device.shortId, device.platform], [12, 9, 22]),
-      columns(
-        [
-          'unlocked',
-          ids(
-            passkeysForDevice(graph, device).map((passkey) => passkey.shortId),
-          ),
-        ],
-        [12, 30],
-      ),
-    ])
-    return [
-      ...head,
-      ...(devices.length > 0
-        ? []
-        : [columns(['my device', '—  no device key'], [12, 30])]),
-      columns(['opens', ids(open)], [12, 30]),
-      columns(['locked', ids(shut)], [12, 30]),
-    ]
-  }
-
-  function otherDeviceLines(graph: KeyGraph, device: Device): string[] {
-    return [
-      columns(['other device', device.shortId, device.label], [14, 9, 20]),
-      columns(['platform', device.platform], [14, 24]),
-      columns(
-        [
-          'vaults',
-          ids(vaultsForDevice(graph, device.id).map((vault) => vault.shortId)),
-        ],
-        [14, 30],
-      ),
-    ]
-  }
-
-  function passkeyLines(graph: KeyGraph, passkey: Passkey): string[] {
-    const reached = vaultsForPasskey(graph, passkey.id)
-    return [
-      columns(['passkey', passkey.shortId, passkey.label], [10, 9, 24]),
-      columns(['manager', storeLabel(passkey.store)], [10, 24]),
-      columns(['present', reachWord(passkey)], [10, 24]),
-      '',
-      'opens',
-      ...(reached.length === 0
-        ? ['  ╳  no vault']
-        : reached.map((vault, index) =>
-            columns(
-              [
-                `  ${branch(index, reached.length)} ${vault.shortId}`,
-                vault.label,
-                routeWord(graph, passkey.id, vault),
-              ],
-              [14, 18, 14],
-            ),
-          )),
-    ]
-  }
-
-  function listPasskeys(graph: KeyGraph): string[] {
-    return [
-      'passkeys',
-      columns(['  id', 'manager', 'present', 'vaults'], [10, 19, 11, 8]),
-      ...graph.passkeys.map((passkey) =>
-        columns(
-          [
-            `  ${passkey.shortId}`,
-            storeLabel(passkey.store),
-            reachWord(passkey),
-            `${vaultsForPasskey(graph, passkey.id).length}`,
-          ],
-          [10, 19, 11, 8],
-        ),
-      ),
-    ]
-  }
-
-  function listVaults(graph: KeyGraph): string[] {
-    return [
-      'vaults',
-      columns(['  id', 'name', 'secrets', 'keys', 'here'], [10, 16, 9, 7, 12]),
-      ...graph.vaults.map((vault) =>
-        columns(
-          [
-            `  ${vault.shortId}`,
-            vault.label,
-            `${vault.secrets}`,
-            `${passkeysForVault(graph, vault).length}`,
-            openableHere(graph, vault) ? 'opens' : 'locked',
-          ],
-          [10, 16, 9, 7, 12],
-        ),
-      ),
-    ]
-  }
-
-  function listOthers(graph: KeyGraph): string[] {
-    const devices = graph.devices.filter((device) => !isHere(graph, device))
-    if (devices.length === 0) return ['other devices', '  —']
-    return [
-      'other devices',
-      ...devices.map((device) =>
-        columns(
-          [
-            `  ${device.shortId}`,
-            device.label,
-            device.platform,
-            `${vaultsForDevice(graph, device.id).length} vaults`,
-          ],
-          [10, 16, 18, 10],
-        ),
-      ),
-    ]
-  }
-
-  function helpLines(): string[] {
-    return [
-      columns(['  map', 'vaults · the passkeys that open them'], [12, 40]),
-      columns(['  ls', 'passkeys · vaults · other devices'], [12, 40]),
-      columns(['  id <id>', 'one identifier'], [12, 40]),
-      columns(['  here', 'what this browser can do now'], [12, 40]),
-      columns(['  tab', 'complete an identifier'], [12, 40]),
-      columns(['  clear', 'wipe the transcript'], [12, 40]),
-    ]
-  }
-
-  /** The header the console keeps even after clear, as a real terminal does. */
-  function banner(graph: KeyGraph): Block {
-    const others = graph.devices.filter(
-      (device) => !isHere(graph, device),
-    ).length
-    return {
-      id: 0,
-      prompt: '',
-      lines: [
-        `nook keys · ${graph.label}`,
-        columns(
-          [
-            `passkeys ${graph.passkeys.length}`,
-            `vaults ${graph.vaults.length}`,
-            `other devices ${others}`,
-          ],
-          [13, 11, 18],
-        ),
-        '',
-        'map · ls · id <id> · here · help · clear',
-      ],
-    }
-  }
-
-  function opening(graph: KeyGraph): Block[] {
-    return [banner(graph), { id: 1, prompt: 'map', lines: mapLines(graph) }]
-  }
-
-  function hits(query: string, shortId: string, id: string, label: string) {
-    const needle = query.toLowerCase()
-    return (
-      shortId.toLowerCase().startsWith(needle) ||
-      id.toLowerCase() === needle ||
-      label.toLowerCase().includes(needle)
-    )
-  }
-
-  function lookup(graph: KeyGraph, query: string): Match[] {
-    return [
-      ...graph.passkeys
-        .filter((passkey) =>
-          hits(query, passkey.shortId, passkey.id, passkey.label),
-        )
-        .map((passkey) => ({
-          kind: NodeKind.Passkey,
-          id: passkey.id,
-          shortId: passkey.shortId,
-          label: passkey.label,
-        })),
-      ...graph.vaults
-        .filter((vault) => hits(query, vault.shortId, vault.id, vault.label))
-        .map((vault) => ({
-          kind: NodeKind.Vault,
-          id: vault.id,
-          shortId: vault.shortId,
-          label: vault.label,
-        })),
-      ...graph.devices
-        .filter((device) =>
-          hits(query, device.shortId, device.id, device.label),
-        )
-        .map((device) => ({
-          kind: NodeKind.Device,
-          id: device.id,
-          shortId: device.shortId,
-          label: device.label,
-        })),
-    ]
-  }
-
-  /** My device key never reads as one more `Device key` row among the rest. */
-  function kindWord(graph: KeyGraph, match: Match): string {
-    if (match.kind !== NodeKind.Device) return kindLabel(match.kind)
-    return graph.devices.some(
-      (device) => device.id === match.id && isHere(graph, device),
-    )
-      ? 'my device'
-      : 'other device'
-  }
-
-  function matchLines(graph: KeyGraph, matches: Match[]): string[] {
-    return matches.map((match) =>
-      columns(
-        [`  ${match.shortId}`, kindWord(graph, match), match.label],
-        [10, 14, 22],
-      ),
-    )
-  }
-
-  /** The identifiers you can ask about, grouped so classes never interleave. */
-  function indexLines(graph: KeyGraph): string[] {
-    const others = graph.devices.filter((device) => !isHere(graph, device))
-    return [
-      'passkeys',
-      ...graph.passkeys.map((passkey) =>
-        columns([`  ${passkey.shortId}`, passkey.label], [10, 24]),
-      ),
-      '',
-      'vaults',
-      ...graph.vaults.map((vault) =>
-        columns([`  ${vault.shortId}`, vault.label], [10, 24]),
-      ),
-      ...(others.length > 0
-        ? [
-            '',
-            'other devices',
-            ...others.map((device) =>
-              columns([`  ${device.shortId}`, device.label], [10, 24]),
-            ),
-          ]
-        : []),
-    ]
-  }
-
-  function reportFor(graph: KeyGraph, match: Match): string[] {
-    if (match.kind === NodeKind.Passkey) {
-      return graph.passkeys
-        .filter((passkey) => passkey.id === match.id)
-        .flatMap((passkey) => passkeyLines(graph, passkey))
-    }
-    if (match.kind === NodeKind.Vault) {
-      return graph.vaults
-        .filter((vault) => vault.id === match.id)
-        .flatMap((vault) => vaultBlock(graph, vault))
-    }
-    return graph.devices
-      .filter((device) => device.id === match.id)
-      .flatMap((device) =>
-        isHere(graph, device)
-          ? myLines(graph)
-          : otherDeviceLines(graph, device),
-      )
-  }
-
-  function idCommand(graph: KeyGraph, query: string): string[] {
-    if (query.length === 0) return ['id <id>', '', ...indexLines(graph)]
-    const matches = lookup(graph, query)
-    if (matches.length === 0) {
-      return [`no match  ${query}`, '', ...indexLines(graph)]
-    }
-    if (matches.length > 1) {
-      return [
-        `${matches.length} matches  ${query}`,
-        '',
-        ...matchLines(graph, matches),
-      ]
-    }
-    return matches.flatMap((match) => reportFor(graph, match))
-  }
-
-  function outputFor(graph: KeyGraph, command: string): string[] {
-    const [verb, ...rest] = command.split(' ')
-    const argument = rest.join(' ')
-    if (command === 'map') return mapLines(graph)
-    if (command === 'ls') {
-      return [
-        ...listPasskeys(graph),
-        '',
-        ...listVaults(graph),
-        '',
-        ...listOthers(graph),
-      ]
-    }
-    if (command === 'here') return myLines(graph)
-    if (command === 'help') return helpLines()
-    if (verb === 'id') return idCommand(graph, argument)
-    if (verb && verb.length === 6) return idCommand(graph, verb)
-    return [`unknown  ${command}`, '', ...helpLines()]
-  }
 
   function run(raw: string) {
     const command = raw.trim().toLowerCase().replace(/\s+/g, ' ')
@@ -483,9 +79,13 @@ vaults they touch.
       void scrollToEnd()
       return
     }
+    const nookNamedArgument182: Parameters<typeof outputFor>[0] = {
+      graph,
+      command,
+    }
     transcript = [
       ...transcript,
-      { id: nextId, prompt: command, lines: outputFor(graph, command) },
+      { id: nextId, prompt: command, lines: outputFor(nookNamedArgument182) },
     ]
     nextId += 1
     void scrollToEnd()
@@ -551,7 +151,7 @@ vaults they touch.
     focusInput()
   }
 
-  function inkOf(text: string, here: string): Ink {
+  function inkOf({ text, here }: { text: string; here: string }): Ink {
     if (/^[0-9a-f]{6}$/.test(text)) {
       return text === here && here.length > 0 ? Ink.Mine : Ink.Id
     }
@@ -561,15 +161,29 @@ vaults they touch.
     return Ink.Warn
   }
 
-  function segmentsOf(line: string, here: string): Segment[] {
-    return line
-      .split(TOKEN)
-      .filter((part) => part.length > 0)
-      .map((part, index) => ({
+  function segmentsOf({
+    line,
+    here,
+  }: {
+    line: string
+    here: string
+  }): Segment[] {
+    return [
+      ...line
+        .split(TOKEN)
+        .filter((part) => part.length > 0)
+        .entries(),
+    ].map(([index, part]) => {
+      const nookNamedArgument183: Parameters<typeof inkOf>[0] = {
+        text: part,
+        here,
+      }
+      return {
         key: `${index}-${part}`,
         text: part,
-        ink: EXACT.test(part) ? inkOf(part, here) : Ink.Plain,
-      }))
+        ink: EXACT.test(part) ? inkOf(nookNamedArgument183) : Ink.Plain,
+      }
+    })
   }
 
   function inkClass(ink: Ink): string {
@@ -608,6 +222,14 @@ vaults they touch.
     </p>
 
     {#each mine as device (device.id)}
+      {@const devicePasskeys: Parameters<typeof passkeysForDevice>[0] = {
+        graph,
+        device,
+      }}
+      {@const deviceVaults: Parameters<typeof vaultsForDevice>[0] = {
+        graph,
+        deviceId: device.id,
+      }}
       <div
         class="mt-2 rounded-lg border-2 border-[#e0a458] bg-[linear-gradient(180deg,#221a10_0%,#16120c_100%)] p-4 shadow-[0_20px_46px_rgb(0_0_0/0.5)]"
       >
@@ -634,7 +256,7 @@ vaults they touch.
               Unlocked by
             </dt>
             <dd class="mt-1.5 flex flex-wrap gap-1.5">
-              {#each passkeysForDevice(graph, device) as passkey (passkey.id)}
+              {#each passkeysForDevice(devicePasskeys) as passkey (passkey.id)}
                 <button
                   type="button"
                   aria-label={`Insert passkey ${passkey.shortId}, ${storeLabel(passkey.store)}`}
@@ -665,7 +287,7 @@ vaults they touch.
               Opens
             </dt>
             <dd class="mt-1.5 flex flex-wrap gap-1.5">
-              {#each vaultsForDevice(graph, device.id) as vault (vault.id)}
+              {#each vaultsForDevice(deviceVaults) as vault (vault.id)}
                 <button
                   type="button"
                   aria-label={`Insert vault ${vault.shortId}, ${vault.label}`}
@@ -749,10 +371,14 @@ vaults they touch.
               </p>
             {/if}
             {#each block.lines as line, index (index)}
+              {@const highlightedSegments: Parameters<typeof segmentsOf>[0] = {
+                line,
+                here: mineId,
+              }}
               <p
                 class="flex min-h-5 font-mono text-[11px] leading-5 sm:text-xs"
               >
-                {#each segmentsOf(line, mineId) as segment (segment.key)}
+                {#each segmentsOf(highlightedSegments) as segment (segment.key)}
                   <span class={`whitespace-pre ${inkClass(segment.ink)}`}>
                     {segment.text}
                   </span>
@@ -857,6 +483,10 @@ vaults they touch.
       </p>
       <ul class="mt-2 border-l border-dashed border-[#332b1e] pl-3">
         {#each otherDevices as device (device.id)}
+          {@const deviceVaults: Parameters<typeof vaultsForDevice>[0] = {
+            graph,
+            deviceId: device.id,
+          }}
           <li class="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-1.5">
             <button
               type="button"
@@ -871,7 +501,7 @@ vaults they touch.
               {device.platform}
             </span>
             <span class="ml-auto flex shrink-0 flex-wrap gap-1.5">
-              {#each vaultsForDevice(graph, device.id) as vault (vault.id)}
+              {#each vaultsForDevice(deviceVaults) as vault (vault.id)}
                 <span class="font-mono text-[11px] text-[#6b6047]">
                   {vault.shortId}
                 </span>

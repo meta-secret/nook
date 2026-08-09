@@ -5,6 +5,7 @@
 //! as complete before durably creating or replacing credentials.
 
 use serde::{Deserialize, Serialize};
+use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Default wall-clock budget while waiting for success evidence after submit.
@@ -15,8 +16,9 @@ pub const DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS: u32 = 8_000;
 /// Independent boolean sensors are intentional: content scripts report each
 /// signal separately and Rust owns the composition policy.
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationOutcomeObservation {
     /// Document URL left a login/signup/password-change-like path.
     pub navigated_away_from_auth_path: bool,
@@ -32,6 +34,33 @@ pub struct AuthenticationOutcomeObservation {
     pub in_iframe: bool,
     /// Milliseconds since the authentication act (submit/fill).
     pub elapsed_ms: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct AuthenticationOutcomeClassification {
+    pub observation: AuthenticationOutcomeObservation,
+    pub timeout_ms: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct AuthenticationOutcomeDecision {
+    pub verdict: AuthenticationOutcomeVerdict,
+    pub allows_credential_commit: bool,
+}
+
+impl AuthenticationOutcomeDecision {
+    #[must_use]
+    pub const fn classify(observation: AuthenticationOutcomeObservation, timeout_ms: u32) -> Self {
+        let verdict = classify_authentication_outcome(observation, timeout_ms);
+        Self {
+            verdict,
+            allows_credential_commit: verdict.allows_credential_commit(),
+        }
+    }
 }
 
 /// Classification of collected outcome evidence.
@@ -137,6 +166,16 @@ mod tests {
             AuthenticationOutcomeVerdict::Sufficient
         );
         assert!(AuthenticationOutcomeVerdict::Sufficient.allows_credential_commit());
+        assert_eq!(
+            AuthenticationOutcomeDecision::classify(
+                observation,
+                DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS
+            ),
+            AuthenticationOutcomeDecision {
+                verdict: AuthenticationOutcomeVerdict::Sufficient,
+                allows_credential_commit: true,
+            }
+        );
     }
 
     #[test]

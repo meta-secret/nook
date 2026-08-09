@@ -218,11 +218,15 @@ export class ExtensionSessionMessageDispatcher {
     previous.close(error)
   }
 
-  private enqueueSensitiveMessage(
-    message: Record<string, unknown>,
-    payload: Record<string, unknown>,
-    fields: readonly string[],
-  ): Promise<unknown> {
+  private enqueueSensitiveMessage({
+    message,
+    payload,
+    fields,
+  }: {
+    message: Record<string, unknown>
+    payload: Record<string, unknown>
+    fields: readonly string[]
+  }): Promise<unknown> {
     let payloadResidency: SensitivePayloadResidency = {
       kind: SensitivePayloadResidencyKind.Resident,
       payload: { ...payload },
@@ -243,7 +247,7 @@ export class ExtensionSessionMessageDispatcher {
       }
       payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
     }
-    return this.operations.enqueue({
+    const nookNamedArgs1_0: Parameters<typeof this.operations.enqueue>[0] = {
       operation: async () => {
         if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
           throw new Error('Extension session request expired.')
@@ -251,10 +255,13 @@ export class ExtensionSessionMessageDispatcher {
         const operationPayload = payloadResidency.payload
         payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
         try {
-          return await this.context.handleMessage({
+          const nookNamedArgs0_0: Parameters<
+            typeof this.context.handleMessage
+          >[0] = {
             ...message,
             payload: operationPayload,
-          })
+          }
+          return await this.context.handleMessage(nookNamedArgs0_0)
         } finally {
           for (const field of fields) {
             clearSensitiveValue(operationPayload[field])
@@ -273,20 +280,24 @@ export class ExtensionSessionMessageDispatcher {
           run: clearPending,
         },
       },
-    })
+    }
+    return this.operations.enqueue(nookNamedArgs1_0)
   }
 
-  private async enqueueVaultImport(
-    message: Record<string, unknown>,
-    payload: Record<string, unknown>,
-  ): Promise<unknown> {
+  private async enqueueVaultImport({
+    message,
+    payload,
+  }: {
+    message: Record<string, unknown>
+    payload: Record<string, unknown>
+  }): Promise<unknown> {
     const operationGeneration = this.operationGeneration
     if (!Array.isArray(payload.providers)) {
       payload.providers = []
       return { ok: false, error: 'invalid-provider-payload' }
     }
     const providerCandidate: StorageProvider[] = payload.providers
-    const stagingArgs = {
+    const stagingArgs: Parameters<typeof stageProviderCredentials>[0] = {
       providers: providerCandidate,
       decode: this.context.decodeProviders,
     }
@@ -305,7 +316,7 @@ export class ExtensionSessionMessageDispatcher {
     scrubProviderCredentials(providerCandidate)
     // Reserve the queue position before cold WASM decoding can yield. Reset
     // must remain a terminal barrier after every import accepted before it.
-    return this.operations.enqueue({
+    const nookNamedArgs1_1: Parameters<typeof this.operations.enqueue>[0] = {
       operation: async () => {
         stagingOwnership = StagingOwnership.Operation
         const staging = await stagingOperation
@@ -325,20 +336,26 @@ export class ExtensionSessionMessageDispatcher {
         }
         if (staging.providers.length === 0) {
           stagingOwnership = StagingOwnership.Cleared
-          return this.context.handleMessage({
+          const nookNamedArgs0_1: Parameters<
+            typeof this.context.handleMessage
+          >[0] = {
             ...message,
             payload: {
               ...payload,
               providers: staging.providers,
             },
-          })
+          }
+          return this.context.handleMessage(nookNamedArgs0_1)
         }
         const stagedProviders = staging.providers
         try {
-          return await this.context.handleMessage({
+          const nookNamedArgs0_2: Parameters<
+            typeof this.context.handleMessage
+          >[0] = {
             ...message,
             payload: { ...payload, providers: stagedProviders },
-          })
+          }
+          return await this.context.handleMessage(nookNamedArgs0_2)
         } finally {
           scrubProviderCredentials(stagedProviders)
           payload.providers = []
@@ -353,7 +370,8 @@ export class ExtensionSessionMessageDispatcher {
           run: clearQueuedStaging,
         },
       },
-    })
+    }
+    return this.operations.enqueue(nookNamedArgs1_1)
   }
 
   enqueue(message: unknown): Promise<unknown> {
@@ -364,10 +382,11 @@ export class ExtensionSessionMessageDispatcher {
     const type = parsedType.messageType
     const payload = this.context.messagePayload(message)
     if (type === ExtensionSessionMessageType.ImportVault) {
-      return this.enqueueVaultImport(
-        message as Record<string, unknown>,
+      const nookNamedArgs0_3: Parameters<typeof this.enqueueVaultImport>[0] = {
+        message: message as Record<string, unknown>,
         payload,
-      )
+      }
+      return this.enqueueVaultImport(nookNamedArgs0_3)
     }
     const requestedExpiry = requestedQueueExpiry(payload)
     const priority =
@@ -378,14 +397,17 @@ export class ExtensionSessionMessageDispatcher {
         : sessionMessagePriority(type)
     const sensitiveFields = sensitiveSessionFields[type]
     if (sensitiveFields) {
-      return this.enqueueSensitiveMessage(
-        message as Record<string, unknown>,
+      const nookNamedArgs0_4: Parameters<
+        typeof this.enqueueSensitiveMessage
+      >[0] = {
+        message: message as Record<string, unknown>,
         payload,
-        sensitiveFields,
-      )
+        fields: sensitiveFields,
+      }
+      return this.enqueueSensitiveMessage(nookNamedArgs0_4)
     }
 
-    return this.operations.enqueue({
+    const nookNamedArgs0_5: Parameters<typeof this.operations.enqueue>[0] = {
       operation: () => this.context.handleMessage(message),
       options: {
         priority,
@@ -403,7 +425,8 @@ export class ExtensionSessionMessageDispatcher {
               : { kind: SessionOperationExpiryKind.None },
         cleanup: { kind: SessionOperationCleanupKind.None },
       },
-    })
+    }
+    return this.operations.enqueue(nookNamedArgs0_5)
   }
 
   registerRuntimeListener(): void {
@@ -434,15 +457,16 @@ export class ExtensionSessionMessageDispatcher {
         : this.enqueue(message)
       void response
         .then((value) => sendResponse(value))
-        .catch((error) =>
-          sendResponse({
+        .catch((error) => {
+          const nookArrowArgs0: Parameters<typeof sendResponse>[0] = {
             ok: false,
             error:
               error instanceof Error
                 ? error.message
                 : 'Extension session failed.',
-          }),
-        )
+          }
+          return sendResponse(nookArrowArgs0)
+        })
       return true
     })
   }

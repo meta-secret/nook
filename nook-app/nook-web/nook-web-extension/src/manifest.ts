@@ -75,6 +75,19 @@ export type ExtensionManifest = {
   }>
 }
 
+export type ExtensionManifestDeployment = {
+  key: string
+  name: string
+  shortName: string
+  versionName: string
+}
+
+export type CreateExtensionManifestArgs = {
+  version: string
+  simpleVaultBaseUrl?: string
+  deployment?: ExtensionManifestDeployment
+}
+
 const iconSet: ManifestIconSet = {
   [ManifestIconSize.Small]: 'icons/nook.png',
   [ManifestIconSize.Medium]: 'icons/nook.png',
@@ -82,16 +95,11 @@ const iconSet: ManifestIconSet = {
   [ManifestIconSize.Store]: 'icons/nook.png',
 }
 
-export function createManifest(
-  version: string,
+export function createManifest({
+  version,
   simpleVaultBaseUrl = defaultSimpleVaultBaseUrl(),
-  deployment?: {
-    key: string
-    name: string
-    shortName: string
-    versionName: string
-  },
-): ExtensionManifest {
+  deployment,
+}: CreateExtensionManifestArgs): ExtensionManifest {
   const simpleVaultMatch = simpleVaultMatchPattern(simpleVaultBaseUrl)
   const vaultAppExclusions =
     nookVaultAppExcludeMatchPatterns(simpleVaultBaseUrl)

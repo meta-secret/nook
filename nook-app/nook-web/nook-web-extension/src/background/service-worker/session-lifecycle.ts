@@ -50,13 +50,16 @@ export async function ensureExtensionSessionDocument(): Promise<void> {
   ) {
     return extensionSessionDocumentState.operation
   }
+  const nookTypedArgs0_0: Parameters<
+    typeof chrome.offscreen.createDocument
+  >[0] = {
+    url: extensionSessionDocument,
+    reasons: ['WORKERS'],
+    justification:
+      'Keep a user-authorized extension device identity in memory for a 15-minute session.',
+  }
   const operation = chrome.offscreen
-    .createDocument({
-      url: extensionSessionDocument,
-      reasons: ['WORKERS'],
-      justification:
-        'Keep a user-authorized extension device identity in memory for a 15-minute session.',
-    })
+    .createDocument(nookTypedArgs0_0)
     .catch((error) => {
       // Manifest V3 permits only one offscreen document. A restarted service
       // worker may race with the existing session document; it is safe to use
@@ -167,7 +170,10 @@ export function isUnlockedSessionStatus(status: unknown): boolean {
 }
 
 export function openSimpleVault(path = ''): void {
-  void chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
+  const nookTypedArgs0_1: Parameters<typeof chrome.tabs.create>[0] = {
+    url: runtimeSimpleVaultUrl(path),
+  }
+  void chrome.tabs.create(nookTypedArgs0_1)
 }
 
 enum ActiveTabQueryKind {
@@ -181,13 +187,16 @@ type ActiveTabQuery =
 
 function queryActiveTab(): Promise<ActiveTabQuery> {
   return new Promise((resolve) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const nookTypedArgs0_2: Parameters<typeof chrome.tabs.query>[0] = {
+      active: true,
+      currentWindow: true,
+    }
+    chrome.tabs.query(nookTypedArgs0_2, (tabs) => {
       const tab = tabs[0]
-      resolve(
-        tab
-          ? { kind: ActiveTabQueryKind.Found, tab }
-          : { kind: ActiveTabQueryKind.Unavailable },
-      )
+      const result: ActiveTabQuery = tab
+        ? { kind: ActiveTabQueryKind.Found, tab }
+        : { kind: ActiveTabQueryKind.Unavailable }
+      resolve(result)
     })
   })
 }
@@ -203,37 +212,49 @@ export async function queryActiveTabLoginDetection(): Promise<LoginDetectionResp
   }
   try {
     const response = await new Promise<LoginDetectionResponse>((resolve) => {
-      chrome.tabs.sendMessage(
-        tabId,
-        { type: 'nook:query-login-detection' },
-        (result: unknown) => {
-          if (chrome.runtime.lastError) {
-            resolve({ ok: true, status: LoginDetectionStatus.Unavailable })
-            return
-          }
-          if (!result || typeof result !== 'object') {
-            resolve({ ok: true, status: LoginDetectionStatus.Unavailable })
-            return
-          }
-          const payload = result as {
-            ok?: unknown
-            status?: unknown
-          }
-          if (
-            payload.ok !== true ||
-            (payload.status !== LoginDetectionStatus.Detected &&
-              payload.status !== LoginDetectionStatus.NotDetected &&
-              payload.status !== LoginDetectionStatus.Unavailable)
-          ) {
-            resolve({ ok: true, status: LoginDetectionStatus.Unavailable })
-            return
-          }
-          resolve({
+      const nookTypedArgs1_0: Parameters<typeof chrome.tabs.sendMessage>[1] = {
+        type: 'nook:query-login-detection',
+      }
+      chrome.tabs.sendMessage(tabId, nookTypedArgs1_0, (result: unknown) => {
+        if (chrome.runtime.lastError) {
+          const nookTypedArgs0_3: Parameters<typeof resolve>[0] = {
             ok: true,
-            status: payload.status as LoginDetectionStatus,
-          })
-        },
-      )
+            status: LoginDetectionStatus.Unavailable,
+          }
+          resolve(nookTypedArgs0_3)
+          return
+        }
+        if (!result || typeof result !== 'object') {
+          const nookTypedArgs0_4: Parameters<typeof resolve>[0] = {
+            ok: true,
+            status: LoginDetectionStatus.Unavailable,
+          }
+          resolve(nookTypedArgs0_4)
+          return
+        }
+        const payload = result as {
+          ok?: unknown
+          status?: unknown
+        }
+        if (
+          payload.ok !== true ||
+          (payload.status !== LoginDetectionStatus.Detected &&
+            payload.status !== LoginDetectionStatus.NotDetected &&
+            payload.status !== LoginDetectionStatus.Unavailable)
+        ) {
+          const nookTypedArgs0_5: Parameters<typeof resolve>[0] = {
+            ok: true,
+            status: LoginDetectionStatus.Unavailable,
+          }
+          resolve(nookTypedArgs0_5)
+          return
+        }
+        const nookTypedArgs0_6: Parameters<typeof resolve>[0] = {
+          ok: true,
+          status: payload.status as LoginDetectionStatus,
+        }
+        resolve(nookTypedArgs0_6)
+      })
     })
     return response
   } catch {
@@ -246,16 +267,20 @@ export async function openCompanionLauncher(intent?: 'pair'): Promise<void> {
   const popupUrl = chrome.runtime.getURL('popup/index.html')
   const launcherUrl = intent ? `${popupUrl}?intent=${intent}` : popupUrl
   if (chrome.windows?.create) {
-    await chrome.windows.create({
+    const nookTypedArgs0_7: Parameters<typeof chrome.windows.create>[0] = {
       url: launcherUrl,
       type: 'popup',
       width: 440,
       height: 620,
       focused: true,
-    })
+    }
+    await chrome.windows.create(nookTypedArgs0_7)
     return
   }
-  await chrome.tabs.create({ url: launcherUrl })
+  const nookTypedArgs0_8: Parameters<typeof chrome.tabs.create>[0] = {
+    url: launcherUrl,
+  }
+  await chrome.tabs.create(nookTypedArgs0_8)
 }
 
 export function openCompanionLauncherBestEffort(intent?: 'pair'): void {

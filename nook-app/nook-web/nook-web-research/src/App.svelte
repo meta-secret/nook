@@ -17,9 +17,12 @@
   )
 
   function navigate(nextPath: string) {
-    window.history.pushState({}, '', nextPath)
+    const nookNamedArgument0: Parameters<typeof window.history.pushState>[0] =
+      {}
+    window.history.pushState(nookNamedArgument0, '', nextPath)
     path = nextPath
-    window.scrollTo({ top: 0 })
+    const scrollTarget: ScrollToOptions = { top: 0 }
+    window.scrollTo(scrollTarget)
   }
 
   onMount(() => {

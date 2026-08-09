@@ -90,9 +90,10 @@ export async function storeAuthenticatorPicker(
   request: PendingAuthenticatorPicker,
 ): Promise<void> {
   pendingAuthenticatorPickers.set(request.requestId, request)
-  await setSessionStorage({
+  const nookTypedArgs0_0: Parameters<typeof setSessionStorage>[0] = {
     [authenticatorPickerStorageKey(request.requestId)]: request,
-  })
+  }
+  await setSessionStorage(nookTypedArgs0_0)
 }
 
 export async function removeAuthenticatorPicker(
@@ -153,16 +154,20 @@ export function isAuthenticatorPickerSender(
   }
 }
 
-export async function authenticatorAccounts(
-  grants: StoredExtensionPairingGrant[],
-  query: string,
-): Promise<WebsiteAuthenticatorOption[]> {
+export async function authenticatorAccounts({
+  grants,
+  query,
+}: {
+  grants: StoredExtensionPairingGrant[]
+  query: string
+}): Promise<WebsiteAuthenticatorOption[]> {
   const accounts: WebsiteAuthenticatorOption[] = []
   for (const grant of grants) {
-    const response = await sendSessionMessage({
+    const nookTypedArgs0_1: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-list-authenticators',
       payload: { ...grant, query },
-    })
+    }
+    const response = await sendSessionMessage(nookTypedArgs0_1)
     for (const account of sessionResponseAccounts(response)) {
       if (
         !account ||
@@ -176,28 +181,38 @@ export async function authenticatorAccounts(
       ) {
         continue
       }
-      accounts.push({
+      const nookTypedArgs0_2: Parameters<typeof accounts.push>[0] = {
         vaultStoreId: grant.vaultStoreId,
         vaultName: grant.vaultName,
         secretId: account.secretId,
         issuer: account.issuer,
         account: account.account,
-      })
+      }
+      accounts.push(nookTypedArgs0_2)
     }
   }
   return accounts
 }
 
-export async function authorizedWebsiteGrant(
-  origin: string,
-  vaultStoreId: string,
-  sender: chrome.runtime.MessageSender,
-  reasons: { forbidden: string; missing: string; locked: string },
-): Promise<
+export async function authorizedWebsiteGrant({
+  origin,
+  vaultStoreId,
+  sender,
+  reasons,
+}: {
+  origin: string
+  vaultStoreId: string
+  sender: chrome.runtime.MessageSender
+  reasons: { forbidden: string; missing: string; locked: string }
+}): Promise<
   | { grant: StoredExtensionPairingGrant }
   | { response: { ok: false; reason: string } }
 > {
-  if (!isAuthorizedWebsiteSender(sender, origin)) {
+  const nookTypedArgs0_3: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
+    sender,
+    origin,
+  }
+  if (!isAuthorizedWebsiteSender(nookTypedArgs0_3)) {
     return { response: { ok: false, reason: reasons.forbidden } }
   }
   const grant = (await passwordPairingGrants()).find(
@@ -206,10 +221,11 @@ export async function authorizedWebsiteGrant(
   if (!grant) return { response: { ok: false, reason: reasons.missing } }
   await ensureExtensionSessionDocument()
   const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
-  const status = await sendSessionMessage({
+  const nookTypedArgs0_4: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
     payload: { queueExpiresAt, queuePriority: 'interactive' },
-  })
+  }
+  const status = await sendSessionMessage(nookTypedArgs0_4)
   if (!isUnlockedSessionStatus(status)) {
     openCompanionLauncherBestEffort()
     return { response: { ok: false, reason: reasons.locked } }
@@ -217,18 +233,23 @@ export async function authorizedWebsiteGrant(
   return { grant }
 }
 
-export async function loginAccountsForOrigin(
-  grants: StoredExtensionPairingGrant[],
-  origin: string,
+export async function loginAccountsForOrigin({
+  grants,
+  origin,
   query = '',
-): Promise<WebsiteLoginAccountOption[]> {
+}: {
+  grants: StoredExtensionPairingGrant[]
+  origin: string
+  query?: string
+}): Promise<WebsiteLoginAccountOption[]> {
   const accounts: WebsiteLoginAccountOption[] = []
   const needle = query.trim().toLowerCase()
   for (const grant of grants) {
-    const response = await sendSessionMessage({
+    const nookTypedArgs0_5: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-list-logins',
       payload: { ...grant, origin },
-    })
+    }
+    const response = await sendSessionMessage(nookTypedArgs0_5)
     for (const account of sessionResponseAccounts(response)) {
       if (
         !account ||
@@ -269,25 +290,30 @@ export async function loginAccountsForOrigin(
   return accounts
 }
 
-export async function websiteLoginOptions(
+export async function websiteLoginOptions({
+  message,
+  sender,
+}: {
   message: {
     payload: {
       origin: string
     }
-  },
-  sender: chrome.runtime.MessageSender,
-): Promise<unknown> {
-  const access = await availableWebsiteGrants(
-    message.payload.origin,
+  }
+  sender: chrome.runtime.MessageSender
+}): Promise<unknown> {
+  const nookTypedArgs0_6: Parameters<typeof availableWebsiteGrants>[0] = {
+    origin: message.payload.origin,
     sender,
-    'login-forbidden-origin',
-  )
+    forbiddenReason: 'login-forbidden-origin',
+  }
+  const access = await availableWebsiteGrants(nookTypedArgs0_6)
   if ('response' in access) return access.response
 
-  const accounts = await loginAccountsForOrigin(
-    access.grants,
-    message.payload.origin,
-  )
+  const nookTypedArgs0_0: Parameters<typeof loginAccountsForOrigin>[0] = {
+    grants: access.grants,
+    origin: message.payload.origin,
+  }
+  const accounts = await loginAccountsForOrigin(nookTypedArgs0_0)
   return { ok: true, status: 'ready', accounts }
 }
 
@@ -303,9 +329,10 @@ export async function storeLoginPicker(
   request: PendingLoginPicker,
 ): Promise<void> {
   pendingLoginPickers.set(request.requestId, request)
-  await setSessionStorage({
+  const nookTypedArgs0_7: Parameters<typeof setSessionStorage>[0] = {
     [loginPickerStorageKey(request.requestId)]: request,
-  })
+  }
+  await setSessionStorage(nookTypedArgs0_7)
 }
 
 export async function removeLoginPicker(requestId: string): Promise<void> {

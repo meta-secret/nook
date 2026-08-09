@@ -1,4 +1,5 @@
 import type { ExtensionPairingApprovedMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import type { ExtensionPairingGrantApproval } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { StorageProvider } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   type ProviderCredentialCleanupArgs,
@@ -14,13 +15,13 @@ import {
   isStoredExtensionPairingGrant,
   pairingGrantStorageKey,
   setupAfterPairingGrantRemoval,
-  PairingSetupAfterRemovalKind,
   setupStorageKey,
 } from '../pairing-grants'
 import {
   decodeExtensionStorageProviders,
   importExtensionEventLog,
   reconcileExtensionPairingState,
+  type ExtensionPairingItems,
 } from '../vault-runtime'
 import {
   ensureLegacyPairingMigration,
@@ -30,26 +31,35 @@ import {
 } from './pairing-identity'
 import { ensureExtensionSessionDocument } from './session-lifecycle'
 
-async function reconcilePairingStorage(
-  items: Record<string, unknown>,
-  removedKeys: string[],
-): Promise<void> {
+async function reconcilePairingStorage(args: {
+  items: ExtensionPairingItems
+  removedKeys: string[]
+}): Promise<void> {
   await ensureLegacyPairingMigration()
-  await reconcileExtensionPairingState(items, removedKeys)
+  await reconcileExtensionPairingState(args)
+}
+
+type RestorePairingStorageArgs = {
+  previous: ExtensionPairingItems
+  written: ExtensionPairingItems
 }
 
 async function restorePairingStorage(
-  previous: Record<string, unknown>,
-  written: Record<string, unknown>,
+  args: RestorePairingStorageArgs,
 ): Promise<void> {
+  const { previous, written } = args
   const touchedKeys = Object.keys(written)
-  const restore = Object.fromEntries(
+  const restore: ExtensionPairingItems = Object.fromEntries(
     touchedKeys
       .filter((key) => key in previous)
       .map((key) => [key, previous[key]]),
   )
   const addedKeys = touchedKeys.filter((key) => !(key in previous))
-  await reconcilePairingStorage(restore, addedKeys)
+  const reconcileArgs: Parameters<typeof reconcilePairingStorage>[0] = {
+    items: restore,
+    removedKeys: addedKeys,
+  }
+  await reconcilePairingStorage(reconcileArgs)
 }
 
 type ImportDecodedApprovedPairingArgs = {
@@ -64,36 +74,62 @@ async function importDecodedApprovedPairing(
   args: ImportDecodedApprovedPairingArgs,
 ): Promise<PairingImportResult> {
   const { message, providers } = args
-  const grant: ExtensionPairingApprovedMessage['payload'] = {
-    ...message.payload,
-    providers,
+  const grantApproval: ExtensionPairingGrantApproval = {
+    vaultType: message.payload.vaultType,
+    deviceId: message.payload.deviceId,
+    devicePublicKey: message.payload.devicePublicKey,
+    deviceSigningPublicKey: message.payload.deviceSigningPublicKey,
+    deviceLabel: message.payload.deviceLabel,
+    vaultStoreId: message.payload.vaultStoreId,
+    vaultName: message.payload.vaultName,
+    approvedAt: message.payload.approvedAt,
+    scopes: message.payload.scopes,
+    syncProviderCount: providers.length,
   }
   try {
-    const imported = await importExtensionEventLog(
-      grant,
-      message.eventLogRecords,
-    )
+    const nookTypedArgs0_0: Parameters<typeof importExtensionEventLog>[0] = {
+      grant: message.payload,
+      records: message.eventLogRecords,
+    }
+    const imported = await importExtensionEventLog(nookTypedArgs0_0)
     if (!imported.accessGranted) {
       return { ok: false, reason: 'event-log-access-not-granted' }
     }
     await ensureExtensionSessionDocument()
-    const pairingItems = extensionPairingGrantStorageItems(grant, imported)
+    const pairingItemsArgs: Parameters<
+      typeof extensionPairingGrantStorageItems
+    >[0] = { grant: grantApproval, imported }
+    const pairingItems = extensionPairingGrantStorageItems(pairingItemsArgs)
     const previousPairingState = await getPairingStorage()
     await setPairingStorage(pairingItems)
     try {
-      await sendSessionMessage({
+      const nookTypedArgs0_1: Parameters<typeof sendSessionMessage>[0] = {
         type: 'nook:extension-session-migrate-auth-providers',
-      })
-      await sendSessionMessage({ type: 'nook:extension-session-reset' })
+      }
+      await sendSessionMessage(nookTypedArgs0_1)
+      const nookTypedArgs0_2: Parameters<typeof sendSessionMessage>[0] = {
+        type: 'nook:extension-session-reset',
+      }
+      await sendSessionMessage(nookTypedArgs0_2)
       // Snapshot before scrubbing so lazy extension IPC cannot observe
       // emptied credential fields mid-handoff.
-      const importMessage = {
+      const importMessage: {
+        type: 'nook:extension-session-import-vault'
+        payload: {
+          vaultStoreId: string
+          deviceId: string
+          devicePublicKey: string
+          deviceSigningPublicKey: string
+          eventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
+          providers: StorageProvider[]
+        }
+      } = {
         type: 'nook:extension-session-import-vault' as const,
         payload: {
-          vaultStoreId: grant.vaultStoreId,
-          deviceId: grant.deviceId,
-          devicePublicKey: grant.devicePublicKey,
-          deviceSigningPublicKey: grant.deviceSigningPublicKey,
+          vaultStoreId: grantApproval.vaultStoreId,
+          deviceId: grantApproval.deviceId,
+          devicePublicKey: grantApproval.devicePublicKey,
+          deviceSigningPublicKey: grantApproval.deviceSigningPublicKey,
           eventLogRecords: message.eventLogRecords,
           providers: structuredClone(providers),
         },
@@ -122,11 +158,19 @@ async function importDecodedApprovedPairing(
           sessionImport.error.length > 0
             ? sessionImport.error
             : 'extension-vault-import-failed'
-        await restorePairingStorage(previousPairingState, pairingItems)
+        const restoreArgs: Parameters<typeof restorePairingStorage>[0] = {
+          previous: previousPairingState,
+          written: pairingItems,
+        }
+        await restorePairingStorage(restoreArgs)
         return { ok: false, reason }
       }
     } catch (error) {
-      await restorePairingStorage(previousPairingState, pairingItems)
+      const restoreArgs: Parameters<typeof restorePairingStorage>[0] = {
+        previous: previousPairingState,
+        written: pairingItems,
+      }
+      await restorePairingStorage(restoreArgs)
       throw error
     }
     return { ok: true, eventCount: imported.eventCount }
@@ -166,10 +210,13 @@ export async function importApprovedPairing(
   }
 }
 
-export async function importLocalEventLogUpdate(
-  vaultStoreId: string,
-  eventLogRecords: Parameters<typeof importExtensionEventLog>[1],
-): Promise<PairingImportResult> {
+export async function importLocalEventLogUpdate({
+  vaultStoreId,
+  eventLogRecords,
+}: {
+  vaultStoreId: string
+  eventLogRecords: Parameters<typeof importExtensionEventLog>[0]['records']
+}): Promise<PairingImportResult> {
   const key = pairingGrantStorageKey(vaultStoreId)
   try {
     const stored = await getPairingStorage()
@@ -177,31 +224,41 @@ export async function importLocalEventLogUpdate(
     if (!isStoredExtensionPairingGrant(grant)) {
       return { ok: false, reason: 'vault-not-paired' }
     }
-    const imported = await importExtensionEventLog(grant, eventLogRecords)
+    const nookTypedArgs0_3: Parameters<typeof importExtensionEventLog>[0] = {
+      grant,
+      records: eventLogRecords,
+    }
+    const imported = await importExtensionEventLog(nookTypedArgs0_3)
     if (!imported.accessGranted) {
-      const setup = setupAfterPairingGrantRemoval(stored, vaultStoreId)
-      await reconcilePairingStorage(
-        setup.kind === PairingSetupAfterRemovalKind.Ready
-          ? { [setupStorageKey]: setup.setup }
-          : {},
-        [
+      const setupArgs: Parameters<typeof setupAfterPairingGrantRemoval>[0] = {
+        stored,
+        removedVaultStoreId: vaultStoreId,
+      }
+      const setup = setupAfterPairingGrantRemoval(setupArgs)
+      const items: ExtensionPairingItems =
+        setup.kind === 'ready' ? { [setupStorageKey]: setup.setup } : {}
+      const reconcileArgs: Parameters<typeof reconcilePairingStorage>[0] = {
+        items,
+        removedKeys: [
           key,
-          ...(setup.kind === PairingSetupAfterRemovalKind.Ready
-            ? []
-            : [setupStorageKey]),
+          ...(setup.kind === 'ready' ? [] : [setupStorageKey]),
         ],
-      )
+      }
+      await reconcilePairingStorage(reconcileArgs)
       return { ok: false, reason: 'event-log-access-revoked' }
     }
     const setup = stored[setupStorageKey]
     const select =
       isExtensionReadySetupState(setup) &&
       setup.selectedVaultStoreId === vaultStoreId
-    await setPairingStorage(
-      extensionStoredPairingGrantStorageItems(grant, imported, select),
-    )
+    const pairingItemsArgs: Parameters<
+      typeof extensionStoredPairingGrantStorageItems
+    >[0] = { grant, imported, select }
+    const pairingItems =
+      extensionStoredPairingGrantStorageItems(pairingItemsArgs)
+    await setPairingStorage(pairingItems)
     await ensureExtensionSessionDocument()
-    await sendSessionMessage({
+    const nookTypedArgs0_4: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-update-vault',
       payload: {
         vaultStoreId: grant.vaultStoreId,
@@ -210,7 +267,8 @@ export async function importLocalEventLogUpdate(
         deviceSigningPublicKey: grant.deviceSigningPublicKey,
         eventLogRecords,
       },
-    })
+    }
+    await sendSessionMessage(nookTypedArgs0_4)
     return { ok: true, eventCount: imported.eventCount }
   } catch {
     return { ok: false, reason: 'event-log-import-failed' }

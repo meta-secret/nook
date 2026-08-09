@@ -148,30 +148,160 @@ pub fn extension_persistence_store_names(
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn classify_extension_persistence_databases(
-    area: nook_companion_core::ExtensionPersistenceArea,
-    observed_names: Vec<String>,
+    input: nook_companion_core::ExtensionPersistenceObservation,
 ) -> nook_companion_core::ExtensionPersistenceDatabaseState {
-    nook_companion_core::classify_extension_database_names(area, &observed_names)
+    nook_companion_core::classify_extension_database_names(input.area, &input.observed_names)
 }
 
 #[wasm_bindgen(js_name = classifyExtensionPersistenceStores)]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn classify_extension_persistence_stores(
-    area: nook_companion_core::ExtensionPersistenceArea,
-    observed_names: Vec<String>,
+    input: nook_companion_core::ExtensionPersistenceObservation,
 ) -> nook_companion_core::ExtensionPersistenceStoreState {
-    nook_companion_core::classify_extension_store_names(area, &observed_names)
+    nook_companion_core::classify_extension_store_names(input.area, &input.observed_names)
 }
 
 #[wasm_bindgen(js_name = matchingExtensionPersistenceStores)]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn matching_extension_persistence_stores(
-    area: nook_companion_core::ExtensionPersistenceArea,
-    observed_names: Vec<String>,
+    input: nook_companion_core::ExtensionPersistenceObservation,
 ) -> Vec<String> {
-    nook_companion_core::matching_extension_store_names(area, &observed_names)
+    nook_companion_core::matching_extension_store_names(input.area, &input.observed_names)
+}
+
+#[wasm_bindgen(js_name = classifyCompanionAuthenticationWorkflow)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn classify_companion_authentication_workflow(
+    input: nook_companion_core::AuthenticationPageObservations,
+) -> nook_companion_core::AuthenticationWorkflowViewMatch {
+    nook_companion_core::classify_authentication_workflow_candidates(&input.observations).into()
+}
+
+#[wasm_bindgen(js_name = classifyCompanionAuthenticationOutcome)]
+#[must_use]
+pub fn classify_companion_authentication_outcome(
+    input: nook_companion_core::AuthenticationOutcomeClassification,
+) -> nook_companion_core::AuthenticationOutcomeDecision {
+    nook_companion_core::AuthenticationOutcomeDecision::classify(
+        input.observation,
+        input.timeout_ms,
+    )
+}
+
+#[wasm_bindgen(js_name = classifyCompanionAuthenticationOutcomeWithDefaultTimeout)]
+#[must_use]
+pub fn classify_companion_authentication_outcome_with_default_timeout(
+    observation: nook_companion_core::AuthenticationOutcomeObservation,
+) -> nook_companion_core::AuthenticationOutcomeDecision {
+    nook_companion_core::AuthenticationOutcomeDecision::classify(
+        observation,
+        nook_companion_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
+    )
+}
+
+#[wasm_bindgen(js_name = extensionPairingGrantStorageKey)]
+#[must_use]
+pub fn extension_pairing_grant_storage_key(vault_store_id: &str) -> String {
+    nook_companion_core::grant_storage_key(vault_store_id)
+}
+
+#[wasm_bindgen(js_name = extensionPairingSetupStorageKey)]
+#[must_use]
+pub fn extension_pairing_setup_storage_key() -> String {
+    nook_companion_core::EXTENSION_SETUP_KEY.to_owned()
+}
+
+#[wasm_bindgen(js_name = createExtensionPairingState)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn create_extension_pairing_state(
+    input: nook_companion_core::CreateExtensionPairingStateInput,
+) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
+    nook_companion_core::create_pairing_state(input)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen(js_name = refreshExtensionPairingGrant)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn refresh_extension_pairing_grant(
+    input: nook_companion_core::RefreshExtensionPairingGrantInput,
+) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
+    nook_companion_core::refresh_pairing_grant(input)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen(js_name = orderedExtensionPairingGrants)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn ordered_extension_pairing_grants(
+    state: nook_companion_core::ExtensionPairingState,
+) -> Vec<nook_companion_core::StoredExtensionPairingGrant> {
+    state.ordered_grants()
+}
+
+#[wasm_bindgen(js_name = selectedExtensionPairingGrant)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn selected_extension_pairing_grant(
+    state: nook_companion_core::ExtensionPairingState,
+) -> nook_companion_core::SelectedExtensionPairingGrant {
+    state.selected_grant().map_or(
+        nook_companion_core::SelectedExtensionPairingGrant::NotSelected,
+        |grant| nook_companion_core::SelectedExtensionPairingGrant::Selected {
+            grant: Box::new(grant),
+        },
+    )
+}
+
+#[wasm_bindgen(js_name = firstExtensionPairingGrant)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn first_extension_pairing_grant(
+    state: nook_companion_core::ExtensionPairingState,
+) -> nook_companion_core::SelectedExtensionPairingGrant {
+    state.first_grant().map_or(
+        nook_companion_core::SelectedExtensionPairingGrant::NotSelected,
+        |grant| nook_companion_core::SelectedExtensionPairingGrant::Selected {
+            grant: Box::new(grant),
+        },
+    )
+}
+
+#[wasm_bindgen(js_name = extensionSetupAfterPairingGrantRemoval)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn extension_setup_after_pairing_grant_removal(
+    input: nook_companion_core::ExtensionPairingGrantRemovalInput,
+) -> nook_companion_core::ExtensionSetupAfterRemoval {
+    input
+        .state
+        .setup_after_removal(&input.removed_vault_store_id)
+        .map_or(
+            nook_companion_core::ExtensionSetupAfterRemoval::NoPairedVault,
+            |setup| nook_companion_core::ExtensionSetupAfterRemoval::Ready { setup },
+        )
+}
+
+#[wasm_bindgen(js_name = isStoredExtensionPairingGrantJson)]
+#[must_use]
+pub fn is_stored_extension_pairing_grant_json(value: &str) -> bool {
+    nook_companion_core::is_stored_pairing_grant_json(value)
+}
+
+#[wasm_bindgen(js_name = isExtensionReadySetupJson)]
+#[must_use]
+pub fn is_extension_ready_setup_json(value: &str) -> bool {
+    nook_companion_core::is_ready_pairing_setup_json(value)
+}
+
+#[wasm_bindgen(js_name = migrateLegacyExtensionPairingStateJson)]
+pub fn migrate_legacy_extension_pairing_state_json(
+    value: &str,
+) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
+    nook_companion_core::migrate_legacy_pairing_state_json(value)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen(js_name = isCloudflarePrPreviewHost)]
@@ -403,12 +533,20 @@ mod tests {
     fn extension_persistence_wasm_exports_match_core_policy() {
         let area = nook_companion_core::ExtensionPersistenceArea::Pairing;
         assert_eq!(extension_persistence_database_name(area), "nook_extension");
+        let database_observation = nook_companion_core::ExtensionPersistenceObservation {
+            area,
+            observed_names: vec!["nook_extension".to_owned()],
+        };
         assert_eq!(
-            classify_extension_persistence_databases(area, vec!["nook_extension".to_owned()]),
+            classify_extension_persistence_databases(database_observation),
             nook_companion_core::ExtensionPersistenceDatabaseState::Present
         );
+        let store_observation = nook_companion_core::ExtensionPersistenceObservation {
+            area,
+            observed_names: vec!["pairing".to_owned()],
+        };
         assert_eq!(
-            classify_extension_persistence_stores(area, vec!["pairing".to_owned()]),
+            classify_extension_persistence_stores(store_observation),
             nook_companion_core::ExtensionPersistenceStoreState::Present
         );
     }

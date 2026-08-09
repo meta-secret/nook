@@ -31,9 +31,6 @@ const VAULT_AUTH_STEP_CATALOG: Record<
   },
 }
 
-export function vaultAuthStepMessage(
-  key: VaultAuthStepKey,
-  locale: VaultAuthLocale = VaultAuthLocale.English,
-): string {
-  return VAULT_AUTH_STEP_CATALOG[locale][key]
+export function vaultAuthStepMessage(key: VaultAuthStepKey): string {
+  return VAULT_AUTH_STEP_CATALOG[VaultAuthLocale.English][key]
 }

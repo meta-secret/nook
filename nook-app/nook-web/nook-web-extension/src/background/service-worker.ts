@@ -55,7 +55,6 @@ import {
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
 } from '../lib/webauthn-messages'
-import { setupStorageKey } from './pairing-grants'
 import { websiteLoginOptions } from './service-worker/account-pickers'
 import {
   cancelAuthenticatorPicker,
@@ -86,13 +85,13 @@ import {
 import {
   createIdentityHandoff,
   discoverPairedVaultIdentity,
-  getPairingStorage,
   hasPairingApprovedType,
   isAuthorizedWebsiteSender,
   isNokeySender,
   openExtensionPairing,
   requestPairedVaultUnlock,
 } from './service-worker/pairing-identity'
+import { handlePairingStateQuery } from './service-worker/pairing-state-query'
 import {
   importApprovedPairing,
   importLocalEventLogUpdate,
@@ -125,113 +124,159 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
   const message = runtimeMessage as object
   if (isExtensionPairingStateQueryMessage(message)) {
-    if (sender.id !== chrome.runtime.id) {
-      sendResponse({ ok: false, reason: 'forbidden-sender' })
-      return false
+    const queryContext: Parameters<typeof handlePairingStateQuery>[0] = {
+      sender,
+      sendResponse,
     }
-    void getPairingStorage(setupStorageKey)
-      .then((stored) =>
-        sendResponse({ ok: true, setup: stored[setupStorageKey] }),
-      )
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'pairing-state-read-failed' }),
-      )
-    return true
+    return handlePairingStateQuery(queryContext)
   }
 
   if (isWebsiteLoginPickerOpenMessage(message)) {
-    void openWebsiteLoginPicker(message, sender)
+    const nookTypedArgs0_0: Parameters<typeof openWebsiteLoginPicker>[0] = {
+      message,
+      sender,
+    }
+    void openWebsiteLoginPicker(nookTypedArgs0_0)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'login-picker-open-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs2: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'login-picker-open-failed',
+        }
+        return sendResponse(nookArrowArgs2)
+      })
     return true
   }
 
   if (isLoginPickerQueryMessage(message)) {
-    void queryLoginPicker(message, sender)
+    const nookTypedArgs0_1: Parameters<typeof queryLoginPicker>[0] = {
+      message,
+      sender,
+    }
+    void queryLoginPicker(nookTypedArgs0_1)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({
+      .catch(() => {
+        const nookArrowArgs3: Parameters<typeof sendResponse>[0] = {
           ok: false,
           reason: 'login-picker-query-failed',
-        }),
-      )
+        }
+        return sendResponse(nookArrowArgs3)
+      })
     return true
   }
 
   if (isLoginPickerSelectMessage(message)) {
-    void selectLoginPicker(message, sender)
+    const nookTypedArgs0_2: Parameters<typeof selectLoginPicker>[0] = {
+      message,
+      sender,
+    }
+    void selectLoginPicker(nookTypedArgs0_2)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({
+      .catch(() => {
+        const nookArrowArgs4: Parameters<typeof sendResponse>[0] = {
           ok: false,
           reason: 'login-picker-select-failed',
-        }),
-      )
+        }
+        return sendResponse(nookArrowArgs4)
+      })
     return true
   }
 
   if (isLoginPickerCancelMessage(message)) {
-    void cancelLoginPicker(message, sender)
+    const nookTypedArgs0_3: Parameters<typeof cancelLoginPicker>[0] = {
+      message,
+      sender,
+    }
+    void cancelLoginPicker(nookTypedArgs0_3)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({
+      .catch(() => {
+        const nookArrowArgs5: Parameters<typeof sendResponse>[0] = {
           ok: false,
           reason: 'login-picker-cancel-failed',
-        }),
-      )
+        }
+        return sendResponse(nookArrowArgs5)
+      })
     return true
   }
 
   if (isWebsiteAuthenticatorPickerOpenMessage(message)) {
-    void openWebsiteAuthenticatorPicker(message, sender)
+    const nookTypedArgs0_4: Parameters<
+      typeof openWebsiteAuthenticatorPicker
+    >[0] = { message, sender }
+    void openWebsiteAuthenticatorPicker(nookTypedArgs0_4)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'authenticator-picker-open-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs6: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'authenticator-picker-open-failed',
+        }
+        return sendResponse(nookArrowArgs6)
+      })
     return true
   }
 
   if (isAuthenticatorPickerQueryMessage(message)) {
-    void queryAuthenticatorPicker(message, sender)
+    const nookTypedArgs0_5: Parameters<typeof queryAuthenticatorPicker>[0] = {
+      message,
+      sender,
+    }
+    void queryAuthenticatorPicker(nookTypedArgs0_5)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({
+      .catch(() => {
+        const nookArrowArgs7: Parameters<typeof sendResponse>[0] = {
           ok: false,
           reason: 'authenticator-picker-query-failed',
-        }),
-      )
+        }
+        return sendResponse(nookArrowArgs7)
+      })
     return true
   }
 
   if (isAuthenticatorPickerSelectMessage(message)) {
-    void selectAuthenticatorPicker(message, sender)
+    const nookTypedArgs0_6: Parameters<typeof selectAuthenticatorPicker>[0] = {
+      message,
+      sender,
+    }
+    void selectAuthenticatorPicker(nookTypedArgs0_6)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({
+      .catch(() => {
+        const nookArrowArgs8: Parameters<typeof sendResponse>[0] = {
           ok: false,
           reason: 'authenticator-picker-select-failed',
-        }),
-      )
+        }
+        return sendResponse(nookArrowArgs8)
+      })
     return true
   }
 
   if (isAuthenticatorPickerCancelMessage(message)) {
-    void cancelAuthenticatorPicker(message, sender)
+    const nookTypedArgs0_7: Parameters<typeof cancelAuthenticatorPicker>[0] = {
+      message,
+      sender,
+    }
+    void cancelAuthenticatorPicker(nookTypedArgs0_7)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({
+      .catch(() => {
+        const nookArrowArgs9: Parameters<typeof sendResponse>[0] = {
           ok: false,
           reason: 'authenticator-picker-cancel-failed',
-        }),
-      )
+        }
+        return sendResponse(nookArrowArgs9)
+      })
     return true
   }
 
   if (isAuthenticationWorkflowSnapshotMessage(message)) {
-    if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
-      sendResponse({ ok: false, reason: 'workflow-forbidden-origin' })
+    const nookTypedArgs0_1: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
+      sender,
+      origin: message.payload.origin,
+    }
+    if (!isAuthorizedWebsiteSender(nookTypedArgs0_1)) {
+      const nookTypedArgs0_2: Parameters<typeof sendResponse>[0] = {
+        ok: false,
+        reason: 'workflow-forbidden-origin',
+      }
+      sendResponse(nookTypedArgs0_2)
       return false
     }
     const needsPasskeyLookup = message.payload.observations.some(
@@ -252,28 +297,47 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
           })),
         ),
       )
-      .then((result) =>
-        sendResponse(
-          result.kind === AuthenticationWorkflowSnapshotKind.Matched
-            ? { ok: true, snapshot: result.snapshot }
-            : { ok: true },
-        ),
-      )
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'workflow-snapshot-failed' }),
-      )
+      .then((result) => {
+        const matchedResponse: Parameters<typeof sendResponse>[0] = {
+          ok: true,
+          ...(result.kind === AuthenticationWorkflowSnapshotKind.Matched
+            ? { snapshot: result.snapshot }
+            : {}),
+        }
+        return sendResponse(matchedResponse)
+      })
+      .catch(() => {
+        const nookArrowArgs10: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'workflow-snapshot-failed',
+        }
+        return sendResponse(nookArrowArgs10)
+      })
     return true
   }
 
   if (isAuthenticationOutcomeClassifyMessage(message)) {
-    void classifyAuthenticationOutcome(
-      message.payload.observation,
-      message.payload.timeoutMs,
-    )
-      .then((verdict) => sendResponse({ ok: true, verdict }))
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'outcome-classify-failed' }),
-      )
+    const nookTypedArgs0_3: Parameters<
+      typeof classifyAuthenticationOutcome
+    >[0] = {
+      observation: message.payload.observation,
+      timeoutMs: message.payload.timeoutMs,
+    }
+    void classifyAuthenticationOutcome(nookTypedArgs0_3)
+      .then((verdict) => {
+        const nookArrowArgs11: Parameters<typeof sendResponse>[0] = {
+          ok: true,
+          verdict,
+        }
+        return sendResponse(nookArrowArgs11)
+      })
+      .catch(() => {
+        const nookArrowArgs12: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'outcome-classify-failed',
+        }
+        return sendResponse(nookArrowArgs12)
+      })
     return true
   }
 
@@ -288,189 +352,354 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     'origin' in message.payload &&
     typeof message.payload.origin === 'string'
   ) {
-    if (
-      !isAuthorizedWebsiteSender(
-        sender,
-        (message.payload as { origin: string }).origin,
-      )
-    ) {
-      sendResponse({ ok: false, reason: 'generate-password-forbidden-origin' })
+    const nookTypedArgs0_4: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
+      sender,
+      origin: (message.payload as { origin: string }).origin,
+    }
+    if (!isAuthorizedWebsiteSender(nookTypedArgs0_4)) {
+      const nookTypedArgs0_5: Parameters<typeof sendResponse>[0] = {
+        ok: false,
+        reason: 'generate-password-forbidden-origin',
+      }
+      sendResponse(nookTypedArgs0_5)
       return false
     }
     void generateSuggestedPassword()
-      .then((password) => sendResponse({ ok: true, password }))
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'generate-password-failed' }),
-      )
+      .then((password) => {
+        const nookArrowArgs13: Parameters<typeof sendResponse>[0] = {
+          ok: true,
+          password,
+        }
+        return sendResponse(nookArrowArgs13)
+      })
+      .catch(() => {
+        const nookArrowArgs14: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'generate-password-failed',
+        }
+        return sendResponse(nookArrowArgs14)
+      })
     return true
   }
 
   if (isWebsitePasskeyOptionsMessage(message)) {
-    void websitePasskeyOptions(message, sender)
+    const nookTypedArgs0_8: Parameters<typeof websitePasskeyOptions>[0] = {
+      message,
+      sender,
+    }
+    void websitePasskeyOptions(nookTypedArgs0_8)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'passkey-options-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs15: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'passkey-options-failed',
+        }
+        return sendResponse(nookArrowArgs15)
+      })
     return true
   }
 
   if (isWebsitePasskeyPerformMessage(message)) {
-    void performWebsitePasskey(message, sender)
+    const nookTypedArgs0_9: Parameters<typeof performWebsitePasskey>[0] = {
+      message,
+      sender,
+    }
+    void performWebsitePasskey(nookTypedArgs0_9)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'passkey-ceremony-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs16: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'passkey-ceremony-failed',
+        }
+        return sendResponse(nookArrowArgs16)
+      })
     return true
   }
 
   if (isWebsitePasskeyCancelMessage(message)) {
-    void cancelWebsitePasskey(message, sender)
+    const nookTypedArgs0_10: Parameters<typeof cancelWebsitePasskey>[0] = {
+      message,
+      sender,
+    }
+    void cancelWebsitePasskey(nookTypedArgs0_10)
       .then(sendResponse)
-      .catch(() => sendResponse({ ok: false, reason: 'passkey-cancel-failed' }))
+      .catch(() => {
+        const nookArrowArgs17: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'passkey-cancel-failed',
+        }
+        return sendResponse(nookArrowArgs17)
+      })
     return true
   }
 
   if (isWebsiteLoginOptionsMessage(message)) {
-    void websiteLoginOptions(message, sender)
+    const nookTypedArgs0_11: Parameters<typeof websiteLoginOptions>[0] = {
+      message,
+      sender,
+    }
+    void websiteLoginOptions(nookTypedArgs0_11)
       .then(sendResponse)
-      .catch(() => sendResponse({ ok: false, reason: 'login-options-failed' }))
+      .catch(() => {
+        const nookArrowArgs18: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'login-options-failed',
+        }
+        return sendResponse(nookArrowArgs18)
+      })
     return true
   }
 
   if (isWebsiteLoginRevealMessage(message)) {
-    void websiteLoginFill(message, sender)
+    const nookTypedArgs0_12: Parameters<typeof websiteLoginFill>[0] = {
+      message,
+      sender,
+    }
+    void websiteLoginFill(nookTypedArgs0_12)
       .then(sendResponse)
-      .catch(() => sendResponse({ ok: false, reason: 'login-fill-failed' }))
+      .catch(() => {
+        const nookArrowArgs19: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'login-fill-failed',
+        }
+        return sendResponse(nookArrowArgs19)
+      })
     return true
   }
 
   if (isWebsiteLoginSaveOfferMessage(message)) {
-    void websiteLoginSaveOffer(message, sender)
+    const nookTypedArgs0_13: Parameters<typeof websiteLoginSaveOffer>[0] = {
+      message,
+      sender,
+    }
+    void websiteLoginSaveOffer(nookTypedArgs0_13)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'login-save-offer-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs20: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'login-save-offer-failed',
+        }
+        return sendResponse(nookArrowArgs20)
+      })
     return true
   }
 
   if (isWebsiteLoginSavePendingMessage(message)) {
-    void websiteLoginSavePending(message, sender)
+    const nookTypedArgs0_14: Parameters<typeof websiteLoginSavePending>[0] = {
+      message,
+      sender,
+    }
+    void websiteLoginSavePending(nookTypedArgs0_14)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'login-save-pending-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs21: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'login-save-pending-failed',
+        }
+        return sendResponse(nookArrowArgs21)
+      })
     return true
   }
 
   if (isWebsiteLoginSaveCommitMessage(message)) {
-    void websiteLoginSaveCommit(message, sender)
+    const nookTypedArgs0_15: Parameters<typeof websiteLoginSaveCommit>[0] = {
+      message,
+      sender,
+    }
+    void websiteLoginSaveCommit(nookTypedArgs0_15)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'login-save-commit-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs22: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'login-save-commit-failed',
+        }
+        return sendResponse(nookArrowArgs22)
+      })
     return true
   }
 
   if (isWebsiteLoginSaveDismissMessage(message)) {
-    void websiteLoginSaveDismiss(message, sender)
+    const nookTypedArgs0_16: Parameters<typeof websiteLoginSaveDismiss>[0] = {
+      message,
+      sender,
+    }
+    void websiteLoginSaveDismiss(nookTypedArgs0_16)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'login-save-dismiss-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs23: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'login-save-dismiss-failed',
+        }
+        return sendResponse(nookArrowArgs23)
+      })
     return true
   }
 
   if (isWebsiteAuthenticatorOptionsMessage(message)) {
-    void websiteAuthenticatorOptions(message, sender)
+    const nookTypedArgs0_17: Parameters<typeof websiteAuthenticatorOptions>[0] =
+      { message, sender }
+    void websiteAuthenticatorOptions(nookTypedArgs0_17)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'authenticator-options-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs24: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'authenticator-options-failed',
+        }
+        return sendResponse(nookArrowArgs24)
+      })
     return true
   }
 
   if (isWebsiteAuthenticatorFillMessage(message)) {
-    void websiteAuthenticatorFill(message, sender)
+    const nookTypedArgs0_18: Parameters<typeof websiteAuthenticatorFill>[0] = {
+      message,
+      sender,
+    }
+    void websiteAuthenticatorFill(nookTypedArgs0_18)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'authenticator-fill-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs25: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'authenticator-fill-failed',
+        }
+        return sendResponse(nookArrowArgs25)
+      })
     return true
   }
 
   if (isWebsiteAuthenticatorEnrollPreviewMessage(message)) {
-    void websiteAuthenticatorEnrollPreview(message, sender)
+    const nookTypedArgs0_19: Parameters<
+      typeof websiteAuthenticatorEnrollPreview
+    >[0] = { message, sender }
+    void websiteAuthenticatorEnrollPreview(nookTypedArgs0_19)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'authenticator-preview-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs26: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'authenticator-preview-failed',
+        }
+        return sendResponse(nookArrowArgs26)
+      })
     return true
   }
 
   if (isWebsiteAuthenticatorEnrollStageMessage(message)) {
-    void websiteAuthenticatorEnrollStage(message, sender)
+    const nookTypedArgs0_20: Parameters<
+      typeof websiteAuthenticatorEnrollStage
+    >[0] = { message, sender }
+    void websiteAuthenticatorEnrollStage(nookTypedArgs0_20)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'authenticator-stage-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs27: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'authenticator-stage-failed',
+        }
+        return sendResponse(nookArrowArgs27)
+      })
     return true
   }
 
   if (isWebsiteAuthenticatorEnrollCodeMessage(message)) {
-    void websiteAuthenticatorEnrollCode(message, sender)
+    const nookTypedArgs0_21: Parameters<
+      typeof websiteAuthenticatorEnrollCode
+    >[0] = { message, sender }
+    void websiteAuthenticatorEnrollCode(nookTypedArgs0_21)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'authenticator-code-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs28: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'authenticator-code-failed',
+        }
+        return sendResponse(nookArrowArgs28)
+      })
     return true
   }
 
   if (isWebsiteAuthenticatorEnrollConfirmMessage(message)) {
-    void websiteAuthenticatorEnrollConfirm(message, sender)
+    const nookTypedArgs0_22: Parameters<
+      typeof websiteAuthenticatorEnrollConfirm
+    >[0] = { message, sender }
+    void websiteAuthenticatorEnrollConfirm(nookTypedArgs0_22)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'authenticator-enroll-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs29: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'authenticator-enroll-failed',
+        }
+        return sendResponse(nookArrowArgs29)
+      })
     return true
   }
 
   if (isWebsiteAuthenticatorEnrollDismissMessage(message)) {
-    void websiteAuthenticatorEnrollDismiss(message, sender)
+    const nookTypedArgs0_23: Parameters<
+      typeof websiteAuthenticatorEnrollDismiss
+    >[0] = { message, sender }
+    void websiteAuthenticatorEnrollDismiss(nookTypedArgs0_23)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'authenticator-dismiss-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs30: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'authenticator-dismiss-failed',
+        }
+        return sendResponse(nookArrowArgs30)
+      })
     return true
   }
 
   if (isWebsiteAuthenticatorEnrollPendingMessage(message)) {
-    void websiteAuthenticatorEnrollPending(message, sender)
+    const nookTypedArgs0_24: Parameters<
+      typeof websiteAuthenticatorEnrollPending
+    >[0] = { message, sender }
+    void websiteAuthenticatorEnrollPending(nookTypedArgs0_24)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'authenticator-pending-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs31: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'authenticator-pending-failed',
+        }
+        return sendResponse(nookArrowArgs31)
+      })
     return true
   }
 
   if (isWebsiteAuthenticatorBackupAttachMessage(message)) {
-    void websiteAuthenticatorBackupAttach(message, sender)
+    const nookTypedArgs0_25: Parameters<
+      typeof websiteAuthenticatorBackupAttach
+    >[0] = { message, sender }
+    void websiteAuthenticatorBackupAttach(nookTypedArgs0_25)
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'authenticator-backup-failed' }),
-      )
+      .catch(() => {
+        const nookArrowArgs32: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'authenticator-backup-failed',
+        }
+        return sendResponse(nookArrowArgs32)
+      })
     return true
   }
 
   if (isExtensionSessionEnsureMessage(message)) {
     if (sender.id !== chrome.runtime.id) {
-      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      const nookTypedArgs0_6: Parameters<typeof sendResponse>[0] = {
+        ok: false,
+        reason: 'forbidden-sender',
+      }
+      sendResponse(nookTypedArgs0_6)
       return false
     }
     void ensureExtensionSessionDocument()
-      .then(() => sendResponse({ ok: true }))
-      .catch(() =>
-        sendResponse({ ok: false, reason: 'session-runtime-failed' }),
-      )
+      .then(() => {
+        const nookArrowArgs33: Parameters<typeof sendResponse>[0] = { ok: true }
+        return sendResponse(nookArrowArgs33)
+      })
+      .catch(() => {
+        const nookArrowArgs34: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'session-runtime-failed',
+        }
+        return sendResponse(nookArrowArgs34)
+      })
     return true
   }
 
@@ -481,12 +710,25 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
         sender.url.startsWith(chrome.runtime.getURL('')))
     const extensionSender = sender.id === chrome.runtime.id && senderUrlAllowed
     if (!extensionSender) {
-      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      const nookTypedArgs0_7: Parameters<typeof sendResponse>[0] = {
+        ok: false,
+        reason: 'forbidden-sender',
+      }
+      sendResponse(nookTypedArgs0_7)
       return false
     }
     void closeExtensionSessionDocument()
-      .then(() => sendResponse({ ok: true }))
-      .catch(() => sendResponse({ ok: false, reason: 'session-lock-failed' }))
+      .then(() => {
+        const nookArrowArgs35: Parameters<typeof sendResponse>[0] = { ok: true }
+        return sendResponse(nookArrowArgs35)
+      })
+      .catch(() => {
+        const nookArrowArgs36: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'session-lock-failed',
+        }
+        return sendResponse(nookArrowArgs36)
+      })
     return true
   }
 
@@ -495,10 +737,17 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       sender.id !== chrome.runtime.id ||
       !sender.url?.endsWith(`/${extensionSessionDocument}`)
     ) {
-      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      const nookTypedArgs0_8: Parameters<typeof sendResponse>[0] = {
+        ok: false,
+        reason: 'forbidden-sender',
+      }
+      sendResponse(nookTypedArgs0_8)
       return false
     }
-    void closeExtensionSessionDocument().then(() => sendResponse({ ok: true }))
+    void closeExtensionSessionDocument().then(() => {
+      const nookArrowArgs37: Parameters<typeof sendResponse>[0] = { ok: true }
+      return sendResponse(nookArrowArgs37)
+    })
     return true
   }
 
@@ -506,13 +755,21 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     hasPairingApprovedType(message) &&
     !isExtensionPairingApprovedMessage(message)
   ) {
-    sendResponse({ ok: false, reason: 'invalid-pairing-grant' })
+    const nookTypedArgs0_9: Parameters<typeof sendResponse>[0] = {
+      ok: false,
+      reason: 'invalid-pairing-grant',
+    }
+    sendResponse(nookTypedArgs0_9)
     return false
   }
 
   if (isExtensionPairingApprovedMessage(message)) {
     if (sender.id !== chrome.runtime.id) {
-      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      const nookTypedArgs0_10: Parameters<typeof sendResponse>[0] = {
+        ok: false,
+        reason: 'forbidden-sender',
+      }
+      sendResponse(nookTypedArgs0_10)
       return false
     }
 
@@ -522,61 +779,102 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
 
   if (isExtensionLocalEventLogUpdatedMessage(message)) {
     if (sender.id !== chrome.runtime.id || !isNokeySender(sender)) {
-      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      const nookTypedArgs0_11: Parameters<typeof sendResponse>[0] = {
+        ok: false,
+        reason: 'forbidden-sender',
+      }
+      sendResponse(nookTypedArgs0_11)
       return false
     }
-    void importLocalEventLogUpdate(
-      message.payload.vaultStoreId,
-      message.payload.eventLogRecords,
-    ).then(sendResponse)
+    const nookTypedArgs0_12: Parameters<typeof importLocalEventLogUpdate>[0] = {
+      vaultStoreId: message.payload.vaultStoreId,
+      eventLogRecords: message.payload.eventLogRecords,
+    }
+    void importLocalEventLogUpdate(nookTypedArgs0_12).then(sendResponse)
     return true
   }
 
   if (isQueryActiveTabLoginDetectionMessage(message)) {
     if (sender.id !== chrome.runtime.id) {
-      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      const nookTypedArgs0_13: Parameters<typeof sendResponse>[0] = {
+        ok: false,
+        reason: 'forbidden-sender',
+      }
+      sendResponse(nookTypedArgs0_13)
       return false
     }
     void queryActiveTabLoginDetection()
       .then(sendResponse)
-      .catch(() =>
-        sendResponse({
+      .catch(() => {
+        const nookArrowArgs38: Parameters<typeof sendResponse>[0] = {
           ok: true,
           status: LoginDetectionStatus.Unavailable,
-        } satisfies LoginDetectionResponse),
-      )
+        } satisfies LoginDetectionResponse
+        return sendResponse(nookArrowArgs38)
+      })
     return true
   }
 
   if (isOpenSimpleVaultMessage(message)) {
     if (sender.id !== chrome.runtime.id) {
-      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      const nookTypedArgs0_14: Parameters<typeof sendResponse>[0] = {
+        ok: false,
+        reason: 'forbidden-sender',
+      }
+      sendResponse(nookTypedArgs0_14)
       return false
     }
     openSimpleVault()
-    sendResponse({ ok: true })
+    const nookTypedArgs0_15: Parameters<typeof sendResponse>[0] = { ok: true }
+    sendResponse(nookTypedArgs0_15)
     return false
   }
 
   if (isOpenCompanionLauncherMessage(message)) {
     if (sender.id !== chrome.runtime.id) {
-      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      const nookTypedArgs0_16: Parameters<typeof sendResponse>[0] = {
+        ok: false,
+        reason: 'forbidden-sender',
+      }
+      sendResponse(nookTypedArgs0_16)
       return false
     }
     void openCompanionLauncher(message.payload?.intent)
-      .then(() => sendResponse({ ok: true }))
-      .catch(() => sendResponse({ ok: false, reason: 'launcher-failed' }))
+      .then(() => {
+        const nookArrowArgs39: Parameters<typeof sendResponse>[0] = { ok: true }
+        return sendResponse(nookArrowArgs39)
+      })
+      .catch(() => {
+        const nookArrowArgs40: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'launcher-failed',
+        }
+        return sendResponse(nookArrowArgs40)
+      })
     return true
   }
 
   if (isBeginExtensionPairingMessage(message)) {
     if (sender.id !== chrome.runtime.id) {
-      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      const nookTypedArgs0_17: Parameters<typeof sendResponse>[0] = {
+        ok: false,
+        reason: 'forbidden-sender',
+      }
+      sendResponse(nookTypedArgs0_17)
       return false
     }
     void openExtensionPairing(message.payload)
-      .then(() => sendResponse({ ok: true }))
-      .catch(() => sendResponse({ ok: false, reason: 'pairing-launch-failed' }))
+      .then(() => {
+        const nookArrowArgs41: Parameters<typeof sendResponse>[0] = { ok: true }
+        return sendResponse(nookArrowArgs41)
+      })
+      .catch(() => {
+        const nookArrowArgs42: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'pairing-launch-failed',
+        }
+        return sendResponse(nookArrowArgs42)
+      })
     return true
   }
 
@@ -589,18 +887,37 @@ chrome.runtime.onMessageExternal.addListener(
     const message = runtimeMessage as object
     if (isOpenCompanionLauncherMessage(message)) {
       if (!isNokeySender(sender)) {
-        sendResponse({ ok: false, reason: 'forbidden-sender' })
+        const nookTypedArgs0_18: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'forbidden-sender',
+        }
+        sendResponse(nookTypedArgs0_18)
         return false
       }
       void openCompanionLauncher(message.payload?.intent)
-        .then(() => sendResponse({ ok: true }))
-        .catch(() => sendResponse({ ok: false, reason: 'launcher-failed' }))
+        .then(() => {
+          const nookArrowArgs43: Parameters<typeof sendResponse>[0] = {
+            ok: true,
+          }
+          return sendResponse(nookArrowArgs43)
+        })
+        .catch(() => {
+          const nookArrowArgs44: Parameters<typeof sendResponse>[0] = {
+            ok: false,
+            reason: 'launcher-failed',
+          }
+          return sendResponse(nookArrowArgs44)
+        })
       return true
     }
 
     if (isExtensionPairedVaultIdentityDiscoveryMessage(message)) {
       if (!isNokeySender(sender)) {
-        sendResponse({ ok: false, reason: 'forbidden-sender' })
+        const nookTypedArgs0_19: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'forbidden-sender',
+        }
+        sendResponse(nookTypedArgs0_19)
         return false
       }
       void discoverPairedVaultIdentity(message).then(sendResponse)
@@ -609,25 +926,34 @@ chrome.runtime.onMessageExternal.addListener(
 
     if (isExtensionPairedVaultUnlockRequestMessage(message)) {
       if (!isNokeySender(sender)) {
-        sendResponse({ ok: false, reason: 'forbidden-sender' })
+        const nookTypedArgs0_20: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'forbidden-sender',
+        }
+        sendResponse(nookTypedArgs0_20)
         return false
       }
       void requestPairedVaultUnlock(message)
         .then(sendResponse)
-        .catch(() =>
-          sendResponse({
+        .catch(() => {
+          const nookArrowArgs45: Parameters<typeof sendResponse>[0] = {
             ok: false,
             requestId: message.payload.requestId,
             vaultStoreId: message.payload.vaultStoreId,
             reason: 'unlock-launch-failed',
-          }),
-        )
+          }
+          return sendResponse(nookArrowArgs45)
+        })
       return true
     }
 
     if (isExtensionIdentityHandoffRequestMessage(message)) {
       if (!isNokeySender(sender)) {
-        sendResponse({ ok: false, reason: 'forbidden-sender' })
+        const nookTypedArgs0_21: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'forbidden-sender',
+        }
+        sendResponse(nookTypedArgs0_21)
         return false
       }
       void createIdentityHandoff(message).then(sendResponse)
@@ -636,7 +962,11 @@ chrome.runtime.onMessageExternal.addListener(
 
     if (isExtensionPairedVaultIdentityHandoffRequestMessage(message)) {
       if (!isNokeySender(sender)) {
-        sendResponse({ ok: false, reason: 'forbidden-sender' })
+        const nookTypedArgs0_22: Parameters<typeof sendResponse>[0] = {
+          ok: false,
+          reason: 'forbidden-sender',
+        }
+        sendResponse(nookTypedArgs0_22)
         return false
       }
       void createIdentityHandoff(message).then(sendResponse)
@@ -644,7 +974,11 @@ chrome.runtime.onMessageExternal.addListener(
     }
 
     if (!isExtensionPairingApprovedMessage(message) || !isNokeySender(sender)) {
-      sendResponse({ ok: false, reason: 'invalid-pairing-grant' })
+      const nookTypedArgs0_23: Parameters<typeof sendResponse>[0] = {
+        ok: false,
+        reason: 'invalid-pairing-grant',
+      }
+      sendResponse(nookTypedArgs0_23)
       return false
     }
 

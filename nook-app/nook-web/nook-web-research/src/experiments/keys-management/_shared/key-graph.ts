@@ -76,7 +76,8 @@ export enum HereKind {
 }
 
 export type Here =
-  { kind: HereKind.Prepared; deviceId: string } | { kind: HereKind.Unprepared }
+  | { kind: HereKind.Prepared; deviceId: string }
+  | { kind: HereKind.Unprepared }
 
 export enum GraphId {
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
@@ -287,30 +288,61 @@ export function graphById(id: GraphId): KeyGraph {
   return match ? match : tangle
 }
 
-export function devicesForPasskey(
-  graph: KeyGraph,
-  passkeyId: string,
-): Device[] {
+export function devicesForPasskey({
+  graph,
+  passkeyId,
+}: {
+  graph: KeyGraph
+  passkeyId: string
+}): Device[] {
   return graph.devices.filter((device) => device.passkeyIds.includes(passkeyId))
 }
 
-export function passkeysForDevice(graph: KeyGraph, device: Device): Passkey[] {
+export function passkeysForDevice({
+  graph,
+  device,
+}: {
+  graph: KeyGraph
+  device: Device
+}): Passkey[] {
   return graph.passkeys.filter((passkey) =>
     device.passkeyIds.includes(passkey.id),
   )
 }
 
-export function devicesForVault(graph: KeyGraph, vault: Vault): Device[] {
+export function devicesForVault({
+  graph,
+  vault,
+}: {
+  graph: KeyGraph
+  vault: Vault
+}): Device[] {
   return graph.devices.filter((device) => vault.deviceIds.includes(device.id))
 }
 
-export function vaultsForDevice(graph: KeyGraph, deviceId: string): Vault[] {
+export function vaultsForDevice({
+  graph,
+  deviceId,
+}: {
+  graph: KeyGraph
+  deviceId: string
+}): Vault[] {
   return graph.vaults.filter((vault) => vault.deviceIds.includes(deviceId))
 }
 
 /** Every vault this passkey reaches, through any device it is enrolled on. */
-export function vaultsForPasskey(graph: KeyGraph, passkeyId: string): Vault[] {
-  const deviceIds = devicesForPasskey(graph, passkeyId).map(
+export function vaultsForPasskey({
+  graph,
+  passkeyId,
+}: {
+  graph: KeyGraph
+  passkeyId: string
+}): Vault[] {
+  const nookNamedArgs0_0: Parameters<typeof devicesForPasskey>[0] = {
+    graph,
+    passkeyId,
+  }
+  const deviceIds = devicesForPasskey(nookNamedArgs0_0).map(
     (device) => device.id,
   )
   return graph.vaults.filter((vault) =>
@@ -319,8 +351,18 @@ export function vaultsForPasskey(graph: KeyGraph, passkeyId: string): Vault[] {
 }
 
 /** Every passkey that reaches this vault, through any device in between. */
-export function passkeysForVault(graph: KeyGraph, vault: Vault): Passkey[] {
-  const devices = devicesForVault(graph, vault)
+export function passkeysForVault({
+  graph,
+  vault,
+}: {
+  graph: KeyGraph
+  vault: Vault
+}): Passkey[] {
+  const nookNamedArgs0_1: Parameters<typeof devicesForVault>[0] = {
+    graph,
+    vault,
+  }
+  const devices = devicesForVault(nookNamedArgs0_1)
   return graph.passkeys.filter((passkey) =>
     devices.some((device) => device.passkeyIds.includes(passkey.id)),
   )
@@ -333,14 +375,26 @@ export function hereDevices(graph: KeyGraph): Device[] {
   return graph.devices.filter((device) => device.id === id)
 }
 
-export function isHere(graph: KeyGraph, device: Device): boolean {
+export function isHere({
+  graph,
+  device,
+}: {
+  graph: KeyGraph
+  device: Device
+}): boolean {
   return (
     graph.here.kind === HereKind.Prepared && graph.here.deviceId === device.id
   )
 }
 
 /** Whether this browser, as it stands, can open the vault at all. */
-export function openableHere(graph: KeyGraph, vault: Vault): boolean {
+export function openableHere({
+  graph,
+  vault,
+}: {
+  graph: KeyGraph
+  vault: Vault
+}): boolean {
   return hereDevices(graph).some((device) =>
     vault.deviceIds.includes(device.id),
   )
@@ -381,31 +435,65 @@ export interface Highlight {
   vaultIds: string[]
 }
 
-export function highlightFor(graph: KeyGraph, node: NodeRef): Highlight {
+export function highlightFor({
+  graph,
+  node,
+}: {
+  graph: KeyGraph
+  node: NodeRef
+}): Highlight {
   if (node.kind === NodeKind.Passkey) {
-    const devices = devicesForPasskey(graph, node.id)
+    const nookNamedArgs0_2: Parameters<typeof devicesForPasskey>[0] = {
+      graph,
+      passkeyId: node.id,
+    }
+    const devices = devicesForPasskey(nookNamedArgs0_2)
+    const nookNamedArgs0_3: Parameters<typeof vaultsForPasskey>[0] = {
+      graph,
+      passkeyId: node.id,
+    }
     return {
       passkeyIds: [node.id],
       deviceIds: devices.map((device) => device.id),
-      vaultIds: vaultsForPasskey(graph, node.id).map((vault) => vault.id),
+      vaultIds: vaultsForPasskey(nookNamedArgs0_3).map((vault) => vault.id),
     }
   }
   if (node.kind === NodeKind.Device) {
     const devices = graph.devices.filter((device) => device.id === node.id)
+    const nookNamedArgs0_4: Parameters<typeof vaultsForDevice>[0] = {
+      graph,
+      deviceId: node.id,
+    }
     return {
-      passkeyIds: devices.flatMap((device) =>
-        passkeysForDevice(graph, device).map((passkey) => passkey.id),
-      ),
+      passkeyIds: devices.flatMap((device) => {
+        const nookNamedArgument184: Parameters<typeof passkeysForDevice>[0] = {
+          graph,
+          device,
+        }
+        return passkeysForDevice(nookNamedArgument184).map(
+          (passkey) => passkey.id,
+        )
+      }),
       deviceIds: devices.map((device) => device.id),
-      vaultIds: vaultsForDevice(graph, node.id).map((vault) => vault.id),
+      vaultIds: vaultsForDevice(nookNamedArgs0_4).map((vault) => vault.id),
     }
   }
   const vaults = graph.vaults.filter((vault) => vault.id === node.id)
-  const devices = vaults.flatMap((vault) => devicesForVault(graph, vault))
+  const devices = vaults.flatMap((vault) => {
+    const nookNamedArgument185: Parameters<typeof devicesForVault>[0] = {
+      graph,
+      vault,
+    }
+    return devicesForVault(nookNamedArgument185)
+  })
   return {
-    passkeyIds: vaults.flatMap((vault) =>
-      passkeysForVault(graph, vault).map((passkey) => passkey.id),
-    ),
+    passkeyIds: vaults.flatMap((vault) => {
+      const nookNamedArgument186: Parameters<typeof passkeysForVault>[0] = {
+        graph,
+        vault,
+      }
+      return passkeysForVault(nookNamedArgument186).map((passkey) => passkey.id)
+    }),
     deviceIds: devices.map((device) => device.id),
     vaultIds: vaults.map((vault) => vault.id),
   }

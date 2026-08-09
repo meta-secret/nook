@@ -34,7 +34,7 @@ function isSerializedProviderField(
   return Object.values(value).every(isSerializedProviderField)
 }
 
-export function scrubProviderCredentials(providers: StorageProvider[]): void {
+export function scrubProviderCredentials(providers: object[]): void {
   const candidates = providers as ProviderCredentialCandidate[]
   for (const provider of candidates) {
     if (!provider || typeof provider !== 'object') continue
@@ -75,7 +75,7 @@ export async function runWithProviderCredentialCleanup<Result>(
 }
 
 export type StageProviderCredentialsArgs = {
-  providers: StorageProvider[]
+  providers: object[]
   decode: (providers: object) => Promise<StorageProvider[]>
 }
 

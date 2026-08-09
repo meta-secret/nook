@@ -95,11 +95,15 @@ function hasDisplayedOutcomeMarker(selector: string): boolean {
   )
 }
 
-function collectEnrollmentOutcomeObservation(
-  startedAt: number,
-  authPath: string,
-  sawMutation: boolean,
-): AuthenticationOutcomeObservationView {
+function collectEnrollmentOutcomeObservation({
+  startedAt,
+  authPath,
+  sawMutation,
+}: {
+  startedAt: number
+  authPath: string
+  sawMutation: boolean
+}): AuthenticationOutcomeObservationView {
   // Only count markers that are actually shown. Soft SPA demos keep a hidden
   // success node in the document; treating that as present commits too early.
   const successMarkerPresent = hasDisplayedOutcomeMarker(
@@ -126,20 +130,24 @@ function collectEnrollmentOutcomeObservation(
   }
 }
 
-async function classifyEnrollmentOutcome(
-  host: EnrollmentOutcomeHost,
-  observation: AuthenticationOutcomeObservationView,
-): Promise<EnrollmentOutcomeClassification> {
-  const delivery = await host.sendRuntimeMessage<{
-    ok?: boolean
-    verdict?: AuthenticationOutcomeVerdictView
-  }>({
+async function classifyEnrollmentOutcome({
+  host,
+  observation,
+}: {
+  host: EnrollmentOutcomeHost
+  observation: AuthenticationOutcomeObservationView
+}): Promise<EnrollmentOutcomeClassification> {
+  const nookTypedArgs0_0: Parameters<typeof host.sendRuntimeMessage>[0] = {
     type: 'nook:authentication-outcome-classify',
     payload: {
       observation,
       timeoutMs: ENROLLMENT_EVIDENCE_TIMEOUT_MS,
     },
-  })
+  }
+  const delivery = await host.sendRuntimeMessage<{
+    ok?: boolean
+    verdict?: AuthenticationOutcomeVerdictView
+  }>(nookTypedArgs0_0)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok ||
@@ -153,14 +161,19 @@ async function classifyEnrollmentOutcome(
   }
 }
 
-export async function fillStagedEnrollmentCode(
-  host: EnrollmentOutcomeHost,
-  stageId: string,
-): Promise<boolean> {
-  const delivery = await host.sendRuntimeMessage<EnrollCodeResponse>({
+export async function fillStagedEnrollmentCode({
+  host,
+  stageId,
+}: {
+  host: EnrollmentOutcomeHost
+  stageId: string
+}): Promise<boolean> {
+  const nookTypedArgs0_1: Parameters<typeof host.sendRuntimeMessage>[0] = {
     type: 'nook:website-authenticator-enroll-code',
     payload: { origin: location.origin, stageId },
-  })
+  }
+  const delivery =
+    await host.sendRuntimeMessage<EnrollCodeResponse>(nookTypedArgs0_1)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok ||
@@ -168,7 +181,10 @@ export async function fillStagedEnrollmentCode(
   ) {
     return false
   }
-  return fillOneTimeCode(delivery.response.code)
+  const nookTypedArgs0_0: Parameters<typeof fillOneTimeCode>[0] = {
+    code: delivery.response.code,
+  }
+  return fillOneTimeCode(nookTypedArgs0_0)
 }
 
 export function stopPendingEnrollmentWatch(): void {
@@ -186,11 +202,14 @@ async function evaluatePendingEnrollmentEvidence(): Promise<void> {
   if (enrollmentWatchState.kind === EnrollmentWatchStateKind.Idle) return
   const watch = enrollmentWatchState.watch
   if (watch.stageId === 'pending') return
-  const observation = collectEnrollmentOutcomeObservation(
-    watch.startedAt,
-    watch.authPath,
-    watch.sawMutation,
-  )
+  const nookTypedArgs0_1: Parameters<
+    typeof collectEnrollmentOutcomeObservation
+  >[0] = {
+    startedAt: watch.startedAt,
+    authPath: watch.authPath,
+    sawMutation: watch.sawMutation,
+  }
+  const observation = collectEnrollmentOutcomeObservation(nookTypedArgs0_1)
 
   // Commit on clear success without depending on a service-worker roundtrip.
   if (observation.successMarkerPresent && !observation.errorMarkerPresent) {
@@ -210,10 +229,11 @@ async function evaluatePendingEnrollmentEvidence(): Promise<void> {
     return
   }
 
-  const classification = await classifyEnrollmentOutcome(
-    watch.host,
+  const nookTypedArgs0_2: Parameters<typeof classifyEnrollmentOutcome>[0] = {
+    host: watch.host,
     observation,
-  )
+  }
+  const classification = await classifyEnrollmentOutcome(nookTypedArgs0_2)
   if (
     classification.kind === EnrollmentOutcomeClassificationKind.Unavailable ||
     enrollmentWatchState.kind !== EnrollmentWatchStateKind.Watching ||
@@ -244,28 +264,41 @@ async function evaluatePendingEnrollmentEvidence(): Promise<void> {
   }
 }
 
-export function beginEnrollmentEvidenceWatch(
-  host: EnrollmentOutcomeHost,
-  stageId: string,
-  callbacks: EnrollmentEvidenceCallbacks,
-): void {
+export function beginEnrollmentEvidenceWatch({
+  host,
+  stageId,
+  callbacks,
+}: {
+  host: EnrollmentOutcomeHost
+  stageId: string
+  callbacks: EnrollmentEvidenceCallbacks
+}): void {
   stopPendingEnrollmentWatch()
   const observer = new MutationObserver(() => {
     if (enrollmentWatchState.kind !== EnrollmentWatchStateKind.Watching) return
     enrollmentWatchState.watch.sawMutation = true
     if (stageId !== 'pending') {
-      void fillStagedEnrollmentCode(host, stageId)
+      const nookTypedArgs0_3: Parameters<typeof fillStagedEnrollmentCode>[0] = {
+        host,
+        stageId,
+      }
+      void fillStagedEnrollmentCode(nookTypedArgs0_3)
     }
     void evaluatePendingEnrollmentEvidence()
   })
-  observer.observe(document.documentElement, {
+  const nookTypedArgs0_2: Parameters<typeof observer.observe>[1] = {
     childList: true,
     subtree: true,
     attributes: true,
-  })
+  }
+  observer.observe(document.documentElement, nookTypedArgs0_2)
   const timer = window.setInterval(() => {
     if (stageId !== 'pending') {
-      void fillStagedEnrollmentCode(host, stageId)
+      const nookTypedArgs0_4: Parameters<typeof fillStagedEnrollmentCode>[0] = {
+        host,
+        stageId,
+      }
+      void fillStagedEnrollmentCode(nookTypedArgs0_4)
     }
     void evaluatePendingEnrollmentEvidence()
   }, ENROLLMENT_EVIDENCE_POLL_MS)

@@ -16,6 +16,11 @@ export enum SentinelUi {
   Terminal = 'terminal',
 }
 
+export interface SentinelLaunch {
+  ui: SentinelUi
+  vaultName: string
+}
+
 export enum VaultAuthExperimentStage {
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Auth = 'auth',

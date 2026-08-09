@@ -47,10 +47,23 @@ are reading via IntersectionObserver and lets you jump between them.
   const scenario = $derived(scenarioById(scenarioId))
   const prepared = $derived(isPrepared(scenario))
   const acts = $derived(
-    CHAIN_STAGES.map((stage, index) => actFor(scenario, stage, index)),
+    [...CHAIN_STAGES.entries()].map(([index, stage]) => {
+      const nookNamedArgument110: Parameters<typeof actFor>[0] = {
+        access: scenario,
+        stage,
+        index,
+      }
+      return actFor(nookNamedArgument110)
+    }),
   )
 
-  function passkeyAct(access: AccessScenario, numeral: string): Act {
+  function passkeyAct({
+    access,
+    numeral,
+  }: {
+    access: AccessScenario
+    numeral: string
+  }): Act {
     const ready = isPrepared(access)
     return {
       stage: ChainStage.Passkey,
@@ -72,7 +85,13 @@ are reading via IntersectionObserver and lets you jump between them.
     }
   }
 
-  function deviceAct(access: AccessScenario, numeral: string): Act {
+  function deviceAct({
+    access,
+    numeral,
+  }: {
+    access: AccessScenario
+    numeral: string
+  }): Act {
     const ready = isPrepared(access)
     return {
       stage: ChainStage.DeviceKey,
@@ -90,7 +109,13 @@ are reading via IntersectionObserver and lets you jump between them.
     }
   }
 
-  function vaultAct(access: AccessScenario, numeral: string): Act {
+  function vaultAct({
+    access,
+    numeral,
+  }: {
+    access: AccessScenario
+    numeral: string
+  }): Act {
     const verified = verifiedVaults(access)
     const names = verified.map((vault) => vault.label).join(', ')
     return {
@@ -117,15 +142,31 @@ are reading via IntersectionObserver and lets you jump between them.
     }
   }
 
-  function actFor(
-    access: AccessScenario,
-    stage: ChainStage,
-    index: number,
-  ): Act {
+  function actFor({
+    access,
+    stage,
+    index,
+  }: {
+    access: AccessScenario
+    stage: ChainStage
+    index: number
+  }): Act {
     const numeral = NUMERALS[index]
-    if (stage === ChainStage.Passkey) return passkeyAct(access, numeral)
-    if (stage === ChainStage.DeviceKey) return deviceAct(access, numeral)
-    return vaultAct(access, numeral)
+    const nookNamedArgument111: Parameters<typeof passkeyAct>[0] = {
+      access,
+      numeral,
+    }
+    if (stage === ChainStage.Passkey) return passkeyAct(nookNamedArgument111)
+    const nookNamedArgument112: Parameters<typeof deviceAct>[0] = {
+      access,
+      numeral,
+    }
+    if (stage === ChainStage.DeviceKey) return deviceAct(nookNamedArgument112)
+    const nookNamedArgument113: Parameters<typeof vaultAct>[0] = {
+      access,
+      numeral,
+    }
+    return vaultAct(nookNamedArgument113)
   }
 
   function jumpTo(stage: ChainStage) {
@@ -134,24 +175,25 @@ are reading via IntersectionObserver and lets you jump between them.
     const reduced = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
     ).matches
-    panel.scrollIntoView({
+    const nookNamedArgument114: Parameters<typeof panel.scrollIntoView>[0] = {
       behavior: reduced ? 'auto' : 'smooth',
       block: 'start',
-    })
+    }
+    panel.scrollIntoView(nookNamedArgument114)
   }
 
   $effect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue
-          const key = (entry.target as HTMLElement).dataset.act
-          const match = CHAIN_STAGES.find((stage) => `${stage}` === key)
-          if (match) activeAct = match
-        }
-      },
-      { rootMargin: '-45% 0px -45% 0px', threshold: 0 },
-    )
+    const nookNamedArgument115: ConstructorParameters<
+      typeof IntersectionObserver
+    >[1] = { rootMargin: '-45% 0px -45% 0px', threshold: 0 }
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue
+        const key = (entry.target as HTMLElement).dataset.act
+        const match = CHAIN_STAGES.find((stage) => `${stage}` === key)
+        if (match) activeAct = match
+      }
+    }, nookNamedArgument115)
     document
       .querySelectorAll('[data-act]')
       .forEach((panel) => observer.observe(panel))

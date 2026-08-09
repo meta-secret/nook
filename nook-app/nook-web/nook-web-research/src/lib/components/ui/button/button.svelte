@@ -16,10 +16,14 @@
     size?: ButtonSize
     children?: Snippet
   } = $props()
+  let variantInput: Parameters<typeof buttonVariants>[0] = $derived({
+    variant,
+    size,
+  })
 </script>
 
 <button
-  class={cn(buttonVariants({ variant, size }), className)}
+  class={cn(buttonVariants(variantInput), className)}
   {type}
   {...restProps}
 >

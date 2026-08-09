@@ -9,6 +9,7 @@
     Plus,
     Smartphone,
   } from '@lucide/svelte'
+  import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
 
   interface PeerNode {
@@ -18,12 +19,14 @@
   }
 
   let { navigate }: ExperimentProps = $props()
-  void navigate
   let vaultName = $state('Alpha Vault Safe')
   let total = $state(3)
   let threshold = $state(2)
   let rootGenerated = $state(false)
   let peers = $state<PeerNode[]>(buildPeers(3))
+  const signatureCounts = $derived(
+    [...Array<number>(total).keys()].map((index) => index + 1),
+  )
 
   const pairedCount = $derived(
     (rootGenerated ? 1 : 0) + peers.filter(({ paired }) => paired).length,
@@ -32,7 +35,7 @@
   const meshReady = $derived(pairedCount === total)
 
   function buildPeers(count: number): PeerNode[] {
-    return Array.from({ length: count - 1 }, (_, index) => ({
+    return [...Array<PeerNode>(count - 1).keys()].map((index) => ({
       id: index + 2,
       name:
         index === 0
@@ -67,6 +70,7 @@
 </svelte:head>
 
 <main class="reference-canvas min-h-screen bg-[#050505] text-[#e2e2e2]">
+  <ExperimentBack {navigate} />
   <div
     class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 pt-8 pb-12 sm:pt-9"
   >
@@ -136,7 +140,7 @@
             value={threshold}
             onchange={changeThreshold}
           >
-            {#each Array.from({ length: total }, (_, index) => index + 1) as count (count)}
+            {#each signatureCounts as count (count)}
               <option value={count}
                 >{count}
                 {count === 1 ? 'Signature' : 'Signatures'} Required</option

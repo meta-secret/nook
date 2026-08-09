@@ -86,10 +86,11 @@
     const sequence = ++querySequence
     loading = true
     error = ''
-    const response = await sendRuntimeMessage({
+    const message: Parameters<typeof sendRuntimeMessage>[0] = {
       type: 'nook:login-picker-query',
       payload: { requestId, query: searchQuery },
-    })
+    }
+    const response = await sendRuntimeMessage(message)
     if (sequence !== querySequence) return
     loading = false
     if (!isAccountQueryResponse(response)) {
@@ -106,14 +107,15 @@
     if (busy) return
     busy = true
     error = ''
-    const response = await sendRuntimeMessage({
+    const message: Parameters<typeof sendRuntimeMessage>[0] = {
       type: 'nook:login-picker-select',
       payload: {
         requestId,
         vaultStoreId: account.vaultStoreId,
         secretId: account.secretId,
       },
-    })
+    }
+    const response = await sendRuntimeMessage(message)
     if (isOkResponse(response)) {
       completed = true
       window.close()
@@ -132,10 +134,11 @@
     const cancelPendingPicker = () => {
       if (completed) return
       completed = true
-      void chrome.runtime.sendMessage({
+      const message: { type: string; payload: { requestId: string } } = {
         type: 'nook:login-picker-cancel',
         payload: { requestId },
-      })
+      }
+      void chrome.runtime.sendMessage(message)
     }
     window.addEventListener('pagehide', cancelPendingPicker)
     return () => window.removeEventListener('pagehide', cancelPendingPicker)

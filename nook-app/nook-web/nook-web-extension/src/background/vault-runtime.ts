@@ -1,8 +1,16 @@
 import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/runtime-messages'
+import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+import {
+  classifyCompanionAuthenticationOutcome,
+  classifyCompanionAuthenticationOutcomeWithDefaultTimeout,
+  classifyCompanionAuthenticationWorkflow,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  AuthenticationOutcomeClassification,
+  AuthenticationOutcomeObservation,
+  AuthenticationPageObservations,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import initNookWasm, {
-  authenticationWorkflowSnapshot as wasmAuthenticationWorkflowSnapshot,
-  classifyAuthenticationOutcome as wasmClassifyAuthenticationOutcome,
-  classifyAuthenticationOutcomeWithDefaultTimeout as wasmClassifyAuthenticationOutcomeWithDefaultTimeout,
   configureVaultApplication,
   decodeStorageProviders as wasmDecodeStorageProviders,
   defaultPasswordGenerationOptions as wasmDefaultPasswordGenerationOptions,
@@ -11,17 +19,13 @@ import initNookWasm, {
   reconcileExtensionPairingState as wasmReconcileExtensionPairingState,
   removeExtensionPairingState as wasmRemoveExtensionPairingState,
   writeExtensionPairingState as wasmWriteExtensionPairingState,
-  NookAuthenticationOutcomeObservation,
-  NookAuthenticationPageObservation,
-  NookAuthenticationPageObservations,
-  NookAuthenticationWorkflowMatchState,
-  NookExtensionPairingState,
   NookExternalEventLogRecords,
   NookVaultManager,
   VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   AuthProvidersSnapshot,
+  ExtensionPairingState,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
@@ -32,7 +36,10 @@ import type {
   AuthenticationOutcomeObservationView,
   AuthenticationOutcomeVerdictView,
 } from '../lib/outcome-evidence-messages'
-import type { ImportedEventLogState } from './pairing-grants'
+import type {
+  ExtensionPairingItems,
+  ImportedEventLogState,
+} from './pairing-grants'
 
 enum BackgroundWasmStartupKind {
   NotStarted = 'not-started',
@@ -54,9 +61,10 @@ function ensureExtensionWasm(): Promise<unknown> {
   if (backgroundWasmStartup.kind === BackgroundWasmStartupKind.Initializing) {
     return backgroundWasmStartup.operation
   }
-  const operation = initNookWasm({
+  const nookTypedArgs0_0: Parameters<typeof initNookWasm>[0] = {
     module_or_path: chrome.runtime.getURL('background/nook_wasm_bg.wasm'),
-  }).then((value) => {
+  }
+  const operation = initNookWasm(nookTypedArgs0_0).then((value) => {
     configureVaultApplication(VaultApplication.Extension)
     return value
   })
@@ -67,28 +75,32 @@ function ensureExtensionWasm(): Promise<unknown> {
   return operation
 }
 
-export async function readExtensionPairingState(): Promise<
-  Record<string, unknown>
-> {
-  await ensureExtensionWasm()
-  const state = await wasmReadExtensionPairingState()
-  try {
-    return state.toObject() as Record<string, unknown>
-  } finally {
-    state.free()
+function stateFromPairingItems(
+  items: ExtensionPairingItems,
+): ExtensionPairingState {
+  return {
+    entries: Object.entries(items).map(([key, record]) => ({ key, record })),
   }
 }
 
+function pairingItemsFromState(
+  state: ExtensionPairingState,
+): ExtensionPairingItems {
+  return Object.fromEntries(
+    state.entries.map(({ key, record }) => [key, record]),
+  )
+}
+
+export async function readExtensionPairingState(): Promise<ExtensionPairingItems> {
+  await ensureExtensionWasm()
+  return pairingItemsFromState(await wasmReadExtensionPairingState())
+}
+
 export async function writeExtensionPairingState(
-  entries: Record<string, unknown>,
+  items: ExtensionPairingItems,
 ): Promise<void> {
   await ensureExtensionWasm()
-  const state = NookExtensionPairingState.fromObject(entries)
-  try {
-    await wasmWriteExtensionPairingState(state)
-  } finally {
-    state.free()
-  }
+  await wasmWriteExtensionPairingState(stateFromPairingItems(items))
 }
 
 export async function removeExtensionPairingState(
@@ -98,17 +110,20 @@ export async function removeExtensionPairingState(
   await wasmRemoveExtensionPairingState(keys)
 }
 
-export async function reconcileExtensionPairingState(
-  entries: Record<string, unknown>,
-  removedKeys: string[],
-): Promise<void> {
+type ReconcileExtensionPairingStateArgs = {
+  items: ExtensionPairingItems
+  removedKeys: string[]
+}
+
+export async function reconcileExtensionPairingState({
+  items,
+  removedKeys,
+}: ReconcileExtensionPairingStateArgs): Promise<void> {
   await ensureExtensionWasm()
-  const state = NookExtensionPairingState.fromObject(entries)
-  try {
-    await wasmReconcileExtensionPairingState(state, removedKeys)
-  } finally {
-    state.free()
-  }
+  await wasmReconcileExtensionPairingState(
+    stateFromPairingItems(items),
+    removedKeys,
+  )
 }
 
 export enum AuthenticationWorkflowSnapshotKind {
@@ -126,57 +141,15 @@ export type AuthenticationWorkflowSnapshot =
 export async function authenticationWorkflowSnapshot(
   observations: AuthenticationPageObservationView[],
 ): Promise<AuthenticationWorkflowSnapshot> {
-  await ensureExtensionWasm()
-  const inputs = new NookAuthenticationPageObservations()
-  try {
-    for (const observation of observations) {
-      const input = new NookAuthenticationPageObservation(
-        observation.usernameFieldCount,
-        observation.currentPasswordFieldCount,
-        observation.newPasswordFieldCount,
-        observation.genericPasswordFieldCount,
-        observation.oneTimeCodeFieldCount,
-        observation.manualCheckpointPresent,
-        observation.authenticatorSetupHint,
-        observation.backupCodesHint,
-        observation.passkeyControlPresent,
-        observation.matchingPasskeyAccountCount,
-      )
-      try {
-        inputs.add(input)
-      } finally {
-        input.free()
-      }
-    }
-    const workflowMatch = wasmAuthenticationWorkflowSnapshot(inputs)
-    try {
-      if (
-        workflowMatch.state === NookAuthenticationWorkflowMatchState.NoMatch
-      ) {
-        return { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
-      }
-      const snapshot = workflowMatch.snapshot()
-      try {
-        return {
-          kind: AuthenticationWorkflowSnapshotKind.Matched,
-          snapshot: {
-            kind: snapshot.kindName,
-            stage: snapshot.stageName,
-            action: snapshot.actionName,
-            currentStep: snapshot.currentStep,
-            totalSteps: snapshot.totalSteps,
-            requiresHumanApproval: snapshot.requiresHumanApproval,
-            observationIndex: snapshot.observationIndex,
-          },
-        }
-      } finally {
-        snapshot.free()
-      }
-    } finally {
-      workflowMatch.free()
-    }
-  } finally {
-    inputs.free()
+  await companionWasmReady
+  const input: AuthenticationPageObservations = { observations }
+  const workflowMatch = classifyCompanionAuthenticationWorkflow(input)
+  if (workflowMatch.kind === 'no-match') {
+    return { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
+  }
+  return {
+    kind: AuthenticationWorkflowSnapshotKind.Matched,
+    snapshot: workflowMatch.snapshot,
   }
 }
 
@@ -185,64 +158,36 @@ export async function generateSuggestedPassword(): Promise<string> {
   return wasmGeneratePassword(wasmDefaultPasswordGenerationOptions())
 }
 
-export async function classifyAuthenticationOutcome(
-  observation: AuthenticationOutcomeObservationView,
-  timeoutMs: number,
-): Promise<AuthenticationOutcomeVerdictView> {
-  await ensureExtensionWasm()
-  const input = new NookAuthenticationOutcomeObservation(
-    observation.navigatedAwayFromAuthPath,
-    observation.authFieldsPresent,
-    observation.successMarkerPresent,
-    observation.errorMarkerPresent,
-    observation.sameDocumentMutation,
-    observation.inIframe,
-    Math.max(0, Math.floor(observation.elapsedMs)),
-  )
-  try {
-    const verdict = wasmClassifyAuthenticationOutcome(
-      input,
-      Math.max(1, Math.floor(timeoutMs)),
-    )
-    try {
-      return {
-        verdict: verdict.verdict,
-        allowsCredentialCommit: verdict.allowsCredentialCommit === true,
-      }
-    } finally {
-      verdict.free()
-    }
-  } finally {
-    input.free()
+export async function classifyAuthenticationOutcome({
+  observation,
+  timeoutMs,
+}: {
+  observation: AuthenticationOutcomeObservationView
+  timeoutMs: number
+}): Promise<AuthenticationOutcomeVerdictView> {
+  await companionWasmReady
+  const boundedObservation: AuthenticationOutcomeObservation = {
+    ...observation,
+    elapsedMs: Math.max(0, Math.floor(observation.elapsedMs)),
   }
+  const input: AuthenticationOutcomeClassification = {
+    observation: boundedObservation,
+    timeoutMs: Math.max(1, Math.floor(timeoutMs)),
+  }
+  return classifyCompanionAuthenticationOutcome(input)
 }
 
 export async function classifyAuthenticationOutcomeWithDefaultTimeout(
   observation: AuthenticationOutcomeObservationView,
 ): Promise<AuthenticationOutcomeVerdictView> {
-  await ensureExtensionWasm()
-  const input = new NookAuthenticationOutcomeObservation(
-    observation.navigatedAwayFromAuthPath,
-    observation.authFieldsPresent,
-    observation.successMarkerPresent,
-    observation.errorMarkerPresent,
-    observation.sameDocumentMutation,
-    observation.inIframe,
-    Math.max(0, Math.floor(observation.elapsedMs)),
-  )
-  try {
-    const verdict = wasmClassifyAuthenticationOutcomeWithDefaultTimeout(input)
-    try {
-      return {
-        verdict: verdict.verdict,
-        allowsCredentialCommit: verdict.allowsCredentialCommit === true,
-      }
-    } finally {
-      verdict.free()
-    }
-  } finally {
-    input.free()
+  await companionWasmReady
+  const boundedObservation: AuthenticationOutcomeObservation = {
+    ...observation,
+    elapsedMs: Math.max(0, Math.floor(observation.elapsedMs)),
   }
+  return classifyCompanionAuthenticationOutcomeWithDefaultTimeout(
+    boundedObservation,
+  )
 }
 
 function isImportedEventLogState(
@@ -269,15 +214,18 @@ function isImportedEventLogState(
   return true
 }
 
-export async function importExtensionEventLog(
+export async function importExtensionEventLog({
+  grant,
+  records,
+}: {
   grant: {
     vaultStoreId: string
     deviceId: string
     devicePublicKey: string
     deviceSigningPublicKey: string
-  },
-  records: ExtensionEventLogRecord[],
-): Promise<ImportedEventLogState> {
+  }
+  records: ExtensionEventLogRecord[]
+}): Promise<ImportedEventLogState> {
   await ensureExtensionWasm()
   const manager = new NookVaultManager()
   try {

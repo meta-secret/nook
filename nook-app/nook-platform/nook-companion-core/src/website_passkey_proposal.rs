@@ -4,7 +4,7 @@
 //! observations plus an unlocked vault match count. Proposals never perform
 //! `WebAuthn` create/assert; the existing page ceremony owns consent and crypto.
 
-use crate::auth::authentication_workflow::AuthenticationWorkflowKind;
+use crate::authentication_workflow::AuthenticationWorkflowKind;
 
 /// Eligibility outcome for a Pilot passkey CTA.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -52,7 +52,7 @@ function toArrayBuffer(source: ArrayLike<number>): ArrayBuffer {
 }
 
 function embeddedCompanionWasmBytes(): CompanionWasmBytes {
-  let base64 = "";
+  let base64: string;
   try {
     // Bun content builds define this identifier. In plain ESM unit tests the
     // binding is absent, and `typeof` still throws ReferenceError in modules.
@@ -78,24 +78,24 @@ async function importNodeModule<TModule>(specifier: string): Promise<TModule> {
   // Keep `import()` out of the classic content-script parse tree; Chrome rejects
   // bare dynamic import syntax even when the Node branch never runs.
   try {
-    const loader = new Function(
-      "specifier",
-      "return import(specifier);",
-    ) as (specifier: string) => Promise<TModule>;
+    const loader = new Function("specifier", "return import(specifier);") as (
+      specifier: string,
+    ) => Promise<TModule>;
     return await loader(specifier);
   } catch {
     // vitest/vite-node can block Function-constructed import(); eval keeps the
     // static source free of `import()` while still loading Node builtins.
-    return await (
-      0,
-      eval
-    )(`import(${JSON.stringify(specifier)})`) as Promise<TModule>;
+    return (await (0, eval)(
+      `import(${JSON.stringify(specifier)})`,
+    )) as Promise<TModule>;
   }
 }
 
 async function companionWasmDiskCandidates(): Promise<string[]> {
   const nodeProcess = (
-    globalThis as { process?: { cwd?: () => string; env?: Record<string, string> } }
+    globalThis as {
+      process?: { cwd?: () => string; env?: Record<string, string> };
+    }
   ).process;
   const fromEnv = nodeProcess?.env?.NOOK_COMPANION_WASM_PATH?.trim() ?? "";
   const cwd = nodeProcess?.cwd?.() ?? "";
@@ -233,7 +233,10 @@ async function companionWasmModuleOrPath(): Promise<CompanionWasmModule> {
 async function startCompanionWasm(): Promise<unknown> {
   const resolved = await companionWasmModuleOrPath();
   if (resolved.kind === CompanionWasmModuleKind.Present) {
-    return initCompanionWasm({ module_or_path: resolved.moduleOrPath });
+    const nookTypedArgs0_0: Parameters<typeof initCompanionWasm>[0] = {
+      module_or_path: resolved.moduleOrPath,
+    };
+    return initCompanionWasm(nookTypedArgs0_0);
   }
   // Node/Bun last resort: wasm-bindgen resolves via import.meta.url. Extension
   // bun tests need on-disk bytes (or they hit Bun's file: fetch rejection).

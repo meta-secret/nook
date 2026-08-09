@@ -5,12 +5,13 @@
   import {
     createVaultAuthWorkflowState,
     Presence,
+    type SentinelLaunch,
     SentinelUi,
     VaultPath,
   } from './vault-auth-workflow-state.svelte'
 
   interface Props {
-    onSentinel: (ui: SentinelUi, vaultName: string) => void
+    onSentinel: (launch: SentinelLaunch) => void
   }
 
   let { onSentinel }: Props = $props()
@@ -28,6 +29,20 @@
   const chooseSimple = () => workflow.choose(VaultPath.Simple)
   const continueAfterName = () => workflow.continueAfterName(vaultName)
   const goBack = () => workflow.goBack()
+  const openCardStack = () => {
+    const launch: SentinelLaunch = {
+      ui: SentinelUi.CardStack,
+      vaultName: vaultName.trim(),
+    }
+    onSentinel(launch)
+  }
+  const openTerminal = () => {
+    const launch: SentinelLaunch = {
+      ui: SentinelUi.Terminal,
+      vaultName: vaultName.trim(),
+    }
+    onSentinel(launch)
+  }
 </script>
 
 <div class="min-h-screen bg-white text-black">
@@ -147,15 +162,13 @@
                   >
                     <button
                       class="rounded-md bg-black px-4 py-2.5 text-sm font-medium text-white"
-                      onclick={() =>
-                        onSentinel(SentinelUi.CardStack, vaultName.trim())}
+                      onclick={openCardStack}
                     >
                       Sentinel card stack · default
                     </button>
                     <button
                       class="rounded-md border border-black/15 bg-white px-4 py-2.5 text-sm font-medium"
-                      onclick={() =>
-                        onSentinel(SentinelUi.Terminal, vaultName.trim())}
+                      onclick={openTerminal}
                     >
                       Vault terminal
                     </button>

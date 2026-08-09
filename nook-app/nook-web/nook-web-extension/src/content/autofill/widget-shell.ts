@@ -249,14 +249,21 @@ const WIDGET_PANEL_STYLES = `
     }
   `
 
-export function buildEnrollmentFlowHost(
-  panel: HTMLElement,
-  step: HTMLParagraphElement,
-  title: HTMLHeadingElement,
-  description: HTMLParagraphElement,
-  continueButton: HTMLButtonElement,
-  openVaultButton: HTMLButtonElement,
-): EnrollmentFlowHost {
+export function buildEnrollmentFlowHost({
+  panel,
+  step,
+  title,
+  description,
+  continueButton,
+  openVaultButton,
+}: {
+  panel: HTMLElement
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+  openVaultButton: HTMLButtonElement
+}): EnrollmentFlowHost {
   return {
     panel,
     step,
@@ -301,10 +308,13 @@ interface WidgetShell {
   collapsedLaunch: HTMLButtonElement
 }
 
-export function createWidgetMark(
-  className: string,
-  size: number,
-): HTMLImageElement {
+export function createWidgetMark({
+  className,
+  size,
+}: {
+  className: string
+  size: number
+}): HTMLImageElement {
   const mark = document.createElement('img')
   mark.className = className
   mark.src = chrome.runtime.getURL('icons/nook.png')
@@ -315,12 +325,17 @@ export function createWidgetMark(
   return mark
 }
 
-export function createWidgetShell(
-  copy: WorkflowCopy,
-  vaultConnection: PilotVaultConnection,
-  currentStep: number,
-  totalSteps: number,
-): WidgetShell {
+export function createWidgetShell({
+  copy,
+  vaultConnection,
+  currentStep,
+  totalSteps,
+}: {
+  copy: WorkflowCopy
+  vaultConnection: PilotVaultConnection
+  currentStep: number
+  totalSteps: number
+}): WidgetShell {
   const host = document.createElement('aside')
   host.id = WIDGET_HOST_ID
   host.setAttribute(
@@ -338,7 +353,11 @@ export function createWidgetShell(
 
   const step = document.createElement('p')
   step.className = 'step-label'
-  step.textContent = progressLabel(currentStep, totalSteps)
+  const nookTypedArgs0_0: Parameters<typeof progressLabel>[0] = {
+    currentStep,
+    totalSteps,
+  }
+  step.textContent = progressLabel(nookTypedArgs0_0)
 
   const collapseButton = document.createElement('button')
   collapseButton.type = 'button'
@@ -368,7 +387,11 @@ export function createWidgetShell(
   const body = document.createElement('div')
   body.className = 'body'
 
-  const mark = createWidgetMark('mark', 52)
+  const nookTypedArgs0_1: Parameters<typeof createWidgetMark>[0] = {
+    className: 'mark',
+    size: 52,
+  }
+  const mark = createWidgetMark(nookTypedArgs0_1)
 
   const title = document.createElement('h1')
   title.textContent = translatedMessage(copy.titleKey)
@@ -402,7 +425,10 @@ export function createWidgetShell(
     BROWSER_MESSAGE_KEYS.WidgetOpenVault,
   )
   openVaultButton.addEventListener('click', () => {
-    void chrome.runtime.sendMessage({ type: 'nook:open-simple-vault' })
+    const nookTypedArgs0_0: Parameters<typeof chrome.runtime.sendMessage>[0] = {
+      type: 'nook:open-simple-vault',
+    }
+    void chrome.runtime.sendMessage(nookTypedArgs0_0)
   })
 
   body.append(
@@ -418,13 +444,21 @@ export function createWidgetShell(
   const collapsedLaunch = document.createElement('button')
   collapsedLaunch.type = 'button'
   collapsedLaunch.className = 'collapsed-launch'
+  const nookTypedArgs0_2: Parameters<typeof progressLabel>[0] = {
+    currentStep,
+    totalSteps,
+  }
   collapsedLaunch.setAttribute(
     'aria-label',
-    `${translatedMessage(BROWSER_MESSAGE_KEYS.WidgetExpand)}: ${progressLabel(currentStep, totalSteps)}`,
+    `${translatedMessage(BROWSER_MESSAGE_KEYS.WidgetExpand)}: ${progressLabel(nookTypedArgs0_2)}`,
   )
   collapsedLaunch.setAttribute('data-testid', 'nook-auth-gate-expand')
 
-  const collapsedMark = createWidgetMark('collapsed-mark', 40)
+  const nookTypedArgs0_3: Parameters<typeof createWidgetMark>[0] = {
+    className: 'collapsed-mark',
+    size: 40,
+  }
+  const collapsedMark = createWidgetMark(nookTypedArgs0_3)
   const collapsedProgress = document.createElement('span')
   collapsedProgress.className = 'collapsed-progress'
   collapsedProgress.textContent = `${currentStep}/${totalSteps}`
@@ -445,11 +479,15 @@ export function createWidgetShell(
   }
 }
 
-export function mountWidgetShell(
-  shell: WidgetShell,
-  workflowKey: string,
-  workflowRoot: WidgetWorkflowRoot,
-): void {
+export function mountWidgetShell({
+  shell,
+  workflowKey,
+  workflowRoot,
+}: {
+  shell: WidgetShell
+  workflowKey: string
+  workflowRoot: WidgetWorkflowRoot
+}): void {
   const { host, panel, toolbar, body, collapseButton, collapsedLaunch } = shell
   const applyCollapsedState = (): void => {
     panel.classList.toggle('is-collapsed', widgetState.collapsed)
@@ -461,14 +499,19 @@ export function mountWidgetShell(
     requestAnimationFrame(() => {
       if (widgetState.placement.kind === WidgetPlacementKind.Unpositioned)
         return
-      const position = clampWidgetPosition(
-        widgetState.placement.position.left,
-        widgetState.placement.position.top,
-        host.offsetWidth,
-        host.offsetHeight,
-      )
+      const nookTypedArgs0_4: Parameters<typeof clampWidgetPosition>[0] = {
+        left: widgetState.placement.position.left,
+        top: widgetState.placement.position.top,
+        width: host.offsetWidth,
+        height: host.offsetHeight,
+      }
+      const position = clampWidgetPosition(nookTypedArgs0_4)
       widgetState.setPosition(position)
-      applyWidgetPosition(host, position)
+      const nookTypedArgs0_5: Parameters<typeof applyWidgetPosition>[0] = {
+        host,
+        position,
+      }
+      applyWidgetPosition(nookTypedArgs0_5)
     })
   }
 
@@ -480,21 +523,40 @@ export function mountWidgetShell(
   const style = document.createElement('style')
   style.textContent = WIDGET_PANEL_STYLES
   panel.append(toolbar, body, collapsedLaunch)
-  host.attachShadow({ mode: 'open' }).append(style, panel)
+  const nookTypedArgs0_1: Parameters<typeof host.attachShadow>[0] = {
+    mode: 'open',
+  }
+  host.attachShadow(nookTypedArgs0_1).append(style, panel)
   document.documentElement.append(host)
   widgetState.attachHost(host)
   widgetState.assignWorkflowKey(workflowKey)
   widgetState.setRenderedWorkflowRoot(workflowRoot)
 
-  attachPointerDrag(host, toolbar)
-  attachPointerDrag(host, collapsedLaunch, {
+  const nookTypedArgs0_6: Parameters<typeof attachPointerDrag>[0] = {
+    host,
+    handle: toolbar,
+  }
+  attachPointerDrag(nookTypedArgs0_6)
+  const nookTypedArgs0_2: NonNullable<
+    Parameters<typeof attachPointerDrag>[0]['options']
+  > = {
     onTap: () => {
       widgetState.collapsed = false
       applyCollapsedState()
     },
-  })
+  }
+  const nookTypedArgs0_7: Parameters<typeof attachPointerDrag>[0] = {
+    host,
+    handle: collapsedLaunch,
+    options: nookTypedArgs0_2,
+  }
+  attachPointerDrag(nookTypedArgs0_7)
   applyCollapsedState()
   if (widgetState.placement.kind === WidgetPlacementKind.Positioned) {
-    applyWidgetPosition(host, widgetState.placement.position)
+    const nookTypedArgs0_8: Parameters<typeof applyWidgetPosition>[0] = {
+      host,
+      position: widgetState.placement.position,
+    }
+    applyWidgetPosition(nookTypedArgs0_8)
   }
 }

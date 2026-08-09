@@ -39,51 +39,76 @@ export function sendRuntimeMessage<T>(
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(message, (response: unknown) => {
       if (chrome.runtime.lastError) {
-        resolve({ kind: RuntimeMessageDeliveryKind.Unavailable })
+        const nookTypedArgs0_0: Parameters<typeof resolve>[0] = {
+          kind: RuntimeMessageDeliveryKind.Unavailable,
+        }
+        resolve(nookTypedArgs0_0)
         return
       }
-      resolve({
+      const nookTypedArgs0_1: Parameters<typeof resolve>[0] = {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: response as T,
-      })
+      }
+      resolve(nookTypedArgs0_1)
     })
   })
 }
 
-export function setStatus(
-  description: HTMLParagraphElement,
-  continueButton: HTMLButtonElement,
-  text: string,
-  enableContinue: boolean,
-): void {
+export function setStatus({
+  description,
+  continueButton,
+  text,
+  enableContinue,
+}: {
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+  text: string
+  enableContinue: boolean
+}): void {
   description.textContent = text
   continueButton.disabled = !enableContinue || widgetState.busy
 }
 
-export async function fillAndSubmitAccount(
-  account: Pick<WebsiteLoginAccountOption, 'vaultStoreId' | 'secretId'>,
-  workflow: PasswordFormObservation,
-  step: HTMLParagraphElement,
-  title: HTMLHeadingElement,
-  description: HTMLParagraphElement,
-  continueButton: HTMLButtonElement,
-): Promise<boolean> {
-  const delivery = await sendRuntimeMessage<LoginFillResponse>({
+export async function fillAndSubmitAccount({
+  account,
+  workflow,
+  step,
+  title,
+  description,
+  continueButton,
+}: {
+  account: Pick<WebsiteLoginAccountOption, 'vaultStoreId' | 'secretId'>
+  workflow: PasswordFormObservation
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+}): Promise<boolean> {
+  const nookTypedArgs0_2: Parameters<typeof sendRuntimeMessage>[0] = {
     type: 'nook:website-login-fill',
     payload: {
       origin: location.origin,
       vaultStoreId: account.vaultStoreId,
       secretId: account.secretId,
     },
-  })
+  }
+  const delivery = await sendRuntimeMessage<LoginFillResponse>(nookTypedArgs0_2)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
-    setStatus(
+    const nookTypedArgs0_0: Parameters<typeof setFlightProgress>[0] = {
+      step,
+      title,
+      currentStep: 1,
+      totalSteps: 3,
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+    }
+    setFlightProgress(nookTypedArgs0_0)
+    const nookTypedArgs0_1: Parameters<typeof setStatus>[0] = {
       description,
       continueButton,
-      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-      true,
-    )
+      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
+      enableContinue: true,
+    }
+    setStatus(nookTypedArgs0_1)
     return false
   }
   const { response } = delivery
@@ -92,13 +117,21 @@ export async function fillAndSubmitAccount(
     !response.username ||
     typeof response.password !== 'string'
   ) {
-    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
-    setStatus(
+    const nookTypedArgs0_2: Parameters<typeof setFlightProgress>[0] = {
+      step,
+      title,
+      currentStep: 1,
+      totalSteps: 3,
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+    }
+    setFlightProgress(nookTypedArgs0_2)
+    const nookTypedArgs0_3: Parameters<typeof setStatus>[0] = {
       description,
       continueButton,
-      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-      true,
-    )
+      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
+      enableContinue: true,
+    }
+    setStatus(nookTypedArgs0_3)
     return false
   }
 
@@ -107,44 +140,59 @@ export async function fillAndSubmitAccount(
     password: response.password,
   }
   response.password = ''
-  const filled = fillLoginCredentials(
+  const nookTypedArgs0_4: Parameters<typeof fillLoginCredentials>[0] = {
     credentials,
-    workflow.root,
-    workflow.formScope,
-  )
+    root: workflow.root,
+    formScope: workflow.formScope,
+  }
+  const filled = fillLoginCredentials(nookTypedArgs0_4)
   credentials.password = ''
   credentials.username = ''
   if (!filled) {
-    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
-    setStatus(
-      description,
-      continueButton,
-      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-      true,
-    )
-    return false
-  }
-  if (!submitLoginForm(workflow.root, workflow.formScope)) {
-    setFlightProgress(
+    const nookTypedArgs0_5: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,
-      2,
-      3,
-      BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
-    )
+      currentStep: 1,
+      totalSteps: 3,
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+    }
+    setFlightProgress(nookTypedArgs0_5)
+    const nookTypedArgs0_6: Parameters<typeof setStatus>[0] = {
+      description,
+      continueButton,
+      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
+      enableContinue: true,
+    }
+    setStatus(nookTypedArgs0_6)
+    return false
+  }
+  const nookTypedArgs0_7: Parameters<typeof submitLoginForm>[0] = {
+    root: workflow.root,
+    formScope: workflow.formScope,
+  }
+  if (!submitLoginForm(nookTypedArgs0_7)) {
+    const nookTypedArgs0_8: Parameters<typeof setFlightProgress>[0] = {
+      step,
+      title,
+      currentStep: 2,
+      totalSteps: 3,
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
+    }
+    setFlightProgress(nookTypedArgs0_8)
     description.textContent = translatedMessage(
       BROWSER_MESSAGE_KEYS.WidgetFilledManual,
     )
     continueButton.hidden = true
     return true
   }
-  setFlightProgress(
+  const nookTypedArgs0_9: Parameters<typeof setFlightProgress>[0] = {
     step,
     title,
-    3,
-    3,
-    BROWSER_MESSAGE_KEYS.WidgetVerifyingTitle,
-  )
+    currentStep: 3,
+    totalSteps: 3,
+    titleKey: BROWSER_MESSAGE_KEYS.WidgetVerifyingTitle,
+  }
+  setFlightProgress(nookTypedArgs0_9)
   description.textContent = translatedMessage(
     BROWSER_MESSAGE_KEYS.WidgetSubmitted,
   )
@@ -152,50 +200,82 @@ export async function fillAndSubmitAccount(
   return true
 }
 
-async function openLoginPicker(
-  workflow: PasswordFormObservation,
-  step: HTMLParagraphElement,
-  title: HTMLHeadingElement,
-  description: HTMLParagraphElement,
-  continueButton: HTMLButtonElement,
-): Promise<void> {
+async function openLoginPicker({
+  workflow,
+  step,
+  title,
+  description,
+  continueButton,
+}: {
+  workflow: PasswordFormObservation
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+}): Promise<void> {
   if (pickerState.login.kind === LoginPickerKind.Open) return
-  const delivery = await sendRuntimeMessage<LoginPickerOpenResponse>({
+  const nookTypedArgs0_3: Parameters<typeof sendRuntimeMessage>[0] = {
     type: 'nook:website-login-picker-open',
     payload: { origin: location.origin },
-  })
+  }
+  const delivery =
+    await sendRuntimeMessage<LoginPickerOpenResponse>(nookTypedArgs0_3)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok
   ) {
-    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
-    setStatus(
+    const nookTypedArgs0_10: Parameters<typeof setFlightProgress>[0] = {
+      step,
+      title,
+      currentStep: 1,
+      totalSteps: 3,
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+    }
+    setFlightProgress(nookTypedArgs0_10)
+    const nookTypedArgs0_11: Parameters<typeof setStatus>[0] = {
       description,
       continueButton,
-      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-      true,
-    )
+      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
+      enableContinue: true,
+    }
+    setStatus(nookTypedArgs0_11)
     return
   }
   const { response } = delivery
   if (response.status === 'locked') {
-    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
-    setStatus(
+    const nookTypedArgs0_12: Parameters<typeof setFlightProgress>[0] = {
+      step,
+      title,
+      currentStep: 1,
+      totalSteps: 3,
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+    }
+    setFlightProgress(nookTypedArgs0_12)
+    const nookTypedArgs0_13: Parameters<typeof setStatus>[0] = {
       description,
       continueButton,
-      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue),
-      true,
-    )
+      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue),
+      enableContinue: true,
+    }
+    setStatus(nookTypedArgs0_13)
     return
   }
   if (response.status === 'unavailable') {
-    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
-    setStatus(
+    const nookTypedArgs0_14: Parameters<typeof setFlightProgress>[0] = {
+      step,
+      title,
+      currentStep: 1,
+      totalSteps: 3,
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+    }
+    setFlightProgress(nookTypedArgs0_14)
+    const nookTypedArgs0_15: Parameters<typeof setStatus>[0] = {
       description,
       continueButton,
-      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault),
-      true,
-    )
+      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault),
+      enableContinue: true,
+    }
+    setStatus(nookTypedArgs0_15)
     return
   }
   if (
@@ -203,13 +283,21 @@ async function openLoginPicker(
     typeof response.expiresAt !== 'number' ||
     response.expiresAt <= Date.now()
   ) {
-    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
-    setStatus(
+    const nookTypedArgs0_16: Parameters<typeof setFlightProgress>[0] = {
+      step,
+      title,
+      currentStep: 1,
+      totalSteps: 3,
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+    }
+    setFlightProgress(nookTypedArgs0_16)
+    const nookTypedArgs0_17: Parameters<typeof setStatus>[0] = {
       description,
       continueButton,
-      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-      true,
-    )
+      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
+      enableContinue: true,
+    }
+    setStatus(nookTypedArgs0_17)
     return
   }
   const requestId = response.requestId
@@ -227,12 +315,13 @@ async function openLoginPicker(
       }
       const pending = pickerState.login.request
       pickerState.clearPendingLogin()
-      setStatus(
-        pending.description,
-        pending.continueButton,
-        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-        true,
-      )
+      const nookTypedArgs0_18: Parameters<typeof setStatus>[0] = {
+        description: pending.description,
+        continueButton: pending.continueButton,
+        text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
+        enableContinue: true,
+      }
+      setStatus(nookTypedArgs0_18)
       if (
         pending.continueButton.isConnected &&
         !pending.continueButton.hidden
@@ -242,7 +331,7 @@ async function openLoginPicker(
     },
     Math.max(0, response.expiresAt - Date.now()),
   )
-  pickerState.openLogin({
+  const nookTypedArgs0_4: Parameters<typeof pickerState.openLogin>[0] = {
     requestId,
     workflow,
     step,
@@ -250,21 +339,31 @@ async function openLoginPicker(
     description,
     continueButton,
     timeoutId,
-  })
-  setFlightProgress(step, title, 2, 3, BROWSER_MESSAGE_KEYS.WidgetFillingTitle)
-  setStatus(
+  }
+  pickerState.openLogin(nookTypedArgs0_4)
+  const nookTypedArgs0_19: Parameters<typeof setFlightProgress>[0] = {
+    step,
+    title,
+    currentStep: 2,
+    totalSteps: 3,
+    titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
+  }
+  setFlightProgress(nookTypedArgs0_19)
+  const nookTypedArgs0_20: Parameters<typeof setStatus>[0] = {
     description,
     continueButton,
-    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetLoginPickerOpened),
-    true,
-  )
+    text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetLoginPickerOpened),
+    enableContinue: true,
+  }
+  setStatus(nookTypedArgs0_20)
 }
 
 function cancelLoginPickerRequest(requestId: string): void {
-  void sendRuntimeMessage({
+  const nookTypedArgs0_5: Parameters<typeof sendRuntimeMessage>[0] = {
     type: 'nook:login-picker-cancel',
     payload: { requestId },
-  })
+  }
+  void sendRuntimeMessage(nookTypedArgs0_5)
 }
 
 export function cancelPendingLoginPickerRequest(): void {
@@ -275,73 +374,101 @@ export function cancelPendingLoginPickerRequest(): void {
   cancelLoginPickerRequest(pending.requestId)
 }
 
-export async function generatePasswordWithNook(
-  workflow: PasswordFormObservation,
-  step: HTMLParagraphElement,
-  title: HTMLHeadingElement,
-  description: HTMLParagraphElement,
-  continueButton: HTMLButtonElement,
-): Promise<void> {
+export async function generatePasswordWithNook({
+  workflow,
+  step,
+  title,
+  description,
+  continueButton,
+}: {
+  workflow: PasswordFormObservation
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+}): Promise<void> {
   if (widgetState.busy) return
   widgetState.busy = true
   continueButton.disabled = true
   const totalSteps = workflow.summary.currentPasswordFieldCount > 0 ? 4 : 5
-  setFlightProgress(step, title, 2, totalSteps, copyTitleForWorkflow(workflow))
-  setStatus(
+  const nookTypedArgs0_21: Parameters<typeof setFlightProgress>[0] = {
+    step,
+    title,
+    currentStep: 2,
+    totalSteps,
+    titleKey: copyTitleForWorkflow(workflow),
+  }
+  setFlightProgress(nookTypedArgs0_21)
+  const nookTypedArgs0_22: Parameters<typeof setStatus>[0] = {
     description,
     continueButton,
-    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordWorking),
-    false,
-  )
+    text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordWorking),
+    enableContinue: false,
+  }
+  setStatus(nookTypedArgs0_22)
   try {
+    const nookTypedArgs0_6: Parameters<typeof sendRuntimeMessage>[0] = {
+      type: 'nook:website-generate-password',
+      payload: { origin: location.origin },
+    }
     const delivery = await sendRuntimeMessage<{
       ok?: boolean
       password?: string
       reason?: string
-    }>({
-      type: 'nook:website-generate-password',
-      payload: { origin: location.origin },
-    })
+    }>(nookTypedArgs0_6)
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-      setStatus(
+      const nookTypedArgs0_23: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
-        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed),
-        true,
-      )
+        text: translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed,
+        ),
+        enableContinue: true,
+      }
+      setStatus(nookTypedArgs0_23)
       return
     }
     const { response } = delivery
     if (response.ok !== true || typeof response.password !== 'string') {
-      setStatus(
+      const nookTypedArgs0_24: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
-        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed),
-        true,
-      )
+        text: translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed,
+        ),
+        enableContinue: true,
+      }
+      setStatus(nookTypedArgs0_24)
       return
     }
     const password = response.password
-    const filled = fillGeneratedPassword(
+    const nookTypedArgs0_25: Parameters<typeof fillGeneratedPassword>[0] = {
       password,
-      workflow.root,
-      workflow.formScope,
-    )
+      root: workflow.root,
+      formScope: workflow.formScope,
+    }
+    const filled = fillGeneratedPassword(nookTypedArgs0_25)
     if (!filled) {
-      setStatus(
+      const nookTypedArgs0_26: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
-        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed),
-        true,
-      )
+        text: translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed,
+        ),
+        enableContinue: true,
+      }
+      setStatus(nookTypedArgs0_26)
       return
     }
-    setStatus(
+    const nookTypedArgs0_27: Parameters<typeof setStatus>[0] = {
       description,
       continueButton,
-      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetGeneratedPasswordFilled),
-      false,
-    )
+      text: translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetGeneratedPasswordFilled,
+      ),
+      enableContinue: false,
+    }
+    setStatus(nookTypedArgs0_27)
     continueButton.hidden = true
   } finally {
     widgetState.busy = false
@@ -349,42 +476,53 @@ export async function generatePasswordWithNook(
   }
 }
 
-export async function proposePasskeyWithNook(
-  description: HTMLParagraphElement,
-  continueButton: HTMLButtonElement,
-  action: PasskeyWidgetAction,
-): Promise<void> {
+export async function proposePasskeyWithNook({
+  description,
+  continueButton,
+  action,
+}: {
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+  action: PasskeyWidgetAction
+}): Promise<void> {
   if (widgetState.busy) return
   widgetState.busy = true
   continueButton.disabled = true
-  setStatus(
+  const nookTypedArgs0_28: Parameters<typeof setStatus>[0] = {
     description,
     continueButton,
-    translatedMessage(
+    text: translatedMessage(
       action === PasskeyWidgetAction.UsePasskey
         ? BROWSER_MESSAGE_KEYS.WidgetUsePasskeyWorking
         : BROWSER_MESSAGE_KEYS.WidgetCreatePasskeyWorking,
     ),
-    false,
-  )
+    enableContinue: false,
+  }
+  setStatus(nookTypedArgs0_28)
   try {
     const control = findPasskeyControl(document)
     if (control.kind === PasskeyControlLookupKind.Absent) {
-      setStatus(
+      const nookTypedArgs0_29: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
-        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPasskeyControlMissing),
-        true,
-      )
+        text: translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetPasskeyControlMissing,
+        ),
+        enableContinue: true,
+      }
+      setStatus(nookTypedArgs0_29)
       return
     }
     control.control.click()
-    setStatus(
+    const nookTypedArgs0_30: Parameters<typeof setStatus>[0] = {
       description,
       continueButton,
-      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPasskeyCeremonyStarted),
-      false,
-    )
+      text: translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetPasskeyCeremonyStarted,
+      ),
+      enableContinue: false,
+    }
+    setStatus(nookTypedArgs0_30)
     continueButton.hidden = true
   } finally {
     widgetState.busy = false
@@ -407,119 +545,149 @@ function copyTitleForWorkflow(
   return BROWSER_MESSAGE_KEYS.WidgetLoginTitle
 }
 
-export async function continueWithNook(
-  step: HTMLParagraphElement,
-  title: HTMLHeadingElement,
-  description: HTMLParagraphElement,
-  continueButton: HTMLButtonElement,
-  _openVaultButton: HTMLButtonElement,
-  _panel: HTMLElement,
-  workflow: PasswordFormObservation,
-): Promise<void> {
+export async function continueWithNook({
+  step,
+  title,
+  description,
+  continueButton,
+  workflow,
+}: {
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+  workflow: PasswordFormObservation
+}): Promise<void> {
   if (widgetState.busy || pickerState.login.kind === LoginPickerKind.Open)
     return
   widgetState.busy = true
   continueButton.disabled = true
-  setFlightProgress(step, title, 2, 3, BROWSER_MESSAGE_KEYS.WidgetFillingTitle)
-  setStatus(
+  const nookTypedArgs0_31: Parameters<typeof setFlightProgress>[0] = {
+    step,
+    title,
+    currentStep: 2,
+    totalSteps: 3,
+    titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
+  }
+  setFlightProgress(nookTypedArgs0_31)
+  const nookTypedArgs0_32: Parameters<typeof setStatus>[0] = {
     description,
     continueButton,
-    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetWorking),
-    false,
-  )
+    text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetWorking),
+    enableContinue: false,
+  }
+  setStatus(nookTypedArgs0_32)
 
   try {
-    const delivery = await sendRuntimeMessage<LoginOptionsResponse>({
+    const nookTypedArgs0_7: Parameters<typeof sendRuntimeMessage>[0] = {
       type: 'nook:website-login-options',
       payload: { origin: location.origin },
-    })
+    }
+    const delivery =
+      await sendRuntimeMessage<LoginOptionsResponse>(nookTypedArgs0_7)
 
     if (
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
       !delivery.response?.ok
     ) {
-      setFlightProgress(
+      const nookTypedArgs0_33: Parameters<typeof setFlightProgress>[0] = {
         step,
         title,
-        1,
-        3,
-        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-      )
-      setStatus(
+        currentStep: 1,
+        totalSteps: 3,
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      }
+      setFlightProgress(nookTypedArgs0_33)
+      const nookTypedArgs0_34: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
-        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-        true,
-      )
+        text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
+        enableContinue: true,
+      }
+      setStatus(nookTypedArgs0_34)
       return
     }
     const { response } = delivery
 
     if (response.status === 'locked') {
-      setFlightProgress(
+      const nookTypedArgs0_35: Parameters<typeof setFlightProgress>[0] = {
         step,
         title,
-        1,
-        3,
-        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-      )
-      setStatus(
+        currentStep: 1,
+        totalSteps: 3,
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      }
+      setFlightProgress(nookTypedArgs0_35)
+      const nookTypedArgs0_36: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
-        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue),
-        true,
-      )
+        text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue),
+        enableContinue: true,
+      }
+      setStatus(nookTypedArgs0_36)
       return
     }
 
     if (response.status === 'unavailable') {
-      setFlightProgress(
+      const nookTypedArgs0_37: Parameters<typeof setFlightProgress>[0] = {
         step,
         title,
-        1,
-        3,
-        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-      )
-      setStatus(
+        currentStep: 1,
+        totalSteps: 3,
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      }
+      setFlightProgress(nookTypedArgs0_37)
+      const nookTypedArgs0_38: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
-        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault),
-        true,
-      )
+        text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault),
+        enableContinue: true,
+      }
+      setStatus(nookTypedArgs0_38)
       return
     }
 
     const accounts = response.accounts ?? []
     if (accounts.length === 0) {
-      setFlightProgress(
+      const nookTypedArgs0_39: Parameters<typeof setFlightProgress>[0] = {
         step,
         title,
-        1,
-        3,
-        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-      )
-      setStatus(
+        currentStep: 1,
+        totalSteps: 3,
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      }
+      setFlightProgress(nookTypedArgs0_39)
+      const nookTypedArgs0_40: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
-        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetNoMatch),
-        true,
-      )
+        text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetNoMatch),
+        enableContinue: true,
+      }
+      setStatus(nookTypedArgs0_40)
       return
     }
 
     if (accounts.length === 1) {
-      await fillAndSubmitAccount(
-        accounts[0],
+      const nookTypedArgs0_41: Parameters<typeof fillAndSubmitAccount>[0] = {
+        account: accounts[0],
         workflow,
         step,
         title,
         description,
         continueButton,
-      )
+      }
+      await fillAndSubmitAccount(nookTypedArgs0_41)
       return
     }
 
-    await openLoginPicker(workflow, step, title, description, continueButton)
+    const nookTypedArgs0_42: Parameters<typeof openLoginPicker>[0] = {
+      workflow,
+      step,
+      title,
+      description,
+      continueButton,
+    }
+    await openLoginPicker(nookTypedArgs0_42)
   } finally {
     widgetState.busy = false
     if (

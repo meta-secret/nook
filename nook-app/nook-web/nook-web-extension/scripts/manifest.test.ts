@@ -2,7 +2,16 @@ import { companionWasmReady } from '../../nook-web-shared/src/extension/companio
 
 await companionWasmReady
 import { describe, expect, test } from 'bun:test'
-import { createManifest } from '../src/manifest'
+import {
+  createManifest,
+  type CreateExtensionManifestArgs,
+} from '../src/manifest'
+
+const defaultManifestArgs: CreateExtensionManifestArgs = { version: '1.0.0' }
+
+function defaultManifest() {
+  return createManifest(defaultManifestArgs)
+}
 
 const environments = [
   {
@@ -22,7 +31,11 @@ const environments = [
 describe('extension origin isolation', () => {
   for (const environment of environments) {
     test(`connects only to ${environment.simple}`, () => {
-      const manifest = createManifest('1.0.0', environment.simple)
+      const manifestArgs: CreateExtensionManifestArgs = {
+        version: '1.0.0',
+        simpleVaultBaseUrl: environment.simple,
+      }
+      const manifest = createManifest(manifestArgs)
       const simpleMatch = `${environment.simple}*`
 
       expect(manifest.externally_connectable.matches).toEqual([simpleMatch])
@@ -73,12 +86,12 @@ describe('extension origin isolation', () => {
   }
 
   test('declares offscreen and storage permissions for its memory-only session coordination', () => {
-    expect(createManifest('1.0.0').permissions).toContain('offscreen')
-    expect(createManifest('1.0.0').permissions).toContain('storage')
+    expect(defaultManifest().permissions).toContain('offscreen')
+    expect(defaultManifest().permissions).toContain('storage')
   })
 
   test('exposes the icon and companion WASM to in-page content scripts', () => {
-    expect(createManifest('1.0.0').web_accessible_resources).toEqual([
+    expect(defaultManifest().web_accessible_resources).toEqual([
       {
         resources: ['icons/nook.png', 'content/nook_companion_wasm_bg.wasm'],
         matches: ['<all_urls>'],
@@ -87,14 +100,14 @@ describe('extension origin isolation', () => {
   })
 
   test('loads autofill as a module so companion WASM top-level await can run', () => {
-    const autofill = createManifest('1.0.0').content_scripts.find((script) =>
+    const autofill = defaultManifest().content_scripts.find((script) =>
       script.js.includes('content/autofill.js'),
     )
     expect(autofill?.type).toBe('module')
   })
 
   test('installs isolated transport and page-world WebAuthn bridges at document start', () => {
-    const scripts = createManifest('1.0.0').content_scripts
+    const scripts = defaultManifest().content_scripts
     expect(
       scripts.some(
         (script) =>
