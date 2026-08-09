@@ -1,5 +1,3 @@
-import type { ExternalObject, ExternalValue } from './external-value'
-
 export type PasskeySetupMaterial = {
   userHandle: number[]
   prfInput: number[]
@@ -10,18 +8,15 @@ export type PasskeyUnlockMaterial = {
   prfInput: number[]
 }
 
-function isResponseObject(value: ExternalValue): value is ExternalObject {
-  return typeof value === 'object' && !Array.isArray(value)
+export type PasskeySetupResponse = {
+  setup?: Partial<PasskeySetupMaterial>
 }
 
-function responseObject(value: ExternalValue): ExternalObject {
-  if (!isResponseObject(value)) {
-    throw new Error('Extension session returned a malformed response.')
-  }
-  return value
+export type PasskeyUnlockResponse = {
+  material?: Partial<PasskeyUnlockMaterial>
 }
 
-function byteArray(value: ExternalValue): number[] {
+function byteArray(value: number[] | undefined): number[] {
   if (
     !Array.isArray(value) ||
     !value.every(
@@ -38,9 +33,12 @@ function byteArray(value: ExternalValue): number[] {
 }
 
 export function decodePasskeySetupResponse(
-  response: ExternalObject,
+  response: PasskeySetupResponse,
 ): PasskeySetupMaterial {
-  const setup = responseObject(response.setup)
+  const setup = response.setup
+  if (!setup) {
+    throw new Error('Extension session returned a malformed setup response.')
+  }
   return {
     userHandle: byteArray(setup.userHandle),
     prfInput: byteArray(setup.prfInput),
@@ -48,9 +46,12 @@ export function decodePasskeySetupResponse(
 }
 
 export function decodePasskeyUnlockResponse(
-  response: ExternalObject,
+  response: PasskeyUnlockResponse,
 ): PasskeyUnlockMaterial {
-  const material = responseObject(response.material)
+  const material = response.material
+  if (!material) {
+    throw new Error('Extension session returned a malformed unlock response.')
+  }
   return {
     credentialId: byteArray(material.credentialId),
     prfInput: byteArray(material.prfInput),

@@ -281,12 +281,13 @@ export class ExtensionSessionMessageDispatcher {
     payload: Record<string, unknown>,
   ): Promise<unknown> {
     const operationGeneration = this.operationGeneration
-    const providerCandidate = payload.providers
+    const providerCandidate: StorageProvider[] = Array.isArray(
+      payload.providers,
+    )
+      ? payload.providers
+      : []
     const stagingArgs = {
-      providers:
-        providerCandidate && typeof providerCandidate === 'object'
-          ? providerCandidate
-          : {},
+      providers: providerCandidate,
       decode: this.context.decodeProviders,
     }
     const stagingOperation = stageProviderCredentials(stagingArgs)
@@ -301,9 +302,7 @@ export class ExtensionSessionMessageDispatcher {
       })
     }
     payload.providers = []
-    if (providerCandidate && typeof providerCandidate === 'object') {
-      scrubProviderCredentials(providerCandidate)
-    }
+    scrubProviderCredentials(providerCandidate)
     // Reserve the queue position before cold WASM decoding can yield. Reset
     // must remain a terminal barrier after every import accepted before it.
     return this.operations.enqueue({

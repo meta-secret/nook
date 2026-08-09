@@ -1,5 +1,5 @@
-import type { ExternalValue } from './external-value'
 import type { AuthenticationOutcomeObservationView } from './outcome-evidence-messages'
+import { hasOriginPayload } from './origin-runtime-message'
 import { NookWebsiteLoginSaveDecision } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export { NookWebsiteLoginSaveDecision }
@@ -75,30 +75,10 @@ export type WebsiteLoginSaveDismissMessage = {
   }
 }
 
-function hasOriginPayload(message: ExternalValue): message is {
-  type: string
-  payload: Record<string, ExternalValue> & { origin: string }
-} {
-  return Boolean(
-    message &&
-    typeof message === 'object' &&
-    'type' in message &&
-    typeof message.type === 'string' &&
-    message.type.length > 0 &&
-    'payload' in message &&
-    typeof message.payload === 'object' &&
-    message.payload &&
-    'origin' in message.payload &&
-    typeof message.payload.origin === 'string' &&
-    message.payload.origin.length > 0,
-  )
-}
-
 function isOutcomeObservation(
-  value: ExternalValue,
+  value: object,
 ): value is AuthenticationOutcomeObservationView {
-  if (!value || typeof value !== 'object') return false
-  const view = value as Record<string, ExternalValue>
+  const view = value as Partial<AuthenticationOutcomeObservationView>
   return (
     typeof view.navigatedAwayFromAuthPath === 'boolean' &&
     typeof view.authFieldsPresent === 'boolean' &&
@@ -113,7 +93,7 @@ function isOutcomeObservation(
 }
 
 export function isWebsiteLoginSaveOfferMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteLoginSaveOfferMessage {
   if (
     !hasOriginPayload(message) ||
@@ -121,7 +101,7 @@ export function isWebsiteLoginSaveOfferMessage(
   ) {
     return false
   }
-  const payload = message.payload
+  const payload = message.payload as Partial<WebsiteLoginSaveOfferMessage['payload']>
   return (
     typeof payload.username === 'string' &&
     payload.username.trim().length > 0 &&
@@ -131,7 +111,7 @@ export function isWebsiteLoginSaveOfferMessage(
 }
 
 export function isWebsiteLoginSavePendingMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteLoginSavePendingMessage {
   return (
     hasOriginPayload(message) &&
@@ -141,7 +121,7 @@ export function isWebsiteLoginSavePendingMessage(
 }
 
 export function isWebsiteLoginSaveCommitMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteLoginSaveCommitMessage {
   if (
     !hasOriginPayload(message) ||
@@ -150,16 +130,16 @@ export function isWebsiteLoginSaveCommitMessage(
   ) {
     return false
   }
-  const payload = message.payload
+  const payload = message.payload as Partial<WebsiteLoginSaveCommitMessage['payload']>
   return (
     typeof payload.offerId === 'string' &&
     payload.offerId.length > 0 &&
-    isOutcomeObservation(payload.evidence)
+    Boolean(payload.evidence) && isOutcomeObservation(payload.evidence)
   )
 }
 
 export function isWebsiteLoginSaveDismissMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteLoginSaveDismissMessage {
   if (
     !hasOriginPayload(message) ||
@@ -168,6 +148,6 @@ export function isWebsiteLoginSaveDismissMessage(
   ) {
     return false
   }
-  const payload = message.payload
+  const payload = message.payload as Partial<WebsiteLoginSaveDismissMessage['payload']>
   return typeof payload.offerId === 'string' && payload.offerId.length > 0
 }

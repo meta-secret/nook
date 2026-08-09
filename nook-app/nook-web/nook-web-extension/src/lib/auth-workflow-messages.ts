@@ -1,4 +1,3 @@
-import type { ExternalValue } from './external-value'
 import type { PasswordFormSummary } from '../../../nook-web-shared/src/extension/password-forms'
 
 const MAX_OBSERVED_FIELD_COUNT = 100
@@ -41,7 +40,7 @@ export type AuthenticationWorkflowSnapshotMessage = {
   }
 }
 
-function isBoundedCount(value: ExternalValue): value is number {
+function isBoundedCount(value: number | undefined): value is number {
   return (
     typeof value === 'number' &&
     Number.isInteger(value) &&
@@ -51,7 +50,7 @@ function isBoundedCount(value: ExternalValue): value is number {
 }
 
 export function isAuthenticationWorkflowSnapshotMessage(
-  message: ExternalValue,
+  message: object,
 ): message is AuthenticationWorkflowSnapshotMessage {
   if (
     !message ||
@@ -73,7 +72,7 @@ export function isAuthenticationWorkflowSnapshotMessage(
   }
   return message.payload.observations.every((value) => {
     if (!value || typeof value !== 'object') return false
-    const observation = value as Record<string, ExternalValue>
+    const observation = value as Partial<AuthenticationPageObservationView>
     return (
       [
         observation.usernameFieldCount,

@@ -1,8 +1,3 @@
-import {
-  isExternalValue,
-  type ExternalValue,
-  type ExternalValueCandidate,
-} from './external-value'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export enum ProviderCredentialStagingKind {
@@ -17,46 +12,39 @@ export type ProviderCredentialStaging =
       providers: StorageProvider[]
     }
 
-type MutableExternalValue =
-  string | number | boolean | MutableExternalValue[] | MutableExternalObject
-
-interface MutableExternalObject {
-  [key: string]: MutableExternalValue
-}
-
-function isRecord(value: MutableExternalValue): value is MutableExternalObject {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
-}
-
-function cloneExternalValue(value: ExternalValue): MutableExternalValue {
-  if (Array.isArray(value)) {
-    return value.map(cloneExternalValue)
+type ProviderCredentialCandidate = {
+  githubPat?: string | { state: string }
+  oauthFile?: {
+    config?: {
+      accessToken?: string | { state: string }
+      refreshToken?: string | { state: string }
+    }
+    accessToken?: string
+    refreshToken?: string
   }
-  if (!value || typeof value !== 'object') return value
-  const entries: [string, MutableExternalValue][] = []
-  for (const [key, child] of Object.entries(value)) {
-    entries.push([key, cloneExternalValue(child)])
-  }
-  return Object.fromEntries(entries)
 }
 
-function isExternalValueArray(
-  value: ExternalValueCandidate,
-): value is readonly ExternalValue[] {
-  return Array.isArray(value) && value.every(isExternalValue)
+function isSerializedProviderField(
+  value: object | string | number | boolean,
+): boolean {
+  if (typeof value === 'string' || typeof value === 'boolean') return true
+  if (typeof value === 'number') return Number.isFinite(value)
+  if (Array.isArray(value)) return value.every(isSerializedProviderField)
+  if (!value || Object.getPrototypeOf(value) !== Object.prototype) return false
+  return Object.values(value).every(isSerializedProviderField)
 }
 
-export function scrubProviderCredentials(providers: object): void {
-  if (!Array.isArray(providers)) return
-  for (const provider of providers) {
-    if (!isRecord(provider)) continue
+export function scrubProviderCredentials(providers: StorageProvider[]): void {
+  const candidates = providers as ProviderCredentialCandidate[]
+  for (const provider of candidates) {
+    if (!provider || typeof provider !== 'object') continue
     if (typeof provider.githubPat === 'string') {
       delete provider.githubPat
     } else if ('githubPat' in provider) {
       provider.githubPat = { state: 'missing' }
     }
-    if (isRecord(provider.oauthFile)) {
-      if (isRecord(provider.oauthFile.config)) {
+    if (provider.oauthFile && typeof provider.oauthFile === 'object') {
+      if (provider.oauthFile.config) {
         provider.oauthFile.config.accessToken = { state: 'signedOut' }
         provider.oauthFile.config.refreshToken = { state: 'notIssued' }
       }
@@ -71,7 +59,7 @@ export function scrubProviderCredentials(providers: object): void {
 }
 
 export type ProviderCredentialCleanupArgs<Result> = {
-  providers: object
+  providers: StorageProvider[]
   operation: () => Promise<Result>
 }
 
@@ -86,17 +74,17 @@ export async function runWithProviderCredentialCleanup<Result>(
 }
 
 export type StageProviderCredentialsArgs = {
-  providers: ExternalValueCandidate
+  providers: StorageProvider[]
   decode: (providers: object) => Promise<StorageProvider[]>
 }
 
 export async function stageProviderCredentials(
   args: StageProviderCredentialsArgs,
 ): Promise<ProviderCredentialStaging> {
-  if (!isExternalValueArray(args.providers)) {
+  if (!args.providers.every(isSerializedProviderField)) {
     return { kind: ProviderCredentialStagingKind.InvalidInput }
   }
-  const staged = args.providers.map(cloneExternalValue)
+  const staged = structuredClone(args.providers)
   try {
     const providers = await args.decode(staged)
     return { kind: ProviderCredentialStagingKind.Staged, providers }

@@ -1,4 +1,3 @@
-import type { ExternalValue } from './external-value'
 import { hasOriginPayload } from './origin-runtime-message'
 import type { WebsiteAuthenticatorOption } from './login-fill-messages'
 
@@ -76,12 +75,12 @@ export type WebsiteAuthenticatorCanceledMessage = {
   }
 }
 
-function isNonEmptyString(value: ExternalValue): value is string {
+function isNonEmptyString(value: string | undefined): value is string {
   return typeof value === 'string' && value.length > 0
 }
 
 export function isWebsiteAuthenticatorPickerOpenMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteAuthenticatorPickerOpenMessage {
   return (
     hasOriginPayload(message) &&
@@ -91,7 +90,7 @@ export function isWebsiteAuthenticatorPickerOpenMessage(
 }
 
 export function isAuthenticatorPickerQueryMessage(
-  message: ExternalValue,
+  message: object,
 ): message is AuthenticatorPickerQueryMessage {
   if (
     !message ||
@@ -105,7 +104,7 @@ export function isAuthenticatorPickerQueryMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload = message.payload as Partial<AuthenticatorPickerQueryMessage['payload']>
   return (
     isNonEmptyString(payload.requestId) &&
     typeof payload.query === 'string' &&
@@ -114,7 +113,7 @@ export function isAuthenticatorPickerQueryMessage(
 }
 
 export function isAuthenticatorPickerSelectMessage(
-  message: ExternalValue,
+  message: object,
 ): message is AuthenticatorPickerSelectMessage {
   if (
     !message ||
@@ -128,7 +127,7 @@ export function isAuthenticatorPickerSelectMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload = message.payload as Partial<AuthenticatorPickerSelectMessage['payload']>
   return (
     isNonEmptyString(payload.requestId) &&
     isNonEmptyString(payload.vaultStoreId) &&
@@ -137,7 +136,7 @@ export function isAuthenticatorPickerSelectMessage(
 }
 
 export function isAuthenticatorPickerCancelMessage(
-  message: ExternalValue,
+  message: object,
 ): message is AuthenticatorPickerCancelMessage {
   if (
     !message ||
@@ -151,12 +150,12 @@ export function isAuthenticatorPickerCancelMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload = message.payload as Partial<AuthenticatorPickerCancelMessage['payload']>
   return isNonEmptyString(payload.requestId)
 }
 
 export function isWebsiteAuthenticatorSelectedMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteAuthenticatorSelectedMessage {
   if (
     !message ||
@@ -170,7 +169,9 @@ export function isWebsiteAuthenticatorSelectedMessage(
   ) {
     return false
   }
-  const payload = message.payload as Record<string, ExternalValue>
+  const payload = message.payload as Partial<
+    WebsiteAuthenticatorSelectedMessage['payload']
+  >
   if (
     !isNonEmptyString(payload.origin) ||
     !isNonEmptyString(payload.requestId) ||
@@ -179,14 +180,16 @@ export function isWebsiteAuthenticatorSelectedMessage(
   ) {
     return false
   }
-  const account = payload.account as Record<string, ExternalValue>
+  const account = payload.account as Partial<
+    WebsiteAuthenticatorSelectedMessage['payload']['account']
+  >
   return (
     isNonEmptyString(account.vaultStoreId) && isNonEmptyString(account.secretId)
   )
 }
 
 export function isWebsiteAuthenticatorCanceledMessage(
-  message: ExternalValue,
+  message: object,
 ): message is WebsiteAuthenticatorCanceledMessage {
   return (
     hasOriginPayload(message) &&

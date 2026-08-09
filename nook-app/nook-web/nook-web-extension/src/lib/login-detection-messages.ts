@@ -1,4 +1,3 @@
-import type { ExternalValue } from './external-value'
 export enum QueryActiveTabLoginDetectionMessageType {
   NookQueryActiveTabLoginDetection = 'nook:query-active-tab-login-detection',
 }
@@ -27,7 +26,7 @@ export type LoginDetectionResponse = {
 }
 
 export function isQueryActiveTabLoginDetectionMessage(
-  message: ExternalValue,
+  message: object,
 ): message is QueryActiveTabLoginDetectionMessage {
   return (
     !!message &&
@@ -39,7 +38,7 @@ export function isQueryActiveTabLoginDetectionMessage(
 }
 
 export function isQueryLoginDetectionMessage(
-  message: ExternalValue,
+  message: object,
 ): message is QueryLoginDetectionMessage {
   return (
     !!message &&
