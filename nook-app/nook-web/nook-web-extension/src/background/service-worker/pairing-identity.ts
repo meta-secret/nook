@@ -723,7 +723,15 @@ export async function availableWebsiteGrants({
   forbiddenReason: string
 }): Promise<
   | { grants: StoredExtensionPairingGrant[] }
-  | { response: Record<string, unknown> }
+  | {
+      response:
+        | { ok: false; reason: string }
+        | {
+            ok: true
+            status: 'unavailable' | 'locked'
+            accounts: []
+          }
+    }
 > {
   const nookTypedArgs0_8: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,

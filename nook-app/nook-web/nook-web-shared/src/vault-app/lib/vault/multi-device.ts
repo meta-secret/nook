@@ -3,7 +3,11 @@ import type { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp, type NookSecretRecord } from "$lib/nook";
 import { createLogger } from "$lib/runtime/log";
 import { JoinEnrollmentState } from "$app-wasm";
-import { EventOutboxTargetKind } from "$lib/vault/sync-operation-state";
+import {
+  EventOutboxRequestKind,
+  EventOutboxTargetKind,
+  type EventOutboxRequest,
+} from "$lib/vault/sync-operation-state";
 
 const log = createLogger("vault-devices");
 
@@ -32,7 +36,10 @@ export async function approveJoin({
     )) as NookSecretRecord[];
     for (const record of rawRecords) record.free();
     await state.refreshSecretsFromSession();
-    await state.flushRemoteEventOutboxNow();
+    const request: EventOutboxRequest = {
+      kind: EventOutboxRequestKind.Default,
+    };
+    await state.flushRemoteEventOutboxNow(request);
     await state.hydrateMultiDeviceState();
     state.pendingJoins = state.pendingJoins.filter(
       (entry) => entry.deviceId !== joinDeviceId,
@@ -158,7 +165,10 @@ export async function confirmJoinRequest(state: VaultState) {
   state.dismissSuccess();
   state.isVerifying = true;
   try {
-    const target = state.eventOutboxTarget();
+    const request: EventOutboxRequest = {
+      kind: EventOutboxRequestKind.Default,
+    };
+    const target = state.eventOutboxTarget(request);
     const storageArgs =
       target.kind === EventOutboxTargetKind.Remote
         ? target.args

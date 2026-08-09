@@ -17,7 +17,7 @@ export const untrustedInputAdapterFiles = [
   "nook-web-extension/src/background/vault-runtime.ts",
   // Chrome service-worker request and response boundary adapters.
   "nook-web-extension/src/background/service-worker/account-pickers.ts",
-  "nook-web-extension/src/background/service-worker/authenticator-operations.ts",
+  "nook-web-extension/src/background/service-worker/authenticator-session-adapter.ts",
   "nook-web-extension/src/background/service-worker/login-operations.ts",
   "nook-web-extension/src/background/service-worker/pairing-identity.ts",
   "nook-web-extension/src/background/service-worker/passkey-operations.ts",

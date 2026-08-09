@@ -28,6 +28,11 @@ import {
   isExtensionPairingApprovedMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
+  extensionPairingGrantPolicyReady,
+  setupStorageKey,
+} from '../../../../nook-web-extension/src/background/pairing-grants'
+
+const {
   extensionPairingGrantStorageItems,
   extensionStoredPairingGrantStorageItems,
   isStoredExtensionPairingGrant,
@@ -37,8 +42,7 @@ import {
   selectedPairingGrant,
   selectedPairingGrantFirst,
   setupAfterPairingGrantRemoval,
-  setupStorageKey,
-} from '../../../../nook-web-extension/src/background/pairing-grants'
+} = await extensionPairingGrantPolicyReady
 
 function locationFromUrl(url: string): Location {
   return new URL(url) as unknown as Location

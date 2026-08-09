@@ -31,7 +31,9 @@ import {
   type StorageProvider,
 } from "$lib/auth/providers";
 import {
+  EventOutboxRequestKind,
   EventOutboxTargetKind,
+  type EventOutboxRequest,
   type EventOutboxTarget,
 } from "$lib/vault/sync-operation-state";
 import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
@@ -230,29 +232,44 @@ export async function runFanOutSyncAfterLocalSave(
   await publishExtensionEventLogUpdateForVault(state);
   if (!state.deviceProtectionReady) return;
   if (state.syncProviders.length === 0) {
-    await state.flushRemoteEventOutboxNow();
+    const request: EventOutboxRequest = {
+      kind: EventOutboxRequestKind.Default,
+    };
+    await state.flushRemoteEventOutboxNow(request);
     return;
   }
   for (const provider of state.syncProviders) {
     if (state.syncBlocked) break;
-    await state.flushRemoteEventOutboxNow(provider);
+    const request = eventOutboxRequestForProvider(provider);
+    await state.flushRemoteEventOutboxNow(request);
   }
+}
+
+export function eventOutboxRequestForProvider(
+  provider: StorageProvider,
+): EventOutboxRequest {
+  return provider.type === LOCAL_FOLDER_PROVIDER_TYPE
+    ? { kind: EventOutboxRequestKind.LocalFolder, provider }
+    : { kind: EventOutboxRequestKind.Remote, provider };
 }
 
 export function eventOutboxTarget({
   state,
-  provider,
+  request,
 }: {
   readonly state: SyncActionsContext;
-  readonly provider?: StorageProvider;
+  readonly request: EventOutboxRequest;
 }): EventOutboxTarget {
-  if (provider?.type === LOCAL_FOLDER_PROVIDER_TYPE) {
-    return { kind: EventOutboxTargetKind.LocalFolder, provider };
+  if (request.kind === EventOutboxRequestKind.LocalFolder) {
+    return {
+      kind: EventOutboxTargetKind.LocalFolder,
+      provider: request.provider,
+    };
   }
-  if (provider) {
+  if (request.kind === EventOutboxRequestKind.Remote) {
     return {
       kind: EventOutboxTargetKind.Remote,
-      args: state.providerWasmArgs(provider),
+      args: state.providerWasmArgs(request.provider),
     };
   }
   if (state.syncProviders[0]?.type === LOCAL_FOLDER_PROVIDER_TYPE) {
@@ -277,15 +294,15 @@ export function eventOutboxTarget({
 
 export async function flushRemoteEventOutboxNow({
   state,
-  provider,
+  request,
 }: {
   readonly state: SyncActionsContext;
-  readonly provider?: StorageProvider;
+  readonly request: EventOutboxRequest;
 }): Promise<void> {
   if (!state.hasManager) return;
   const eventOutboxTargetArgs: Parameters<typeof eventOutboxTarget>[0] = {
     state,
-    provider,
+    request,
   };
   const target = eventOutboxTarget(eventOutboxTargetArgs);
   if (target.kind === EventOutboxTargetKind.LocalFolder) {

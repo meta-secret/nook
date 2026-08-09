@@ -16,6 +16,7 @@ import {
   startVaultDiscoveryTimeout,
   VAULT_ASSESS_TIMEOUT_ERROR_NAME,
 } from "$lib/vault/vault-discovery-timeout";
+import { eventOutboxRequestForProvider } from "$lib/vault/sync.svelte";
 
 const log = createLogger("vault-provider-connection");
 
@@ -128,7 +129,8 @@ export async function connectAndSyncStagedProvider(
       state.errorMsg = state.t(I18N_KEYS.ErrorsCloudSyncProviderRequired);
       return;
     }
-    await state.flushRemoteEventOutboxNow(provider);
+    const request = eventOutboxRequestForProvider(provider);
+    await state.flushRemoteEventOutboxNow(request);
     const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[0] = {
       providerId: provider.id,
       options: {

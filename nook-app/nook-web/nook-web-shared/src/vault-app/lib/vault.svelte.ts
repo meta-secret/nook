@@ -19,10 +19,7 @@ import {
   type StartSentinelGenesisArgs,
   type StoreId,
 } from "$app-wasm";
-import {
-  type ProviderSetupRequest,
-  type StorageProvider,
-} from "$lib/auth/providers";
+import { type ProviderSetupRequest } from "$lib/auth/providers";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
   OpenSettingsArgs,
@@ -44,7 +41,10 @@ import * as lifecycleActions from "$lib/vault/lifecycle";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
 import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
-import type { EventOutboxTarget } from "$lib/vault/sync-operation-state";
+import type {
+  EventOutboxRequest,
+  EventOutboxTarget,
+} from "$lib/vault/sync-operation-state";
 import { VaultRuntimeState } from "$lib/vault/runtime-state.svelte";
 
 export {
@@ -458,10 +458,10 @@ export class VaultState extends VaultRuntimeState {
     void this.runFanOutSyncAfterLocalSave();
   }
 
-  eventOutboxTarget(provider?: StorageProvider): EventOutboxTarget {
+  eventOutboxTarget(request: EventOutboxRequest): EventOutboxTarget {
     const eventOutboxTargetArgs: Parameters<
       typeof syncActions.eventOutboxTarget
-    >[0] = { state: this, provider };
+    >[0] = { state: this, request };
     return syncActions.eventOutboxTarget(eventOutboxTargetArgs);
   }
 
@@ -937,10 +937,10 @@ export class VaultState extends VaultRuntimeState {
     return secretsActions.handleProtonPassImport(handleProtonPassImportArgs);
   }
 
-  async flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void> {
+  async flushRemoteEventOutboxNow(request: EventOutboxRequest): Promise<void> {
     const flushRemoteEventOutboxNowArgs: Parameters<
       typeof syncActions.flushRemoteEventOutboxNow
-    >[0] = { state: this, provider };
+    >[0] = { state: this, request };
     return syncActions.flushRemoteEventOutboxNow(flushRemoteEventOutboxNowArgs);
   }
 

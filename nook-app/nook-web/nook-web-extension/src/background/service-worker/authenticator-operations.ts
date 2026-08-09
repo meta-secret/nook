@@ -1,4 +1,8 @@
-import { type OtpauthEnrollmentPreview } from '../../lib/enrollment-messages'
+import type {
+  OtpauthEnrollmentPreview,
+  WebsiteAuthenticatorBackupAttachMessageMode,
+} from '../../lib/enrollment-messages'
+import type { WebsiteAuthenticatorOption } from '../../lib/login-fill-messages'
 import {
   AuthenticatorPickerLoadKind,
   authenticatorAccounts,
@@ -13,10 +17,56 @@ import {
   isAuthorizedWebsiteSender,
   passwordPairingGrants,
   randomNonce,
-  sendSessionMessage,
 } from './pairing-identity'
 import { AUTHENTICATOR_PICKER_TTL_MS } from './account-pickers'
 import { ensureExtensionSessionDocument } from './session-lifecycle'
+import {
+  attachAuthenticatorBackupCodes,
+  authenticatorCodeFromSession,
+  authenticatorPreviewFromSession,
+  confirmAuthenticatorEnrollment,
+  selectedAuthenticatorPageAcknowledged,
+  stagedAuthenticatorCodeFromSession,
+} from './authenticator-session-adapter'
+
+type AuthenticatorFailureResponse = { ok: false; reason: string }
+type AuthenticatorSuccessResponse = { ok: true }
+type AuthenticatorUnavailableResponse = {
+  ok: true
+  status: 'unavailable' | 'locked'
+  accounts: []
+}
+type AuthenticatorOptionsResponse =
+  | AuthenticatorFailureResponse
+  | AuthenticatorUnavailableResponse
+  | { ok: true; status: 'ready'; accounts: WebsiteAuthenticatorOption[] }
+type AuthenticatorPickerOpenResponse =
+  | AuthenticatorFailureResponse
+  | AuthenticatorUnavailableResponse
+  | { ok: true; status: 'ready'; requestId: string; expiresAt: number }
+type AuthenticatorPickerQueryResponse =
+  | AuthenticatorFailureResponse
+  | { ok: true; origin: string; accounts: WebsiteAuthenticatorOption[] }
+type AuthenticatorCodeResponse =
+  AuthenticatorFailureResponse | { ok: true; code: string }
+type AuthenticatorPreviewResponse =
+  | AuthenticatorFailureResponse
+  | { ok: true; status: 'unavailable' }
+  | {
+      ok: true
+      status: 'ready'
+      preview: OtpauthEnrollmentPreview
+      vaultStoreId: string
+      vaultName: string
+    }
+type AuthenticatorStageResponse =
+  AuthenticatorFailureResponse | { ok: true; stageId: string }
+type AuthenticatorSecretResponse =
+  AuthenticatorFailureResponse | { ok: true; secretId: string }
+type AuthenticatorPendingResponse =
+  | AuthenticatorFailureResponse
+  | { ok: true; stageId: string; vaultStoreId: string }
+  | AuthenticatorSuccessResponse
 
 export async function websiteAuthenticatorOptions({
   message,
@@ -24,7 +74,7 @@ export async function websiteAuthenticatorOptions({
 }: {
   message: { payload: { origin: string } }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<AuthenticatorOptionsResponse> {
   const nookTypedArgs0_0: Parameters<typeof availableWebsiteGrants>[0] = {
     origin: message.payload.origin,
     sender,
@@ -48,7 +98,7 @@ export async function openWebsiteAuthenticatorPicker({
 }: {
   message: { payload: { origin: string } }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<AuthenticatorPickerOpenResponse> {
   const nookTypedArgs0_1: Parameters<typeof availableWebsiteGrants>[0] = {
     origin: message.payload.origin,
     sender,
@@ -105,7 +155,7 @@ export async function queryAuthenticatorPicker({
 }: {
   message: { payload: { requestId: string; query: string } }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<AuthenticatorPickerQueryResponse> {
   if (!isAuthenticatorPickerSender(sender)) {
     return { ok: false, reason: 'authenticator-picker-forbidden' }
   }
@@ -137,7 +187,7 @@ export async function selectAuthenticatorPicker({
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<AuthenticatorSuccessResponse | AuthenticatorFailureResponse> {
   if (!isAuthenticatorPickerSender(sender)) {
     return { ok: false, reason: 'authenticator-picker-forbidden' }
   }
@@ -163,27 +213,16 @@ export async function selectAuthenticatorPicker({
     return { ok: false, reason: 'authenticator-picker-selection-invalid' }
   }
   try {
-    const nookTypedArgs0_4: Parameters<typeof chrome.tabs.sendMessage>[1] = {
-      type: 'nook:website-authenticator-selected',
-      payload: {
-        origin: request.origin,
-        requestId: request.requestId,
-        account: {
-          vaultStoreId: selected.vaultStoreId,
-          secretId: selected.secretId,
-        },
-      },
+    const acknowledgeArgs: Parameters<
+      typeof selectedAuthenticatorPageAcknowledged
+    >[0] = {
+      tabId: request.tabId,
+      origin: request.origin,
+      requestId: request.requestId,
+      vaultStoreId: selected.vaultStoreId,
+      secretId: selected.secretId,
     }
-    const response: unknown = await chrome.tabs.sendMessage(
-      request.tabId,
-      nookTypedArgs0_4,
-    )
-    if (
-      !response ||
-      typeof response !== 'object' ||
-      !('ok' in response) ||
-      response.ok !== true
-    ) {
+    if (!(await selectedAuthenticatorPageAcknowledged(acknowledgeArgs))) {
       return { ok: false, reason: 'authenticator-picker-page-unavailable' }
     }
   } catch {
@@ -199,7 +238,7 @@ export async function cancelAuthenticatorPicker({
 }: {
   message: { payload: { requestId: string } }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<AuthenticatorSuccessResponse | AuthenticatorFailureResponse> {
   const loaded = await loadAuthenticatorPicker(message.payload.requestId)
   if (loaded.kind === AuthenticatorPickerLoadKind.Unavailable) {
     return { ok: true }
@@ -240,7 +279,7 @@ export async function websiteAuthenticatorFill({
     payload: { origin: string; vaultStoreId: string; secretId: string }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<AuthenticatorCodeResponse> {
   const nookTypedArgs0_6: Parameters<
     typeof authorizedWebsiteGrant
   >[0]['reasons'] = {
@@ -256,11 +295,11 @@ export async function websiteAuthenticatorFill({
   }
   const access = await authorizedWebsiteGrant(nookTypedArgs0_3)
   if ('response' in access) return access.response
-  const nookTypedArgs0_7: Parameters<typeof sendSessionMessage>[0] = {
-    type: 'nook:extension-session-authenticator-code',
-    payload: { ...access.grant, secretId: message.payload.secretId },
+  const sessionArgs: Parameters<typeof authenticatorCodeFromSession>[0] = {
+    grant: access.grant,
+    secretId: message.payload.secretId,
   }
-  return sendSessionMessage(nookTypedArgs0_7)
+  return authenticatorCodeFromSession(sessionArgs)
 }
 
 export async function websiteAuthenticatorEnrollPreview({
@@ -271,7 +310,7 @@ export async function websiteAuthenticatorEnrollPreview({
     payload: { origin: string; otpauthUri: string }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<AuthenticatorPreviewResponse> {
   const nookTypedArgs0_8: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin: message.payload.origin,
@@ -285,29 +324,16 @@ export async function websiteAuthenticatorEnrollPreview({
   }
   await ensureExtensionSessionDocument()
   try {
-    const nookTypedArgs0_9: Parameters<typeof sendSessionMessage>[0] = {
-      type: 'nook:extension-session-authenticator-enroll-preview',
-      payload: { otpauthUri: message.payload.otpauthUri },
-    }
-    const response = await sendSessionMessage(nookTypedArgs0_9)
-    if (
-      !response ||
-      typeof response !== 'object' ||
-      !('ok' in response) ||
-      response.ok !== true ||
-      !('preview' in response) ||
-      !response.preview ||
-      typeof response.preview !== 'object'
-    ) {
-      return { ok: false, reason: 'authenticator-preview-failed' }
-    }
-    const preview = response.preview as OtpauthEnrollmentPreview
+    const response = await authenticatorPreviewFromSession(
+      message.payload.otpauthUri,
+    )
+    const firstGrant = grants[0]!
     return {
       ok: true,
       status: 'ready',
-      preview,
-      vaultStoreId: grants[0]?.vaultStoreId,
-      vaultName: grants[0]?.vaultName,
+      preview: response.preview,
+      vaultStoreId: firstGrant.vaultStoreId,
+      vaultName: firstGrant.vaultName,
     }
   } catch {
     return { ok: false, reason: 'authenticator-preview-invalid' }
@@ -353,7 +379,7 @@ export async function websiteAuthenticatorEnrollStage({
     payload: { origin: string; vaultStoreId: string; otpauthUri: string }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<AuthenticatorStageResponse> {
   const nookTypedArgs0_10: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin: message.payload.origin,
@@ -393,7 +419,7 @@ export async function websiteAuthenticatorEnrollCode({
     payload: { origin: string; stageId: string }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<AuthenticatorCodeResponse> {
   const nookTypedArgs0_12: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin: message.payload.origin,
@@ -408,11 +434,7 @@ export async function websiteAuthenticatorEnrollCode({
   }
   await ensureExtensionSessionDocument()
   try {
-    const nookTypedArgs0_13: Parameters<typeof sendSessionMessage>[0] = {
-      type: 'nook:extension-session-authenticator-enroll-code',
-      payload: { otpauthUri: staged.otpauthUri },
-    }
-    return await sendSessionMessage(nookTypedArgs0_13)
+    return await stagedAuthenticatorCodeFromSession(staged.otpauthUri)
   } catch {
     return { ok: false, reason: 'authenticator-code-failed' }
   }
@@ -426,7 +448,7 @@ export async function websiteAuthenticatorEnrollConfirm({
     payload: { origin: string; vaultStoreId: string; stageId: string }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<AuthenticatorSecretResponse> {
   const nookTypedArgs0_14: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin: message.payload.origin,
@@ -459,15 +481,12 @@ export async function websiteAuthenticatorEnrollConfirm({
   const access = await authorizedWebsiteGrant(nookTypedArgs0_4)
   if ('response' in access) return access.response
   try {
-    const nookTypedArgs0_16: Parameters<typeof sendSessionMessage>[0] = {
-      type: 'nook:extension-session-authenticator-enroll-confirm',
-      payload: {
-        ...access.grant,
-        otpauthUri: staged.otpauthUri,
-        origin: message.payload.origin,
-      },
+    const confirmArgs: Parameters<typeof confirmAuthenticatorEnrollment>[0] = {
+      grant: access.grant,
+      otpauthUri: staged.otpauthUri,
+      origin: message.payload.origin,
     }
-    const response = await sendSessionMessage(nookTypedArgs0_16)
+    const response = await confirmAuthenticatorEnrollment(confirmArgs)
     clearStagedEnrollment(message.payload.stageId)
     return response
   } catch {
@@ -483,7 +502,7 @@ export async function websiteAuthenticatorEnrollDismiss({
     payload: { origin: string; stageId: string }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<AuthenticatorSuccessResponse | AuthenticatorFailureResponse> {
   const nookTypedArgs0_17: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin: message.payload.origin,
@@ -506,7 +525,7 @@ export async function websiteAuthenticatorEnrollPending({
     payload: { origin: string }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<AuthenticatorPendingResponse> {
   const nookTypedArgs0_18: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin: message.payload.origin,
@@ -527,11 +546,6 @@ export async function websiteAuthenticatorEnrollPending({
   return { ok: true }
 }
 
-export enum WebsiteAuthenticatorBackupAttachMessageMode {
-  Replace = 'replace',
-  Merge = 'merge',
-}
-
 export async function websiteAuthenticatorBackupAttach({
   message,
   sender,
@@ -548,7 +562,7 @@ export async function websiteAuthenticatorBackupAttach({
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<AuthenticatorSecretResponse> {
   const codes = [...message.payload.codes]
   message.payload.codes.fill('')
   message.payload.codes = []
@@ -568,16 +582,13 @@ export async function websiteAuthenticatorBackupAttach({
     }
     const access = await authorizedWebsiteGrant(nookTypedArgs0_5)
     if ('response' in access) return access.response
-    const nookTypedArgs0_20: Parameters<typeof sendSessionMessage>[0] = {
-      type: 'nook:extension-session-authenticator-backup-attach',
-      payload: {
-        ...access.grant,
-        secretId: message.payload.secretId,
-        codes,
-        mode: message.payload.mode,
-      },
+    const attachArgs: Parameters<typeof attachAuthenticatorBackupCodes>[0] = {
+      grant: access.grant,
+      secretId: message.payload.secretId,
+      codes,
+      mode: message.payload.mode,
     }
-    const pending = sendSessionMessage(nookTypedArgs0_20)
+    const pending = attachAuthenticatorBackupCodes(attachArgs)
     codes.fill('')
     return await pending
   } finally {

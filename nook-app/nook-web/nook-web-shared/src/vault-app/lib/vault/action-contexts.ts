@@ -27,6 +27,7 @@ import type {
   SettingsAccordionSection,
   SettingsSection,
 } from "$lib/vault/state/ui.svelte";
+import type { EventOutboxRequest } from "$lib/vault/sync-operation-state";
 
 type ProviderStateFields = Pick<
   VaultProviderState,
@@ -102,7 +103,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   connectAndSyncStagedProvider(): Promise<void>;
   dismissSuccess(): void;
   ensureProviderSaved(): Promise<boolean>;
-  flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void>;
+  flushRemoteEventOutboxNow(request: EventOutboxRequest): Promise<void>;
   handleRemoteVaultAssessStatus(
     accessStatus: VaultAccessStatus,
   ): Promise<boolean>;
@@ -232,7 +233,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   refreshSecretsFromSession(): Promise<void>;
   runFanOutSyncAfterLocalSave(): Promise<void>;
   runFanOutSyncToProviders(options?: { quiet?: boolean }): Promise<void>;
-  flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void>;
+  flushRemoteEventOutboxNow(request: EventOutboxRequest): Promise<void>;
   removeProvider(providerId: string): Promise<void>;
   ensureProviderSaved(): Promise<boolean>;
   showSuccess(message: string): void;
