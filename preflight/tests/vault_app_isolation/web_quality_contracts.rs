@@ -21,7 +21,7 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         "\"security\": \"bun audit --prod --audit-level=high\"",
         "\"check\": \"bun run security",
         "bun run lint",
-        "\"lint\": \"../nook-web-app/node_modules/.bin/eslint --config ../eslint.config.js src\"",
+        "\"lint\": \"cd .. && nook-web-app/node_modules/.bin/eslint --config eslint.config.js nook-web-research/src\"",
     ] {
         assert!(
             research_manifest.contains(required),
@@ -40,16 +40,16 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         "import { typedApiRules } from './typed-api-rules.js'",
         "untrustedInputAdapterRules",
         "rules: typedApiRules",
-        "'max-params': ['error', { max: 1 }]",
-        "'@typescript-eslint/no-restricted-types'",
+        "\"max-params\": [\"error\", { max: 1 }]",
+        "\"@typescript-eslint/no-restricted-types\"",
         "Nook web forbids unknown",
         "Model a concrete domain type",
         "must be narrowed immediately",
-        "ExternalValue: { message: 'Use a concrete Nook domain value.' }",
-        "ExternalObject: { message: 'Use a concrete Nook domain object.' }",
-        "JsonValue: { message: 'Use a concrete Nook domain value.' }",
-        "GenericValue: { message: 'Use a concrete Nook domain value.' }",
-        "'nook-typed-api/no-raw-object-arguments': 'error'",
+        "ExternalValue: { message: \"Use a concrete Nook domain value.\" }",
+        "ExternalObject: { message: \"Use a concrete Nook domain object.\" }",
+        "JsonValue: { message: \"Use a concrete Nook domain value.\" }",
+        "GenericValue: { message: \"Use a concrete Nook domain value.\" }",
+        "\"nook-typed-api/no-raw-object-arguments\": \"error\"",
         "TSAsExpression",
         "TSTypeAssertion",
         "TSSatisfiesExpression",
@@ -119,8 +119,9 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
 
     let extension_manifest = read(&root, "nook-app/nook-web/nook-web-extension/package.json");
     assert!(
-        extension_manifest
-            .contains("eslint --config ../eslint.config.js scripts src e2e playwright.config.ts"),
+        extension_manifest.contains(
+            "eslint --config eslint.config.js nook-web-extension/scripts nook-web-extension/src nook-web-extension/e2e nook-web-extension/playwright.config.ts"
+        ),
         "the extension lint command must retain its production source tree"
     );
 
