@@ -76,8 +76,7 @@ export enum HereKind {
 }
 
 export type Here =
-  | { kind: HereKind.Prepared; deviceId: string }
-  | { kind: HereKind.Unprepared }
+  { kind: HereKind.Prepared; deviceId: string } | { kind: HereKind.Unprepared }
 
 export enum GraphId {
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */

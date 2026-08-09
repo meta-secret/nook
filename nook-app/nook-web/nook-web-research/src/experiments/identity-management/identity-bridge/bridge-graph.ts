@@ -108,10 +108,7 @@ export type StageGraphData = {
 }
 
 export type BridgeGraphData =
-  | DeviceGraphData
-  | IdentityGraphData
-  | StageGraphData
-  | VaultGraphData
+  DeviceGraphData | IdentityGraphData | StageGraphData | VaultGraphData
 export type BridgeGraphNode = Node<BridgeGraphData, BridgeGraphNodeType.Graph>
 export type BridgeGraphEdgeData = { lane: number }
 export type BridgeGraphEdge = Edge<BridgeGraphEdgeData, BridgeGraphEdgeType>

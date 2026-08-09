@@ -16,6 +16,27 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         );
     }
 
+    let app_tasks = read(&root, "nook-app/Taskfile.yml");
+    for required in [
+        "cd \"{{.RESEARCH_ROOT}}\" && bun run format",
+        "cd \"{{.RESEARCH_ROOT}}\" && bun run format:check",
+    ] {
+        assert!(
+            app_tasks.contains(required),
+            "sealed formatting must retain the research command `{required}`"
+        );
+    }
+    let web_toolchain = read(
+        &root,
+        "nook-app/nook-web/docker/toolchain.Dockerfile",
+    );
+    assert!(
+        web_toolchain.contains(
+            "nook-web-research && bun install --frozen-lockfile"
+        ),
+        "sealed formatting must use the research package's pinned dependencies"
+    );
+
     let research_manifest = read(&root, "nook-app/nook-web/nook-web-research/package.json");
     for required in [
         "\"security\": \"bun audit --prod --audit-level=high\"",
