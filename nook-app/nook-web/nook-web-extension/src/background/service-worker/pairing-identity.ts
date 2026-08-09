@@ -15,6 +15,7 @@ import {
   isRuntimeSimpleVaultUrl,
   runtimeSimpleVaultUrl,
 } from '../../lib/simple-vault-runtime'
+import { WebsiteAuthenticatorResponseStatus } from '../../lib/login-fill-messages'
 import {
   parsedWebsitePasskeyRequest,
   WebsitePasskeyRequestParseKind,
@@ -728,7 +729,9 @@ export async function availableWebsiteGrants({
         | { ok: false; reason: string }
         | {
             ok: true
-            status: 'unavailable' | 'locked'
+            status:
+              | WebsiteAuthenticatorResponseStatus.Unavailable
+              | WebsiteAuthenticatorResponseStatus.Locked
             accounts: []
           }
     }
@@ -742,7 +745,13 @@ export async function availableWebsiteGrants({
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
-    return { response: { ok: true, status: 'unavailable', accounts: [] } }
+    return {
+      response: {
+        ok: true,
+        status: WebsiteAuthenticatorResponseStatus.Unavailable,
+        accounts: [],
+      },
+    }
   }
   await ensureExtensionSessionDocument()
   const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
@@ -753,7 +762,13 @@ export async function availableWebsiteGrants({
   const status = await sendSessionMessage(nookTypedArgs0_9)
   if (!isUnlockedSessionStatus(status)) {
     openCompanionLauncherBestEffort()
-    return { response: { ok: true, status: 'locked', accounts: [] } }
+    return {
+      response: {
+        ok: true,
+        status: WebsiteAuthenticatorResponseStatus.Locked,
+        accounts: [],
+      },
+    }
   }
   return { grants }
 }

@@ -2,7 +2,10 @@ import type {
   OtpauthEnrollmentPreview,
   WebsiteAuthenticatorBackupAttachMessageMode,
 } from '../../lib/enrollment-messages'
-import type { WebsiteAuthenticatorOption } from '../../lib/login-fill-messages'
+import {
+  type WebsiteAuthenticatorOption,
+  WebsiteAuthenticatorResponseStatus,
+} from '../../lib/login-fill-messages'
 import {
   AuthenticatorPickerLoadKind,
   authenticatorAccounts,
@@ -33,17 +36,28 @@ type AuthenticatorFailureResponse = { ok: false; reason: string }
 type AuthenticatorSuccessResponse = { ok: true }
 type AuthenticatorUnavailableResponse = {
   ok: true
-  status: 'unavailable' | 'locked'
+  status:
+    | WebsiteAuthenticatorResponseStatus.Unavailable
+    | WebsiteAuthenticatorResponseStatus.Locked
   accounts: []
 }
 type AuthenticatorOptionsResponse =
   | AuthenticatorFailureResponse
   | AuthenticatorUnavailableResponse
-  | { ok: true; status: 'ready'; accounts: WebsiteAuthenticatorOption[] }
+  | {
+      ok: true
+      status: WebsiteAuthenticatorResponseStatus.Ready
+      accounts: WebsiteAuthenticatorOption[]
+    }
 type AuthenticatorPickerOpenResponse =
   | AuthenticatorFailureResponse
   | AuthenticatorUnavailableResponse
-  | { ok: true; status: 'ready'; requestId: string; expiresAt: number }
+  | {
+      ok: true
+      status: WebsiteAuthenticatorResponseStatus.Ready
+      requestId: string
+      expiresAt: number
+    }
 type AuthenticatorPickerQueryResponse =
   | AuthenticatorFailureResponse
   | { ok: true; origin: string; accounts: WebsiteAuthenticatorOption[] }
@@ -51,10 +65,10 @@ type AuthenticatorCodeResponse =
   AuthenticatorFailureResponse | { ok: true; code: string }
 type AuthenticatorPreviewResponse =
   | AuthenticatorFailureResponse
-  | { ok: true; status: 'unavailable' }
+  | { ok: true; status: WebsiteAuthenticatorResponseStatus.Unavailable }
   | {
       ok: true
-      status: 'ready'
+      status: WebsiteAuthenticatorResponseStatus.Ready
       preview: OtpauthEnrollmentPreview
       vaultStoreId: string
       vaultName: string
@@ -89,7 +103,11 @@ export async function websiteAuthenticatorOptions({
       query: '',
     }
   const accounts = await authenticatorAccounts(authenticatorAccountsArgs)
-  return { ok: true, status: 'ready', accounts }
+  return {
+    ok: true,
+    status: WebsiteAuthenticatorResponseStatus.Ready,
+    accounts,
+  }
 }
 
 export async function openWebsiteAuthenticatorPicker({
@@ -146,7 +164,12 @@ export async function openWebsiteAuthenticatorPicker({
     await removeAuthenticatorPicker(requestId)
     return { ok: false, reason: 'authenticator-picker-open-failed' }
   }
-  return { ok: true, status: 'ready', requestId, expiresAt: request.expiresAt }
+  return {
+    ok: true,
+    status: WebsiteAuthenticatorResponseStatus.Ready,
+    requestId,
+    expiresAt: request.expiresAt,
+  }
 }
 
 export async function queryAuthenticatorPicker({
@@ -320,7 +343,10 @@ export async function websiteAuthenticatorEnrollPreview({
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
-    return { ok: true, status: 'unavailable' }
+    return {
+      ok: true,
+      status: WebsiteAuthenticatorResponseStatus.Unavailable,
+    }
   }
   await ensureExtensionSessionDocument()
   try {
@@ -330,7 +356,7 @@ export async function websiteAuthenticatorEnrollPreview({
     const firstGrant = grants[0]!
     return {
       ok: true,
-      status: 'ready',
+      status: WebsiteAuthenticatorResponseStatus.Ready,
       preview: response.preview,
       vaultStoreId: firstGrant.vaultStoreId,
       vaultName: firstGrant.vaultName,

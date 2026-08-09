@@ -1,4 +1,7 @@
-import type { OtpauthEnrollmentPreview } from '../../lib/enrollment-messages'
+import type {
+  OtpauthEnrollmentPreview,
+  WebsiteAuthenticatorBackupAttachMessageMode,
+} from '../../lib/enrollment-messages'
 import type { StoredExtensionPairingGrant } from '../pairing-grants'
 import { sendSessionMessage } from './pairing-identity'
 
@@ -122,7 +125,7 @@ export async function attachAuthenticatorBackupCodes({
   grant: StoredExtensionPairingGrant
   secretId: string
   codes: string[]
-  mode: 'replace' | 'merge'
+  mode: WebsiteAuthenticatorBackupAttachMessageMode
 }): Promise<AuthenticatorSecretSessionResponse> {
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-backup-attach',

@@ -17,6 +17,12 @@ export type WebsiteAuthenticatorOption = {
   account: string
 }
 
+export enum WebsiteAuthenticatorResponseStatus {
+  Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+}
+
 export enum WebsiteLoginOptionsMessageType {
   NookWebsiteLoginOptions = 'nook:website-login-options',
 }
