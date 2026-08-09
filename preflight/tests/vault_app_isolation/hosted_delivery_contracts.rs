@@ -280,12 +280,12 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "PR web verification must wait on the WASM build through needs, download its artifact, and export host dist"
     );
     assert!(
-        preview_job.contains("needs: [rust, verify, wasm-node-test]")
+        preview_job.contains("needs: [rust, verify, wasm-node-test, ui-demo]")
             && preview_job.contains("NOOK_HOST_PAGES_DEPLOY: \"1\"")
             && preview_job.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh")
             && preview_job.contains("name: pr-web-dist-${{ github.run_id }}")
             && !preview_job.contains("attempt $attempt/900"),
-        "PR preview must deploy only after Native Rust, web verification, and WASM Node tests succeed"
+        "PR preview must deploy only after Native Rust, web verification, WASM Node tests, and the UI demo succeed"
     );
     let coverage_job = section(&pr, "  coverage:\n", "  full-e2e:\n");
     let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");
