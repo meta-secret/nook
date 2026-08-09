@@ -78,8 +78,9 @@ export async function runSkillScaffold(
 
   const wrappersCreated: string[] = [];
   if (request.createExecutableWrappers) {
+    const directoryOptions: { readonly recursive: true } = { recursive: true };
     const agentsDir = path.join(repoRoot, '.agents', 'skills', slug);
-    mkdirSync(agentsDir, { recursive: true });
+    mkdirSync(agentsDir, directoryOptions);
     const skillMd = path.join(agentsDir, 'SKILL.md');
     if (!existsSync(skillMd)) {
       const cortexLink = `.cortex/dynamic-skills/${slug}.md`;
@@ -105,7 +106,7 @@ export async function runSkillScaffold(
 
     for (const host of ['.cursor/skills', '.claude/skills'] as const) {
       const hostDir = path.join(repoRoot, host);
-      mkdirSync(hostDir, { recursive: true });
+      mkdirSync(hostDir, directoryOptions);
       const linkPath = path.join(hostDir, slug);
       if (!existsSync(linkPath)) {
         symlinkSync(

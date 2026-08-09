@@ -1,10 +1,18 @@
 <script lang="ts">
-  import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
+  import {
+    I18N_KEYS,
+    type I18nKey,
+  } from '../../../nook-web-shared/src/generated/i18n-keys'
   import { Search } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
-  import type { ExtensionI18n } from '../lib/i18n'
+  import {
+    ExtensionTranslationRequestKind,
+    plainExtensionTranslation,
+    type ExtensionI18n,
+    type ExtensionTranslationRequest,
+  } from '../lib/i18n'
 
   let {
     i18n,
@@ -13,6 +21,10 @@
     i18n: ExtensionI18n
     requestId: string
   } = $props()
+
+  function translatePlain(key: I18nKey): string {
+    return i18n.t(plainExtensionTranslation(key))
+  }
 
   let query = $state('')
   let accounts = $state<WebsiteAuthenticatorOption[]>([])
@@ -53,6 +65,15 @@
     )
   }
 
+  function destinationLabel(origin: string): string {
+    const request: ExtensionTranslationRequest = {
+      kind: ExtensionTranslationRequestKind.WithReplacements,
+      key: I18N_KEYS.ExtensionAuthenticatorPickerDestination,
+      replacements: { origin },
+    }
+    return i18n.t(request)
+  }
+
   async function loadAccounts(searchQuery: string): Promise<void> {
     const sequence = ++querySequence
     loading = true
@@ -66,7 +87,7 @@
     if (!isAccountQueryResponse(response)) {
       accounts = []
       destinationOrigin = ''
-      error = i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerFailed)
+      error = translatePlain(I18N_KEYS.ExtensionAuthenticatorPickerFailed)
       return
     }
     destinationOrigin = response.origin
@@ -91,7 +112,7 @@
       return
     }
     busy = false
-    error = i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerFailed)
+    error = translatePlain(I18N_KEYS.ExtensionAuthenticatorPickerFailed)
   }
 
   $effect(() => {
@@ -115,25 +136,23 @@
 
 <main class="authenticator-picker" data-testid="authenticator-picker">
   <p class="step-label">
-    {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerStepLabel)}
+    {translatePlain(I18N_KEYS.ExtensionAuthenticatorPickerStepLabel)}
   </p>
   <NookIcon src="../icons/nook.png" alt="" class="popup-logo companion-logo" />
-  <h1>{i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerTitle)}</h1>
+  <h1>{translatePlain(I18N_KEYS.ExtensionAuthenticatorPickerTitle)}</h1>
   <p class="description">
-    {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerDescription)}
+    {translatePlain(I18N_KEYS.ExtensionAuthenticatorPickerDescription)}
   </p>
   {#if destinationOrigin}
     <p class="destination-origin" data-testid="authenticator-destination">
-      {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerDestination, {
-        origin: destinationOrigin,
-      })}
+      {destinationLabel(destinationOrigin)}
     </p>
   {/if}
 
   <div class="picker-filter">
     <Search aria-hidden="true" size={18} />
     <label for="authenticator-search">
-      {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerSearchLabel)}
+      {translatePlain(I18N_KEYS.ExtensionAuthenticatorPickerSearchLabel)}
     </label>
     <input
       id="authenticator-search"
@@ -143,24 +162,24 @@
       bind:value={query}
       maxlength="200"
       autocomplete="off"
-      placeholder={i18n.t(
+      placeholder={translatePlain(
         I18N_KEYS.ExtensionAuthenticatorPickerSearchPlaceholder,
       )}
     />
   </div>
   <p class="filter-chip">
-    {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerFilterLabel)}
+    {translatePlain(I18N_KEYS.ExtensionAuthenticatorPickerFilterLabel)}
   </p>
 
   {#if error}
     <p class="error-message" role="alert">{error}</p>
   {:else if loading}
     <p class="picker-status">
-      {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerLoading)}
+      {translatePlain(I18N_KEYS.ExtensionAuthenticatorPickerLoading)}
     </p>
   {:else if accounts.length === 0}
     <p class="picker-status">
-      {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerNoResults)}
+      {translatePlain(I18N_KEYS.ExtensionAuthenticatorPickerNoResults)}
     </p>
   {:else}
     <div class="authenticator-results" data-testid="authenticator-results">

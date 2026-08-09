@@ -105,11 +105,12 @@ export function setFlightProgress(
   title.textContent = translatedMessage(titleKey)
   const root = step.getRootNode()
   if (root instanceof ShadowRoot) {
-    const compact = compactProgressState(
-      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel),
+    const compactProgressArgs = {
+      pilotLabel: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel),
       currentStep,
       totalSteps,
-    )
+    }
+    const compact = compactProgressState(compactProgressArgs)
     const collapsedProgress = root.querySelector<HTMLElement>(
       '.collapsed-progress',
     )

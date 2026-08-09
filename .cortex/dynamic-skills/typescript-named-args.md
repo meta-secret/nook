@@ -1,13 +1,20 @@
-# TypeScript Named Call Arguments (Loom)
+# TypeScript Named Call Arguments
 
 ## Purpose
 
-In Loom TypeScript, do not pass raw object literals into function calls.
+In authored TypeScript, do not pass raw object literals into function calls.
 Build a named, typed argument value first.
 
 ## Scope
 
-Applies only to `agentic-ai/loom` authored TypeScript (`src/` and `tests/`).
+Applies to:
+
+- `agentic-ai/loom` authored TypeScript;
+- migrated `nook-app/nook-web` paths selected by the shared ESLint config.
+
+Nook web expands enforcement one green package slice at a time.
+
+Generated bindings are excluded.
 
 ## Problem Pattern
 
@@ -45,8 +52,25 @@ Rules:
 
 ## Enforcement
 
-ESLint `no-restricted-syntax` in `agentic-ai/loom` rejects call arguments that
-are object literals (including `as`-cast object literals).
+Loom's ESLint `loom/no-raw-object-arguments` rule rejects call arguments that
+are object literals, including statically resolvable spread-array elements and
+literals selected by assignment, conditional, logical, or sequence results.
+Its walk stops at function boundaries, so object literals returned by
+function-valued arguments remain valid.
+
+Nook web's `nook-typed-api/no-raw-object-arguments` rule enforces the same
+contract. It also requires an explicit type on named object-literal arguments.
+
+Both rules reject object literals behind TypeScript wrappers and call-site
+assignment, conditional, logical, or sequence expressions. Loom also rejects
+statically resolvable object values expanded from spread arrays.
+
+The rule is configured in:
+
+- `agentic-ai/loom/eslint.config.js` defines
+  `loom/no-raw-object-arguments`;
+- `nook-app/nook-web/eslint.config.js` uses
+  `nook-typed-api/no-raw-object-arguments`.
 
 ```bash
 task loom:verify
@@ -54,6 +78,6 @@ task loom:verify
 
 ## Application Checklist
 
-- [ ] Search for `foo({` call sites in Loom and extract named typed args.
+- [ ] Search the changed package for inline object call arguments.
 - [ ] Prefer exported arg types from the callee module.
-- [ ] Keep `bun run lint` / `task loom:verify` green.
+- [ ] Keep the applicable Loom or web lint task green.

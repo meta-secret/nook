@@ -1,3 +1,4 @@
+import type { ExternalValue } from '../../lib/external-value'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import { summarizeAuthenticationWorkflowForms } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
@@ -35,7 +36,8 @@ export function removeScannedWidget(): void {
   removeWidget()
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
+  const message = runtimeMessage as ExternalValue
   if (
     sender.id === chrome.runtime.id &&
     isQueryLoginDetectionMessage(message)

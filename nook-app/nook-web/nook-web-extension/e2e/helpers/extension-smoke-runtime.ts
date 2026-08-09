@@ -27,6 +27,7 @@ import {
 import { startMockAuthServer } from '../mock-auth'
 import { waitForExtensionPairingReady } from './extension-approval'
 import {
+  readExtensionPersistenceSnapshot,
   readExtensionPairingStorage,
   removeExtensionPairingStorageKeys,
   writeExtensionPairingStorage,
@@ -41,6 +42,7 @@ export {
   lockExtensionSession,
   sentinelVaultBaseUrl,
   readPersistedAppLogs,
+  readExtensionPersistenceSnapshot,
   simpleVaultUrl,
   waitForExtensionPairingReady,
 }
@@ -231,7 +233,10 @@ export async function openSimpleVaultConnection(
   await popupPage.getByTestId('connect-simple-vault-btn').click()
   const simplePage = await openedConnectPage
   await expect(simplePage).toHaveURL((url) =>
-    belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
+    belongsToSimpleVault({
+      baseUrl: simpleVaultBaseUrl,
+      candidateUrl: url.toString(),
+    }),
   )
   return simplePage
 }

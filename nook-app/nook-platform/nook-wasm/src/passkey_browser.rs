@@ -40,8 +40,16 @@ pub(crate) fn creation_options(
     user_handle: &[u8],
     prf_input: &[u8],
 ) -> Result<CredentialCreationOptions, JsError> {
-    let passkey_label = passkey_label_with_passkey_handle(passkey_label, user_handle);
-    let options = creation_options_struct(rp_id, rp_name, &passkey_label, user_handle, prf_input)?;
+    let setup = nook_core::DeviceKeyProtectionSetup::new(user_handle, prf_input)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    let passkey_label = passkey_label_with_passkey_handle(passkey_label, setup.user_handle());
+    let options = creation_options_struct(
+        rp_id,
+        rp_name,
+        &passkey_label,
+        setup.user_handle(),
+        setup.prf_input(),
+    )?;
     to_browser_object(&options)
         .map(JsCast::unchecked_into)
         .map_err(|error| {
@@ -56,7 +64,9 @@ pub(crate) fn request_options(
     credential_id: &[u8],
     prf_input: &[u8],
 ) -> Result<CredentialRequestOptions, JsError> {
-    let options = request_options_struct(rp_id, credential_id, prf_input)?;
+    let request = nook_core::PasskeyAssertionRequest::new(credential_id, prf_input)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    let options = request_options_struct(rp_id, request.credential_id(), request.prf_input())?;
     to_browser_object(&options)
         .map(JsCast::unchecked_into)
         .map_err(|error| JsError::new(&format!("Failed to build passkey request options: {error}")))

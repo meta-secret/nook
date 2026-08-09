@@ -59,6 +59,15 @@ pub struct DeviceKeyProtectionSetup {
 }
 
 impl DeviceKeyProtectionSetup {
+    pub fn new(user_handle: &[u8], prf_input: &[u8]) -> DeviceKeyProtectionResult<Self> {
+        let user_handle = validate_prf_input(user_handle)?;
+        let prf_input = validate_prf_input(prf_input)?;
+        Ok(Self {
+            user_handle,
+            prf_input,
+        })
+    }
+
     pub fn generate() -> DeviceKeyProtectionResult<Self> {
         let mut user_handle = [0u8; PRF_INPUT_LEN];
         fill(&mut user_handle)
@@ -380,6 +389,17 @@ mod tests {
         assert_ne!(setup.user_handle(), other.user_handle());
         assert_eq!(setup.prf_input(), deterministic_passkey_prf_input());
         assert_eq!(setup.prf_input(), other.prf_input());
+        Ok(())
+    }
+
+    #[test]
+    fn setup_rejects_material_outside_the_rust_owned_contract() -> anyhow::Result<()> {
+        let valid = [7u8; 32];
+        let setup = DeviceKeyProtectionSetup::new(&valid, &valid)?;
+        assert_eq!(setup.user_handle(), valid);
+        assert_eq!(setup.prf_input(), valid);
+        assert!(DeviceKeyProtectionSetup::new(&[], &valid).is_err());
+        assert!(DeviceKeyProtectionSetup::new(&valid, &[8u8; 31]).is_err());
         Ok(())
     }
 

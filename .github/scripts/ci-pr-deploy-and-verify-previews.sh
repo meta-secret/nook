@@ -26,6 +26,14 @@ sentinel_url="https://pr-$pr.nokey-sentinel.pages.dev"
 deploy_dir="$(mktemp -d)"
 trap 'rm -rf "$deploy_dir"' EXIT
 
+if [ "${NOOK_HOST_PAGES_DEPLOY:-}" = "1" ]; then
+  export NOOK_WRANGLER_VERSION="${NOOK_WRANGLER_VERSION:-4.114.0}"
+  # Complete the pinned npm install before four deploy processes share the
+  # npx cache. A cold concurrent install can expose Miniflare before all of its
+  # dependencies are present.
+  npx --yes "wrangler@${NOOK_WRANGLER_VERSION}" --version >/dev/null
+fi
+
 deploy_pages() {
   project="$1"
   dist="$2"

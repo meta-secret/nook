@@ -12,7 +12,12 @@ describe('Nook Pilot in-page authorization policy', () => {
   })
 
   test('keeps compact progress and its accessible label synchronized', () => {
-    expect(compactProgressState('Nook Pilot', 3, 3)).toEqual({
+    const args = {
+      pilotLabel: 'Nook Pilot',
+      currentStep: 3,
+      totalSteps: 3,
+    }
+    expect(compactProgressState(args)).toEqual({
       badge: '3/3',
       accessibleLabel: 'Nook Pilot · 3/3',
     })

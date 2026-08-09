@@ -1,3 +1,4 @@
+import type { ExternalValue } from './external-value'
 import { hasOriginPayload } from './origin-runtime-message'
 
 export enum WebsiteAuthenticatorEnrollPreviewMessageType {
@@ -104,27 +105,35 @@ export type OtpauthEnrollmentPreview = {
   period: number
 }
 
-function isOtpauthTotpUri(value: unknown): value is string {
+function isOtpauthTotpUri(value: ExternalValue): value is string {
   return typeof value === 'string' && value.startsWith('otpauth://totp/')
 }
 
 export function isWebsiteAuthenticatorEnrollPreviewMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteAuthenticatorEnrollPreviewMessage {
-  if (!hasOriginPayload(message, 'nook:website-authenticator-enroll-preview')) {
+  if (
+    !hasOriginPayload(message) ||
+    message.type !==
+      WebsiteAuthenticatorEnrollPreviewMessageType.NookWebsiteAuthenticatorEnrollPreview
+  ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   return isOtpauthTotpUri(payload.otpauthUri)
 }
 
 export function isWebsiteAuthenticatorEnrollStageMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteAuthenticatorEnrollStageMessage {
-  if (!hasOriginPayload(message, 'nook:website-authenticator-enroll-stage')) {
+  if (
+    !hasOriginPayload(message) ||
+    message.type !==
+      WebsiteAuthenticatorEnrollStageMessageType.NookWebsiteAuthenticatorEnrollStage
+  ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
@@ -133,22 +142,30 @@ export function isWebsiteAuthenticatorEnrollStageMessage(
 }
 
 export function isWebsiteAuthenticatorEnrollCodeMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteAuthenticatorEnrollCodeMessage {
-  if (!hasOriginPayload(message, 'nook:website-authenticator-enroll-code')) {
+  if (
+    !hasOriginPayload(message) ||
+    message.type !==
+      WebsiteAuthenticatorEnrollCodeMessageType.NookWebsiteAuthenticatorEnrollCode
+  ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   return typeof payload.stageId === 'string' && payload.stageId.length > 0
 }
 
 export function isWebsiteAuthenticatorEnrollConfirmMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteAuthenticatorEnrollConfirmMessage {
-  if (!hasOriginPayload(message, 'nook:website-authenticator-enroll-confirm')) {
+  if (
+    !hasOriginPayload(message) ||
+    message.type !==
+      WebsiteAuthenticatorEnrollConfirmMessageType.NookWebsiteAuthenticatorEnrollConfirm
+  ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
@@ -158,28 +175,40 @@ export function isWebsiteAuthenticatorEnrollConfirmMessage(
 }
 
 export function isWebsiteAuthenticatorEnrollDismissMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteAuthenticatorEnrollDismissMessage {
-  if (!hasOriginPayload(message, 'nook:website-authenticator-enroll-dismiss')) {
+  if (
+    !hasOriginPayload(message) ||
+    message.type !==
+      WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss
+  ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   return typeof payload.stageId === 'string' && payload.stageId.length > 0
 }
 
 export function isWebsiteAuthenticatorEnrollPendingMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteAuthenticatorEnrollPendingMessage {
-  return hasOriginPayload(message, 'nook:website-authenticator-enroll-pending')
+  return (
+    hasOriginPayload(message) &&
+    message.type ===
+      WebsiteAuthenticatorEnrollPendingMessageType.NookWebsiteAuthenticatorEnrollPending
+  )
 }
 
 export function isWebsiteAuthenticatorBackupAttachMessage(
-  message: unknown,
+  message: ExternalValue,
 ): message is WebsiteAuthenticatorBackupAttachMessage {
-  if (!hasOriginPayload(message, 'nook:website-authenticator-backup-attach')) {
+  if (
+    !hasOriginPayload(message) ||
+    message.type !==
+      WebsiteAuthenticatorBackupAttachMessageType.NookWebsiteAuthenticatorBackupAttach
+  ) {
     return false
   }
-  const payload = message.payload as Record<string, unknown>
+  const payload = message.payload as Record<string, ExternalValue>
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&

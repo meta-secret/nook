@@ -106,12 +106,16 @@ async function resolveGitHubStars(
   if (slug.length === 0) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const response = await fetch(`https://api.github.com/repos/${slug}`, {
+  const requestInit: RequestInit = {
     headers: {
       Accept: 'application/vnd.github+json',
       'User-Agent': 'nook-loom-dependency-popularity',
     },
-  });
+  };
+  const response = await fetch(
+    `https://api.github.com/repos/${slug}`,
+    requestInit,
+  );
   if (!response.ok) {
     return { presence: GitHubStarsPresence.Unavailable };
   }

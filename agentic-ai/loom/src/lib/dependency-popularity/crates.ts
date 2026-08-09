@@ -14,14 +14,15 @@ import {
 
 import type { ExternalPropertyArgs } from '../guards.ts';
 export async function fetchCrateMetrics(name: string): Promise<CrateMetrics> {
+  const requestInit: RequestInit = {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'nook-loom-dependency-popularity (meta-secret/nook)',
+    },
+  };
   const response = await fetch(
     `https://crates.io/api/v1/crates/${encodeURIComponent(name)}`,
-    {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'nook-loom-dependency-popularity (meta-secret/nook)',
-      },
-    },
+    requestInit,
   );
   if (!response.ok) {
     throw new Error(
@@ -116,14 +117,15 @@ async function resolveCrateGitHubStars(
   if (typeof owner !== 'string' || typeof repo !== 'string') {
     return { presence: GitHubStarsPresence.Unavailable };
   }
+  const requestInit: RequestInit = {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'nook-loom-dependency-popularity',
+    },
+  };
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo.replace(/\.git$/, '')}`,
-    {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'nook-loom-dependency-popularity',
-      },
-    },
+    requestInit,
   );
   if (!response.ok) {
     return { presence: GitHubStarsPresence.Unavailable };

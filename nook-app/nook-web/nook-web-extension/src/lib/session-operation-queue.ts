@@ -5,22 +5,50 @@ export enum SessionOperationPriority {
   Probe = 'probe',
 }
 
-type QueueOptions = {
-  priority?: SessionOperationPriority
-  expiresAt?: number
-  onExpire?: () => void
+export enum SessionOperationExpiryKind {
+  None = 'none',
+  Deadline = 'deadline',
 }
 
-type QueueEntry<T> = {
+export type SessionOperationExpiry =
+  | { kind: SessionOperationExpiryKind.None }
+  | { kind: SessionOperationExpiryKind.Deadline; expiresAt: number }
+
+export enum SessionOperationCleanupKind {
+  None = 'none',
+  OnExpire = 'on-expire',
+}
+
+export type SessionOperationCleanup =
+  | { kind: SessionOperationCleanupKind.None }
+  | { kind: SessionOperationCleanupKind.OnExpire; run: () => void }
+
+export type SessionOperationOptions = {
+  priority: SessionOperationPriority
+  expiry: SessionOperationExpiry
+  cleanup: SessionOperationCleanup
+}
+
+export const DEFAULT_SESSION_OPERATION_OPTIONS: SessionOperationOptions = {
+  priority: SessionOperationPriority.Normal,
+  expiry: { kind: SessionOperationExpiryKind.None },
+  cleanup: { kind: SessionOperationCleanupKind.None },
+}
+
+type QueueEntry = {
   sequence: number
   priority: number
-  operation: () => Promise<T>
-  resolve: (value: T) => void
+  operation: () => Promise<void>
   reject: (reason: Error) => void
   expiresAt?: number
   onExpire?: () => void
   expiryTimer?: ReturnType<typeof setTimeout>
   settled: boolean
+}
+
+export type EnqueueSessionOperationArgs<T> = {
+  operation: () => Promise<T>
+  options: SessionOperationOptions
 }
 
 const priorityOrder: Record<SessionOperationPriority, number> = {
@@ -41,7 +69,7 @@ type QueueState =
   { kind: QueueStateKind.Open } | { kind: QueueStateKind.Closed; error: Error }
 
 export class SessionOperationQueue {
-  private entries: QueueEntry<unknown>[] = []
+  private entries: QueueEntry[] = []
   private sequence = 0
   private running = false
   private state: QueueState = { kind: QueueStateKind.Open }
@@ -60,25 +88,36 @@ export class SessionOperationQueue {
     }
   }
 
-  enqueue<T>(
-    operation: () => Promise<T>,
-    options: QueueOptions = {},
-  ): Promise<T> {
+  enqueue<T>(args: EnqueueSessionOperationArgs<T>): Promise<T> {
+    const { operation, options } = args
+    // Promise owns this callback's resolve and reject signature.
+    // eslint-disable-next-line max-params
     return new Promise<T>((resolve, reject) => {
       if (this.state.kind === QueueStateKind.Closed) {
-        options.onExpire?.()
+        if (options.cleanup.kind === SessionOperationCleanupKind.OnExpire) {
+          options.cleanup.run()
+        }
         reject(this.state.error)
         return
       }
-      const entry: QueueEntry<T> = {
+      const expiryFields =
+        options.expiry.kind === SessionOperationExpiryKind.Deadline
+          ? { expiresAt: options.expiry.expiresAt }
+          : {}
+      const cleanupFields =
+        options.cleanup.kind === SessionOperationCleanupKind.OnExpire
+          ? { onExpire: options.cleanup.run }
+          : {}
+      const entry: QueueEntry = {
         sequence: this.sequence++,
-        priority:
-          priorityOrder[options.priority ?? SessionOperationPriority.Normal],
-        operation,
-        resolve,
+        priority: priorityOrder[options.priority],
+        operation: async () => {
+          const result = await operation()
+          resolve(result)
+        },
         reject,
-        expiresAt: options.expiresAt,
-        onExpire: options.onExpire,
+        ...expiryFields,
+        ...cleanupFields,
         settled: false,
       }
       if (typeof entry.expiresAt === 'number') {
@@ -97,11 +136,12 @@ export class SessionOperationQueue {
           reject(expiredError())
         }, remaining)
       }
-      this.entries.push(entry as QueueEntry<unknown>)
-      this.entries.sort(
-        (left, right) =>
-          left.priority - right.priority || left.sequence - right.sequence,
-      )
+      this.entries.push(entry)
+      // Array.sort owns this comparator signature.
+      // eslint-disable-next-line max-params
+      const compareEntries = (left: QueueEntry, right: QueueEntry) =>
+        left.priority - right.priority || left.sequence - right.sequence
+      this.entries.sort(compareEntries)
       void this.drain()
     })
   }
@@ -124,9 +164,8 @@ export class SessionOperationQueue {
           } else {
             if (entry.expiryTimer) clearTimeout(entry.expiryTimer)
             try {
-              const result = await entry.operation()
+              await entry.operation()
               entry.settled = true
-              entry.resolve(result)
             } catch (error) {
               entry.settled = true
               entry.reject(

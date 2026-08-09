@@ -8,7 +8,8 @@ import type { FindBrokenRelativeLinksArgs } from '../src/lib/links.ts';
 describe('findBrokenRelativeLinks', () => {
   test('reports missing relative targets', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'loom-links-'));
-    mkdirSync(path.join(root, '.cortex'), { recursive: true });
+    const directoryOptions: { readonly recursive: true } = { recursive: true };
+    mkdirSync(path.join(root, '.cortex'), directoryOptions);
     const filePath = path.join(root, '.cortex', 'demo.md');
     writeFileSync(
       filePath,
