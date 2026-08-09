@@ -30,10 +30,7 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
     let eslint = format!(
         "{}\n{}\n{}\n{}",
         read(&root, "nook-app/nook-web/eslint.config.js"),
-        read(
-            &root,
-            "nook-app/nook-web/no-raw-object-arguments-rule.js",
-        ),
+        read(&root, "nook-app/nook-web/no-raw-object-arguments-rule.js",),
         read(&root, "nook-app/nook-web/typed-api-analysis.js"),
         read(&root, "nook-app/nook-web/typed-api-rules.js")
     );
