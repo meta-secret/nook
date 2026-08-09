@@ -144,7 +144,7 @@ export async function addVaultPassword(
     );
     await state.hydrateMultiDeviceState();
     await state.runFanOutSyncAfterLocalSave();
-  } catch (e: unknown) {
+  } catch (e) {
     state.passwordError =
       e instanceof Error ? e.message : "Failed to add vault password.";
     throw e;
@@ -179,7 +179,7 @@ export async function updateVaultPasswordEntry(
     await state.refreshPasswordEntriesList();
     state.showSuccess(state.t(I18N_KEYS.ToastsPasswordUpdated));
     await state.runFanOutSyncAfterLocalSave();
-  } catch (e: unknown) {
+  } catch (e) {
     state.passwordError =
       e instanceof Error ? e.message : "Failed to update vault password.";
     throw e;
@@ -209,7 +209,7 @@ export async function removeVaultPasswordEntry(
     }
     state.showSuccess(state.t(I18N_KEYS.ToastsPasswordRemoved));
     await state.runFanOutSyncAfterLocalSave();
-  } catch (e: unknown) {
+  } catch (e) {
     state.passwordError =
       e instanceof Error ? e.message : "Failed to remove vault password.";
     throw e;
@@ -283,7 +283,7 @@ export async function unlockWithPassword(
     if (state.deviceProtectionReady) {
       state.startVaultSync();
     }
-  } catch (e: unknown) {
+  } catch (e) {
     state.isAuthenticated = false;
     const message =
       e instanceof Error ? e.message : "Failed to unlock with password.";
@@ -646,7 +646,7 @@ export async function connectWithEnrollmentCode(
     state.showSuccess(state.t(I18N_KEYS.ToastsDeviceEnrolled));
     state.startIdleSessionTracking();
     state.startVaultSync();
-  } catch (e: unknown) {
+  } catch (e) {
     state.isAuthenticated = false;
     state.errorMsg =
       e instanceof Error

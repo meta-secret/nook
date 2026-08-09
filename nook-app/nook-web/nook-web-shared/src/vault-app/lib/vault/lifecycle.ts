@@ -368,7 +368,7 @@ export async function createFreshVault(state: VaultState) {
     });
     state.showSuccess(state.t(I18N_KEYS.ToastsVaultCreated));
     state.startIdleSessionTracking();
-  } catch (e: unknown) {
+  } catch (e) {
     state.isAuthenticated = false;
     const message =
       e instanceof Error ? e.message : "Failed to create a new vault.";

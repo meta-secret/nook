@@ -1,8 +1,8 @@
 import {
-  ExternalPropertyPresence,
-  asExternalValue,
-  externalProperty,
-  type ExternalValue,
+  UntrustedYamlPropertyPresence,
+  asUntrustedYamlNode,
+  untrustedYamlProperty,
+  type UntrustedYamlNode,
   isRecord,
 } from '../guards.ts';
 import {
@@ -12,7 +12,7 @@ import {
   type GitHubStars,
 } from './types.ts';
 
-import type { ExternalPropertyArgs } from '../guards.ts';
+import type { UntrustedYamlPropertyArgs } from '../guards.ts';
 export async function fetchCrateMetrics(name: string): Promise<CrateMetrics> {
   const requestInit: RequestInit = {
     headers: {
@@ -29,36 +29,36 @@ export async function fetchCrateMetrics(name: string): Promise<CrateMetrics> {
       `crates.io lookup failed for ${name}: HTTP ${response.status}`,
     );
   }
-  const json = asExternalValue((await response.json()) as ExternalValue);
+  const json = asUntrustedYamlNode((await response.json()) as UntrustedYamlNode);
   if (!isRecord(json)) {
     throw new Error(`crates.io payload invalid for ${name}`);
   }
-  const cratePropertyArgs2: ExternalPropertyArgs = {
+  const cratePropertyArgs2: UntrustedYamlPropertyArgs = {
     record: json,
     key: 'crate',
   };
-  const crateProperty = externalProperty(cratePropertyArgs2);
+  const crateProperty = untrustedYamlProperty(cratePropertyArgs2);
   if (
-    crateProperty.presence === ExternalPropertyPresence.Absent ||
+    crateProperty.presence === UntrustedYamlPropertyPresence.Absent ||
     !isRecord(crateProperty.value)
   ) {
     throw new Error(`crates.io payload invalid for ${name}`);
   }
   const crate = crateProperty.value;
-  const downloadsArgs: ExternalPropertyArgs = {
+  const downloadsArgs: UntrustedYamlPropertyArgs = {
     record: crate,
     key: 'downloads',
   };
-  const downloads = externalProperty(downloadsArgs);
-  const recentDownloadsArgs: ExternalPropertyArgs = {
+  const downloads = untrustedYamlProperty(downloadsArgs);
+  const recentDownloadsArgs: UntrustedYamlPropertyArgs = {
     record: crate,
     key: 'recent_downloads',
   };
-  const recentDownloads = externalProperty(recentDownloadsArgs);
+  const recentDownloads = untrustedYamlProperty(recentDownloadsArgs);
   if (
-    downloads.presence === ExternalPropertyPresence.Absent ||
+    downloads.presence === UntrustedYamlPropertyPresence.Absent ||
     typeof downloads.value !== 'number' ||
-    recentDownloads.presence === ExternalPropertyPresence.Absent ||
+    recentDownloads.presence === UntrustedYamlPropertyPresence.Absent ||
     typeof recentDownloads.value !== 'number'
   ) {
     throw new Error(`crates.io download fields missing for ${name}`);
@@ -73,40 +73,40 @@ export async function fetchCrateMetrics(name: string): Promise<CrateMetrics> {
 }
 
 async function resolveCrateGitHubStars(
-  payload: ExternalValue,
+  payload: UntrustedYamlNode,
 ): Promise<GitHubStars> {
   if (!isRecord(payload)) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const versionsArgs: ExternalPropertyArgs = {
+  const versionsArgs: UntrustedYamlPropertyArgs = {
     record: payload,
     key: 'versions',
   };
-  const versions = externalProperty(versionsArgs);
+  const versions = untrustedYamlProperty(versionsArgs);
   if (
-    versions.presence === ExternalPropertyPresence.Absent ||
+    versions.presence === UntrustedYamlPropertyPresence.Absent ||
     !Array.isArray(versions.value)
   ) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const cratePropertyArgs: ExternalPropertyArgs = {
+  const cratePropertyArgs: UntrustedYamlPropertyArgs = {
     record: payload,
     key: 'crate',
   };
-  const crateProperty = externalProperty(cratePropertyArgs);
+  const crateProperty = untrustedYamlProperty(cratePropertyArgs);
   if (
-    crateProperty.presence === ExternalPropertyPresence.Absent ||
+    crateProperty.presence === UntrustedYamlPropertyPresence.Absent ||
     !isRecord(crateProperty.value)
   ) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const repositoryArgs: ExternalPropertyArgs = {
+  const repositoryArgs: UntrustedYamlPropertyArgs = {
     record: crateProperty.value,
     key: 'repository',
   };
-  const repository = externalProperty(repositoryArgs);
+  const repository = untrustedYamlProperty(repositoryArgs);
   if (
-    repository.presence === ExternalPropertyPresence.Absent ||
+    repository.presence === UntrustedYamlPropertyPresence.Absent ||
     typeof repository.value !== 'string'
   ) {
     return { presence: GitHubStarsPresence.Unavailable };
@@ -130,17 +130,17 @@ async function resolveCrateGitHubStars(
   if (!response.ok) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const json = asExternalValue((await response.json()) as ExternalValue);
+  const json = asUntrustedYamlNode((await response.json()) as UntrustedYamlNode);
   if (!isRecord(json)) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const starsArgs: ExternalPropertyArgs = {
+  const starsArgs: UntrustedYamlPropertyArgs = {
     record: json,
     key: 'stargazers_count',
   };
-  const stars = externalProperty(starsArgs);
+  const stars = untrustedYamlProperty(starsArgs);
   if (
-    stars.presence === ExternalPropertyPresence.Absent ||
+    stars.presence === UntrustedYamlPropertyPresence.Absent ||
     typeof stars.value !== 'number'
   ) {
     return { presence: GitHubStarsPresence.Unavailable };

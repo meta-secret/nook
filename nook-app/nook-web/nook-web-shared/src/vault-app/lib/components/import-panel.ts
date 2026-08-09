@@ -30,7 +30,7 @@ export async function importTextFile(
       kind: ImportAttemptKind.Completed,
       result: await onImport(await file.text()),
     };
-  } catch (cause: unknown) {
+  } catch (cause) {
     return {
       kind: ImportAttemptKind.Failed,
       error: cause instanceof Error ? cause.message : String(cause),
@@ -50,7 +50,7 @@ export async function importBinaryFile(
       kind: ImportAttemptKind.Completed,
       result: await onImport(bytes),
     };
-  } catch (cause: unknown) {
+  } catch (cause) {
     return {
       kind: ImportAttemptKind.Failed,
       error: cause instanceof Error ? cause.message : String(cause),

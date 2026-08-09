@@ -434,7 +434,7 @@ export class ExtensionSessionMessageDispatcher {
         : this.enqueue(message)
       void response
         .then((value) => sendResponse(value))
-        .catch((error: unknown) =>
+        .catch((error) =>
           sendResponse({
             ok: false,
             error:

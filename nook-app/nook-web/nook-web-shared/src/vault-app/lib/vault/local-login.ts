@@ -156,7 +156,7 @@ export async function selectVaultForUnlock(
     await state.refreshPasswordEntriesList();
     await refreshLoginUnlockCapabilities(state);
     state.localLoginPreparation = LocalLoginPreparationState.Ready;
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg =
       e instanceof Error
         ? e.message
@@ -242,7 +242,7 @@ export async function createLocalVaultWithDeviceKeys(
     state.showSuccess(state.t(I18N_KEYS.ToastsLocalLoaded));
     state.startIdleSessionTracking();
     state.startVaultSync();
-  } catch (e: unknown) {
+  } catch (e) {
     state.isAuthenticated = false;
     const message =
       e instanceof Error
@@ -302,7 +302,7 @@ export async function renameLocalVaultLabel(
     renameCommitted = true;
     await refreshLocalVaultCatalog(state);
     state.showSuccess(state.t(I18N_KEYS.ToastsVaultRenamed));
-  } catch (e: unknown) {
+  } catch (e) {
     if (
       !renameCommitted &&
       previousLabel.kind === PreviousVaultLabelKind.Present
@@ -310,7 +310,7 @@ export async function renameLocalVaultLabel(
       try {
         await setLocalVaultLabel(trimmedStoreId, previousLabel.label);
         await refreshLocalVaultCatalog(state);
-      } catch (rollbackError: unknown) {
+      } catch (rollbackError) {
         log.warn("local vault rename rollback failed", {
           error:
             rollbackError instanceof Error

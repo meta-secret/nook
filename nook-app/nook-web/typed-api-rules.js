@@ -17,3 +17,17 @@ export const typedApiRules = {
   ],
   'nook-typed-api/no-raw-object-arguments': 'error',
 }
+
+export const untrustedInputAdapterRules = {
+  '@typescript-eslint/no-restricted-types': [
+    'error',
+    {
+      types: {
+        ExternalValue: { message: 'Use a concrete Nook domain value.' },
+        ExternalObject: { message: 'Use a concrete Nook domain object.' },
+        JsonValue: { message: 'Use a concrete Nook domain value.' },
+        GenericValue: { message: 'Use a concrete Nook domain value.' },
+      },
+    },
+  ],
+}

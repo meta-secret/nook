@@ -37,7 +37,7 @@
     vault.errorMsg = ''
     try {
       await action()
-    } catch (error: unknown) {
+    } catch (error) {
       vault.errorMsg =
         error instanceof Error
           ? vault.resolveErrorMessage(error.message)

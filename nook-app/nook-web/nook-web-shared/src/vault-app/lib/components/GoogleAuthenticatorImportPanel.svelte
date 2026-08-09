@@ -117,7 +117,7 @@
     try {
       result = { kind: AuthenticatorImportOutcomeKind.Completed, result: await onImport(migrationUris) };
       migrationUris = [];
-    } catch (cause: unknown) {
+    } catch (cause) {
       error = cause instanceof Error ? cause.message : String(cause);
     }
   }

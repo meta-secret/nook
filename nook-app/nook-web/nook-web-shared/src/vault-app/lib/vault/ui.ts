@@ -160,7 +160,7 @@ export async function deleteLocalData(state: UiActionsContext): Promise<void> {
       state.localDataDeletionStarted = true;
       return deletion;
     });
-  } catch (error: unknown) {
+  } catch (error) {
     const managerWasZeroized = state.localDataDeletionStarted;
     setVaultSessionLocked(true);
     state.clearUnlockedSession(!managerWasZeroized);

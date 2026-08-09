@@ -1,4 +1,4 @@
-import type { ExternalValue } from '../../lib/guards.ts';
+import type { UntrustedYamlNode } from '../../lib/guards.ts';
 import { RequestFamily } from '../enums.ts';
 import { DecodeStatus, decodeErr, type DecodeOutcome } from '../field-error.ts';
 import {
@@ -29,7 +29,7 @@ export type CortexAuditRequest = {
 const ROOT = RequestFamily.CortexAudit;
 
 export function decodeCortexAuditRequest(
-  value: ExternalValue,
+  value: UntrustedYamlNode,
 ): DecodeOutcome<CortexAuditRequest> {
   const objectArgs: ExpectObjectArgs = { value, path: ROOT };
   const object = expectObject(objectArgs);

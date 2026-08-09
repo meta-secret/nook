@@ -12,7 +12,7 @@
   $effect(() => {
     if (!open || prepareStarted) return;
     prepareStarted = true;
-    void prepareICloudSignInControl().catch((error: unknown) => {
+    void prepareICloudSignInControl().catch((error) => {
       prepareError =
         error instanceof Error
           ? vault.t(error.message)

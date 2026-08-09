@@ -45,6 +45,10 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "files: ['src/**/*.ts', 'tests/**/*.ts']",
         "Model a concrete domain type",
         "must be narrowed immediately",
+        "ExternalValue",
+        "ExternalObject",
+        "JsonValue",
+        "GenericValue",
     ] {
         assert!(
             eslint.contains(required),
@@ -54,12 +58,12 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
 
     let guards = read(&root, "agentic-ai/loom/src/lib/guards.ts");
     for required in [
-        "export type ExternalValue =",
-        "export type ExternalObject =",
-        "export type ExternalObjectBuilder =",
-        "export function asExternalValue",
-        "export function externalProperty",
-        "export enum ExternalPropertyPresence",
+        "export type UntrustedYamlNode =",
+        "export type UntrustedYamlMap =",
+        "export type UntrustedYamlMapBuilder =",
+        "export function asUntrustedYamlNode",
+        "export function untrustedYamlProperty",
+        "export enum UntrustedYamlPropertyPresence",
     ] {
         assert!(
             guards.contains(required),
@@ -68,7 +72,11 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     }
     assert!(
         !guards.contains("UnknownRecord"),
-        "Loom guards must not keep UnknownRecord after the ExternalObject rename"
+        "Loom guards must not keep UnknownRecord after the UntrustedYamlMap rename"
+    );
+    assert!(
+        !guards.contains("ExternalValue") && !guards.contains("ExternalObject"),
+        "Loom must not restore generic external value aliases"
     );
 
     let taskfile = read(&root, ".task/agentic-ai.yml");

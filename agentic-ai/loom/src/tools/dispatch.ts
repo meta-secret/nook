@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import {
-  ExternalPropertyPresence,
-  asExternalValue,
-  externalProperty,
+  UntrustedYamlPropertyPresence,
+  asUntrustedYamlNode,
+  untrustedYamlProperty,
   isRecord,
-  type ExternalValue,
+  type UntrustedYamlNode,
 } from '../lib/guards.ts';
 import {
   explainAgainstBlueprint,
@@ -34,7 +34,7 @@ import { parseYamlFile } from '../codec/yaml.ts';
 import { LoomFailure, LoomFailureDetailKind } from '../loom-failure.ts';
 import { executeRequest, listDiscoverableRequests } from './registry.ts';
 
-import type { ExternalPropertyArgs } from '../lib/guards.ts';
+import type { UntrustedYamlPropertyArgs } from '../lib/guards.ts';
 import type {
   SuccessResponseForFamilyArgs,
   SuccessResponseForAgentStatsArgs,
@@ -81,7 +81,7 @@ export async function dispatchRequestFile(
 }
 
 export async function dispatchValue(
-  value: ExternalValue,
+  value: UntrustedYamlNode,
 ): Promise<DispatchOutcome> {
   const request = decodeLoomRequest(value);
   if (request.status === DecodeStatus.Failed) {
@@ -104,12 +104,12 @@ async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
   }
 
   if (request.family === RequestFamily.ToolsList) {
-    const asExternalValueArgs: ExternalValue = {
+    const asUntrustedYamlNodeArgs: UntrustedYamlNode = {
       requests: listDiscoverableRequests(),
     };
     const successResponseForFamilyArgs8: SuccessResponseForFamilyArgs = {
       family: RequestFamily.ToolsList,
-      result: asExternalValue(asExternalValueArgs),
+      result: asUntrustedYamlNode(asUntrustedYamlNodeArgs),
     };
     return {
       exitCode: 0,
@@ -120,13 +120,13 @@ async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
   try {
     const result = await executeRequest(request);
     if (request.family === RequestFamily.CortexAudit && isRecord(result)) {
-      const auditOkArgs: ExternalPropertyArgs = {
+      const auditOkArgs: UntrustedYamlPropertyArgs = {
         record: result,
         key: 'auditOk',
       };
-      const auditOk = externalProperty(auditOkArgs);
+      const auditOk = untrustedYamlProperty(auditOkArgs);
       if (
-        auditOk.presence === ExternalPropertyPresence.Present &&
+        auditOk.presence === UntrustedYamlPropertyPresence.Present &&
         auditOk.value === false
       ) {
         const successResponseForFamilyArgs7: SuccessResponseForFamilyArgs = {
@@ -143,10 +143,10 @@ async function dispatchDecoded(request: LoomRequest): Promise<DispatchOutcome> {
       request.family === RequestFamily.DependencyPopularity &&
       isRecord(result)
     ) {
-      const okArgs: ExternalPropertyArgs = { record: result, key: 'ok' };
-      const ok = externalProperty(okArgs);
+      const okArgs: UntrustedYamlPropertyArgs = { record: result, key: 'ok' };
+      const ok = untrustedYamlProperty(okArgs);
       if (
-        ok.presence === ExternalPropertyPresence.Present &&
+        ok.presence === UntrustedYamlPropertyPresence.Present &&
         ok.value === false
       ) {
         const successResponseForFamilyArgs6: SuccessResponseForFamilyArgs = {
@@ -205,7 +205,7 @@ function failureDetail(error: LoomFailure | Error | string): string {
 
 type BuildSuccessResponseArgs = {
   readonly request: LoomRequest;
-  readonly result: ExternalValue;
+  readonly result: UntrustedYamlNode;
 };
 
 function buildSuccessResponse(args: BuildSuccessResponseArgs): SuccessResponse {
@@ -340,6 +340,6 @@ function buildExecuteErrorResponse(
   }
 }
 
-export function encodedOutcome(outcome: DispatchOutcome): ExternalValue {
+export function encodedOutcome(outcome: DispatchOutcome): UntrustedYamlNode {
   return encodeResponse(outcome.body);
 }

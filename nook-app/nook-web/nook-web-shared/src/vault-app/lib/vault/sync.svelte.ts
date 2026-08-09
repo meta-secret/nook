@@ -812,7 +812,7 @@ export async function syncProviderById(
     );
     log.debug("provider sync finished", { providerId, type: provider.type });
     return;
-  } catch (e: unknown) {
+  } catch (e) {
     syncError(`provider sync (${provider.label})`, e);
     const eventLogIssueResult = state.requireManager().takeEventLogSyncIssue();
     const message = e instanceof Error ? e.message : String(e);

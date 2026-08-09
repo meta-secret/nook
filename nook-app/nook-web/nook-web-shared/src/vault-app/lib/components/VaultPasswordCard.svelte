@@ -203,7 +203,7 @@
       await onIssueCode(activeEntryId.entryId, passwordInput)
       passwordInput = ''
       confirmInput = ''
-    } catch (e: unknown) {
+    } catch (e) {
       localError =
         e instanceof Error
           ? e.message

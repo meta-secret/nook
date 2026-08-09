@@ -152,7 +152,7 @@
       }
       sharedFolderStepOpen = false
       syncStepOpen = true
-    } catch (error: unknown) {
+    } catch (error) {
       vault.errorMsg =
         error instanceof Error
           ? error.message
@@ -178,7 +178,7 @@
       }
       sharedFolderStepOpen = false
       syncStepOpen = true
-    } catch (error: unknown) {
+    } catch (error) {
       vault.errorMsg =
         error instanceof Error
           ? error.message

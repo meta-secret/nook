@@ -57,7 +57,7 @@ export async function ensureExtensionSessionDocument(): Promise<void> {
       justification:
         'Keep a user-authorized extension device identity in memory for a 15-minute session.',
     })
-    .catch((error: unknown) => {
+    .catch((error) => {
       // Manifest V3 permits only one offscreen document. A restarted service
       // worker may race with the existing session document; it is safe to use
       // that already-open document.

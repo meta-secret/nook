@@ -136,7 +136,7 @@ export async function connectAndSyncStagedProvider(
     });
     state.clearLoginSetup();
     state.addProviderOpen = false;
-  } catch (error: unknown) {
+  } catch (error) {
     const assessTimedOut =
       error instanceof Error && error.name === VAULT_ASSESS_TIMEOUT_ERROR_NAME;
     const stagedConflict =

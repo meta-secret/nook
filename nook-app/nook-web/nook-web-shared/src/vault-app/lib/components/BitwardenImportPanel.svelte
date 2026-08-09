@@ -58,7 +58,7 @@
         result: await onImport(await file.text(), password),
       }
       password = ''
-    } catch (cause: unknown) {
+    } catch (cause) {
       error = cause instanceof Error ? cause.message : String(cause)
     } finally {
       isImporting = false

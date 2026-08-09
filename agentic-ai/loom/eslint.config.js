@@ -206,6 +206,18 @@ export default tseslint.config(
               message:
                 'Loom forbids unknown. Model a concrete domain type. A generic transport value is allowed only inside a dedicated untrusted-input codec and must be narrowed immediately.',
             },
+            ExternalValue: {
+              message: 'Loom forbids generic external values. Model a concrete domain value.',
+            },
+            ExternalObject: {
+              message: 'Loom forbids generic external objects. Model a concrete domain object.',
+            },
+            JsonValue: {
+              message: 'Loom forbids generic JSON values. Model a concrete domain value.',
+            },
+            GenericValue: {
+              message: 'Loom forbids generic value bags. Model a concrete domain value.',
+            },
           },
         },
       ],

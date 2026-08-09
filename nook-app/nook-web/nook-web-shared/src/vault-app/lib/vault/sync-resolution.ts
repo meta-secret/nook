@@ -48,7 +48,7 @@ export async function resolveReplacementConflict(
     await state.refreshReplacementConflicts();
     void state.runFanOutSyncAfterLocalSave();
     state.showSuccess(state.t(I18N_KEYS.ToastsSecretConflictResolved));
-  } catch (error: unknown) {
+  } catch (error) {
     state.errorMsg =
       error instanceof Error
         ? error.message
@@ -145,7 +145,7 @@ export async function confirmRecoverRemoteVault(
       return;
     }
     await state.refreshPasswordEntriesList();
-  } catch (error: unknown) {
+  } catch (error) {
     state.errorMsg =
       error instanceof Error
         ? error.message
@@ -165,7 +165,7 @@ export async function confirmCreateFreshRemoteVault(
     state.isVerifying = true;
     try {
       await state.loadDb();
-    } catch (error: unknown) {
+    } catch (error) {
       state.errorMsg =
         error instanceof Error
           ? error.message
@@ -319,7 +319,7 @@ export async function resolveSyncConflictImportRemote(
         provider: providerLabel,
       }),
     );
-  } catch (error: unknown) {
+  } catch (error) {
     state.errorMsg =
       error instanceof Error
         ? error.message

@@ -137,7 +137,7 @@ export async function ensureSentinelCeremonyHydrated(
       const connectArgs = state.connectStorageArgs();
       await state.requireManager().connect(...connectArgs);
     });
-  } catch (e: unknown) {
+  } catch (e) {
     if (isSentinelCeremonyRequiredError(e)) {
       state.refreshVaultArchitectureFromManager();
       state.sentinelCeremonyPrompt = true;
@@ -237,7 +237,7 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
     state.showSuccess(state.t(I18N_KEYS.ToastsVaultUnlocked));
     state.startIdleSessionTracking();
     state.startVaultSync();
-  } catch (e: unknown) {
+  } catch (e) {
     state.isAuthenticated = false;
     if (isSentinelCeremonyRequiredError(e)) {
       state.sentinelCeremonyPrompt = true;

@@ -1,4 +1,4 @@
-import type { ExternalValue } from '../../lib/guards.ts';
+import type { UntrustedYamlNode } from '../../lib/guards.ts';
 import {
   DecodeStatus,
   decodeErr,
@@ -48,7 +48,7 @@ export type AgentStatsFileRequest = {
 };
 
 export type DecodeAgentStatsAssemblePayloadArgs = {
-  readonly value: ExternalValue;
+  readonly value: UntrustedYamlNode;
   readonly path: string;
 };
 
@@ -114,7 +114,7 @@ export function decodeAgentStatsAssemblePayload(
 }
 
 export type DecodeAgentStatsFilePayloadArgs = {
-  readonly value: ExternalValue;
+  readonly value: UntrustedYamlNode;
   readonly path: string;
 };
 

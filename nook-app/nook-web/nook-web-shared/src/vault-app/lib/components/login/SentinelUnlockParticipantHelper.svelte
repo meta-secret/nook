@@ -99,7 +99,7 @@
     vault.errorMsg = ''
     try {
       response = await createSentinelUnlockResponse(vault, storeId, payload)
-    } catch (error: unknown) {
+    } catch (error) {
       vault.errorMsg =
         error instanceof Error
           ? vault.resolveErrorMessage(error.message)

@@ -4,6 +4,7 @@ import svelte from 'eslint-plugin-svelte'
 import globals from 'globals'
 import ts from 'typescript-eslint'
 import { typedApiRules } from './typed-api-rules.js'
+import { untrustedInputAdapterRules } from './typed-api-rules.js'
 import {
   ActiveCallScopeKind,
   arrayAtSummaryValues,
@@ -966,11 +967,36 @@ export default [
     },
   },
   {
-    files: ['nook-web-extension/src/lib/**/*.ts', 'src/lib/**/*.ts', 'nook-vault-{simple,sentinel}/**/*.{ts,svelte}'],
+    files: [
+      'nook-web-extension/src/**/*.{ts,svelte}',
+      'nook-web-shared/src/**/*.{ts,svelte}',
+      'nook-web-app/src/**/*.{ts,svelte}',
+      'nook-web-research/src/**/*.{ts,svelte}',
+      'nook-vault-{simple,sentinel}/**/*.{ts,svelte}',
+    ],
     plugins: {
       'nook-typed-api': nookTypedApiPlugin,
     },
     rules: typedApiRules,
+  },
+  {
+    files: [
+      'nook-web-app/src/landing/github-stars-state.ts',
+      'nook-web-extension/src/chrome.d.ts',
+      'nook-web-extension/src/content/simple-vault-bridge.ts',
+      'nook-web-extension/src/content/webauthn-content.ts',
+      'nook-web-extension/src/content/webauthn-page.ts',
+      'nook-web-shared/src/extension/runtime-messages.ts',
+      'nook-web-shared/src/vault-app/lib/auth/icloud/auth-errors.ts',
+      'nook-web-shared/src/vault-app/lib/auth/icloud/cloudkit-runtime.ts',
+      'nook-web-shared/src/vault-app/lib/auth/icloud/web-auth-wait.ts',
+      'nook-web-shared/src/vault-app/lib/auth/google/oauth.ts',
+      'nook-web-shared/src/vault-app/lib/auth/passkey-device-protection.ts',
+      'nook-web-shared/src/vault-app/lib/extension/connect.ts',
+      'nook-web-shared/src/vault-app/lib/extension/install.ts',
+      'nook-web-shared/src/vault-app/lib/runtime/log.ts',
+    ],
+    rules: untrustedInputAdapterRules,
   },
   {
     files: ['**/tests/**', '**/e2e/**'],

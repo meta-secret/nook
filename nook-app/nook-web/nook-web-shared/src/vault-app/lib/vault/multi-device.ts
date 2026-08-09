@@ -37,7 +37,7 @@ export async function approveJoin(state: VaultState, joinDeviceId: string) {
     );
     state.showSuccess(state.t(I18N_KEYS.ToastsDeviceApproved));
     log.info("join request approved", { joinDeviceId });
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to approve join request.";
   } finally {
@@ -59,7 +59,7 @@ export async function denyJoin(state: VaultState, joinDeviceId: string) {
     await state.hydrateMultiDeviceState();
     state.scheduleFanOutSyncAfterLocalSave();
     state.showSuccess(state.t(I18N_KEYS.ToastsJoinDenied));
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to deny join request.";
   } finally {
@@ -87,7 +87,7 @@ export async function renameDevice(
         ? state.t(I18N_KEYS.ToastsDeviceRenamed)
         : state.t(I18N_KEYS.ToastsDeviceNameReset),
     );
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to rename device.";
     throw e;
@@ -118,7 +118,7 @@ export async function revokeDevice(state: VaultState, authId: string) {
     await state.hydrateMultiDeviceState();
     state.scheduleFanOutSyncAfterLocalSave();
     state.showSuccess(state.t(I18N_KEYS.ToastsDeviceRevoked));
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to revoke device access.";
     throw e;
@@ -146,7 +146,7 @@ export async function confirmJoinRequest(state: VaultState) {
     await state.ensureProviderSaved();
     state.joinEnrollmentPrompt = JoinEnrollmentState.Pending;
     state.awaitingJoinApproval = true;
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to request vault access.";
   } finally {
@@ -189,7 +189,7 @@ export async function enrollAndConnect(state: VaultState) {
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.closeSettings();
     state.startIdleSessionTracking();
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to enroll with vault keys.";
   } finally {

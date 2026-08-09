@@ -372,7 +372,7 @@
         selectedProvider.provider.id,
       )
       passwordInput = ''
-    } catch (e: unknown) {
+    } catch (e) {
       localError =
         e instanceof Error ? e.message : vault.t(I18N_KEYS.OnboardDeviceFailedQrErr)
     } finally {

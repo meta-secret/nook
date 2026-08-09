@@ -22,7 +22,7 @@
     renderError = ''
     try {
       svgHtml = await renderMermaidDiagram(src, diagramTheme)
-    } catch (error: unknown) {
+    } catch (error) {
       svgHtml = ''
       renderError =
         error instanceof Error ? error.message : 'Failed to render diagram'

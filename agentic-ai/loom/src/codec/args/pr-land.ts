@@ -1,4 +1,4 @@
-import type { ExternalValue } from '../../lib/guards.ts';
+import type { UntrustedYamlNode } from '../../lib/guards.ts';
 import {
   DecodeStatus,
   decodeErr,
@@ -55,7 +55,7 @@ export type PrLandValidateRequest = {
 };
 
 export type DecodePrLandPrPayloadArgs = {
-  readonly value: ExternalValue;
+  readonly value: UntrustedYamlNode;
   readonly path: string;
 };
 
@@ -95,7 +95,7 @@ export function decodePrLandPrPayload(
 }
 
 export type DecodePrLandValidatePayloadArgs = {
-  readonly value: ExternalValue;
+  readonly value: UntrustedYamlNode;
   readonly path: string;
 };
 

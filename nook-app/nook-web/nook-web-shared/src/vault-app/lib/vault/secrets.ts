@@ -210,7 +210,7 @@ export async function loadDb(state: VaultState) {
     } else {
       state.showSuccess(state.t(I18N_KEYS.ToastsGithubConnected));
     }
-  } catch (e: unknown) {
+  } catch (e) {
     state.isAuthenticated = false;
     const message = e instanceof Error ? e.message : String(e);
     log.warn("loadDb failed", message);
@@ -270,7 +270,7 @@ async function runPasswordManagerImport(
     });
     state.showSuccess(state.t(successKey, { count: String(result.imported) }));
     return result;
-  } catch (error: unknown) {
+  } catch (error) {
     state.errorMsg = state.t(failureKey, {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -316,7 +316,7 @@ export async function handleAddSecret(
     state.showSuccess(state.t(I18N_KEYS.ToastsSecretSaved));
     await state.runFanOutSyncAfterLocalSave();
     await state.refreshSecretsFromSession();
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg = `Failed to save secret: ${e instanceof Error ? e.message : String(e)}`;
     throw e;
   } finally {
@@ -492,7 +492,7 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
     // silent no-op race right after unlock).
     await state.runFanOutSyncAfterLocalSave();
     await state.refreshSecretsFromSession();
-  } catch (e: unknown) {
+  } catch (e) {
     if (!committed) {
       state.secrets = previousSecrets;
     }
@@ -522,7 +522,7 @@ export async function handleReplaceSecret(
     log.info("secret replaced", { oldId, newId, type });
     await state.runFanOutSyncAfterLocalSave();
     state.showSuccess(state.t(I18N_KEYS.ToastsItemUpdated));
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg = `Failed to update item: ${e instanceof Error ? e.message : String(e)}`;
     throw e;
   } finally {

@@ -1,4 +1,4 @@
-import type { ExternalValue } from '../../lib/guards.ts';
+import type { UntrustedYamlNode } from '../../lib/guards.ts';
 import { RequestFamily } from '../enums.ts';
 import {
   DecodeStatus,
@@ -25,7 +25,7 @@ export type ToolsListRequest = Record<string, never>;
 const ROOT = RequestFamily.ToolsList;
 
 export function decodeToolsListRequest(
-  value: ExternalValue,
+  value: UntrustedYamlNode,
 ): DecodeOutcome<ToolsListRequest> {
   const objectArgs: ExpectObjectArgs = { value, path: ROOT };
   const object = expectObject(objectArgs);

@@ -248,7 +248,7 @@ function setUpCloudKitAuth(
       });
       return identity;
     })
-    .catch((error: unknown) => {
+    .catch((error) => {
       if (isExpectedSignInSetupFailure(error)) {
         log.info("CloudKit auth setup waiting for Apple sign-in", {
           details: cloudKitAuthErrorDetails(error),
@@ -601,7 +601,7 @@ async function waitForCloudKitSignIn(
       });
       return identity;
     })
-    .catch((error: unknown) => {
+    .catch((error) => {
       if (isExpectedSignInSetupFailure(error)) {
         sawExpectedSignInFailure = true;
         log.info("CloudKit sign-in callback waiting for web auth token", {

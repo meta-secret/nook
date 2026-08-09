@@ -35,6 +35,7 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
     );
     for required in [
         "import { typedApiRules } from './typed-api-rules.js'",
+        "untrustedInputAdapterRules",
         "rules: typedApiRules",
         "'max-params': ['error', { max: 1 }]",
         "'@typescript-eslint/no-restricted-types'",
@@ -66,7 +67,12 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         "function spreadArrayElements(args)",
         "unwrapped.type === 'ArrayExpression'",
         "reference.isWrite() && !reference.init && reference.writeExpr",
-        "nook-web-extension/src/lib/**/*.ts",
+        "nook-web-extension/src/**/*.{ts,svelte}",
+        "nook-web-shared/src/**/*.{ts,svelte}",
+        "nook-web-app/src/**/*.{ts,svelte}",
+        "nook-web-research/src/**/*.{ts,svelte}",
+        "nook-web-extension/src/chrome.d.ts",
+        "nook-web-shared/src/extension/runtime-messages.ts",
         "'@typescript-eslint/await-thenable': 'error'",
         "'@typescript-eslint/no-floating-promises': 'error'",
         "'@typescript-eslint/no-misused-promises': 'error'",

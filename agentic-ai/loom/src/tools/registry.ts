@@ -33,7 +33,7 @@ import {
 } from '../commands/pr-land.ts';
 import { runPrePush } from '../commands/pre-push.ts';
 import { runSkillScaffold } from '../commands/skill-scaffold.ts';
-import { asExternalValue, type ExternalValue } from '../lib/guards.ts';
+import { asUntrustedYamlNode, type UntrustedYamlNode } from '../lib/guards.ts';
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
 
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
@@ -139,33 +139,33 @@ export function listAllRequestFamilies(): readonly RequestFamily[] {
 
 export async function executeRequest(
   request: LoomRequest,
-): Promise<ExternalValue> {
+): Promise<UntrustedYamlNode> {
   switch (request.family) {
     case RequestFamily.PrePush:
-      return asExternalValue(
-        (await runPrePush(request.prePush)) as ExternalValue,
+      return asUntrustedYamlNode(
+        (await runPrePush(request.prePush)) as UntrustedYamlNode,
       );
     case RequestFamily.CortexAudit:
-      return asExternalValue(
-        (await runCortexAudit(request.cortexAudit)) as ExternalValue,
+      return asUntrustedYamlNode(
+        (await runCortexAudit(request.cortexAudit)) as UntrustedYamlNode,
       );
     case RequestFamily.SkillScaffold:
-      return asExternalValue(
-        (await runSkillScaffold(request.skillScaffold)) as ExternalValue,
+      return asUntrustedYamlNode(
+        (await runSkillScaffold(request.skillScaffold)) as UntrustedYamlNode,
       );
     case RequestFamily.AgentStats: {
       switch (request.operation) {
         case AgentStatsOperation.Assemble:
-          return asExternalValue(
-            (await runAgentStatsAssemble(request.assemble)) as ExternalValue,
+          return asUntrustedYamlNode(
+            (await runAgentStatsAssemble(request.assemble)) as UntrustedYamlNode,
           );
         case AgentStatsOperation.Validate:
-          return asExternalValue(
-            (await runAgentStatsValidate(request.validate)) as ExternalValue,
+          return asUntrustedYamlNode(
+            (await runAgentStatsValidate(request.validate)) as UntrustedYamlNode,
           );
         case AgentStatsOperation.Publish:
-          return asExternalValue(
-            (await runAgentStatsPublish(request.publish)) as ExternalValue,
+          return asUntrustedYamlNode(
+            (await runAgentStatsPublish(request.publish)) as UntrustedYamlNode,
           );
       }
       break;
@@ -173,29 +173,29 @@ export async function executeRequest(
     case RequestFamily.PrLand: {
       switch (request.operation) {
         case PrLandOperation.Status:
-          return asExternalValue(
-            (await runPrLandStatus(request.status)) as ExternalValue,
+          return asUntrustedYamlNode(
+            (await runPrLandStatus(request.status)) as UntrustedYamlNode,
           );
         case PrLandOperation.Validate:
-          return asExternalValue(
-            (await runPrLandValidate(request.validate)) as ExternalValue,
+          return asUntrustedYamlNode(
+            (await runPrLandValidate(request.validate)) as UntrustedYamlNode,
           );
         case PrLandOperation.Ready:
-          return asExternalValue(
-            (await runPrLandReady(request.ready)) as ExternalValue,
+          return asUntrustedYamlNode(
+            (await runPrLandReady(request.ready)) as UntrustedYamlNode,
           );
         case PrLandOperation.MergeCheck:
-          return asExternalValue(
-            (await runPrLandMergeCheck(request.mergeCheck)) as ExternalValue,
+          return asUntrustedYamlNode(
+            (await runPrLandMergeCheck(request.mergeCheck)) as UntrustedYamlNode,
           );
       }
       break;
     }
     case RequestFamily.DependencyPopularity:
-      return asExternalValue(
+      return asUntrustedYamlNode(
         (await runDependencyPopularity(
           request.dependencyPopularity,
-        )) as ExternalValue,
+        )) as UntrustedYamlNode,
       );
     case RequestFamily.ToolsList:
     case RequestFamily.ToolsCall: {
