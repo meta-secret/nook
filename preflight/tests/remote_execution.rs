@@ -2,7 +2,7 @@ use std::{
     collections::BTreeSet, fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Command,
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 fn repository_root() -> PathBuf {
     std::env::var_os("NOOK_REPO_ROOT").map_or_else(
@@ -393,7 +393,7 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
 }
 
 #[test]
-fn frequent_remote_checks_use_narrow_source_sealed_images() {
+fn frequent_remote_checks_use_narrow_source_sealed_images() -> Result<()> {
     let app_tasks = read("nook-app/Taskfile.yml");
     let core_tasks = read("nook-app/nook-platform/Taskfile.yml");
     let web_tasks = read("nook-app/nook-web/Taskfile.yml");
@@ -410,6 +410,15 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     let wasm_dockerfile = product_dockerfile.as_str();
     let shared_bake = read("nook-app/docker-bake.hcl");
     let bake = format!("{shared_bake}\n{core_bake}\n{wasm_bake}\n{web_app_bake}");
+
+    let focused_web_setup = app_tasks
+        .split("  setup:web:focused:\n")
+        .nth(1)
+        .context("focused web setup task must exist")?;
+    assert!(
+        focused_web_setup.contains("NOOK_EXTENSION_COMMIT: '{{.NOOK_EXTENSION_COMMIT}}'"),
+        "focused web setup must pass the exact commit to NOOK_SOURCE_REVISION through Bake"
+    );
 
     for required in [
         "setup:rust:test:",
@@ -545,6 +554,7 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
         !web_app_bake
             .contains("target \"nook-web-focused\" {\n  inherits = [\"_nook-web-common\"]")
     );
+    Ok(())
 }
 
 #[test]

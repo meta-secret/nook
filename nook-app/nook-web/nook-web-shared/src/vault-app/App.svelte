@@ -43,6 +43,7 @@
     ExtensionIdentityRequestSource,
     isExtensionConnectPath,
     requestPairedExtensionUnlock,
+    type AdoptExtensionIdentityArgs,
     type ExtensionConnectRequestState,
   } from '$lib/extension/connect'
   import {
@@ -304,7 +305,13 @@
     ) {
       const connectRequest = extensionIdentityRequestState.request
       const adopted = await vault.authorizeWithExternalDeviceIdentity(
-        (manager) => adoptExtensionIdentity(manager, connectRequest),
+        (manager) => {
+          const adoptionArgs: AdoptExtensionIdentityArgs = {
+            manager,
+            request: connectRequest,
+          }
+          return adoptExtensionIdentity(adoptionArgs)
+        },
         { deferInitialization: existingVaultImport },
       )
       if (!adopted) return
@@ -347,7 +354,13 @@
             vault.deviceProtectionStatus === DeviceProtectionStatus.Missing)
         if (extensionIdentityCanUnlock) {
           const adopted = await vault.authorizeWithExternalDeviceIdentity(
-            (manager) => adoptExtensionIdentity(manager, connectRequest),
+            (manager) => {
+              const adoptionArgs: AdoptExtensionIdentityArgs = {
+                manager,
+                request: connectRequest,
+              }
+              return adoptExtensionIdentity(adoptionArgs)
+            },
             { deferInitialization: existingVaultImport },
           )
           if (!adopted) return
@@ -515,7 +528,13 @@
     ) {
       const connectRequest = extensionIdentityRequestState.request
       const adopted = await vault.authorizeWithExternalDeviceIdentity(
-        (manager) => adoptExtensionIdentity(manager, connectRequest),
+        (manager) => {
+          const adoptionArgs: AdoptExtensionIdentityArgs = {
+            manager,
+            request: connectRequest,
+          }
+          return adoptExtensionIdentity(adoptionArgs)
+        },
       )
       if (!adopted) return
     }
