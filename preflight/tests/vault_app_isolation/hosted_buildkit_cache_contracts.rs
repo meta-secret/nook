@@ -316,6 +316,9 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let web_publish = web
         .find("task ci:main:publish-web-cache")
         .context("Main web job must publish its cache")?;
+    let ui_demo_step = ui_demo
+        .find("- name: Headless UI demos")
+        .context("Main UI demo job must declare its verification step")?;
     let ui_demo_verify = ui_demo
         .find("task ci:main:ui-demo:artifacts")
         .context("Main UI demo job must verify the browser image")?;
@@ -334,8 +337,9 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && web_verify < web_publish
             && web[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && web[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && ui_demo_step < ui_demo_verify
             && ui_demo_verify < ui_demo_publish
-            && ui_demo[ui_demo_verify..ui_demo_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && ui_demo[ui_demo_step..ui_demo_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && ui_demo[ui_demo_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && !main.contains("\n  publish-cache:\n")
             && !main.contains("task ci:main:warm-gha-cache")
