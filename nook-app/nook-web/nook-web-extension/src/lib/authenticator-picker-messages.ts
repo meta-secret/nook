@@ -75,7 +75,7 @@ export type WebsiteAuthenticatorCanceledMessage = {
   }
 }
 
-function isNonEmptyString(value: string | undefined): value is string {
+function isNonEmptyString(value: string): value is string {
   return typeof value === 'string' && value.length > 0
 }
 
@@ -104,9 +104,9 @@ export function isAuthenticatorPickerQueryMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     AuthenticatorPickerQueryMessage['payload']
-  >
+  
   return (
     isNonEmptyString(payload.requestId) &&
     typeof payload.query === 'string' &&
@@ -129,9 +129,9 @@ export function isAuthenticatorPickerSelectMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     AuthenticatorPickerSelectMessage['payload']
-  >
+  
   return (
     isNonEmptyString(payload.requestId) &&
     isNonEmptyString(payload.vaultStoreId) &&
@@ -154,9 +154,9 @@ export function isAuthenticatorPickerCancelMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     AuthenticatorPickerCancelMessage['payload']
-  >
+  
   return isNonEmptyString(payload.requestId)
 }
 
@@ -175,9 +175,9 @@ export function isWebsiteAuthenticatorSelectedMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     WebsiteAuthenticatorSelectedMessage['payload']
-  >
+  
   if (
     !isNonEmptyString(payload.origin) ||
     !isNonEmptyString(payload.requestId) ||
@@ -186,9 +186,9 @@ export function isWebsiteAuthenticatorSelectedMessage(
   ) {
     return false
   }
-  const account = payload.account as Partial<
+  const account = payload.account as 
     WebsiteAuthenticatorSelectedMessage['payload']['account']
-  >
+  
   return (
     isNonEmptyString(account.vaultStoreId) && isNonEmptyString(account.secretId)
   )
@@ -198,9 +198,9 @@ export function isWebsiteAuthenticatorCanceledMessage(
   message: object,
 ): message is WebsiteAuthenticatorCanceledMessage {
   if (!hasOriginPayload(message)) return false
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     WebsiteAuthenticatorCanceledMessage['payload']
-  >
+  
   return (
     message.type ===
       WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled &&

@@ -104,7 +104,7 @@ export type OtpauthEnrollmentPreview = {
   period: number
 }
 
-function isOtpauthTotpUri(value: string | undefined): value is string {
+function isOtpauthTotpUri(value: string): value is string {
   return typeof value === 'string' && value.startsWith('otpauth://totp/')
 }
 
@@ -118,9 +118,9 @@ export function isWebsiteAuthenticatorEnrollPreviewMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     WebsiteAuthenticatorEnrollPreviewMessage['payload']
-  >
+  
   return isOtpauthTotpUri(payload.otpauthUri)
 }
 
@@ -134,9 +134,9 @@ export function isWebsiteAuthenticatorEnrollStageMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     WebsiteAuthenticatorEnrollStageMessage['payload']
-  >
+  
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
@@ -154,9 +154,9 @@ export function isWebsiteAuthenticatorEnrollCodeMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     WebsiteAuthenticatorEnrollCodeMessage['payload']
-  >
+  
   return typeof payload.stageId === 'string' && payload.stageId.length > 0
 }
 
@@ -170,9 +170,9 @@ export function isWebsiteAuthenticatorEnrollConfirmMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     WebsiteAuthenticatorEnrollConfirmMessage['payload']
-  >
+  
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
@@ -191,9 +191,9 @@ export function isWebsiteAuthenticatorEnrollDismissMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     WebsiteAuthenticatorEnrollDismissMessage['payload']
-  >
+  
   return typeof payload.stageId === 'string' && payload.stageId.length > 0
 }
 
@@ -217,9 +217,9 @@ export function isWebsiteAuthenticatorBackupAttachMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     WebsiteAuthenticatorBackupAttachMessage['payload']
-  >
+  
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&

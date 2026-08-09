@@ -9,14 +9,14 @@ export type PasskeyUnlockMaterial = {
 }
 
 export type PasskeySetupResponse = {
-  setup?: Partial<PasskeySetupMaterial>
+  setup: PasskeySetupMaterial
 }
 
 export type PasskeyUnlockResponse = {
-  material?: Partial<PasskeyUnlockMaterial>
+  material: PasskeyUnlockMaterial
 }
 
-function byteArray(value: number[] | undefined): number[] {
+function byteArray(value: number[]): number[] {
   if (
     !Array.isArray(value) ||
     !value.every(

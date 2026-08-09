@@ -78,7 +78,8 @@ export type WebsiteLoginSaveDismissMessage = {
 function isOutcomeObservation(
   value: object,
 ): value is AuthenticationOutcomeObservationView {
-  const view = value as Partial<AuthenticationOutcomeObservationView>
+  if (!value || typeof value !== 'object') return false
+  const view = value as AuthenticationOutcomeObservationView
   return (
     typeof view.navigatedAwayFromAuthPath === 'boolean' &&
     typeof view.authFieldsPresent === 'boolean' &&
@@ -101,9 +102,9 @@ export function isWebsiteLoginSaveOfferMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     WebsiteLoginSaveOfferMessage['payload']
-  >
+  
   return (
     typeof payload.username === 'string' &&
     payload.username.trim().length > 0 &&
@@ -132,13 +133,12 @@ export function isWebsiteLoginSaveCommitMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     WebsiteLoginSaveCommitMessage['payload']
-  >
+  
   return (
     typeof payload.offerId === 'string' &&
     payload.offerId.length > 0 &&
-    payload.evidence !== undefined &&
     isOutcomeObservation(payload.evidence)
   )
 }
@@ -153,8 +153,8 @@ export function isWebsiteLoginSaveDismissMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     WebsiteLoginSaveDismissMessage['payload']
-  >
+  
   return typeof payload.offerId === 'string' && payload.offerId.length > 0
 }

@@ -40,7 +40,7 @@ export type AuthenticationWorkflowSnapshotMessage = {
   }
 }
 
-function isBoundedCount(value: number | undefined): value is number {
+function isBoundedCount(value: number): value is number {
   return (
     typeof value === 'number' &&
     Number.isInteger(value) &&
@@ -72,7 +72,7 @@ export function isAuthenticationWorkflowSnapshotMessage(
   }
   return message.payload.observations.every((value) => {
     if (!value || typeof value !== 'object') return false
-    const observation = value as Partial<AuthenticationPageObservationView>
+    const observation = value as AuthenticationPageObservationView
     return (
       [
         observation.usernameFieldCount,

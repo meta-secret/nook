@@ -43,12 +43,12 @@ export function isAuthenticationOutcomeClassifyMessage(
   ) {
     return false
   }
-  const payload = message.payload as Partial<
+  const payload = message.payload as 
     AuthenticationOutcomeClassifyMessage['payload']
-  >
+  
   const observation = payload.observation
   if (!observation || typeof observation !== 'object') return false
-  const view = observation as Partial<AuthenticationOutcomeObservationView>
+  const view = observation as AuthenticationOutcomeObservationView
   return (
     typeof view.navigatedAwayFromAuthPath === 'boolean' &&
     typeof view.authFieldsPresent === 'boolean' &&
