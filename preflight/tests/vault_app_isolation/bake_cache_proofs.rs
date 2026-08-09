@@ -64,7 +64,6 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
     let root = repository_root();
     let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let preflight_bake = read(&root, "preflight/docker-bake.hcl");
-    let web_image_bake = read(&root, "nook-app/nook-web/docker/web.docker-bake.hcl");
 
     assert_scope_arms(
         &rust_bake,
@@ -146,6 +145,7 @@ fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Res
     let root = repository_root();
     let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let preflight_bake = read(&root, "preflight/docker-bake.hcl");
+    let web_image_bake = read(&root, "nook-app/nook-web/docker/web.docker-bake.hcl");
     for (bake, name, availability, exact_marker, main_ref) in [
         (
             rust_bake.as_str(),
