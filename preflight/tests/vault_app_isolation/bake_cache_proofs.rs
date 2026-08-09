@@ -64,6 +64,7 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
     let root = repository_root();
     let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let preflight_bake = read(&root, "preflight/docker-bake.hcl");
+    let web_image_bake = read(&root, "nook-app/nook-web/docker/web.docker-bake.hcl");
 
     assert_scope_arms(
         &rust_bake,
