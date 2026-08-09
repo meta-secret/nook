@@ -367,6 +367,7 @@ jobs:
           UI_DEMO_OUTPUT_DIR: ${{ runner.temp }}/nook-ui-demo
 
           CI: true
+          GHA_CACHE_WRITE_ENABLED: ""
           GIT_COMMIT_ID: ${{ github.sha }}
           NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
           NOOK_EXTENSION_CHANNEL: development
