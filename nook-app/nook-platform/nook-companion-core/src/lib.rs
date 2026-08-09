@@ -10,11 +10,17 @@
 )]
 
 mod backup_code_candidates;
+mod extension_persistence;
 mod oauth_origin_policy;
 mod page_field_classification;
 mod vault_host_policy;
 
 pub use backup_code_candidates::{extract_backup_code_candidates, page_has_backup_code_hint};
+pub use extension_persistence::{
+    ExtensionPersistenceArea, ExtensionPersistenceDatabaseState, ExtensionPersistenceStoreState,
+    classify_extension_database_names, classify_extension_store_names,
+    matching_extension_store_names,
+};
 pub use oauth_origin_policy::{
     BrowserOAuthProvider, OAuthOriginSupport, OAuthOriginUnsupportedReason,
     is_cloudflare_pr_preview_host, resolve_oauth_origin_support,

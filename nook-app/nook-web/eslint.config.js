@@ -26,6 +26,7 @@ export default [
       '**/dist-prod/**',
       '**/node_modules/**',
       'nook-web-shared/src/vault-app/lib/nook-wasm*/**',
+      'nook-web-shared/src/extension/nook-companion-wasm/**',
     ],
   },
   js.configs.recommended,

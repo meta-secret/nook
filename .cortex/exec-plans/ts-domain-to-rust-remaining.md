@@ -31,9 +31,13 @@ Continues [mobile-core-reuse.md](mobile-core-reuse.md).
 
 ## Remaining follow-ups
 
-None for the companion/content boundary. Future domain moves should land in
-`nook-companion-core` when the rule must ship in content scripts, otherwise in
-`nook-core` + full `nook-wasm`.
+- [ ] Move portable extension observation classification out of TypeScript.
+- [ ] Move portable extension protocol validation out of TypeScript.
+- [ ] Keep Chrome, DOM, WebAuthn, timer, and event-listener calls in TypeScript.
+- [ ] Expose content-script decisions through `nook-companion-wasm`.
+- [ ] Use `nook-core` plus full `nook-wasm` when the decision depends on vault
+      or session state.
+- [ ] Add ownership preflight checks after each TypeScript pattern is removed.
 
 ## Validation
 

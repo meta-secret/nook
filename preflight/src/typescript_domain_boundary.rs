@@ -35,6 +35,35 @@ pub fn typescript_json_round_trip_clones(root: &Path) -> io::Result<Vec<Violatio
     )
 }
 
+/// Finds extension persistence decisions that must remain in companion Rust.
+///
+/// Browser IndexedDB calls stay in TypeScript. Classification of the returned
+/// database and store observations belongs in `nook-companion-core`.
+///
+/// # Errors
+///
+/// Returns an error when the extension source tree cannot be read.
+pub fn typescript_extension_persistence_policy(root: &Path) -> io::Result<Vec<Violation>> {
+    source_violations(
+        root,
+        Path::new("nook-app/nook-web/nook-web-extension"),
+        &["ts", "svelte"],
+        extension_persistence_policy_lines,
+    )
+}
+
+pub(super) fn extension_persistence_policy_lines(source: &str) -> Vec<usize> {
+    source
+        .lines()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            (line.contains("databases.some(")
+                || line.contains("objectStoreNames.contains("))
+            .then_some(index + 1)
+        })
+        .collect()
+}
+
 /// Finds redundant optional Svelte rune declarations, domain identifiers
 /// widened to `string` anywhere in authored web state, and domain unions in
 /// the central vault state.

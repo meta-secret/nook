@@ -12,6 +12,7 @@ export const untrustedInputAdapterFiles = [
   'nook-web-extension/src/content/simple-vault-bridge.ts',
   'nook-web-extension/src/content/webauthn-content.ts',
   'nook-web-extension/src/content/webauthn-page.ts',
+  'nook-web-shared/src/extension/extension-connect-scope.ts',
   'nook-web-shared/src/extension/runtime-messages.ts',
   'nook-web-shared/src/vault-app/lib/auth/icloud/auth-errors.ts',
   'nook-web-shared/src/vault-app/lib/auth/icloud/cloudkit-runtime.ts',

@@ -19,10 +19,13 @@ export async function publishExtensionEventLogUpdateForVault(
       state.requireManager().exportEventLogRecords(),
     );
     try {
-      publishExtensionEventLogUpdate(
+      const publishExtensionEventLogUpdateArgs: Parameters<
+        typeof publishExtensionEventLogUpdate
+      >[0] = {
         vaultStoreId,
-        eventLogRecords.toArray() as ExtensionEventLogRecord[],
-      );
+        eventLogRecords: eventLogRecords.toArray() as ExtensionEventLogRecord[],
+      };
+      publishExtensionEventLogUpdate(publishExtensionEventLogUpdateArgs);
     } finally {
       eventLogRecords.free();
     }

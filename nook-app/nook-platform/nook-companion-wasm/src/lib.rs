@@ -128,6 +128,52 @@ pub fn parse_page_input_type(value: &str) -> nook_companion_core::PageInputType 
     nook_companion_core::PageInputType::parse(value)
 }
 
+#[wasm_bindgen(js_name = extensionPersistenceDatabaseName)]
+#[must_use]
+pub fn extension_persistence_database_name(
+    area: nook_companion_core::ExtensionPersistenceArea,
+) -> String {
+    area.database_name().to_owned()
+}
+
+#[wasm_bindgen(js_name = extensionPersistenceStoreNames)]
+#[must_use]
+pub fn extension_persistence_store_names(
+    area: nook_companion_core::ExtensionPersistenceArea,
+) -> Vec<String> {
+    area.store_names()
+}
+
+#[wasm_bindgen(js_name = classifyExtensionPersistenceDatabases)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn classify_extension_persistence_databases(
+    area: nook_companion_core::ExtensionPersistenceArea,
+    observed_names: Vec<String>,
+) -> nook_companion_core::ExtensionPersistenceDatabaseState {
+    nook_companion_core::classify_extension_database_names(area, &observed_names)
+}
+
+#[wasm_bindgen(js_name = classifyExtensionPersistenceStores)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn classify_extension_persistence_stores(
+    area: nook_companion_core::ExtensionPersistenceArea,
+    observed_names: Vec<String>,
+) -> nook_companion_core::ExtensionPersistenceStoreState {
+    nook_companion_core::classify_extension_store_names(area, &observed_names)
+}
+
+#[wasm_bindgen(js_name = matchingExtensionPersistenceStores)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn matching_extension_persistence_stores(
+    area: nook_companion_core::ExtensionPersistenceArea,
+    observed_names: Vec<String>,
+) -> Vec<String> {
+    nook_companion_core::matching_extension_store_names(area, &observed_names)
+}
+
 #[wasm_bindgen(js_name = isCloudflarePrPreviewHost)]
 #[must_use]
 pub fn is_cloudflare_pr_preview_host(hostname: &str) -> bool {
@@ -351,5 +397,19 @@ mod tests {
             false,
         );
         assert!(looks_like_username_field(&username));
+    }
+
+    #[test]
+    fn extension_persistence_wasm_exports_match_core_policy() {
+        let area = nook_companion_core::ExtensionPersistenceArea::Pairing;
+        assert_eq!(extension_persistence_database_name(area), "nook_extension");
+        assert_eq!(
+            classify_extension_persistence_databases(area, vec!["nook_extension".to_owned()]),
+            nook_companion_core::ExtensionPersistenceDatabaseState::Present
+        );
+        assert_eq!(
+            classify_extension_persistence_stores(area, vec!["pairing".to_owned()]),
+            nook_companion_core::ExtensionPersistenceStoreState::Present
+        );
     }
 }

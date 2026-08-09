@@ -57,9 +57,16 @@ export type ExtensionPairingApprovedGrant = {
   providers: ExtensionStorageProviderPayload[]
 }
 
+export enum ExtensionStorageProviderType {
+  Local = 'local',
+  LocalFolder = 'local-folder',
+  Github = 'github',
+  OAuthFile = 'oauth-file',
+}
+
 export type ExtensionStorageProviderPayload = {
   id: string
-  type: 'local' | 'local-folder' | 'github' | 'oauth-file'
+  type: ExtensionStorageProviderType
 }
 
 export type ExtensionVaultEventPayload = {
@@ -207,7 +214,7 @@ function isExtensionEventLogRecord(
     record.eventId.length > 0 &&
     typeof record.path === 'string' &&
     record.path.length > 0 &&
-    Boolean(record.event) &&
+    record.event !== null &&
     typeof record.event === 'object' &&
     'schema_version' in record.event &&
     typeof record.event.schema_version === 'number'
@@ -503,10 +510,10 @@ function isExtensionStorageProviderPayload(
   return (
     typeof provider.id === 'string' &&
     provider.id.length > 0 &&
-    (provider.type === 'local' ||
-      provider.type === 'local-folder' ||
-      provider.type === 'github' ||
-      provider.type === 'oauth-file')
+    (provider.type === ExtensionStorageProviderType.Local ||
+      provider.type === ExtensionStorageProviderType.LocalFolder ||
+      provider.type === ExtensionStorageProviderType.Github ||
+      provider.type === ExtensionStorageProviderType.OAuthFile)
   )
 }
 

@@ -424,6 +424,12 @@ calls. Assign a named typed argument value first. Loom uses ESLint
 `nook-typed-api/no-raw-object-arguments`. Full contract:
 [dynamic-skills/typescript-named-args.md](dynamic-skills/typescript-named-args.md).
 
+Nook browser-extension TypeScript owns browser observation and lifecycle glue.
+Portable classification, validation, policy, and workflow decisions belong in
+Rust. Size-sensitive content-script policy uses `nook-companion-core` through
+`nook-companion-wasm`. Full contract:
+[dynamic-skills/rust-typescript-code-separation.md](dynamic-skills/rust-typescript-code-separation.md).
+
 Bun must be installed. Stop and ask for Bun if `bun --version` fails.
 
 Single invoke form:

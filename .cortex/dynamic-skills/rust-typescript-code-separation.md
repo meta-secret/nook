@@ -6,6 +6,8 @@ Keep Nook's app/domain data shapes in Rust, with TypeScript reserved for UI
 presentation state and browser glue. Use this when a TypeScript type looks like
 core product knowledge rather than a visual component concern.
 
+This rule applies equally to the browser extension.
+
 ## Problem Pattern
 
 `nook-web` defines exported TypeScript unions, structs, or validators for app
@@ -39,6 +41,16 @@ Put app/domain types in Rust first:
   `gloo-file`, `rexie`, `reqwest`) over direct `web-sys`/`js-sys` calls. If a
   direct Web API call is unavoidable, keep it in a narrow adapter module and do
   not let that style spread into domain/session policy.
+- Use `nook-companion-core` for portable extension policy that must run in
+  content scripts or other size-sensitive extension contexts.
+- Expose that policy through `nook-companion-wasm`.
+- TypeScript may observe browser state.
+- TypeScript must pass those observations to Rust when the resulting decision
+  is portable.
+- TypeScript then performs the browser action selected by the typed Rust
+  result.
+- Do not keep a TypeScript `some`, `find`, condition chain, validator, or switch
+  when it decides a domain or workflow outcome from browser observations.
 - Keep `nook-web` focused on Svelte rendering, form state, component props,
   labels, DOM events, timers, Vite/browser environment flags, and calling typed
   wasm APIs. The closer behavior is to browser lifecycle glue (`document`
@@ -108,9 +120,16 @@ Applies to:
 
 - `nook-app/nook-web/nook-web-shared/src/vault-app/lib/**/*.ts` and Svelte modules that define exported app/domain
   unions, payloads, or validators.
+- `nook-app/nook-web/nook-web-extension/src/**/*.ts` when code classifies
+  observations, validates product messages, or decides portable workflow
+  outcomes.
+- `nook-app/nook-web/nook-web-shared/src/extension/**/*.ts` under the same
+  conditions.
 - `nook-wasm` boundary types that should delegate schema and validation to
   `nook-core`.
 - `nook-core` modules that own portable domain models and tests.
+- `nook-companion-core` and `nook-companion-wasm` for size-sensitive extension
+  policy.
 
 Does not apply to:
 
@@ -121,6 +140,10 @@ Does not apply to:
   their portable schema delegated to core. Keep browser lifecycle glue in
   `nook-web`; keep durable storage/provider adapters in `nook-wasm` when Rust has
   a stable abstraction crate for the API.
+
+Calling a browser API does not make the decision based on its result
+browser-owned. Keep the API call in TypeScript. Move portable classification of
+the returned observation into Rust.
 
 ## Examples
 
@@ -232,6 +255,13 @@ After: Rust owns provider rules (`StorageProviderType`, `OauthFilePreset`,
 `SyncProviderTarget`, labels, Drive refs, storage-mode mapping) and wasm exports
 thin helpers. TypeScript may keep the browser IndexedDB snapshot shape, but
 calls wasm for the app/domain decision.
+
+Before: TypeScript inspects an IndexedDB database list and returns a workflow
+status.
+
+After: TypeScript calls `indexedDB.databases()` and collects concrete database
+name observations. Companion Rust decides whether the required database is
+present. The typed WASM result names the workflow outcome.
 
 Authored TypeScript/Svelte uses neither `undefined` nor `null` for absence. When
 a browser or generated WASM API returns either sentinel, classify the outcome
@@ -388,6 +418,11 @@ When `Option<T>` is still acceptable (do not force an enum):
 
 - [ ] Search the requested scope for exported TypeScript types/enums and ask
       whether each is app/domain data or only UI presentation state.
+- [ ] Search extension TypeScript for portable decisions expressed through
+      `some`, `find`, `filter`, condition chains, validators, and switches.
+- [ ] Separate browser observation from portable classification.
+- [ ] Keep the browser observation in TypeScript and move the classification to
+      companion Rust.
 - [ ] Move app/domain schemas and validation into `nook-core` where they are
       portable and testable.
 - [ ] Route JS access through typed `nook-wasm` exports instead of plain TS
@@ -417,6 +452,7 @@ When `Option<T>` is still acceptable (do not force an enum):
       DTO or trait/stdlib signature where `Some`/`None` already says everything.
 - [ ] Leave UI-only state in TypeScript/Svelte and avoid unrelated cleanup.
 - [ ] Add or update Rust tests for moved schema, serialization, and validation.
+- [ ] Add Rust tests for every moved extension observation-to-decision rule.
 
 ## Validation
 
@@ -426,3 +462,5 @@ trigger complete validation with `task pr:validate`. `task preflight`
 rejects known TypeScript domain mirrors, local aliases of generated `Nook*`
 types, same-argument forwarding functions around generated WASM imports,
 unchecked WASM type hints, and raw provider/auth `JsValue` DTO signatures.
+Extension ownership checks must reject known portable decision patterns after
+their Rust replacement lands.

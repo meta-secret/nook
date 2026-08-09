@@ -1,4 +1,12 @@
 import type { Page, Worker } from '@playwright/test'
+import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+import {
+  classifyExtensionPersistenceDatabases,
+  ExtensionPersistenceArea,
+  ExtensionPersistenceDatabaseState,
+  extensionPersistenceDatabaseName,
+  matchingExtensionPersistenceStores,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type ExtensionExecutionScope = Page | Worker
 
@@ -9,79 +17,118 @@ export type ExtensionPersistenceSnapshot = {
 }
 
 type IndexedDbSnapshotArgs = {
+  scope: ExtensionExecutionScope
+  area: ExtensionPersistenceArea
+}
+
+type IndexedDbReadArgs = {
   databaseName: string
   storeNames: string[]
+}
+
+async function observedDatabaseNames(
+  scope: ExtensionExecutionScope,
+): Promise<string[]> {
+  return scope.evaluate(async () => {
+    const names: string[] = []
+    for (const database of await indexedDB.databases()) {
+      if (typeof database.name === 'string') names.push(database.name)
+    }
+    return names
+  })
+}
+
+async function observedStoreNames(
+  args: IndexedDbSnapshotArgs,
+): Promise<string[]> {
+  const databaseName = extensionPersistenceDatabaseName(args.area)
+  return args.scope.evaluate(async (name) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(name)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    try {
+      return Array.from(database.objectStoreNames)
+    } finally {
+      database.close()
+    }
+  }, databaseName)
+}
+
+async function readDatabaseSnapshot(
+  args: IndexedDbSnapshotArgs,
+): Promise<string> {
+  await companionWasmReady
+  const databaseNames = await observedDatabaseNames(args.scope)
+  const databaseState = classifyExtensionPersistenceDatabases(
+    args.area,
+    databaseNames,
+  )
+  if (databaseState === ExtensionPersistenceDatabaseState.Absent) {
+    return 'database:absent'
+  }
+
+  const stores = await observedStoreNames(args)
+  const storeNames = matchingExtensionPersistenceStores(args.area, stores)
+  if (storeNames.length === 0) return 'stores:absent'
+
+  const readArgs: IndexedDbReadArgs = {
+    databaseName: extensionPersistenceDatabaseName(args.area),
+    storeNames,
+  }
+  return args.scope.evaluate(async (input) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(input.databaseName)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    try {
+      const transaction = database.transaction(input.storeNames, 'readonly')
+      const snapshots = await Promise.all(
+        input.storeNames.map(async (storeName) => {
+          const store = transaction.objectStore(storeName)
+          const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+            const request = store.getAllKeys()
+            request.onsuccess = () => resolve(request.result)
+            request.onerror = () => reject(request.error)
+          })
+          const values = await new Promise<object[]>((resolve, reject) => {
+            const request = store.getAll()
+            request.onsuccess = () => resolve(request.result)
+            request.onerror = () => reject(request.error)
+          })
+          return { storeName, keys, values }
+        }),
+      )
+      return JSON.stringify(snapshots)
+    } finally {
+      database.close()
+    }
+  }, readArgs)
 }
 
 export async function readExtensionPersistenceSnapshot(
   scope: ExtensionExecutionScope,
 ): Promise<ExtensionPersistenceSnapshot> {
-  return scope.evaluate(async () => {
-    const readDatabaseSnapshot = async (
-      args: IndexedDbSnapshotArgs,
-    ): Promise<string> => {
-      const databases = await indexedDB.databases()
-      if (!databases.some((database) => database.name === args.databaseName)) {
-        return 'database:absent'
-      }
-      const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open(args.databaseName)
-        request.onsuccess = () => resolve(request.result)
-        request.onerror = () => reject(request.error)
-      })
-      try {
-        const existingStores = args.storeNames.filter((storeName) =>
-          database.objectStoreNames.contains(storeName),
-        )
-        if (existingStores.length === 0) return 'stores:absent'
-        const transaction = database.transaction(existingStores, 'readonly')
-        const stores = await Promise.all(
-          existingStores.map(async (storeName) => {
-            const store = transaction.objectStore(storeName)
-            const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
-              const request = store.getAllKeys()
-              request.onsuccess = () => resolve(request.result)
-              request.onerror = () => reject(request.error)
-            })
-            const values = await new Promise<object[]>((resolve, reject) => {
-              const request = store.getAll()
-              request.onsuccess = () => resolve(request.result)
-              request.onerror = () => reject(request.error)
-            })
-            return { storeName, keys, values }
-          }),
-        )
-        return JSON.stringify(stores)
-      } finally {
-        database.close()
-      }
-    }
-
-    const pairingArgs: IndexedDbSnapshotArgs = {
-      databaseName: 'nook_extension',
-      storeNames: ['pairing'],
-    }
-    const eventLogArgs: IndexedDbSnapshotArgs = {
-      databaseName: 'nook_db',
-      storeNames: [
-        'vault',
-        'events',
-        'projections',
-        'provider_receipts',
-        'outbox',
-      ],
-    }
-    const providerArgs: IndexedDbSnapshotArgs = {
-      databaseName: 'nook_auth',
-      storeNames: ['auth'],
-    }
-    const [pairingState, eventLogState, providerState] = await Promise.all([
-      readDatabaseSnapshot(pairingArgs),
-      readDatabaseSnapshot(eventLogArgs),
-      readDatabaseSnapshot(providerArgs),
-    ])
-    return { pairingState, eventLogState, providerState }
-  })
+  const pairingArgs: IndexedDbSnapshotArgs = {
+    scope,
+    area: ExtensionPersistenceArea.Pairing,
+  }
+  const eventLogArgs: IndexedDbSnapshotArgs = {
+    scope,
+    area: ExtensionPersistenceArea.EventLog,
+  }
+  const providerArgs: IndexedDbSnapshotArgs = {
+    scope,
+    area: ExtensionPersistenceArea.Provider,
+  }
+  const [pairingState, eventLogState, providerState] = await Promise.all([
+    readDatabaseSnapshot(pairingArgs),
+    readDatabaseSnapshot(eventLogArgs),
+    readDatabaseSnapshot(providerArgs),
+  ])
+  return { pairingState, eventLogState, providerState }
 }
 
 export async function readExtensionPairingStorage(
