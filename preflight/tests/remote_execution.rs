@@ -411,6 +411,15 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     let shared_bake = read("nook-app/docker-bake.hcl");
     let bake = format!("{shared_bake}\n{core_bake}\n{wasm_bake}\n{web_app_bake}");
 
+    let focused_web_setup = app_tasks
+        .split("  setup:web:focused:\n")
+        .nth(1)
+        .unwrap_or_else(|| panic!("focused web setup task must exist"));
+    assert!(
+        focused_web_setup.contains("NOOK_EXTENSION_COMMIT: '{{.NOOK_EXTENSION_COMMIT}}'"),
+        "focused web setup must pass the exact commit to NOOK_SOURCE_REVISION through Bake"
+    );
+
     for required in [
         "setup:rust:test:",
         "nook-rust-test",
