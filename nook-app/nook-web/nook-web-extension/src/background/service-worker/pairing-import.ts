@@ -139,8 +139,8 @@ export async function importApprovedPairing(
   message: ExtensionPairingApprovedMessage,
 ): Promise<PairingImportResult> {
   try {
-    const sourceProviders = message.payload.providers
-    const stagingArgs = {
+    const sourceProviders = message.payload.providers as StorageProvider[]
+    const stagingArgs: Parameters<typeof stageProviderCredentials>[0] = {
       providers: sourceProviders,
       decode: decodeExtensionStorageProviders,
     }

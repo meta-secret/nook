@@ -191,9 +191,12 @@ export function isWebsiteLoginSelectedMessage(
 export function isWebsiteLoginCanceledMessage(
   message: object,
 ): message is WebsiteLoginCanceledMessage {
+  if (!hasOriginPayload(message)) return false
+  const payload = message.payload as Partial<
+    WebsiteLoginCanceledMessage['payload']
+  >
   return (
-    hasOriginPayload(message) &&
     message.type === WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled &&
-    isNonEmptyString(message.payload.requestId)
+    isNonEmptyString(payload.requestId)
   )
 }

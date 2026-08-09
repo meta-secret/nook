@@ -197,10 +197,13 @@ export function isWebsiteAuthenticatorSelectedMessage(
 export function isWebsiteAuthenticatorCanceledMessage(
   message: object,
 ): message is WebsiteAuthenticatorCanceledMessage {
+  if (!hasOriginPayload(message)) return false
+  const payload = message.payload as Partial<
+    WebsiteAuthenticatorCanceledMessage['payload']
+  >
   return (
-    hasOriginPayload(message) &&
     message.type ===
       WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled &&
-    isNonEmptyString(message.payload.requestId)
+    isNonEmptyString(payload.requestId)
   )
 }

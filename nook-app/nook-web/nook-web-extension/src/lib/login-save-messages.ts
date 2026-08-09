@@ -138,7 +138,7 @@ export function isWebsiteLoginSaveCommitMessage(
   return (
     typeof payload.offerId === 'string' &&
     payload.offerId.length > 0 &&
-    Boolean(payload.evidence) &&
+    payload.evidence !== undefined &&
     isOutcomeObservation(payload.evidence)
   )
 }
