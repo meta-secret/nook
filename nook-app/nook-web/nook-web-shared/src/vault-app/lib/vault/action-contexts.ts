@@ -5,7 +5,7 @@ import type {
   NookSyncConflictReview,
 } from "$app-wasm";
 import type { NookVaultSyncResult, VaultAccessStatus } from "$lib/nook";
-import type { StorageProvider } from "$lib/auth/providers";
+import type { StorageProvider, StorageProviderType } from "$lib/auth/providers";
 import type {
   LocalProviderLookup,
   StagedRemoteStorage,
@@ -199,7 +199,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   stopScheduledSync(): boolean;
   clearUnlockedSession(resetManager?: boolean): void;
   beginAddProvider(): void;
-  beginProviderSetup(request: { readonly type: "local-folder" }): void;
+  beginProviderSetup(request: { readonly type: StorageProviderType }): void;
   openAdmin(accordion: AdminAccordionSection): void;
   ensureOAuthTokensFresh(): Promise<void>;
   ensureProviderSavedAfterConflict(
