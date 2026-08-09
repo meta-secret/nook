@@ -1027,6 +1027,8 @@ Write vs read identity:
 - Each browser job probes its isolated exact-head ref before solving.
 - An available exact browser ref is imported alone.
 - A missing exact browser ref falls back to the trusted Main seed.
+- The UI-demo lane publishes after a successful ordinary PR demo.
+- The web full-e2e lane owns publication on `ci:full-e2e` pull requests.
 - Changed PR demo specs and Main's complete demo project retain 90-day Actions artifacts.
 - The 10 largest WebMs per run are best-effort published into one private Linear `nook-ui` issue per PR.
 - Main serializes native → WASM → web cache-writing lanes.

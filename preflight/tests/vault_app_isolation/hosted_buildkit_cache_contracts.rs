@@ -257,6 +257,13 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let ui_demo_publish = ui_demo
         .find("task ci:main:publish-web-e2e-cache")
         .context("PR UI demo job must publish its cache")?;
+    let full_e2e = section(&pr, "  full-e2e:\n", "\n  full-extension-e2e:\n");
+    let full_e2e_verify = full_e2e
+        .find("task ci:pr:e2e:web:artifacts")
+        .context("PR full-e2e job must verify the browser image")?;
+    let full_e2e_publish = full_e2e
+        .find("task ci:main:publish-web-e2e-cache")
+        .context("PR full-e2e job must publish its verified browser cache")?;
     assert!(
         rust_verify < rust_publish
             && pr[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
@@ -269,7 +276,13 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && pr[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && ui_demo_verify < ui_demo_publish
             && ui_demo[ui_demo_verify..ui_demo_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && ui_demo[ui_demo_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\""),
+            && ui_demo[ui_demo_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && ui_demo[..ui_demo_publish]
+                .contains("!contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')")
+            && full_e2e_verify < full_e2e_publish
+            && full_e2e[full_e2e_verify..full_e2e_publish]
+                .contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && full_e2e[full_e2e_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\""),
         "PR producers must verify read-only, then publish from warm builders with writes enabled"
     );
     Ok(())

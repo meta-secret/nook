@@ -318,7 +318,8 @@ Use this workflow for quality, CI, and deployment changes.
     - The WASM producer uploads one small run-stable package.
     - That package is consumed by `PR / Verify and preview`.
     - Main-fix PRs carrying `ci:full-e2e` also feed separate local-provider web and extension browser jobs.
-    - `Verify and preview` uses `always()` and fails explicitly when the WASM producer fails.
+    - `Verify and preview` uses `always()`.
+    - It fails explicitly when any required producer or consumer fails.
     - The established required check cannot be skipped by dependency failure.
     - `Verify and preview` also needs Native Rust verification.
     - A failed Native job must keep the merge-gate check from going green.

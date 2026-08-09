@@ -376,7 +376,10 @@ and extension e2e on separate hosted runners through
 health/recovery wrapper as Main. Pull-request browser consumers publish only
 isolated exact-head cache refs. Each consumer probes its exact browser ref.
 An available exact ref is imported alone. A missing exact ref falls back to
-the browser-image seed owned by trusted Main. Adding
+the browser-image seed owned by trusted Main. The web full-e2e job publishes
+the verified exact-head browser graph after its assertions pass. The UI-demo
+publisher is suppressed in that mode so the two jobs never write the same ref
+concurrently. Adding
 or removing the label retriggers PR Actions for the current head. Because the
 readiness audit already requires the exact-head `PR` workflow to succeed, a
 labeled PR cannot be ready while this job is queued, red, or cancelled.
