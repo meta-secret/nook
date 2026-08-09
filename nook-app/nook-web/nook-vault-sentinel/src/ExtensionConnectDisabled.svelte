@@ -1,12 +1,15 @@
 <script lang="ts">
+  import type { VaultState } from '$lib/vault.svelte'
+  import type { ExtensionConnectRequest } from '$lib/extension/connect'
+
   let {
     vault,
     request,
     onClose,
   }: {
-    vault: unknown
-    request: unknown
-    onClose: () => void
+    vault: VaultState
+    request: ExtensionConnectRequest
+    onClose: (approved: boolean) => void
   } = $props()
 
   const disabled = $derived(Boolean(vault && request && onClose))

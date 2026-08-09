@@ -4,7 +4,7 @@ import type { Connect } from "vite";
 import type { Plugin } from "vitest/config";
 import { vaultAppHeaders } from "./src/vault-app/security-headers";
 
-type VaultSpaOptions = {
+export type VaultSpaOptions = {
   name: string;
   spaPaths: readonly string[];
   denyPath?: (pathname: string) => boolean;
