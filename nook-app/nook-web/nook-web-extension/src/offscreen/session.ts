@@ -18,9 +18,8 @@ import { scrubProviderCredentials } from '../lib/provider-credential-staging'
 import {
   ExtensionSessionMessageType,
   ExtensionSessionMessageDispatcher,
-  parseExtensionSessionMessageType,
-  SessionMessageTypeParseKind,
 } from './session-message-dispatch'
+import type { ExtensionSessionRequest } from './session-request-adapter'
 import {
   LOGIN_SAVE_OFFER_TTL_MS,
   PendingLoginSaveLookupState,
@@ -183,44 +182,24 @@ function renewSessionExpiry(generation: number): void {
   scheduleSessionExpiry(generation)
 }
 
-function messagePayload(message: unknown): Record<string, unknown> {
-  if (!message || typeof message !== 'object' || !('payload' in message)) {
-    return {}
-  }
-  const payload = message.payload
-  return payload && typeof payload === 'object'
-    ? (payload as Record<string, unknown>)
-    : {}
-}
-
-function extensionVaultGrant(
-  payload: Record<string, unknown>,
-): ExtensionVaultGrant {
-  const fields = [
-    'vaultStoreId',
-    'deviceId',
-    'devicePublicKey',
-    'deviceSigningPublicKey',
-  ] as const
-  for (const field of fields) {
-    if (typeof payload[field] !== 'string' || payload[field].length === 0) {
-      throw new Error('Extension session received an invalid vault grant.')
-    }
-  }
+function extensionVaultGrant(payload: {
+  vaultStoreId: string
+  deviceId: string
+  devicePublicKey: string
+  deviceSigningPublicKey: string
+}): ExtensionVaultGrant {
   return {
-    vaultStoreId: payload.vaultStoreId as string,
-    deviceId: payload.deviceId as string,
-    devicePublicKey: payload.devicePublicKey as string,
-    deviceSigningPublicKey: payload.deviceSigningPublicKey as string,
+    vaultStoreId: payload.vaultStoreId,
+    deviceId: payload.deviceId,
+    devicePublicKey: payload.devicePublicKey,
+    deviceSigningPublicKey: payload.deviceSigningPublicKey,
   }
 }
 
-async function handleMessage(message: unknown): Promise<unknown> {
-  const parsedType = parseExtensionSessionMessageType(message)
-  if (parsedType.kind === SessionMessageTypeParseKind.Invalid) {
-    return { ok: false, error: 'Invalid extension session message.' }
-  }
-  switch (parsedType.messageType) {
+async function handleMessage(
+  message: ExtensionSessionRequest,
+): Promise<object | void> {
+  switch (message.type) {
     case ExtensionSessionMessageType.Reset: {
       pendingLoginSaveOfferStore.clearAll()
       canceledWebsitePasskeyRequests.clear()
@@ -268,7 +247,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.FinishPasskeySetup: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const activeManager = await getManager()
       const credentialId = toBytes(payload.credentialId)
       const userHandle = toBytes(payload.userHandle)
@@ -298,7 +277,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       return { ok: true, device: await activateSession() }
     }
     case ExtensionSessionMessageType.RecoverPasskey: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const activeManager = await getManager()
       const credentialId = toBytes(payload.credentialId)
       const userHandle = toBytes(payload.userHandle)
@@ -331,7 +310,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.UnlockPasskey: {
-      const prfOutput = toBytes(messagePayload(message).prfOutput)
+      const prfOutput = toBytes(message.payload.prfOutput)
       try {
         await (await getManager()).unlockDeviceIdentity(prfOutput)
       } finally {
@@ -340,14 +319,14 @@ async function handleMessage(message: unknown): Promise<unknown> {
       return { ok: true, device: await activateSession() }
     }
     case ExtensionSessionMessageType.CreatePin: {
-      const pin = messagePayload(message).pin
+      const pin = message.payload.pin
       if (typeof pin !== 'string')
         throw new Error('Extension session received an invalid PIN.')
       await (await getManager()).finishPinDeviceProtection(pin)
       return { ok: true, device: await activateSession() }
     }
     case ExtensionSessionMessageType.UnlockPin: {
-      const pin = messagePayload(message).pin
+      const pin = message.payload.pin
       if (typeof pin !== 'string')
         throw new Error('Extension session received an invalid PIN.')
       await (await getManager()).unlockPinDeviceIdentity(pin)
@@ -355,7 +334,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
     }
     case ExtensionSessionMessageType.SealIdentityHandoff: {
       const generation = sessionGeneration
-      const payload = messagePayload(message)
+      const payload = message.payload
       const recipientPublicKey = payload.recipientPublicKey
       const nonce = payload.nonce
       if (typeof recipientPublicKey !== 'string' || typeof nonce !== 'string') {
@@ -386,7 +365,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       return { ok: true, envelope }
     }
     case ExtensionSessionMessageType.ImportVault: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const grant = extensionVaultGrant(payload)
       const records = payload.eventLogRecords
       const providers = payload.providers
@@ -449,7 +428,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.UpdateVault: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const grant = extensionVaultGrant(payload)
       if (!Array.isArray(payload.eventLogRecords)) {
         throw new Error(
@@ -472,7 +451,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       return { ok: true, status }
     }
     case ExtensionSessionMessageType.ListPasskeys: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const grant = extensionVaultGrant(payload)
       if (
         typeof payload.rpId !== 'string' ||
@@ -504,7 +483,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.ListLogins: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const grant = extensionVaultGrant(payload)
       if (typeof payload.origin !== 'string') {
         throw new Error('Extension session received an invalid login lookup.')
@@ -533,7 +512,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.RevealLogin: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const grant = extensionVaultGrant(payload)
       if (
         typeof payload.origin !== 'string' ||
@@ -562,7 +541,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.ListAuthenticators: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const grant = extensionVaultGrant(payload)
       if (typeof payload.query !== 'string') {
         throw new Error(
@@ -592,7 +571,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.AuthenticatorCode: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const grant = extensionVaultGrant(payload)
       if (typeof payload.secretId !== 'string') {
         throw new Error(
@@ -616,7 +595,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.AuthenticatorEnrollPreview: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       if (typeof payload.otpauthUri !== 'string') {
         throw new Error('Extension session received an invalid otpauth URI.')
       }
@@ -639,7 +618,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.AuthenticatorEnrollCode: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       if (typeof payload.otpauthUri !== 'string') {
         throw new Error('Extension session received an invalid otpauth URI.')
       }
@@ -652,7 +631,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.AuthenticatorEnrollConfirm: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const grant = extensionVaultGrant(payload)
       if (
         typeof payload.otpauthUri !== 'string' ||
@@ -680,7 +659,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       return { ok: true, secretId }
     }
     case ExtensionSessionMessageType.AuthenticatorBackupAttach: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const grant = extensionVaultGrant(payload)
       if (
         typeof payload.secretId !== 'string' ||
@@ -713,7 +692,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       return { ok: true, secretId }
     }
     case ExtensionSessionMessageType.PlanLoginSave: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const grant = extensionVaultGrant(payload)
       if (
         typeof payload.origin !== 'string' ||
@@ -789,7 +768,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.PendingLoginSave: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       if (typeof payload.origin !== 'string') {
         throw new Error(
           'Extension session received an invalid pending login save lookup.',
@@ -811,7 +790,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.CommitLoginSave: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const grant = extensionVaultGrant(payload)
       if (typeof payload.offerId !== 'string') {
         throw new Error(
@@ -863,7 +842,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.DismissLoginSave: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       if (typeof payload.offerId !== 'string') {
         throw new Error(
           'Extension session received an invalid login save dismissal.',
@@ -873,7 +852,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       return { ok: true }
     }
     case ExtensionSessionMessageType.CancelPasskey: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       if (typeof payload.requestId !== 'string') {
         throw new Error(
           'Extension session received an invalid passkey cancellation.',
@@ -883,7 +862,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       return { ok: true }
     }
     case ExtensionSessionMessageType.RegisterPasskey: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const grant = extensionVaultGrant(payload)
       if (
         typeof payload.requestId !== 'string' ||
@@ -928,7 +907,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     case ExtensionSessionMessageType.AssertPasskey: {
-      const payload = messagePayload(message)
+      const payload = message.payload
       const grant = extensionVaultGrant(payload)
       if (
         typeof payload.requestId !== 'string' ||
@@ -982,7 +961,6 @@ const nookTypedArgs0_4: ConstructorParameters<
   typeof ExtensionSessionMessageDispatcher
 >[0] = {
   handleMessage,
-  messagePayload,
   decodeProviders: async (providers) => {
     const snapshot: AuthProvidersSnapshot = {
       providers: providers as StorageProvider[],

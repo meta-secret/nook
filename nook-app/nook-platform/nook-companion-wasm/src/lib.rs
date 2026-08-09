@@ -214,6 +214,44 @@ pub fn extension_pairing_setup_storage_key() -> String {
     nook_companion_core::EXTENSION_SETUP_KEY.to_owned()
 }
 
+#[wasm_bindgen(js_name = extensionVaultAccessScope)]
+#[must_use]
+pub fn extension_vault_access_scope() -> String {
+    nook_companion_core::ExtensionConnectScope::VaultAccess
+        .as_str()
+        .to_owned()
+}
+
+#[wasm_bindgen(js_name = extensionPasswordFillingScope)]
+#[must_use]
+pub fn extension_password_filling_scope() -> String {
+    nook_companion_core::ExtensionConnectScope::PasswordFilling
+        .as_str()
+        .to_owned()
+}
+
+#[wasm_bindgen(js_name = extensionPasskeyManagementScope)]
+#[must_use]
+pub fn extension_passkey_management_scope() -> String {
+    nook_companion_core::ExtensionConnectScope::PasskeyManagement
+        .as_str()
+        .to_owned()
+}
+
+#[wasm_bindgen(js_name = extensionSyncProviderCredentialsScope)]
+#[must_use]
+pub fn extension_sync_provider_credentials_scope() -> String {
+    nook_companion_core::ExtensionConnectScope::SyncProviderCredentials
+        .as_str()
+        .to_owned()
+}
+
+#[wasm_bindgen(js_name = isExtensionConnectScope)]
+#[must_use]
+pub fn is_extension_connect_scope(value: &str) -> bool {
+    nook_companion_core::ExtensionConnectScope::parse(value).is_some()
+}
+
 #[wasm_bindgen(js_name = createExtensionPairingState)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn create_extension_pairing_state(

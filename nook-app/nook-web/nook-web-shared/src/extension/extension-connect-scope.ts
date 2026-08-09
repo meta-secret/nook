@@ -1,24 +1,31 @@
-export const ExtensionConnectScope = {
-  VaultAccess: "vault-access",
-  PasswordFilling: "password-filling",
-  PasskeyManagement: "passkey-management",
-  SyncProviderCredentials: "sync-provider-credentials",
-} as const;
+import {
+  extensionPasskeyManagementScope,
+  extensionPasswordFillingScope,
+  extensionSyncProviderCredentialsScope,
+  extensionVaultAccessScope,
+  isExtensionConnectScope as isRustExtensionConnectScope,
+  type ExtensionConnectScope as RustExtensionConnectScope,
+} from './nook-companion-wasm/nook_companion_wasm.js'
 
-export type ExtensionConnectScope =
-  (typeof ExtensionConnectScope)[keyof typeof ExtensionConnectScope];
+export type ExtensionConnectScope = RustExtensionConnectScope
+
+export const ExtensionConnectScope = {
+  get VaultAccess(): ExtensionConnectScope {
+    return extensionVaultAccessScope() as ExtensionConnectScope
+  },
+  get PasswordFilling(): ExtensionConnectScope {
+    return extensionPasswordFillingScope() as ExtensionConnectScope
+  },
+  get PasskeyManagement(): ExtensionConnectScope {
+    return extensionPasskeyManagementScope() as ExtensionConnectScope
+  },
+  get SyncProviderCredentials(): ExtensionConnectScope {
+    return extensionSyncProviderCredentialsScope() as ExtensionConnectScope
+  },
+}
 
 export function isExtensionConnectScope(
   value: unknown,
 ): value is ExtensionConnectScope {
-  if (typeof value !== "string") return false;
-  switch (value) {
-    case ExtensionConnectScope.VaultAccess:
-    case ExtensionConnectScope.PasswordFilling:
-    case ExtensionConnectScope.PasskeyManagement:
-    case ExtensionConnectScope.SyncProviderCredentials:
-      return true;
-    default:
-      return false;
-  }
+  return typeof value === 'string' && isRustExtensionConnectScope(value)
 }

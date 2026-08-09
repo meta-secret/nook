@@ -7,7 +7,14 @@ import {
   WebsitePasskeyCredentialSelectionKind,
   WebsitePasskeyCeremony,
   type WebsitePasskeyRequestJsonArgs,
+  type WebsitePasskeyOptionsResponse,
+  type WebsitePasskeyPerformResponse,
+  type WebsitePasskeyVaultOption,
 } from '../../lib/webauthn-messages'
+import {
+  passkeyAccountsFromSession,
+  passkeyCeremonyResponseFromSession,
+} from './passkey-session-adapter'
 import {
   isAuthorizedWebsiteSender,
   passkeyPairingGrants,
@@ -74,16 +81,7 @@ async function matchingPasskeyAccountCountForOrigin({
       payload: { ...grant, rpId: hostname, origin, queueExpiresAt },
     }
     const response = await sendSessionMessage(nookTypedArgs0_1)
-    if (
-      response &&
-      typeof response === 'object' &&
-      'ok' in response &&
-      response.ok === true &&
-      'accounts' in response &&
-      Array.isArray(response.accounts)
-    ) {
-      count += response.accounts.length
-    }
+    count += passkeyAccountsFromSession(response).length
   }
   return Math.min(count, 100)
 }
@@ -121,7 +119,7 @@ export async function websitePasskeyOptions({
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<WebsitePasskeyOptionsResponse> {
   const nookTypedArgs0_2: Parameters<typeof requestOriginAndRpId>[0] = {
     ceremony: message.payload.ceremony,
     requestJson: message.payload.requestJson,
@@ -163,7 +161,7 @@ export async function websitePasskeyOptions({
       })),
     }
   }
-  const options: unknown[] = []
+  const options: WebsitePasskeyVaultOption[] = []
   for (const grant of grants) {
     const nookTypedArgs0_4: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-list-passkeys',
@@ -175,15 +173,9 @@ export async function websitePasskeyOptions({
       },
     }
     const response = await sendSessionMessage(nookTypedArgs0_4)
-    if (
-      response &&
-      typeof response === 'object' &&
-      'ok' in response &&
-      response.ok === true &&
-      'accounts' in response &&
-      Array.isArray(response.accounts)
-    ) {
-      for (const account of response.accounts) {
+    const accounts = passkeyAccountsFromSession(response)
+    if (accounts.length > 0) {
+      for (const account of accounts) {
         const nookTypedArgs0_5: Parameters<typeof options.push>[0] = {
           vaultStoreId: grant.vaultStoreId,
           vaultName: grant.vaultName,
@@ -211,7 +203,7 @@ export async function performWebsitePasskey({
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<WebsitePasskeyPerformResponse> {
   const nookTypedArgs0_6: Parameters<typeof requestOriginAndRpId>[0] = {
     ceremony: message.payload.ceremony,
     requestJson: message.payload.requestJson,
@@ -266,7 +258,9 @@ export async function performWebsitePasskey({
         queuePriority: 'interactive',
       },
     }
-    return sendSessionMessage(nookTypedArgs0_7)
+    return passkeyCeremonyResponseFromSession(
+      await sendSessionMessage(nookTypedArgs0_7),
+    )
   } finally {
     pendingWebsitePasskeyRequests.delete(key)
   }

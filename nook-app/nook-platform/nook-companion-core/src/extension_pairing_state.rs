@@ -18,6 +18,29 @@ pub enum ExtensionConnectScope {
     SyncProviderCredentials,
 }
 
+impl ExtensionConnectScope {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::VaultAccess => "vault-access",
+            Self::PasswordFilling => "password-filling",
+            Self::PasskeyManagement => "passkey-management",
+            Self::SyncProviderCredentials => "sync-provider-credentials",
+        }
+    }
+
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "vault-access" => Some(Self::VaultAccess),
+            "password-filling" => Some(Self::PasswordFilling),
+            "passkey-management" => Some(Self::PasskeyManagement),
+            "sync-provider-credentials" => Some(Self::SyncProviderCredentials),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -558,6 +581,21 @@ pub fn migrate_legacy_pairing_state_json(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extension_scope_parser_matches_serialized_vocabulary() {
+        let scopes = [
+            ExtensionConnectScope::VaultAccess,
+            ExtensionConnectScope::PasswordFilling,
+            ExtensionConnectScope::PasskeyManagement,
+            ExtensionConnectScope::SyncProviderCredentials,
+        ];
+
+        for scope in scopes {
+            assert_eq!(ExtensionConnectScope::parse(scope.as_str()), Some(scope));
+        }
+        assert_eq!(ExtensionConnectScope::parse("external-value"), None);
+    }
 
     fn grant() -> StoredExtensionPairingGrant {
         StoredExtensionPairingGrant {

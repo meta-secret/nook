@@ -328,6 +328,14 @@ Every task-owning implementation agent with GitHub write access must:
 - Revalidate the exact head.
 - Squash-merge when `task pr:ready PR=<number>` succeeds.
 
+After every push, monitor review feedback while repository checks run. Treat
+new actionable feedback as higher priority than waiting for checks on a head
+that must change. Stop watching or cancel obsolete validation, fix and resolve
+the feedback, run pre-push hygiene, push the replacement head, and restart
+validation. Let exact-head checks finish only while the actionable feedback
+queue is empty. Immediately before merge, prove both zero unresolved threads
+and green checks for the current head.
+
 Do not stop at a ready-PR handoff or ask for separate merge permission.
 
 Stop without a merge only for a concrete blocker or an explicitly read-only request.

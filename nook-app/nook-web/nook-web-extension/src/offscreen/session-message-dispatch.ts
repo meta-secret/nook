@@ -11,6 +11,12 @@ import {
   SessionOperationQueue,
 } from '../lib/session-operation-queue'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
+import {
+  type ExtensionSessionRequest,
+  ExtensionSessionRequestParseKind,
+  parseExtensionSessionRequest,
+  replaceExtensionSessionRequestPayload,
+} from './session-request-adapter'
 
 export { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 
@@ -24,49 +30,25 @@ enum SensitivePayloadResidencyKind {
 type SensitivePayloadResidency =
   | {
       kind: SensitivePayloadResidencyKind.Resident
-      payload: Record<string, unknown>
+      payload: SessionPayloadRecord
     }
   | { kind: SensitivePayloadResidencyKind.Cleared }
 
 type SessionMessageDispatchContext = {
-  handleMessage: (message: unknown) => Promise<unknown>
-  messagePayload: (message: unknown) => Record<string, unknown>
-  decodeProviders: (providers: object) => Promise<StorageProvider[]>
+  handleMessage: (message: ExtensionSessionRequest) => Promise<object | void>
+  decodeProviders: (providers: StorageProvider[]) => Promise<StorageProvider[]>
 }
 
-export enum SessionMessageTypeParseKind {
-  Invalid = 'invalid',
-  Parsed = 'parsed',
-}
+type SessionPayloadValue =
+  | string
+  | number
+  | number[]
+  | string[]
+  | StorageProvider[]
+  | object[]
+  | undefined
 
-export type SessionMessageTypeParse =
-  | { kind: SessionMessageTypeParseKind.Invalid }
-  | {
-      kind: SessionMessageTypeParseKind.Parsed
-      messageType: ExtensionSessionMessageType
-    }
-
-const extensionSessionMessageTypes = new Set<string>(
-  Object.values(ExtensionSessionMessageType),
-)
-
-export function parseExtensionSessionMessageType(
-  message: unknown,
-): SessionMessageTypeParse {
-  if (!message || typeof message !== 'object' || !('type' in message)) {
-    return { kind: SessionMessageTypeParseKind.Invalid }
-  }
-  if (
-    typeof message.type !== 'string' ||
-    !extensionSessionMessageTypes.has(message.type)
-  ) {
-    return { kind: SessionMessageTypeParseKind.Invalid }
-  }
-  return {
-    kind: SessionMessageTypeParseKind.Parsed,
-    messageType: message.type as ExtensionSessionMessageType,
-  }
-}
+type SessionPayloadRecord = Record<string, SessionPayloadValue>
 
 function sessionMessagePriority(
   type: ExtensionSessionMessageType,
@@ -118,7 +100,7 @@ type RequestedQueueExpiry =
   | { kind: RequestedQueueExpiryKind.Requested; expiresAt: number }
 
 function requestedQueueExpiry(
-  payload: Record<string, unknown>,
+  payload: SessionPayloadRecord,
 ): RequestedQueueExpiry {
   const value = payload.queueExpiresAt
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -131,8 +113,12 @@ function requestedQueueExpiry(
 }
 
 const sensitiveSessionFields: Readonly<
-  Partial<Record<ExtensionSessionMessageType, readonly string[]>>
+  Record<ExtensionSessionMessageType, readonly string[]>
 > = {
+  [ExtensionSessionMessageType.Reset]: [],
+  [ExtensionSessionMessageType.MigrateAuthProviders]: [],
+  [ExtensionSessionMessageType.Status]: [],
+  [ExtensionSessionMessageType.BeginPasskeySetup]: [],
   [ExtensionSessionMessageType.FinishPasskeySetup]: [
     'credentialId',
     'userHandle',
@@ -152,15 +138,30 @@ const sensitiveSessionFields: Readonly<
   [ExtensionSessionMessageType.AuthenticatorEnrollCode]: ['otpauthUri'],
   [ExtensionSessionMessageType.AuthenticatorEnrollConfirm]: ['otpauthUri'],
   [ExtensionSessionMessageType.AuthenticatorBackupAttach]: ['codes'],
+  [ExtensionSessionMessageType.SealIdentityHandoff]: [],
+  [ExtensionSessionMessageType.ImportVault]: [],
+  [ExtensionSessionMessageType.UpdateVault]: [],
+  [ExtensionSessionMessageType.ListPasskeys]: [],
+  [ExtensionSessionMessageType.ListLogins]: [],
+  [ExtensionSessionMessageType.RevealLogin]: [],
+  [ExtensionSessionMessageType.ListAuthenticators]: [],
+  [ExtensionSessionMessageType.AuthenticatorCode]: [],
+  [ExtensionSessionMessageType.PendingLoginSave]: [],
+  [ExtensionSessionMessageType.CommitLoginSave]: [],
+  [ExtensionSessionMessageType.DismissLoginSave]: [],
+  [ExtensionSessionMessageType.CancelPasskey]: [],
+  [ExtensionSessionMessageType.RegisterPasskey]: [],
+  [ExtensionSessionMessageType.AssertPasskey]: [],
+  [ExtensionSessionMessageType.Lock]: [],
 }
 
-function copySensitiveValue(value: unknown): unknown {
+function copySensitiveValue(value: SessionPayloadValue): SessionPayloadValue {
   if (Array.isArray(value)) return [...value]
   if (value instanceof Uint8Array) return new Uint8Array(value)
   return value
 }
 
-function clearSensitiveValue(value: unknown): void {
+function clearSensitiveValue(value: SessionPayloadValue): void {
   if (Array.isArray(value) || value instanceof Uint8Array) value.fill(0)
 }
 
@@ -193,10 +194,10 @@ export class ExtensionSessionMessageDispatcher {
     payload,
     fields,
   }: {
-    message: Record<string, unknown>
-    payload: Record<string, unknown>
+    message: ExtensionSessionRequest
+    payload: SessionPayloadRecord
     fields: readonly string[]
-  }): Promise<unknown> {
+  }): Promise<object | void> {
     let payloadResidency: SensitivePayloadResidency = {
       kind: SensitivePayloadResidencyKind.Resident,
       payload: { ...payload },
@@ -226,12 +227,14 @@ export class ExtensionSessionMessageDispatcher {
         payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
         try {
           const nookNamedArgs0_0: Parameters<
-            typeof this.context.handleMessage
+            typeof replaceExtensionSessionRequestPayload
           >[0] = {
-            ...message,
+            request: message,
             payload: operationPayload,
           }
-          return await this.context.handleMessage(nookNamedArgs0_0)
+          return await this.context.handleMessage(
+            replaceExtensionSessionRequestPayload(nookNamedArgs0_0),
+          )
         } finally {
           for (const field of fields) {
             clearSensitiveValue(operationPayload[field])
@@ -258,9 +261,9 @@ export class ExtensionSessionMessageDispatcher {
     message,
     payload,
   }: {
-    message: Record<string, unknown>
-    payload: Record<string, unknown>
-  }): Promise<unknown> {
+    message: ExtensionSessionRequest
+    payload: SessionPayloadRecord
+  }): Promise<object | void> {
     const operationGeneration = this.operationGeneration
     if (!Array.isArray(payload.providers)) {
       payload.providers = []
@@ -307,25 +310,29 @@ export class ExtensionSessionMessageDispatcher {
         if (staging.providers.length === 0) {
           stagingOwnership = StagingOwnership.Cleared
           const nookNamedArgs0_1: Parameters<
-            typeof this.context.handleMessage
+            typeof replaceExtensionSessionRequestPayload
           >[0] = {
-            ...message,
+            request: message,
             payload: {
               ...payload,
               providers: staging.providers,
             },
           }
-          return this.context.handleMessage(nookNamedArgs0_1)
+          return this.context.handleMessage(
+            replaceExtensionSessionRequestPayload(nookNamedArgs0_1),
+          )
         }
         const stagedProviders = staging.providers
         try {
           const nookNamedArgs0_2: Parameters<
-            typeof this.context.handleMessage
+            typeof replaceExtensionSessionRequestPayload
           >[0] = {
-            ...message,
+            request: message,
             payload: { ...payload, providers: stagedProviders },
           }
-          return await this.context.handleMessage(nookNamedArgs0_2)
+          return await this.context.handleMessage(
+            replaceExtensionSessionRequestPayload(nookNamedArgs0_2),
+          )
         } finally {
           scrubProviderCredentials(stagedProviders)
           payload.providers = []
@@ -344,16 +351,12 @@ export class ExtensionSessionMessageDispatcher {
     return this.operations.enqueue(nookNamedArgs1_1)
   }
 
-  enqueue(message: unknown): Promise<unknown> {
-    const parsedType = parseExtensionSessionMessageType(message)
-    if (parsedType.kind === SessionMessageTypeParseKind.Invalid) {
-      return Promise.resolve()
-    }
-    const type = parsedType.messageType
-    const payload = this.context.messagePayload(message)
+  enqueue(message: ExtensionSessionRequest): Promise<object | void> {
+    const type = message.type
+    const payload = message.payload as SessionPayloadRecord
     if (type === ExtensionSessionMessageType.ImportVault) {
       const nookNamedArgs0_3: Parameters<typeof this.enqueueVaultImport>[0] = {
-        message: message as Record<string, unknown>,
+        message,
         payload,
       }
       return this.enqueueVaultImport(nookNamedArgs0_3)
@@ -366,11 +369,11 @@ export class ExtensionSessionMessageDispatcher {
           : SessionOperationPriority.Probe
         : sessionMessagePriority(type)
     const sensitiveFields = sensitiveSessionFields[type]
-    if (sensitiveFields) {
+    if (sensitiveFields.length > 0) {
       const nookNamedArgs0_4: Parameters<
         typeof this.enqueueSensitiveMessage
       >[0] = {
-        message: message as Record<string, unknown>,
+        message,
         payload,
         fields: sensitiveFields,
       }
@@ -402,9 +405,10 @@ export class ExtensionSessionMessageDispatcher {
   registerRuntimeListener(): void {
     // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      const parsedType = parseExtensionSessionMessageType(message)
-      if (parsedType.kind === SessionMessageTypeParseKind.Invalid) return false
-      const type = parsedType.messageType
+      const parsed = parseExtensionSessionRequest(message)
+      if (parsed.kind === ExtensionSessionRequestParseKind.Invalid) return false
+      const request = parsed.request
+      const type = request.type
       if (type === ExtensionSessionMessageType.Lock) return false
       const serviceWorkerOnly =
         type === ExtensionSessionMessageType.SealIdentityHandoff ||
@@ -424,8 +428,8 @@ export class ExtensionSessionMessageDispatcher {
         type === ExtensionSessionMessageType.DismissLoginSave ||
         type === ExtensionSessionMessageType.CancelPasskey
       const response = direct
-        ? this.context.handleMessage(message)
-        : this.enqueue(message)
+        ? this.context.handleMessage(request)
+        : this.enqueue(request)
       void response
         .then((value) => sendResponse(value))
         .catch((error) => {

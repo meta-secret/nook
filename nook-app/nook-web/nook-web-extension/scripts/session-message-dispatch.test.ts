@@ -23,7 +23,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
   test('stages sensitive fields and clears the caller-owned payload', async () => {
     const payload: Record<string, unknown> = { pin: '123456' }
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders,
       handleMessage: async (message) => ({
         pin: messagePayload(message).pin,
@@ -51,7 +50,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     }
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders,
       handleMessage: async () => {
         handled = true
@@ -77,7 +75,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const payload: Record<string, unknown> = { providers: 'missing-array' }
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders,
       handleMessage: async () => {
         handled = true
@@ -103,7 +100,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const payload: Record<string, unknown> = { providers }
     let handledGithubPat = ''
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders,
       handleMessage: async (message) => {
         const handledProviders = messagePayload(message).providers
@@ -141,7 +137,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -193,7 +188,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
       { githubPat: 'github_pat_canceled_staged_secret' },
     ] as object as StorageProvider[]
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -237,7 +231,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     ] as object as StorageProvider[]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -294,7 +287,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
       },
     } as typeof chrome
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders,
       handleMessage: async () => ({ ok: true }),
     })
