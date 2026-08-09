@@ -35,6 +35,7 @@ export function removeScannedWidget(): void {
   removeWidget()
 }
 
+// eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
 chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
   const message = runtimeMessage as object

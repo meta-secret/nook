@@ -513,10 +513,11 @@ export async function websiteAuthenticatorEnrollConfirm({
       origin: message.payload.origin,
     }
     const response = await confirmAuthenticatorEnrollment(confirmArgs)
-    clearStagedEnrollment(message.payload.stageId)
     return response
   } catch {
     return { ok: false, reason: 'authenticator-enroll-failed' }
+  } finally {
+    clearStagedEnrollment(message.payload.stageId)
   }
 }
 

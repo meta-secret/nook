@@ -100,6 +100,7 @@ function isPendingIdentityHandoff(
 export function setSessionStorage(
   items: Record<string, unknown>,
 ): Promise<void> {
+  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.storage.session.set(items, () => {
       const message = chrome.runtime.lastError?.message
@@ -112,6 +113,7 @@ export function setSessionStorage(
 export function getSessionStorage(
   key: string,
 ): Promise<Record<string, unknown>> {
+  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.storage.session.get(key, (items) => {
       const message = chrome.runtime.lastError?.message
@@ -122,6 +124,7 @@ export function getSessionStorage(
 }
 
 export function removeSessionStorage(key: string): Promise<void> {
+  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.storage.session.remove(key, () => {
       const message = chrome.runtime.lastError?.message
@@ -193,6 +196,7 @@ export function isNokeySender(sender: chrome.runtime.MessageSender): boolean {
 }
 
 export function sendSessionMessage(message: unknown): Promise<unknown> {
+  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {
       const error = chrome.runtime.lastError?.message
@@ -547,6 +551,7 @@ function legacyPairingStorageKeys(stored: Record<string, unknown>): string[] {
 }
 
 function readLegacyPairingStorage(): Promise<Record<string, unknown>> {
+  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.storage.local.get((items) => {
       if (chrome.runtime.lastError) {
@@ -564,6 +569,7 @@ function readLegacyPairingStorage(): Promise<Record<string, unknown>> {
 }
 
 function removeLegacyPairingStorage(keys: string[]): Promise<void> {
+  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.storage.local.remove(keys, () => {
       if (chrome.runtime.lastError) {

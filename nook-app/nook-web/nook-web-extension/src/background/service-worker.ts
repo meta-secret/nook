@@ -120,6 +120,7 @@ import {
   generateSuggestedPassword,
 } from './vault-runtime'
 
+// eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
 chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
   const message = runtimeMessage as object
@@ -882,6 +883,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
 })
 
 chrome.runtime.onMessageExternal.addListener(
+  // eslint-disable-next-line max-params -- Chrome owns the external listener callback signature.
   (runtimeMessage, sender, sendResponse) => {
     if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
     const message = runtimeMessage as object

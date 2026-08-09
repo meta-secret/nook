@@ -176,6 +176,7 @@ async function extensionCeremony({
   const signal = options.signal
 
   return new Promise<Awaited<ReturnType<CredentialsContainer['get']>>>(
+    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     (resolve, reject) => {
       let settled = false
       const finish = (callback: () => void) => {
@@ -269,6 +270,7 @@ const nativeGet = prototype.get
 const nookTypedArgs0_3: Parameters<typeof Object.defineProperty>[2] = {
   configurable: true,
   writable: true,
+  // eslint-disable-next-line max-params -- CredentialsContainer owns this browser override signature.
   value(this: CredentialsContainer, options: CredentialCreationOptions) {
     const nookTypedArgs0_0: Parameters<typeof extensionCeremony>[0] = {
       ceremony: WebsitePasskeyCeremony.Create,
@@ -283,6 +285,7 @@ Object.defineProperty(prototype, 'create', nookTypedArgs0_3)
 const nookTypedArgs0_4: Parameters<typeof Object.defineProperty>[2] = {
   configurable: true,
   writable: true,
+  // eslint-disable-next-line max-params -- CredentialsContainer owns this browser override signature.
   value(this: CredentialsContainer, options: CredentialRequestOptions) {
     const nookTypedArgs0_1: Parameters<typeof extensionCeremony>[0] = {
       ceremony: WebsitePasskeyCeremony.Get,

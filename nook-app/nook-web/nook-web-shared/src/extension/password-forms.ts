@@ -680,19 +680,22 @@ export function summarizeAuthenticationWorkflowForms(
     };
     observations.push(nookTypedArgs0_3);
   }
-  return observations.sort((left, right) => {
-    const signal = ({ summary }: PasswordFormObservation) =>
-      summary.oneTimeCodeFieldCount > 0
-        ? 5
-        : summary.currentPasswordFieldCount > 0
-          ? 4
-          : summary.genericPasswordFieldCount === 1
-            ? 3
-            : summary.passwordFieldCount > 0
-              ? 2
-              : 1;
-    return signal(right) - signal(left);
-  });
+  return observations.sort(
+    // eslint-disable-next-line max-params -- Array.sort owns the comparator callback signature.
+    (left, right) => {
+      const signal = ({ summary }: PasswordFormObservation) =>
+        summary.oneTimeCodeFieldCount > 0
+          ? 5
+          : summary.currentPasswordFieldCount > 0
+            ? 4
+            : summary.genericPasswordFieldCount === 1
+              ? 3
+              : summary.passwordFieldCount > 0
+                ? 2
+                : 1;
+      return signal(right) - signal(left);
+    },
+  );
 }
 
 export function fillOneTimeCode({

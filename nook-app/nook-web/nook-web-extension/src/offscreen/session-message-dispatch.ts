@@ -400,6 +400,7 @@ export class ExtensionSessionMessageDispatcher {
   }
 
   registerRuntimeListener(): void {
+    // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const parsedType = parseExtensionSessionMessageType(message)
       if (parsedType.kind === SessionMessageTypeParseKind.Invalid) return false

@@ -17,6 +17,7 @@ declare namespace chrome {
 
     function getURL(path: string): string
 
+    // eslint-disable-next-line max-params -- Chrome owns this callback overload.
     function sendMessage<TResponse = unknown>(
       message: unknown,
       callback: (response: TResponse) => void,
@@ -31,6 +32,7 @@ declare namespace chrome {
 
     const onMessage: {
       addListener(
+        // eslint-disable-next-line max-params -- Chrome owns the runtime listener signature.
         listener: (
           message: unknown,
           sender: MessageSender,
@@ -41,6 +43,7 @@ declare namespace chrome {
 
     const onMessageExternal: {
       addListener(
+        // eslint-disable-next-line max-params -- Chrome owns the external listener signature.
         listener: (
           message: unknown,
           sender: MessageSender,
@@ -62,6 +65,7 @@ declare namespace chrome {
 
   namespace i18n {
     function getUILanguage(): string
+    // eslint-disable-next-line max-params -- Chrome owns this localization signature.
     function getMessage(
       messageName: string,
       substitutions?: string | string[],
@@ -83,6 +87,7 @@ declare namespace chrome {
       focused?: boolean
     }
 
+    // eslint-disable-next-line max-params -- Chrome owns this callback overload.
     function create(createData: CreateData, callback: () => void): void
     function create(createData: CreateData): Promise<unknown>
   }
@@ -94,22 +99,26 @@ declare namespace chrome {
       title?: string
     }
 
+    // eslint-disable-next-line max-params -- Chrome owns this callback overload.
     function query(
       queryInfo: { active?: boolean; currentWindow?: boolean },
       callback: (tabs: Tab[]) => void,
     ): void
 
+    // eslint-disable-next-line max-params -- Chrome owns this callback overload.
     function create(
       createProperties: { url: string },
       callback: (tab: Tab) => void,
     ): void
     function create(createProperties: { url: string }): Promise<Tab>
 
+    // eslint-disable-next-line max-params -- Chrome owns this callback overload.
     function sendMessage<TResponse = unknown>(
       tabId: number,
       message: unknown,
       callback: (response: TResponse) => void,
     ): void
+    // eslint-disable-next-line max-params -- Chrome owns this Promise overload.
     function sendMessage<TResponse = unknown>(
       tabId: number,
       message: unknown,

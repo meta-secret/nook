@@ -118,23 +118,6 @@ export default [
     rules: untrustedInputAdapterRules,
   },
   {
-    files: [
-      'nook-web-extension/src/chrome.d.ts',
-      'nook-web-extension/src/background/service-worker.ts',
-      'nook-web-extension/src/background/service-worker/pairing-identity.ts',
-      'nook-web-extension/src/content/autofill/message-router.ts',
-      'nook-web-extension/src/content/enrollment-flow.ts',
-      'nook-web-extension/src/content/webauthn-content.ts',
-      'nook-web-extension/src/content/webauthn-page.ts',
-      'nook-web-extension/src/offscreen/session-message-dispatch.ts',
-      'nook-web-shared/src/extension/password-forms.ts',
-      'nook-web-shared/src/generated/i18n-keys.ts',
-    ],
-    rules: {
-      'max-params': 'off',
-    },
-  },
-  {
     files: ['**/tests/**', '**/e2e/**'],
     rules: {
       'no-unsanitized/property': 'off',

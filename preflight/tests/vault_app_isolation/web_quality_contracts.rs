@@ -29,9 +29,15 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         );
     }
 
+    let web_eslint = read(&root, "nook-app/nook-web/eslint.config.js");
+    assert!(
+        !web_eslint.contains("'max-params': 'off'")
+            && !web_eslint.contains("\"max-params\": \"off\""),
+        "single-parameter exceptions must stay on exact host-owned callbacks"
+    );
     let eslint = format!(
         "{}\n{}\n{}\n{}",
-        read(&root, "nook-app/nook-web/eslint.config.js"),
+        web_eslint,
         read(&root, "nook-app/nook-web/no-raw-object-arguments-rule.js",),
         read(&root, "nook-app/nook-web/typed-api-analysis.js"),
         read(&root, "nook-app/nook-web/typed-api-rules.js")
