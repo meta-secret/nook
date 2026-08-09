@@ -551,6 +551,27 @@ jobs:
             WASM_BUILD_MODE=dev
         env:
           CI: true
+          # A failed demo must not publish its image graph. Publish explicitly below.
+          GHA_CACHE_WRITE_ENABLED: ""
+          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+          NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
+          NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
+          NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
+
+      - name: Publish verified browser BuildKit cache
+        if: steps.ui-demo-contract.outputs.required == 'true'
+        run: >-
+          task ci:main:publish-web-e2e-cache
+          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
+          VITE_BASE=/
+          VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
+          VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
+          VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
+          VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
+          WASM_BUILD_MODE=dev
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
           NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
           NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}

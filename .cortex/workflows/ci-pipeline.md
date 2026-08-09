@@ -488,6 +488,9 @@ The `ui-demo` Playwright project runs Chromium headlessly at 1280x720.
 It always records WebM video.
 The pull-request demo job starts beside web verification.
 It starts after the WASM handoff is ready.
+Its browser-image solve is read-only.
+After Playwright succeeds, a dedicated cache-only publisher exports the warm
+graph to the isolated exact-head scope.
 Demo-only waits are allowed to hold meaningful before/after
 states long enough for a reviewer to understand them; ordinary regression specs
 must remain full-speed. CI keeps the GitHub Actions result for 90 days and, after
