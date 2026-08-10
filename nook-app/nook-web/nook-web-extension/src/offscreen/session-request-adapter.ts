@@ -428,10 +428,13 @@ const sessionMessageTypes = new Set<string>(
   Object.values(ExtensionSessionMessageType),
 )
 
-function validField(
-  payload: Record<string, unknown>,
-  field: RequiredField,
-): boolean {
+function validField({
+  payload,
+  field,
+}: {
+  payload: Record<string, unknown>
+  field: RequiredField
+}): boolean {
   const value = payload[field.name]
   switch (field.kind) {
     case FieldKind.String:
@@ -476,7 +479,12 @@ export function parseExtensionSessionRequest(
   }
   const type = value.type as ExtensionSessionMessageType
   const payload = value.payload as Record<string, unknown>
-  if (!requestFields[type].every((field) => validField(payload, field))) {
+  if (
+    !requestFields[type].every((field) => {
+      const args: Parameters<typeof validField>[0] = { payload, field }
+      return validField(args)
+    })
+  ) {
     return { kind: ExtensionSessionRequestParseKind.Invalid }
   }
   if (

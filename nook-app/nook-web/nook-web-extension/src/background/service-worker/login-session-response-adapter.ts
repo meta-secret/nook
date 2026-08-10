@@ -15,3 +15,12 @@ export function decodeWebsiteLoginFillResponse(
   }
   return { ok: false, reason: 'login-fill-session-invalid' }
 }
+
+export function isLoginPickerPageAcknowledgement(response: unknown): boolean {
+  return (
+    Boolean(response) &&
+    typeof response === 'object' &&
+    'ok' in response &&
+    response.ok === true
+  )
+}

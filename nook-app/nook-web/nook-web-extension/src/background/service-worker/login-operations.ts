@@ -32,7 +32,10 @@ import {
   isUnlockedSessionStatus,
   openCompanionLauncherBestEffort,
 } from './session-lifecycle'
-import { decodeWebsiteLoginFillResponse } from './login-session-response-adapter'
+import {
+  decodeWebsiteLoginFillResponse,
+  isLoginPickerPageAcknowledgement,
+} from './login-session-response-adapter'
 
 type LoginOperationFailure = { ok: false; reason: string; verdict?: string }
 type LoginOperationSuccess = { ok: true }
@@ -208,16 +211,11 @@ export async function selectLoginPicker({
         },
       },
     }
-    const response: unknown = await chrome.tabs.sendMessage(
+    const response = await chrome.tabs.sendMessage(
       request.tabId,
       nookTypedArgs0_3,
     )
-    if (
-      !response ||
-      typeof response !== 'object' ||
-      !('ok' in response) ||
-      response.ok !== true
-    ) {
+    if (!isLoginPickerPageAcknowledgement(response)) {
       return { ok: false, reason: 'login-picker-page-unavailable' }
     }
   } catch {
@@ -407,7 +405,7 @@ export async function websiteLoginSavePending({
   }
   const staged = response.offer as {
     offerId?: string
-    decision?: unknown
+    decision?: number
     vaultStoreId?: string
   }
   const grant = grants.find(
