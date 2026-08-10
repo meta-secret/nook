@@ -279,6 +279,7 @@ fn collect_files_with_extension(
         }
     }
     Ok(())
+}
 
 #[cfg(test)]
 mod tests {
