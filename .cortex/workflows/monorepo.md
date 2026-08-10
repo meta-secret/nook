@@ -12,7 +12,8 @@ Use this workflow for feature work that touches more than one package.
 6. Add or update tests in the owning package (`nook-core` Rust tests for domain logic; Playwright for UI flows).
 7. Add new app routine commands to the nearest owning Taskfile: web-family tasks under `nook-app/nook-web/Taskfile.yml` , Docker tasks under `nook-app/nook-platform/docker/Taskfile.yml`, CI tasks under `nook-app/ci/Taskfile.yml`, and repo-level non-app commands under the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.
-9. Run `task format`, commit and push, use focused hosted tasks as useful, then explicitly trigger and prove the exact head with green `pr.yml`.
+9. Run `task format`, commit and push, then explicitly trigger and prove the exact head with green `pr.yml`.
+   - Use a focused hosted task only when it shortens diagnosis of a known failure.
    - Do not run local `task check` for agent work.
 
 Dependency direction must stay:

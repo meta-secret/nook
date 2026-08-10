@@ -19,9 +19,11 @@ wastes hosted concurrency before the branch is ready.
 
 **Required locally:** `task loom:pre-push` only.
 
-**Iterative execution:** after pushing an exact branch head, run allowlisted
-focused work with `task remote TASK_NAME=<name>`. Batch several commands with
-`task remote TASK_NAMES=<name>,<name>`.
+**Focused diagnosis:** after pushing an exact branch head, use
+`task remote TASK_NAME=<name>` only when one isolated gate gives faster
+feedback than complete validation.
+
+Do not batch broad gates sequentially before complete validation.
 
 **Required remotely:** explicitly trigger complete exact-head PR validation.
 
@@ -38,7 +40,6 @@ prLand:
 task loom:pre-push
 git commit …
 git push -u origin HEAD
-task remote TASK_NAME=rust:test
 task loom:pr-land CONFIG=/tmp/pr-land-validate.yaml
 ```
 
@@ -76,8 +77,7 @@ Does not apply to:
 
 - Before: format → push → local `task check` while automatic PR CI consumes
   hosted workers.
-- After: Loom pre-push → commit → push → focused `task remote` → Loom validate →
-  Loom ready.
+- After: Loom pre-push → commit → push → Loom validate → Loom ready.
 - Before: remote Verify fails → run full local `task ci:pr` before re-push.
 - After: remote Verify fails → fix from logs → Loom pre-push → push → re-validate.
 
@@ -86,7 +86,8 @@ Does not apply to:
 - [ ] Run `task loom:pre-push` unconditionally before every push.
 - [ ] Do not require `task check`, `task ci:pr`, full suites, builds, or e2e
       on the agent machine.
-- [ ] Use `task remote` for focused hosted iteration.
+- [ ] Use `task remote` only for focused diagnosis that shortens feedback time.
+- [ ] Do not require focused tasks before complete validation.
 - [ ] Trigger complete validation explicitly with Loom or `task pr:validate`.
 - [ ] Re-validate after every push that replaces the validated head.
 

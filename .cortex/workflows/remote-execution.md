@@ -197,7 +197,12 @@ Before dispatching `web:e2e`, `extension:e2e`, `check`, `ci:pr`, or `ci:pr:e2e`,
 
 Update, format, and push a stale branch before spending an expensive hosted cycle.
 
-Cheap focused tasks remain available for early iteration.
+Cheap focused tasks remain available for isolated diagnosis.
+
+They are not a prerequisite for complete PR validation.
+
+Prefer complete validation when parallel PR jobs have a shorter critical path
+than a sequential focused batch.
 
 The final readiness audit still detects the unavoidable case where the base advances after a run has already started.
 

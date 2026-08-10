@@ -388,12 +388,13 @@ Use this workflow for quality, CI, and deployment changes.
 
 11. **GitHub-hosted agent execution:**
     - When an iteration is coherent, agents run `task format` (and the UI demo contract when UI paths change), commit, and push the exact head.
-    - Focused builds/tests use `task remote TASK_NAME=<name>`.
+    - Focused diagnostics use `task remote TASK_NAME=<name>` when they are faster than complete validation.
+    - Focused tasks are not a prerequisite for complete validation.
     - Complete PR checks run only after `task pr:validate PR=<number>`.
     - Do not run `task check`, `task ci:pr`, full suites, builds, or e2e on the agent machine.
     - Local mirrors remain available to humans.
     - See [remote-execution.md](remote-execution.md), [coding-bro.md](coding-bro.md), and [pull-requests.md § Validation](pull-requests.md#5-hosted-iteration-and-explicit-validation).
-12. Prove the latest pushed head with explicitly triggered green repository-owned checks before merge or handoff. After a remote failure, fix, format, commit, push, use focused hosted proof as useful, and explicitly trigger complete validation again.
+12. Prove the latest pushed head with explicitly triggered green repository-owned checks before merge or handoff. After a remote failure, fix, format, commit, push, and explicitly trigger complete validation again. Use focused hosted proof only when it shortens diagnosis.
 13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [rules.md §5 — Docker daemon](../rules.md#docker-daemon--never-kill-it).
 14. **NEVER pipe a long-running command through `| grep`/`| tail`/`| head`/`| sed` (or any filter).** This is a hard rule, not a suggestion.
     - `grep`/`tail`/`head` **buffer their input until the upstream command exits**.

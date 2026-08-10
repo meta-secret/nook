@@ -409,7 +409,12 @@ Never use `task extension:format` as the only format step before push.
 
 Only after that commit → push.
 
-Use `task remote` for focused hosted feedback.
+Use `task remote` only when a focused gate gives faster diagnostic feedback.
+
+Do not run focused tasks as a prerequisite for complete validation.
+
+Prefer complete validation when its parallel jobs are faster than a sequential
+focused batch.
 
 Use `task pr:validate` for complete exact-head validation.
 
@@ -497,8 +502,8 @@ The normal loop:
 1. Pre-push hygiene
 2. Commit
 3. Push
-4. Focused `task remote` runs as useful
-5. Explicit `task pr:validate` at the complete validation boundary
+4. Optional focused `task remote` runs for isolated diagnostics
+5. Explicit `task pr:validate` as soon as the coherent head is ready
 
 Ordinary PR pushes do not start the full PR workflow.
 
@@ -506,7 +511,10 @@ A later push makes prior checks stale.
 
 The agent must explicitly validate the new exact head before readiness can succeed.
 
-Heavy focused debugging also runs through the allowlisted remote task catalog.
+Heavy focused debugging runs through the allowlisted remote task catalog.
+
+Do not batch broad gates sequentially when complete PR validation runs them in
+parallel with a shorter critical path.
 
 Local execution is reserved for formatting, the UI demo contract, repository inspection, and interactive development sessions that require a persistent local server/browser.
 
@@ -638,7 +646,7 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 
 ## 6. Workflows (`workflows/`)
 
-- [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task loom:pre-push`** → commit/push → focused hosted tasks → Loom/Task validate → fix loop → readiness audit → automatic agent-owned squash merge).
+- [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task loom:pre-push`** → commit/push → Loom/Task validate → optional focused diagnosis → fix loop → readiness audit → automatic agent-owned squash merge).
 - [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 - [`agentic-ai/loom/README.md`](../agentic-ai/loom/README.md) — **Loom**: YAML tool protocol for mechanical cortex rites.
 - [references/loom-tools.md](references/loom-tools.md) — Loom request/response contracts and examples.

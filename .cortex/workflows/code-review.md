@@ -23,7 +23,9 @@ When a new finding arrives:
 3. Reply to and resolve the thread.
 4. Run pre-push hygiene.
 5. Push the replacement head.
-6. Restart focused or complete validation for that head.
+6. Restart complete validation for that head.
+
+Use a focused task instead only when it isolates a known failure faster.
 
 Only let exact-head validation finish while the actionable feedback queue is
 empty.
