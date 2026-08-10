@@ -14,11 +14,14 @@ import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { LoginPickerKind, pickerState, widgetState } from './state'
 import type {
-  LoginFillResponse,
   LoginOptionsResponse,
   LoginPickerOpenResponse,
 } from './workflow-ui'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
+import {
+  LoginFillDeliveryKind,
+  sendLoginFillMessage,
+} from './login-fill-runtime-adapter'
 
 export type PasskeyWidgetAction =
   | AuthenticationWorkflowAction.UsePasskey
@@ -84,7 +87,7 @@ export async function fillAndSubmitAccount({
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
 }): Promise<boolean> {
-  const nookTypedArgs0_2: Parameters<typeof sendRuntimeMessage>[0] = {
+  const nookTypedArgs0_2: Parameters<typeof sendLoginFillMessage>[0] = {
     type: 'nook:website-login-fill',
     payload: {
       origin: location.origin,
@@ -92,8 +95,8 @@ export async function fillAndSubmitAccount({
       secretId: account.secretId,
     },
   }
-  const delivery = await sendRuntimeMessage<LoginFillResponse>(nookTypedArgs0_2)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+  const delivery = await sendLoginFillMessage(nookTypedArgs0_2)
+  if (delivery.kind === LoginFillDeliveryKind.Unavailable) {
     const nookTypedArgs0_0: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,

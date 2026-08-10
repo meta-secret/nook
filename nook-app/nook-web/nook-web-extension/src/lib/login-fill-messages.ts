@@ -9,6 +9,25 @@ export type WebsiteLoginAccountOption = {
   websiteHost: string
 }
 
+export type WebsiteLoginFillResponse =
+  | { ok: true; username: string; password: string }
+  | { ok: false; reason: string }
+
+export function isWebsiteLoginFillResponse(
+  response: object,
+): response is WebsiteLoginFillResponse {
+  if (!('ok' in response) || typeof response.ok !== 'boolean') return false
+  if (!response.ok) {
+    return 'reason' in response && typeof response.reason === 'string'
+  }
+  return (
+    'username' in response &&
+    typeof response.username === 'string' &&
+    'password' in response &&
+    typeof response.password === 'string'
+  )
+}
+
 export type WebsiteAuthenticatorOption = {
   vaultStoreId: string
   vaultName: string

@@ -4,7 +4,10 @@ import {
 } from '../../lib/browser-message-keys'
 import { compactProgressState } from '../../lib/auth-widget-policy'
 import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
-import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
+import type {
+  WebsiteLoginAccountOption,
+  WebsiteLoginFillResponse,
+} from '../../lib/login-fill-messages'
 import { AuthenticationWorkflowKind } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   ExtensionSetupLoadKind,
@@ -43,12 +46,7 @@ export type LoginOptionsResponse = {
   reason?: string
 }
 
-export type LoginFillResponse = {
-  ok?: boolean
-  username?: string
-  password?: string
-  reason?: string
-}
+export type { WebsiteLoginFillResponse as LoginFillResponse }
 
 export type WorkflowSnapshotResponse = {
   ok?: boolean

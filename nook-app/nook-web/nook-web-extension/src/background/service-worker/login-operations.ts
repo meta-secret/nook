@@ -2,7 +2,12 @@ import {
   NookWebsiteLoginSaveDecision,
   WebsiteLoginSavePendingState,
   type WebsiteLoginSaveOfferView,
+  type WebsiteLoginSavePendingResponse,
 } from '../../lib/login-save-messages'
+import type {
+  WebsiteLoginAccountOption,
+  WebsiteLoginFillResponse,
+} from '../../lib/login-fill-messages'
 import { classifyAuthenticationOutcomeWithDefaultTimeout } from '../vault-runtime'
 import {
   LoginPickerLoadKind,
@@ -27,6 +32,32 @@ import {
   isUnlockedSessionStatus,
   openCompanionLauncherBestEffort,
 } from './session-lifecycle'
+import { decodeWebsiteLoginFillResponse } from './login-session-response-adapter'
+
+type LoginOperationFailure = { ok: false; reason: string; verdict?: string }
+type LoginOperationSuccess = { ok: true }
+type LoginPickerOpenResponse =
+  | LoginOperationFailure
+  | {
+      ok: true
+      status: 'ready'
+      requestId: string
+      expiresAt: number
+    }
+type LoginPickerQueryResponse =
+  | LoginOperationFailure
+  | { ok: true; origin: string; accounts: WebsiteLoginAccountOption[] }
+type LoginSaveOfferResponse =
+  | LoginOperationFailure
+  | { ok: true; status: 'unavailable' | 'locked' }
+  | {
+      ok: true
+      status: 'ready'
+      decision: NookWebsiteLoginSaveDecision
+      offer?: WebsiteLoginSaveOfferView
+    }
+type LoginSaveActionResponse =
+  LoginOperationFailure | { ok: true; decision?: NookWebsiteLoginSaveDecision }
 
 export async function openWebsiteLoginPicker({
   message,
@@ -34,7 +65,7 @@ export async function openWebsiteLoginPicker({
 }: {
   message: { payload: { origin: string } }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<LoginPickerOpenResponse> {
   const nookTypedArgs0_0: Parameters<typeof availableWebsiteGrants>[0] = {
     origin: message.payload.origin,
     sender,
@@ -91,7 +122,7 @@ export async function queryLoginPicker({
 }: {
   message: { payload: { requestId: string; query: string } }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<LoginPickerQueryResponse> {
   if (!isLoginPickerSender(sender)) {
     return { ok: false, reason: 'login-picker-forbidden' }
   }
@@ -124,7 +155,7 @@ export async function selectLoginPicker({
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<LoginOperationSuccess | LoginOperationFailure> {
   if (!isLoginPickerSender(sender)) {
     return { ok: false, reason: 'login-picker-forbidden' }
   }
@@ -186,7 +217,7 @@ export async function cancelLoginPicker({
 }: {
   message: { payload: { requestId: string } }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<LoginOperationSuccess | LoginOperationFailure> {
   const loaded = await loadLoginPicker(message.payload.requestId)
   if (loaded.kind === LoginPickerLoadKind.Unavailable) {
     return { ok: true }
@@ -230,7 +261,7 @@ export async function websiteLoginSaveOffer({
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<LoginSaveOfferResponse> {
   const pendingPassword = { value: message.payload.password }
   message.payload.password = ''
   const nookTypedArgs0_5: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
@@ -315,7 +346,7 @@ export async function websiteLoginSavePending({
 }: {
   message: { payload: { origin: string } }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<WebsiteLoginSavePendingResponse> {
   const nookTypedArgs0_8: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin: message.payload.origin,
@@ -394,7 +425,7 @@ export async function websiteLoginSaveCommit({
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<LoginSaveActionResponse> {
   const nookTypedArgs0_10: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin: message.payload.origin,
@@ -470,7 +501,7 @@ export async function websiteLoginSaveDismiss({
 }: {
   message: { payload: { origin: string; offerId: string } }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<LoginOperationSuccess | LoginOperationFailure> {
   const nookTypedArgs0_14: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin: message.payload.origin,
@@ -501,7 +532,7 @@ export async function websiteLoginFill({
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}): Promise<WebsiteLoginFillResponse> {
   const nookTypedArgs0_16: Parameters<
     typeof authorizedWebsiteGrant
   >[0]['reasons'] = {
@@ -525,5 +556,6 @@ export async function websiteLoginFill({
       secretId: message.payload.secretId,
     },
   }
-  return sendSessionMessage(nookTypedArgs0_17)
+  const response = await sendSessionMessage(nookTypedArgs0_17)
+  return decodeWebsiteLoginFillResponse(response)
 }

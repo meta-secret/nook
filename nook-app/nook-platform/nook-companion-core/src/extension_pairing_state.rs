@@ -643,6 +643,24 @@ mod tests {
         }
     }
 
+    fn refresh_input(select: bool) -> RefreshExtensionPairingGrantInput {
+        let mut existing = grant();
+        existing.event_count = 2;
+        existing.event_log_heads = vec!["event-2".to_owned()];
+        existing.last_local_sync_at = "2026-07-25T00:00:01.000Z".to_owned();
+        RefreshExtensionPairingGrantInput {
+            grant: existing,
+            imported: ImportedExtensionEventLog {
+                vault_store_id: "store-test".to_owned(),
+                event_count: 4,
+                heads: vec!["event-4".to_owned()],
+                access_granted: true,
+            },
+            observed_at: "2026-07-25T00:00:04.000Z".to_owned(),
+            select,
+        }
+    }
+
     fn legacy_pairing_state(
         grant: LegacyStoredExtensionPairingGrant,
         setup: LegacyExtensionReadySetup,
@@ -738,6 +756,37 @@ mod tests {
             create_pairing_state(input),
             Err(ExtensionPairingStateError::ImportedVaultMismatch)
         );
+    }
+
+    #[test]
+    fn selected_pairing_grant_refresh_rebuilds_grant_and_setup_metadata() -> anyhow::Result<()> {
+        let state = refresh_pairing_grant(refresh_input(true))?;
+        let refreshed = state
+            .selected_grant()
+            .ok_or_else(|| anyhow::anyhow!("selected refresh must include setup state"))?;
+
+        assert_eq!(refreshed.event_count, 4);
+        assert_eq!(refreshed.event_log_heads, vec!["event-4"]);
+        assert_eq!(refreshed.last_local_sync_at, "2026-07-25T00:00:04.000Z");
+        assert_eq!(state.first_grant(), Some(refreshed));
+        state.validate()?;
+        Ok(())
+    }
+
+    #[test]
+    fn non_selected_pairing_grant_refresh_updates_only_the_grant() -> anyhow::Result<()> {
+        let state = refresh_pairing_grant(refresh_input(false))?;
+        let refreshed = state
+            .first_grant()
+            .ok_or_else(|| anyhow::anyhow!("refresh must include the updated grant"))?;
+
+        assert_eq!(refreshed.event_count, 4);
+        assert_eq!(refreshed.event_log_heads, vec!["event-4"]);
+        assert_eq!(refreshed.last_local_sync_at, "2026-07-25T00:00:04.000Z");
+        assert_eq!(state.selected_grant(), None);
+        assert_eq!(state.entries.len(), 1);
+        state.validate()?;
+        Ok(())
     }
 
     #[test]

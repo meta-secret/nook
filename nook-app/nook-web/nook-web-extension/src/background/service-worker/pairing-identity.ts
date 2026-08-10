@@ -10,6 +10,7 @@ import {
   type ExtensionPairedVaultIdentityStatusMessage,
   type ExtensionPairedVaultUnlockRequestMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
 import {
   isRuntimeSimpleVaultUrl,
@@ -150,6 +151,7 @@ async function issueIdentityHandoff({
 export async function openExtensionPairing(
   device: BeginExtensionPairingMessage['payload'],
 ): Promise<void> {
+  await companionWasmReady
   const nonce = randomNonce()
   const nookTypedArgs0_1: Parameters<typeof issueIdentityHandoff>[0] = {
     nonce,
@@ -596,9 +598,13 @@ export function ensureLegacyPairingMigration(): Promise<void> {
     const legacy = await readLegacyPairingStorage()
     const legacyKeys = legacyPairingStorageKeys(legacy)
     if (legacyKeys.length === 0) return
+    const legacyPairingRecords = Object.fromEntries(
+      legacyKeys.map((key) => [key, legacy[key]]),
+    )
     const current = await readExtensionPairingState()
     const pairingPolicy = await extensionPairingGrantPolicyReady
-    const migrated = pairingPolicy.migratedLegacyPairingStorageItems(legacy)
+    const migrated =
+      pairingPolicy.migratedLegacyPairingStorageItems(legacyPairingRecords)
     if (Object.keys(current).length > 0) {
       const completedKeys = Object.keys(migrated).filter(
         (key) =>
