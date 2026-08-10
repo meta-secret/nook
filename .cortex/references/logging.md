@@ -135,10 +135,11 @@ default is `info`. Almost all app logs today are `debug` (`wasm` status drain,
 - **Web:** `const log = createLogger('scope')` then `log.info(message)` /
   `log.debug(message)` etc. Messages are domain-specific strings. Stray
   `console.*` calls are also captured (scope `console`), but a scoped logger is
-  preferred. Use `warnWithContext({ message, serializedContext })` only at the
-  logging adapter boundary when a typed, sanitized domain context must remain
-  queryable as the entry's separate `data` field. Serialize the domain value
-  before calling the logger. Do not pass generic value bags into application
+  preferred. Use `infoWithContext({ message, serializedContext })` or
+  `warnWithContext({ message, serializedContext })` only at the logging adapter
+  boundary when a typed, sanitized domain context must remain queryable as the
+  entry's separate `data` field. Serialize the domain value before calling the
+  logger. Do not pass generic value bags into application
   code.
 - **Common web scopes:** `vault` (session lifecycle), `connect` (unlock/connect),
   `vault-sync`, `vault-local`, `vault-password`, `vault-devices`, `vault-providers`,

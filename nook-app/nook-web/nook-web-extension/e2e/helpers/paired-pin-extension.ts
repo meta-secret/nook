@@ -53,10 +53,13 @@ async function getServiceWorker(context: BrowserContext) {
   )
 }
 
-export async function exerciseConcurrentSessionStatus(
-  context: BrowserContext,
+export async function exerciseConcurrentSessionStatus({
+  context,
   requestCount = 24,
-): Promise<void> {
+}: {
+  context: BrowserContext
+  requestCount?: number
+}): Promise<void> {
   const worker = await getServiceWorker(context)
   await worker.evaluate(async (count) => {
     const requests = Array.from(
@@ -64,7 +67,7 @@ export async function exerciseConcurrentSessionStatus(
       () =>
         new Promise<void>((resolve, reject) => {
           globalThis.chrome.runtime.sendMessage(
-            { type: 'nook:extension-session-status' },
+            { type: 'nook:extension-session-status', payload: {} },
             (response) => {
               const error = globalThis.chrome.runtime.lastError?.message
               if (error) {

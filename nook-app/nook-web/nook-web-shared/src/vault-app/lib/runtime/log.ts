@@ -501,6 +501,7 @@ export type ScopedLogger = {
   info: (message: string) => void;
   debug: (message: string) => void;
   trace: (message: string) => void;
+  infoWithContext: (context: SerializedLogContext) => void;
   warnWithContext: (context: SerializedLogContext) => void;
 };
 
@@ -551,6 +552,21 @@ export function createLogger(scope: string): ScopedLogger {
         };
         return record(recordArgs6);
       })(),
+    infoWithContext: ({ message, serializedContext }) => {
+      if (!isEnabled(LogLevel.Info)) return;
+      const echoArgs: Parameters<typeof echo>[0] = {
+        level: LogLevel.Info,
+        text: `[${scope}] ${message} ${serializedContext}`,
+      };
+      echo(echoArgs);
+      const persistArgs: Parameters<typeof persistStructured>[0] = {
+        level: LogLevel.Info,
+        scope,
+        message,
+        serializedContext,
+      };
+      persistStructured(persistArgs);
+    },
     warnWithContext: ({ message, serializedContext }) => {
       if (!isEnabled(LogLevel.Warn)) return;
       const echoArgs: Parameters<typeof echo>[0] = {

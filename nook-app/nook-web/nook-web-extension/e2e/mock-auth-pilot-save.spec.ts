@@ -53,7 +53,7 @@ test.describe('PIN Pilot save login', () => {
     try {
       const loginPage = await paired.context.newPage()
       await signInAndSaveMockLogin(loginPage, mockAuth.origin, async () => {
-        await exerciseConcurrentSessionStatus(paired.context)
+        await exerciseConcurrentSessionStatus({ context: paired.context })
       })
 
       const nextLogin = await paired.context.newPage()

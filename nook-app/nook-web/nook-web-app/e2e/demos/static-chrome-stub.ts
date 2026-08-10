@@ -20,9 +20,12 @@ export const demoDomainEnumArgs = {
   authenticationWorkflow: {
     loginKind: AuthenticationWorkflowKind.Login,
     signupKind: AuthenticationWorkflowKind.Signup,
+    totpChallengeKind: AuthenticationWorkflowKind.TotpChallenge,
     credentialsStage: AuthenticationWorkflowStage.Credentials,
+    secondFactorStage: AuthenticationWorkflowStage.SecondFactor,
     continueAction: AuthenticationWorkflowAction.ContinueWithNook,
     generatePasswordAction: AuthenticationWorkflowAction.GeneratePassword,
+    fillTotpAction: AuthenticationWorkflowAction.FillTotp,
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey,
   },
 }
@@ -37,9 +40,12 @@ export type DemoChromeStubArgs = {
   authenticationWorkflow: {
     loginKind: AuthenticationWorkflowKind.Login
     signupKind: AuthenticationWorkflowKind.Signup
+    totpChallengeKind: AuthenticationWorkflowKind.TotpChallenge
     credentialsStage: AuthenticationWorkflowStage.Credentials
+    secondFactorStage: AuthenticationWorkflowStage.SecondFactor
     continueAction: AuthenticationWorkflowAction.ContinueWithNook
     generatePasswordAction: AuthenticationWorkflowAction.GeneratePassword
+    fillTotpAction: AuthenticationWorkflowAction.FillTotp
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey
   }
   /** Static replies keyed by runtime message type. */

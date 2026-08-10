@@ -19,6 +19,7 @@ function loginPilotStubArgs(messages: Record<string, ChromeMessage>) {
 }
 
 function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
+  const { authenticationWorkflow } = demoDomainEnumArgs
   return {
     localizedMessages: messages,
     ...demoDomainEnumArgs,
@@ -27,9 +28,9 @@ function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
       'nook:authentication-workflow-snapshot': {
         ok: true,
         snapshot: {
-          kind: 'totp-challenge',
-          stage: 'second-factor',
-          action: 'fill-totp',
+          kind: authenticationWorkflow.totpChallengeKind,
+          stage: authenticationWorkflow.secondFactorStage,
+          action: authenticationWorkflow.fillTotpAction,
           currentStep: 2,
           totalSteps: 3,
           observationIndex: 0,
