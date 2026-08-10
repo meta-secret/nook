@@ -13,6 +13,7 @@ thiserror = "2.0.18"
 tsify = { version = "0.5.6", default-features = false, features = ["js"] }
 url = "2.5.8"
 wasm-bindgen = "0.2.127"
+zeroize = "1.9.0"
 
 [dev-dependencies]
 anyhow = "1.0.104"

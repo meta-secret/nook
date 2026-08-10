@@ -5,7 +5,7 @@ import type {
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   ExtensionSessionRequestValidation,
-  validateExtensionSessionRequestJson,
+  validateExtensionSessionRequest,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 
@@ -286,11 +286,9 @@ export async function parseExtensionSessionRequest(
 ): Promise<ExtensionSessionRequestParse> {
   try {
     await companionWasmReady
-    const serialized = JSON.stringify(value)
     if (
-      typeof serialized !== 'string' ||
-      validateExtensionSessionRequestJson(serialized) !==
-        ExtensionSessionRequestValidation.Accepted
+      validateExtensionSessionRequest(value) !==
+      ExtensionSessionRequestValidation.Accepted
     ) {
       return { kind: ExtensionSessionRequestParseKind.Invalid }
     }

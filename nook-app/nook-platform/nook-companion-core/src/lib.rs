@@ -43,8 +43,9 @@ pub use extension_persistence::{
     classify_extension_store_names, matching_extension_store_names,
 };
 pub use extension_session_protocol::{
-    ExtensionSessionRequestValidation, WebsiteLoginAccountOption, WebsiteLoginOptions,
-    WebsiteLoginOptionsDecodeError, decode_website_login_options_json,
+    ExtensionSessionRequestValidation, ExtensionSessionRequestWire, WebsiteLoginAccountOption,
+    WebsiteLoginOptions, WebsiteLoginOptionsDecodeError, WebsiteLoginOptionsWireValue,
+    decode_website_login_options, decode_website_login_options_json,
     validate_extension_session_request_json,
 };
 pub use oauth_origin_policy::{

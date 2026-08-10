@@ -2,15 +2,48 @@
 
 #![allow(dead_code)] // Serde reads the private wire fields during concrete decoding.
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de::Error as _};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
+use zeroize::Zeroize;
 
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExtensionSessionRequestValidation {
     Accepted,
     Rejected,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(transparent)]
+struct SensitiveString(String);
+
+impl Zeroize for SensitiveString {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+impl Drop for SensitiveString {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(transparent)]
+struct SensitiveBytes(Vec<u8>);
+
+impl Zeroize for SensitiveBytes {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+impl Drop for SensitiveBytes {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -22,8 +55,37 @@ enum QueuePriority {
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct QueueMetadata {
+    #[serde(default, deserialize_with = "deserialize_optional_finite_f64")]
     queue_expires_at: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_optional_non_null")]
     queue_priority: Option<QueuePriority>,
+}
+
+fn deserialize_optional_non_null<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
+}
+
+fn deserialize_finite_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = f64::deserialize(deserializer)?;
+    if value.is_finite() {
+        Ok(value)
+    } else {
+        Err(D::Error::custom("queue expiry must be finite"))
+    }
+}
+
+fn deserialize_optional_finite_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserialize_finite_f64(deserializer).map(Some)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -64,10 +126,10 @@ struct EmptyPayload {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FinishPasskeySetupPayload {
-    credential_id: Vec<u8>,
-    user_handle: Vec<u8>,
-    prf_input: Vec<u8>,
-    prf_output: Vec<u8>,
+    credential_id: SensitiveBytes,
+    user_handle: SensitiveBytes,
+    prf_input: SensitiveBytes,
+    prf_output: SensitiveBytes,
     device_mode: u32,
     #[serde(flatten)]
     queue: QueueMetadata,
@@ -76,9 +138,9 @@ struct FinishPasskeySetupPayload {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RecoverPasskeyPayload {
-    credential_id: Vec<u8>,
-    user_handle: Vec<u8>,
-    prf_output: Vec<u8>,
+    credential_id: SensitiveBytes,
+    user_handle: SensitiveBytes,
+    prf_output: SensitiveBytes,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
@@ -86,14 +148,14 @@ struct RecoverPasskeyPayload {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UnlockPasskeyPayload {
-    prf_output: Vec<u8>,
+    prf_output: SensitiveBytes,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 struct PinPayload {
-    pin: String,
+    pin: SensitiveString,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
@@ -184,7 +246,7 @@ struct SecretIdGrantPayload {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OtpauthPayload {
-    otpauth_uri: String,
+    otpauth_uri: SensitiveString,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
@@ -194,7 +256,7 @@ struct OtpauthPayload {
 struct OtpauthGrantPayload {
     #[serde(flatten)]
     grant: VaultGrant,
-    otpauth_uri: String,
+    otpauth_uri: SensitiveString,
     origin: String,
     #[serde(flatten)]
     queue: QueueMetadata,
@@ -206,7 +268,7 @@ struct BackupAttachPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     secret_id: String,
-    codes: Vec<String>,
+    codes: Vec<SensitiveString>,
     mode: String,
     #[serde(flatten)]
     queue: QueueMetadata,
@@ -217,8 +279,8 @@ struct LoginSavePlanPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     origin: String,
-    username: String,
-    password: String,
+    username: SensitiveString,
+    password: SensitiveString,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
@@ -264,8 +326,10 @@ struct PasskeyCeremonyPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     request_id: String,
-    request_json: String,
+    request_json: SensitiveString,
+    #[serde(deserialize_with = "deserialize_finite_f64")]
     queue_expires_at: f64,
+    #[serde(default, deserialize_with = "deserialize_optional_non_null")]
     queue_priority: Option<QueuePriority>,
 }
 
@@ -334,11 +398,83 @@ enum ExtensionSessionRequest {
     Lock(EmptyPayload),
 }
 
+/// A concrete session request decoded directly from the browser value.
+///
+/// The inner wire representation stays private so callers cannot use it as a
+/// generic value bag. Sensitive allocations are erased as soon as validation
+/// finishes.
+#[derive(Debug, Deserialize)]
+#[serde(transparent)]
+pub struct ExtensionSessionRequestWire(ExtensionSessionRequest);
+
+impl Drop for ExtensionSessionRequestWire {
+    fn drop(&mut self) {
+        match &mut self.0 {
+            ExtensionSessionRequest::FinishPasskeySetup(payload) => {
+                payload.credential_id.zeroize();
+                payload.user_handle.zeroize();
+                payload.prf_input.zeroize();
+                payload.prf_output.zeroize();
+            }
+            ExtensionSessionRequest::RecoverPasskey(payload) => {
+                payload.credential_id.zeroize();
+                payload.user_handle.zeroize();
+                payload.prf_output.zeroize();
+            }
+            ExtensionSessionRequest::UnlockPasskey(payload) => payload.prf_output.zeroize(),
+            ExtensionSessionRequest::CreatePin(payload)
+            | ExtensionSessionRequest::UnlockPin(payload) => payload.pin.zeroize(),
+            ExtensionSessionRequest::SealIdentityHandoff(payload) => {
+                payload.recipient_public_key.zeroize();
+                payload.nonce.zeroize();
+                payload.expected_device_id.zeroize();
+                payload.expected_device_public_key.zeroize();
+                payload.expected_device_signing_public_key.zeroize();
+            }
+            ExtensionSessionRequest::AuthenticatorEnrollPreview(payload)
+            | ExtensionSessionRequest::AuthenticatorEnrollCode(payload) => {
+                payload.otpauth_uri.zeroize();
+            }
+            ExtensionSessionRequest::AuthenticatorEnrollConfirm(payload) => {
+                payload.otpauth_uri.zeroize();
+            }
+            ExtensionSessionRequest::AuthenticatorBackupAttach(payload) => {
+                payload.codes.zeroize();
+            }
+            ExtensionSessionRequest::PlanLoginSave(payload) => {
+                payload.username.zeroize();
+                payload.password.zeroize();
+            }
+            ExtensionSessionRequest::RegisterPasskey(payload)
+            | ExtensionSessionRequest::AssertPasskey(payload) => {
+                payload.request_json.zeroize();
+            }
+            ExtensionSessionRequest::Reset(_)
+            | ExtensionSessionRequest::MigrateAuthProviders(_)
+            | ExtensionSessionRequest::Status(_)
+            | ExtensionSessionRequest::BeginPasskeySetup(_)
+            | ExtensionSessionRequest::UnlockOptions(_)
+            | ExtensionSessionRequest::ImportVault(_)
+            | ExtensionSessionRequest::UpdateVault(_)
+            | ExtensionSessionRequest::ListPasskeys(_)
+            | ExtensionSessionRequest::ListLogins(_)
+            | ExtensionSessionRequest::RevealLogin(_)
+            | ExtensionSessionRequest::ListAuthenticators(_)
+            | ExtensionSessionRequest::AuthenticatorCode(_)
+            | ExtensionSessionRequest::PendingLoginSave(_)
+            | ExtensionSessionRequest::CommitLoginSave(_)
+            | ExtensionSessionRequest::DismissLoginSave(_)
+            | ExtensionSessionRequest::CancelPasskey(_)
+            | ExtensionSessionRequest::Lock(_) => {}
+        }
+    }
+}
+
 #[must_use]
 pub fn validate_extension_session_request_json(
     serialized: &str,
 ) -> ExtensionSessionRequestValidation {
-    if serde_json::from_str::<ExtensionSessionRequest>(serialized).is_ok() {
+    if serde_json::from_str::<ExtensionSessionRequestWire>(serialized).is_ok() {
         ExtensionSessionRequestValidation::Accepted
     } else {
         ExtensionSessionRequestValidation::Rejected
@@ -372,6 +508,11 @@ struct WebsiteLoginOptionsWire {
     accounts: Option<Vec<WebsiteLoginAccountWire>>,
     reason: Option<String>,
 }
+
+/// Concrete companion response decoded at the browser runtime boundary.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(transparent)]
+pub struct WebsiteLoginOptionsWireValue(WebsiteLoginOptionsWire);
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
@@ -408,8 +549,15 @@ pub enum WebsiteLoginOptionsDecodeError {
 pub fn decode_website_login_options_json(
     serialized: &str,
 ) -> Result<WebsiteLoginOptions, WebsiteLoginOptionsDecodeError> {
-    let wire = serde_json::from_str::<WebsiteLoginOptionsWire>(serialized)
+    let wire = serde_json::from_str::<WebsiteLoginOptionsWireValue>(serialized)
         .map_err(|_| WebsiteLoginOptionsDecodeError::Malformed)?;
+    decode_website_login_options(wire)
+}
+
+pub fn decode_website_login_options(
+    wire: WebsiteLoginOptionsWireValue,
+) -> Result<WebsiteLoginOptions, WebsiteLoginOptionsDecodeError> {
+    let WebsiteLoginOptionsWireValue(wire) = wire;
     if !wire.ok {
         return wire
             .reason
@@ -491,6 +639,20 @@ mod tests {
         );
         assert_eq!(
             validate_extension_session_request_json(&valid.replace("interactive", "background")),
+            ExtensionSessionRequestValidation::Rejected
+        );
+        assert_eq!(
+            validate_extension_session_request_json(&valid.replace(
+                r#""queuePriority":"interactive""#,
+                r#""queueExpiresAt":null,"queuePriority":"interactive""#,
+            ),),
+            ExtensionSessionRequestValidation::Rejected
+        );
+        assert_eq!(
+            validate_extension_session_request_json(&valid.replace(
+                r#""queuePriority":"interactive""#,
+                r#""queuePriority":null"#
+            ),),
             ExtensionSessionRequestValidation::Rejected
         );
     }

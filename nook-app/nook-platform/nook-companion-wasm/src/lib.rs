@@ -7,21 +7,31 @@
     clippy::uninlined_format_args
 )]
 
-use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 
-#[wasm_bindgen(js_name = validateExtensionSessionRequestJson)]
+#[wasm_bindgen(js_name = validateExtensionSessionRequest)]
 #[must_use]
-pub fn validate_extension_session_request_json(
-    serialized: &str,
+pub fn validate_extension_session_request(
+    request: JsValue,
 ) -> nook_companion_core::ExtensionSessionRequestValidation {
-    nook_companion_core::validate_extension_session_request_json(serialized)
+    if serde_wasm_bindgen::from_value::<nook_companion_core::ExtensionSessionRequestWire>(request)
+        .is_ok()
+    {
+        nook_companion_core::ExtensionSessionRequestValidation::Accepted
+    } else {
+        nook_companion_core::ExtensionSessionRequestValidation::Rejected
+    }
 }
 
-#[wasm_bindgen(js_name = decodeWebsiteLoginOptionsJson)]
-pub fn decode_website_login_options_json(
-    serialized: &str,
+#[wasm_bindgen(js_name = decodeWebsiteLoginOptions)]
+pub fn decode_website_login_options(
+    response: JsValue,
 ) -> Result<nook_companion_core::WebsiteLoginOptions, wasm_bindgen::JsError> {
-    nook_companion_core::decode_website_login_options_json(serialized)
+    let wire = serde_wasm_bindgen::from_value::<nook_companion_core::WebsiteLoginOptionsWireValue>(
+        response,
+    )
+    .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+    nook_companion_core::decode_website_login_options(wire)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 

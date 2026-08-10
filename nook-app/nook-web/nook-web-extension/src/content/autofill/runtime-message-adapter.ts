@@ -1,6 +1,6 @@
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import {
-  decodeWebsiteLoginOptionsJson,
+  decodeWebsiteLoginOptions,
   type WebsiteLoginOptions,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
@@ -67,11 +67,9 @@ export async function sendLoginOptionsRuntimeMessage(
   }
   try {
     await companionWasmReady
-    const serialized = JSON.stringify(delivery.response)
-    if (typeof serialized !== 'string') return unavailable()
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeWebsiteLoginOptionsJson(serialized),
+      response: decodeWebsiteLoginOptions(delivery.response),
     }
   } catch {
     return unavailable()
