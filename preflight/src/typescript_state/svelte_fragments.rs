@@ -3,7 +3,9 @@ use super::{
     typescript_code_null_token_lines, typescript_code_undefined_token_lines,
 };
 
-pub(super) fn svelte_undefined_token_lines(source: &str) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+pub(super) fn svelte_undefined_token_lines(
+    source: &str,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
     let Some(tree) = parser.parse(source, None) else {
@@ -15,7 +17,9 @@ pub(super) fn svelte_undefined_token_lines(source: &str) -> Result<Vec<usize>, t
     lines.dedup();
     Ok(lines)
 }
-pub(super) fn svelte_null_token_lines(source: &str) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+pub(super) fn svelte_null_token_lines(
+    source: &str,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
     let Some(tree) = parser.parse(source, None) else {
@@ -34,7 +38,9 @@ pub(super) fn svelte_null_token_lines(source: &str) -> Result<Vec<usize>, tree_s
     Ok(lines)
 }
 
-pub(super) fn svelte_mutable_void_state_lines(source: &str) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+pub(super) fn svelte_mutable_void_state_lines(
+    source: &str,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
     let Some(tree) = parser.parse(source, None) else {

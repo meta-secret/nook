@@ -23,8 +23,8 @@ use literal_nodes::{
 };
 use source_files::collect_authored_source_files;
 use svelte_fragments::{
-    svelte_generic_optional_state_lines, svelte_mutable_void_state_lines,
-    svelte_null_token_lines, svelte_undefined_token_lines,
+    svelte_generic_optional_state_lines, svelte_mutable_void_state_lines, svelte_null_token_lines,
+    svelte_undefined_token_lines,
 };
 use svelte_raw_discriminants::svelte_raw_string_discriminant_lines;
 
@@ -394,7 +394,6 @@ fn collect_enum_string_values(
         collect_enum_string_values(child, source, values);
     }
 }
-
 
 fn typescript_code_generic_optional_state_lines(
     source: &str,

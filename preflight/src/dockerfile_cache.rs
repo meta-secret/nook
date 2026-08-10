@@ -5,8 +5,6 @@ use std::path::{Path, PathBuf};
 
 const MOUNT_PREFIX: &str = "--mount=";
 
-}
-
 /// Finds forbidden `BuildKit` cache mounts in repository Dockerfiles.
 ///
 /// # Errors

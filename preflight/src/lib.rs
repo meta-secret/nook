@@ -27,7 +27,6 @@ use std::path::{Path, PathBuf};
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 
-
 #[derive(Debug, Eq, PartialEq)]
 pub struct Violation {
     pub path: PathBuf,

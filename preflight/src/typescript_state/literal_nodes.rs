@@ -1,4 +1,7 @@
-pub(super) fn string_literal_value<'a>(node: tree_sitter::Node<'_>, source: &'a str) -> Option<&'a str> {
+pub(super) fn string_literal_value<'a>(
+    node: tree_sitter::Node<'_>,
+    source: &'a str,
+) -> Option<&'a str> {
     if !is_string_literal_expression(node) {
         return None;
     }
@@ -21,7 +24,10 @@ fn contains_template_substitution(node: tree_sitter::Node<'_>) -> bool {
         .any(contains_template_substitution)
 }
 
-pub(super) fn union_contains_direct_string_literal(node: tree_sitter::Node<'_>, source: &str) -> bool {
+pub(super) fn union_contains_direct_string_literal(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+) -> bool {
     if is_string_literal_type(node, source) {
         return true;
     }
