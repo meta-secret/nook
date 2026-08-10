@@ -13,6 +13,11 @@ import {
   type WebsitePasskeyVaultOption,
 } from '../../lib/webauthn-messages'
 import {
+  extensionSessionInteractiveDeadline,
+  extensionSessionProbeDeadline,
+  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+} from '../../offscreen/session-request-adapter'
+import {
   passkeyAccountsFromSession,
   passkeyCeremonyResponseFromSession,
 } from './passkey-session-adapter'
@@ -65,7 +70,7 @@ async function matchingPasskeyAccountCountForOrigin({
   }
   const nookTypedArgs0_0: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
-    payload: { queueExpiresAt },
+    payload: { queue: extensionSessionProbeDeadline(queueExpiresAt) },
   }
   const status = await sendSessionMessage(nookTypedArgs0_0)
   if (
@@ -79,7 +84,12 @@ async function matchingPasskeyAccountCountForOrigin({
   for (const grant of grants) {
     const nookTypedArgs0_1: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-list-passkeys',
-      payload: { ...grant, rpId: hostname, origin, queueExpiresAt },
+      payload: {
+        ...grant,
+        rpId: hostname,
+        origin,
+        queue: extensionSessionProbeDeadline(queueExpiresAt),
+      },
     }
     const response = await sendSessionMessage(nookTypedArgs0_1)
     count += passkeyAccountsFromSession(response).length
@@ -146,7 +156,9 @@ export async function websitePasskeyOptions({
   await ensureExtensionSessionDocument()
   const nookTypedArgs0_3: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
-    payload: { queueExpiresAt: message.payload.expiresAt },
+    payload: {
+      queue: extensionSessionProbeDeadline(message.payload.expiresAt),
+    },
   }
   const status = await sendSessionMessage(nookTypedArgs0_3)
   if (
@@ -178,7 +190,7 @@ export async function websitePasskeyOptions({
         ...grant,
         rpId: context.rpId,
         origin: context.origin,
-        queueExpiresAt: message.payload.expiresAt,
+        queue: extensionSessionProbeDeadline(message.payload.expiresAt),
       },
     }
     const response = await sendSessionMessage(nookTypedArgs0_4)
@@ -263,8 +275,7 @@ export async function performWebsitePasskey({
         ...grant,
         requestId: message.payload.requestId,
         requestJson: websitePasskeyRequestJson(requestJsonArgs),
-        queueExpiresAt: message.payload.expiresAt,
-        queuePriority: 'interactive',
+        queue: extensionSessionInteractiveDeadline(message.payload.expiresAt),
       },
     }
     return passkeyCeremonyResponseFromSession(
@@ -293,7 +304,10 @@ export async function cancelWebsitePasskey({
   await ensureExtensionSessionDocument()
   const nookTypedArgs0_8: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-cancel-passkey',
-    payload: { requestId: message.payload.requestId },
+    payload: {
+      requestId: message.payload.requestId,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    },
   }
   await sendSessionMessage(nookTypedArgs0_8)
   return { ok: true }

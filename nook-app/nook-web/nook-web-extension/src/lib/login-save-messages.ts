@@ -26,11 +26,35 @@ export type WebsiteLoginSavePendingResponse =
     }
   | { ok: false; reason: string }
 
+export enum WebsiteLoginSaveOfferResponseKind {
+  OfferAvailable = 'offer-available',
+  NotRequired = 'not-required',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+  Rejected = 'rejected',
+}
+
 export type WebsiteLoginSaveOfferResponse =
-  { ok: true; offer: WebsiteLoginSaveOfferView } | { ok: true } | { ok: false }
+  | {
+      kind: WebsiteLoginSaveOfferResponseKind.OfferAvailable
+      offer: WebsiteLoginSaveOfferView
+    }
+  | {
+      kind:
+        | WebsiteLoginSaveOfferResponseKind.NotRequired
+        | WebsiteLoginSaveOfferResponseKind.Locked
+        | WebsiteLoginSaveOfferResponseKind.Unavailable
+    }
+  | { kind: WebsiteLoginSaveOfferResponseKind.Rejected; reason: string }
+
+export enum WebsiteLoginSaveActionResponseKind {
+  Completed = 'completed',
+  Rejected = 'rejected',
+}
 
 export type WebsiteLoginSaveActionResponse =
-  { ok: true } | { ok: false; reason?: string }
+  | { kind: WebsiteLoginSaveActionResponseKind.Completed }
+  | { kind: WebsiteLoginSaveActionResponseKind.Rejected; reason: string }
 
 function isWebsiteLoginSaveOfferView(
   offer: object,
@@ -53,13 +77,28 @@ function isWebsiteLoginSaveOfferView(
 export function isWebsiteLoginSaveOfferResponse(
   response: object,
 ): response is WebsiteLoginSaveOfferResponse {
-  if (!('ok' in response) || typeof response.ok !== 'boolean') return false
-  if (response.ok === false || !('offer' in response)) return true
-  return Boolean(
-    response.offer &&
-    typeof response.offer === 'object' &&
-    isWebsiteLoginSaveOfferView(response.offer),
-  )
+  if (!('kind' in response)) return false
+  switch (response.kind) {
+    case WebsiteLoginSaveOfferResponseKind.OfferAvailable:
+      return Boolean(
+        'offer' in response &&
+        response.offer &&
+        typeof response.offer === 'object' &&
+        isWebsiteLoginSaveOfferView(response.offer),
+      )
+    case WebsiteLoginSaveOfferResponseKind.NotRequired:
+    case WebsiteLoginSaveOfferResponseKind.Locked:
+    case WebsiteLoginSaveOfferResponseKind.Unavailable:
+      return !('offer' in response) && !('reason' in response)
+    case WebsiteLoginSaveOfferResponseKind.Rejected:
+      return (
+        'reason' in response &&
+        typeof response.reason === 'string' &&
+        response.reason.length > 0
+      )
+    default:
+      return false
+  }
 }
 
 export function isWebsiteLoginSavePendingResponse(
@@ -87,12 +126,15 @@ export function isWebsiteLoginSavePendingResponse(
 export function isWebsiteLoginSaveActionResponse(
   response: object,
 ): response is WebsiteLoginSaveActionResponse {
+  if (!('kind' in response)) return false
+  if (response.kind === WebsiteLoginSaveActionResponseKind.Completed) {
+    return !('reason' in response)
+  }
   return (
-    'ok' in response &&
-    typeof response.ok === 'boolean' &&
-    (response.ok ||
-      !('reason' in response) ||
-      typeof response.reason === 'string')
+    response.kind === WebsiteLoginSaveActionResponseKind.Rejected &&
+    'reason' in response &&
+    typeof response.reason === 'string' &&
+    response.reason.length > 0
   )
 }
 

@@ -9,6 +9,8 @@ import { AuthenticationOutcomeVerdict } from '../../../../nook-web-shared/src/ex
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import {
   NookWebsiteLoginSaveDecision,
+  WebsiteLoginSaveActionResponseKind,
+  WebsiteLoginSaveOfferResponseKind,
   WebsiteLoginSavePendingState,
   isWebsiteLoginSaveActionResponse,
   isWebsiteLoginSaveOfferResponse,
@@ -23,12 +25,9 @@ import type {
   AuthenticationOutcomeVerdictView,
 } from '../../lib/outcome-evidence-messages'
 import {
-  isAuthenticationOutcomeResponse,
-  type AuthenticationOutcomeResponse,
-} from '../../lib/outcome-evidence-messages'
-import {
   RuntimeMessageDeliveryKind,
   type DecodedRuntimeMessageArgs,
+  sendAuthenticationOutcomeRuntimeMessage,
   sendDecodedRuntimeMessage,
   sendRuntimeMessageWithoutResponse,
 } from './login-passkey-actions'
@@ -128,12 +127,10 @@ async function classifyOutcomeEvidence(
       timeoutMs: OUTCOME_EVIDENCE_TIMEOUT_MS,
     },
   }
-  const sendArgs: DecodedRuntimeMessageArgs<AuthenticationOutcomeResponse> = {
-    message,
-    decode: isAuthenticationOutcomeResponse,
-  }
-  const delivery =
-    await sendDecodedRuntimeMessage<AuthenticationOutcomeResponse>(sendArgs)
+  const sendMessage: Parameters<
+    typeof sendAuthenticationOutcomeRuntimeMessage
+  >[0] = message
+  const delivery = await sendAuthenticationOutcomeRuntimeMessage(sendMessage)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok ||
@@ -239,7 +236,7 @@ async function stageSaveForCredentials(
     return
   }
   const { response } = delivery
-  if (response.ok !== true || !('offer' in response)) return
+  if (response.kind !== WebsiteLoginSaveOfferResponseKind.OfferAvailable) return
   const { offer } = response
   if (saveOfferState.dismissedOfferIds.has(offer.offerId)) return
   beginPendingSaveWatch(offer)
@@ -427,7 +424,8 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
       .then((delivery) => {
         if (
           delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-          !delivery.response?.ok
+          delivery.response.kind !==
+            WebsiteLoginSaveActionResponseKind.Completed
         ) {
           description.textContent = translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed,

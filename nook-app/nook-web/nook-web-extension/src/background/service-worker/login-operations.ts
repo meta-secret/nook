@@ -1,7 +1,11 @@
 import {
   NookWebsiteLoginSaveDecision,
+  WebsiteLoginSaveActionResponseKind,
+  WebsiteLoginSaveOfferResponseKind,
   WebsiteLoginSavePendingState,
+  type WebsiteLoginSaveActionResponse,
   type WebsiteLoginSaveOfferView,
+  type WebsiteLoginSaveOfferResponse,
   type WebsiteLoginSavePendingResponse,
 } from '../../lib/login-save-messages'
 import {
@@ -10,6 +14,10 @@ import {
   type WebsiteLoginFillResponse,
 } from '../../lib/login-fill-messages'
 import { classifyAuthenticationOutcomeWithDefaultTimeout } from '../vault-runtime'
+import {
+  extensionSessionInteractiveDeadline,
+  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+} from '../../offscreen/session-request-adapter'
 import {
   LoginPickerLoadKind,
   authorizedWebsiteGrant,
@@ -40,18 +48,12 @@ import {
   isLoginPickerPageAcknowledgement,
   type LoginOperationFailure,
   type LoginOperationSuccess,
-  type LoginSaveActionResponse,
 } from './login-session-response-adapter'
 
 enum LoginPickerOpenStatus {
   Ready = 'ready',
   Locked = 'locked',
   Unavailable = 'unavailable',
-}
-enum LoginSaveOfferStatus {
-  Unavailable = 'unavailable',
-  Locked = 'locked',
-  Ready = 'ready',
 }
 type LoginPickerOpenResponse =
   | LoginOperationFailure
@@ -68,18 +70,6 @@ type LoginPickerOpenResponse =
 type LoginPickerQueryResponse =
   | LoginOperationFailure
   | { ok: true; origin: string; accounts: WebsiteLoginAccountOption[] }
-type LoginSaveOfferResponse =
-  | LoginOperationFailure
-  | {
-      ok: true
-      status: LoginSaveOfferStatus.Unavailable | LoginSaveOfferStatus.Locked
-    }
-  | {
-      ok: true
-      status: LoginSaveOfferStatus.Ready
-      decision: NookWebsiteLoginSaveDecision
-      offer?: WebsiteLoginSaveOfferView
-    }
 export async function openWebsiteLoginPicker({
   message,
   sender,
@@ -291,7 +281,7 @@ export async function websiteLoginSaveOffer({
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<LoginSaveOfferResponse> {
+}): Promise<WebsiteLoginSaveOfferResponse> {
   const pendingPassword = { value: message.payload.password }
   message.payload.password = ''
   const nookTypedArgs0_5: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
@@ -300,18 +290,21 @@ export async function websiteLoginSaveOffer({
   }
   if (!isAuthorizedWebsiteSender(nookTypedArgs0_5)) {
     pendingPassword.value = ''
-    return { ok: false, reason: 'login-save-forbidden-origin' }
+    return {
+      kind: WebsiteLoginSaveOfferResponseKind.Rejected,
+      reason: 'login-save-forbidden-origin',
+    }
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
     pendingPassword.value = ''
-    return { ok: true, status: LoginSaveOfferStatus.Unavailable }
+    return { kind: WebsiteLoginSaveOfferResponseKind.Unavailable }
   }
   await ensureExtensionSessionDocument()
   const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
   const nookTypedArgs0_6: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
-    payload: { queueExpiresAt, queuePriority: 'interactive' },
+    payload: { queue: extensionSessionInteractiveDeadline(queueExpiresAt) },
   }
   const status = await sendSessionMessage(nookTypedArgs0_6)
   if (
@@ -321,7 +314,7 @@ export async function websiteLoginSaveOffer({
   ) {
     pendingPassword.value = ''
     openCompanionLauncherBestEffort()
-    return { ok: true, status: LoginSaveOfferStatus.Locked }
+    return { kind: WebsiteLoginSaveOfferResponseKind.Locked }
   }
 
   // Prefer the selected/ready vault, then the first password-filling grant.
@@ -333,6 +326,7 @@ export async function websiteLoginSaveOffer({
       origin: message.payload.origin,
       username: message.payload.username,
       password: pendingPassword.value,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
   const response = await sendSessionMessage(nookTypedArgs0_7)
@@ -345,17 +339,13 @@ export async function websiteLoginSaveOffer({
     !('decision' in response) ||
     typeof response.decision !== 'number'
   ) {
-    return { ok: false, reason: 'login-save-plan-failed' }
-  }
-  if (
-    response.decision === NookWebsiteLoginSaveDecision.AlreadySaved ||
-    response.decision === NookWebsiteLoginSaveDecision.Invalid
-  ) {
     return {
-      ok: true,
-      status: LoginSaveOfferStatus.Ready,
-      decision: response.decision,
+      kind: WebsiteLoginSaveOfferResponseKind.Rejected,
+      reason: 'login-save-plan-failed',
     }
+  }
+  if (response.decision === NookWebsiteLoginSaveDecision.AlreadySaved) {
+    return { kind: WebsiteLoginSaveOfferResponseKind.NotRequired }
   }
   if (
     (response.decision !== NookWebsiteLoginSaveDecision.Create &&
@@ -363,7 +353,10 @@ export async function websiteLoginSaveOffer({
     !('offerId' in response) ||
     typeof response.offerId !== 'string'
   ) {
-    return { ok: false, reason: 'login-save-plan-failed' }
+    return {
+      kind: WebsiteLoginSaveOfferResponseKind.Rejected,
+      reason: 'login-save-plan-failed',
+    }
   }
   const offer: WebsiteLoginSaveOfferView = {
     offerId: response.offerId,
@@ -372,9 +365,7 @@ export async function websiteLoginSaveOffer({
     vaultName: grant.vaultName,
   }
   return {
-    ok: true,
-    status: LoginSaveOfferStatus.Ready,
-    decision: response.decision,
+    kind: WebsiteLoginSaveOfferResponseKind.OfferAvailable,
     offer,
   }
 }
@@ -400,7 +391,10 @@ export async function websiteLoginSavePending({
   await ensureExtensionSessionDocument()
   const nookTypedArgs0_9: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-pending-login-save',
-    payload: { origin: message.payload.origin },
+    payload: {
+      origin: message.payload.origin,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    },
   }
   const response = await sendSessionMessage(nookTypedArgs0_9)
   if (
@@ -464,32 +458,40 @@ export async function websiteLoginSaveCommit({
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<LoginSaveActionResponse> {
+}): Promise<WebsiteLoginSaveActionResponse> {
   const nookTypedArgs0_10: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin: message.payload.origin,
   }
   if (!isAuthorizedWebsiteSender(nookTypedArgs0_10)) {
-    return { ok: false, reason: 'login-save-forbidden-origin' }
+    return {
+      kind: WebsiteLoginSaveActionResponseKind.Rejected,
+      reason: 'login-save-forbidden-origin',
+    }
   }
   const verdict = await classifyAuthenticationOutcomeWithDefaultTimeout(
     message.payload.evidence,
   )
   if (!verdict.allowsCredentialCommit) {
     return {
-      ok: false,
+      kind: WebsiteLoginSaveActionResponseKind.Rejected,
       reason: 'login-save-evidence-insufficient',
-      verdict: verdict.verdict,
     }
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
-    return { ok: false, reason: 'login-save-unavailable' }
+    return {
+      kind: WebsiteLoginSaveActionResponseKind.Rejected,
+      reason: 'login-save-unavailable',
+    }
   }
   await ensureExtensionSessionDocument()
   const nookTypedArgs0_11: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-pending-login-save',
-    payload: { origin: message.payload.origin },
+    payload: {
+      origin: message.payload.origin,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    },
   }
   const pending = await sendSessionMessage(nookTypedArgs0_11)
   let grant = grants[0]!
@@ -512,7 +514,7 @@ export async function websiteLoginSaveCommit({
   }
   const nookTypedArgs0_12: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
-    payload: {},
+    payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
   const status = await sendSessionMessage(nookTypedArgs0_12)
   if (
@@ -521,7 +523,10 @@ export async function websiteLoginSaveCommit({
     !isUnlockedSessionStatus(status)
   ) {
     openCompanionLauncherBestEffort()
-    return { ok: false, reason: 'login-save-locked' }
+    return {
+      kind: WebsiteLoginSaveActionResponseKind.Rejected,
+      reason: 'login-save-locked',
+    }
   }
   const nookTypedArgs0_13: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-commit-login-save',
@@ -529,11 +534,18 @@ export async function websiteLoginSaveCommit({
       ...grant,
       origin: message.payload.origin,
       offerId: message.payload.offerId,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
-  return decodeLoginSaveActionResponse(
+  const action = decodeLoginSaveActionResponse(
     await sendSessionMessage(nookTypedArgs0_13),
   )
+  return action.ok
+    ? { kind: WebsiteLoginSaveActionResponseKind.Completed }
+    : {
+        kind: WebsiteLoginSaveActionResponseKind.Rejected,
+        reason: action.reason,
+      }
 }
 
 export async function websiteLoginSaveDismiss({
@@ -542,13 +554,16 @@ export async function websiteLoginSaveDismiss({
 }: {
   message: { payload: { origin: string; offerId: string } }
   sender: chrome.runtime.MessageSender
-}): Promise<LoginOperationSuccess | LoginOperationFailure> {
+}): Promise<WebsiteLoginSaveActionResponse> {
   const nookTypedArgs0_14: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin: message.payload.origin,
   }
   if (!isAuthorizedWebsiteSender(nookTypedArgs0_14)) {
-    return { ok: false, reason: 'login-save-forbidden-origin' }
+    return {
+      kind: WebsiteLoginSaveActionResponseKind.Rejected,
+      reason: 'login-save-forbidden-origin',
+    }
   }
   await ensureExtensionSessionDocument()
   const nookTypedArgs0_15: Parameters<typeof sendSessionMessage>[0] = {
@@ -556,11 +571,18 @@ export async function websiteLoginSaveDismiss({
     payload: {
       origin: message.payload.origin,
       offerId: message.payload.offerId,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
-  return decodeLoginOperationResponse(
+  const action = decodeLoginOperationResponse(
     await sendSessionMessage(nookTypedArgs0_15),
   )
+  return action.ok
+    ? { kind: WebsiteLoginSaveActionResponseKind.Completed }
+    : {
+        kind: WebsiteLoginSaveActionResponseKind.Rejected,
+        reason: action.reason,
+      }
 }
 
 export async function websiteLoginFill({
@@ -597,6 +619,7 @@ export async function websiteLoginFill({
       ...access.grant,
       origin: message.payload.origin,
       secretId: message.payload.secretId,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
   const response = await sendSessionMessage(nookTypedArgs0_17)

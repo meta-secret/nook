@@ -22,6 +22,7 @@ import {
   type DecodedRuntimeMessageArgs,
   type RuntimeMessageDelivery,
 } from './autofill/login-passkey-actions'
+import type { AuthenticationOutcomeResponse } from '../lib/outcome-evidence-messages'
 import {
   appendButtonRow,
   clearEnrollmentSection,
@@ -58,6 +59,9 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   sendDecodedRuntimeMessage: <Response extends object>(
     args: DecodedRuntimeMessageArgs<Response>,
   ) => Promise<RuntimeMessageDelivery<Response>>
+  sendAuthenticationOutcomeRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>>
   sendRuntimeMessageWithoutResponse: (message: object) => void
   translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (args: {

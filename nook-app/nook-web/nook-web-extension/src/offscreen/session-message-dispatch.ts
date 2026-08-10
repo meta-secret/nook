@@ -15,7 +15,11 @@ import {
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import {
   clearExtensionSessionSensitiveRequest,
+  ExtensionSessionQueueKind,
+  ExtensionSessionQueuePriority,
+  type ExtensionSessionNonImportRequest,
   type ExtensionSessionRequest,
+  type ExtensionSessionTransportRequest,
   ExtensionSessionRequestParseKind,
   ExtensionSessionSensitiveStageKind,
   parseExtensionSessionRequest,
@@ -34,7 +38,7 @@ enum SensitivePayloadResidencyKind {
 type SensitivePayloadResidency =
   | {
       kind: SensitivePayloadResidencyKind.Resident
-      request: ExtensionSessionRequest
+      request: ExtensionSessionNonImportRequest
     }
   | { kind: SensitivePayloadResidencyKind.Cleared }
 
@@ -103,15 +107,18 @@ type RequestedQueueExpiry =
   | { kind: RequestedQueueExpiryKind.Requested; expiresAt: number }
 
 function requestedQueueExpiry(
-  request: ExtensionSessionRequest,
+  request: ExtensionSessionTransportRequest,
 ): RequestedQueueExpiry {
-  const value = request.payload.queueExpiresAt
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+  const { queue } = request.payload
+  if (queue.kind === ExtensionSessionQueueKind.MessageDefault) {
     return { kind: RequestedQueueExpiryKind.NotRequested }
   }
   return {
     kind: RequestedQueueExpiryKind.Requested,
-    expiresAt: Math.min(value, Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS),
+    expiresAt: Math.min(
+      queue.expiresAt,
+      Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+    ),
   }
 }
 
@@ -144,7 +151,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
   private enqueueSensitiveMessage({
     request,
   }: {
-    request: ExtensionSessionRequest
+    request: ExtensionSessionNonImportRequest
   }): Promise<SessionResponse> {
     let payloadResidency: SensitivePayloadResidency = {
       kind: SensitivePayloadResidencyKind.Resident,
@@ -188,8 +195,8 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
     message,
   }: {
     message: Extract<
-      ExtensionSessionRequest,
-      { type: ExtensionSessionMessageType.ImportVault }
+      ExtensionSessionTransportRequest,
+      { type: (typeof ExtensionSessionMessageType)['ImportVault'] }
     >
   }): Promise<ExtensionSessionDispatchResponse<SessionResponse>> {
     const payload = message.payload
@@ -198,7 +205,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
       payload.providers = []
       return { ok: false, error: 'invalid-provider-payload' }
     }
-    const providerCandidate: StorageProvider[] = payload.providers
+    const providerCandidate: SerializedStorageProvider[] = payload.providers
     const stagingArgs: Parameters<typeof stageProviderCredentials>[0] = {
       providers: providerCandidate,
       decode: this.context.decodeProviders,
@@ -276,7 +283,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
   }
 
   enqueue(
-    message: ExtensionSessionRequest,
+    message: ExtensionSessionTransportRequest,
   ): Promise<ExtensionSessionDispatchResponse<SessionResponse>> {
     const type = message.type
     if (type === ExtensionSessionMessageType.ImportVault) {
@@ -288,7 +295,9 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
     const requestedExpiry = requestedQueueExpiry(message)
     const priority =
       requestedExpiry.kind === RequestedQueueExpiryKind.Requested
-        ? message.payload.queuePriority === 'interactive'
+        ? message.payload.queue.kind === ExtensionSessionQueueKind.Deadline &&
+          message.payload.queue.priority ===
+            ExtensionSessionQueuePriority.Interactive
           ? SessionOperationPriority.Interactive
           : SessionOperationPriority.Probe
         : sessionMessagePriority(type)

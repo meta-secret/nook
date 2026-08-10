@@ -31,6 +31,7 @@ import {
 
 export {
   RuntimeMessageDeliveryKind,
+  sendAuthenticationOutcomeRuntimeMessage,
   sendDecodedRuntimeMessage,
   sendRuntimeMessageWithoutResponse,
 } from './runtime-message-adapter'

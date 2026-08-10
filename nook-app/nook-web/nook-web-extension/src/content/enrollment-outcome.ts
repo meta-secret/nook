@@ -1,11 +1,9 @@
 import { fillOneTimeCode } from '../../../nook-web-shared/src/extension/password-forms'
 import { AuthenticationOutcomeVerdict } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type {
-  AuthenticationOutcomeResponse,
   AuthenticationOutcomeObservationView,
   AuthenticationOutcomeVerdictView,
 } from '../lib/outcome-evidence-messages'
-import { isAuthenticationOutcomeResponse } from '../lib/outcome-evidence-messages'
 import {
   RuntimeMessageDeliveryKind,
   type DecodedRuntimeMessageArgs,
@@ -20,6 +18,14 @@ type EnrollmentOutcomeHost = {
   sendDecodedRuntimeMessage: <Response extends object>(
     args: DecodedRuntimeMessageArgs<Response>,
   ) => Promise<RuntimeMessageDelivery<Response>>
+  sendAuthenticationOutcomeRuntimeMessage: (
+    message: object,
+  ) => Promise<
+    RuntimeMessageDelivery<{
+      ok: true
+      verdict: AuthenticationOutcomeVerdictView
+    }>
+  >
 }
 
 type EnrollmentEvidenceCallbacks = {
@@ -159,14 +165,11 @@ async function classifyEnrollmentOutcome({
       timeoutMs: ENROLLMENT_EVIDENCE_TIMEOUT_MS,
     },
   }
-  const sendArgs: DecodedRuntimeMessageArgs<AuthenticationOutcomeResponse> = {
-    message,
-    decode: isAuthenticationOutcomeResponse,
-  }
+  const sendMessage: Parameters<
+    typeof host.sendAuthenticationOutcomeRuntimeMessage
+  >[0] = message
   const delivery =
-    await host.sendDecodedRuntimeMessage<AuthenticationOutcomeResponse>(
-      sendArgs,
-    )
+    await host.sendAuthenticationOutcomeRuntimeMessage(sendMessage)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok ||

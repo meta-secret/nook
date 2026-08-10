@@ -5,6 +5,7 @@ import {
 } from '../src/offscreen/session-message-dispatch'
 import {
   ExtensionSessionRequestParseKind,
+  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
   parseExtensionSessionRequest,
 } from '../src/offscreen/session-request-adapter'
 import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -24,13 +25,16 @@ async function decodeProviders(providers: object) {
 }
 
 describe('ExtensionSessionMessageDispatcher', () => {
-  test('accepts explicit empty payloads for control commands', async () => {
+  test('accepts explicit default queue state for control commands', async () => {
     for (const type of [
       ExtensionSessionMessageType.MigrateAuthProviders,
       ExtensionSessionMessageType.Reset,
       ExtensionSessionMessageType.Status,
     ]) {
-      const message = { type, payload: {} }
+      const message = {
+        type,
+        payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
+      }
       const parse = await parseExtensionSessionRequest(message)
       expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     }
@@ -57,6 +61,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
         ...grant,
         providers: [{ githubPat: 'secret' }],
         eventLogRecords: [],
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     })
     expect(malformedProvider.kind).toBe(
@@ -68,13 +73,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
       payload: {
         ...grant,
         eventLogRecords: [{ eventId: 'event' }],
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     })
     expect(malformedEvent.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
   })
 
   test('stages sensitive fields and clears the caller-owned payload', async () => {
-    const payload: Record<string, unknown> = { pin: '123456' }
+    const payload: Record<string, unknown> = {
+      pin: '123456',
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    }
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders,
       handleMessage: async (message) => ({
@@ -100,6 +109,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     ]
     const payload: Record<string, unknown> = {
       providers,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     }
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({
@@ -125,7 +135,10 @@ describe('ExtensionSessionMessageDispatcher', () => {
   })
 
   test('rejects a vault import without a provider array', async () => {
-    const payload: Record<string, unknown> = { providers: 'missing-array' }
+    const payload: Record<string, unknown> = {
+      providers: 'missing-array',
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    }
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders,
@@ -150,7 +163,10 @@ describe('ExtensionSessionMessageDispatcher', () => {
 
   test('scrubs an accepted caller provider array after staging', async () => {
     const providers = [{ githubPat: 'github_pat_accepted_secret' }]
-    const payload: Record<string, unknown> = { providers }
+    const payload: Record<string, unknown> = {
+      providers,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    }
     let handledGithubPat = ''
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders,
@@ -206,11 +222,14 @@ describe('ExtensionSessionMessageDispatcher', () => {
 
     const importResponse = dispatcher.enqueue({
       type: ExtensionSessionMessageType.ImportVault,
-      payload: { providers: [] },
+      payload: {
+        providers: [],
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
     })
     const resetResponse = dispatcher.enqueue({
       type: ExtensionSessionMessageType.Reset,
-      payload: {},
+      payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
     })
     await Promise.resolve()
     expect(handledTypes).toEqual([])
@@ -254,11 +273,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
 
     const blockerResponse = dispatcher.enqueue({
       type: ExtensionSessionMessageType.CreatePin,
-      payload: { pin: '123456' },
+      payload: {
+        pin: '123456',
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
     })
     const importResponse = dispatcher.enqueue({
       type: ExtensionSessionMessageType.ImportVault,
-      payload: { providers: [{ githubPat: 'caller-secret' }] },
+      payload: {
+        providers: [{ githubPat: 'caller-secret' }],
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
     })
 
     dispatcher.replaceOperations(new Error('reset'))
@@ -297,7 +322,10 @@ describe('ExtensionSessionMessageDispatcher', () => {
 
     const importResponse = dispatcher.enqueue({
       type: ExtensionSessionMessageType.ImportVault,
-      payload: { providers: [{ githubPat: 'caller-secret' }] },
+      payload: {
+        providers: [{ githubPat: 'caller-secret' }],
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
     })
     await Promise.resolve()
     dispatcher.replaceOperations(new Error('session expired'))

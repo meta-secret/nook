@@ -6,7 +6,10 @@ import {
   type LoginPickerOpenResponseWire,
   type WebsiteLoginOptions,
   type WebsiteLoginOptionsWireValue,
+  type AuthenticationOutcomeDecision,
+  validateCompanionAuthenticationOutcomeDecision,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type { AuthenticationOutcomeResponse } from '../../lib/outcome-evidence-messages'
 
 export enum RuntimeMessageDeliveryKind {
   Delivered = 'delivered',
@@ -108,6 +111,39 @@ export async function sendLoginPickerOpenRuntimeMessage(
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
       response: decodeLoginPickerOpenResponse(responseWire),
+    }
+  } catch {
+    return unavailable()
+  }
+}
+
+export async function sendAuthenticationOutcomeRuntimeMessage(
+  message: object,
+): Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>> {
+  const delivery = await sendRuntimeMessage(message)
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+    return unavailable()
+  }
+  const { response } = delivery
+  if (
+    !response ||
+    typeof response !== 'object' ||
+    !('ok' in response) ||
+    response.ok !== true ||
+    !('verdict' in response) ||
+    !response.verdict ||
+    typeof response.verdict !== 'object'
+  ) {
+    return unavailable()
+  }
+  try {
+    await companionWasmReady
+    const verdict = validateCompanionAuthenticationOutcomeDecision(
+      response.verdict as AuthenticationOutcomeDecision,
+    )
+    return {
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: { ok: true, verdict },
     }
   } catch {
     return unavailable()

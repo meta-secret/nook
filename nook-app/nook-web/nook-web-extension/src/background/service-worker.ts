@@ -42,6 +42,8 @@ import {
   isWebsiteLoginPickerOpenMessage,
 } from '../lib/login-picker-messages'
 import {
+  WebsiteLoginSaveActionResponseKind,
+  WebsiteLoginSaveOfferResponseKind,
   isWebsiteLoginSaveCommitMessage,
   isWebsiteLoginSaveDismissMessage,
   isWebsiteLoginSaveOfferMessage,
@@ -476,7 +478,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs20: Parameters<typeof sendResponse>[0] = {
-          ok: false,
+          kind: WebsiteLoginSaveOfferResponseKind.Rejected,
           reason: 'login-save-offer-failed',
         }
         return sendResponse(nookArrowArgs20)
@@ -510,7 +512,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs22: Parameters<typeof sendResponse>[0] = {
-          ok: false,
+          kind: WebsiteLoginSaveActionResponseKind.Rejected,
           reason: 'login-save-commit-failed',
         }
         return sendResponse(nookArrowArgs22)
@@ -527,7 +529,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs23: Parameters<typeof sendResponse>[0] = {
-          ok: false,
+          kind: WebsiteLoginSaveActionResponseKind.Rejected,
           reason: 'login-save-dismiss-failed',
         }
         return sendResponse(nookArrowArgs23)

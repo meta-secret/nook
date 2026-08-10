@@ -14,6 +14,10 @@ import {
 } from '../../lib/provider-credential-staging'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
+  type ExtensionSessionQueue,
+  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+} from '../../offscreen/session-request-adapter'
+import {
   type ExtensionPairingItems,
   extensionPairingGrantPolicyReady,
   setupStorageKey,
@@ -119,18 +123,18 @@ async function importDecodedApprovedPairing(
     try {
       const nookTypedArgs0_1: Parameters<typeof sendSessionMessage>[0] = {
         type: ExtensionSessionMessageType.MigrateAuthProviders,
-        payload: {},
+        payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
       }
       await sendSessionMessage(nookTypedArgs0_1)
       const nookTypedArgs0_2: Parameters<typeof sendSessionMessage>[0] = {
         type: ExtensionSessionMessageType.Reset,
-        payload: {},
+        payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
       }
       await sendSessionMessage(nookTypedArgs0_2)
       // Snapshot before scrubbing so lazy extension IPC cannot observe
       // emptied credential fields mid-handoff.
       const importMessage: {
-        type: ExtensionSessionMessageType.ImportVault
+        type: (typeof ExtensionSessionMessageType)['ImportVault']
         payload: {
           vaultStoreId: string
           deviceId: string
@@ -138,6 +142,7 @@ async function importDecodedApprovedPairing(
           deviceSigningPublicKey: string
           eventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
           providers: StorageProvider[]
+          queue: ExtensionSessionQueue
         }
       } = {
         type: ExtensionSessionMessageType.ImportVault,
@@ -148,6 +153,7 @@ async function importDecodedApprovedPairing(
           deviceSigningPublicKey: grantApproval.deviceSigningPublicKey,
           eventLogRecords: message.eventLogRecords,
           providers: structuredClone(providers),
+          queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
         },
       }
       scrubProviderCredentials(providers)
@@ -285,6 +291,7 @@ export async function importLocalEventLogUpdate({
         devicePublicKey: grant.devicePublicKey,
         deviceSigningPublicKey: grant.deviceSigningPublicKey,
         eventLogRecords,
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
     await sendSessionMessage(nookTypedArgs0_4)

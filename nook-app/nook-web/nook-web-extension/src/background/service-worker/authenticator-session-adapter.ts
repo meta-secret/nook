@@ -3,6 +3,7 @@ import type {
   WebsiteAuthenticatorBackupAttachMessageMode,
 } from '../../lib/enrollment-messages'
 import type { StoredExtensionPairingGrant } from '../pairing-grants'
+import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../offscreen/session-request-adapter'
 import { sendSessionMessage } from './pairing-identity'
 
 export type AuthenticatorCodeSessionResponse = {
@@ -36,7 +37,11 @@ export async function authenticatorCodeFromSession({
 }): Promise<AuthenticatorCodeSessionResponse> {
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-code',
-    payload: { ...grant, secretId },
+    payload: {
+      ...grant,
+      secretId,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    },
   }
   const response = responseRecord(await sendSessionMessage(message))
   if (response.ok !== true || typeof response.code !== 'string') {
@@ -50,7 +55,7 @@ export async function authenticatorPreviewFromSession(
 ): Promise<AuthenticatorPreviewSessionResponse> {
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-enroll-preview',
-    payload: { otpauthUri },
+    payload: { otpauthUri, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
   const response = responseRecord(await sendSessionMessage(message))
   const preview = response.preview
@@ -91,7 +96,7 @@ export async function stagedAuthenticatorCodeFromSession(
 ): Promise<AuthenticatorCodeSessionResponse> {
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-enroll-code',
-    payload: { otpauthUri },
+    payload: { otpauthUri, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
   const response = responseRecord(await sendSessionMessage(message))
   if (response.ok !== true || typeof response.code !== 'string') {
@@ -111,7 +116,12 @@ export async function confirmAuthenticatorEnrollment({
 }): Promise<AuthenticatorSecretSessionResponse> {
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-enroll-confirm',
-    payload: { ...grant, otpauthUri, origin },
+    payload: {
+      ...grant,
+      otpauthUri,
+      origin,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    },
   }
   return authenticatorSecretResponse(await sendSessionMessage(message))
 }
@@ -129,7 +139,13 @@ export async function attachAuthenticatorBackupCodes({
 }): Promise<AuthenticatorSecretSessionResponse> {
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-backup-attach',
-    payload: { ...grant, secretId, codes, mode },
+    payload: {
+      ...grant,
+      secretId,
+      codes,
+      mode,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    },
   }
   return authenticatorSecretResponse(await sendSessionMessage(message))
 }

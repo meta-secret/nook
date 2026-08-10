@@ -227,6 +227,14 @@ pub fn classify_companion_authentication_outcome_with_default_timeout(
     )
 }
 
+#[wasm_bindgen(js_name = validateCompanionAuthenticationOutcomeDecision)]
+#[must_use]
+pub fn validate_companion_authentication_outcome_decision(
+    decision: nook_companion_core::AuthenticationOutcomeDecision,
+) -> nook_companion_core::AuthenticationOutcomeDecision {
+    decision
+}
+
 #[wasm_bindgen(js_name = extensionPairingGrantStorageKey)]
 #[must_use]
 pub fn extension_pairing_grant_storage_key(vault_store_id: &str) -> String {
