@@ -2,6 +2,11 @@ import {
   AuthenticationOutcomeVerdict,
   NookWebsiteLoginSaveDecision,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import {
+  AuthenticationWorkflowAction,
+  AuthenticationWorkflowKind,
+  AuthenticationWorkflowStage,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 
 export const demoLoginSaveCreateDecision = NookWebsiteLoginSaveDecision.Create
 export const demoSufficientAuthenticationOutcome =
@@ -12,6 +17,14 @@ export const demoDomainEnumArgs = {
   loginSaveCreateDecision: demoLoginSaveCreateDecision,
   sufficientAuthenticationOutcome: demoSufficientAuthenticationOutcome,
   insufficientAuthenticationOutcome: demoInsufficientAuthenticationOutcome,
+  authenticationWorkflow: {
+    loginKind: AuthenticationWorkflowKind.Login,
+    signupKind: AuthenticationWorkflowKind.Signup,
+    credentialsStage: AuthenticationWorkflowStage.Credentials,
+    continueAction: AuthenticationWorkflowAction.ContinueWithNook,
+    generatePasswordAction: AuthenticationWorkflowAction.GeneratePassword,
+    createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey,
+  },
 }
 
 export type ChromeMessage = { message: string }
@@ -21,6 +34,14 @@ export type DemoChromeStubArgs = {
   loginSaveCreateDecision: NookWebsiteLoginSaveDecision
   sufficientAuthenticationOutcome: AuthenticationOutcomeVerdict
   insufficientAuthenticationOutcome: AuthenticationOutcomeVerdict
+  authenticationWorkflow: {
+    loginKind: AuthenticationWorkflowKind.Login
+    signupKind: AuthenticationWorkflowKind.Signup
+    credentialsStage: AuthenticationWorkflowStage.Credentials
+    continueAction: AuthenticationWorkflowAction.ContinueWithNook
+    generatePasswordAction: AuthenticationWorkflowAction.GeneratePassword
+    createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey
+  }
   /** Static replies keyed by runtime message type. */
   responsesByType?: Record<string, unknown>
   /** Stateful login-pilot replies for Continue → unlock → chooser. */
@@ -59,6 +80,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     loginSaveCreateDecision,
     sufficientAuthenticationOutcome,
     insufficientAuthenticationOutcome,
+    authenticationWorkflow,
     responsesByType = {},
     loginPilotFlow = false,
     savePilotFlow = false,
@@ -143,9 +165,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           return {
             ok: true,
             snapshot: {
-              kind: 'login',
-              stage: 'credentials',
-              action: 'create-passkey',
+              kind: authenticationWorkflow.loginKind,
+              stage: authenticationWorkflow.credentialsStage,
+              action: authenticationWorkflow.createPasskeyAction,
               currentStep: 1,
               totalSteps: 3,
               observationIndex: 0,
@@ -245,9 +267,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           return {
             ok: true,
             snapshot: {
-              kind: 'signup',
-              stage: 'credentials',
-              action: 'generate-password',
+              kind: authenticationWorkflow.signupKind,
+              stage: authenticationWorkflow.credentialsStage,
+              action: authenticationWorkflow.generatePasswordAction,
               currentStep: 2,
               totalSteps: 5,
               observationIndex: 0,
@@ -268,9 +290,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           return {
             ok: true,
             snapshot: {
-              kind: 'login',
-              stage: 'credentials',
-              action: 'continue-with-nook',
+              kind: authenticationWorkflow.loginKind,
+              stage: authenticationWorkflow.credentialsStage,
+              action: authenticationWorkflow.continueAction,
               currentStep: 1,
               totalSteps: 3,
               observationIndex: 0,
@@ -350,9 +372,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         return {
           ok: true,
           snapshot: {
-            kind: 'login',
-            stage: 'credentials',
-            action: 'continue-with-nook',
+            kind: authenticationWorkflow.loginKind,
+            stage: authenticationWorkflow.credentialsStage,
+            action: authenticationWorkflow.continueAction,
             currentStep: 1,
             totalSteps: 3,
             observationIndex: 0,

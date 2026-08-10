@@ -29,7 +29,11 @@
     </span>
     <span class="flex flex-1 gap-2 shrink-0 whitespace-nowrap">
       {#if childrenProp}
-        {@render (() => { const childrenPropArgs: Parameters<typeof childrenProp>[0] = { selected, highlighted }; return childrenProp(childrenPropArgs); })()}
+        {@const childrenPropArgs: Parameters<typeof childrenProp>[0] = {
+          selected,
+          highlighted,
+        }}
+        {@render childrenProp(childrenPropArgs)}
       {:else}
         {label || value}
       {/if}
