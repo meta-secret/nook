@@ -1,6 +1,6 @@
 //! Portable domain values for TOTP authenticators and recovery-code updates.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 
 const DEFAULT_DIGITS: u32 = 6;
 const DEFAULT_PERIOD: u64 = 30;
@@ -91,9 +91,18 @@ impl TotpAlgorithm {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct TotpDigits(u32);
+
+impl<'de> Deserialize<'de> for TotpDigits {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::parse(u32::deserialize(deserializer)?).map_err(D::Error::custom)
+    }
+}
 
 impl Default for TotpDigits {
     fn default() -> Self {
@@ -118,9 +127,18 @@ impl TotpDigits {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct TotpPeriod(u64);
+
+impl<'de> Deserialize<'de> for TotpPeriod {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::parse(u64::deserialize(deserializer)?).map_err(D::Error::custom)
+    }
+}
 
 impl Default for TotpPeriod {
     fn default() -> Self {
@@ -180,5 +198,19 @@ mod tests {
         for period in [0, 14, 301, u64::MAX] {
             assert!(TotpPeriod::parse(period).is_err());
         }
+    }
+
+    #[test]
+    fn deserialization_enforces_authenticator_number_bounds() {
+        assert!(matches!(
+            serde_json::from_str::<TotpDigits>("6"),
+            Ok(value) if value.get() == 6
+        ));
+        assert!(matches!(
+            serde_json::from_str::<TotpPeriod>("300"),
+            Ok(value) if value.get() == 300
+        ));
+        assert!(serde_json::from_str::<TotpDigits>("9").is_err());
+        assert!(serde_json::from_str::<TotpPeriod>("301").is_err());
     }
 }

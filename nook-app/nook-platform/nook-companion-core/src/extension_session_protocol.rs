@@ -82,12 +82,13 @@ pub enum PasskeyCeremonyPriority {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(
+    deny_unknown_fields,
     tag = "kind",
     rename_all = "kebab-case",
     rename_all_fields = "camelCase"
 )]
 pub enum QueueDisposition {
-    MessageDefault,
+    MessageDefault {},
     Deadline {
         #[serde(deserialize_with = "deserialize_finite_f64")]
         expires_at: f64,
@@ -97,6 +98,7 @@ pub enum QueueDisposition {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(
+    deny_unknown_fields,
     tag = "kind",
     rename_all = "kebab-case",
     rename_all_fields = "camelCase"
@@ -815,7 +817,7 @@ mod tests {
     }
 
     #[test]
-    fn picker_ready_state_owns_complete_metadata() -> anyhow::Result<()> {
+    fn picker_response_variants_enforce_their_invariants() -> anyhow::Result<()> {
         let ready = serde_json::from_str::<LoginPickerOpenResponseWire>(
             r#"{"ok":true,"status":"ready","requestId":"request","expiresAt":42}"#,
         )?;
@@ -840,6 +842,52 @@ mod tests {
             )
             .is_err()
         );
+
+        for (serialized, expected) in [
+            (
+                r#"{"ok":true,"status":"locked"}"#,
+                LoginPickerOpenResponse::Locked {
+                    kind: LoginPickerOpenResponseKind::Locked,
+                },
+            ),
+            (
+                r#"{"ok":true,"status":"unavailable"}"#,
+                LoginPickerOpenResponse::Unavailable {
+                    kind: LoginPickerOpenResponseKind::Unavailable,
+                },
+            ),
+            (
+                r#"{"ok":false,"reason":"picker closed"}"#,
+                LoginPickerOpenResponse::Failed {
+                    kind: LoginPickerOpenResponseKind::Failed,
+                },
+            ),
+        ] {
+            let wire = serde_json::from_str::<LoginPickerOpenResponseWire>(serialized)?;
+            assert_eq!(decode_login_picker_open_response(wire)?, expected);
+        }
+
+        for serialized in [
+            r#"{"ok":false,"status":"ready","requestId":"request","expiresAt":42}"#,
+            r#"{"ok":true,"status":"ready","requestId":" ","expiresAt":42}"#,
+            r#"{"ok":false,"status":"locked"}"#,
+            r#"{"ok":false,"status":"unavailable"}"#,
+            r#"{"ok":true,"reason":"failure"}"#,
+            r#"{"ok":false,"reason":" "}"#,
+        ] {
+            let wire = serde_json::from_str::<LoginPickerOpenResponseWire>(serialized)?;
+            assert!(decode_login_picker_open_response(wire).is_err());
+        }
         Ok(())
+    }
+
+    #[test]
+    fn queue_variants_reject_foreign_fields() {
+        for contradictory_queue in [
+            r#"{"kind":"message-default","expiresAt":42,"priority":"interactive"}"#,
+            r#"{"kind":"deadline","expiresAt":42,"priority":"interactive","probe":true}"#,
+        ] {
+            assert!(serde_json::from_str::<QueueDisposition>(contradictory_queue).is_err());
+        }
     }
 }

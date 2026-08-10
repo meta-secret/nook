@@ -228,15 +228,18 @@ App code lives under `nook-app/`. Dependencies flow one way:
 nook-vault-simple / nook-vault-sentinel / nook-web-extension
   ├─> nook-wasm              browser I/O + full vault session bridge
   │    ├─> nook-core         vault application services, secrets, sync policy
+  │    │    ├─> nook-authenticator-domain
   │    │    ├─> nook-event-log
   │    │    │    ├─> nook-auth2
   │    │    │    └─> nook-replication
   │    │    └─> nook-app-common
   │    └─> nook-companion-core
+  │         └─> nook-authenticator-domain
   └─> nook-companion-wasm   size-sensitive extension policy bridge
        └─> nook-companion-core
 
-nook-auth2 ──> nook-app-common
+nook-auth2 ─┬─> nook-authenticator-domain
+            └─> nook-app-common
 ```
 
 `nook-app-common` is a leaf dependency used directly by both `nook-auth2` and
@@ -245,6 +248,7 @@ nook-auth2 ──> nook-app-common
 | Package | Role |
 | ------- | ---- |
 | `nook-app-common` | Dependency-light shared Rust primitives, locale catalogs, translation behavior, and the single generated Rust i18n key registry |
+| `nook-authenticator-domain` | Dependency-light closed values for passkey protection, TOTP metadata, and backup-code update policy shared across authentication, vault, and extension boundaries |
 | `nook-auth2` | Portable key access: device identities, age envelopes, recovery helpers |
 | `nook-replication` | Portable replication: causal DAG indexing, append-only replica sets, outbox and repair planning |
 | `nook-event-log` | Portable vault history: canonical signed events, actor authorization, deterministic projection, key epochs |
