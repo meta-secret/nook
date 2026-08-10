@@ -27,17 +27,18 @@ type RuntimeMock =
 
 function installRuntimeMock(mock: RuntimeMock): void {
   const runtime = {
-    get lastError(): chrome.runtime.LastError | undefined {
-      return mock.kind === RuntimeMockKind.LastError
-        ? { message: 'extension context unavailable' }
-        : undefined
-    },
     sendMessage: (...parameters: [object, (response: object) => void]) => {
       const callback = parameters[1]
       const response =
         mock.kind === RuntimeMockKind.Response ? mock.response : {}
       callback(response)
     },
+  }
+  if (mock.kind === RuntimeMockKind.LastError) {
+    const lastErrorDescriptor: PropertyDescriptor = {
+      value: { message: 'extension context unavailable' },
+    }
+    Object.defineProperty(runtime, 'lastError', lastErrorDescriptor)
   }
   globalThis.chrome = { runtime } as typeof chrome
 }

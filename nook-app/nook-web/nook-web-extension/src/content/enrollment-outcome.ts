@@ -18,9 +18,7 @@ type EnrollmentOutcomeHost = {
   sendDecodedRuntimeMessage: <Response extends object>(
     args: DecodedRuntimeMessageArgs<Response>,
   ) => Promise<RuntimeMessageDelivery<Response>>
-  sendAuthenticationOutcomeRuntimeMessage: (
-    message: object,
-  ) => Promise<
+  sendAuthenticationOutcomeRuntimeMessage: (message: object) => Promise<
     RuntimeMessageDelivery<{
       ok: true
       verdict: AuthenticationOutcomeVerdictView
