@@ -222,7 +222,10 @@ mod tests {
 
     #[test]
     fn rejects_blank_authenticator_account_identity() {
+        let mut blank_vault_name = account("vault", "secret", "Nook");
+        blank_vault_name.vault_name = " ".to_owned();
         for malformed in [
+            blank_vault_name,
             account(" ", "secret", "Nook"),
             account("vault", " ", "Nook"),
             account("vault", "secret", " "),
@@ -243,12 +246,23 @@ mod tests {
     #[test]
     fn rejects_contradictory_authenticator_options_states() {
         for wire in [
+            AuthenticatorOptionsResponseWire::Available(AuthenticatorOptionsAvailableWire::Ready {
+                ok: false,
+                accounts: Vec::new(),
+            }),
             AuthenticatorOptionsResponseWire::Available(
                 AuthenticatorOptionsAvailableWire::Locked { ok: false },
+            ),
+            AuthenticatorOptionsResponseWire::Available(
+                AuthenticatorOptionsAvailableWire::Unavailable { ok: false },
             ),
             AuthenticatorOptionsResponseWire::Rejected(AuthenticatorOptionsRejectedWire {
                 ok: true,
                 reason: "authenticator-locked".to_owned(),
+            }),
+            AuthenticatorOptionsResponseWire::Rejected(AuthenticatorOptionsRejectedWire {
+                ok: false,
+                reason: " ".to_owned(),
             }),
         ] {
             assert_eq!(

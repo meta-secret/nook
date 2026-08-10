@@ -133,20 +133,6 @@ export type AuthenticatorOptionsResponse =
   | { ok: true; status: AuthenticatorOptionsResponseStatus.Locked }
   | { ok: true; status: AuthenticatorOptionsResponseStatus.Unavailable }
 
-export type AuthenticatorFillResponse =
-  { ok: true; code: string } | { ok: false }
-
-export function isAuthenticatorFillResponse(
-  response: object,
-): response is AuthenticatorFillResponse {
-  if (!('ok' in response) || typeof response.ok !== 'boolean') return false
-  return response.ok === false
-    ? !('code' in response)
-    : 'code' in response &&
-        typeof response.code === 'string' &&
-        response.code.length > 0
-}
-
 export function isAuthenticatorOptionsResponse(
   response: object,
 ): response is AuthenticatorOptionsResponse {

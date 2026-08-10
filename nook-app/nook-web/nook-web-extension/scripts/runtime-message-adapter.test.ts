@@ -3,14 +3,21 @@ import {
   AuthenticationOutcomeVerdict,
   AuthenticationWorkflowSnapshotResponseKind,
   AuthenticatorBackupAttachResponseKind,
+  AuthenticatorCodeResponseKind,
+  AuthenticatorEnrollmentConfirmResponseKind,
+  AuthenticatorEnrollmentStageResponseKind,
   AuthenticatorOptionsResponseKind,
   AuthenticatorPreviewResponseKind,
+  GeneratedPasswordResponseKind,
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   RuntimeMessageDeliveryKind,
   sendAuthenticatorBackupAttachRuntimeMessage,
+  sendAuthenticatorCodeRuntimeMessage,
+  sendAuthenticatorEnrollmentConfirmRuntimeMessage,
+  sendAuthenticatorEnrollmentStageRuntimeMessage,
   sendAuthenticatorOptionsRuntimeMessage,
   sendAuthenticatorPreviewRuntimeMessage,
   sendAuthenticationWorkflowSnapshotRuntimeMessage,
@@ -18,6 +25,7 @@ import {
   sendDecodedRuntimeMessage,
   sendLoginOptionsRuntimeMessage,
   sendLoginPickerOpenRuntimeMessage,
+  sendGeneratePasswordRuntimeMessage,
 } from '../src/content/autofill/runtime-message-adapter'
 
 type TestAcknowledgement = { accepted: true }
@@ -250,6 +258,90 @@ describe('runtime message adapters', () => {
     const delivery = await sendAuthenticatorBackupAttachRuntimeMessage(message)
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
+  })
+
+  test('decodes only six-to-eight digit authenticator codes through Rust', async () => {
+    installRuntimeMock({
+      kind: RuntimeMockKind.Response,
+      response: { ok: true, code: '123456' },
+    })
+    const ready = await sendAuthenticatorCodeRuntimeMessage(message)
+    expect(ready.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
+    if (ready.kind === RuntimeMessageDeliveryKind.Delivered) {
+      expect(ready.response.kind).toBe(AuthenticatorCodeResponseKind.Ready)
+    }
+
+    for (const response of [
+      { ok: true, code: 'not-a-totp' },
+      { ok: true, code: '12345' },
+      { ok: true, code: '123456', reason: 'contradiction' },
+    ]) {
+      installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+      const delivery = await sendAuthenticatorCodeRuntimeMessage(message)
+      expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
+    }
+  })
+
+  test('decodes concrete authenticator enrollment identities through Rust', async () => {
+    installRuntimeMock({
+      kind: RuntimeMockKind.Response,
+      response: { ok: true, stageId: 'stage-1' },
+    })
+    const staged = await sendAuthenticatorEnrollmentStageRuntimeMessage(message)
+    expect(staged.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
+    if (staged.kind === RuntimeMessageDeliveryKind.Delivered) {
+      expect(staged.response.kind).toBe(
+        AuthenticatorEnrollmentStageResponseKind.Staged,
+      )
+    }
+
+    installRuntimeMock({
+      kind: RuntimeMockKind.Response,
+      response: { ok: true, secretId: 'secret-1' },
+    })
+    const completed =
+      await sendAuthenticatorEnrollmentConfirmRuntimeMessage(message)
+    expect(completed.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
+    if (completed.kind === RuntimeMessageDeliveryKind.Delivered) {
+      expect(completed.response.kind).toBe(
+        AuthenticatorEnrollmentConfirmResponseKind.Completed,
+      )
+    }
+  })
+
+  test('rejects blank and contradictory authenticator enrollment identities through Rust', async () => {
+    for (const response of [
+      { ok: true, stageId: ' ' },
+      { ok: true, secretId: 'secret-1', reason: 'contradiction' },
+    ]) {
+      installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+      const delivery =
+        'stageId' in response
+          ? await sendAuthenticatorEnrollmentStageRuntimeMessage(message)
+          : await sendAuthenticatorEnrollmentConfirmRuntimeMessage(message)
+      expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
+    }
+  })
+
+  test('decodes only non-empty generated passwords through Rust', async () => {
+    installRuntimeMock({
+      kind: RuntimeMockKind.Response,
+      response: { ok: true, password: 'correct horse battery staple' },
+    })
+    const generated = await sendGeneratePasswordRuntimeMessage(message)
+    expect(generated.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
+    if (generated.kind === RuntimeMessageDeliveryKind.Delivered) {
+      expect(generated.response.kind).toBe(
+        GeneratedPasswordResponseKind.Generated,
+      )
+    }
+
+    installRuntimeMock({
+      kind: RuntimeMockKind.Response,
+      response: { ok: true, password: '' },
+    })
+    const blank = await sendGeneratePasswordRuntimeMessage(message)
+    expect(blank.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
 
   test('decodes concrete authenticator account identities through Rust', async () => {

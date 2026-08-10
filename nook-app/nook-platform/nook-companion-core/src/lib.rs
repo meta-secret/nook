@@ -12,12 +12,15 @@
 mod authentication_workflow;
 mod authentication_workflow_response;
 mod authenticator_backup_attach_response;
+mod authenticator_code_response;
+mod authenticator_enrollment_response;
 mod authenticator_options_response;
 mod authenticator_preview_response;
 mod backup_code_candidates;
 mod extension_pairing_state;
 mod extension_persistence;
 mod extension_session_protocol;
+mod generated_password_response;
 mod oauth_origin_policy;
 mod outcome_evidence;
 mod page_field_classification;
@@ -40,6 +43,17 @@ pub use authenticator_backup_attach_response::{
     AuthenticatorBackupAttachResponse, AuthenticatorBackupAttachResponseDecodeError,
     AuthenticatorBackupAttachResponseKind, AuthenticatorBackupAttachResponseWire,
     decode_authenticator_backup_attach_response,
+};
+pub use authenticator_code_response::{
+    AuthenticatorCodeResponse, AuthenticatorCodeResponseDecodeError, AuthenticatorCodeResponseKind,
+    AuthenticatorCodeResponseWire, decode_authenticator_code_response,
+};
+pub use authenticator_enrollment_response::{
+    AuthenticatorEnrollmentConfirmResponse, AuthenticatorEnrollmentConfirmResponseKind,
+    AuthenticatorEnrollmentConfirmResponseWire, AuthenticatorEnrollmentResponseDecodeError,
+    AuthenticatorEnrollmentStageResponse, AuthenticatorEnrollmentStageResponseKind,
+    AuthenticatorEnrollmentStageResponseWire, decode_authenticator_enrollment_confirm_response,
+    decode_authenticator_enrollment_stage_response,
 };
 pub use authenticator_options_response::{
     AuthenticatorOptionsResponse, AuthenticatorOptionsResponseDecodeError,
@@ -71,6 +85,10 @@ pub use extension_session_protocol::{
     ExtensionSessionRequestValidation, ExtensionSessionRequestWire, LoginPickerOpenResponse,
     LoginPickerOpenResponseDecodeError, LoginPickerOpenResponseWire,
     decode_login_picker_open_response, validate_extension_session_request_json,
+};
+pub use generated_password_response::{
+    GeneratedPasswordResponse, GeneratedPasswordResponseDecodeError, GeneratedPasswordResponseKind,
+    GeneratedPasswordResponseWire, decode_generated_password_response,
 };
 pub use oauth_origin_policy::{
     BrowserOAuthProvider, OAuthOriginSupport, OAuthOriginUnsupportedReason,

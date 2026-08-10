@@ -416,7 +416,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       case 'nook:website-login-options':
         loginOptionsCalls += 1
         if (loginOptionsCalls === 1) {
-          return { ok: true, status: 'locked', accounts: [] }
+          return { ok: true, status: 'locked' }
         }
         return {
           ok: true,

@@ -50,6 +50,38 @@ pub fn decode_authenticator_backup_attach_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
+#[wasm_bindgen(js_name = decodeAuthenticatorCodeResponse)]
+pub fn decode_authenticator_code_response(
+    response: nook_companion_core::AuthenticatorCodeResponseWire,
+) -> Result<nook_companion_core::AuthenticatorCodeResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_authenticator_code_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen(js_name = decodeAuthenticatorEnrollmentStageResponse)]
+pub fn decode_authenticator_enrollment_stage_response(
+    response: nook_companion_core::AuthenticatorEnrollmentStageResponseWire,
+) -> Result<nook_companion_core::AuthenticatorEnrollmentStageResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_authenticator_enrollment_stage_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen(js_name = decodeAuthenticatorEnrollmentConfirmResponse)]
+pub fn decode_authenticator_enrollment_confirm_response(
+    response: nook_companion_core::AuthenticatorEnrollmentConfirmResponseWire,
+) -> Result<nook_companion_core::AuthenticatorEnrollmentConfirmResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_authenticator_enrollment_confirm_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen(js_name = decodeGeneratedPasswordResponse)]
+pub fn decode_generated_password_response(
+    response: nook_companion_core::GeneratedPasswordResponseWire,
+) -> Result<nook_companion_core::GeneratedPasswordResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_generated_password_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
 #[wasm_bindgen(js_name = decodeAuthenticatorOptionsResponse)]
 pub fn decode_authenticator_options_response(
     response: nook_companion_core::AuthenticatorOptionsResponseWire,

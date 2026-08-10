@@ -1,21 +1,19 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { fillOneTimeCode } from '../../../../nook-web-shared/src/extension/password-forms'
+import { AuthenticatorCodeResponseKind } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { WebsiteAuthenticatorOption } from '../../lib/login-fill-messages'
 import {
   type DecodedRuntimeMessageArgs,
   RuntimeMessageDeliveryKind,
+  sendAuthenticatorCodeRuntimeMessage,
   sendDecodedRuntimeMessage,
   sendRuntimeMessageWithoutResponse,
   setStatus,
 } from './login-passkey-actions'
 import { AuthenticatorPickerKind, pickerState, widgetState } from './state'
-import type {
-  AuthenticatorFillResponse,
-  AuthenticatorOptionsResponse,
-} from './workflow-ui'
+import type { AuthenticatorOptionsResponse } from './workflow-ui'
 import {
-  isAuthenticatorFillResponse,
   isAuthenticatorOptionsResponse,
   setFlightProgress,
   translatedMessage,
@@ -36,7 +34,7 @@ export async function fillAuthenticatorCode({
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
 }): Promise<boolean> {
-  const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
+  const message: Parameters<typeof sendAuthenticatorCodeRuntimeMessage>[0] = {
     type: 'nook:website-authenticator-fill',
     payload: {
       origin: location.origin,
@@ -44,12 +42,7 @@ export async function fillAuthenticatorCode({
       secretId: account.secretId,
     },
   }
-  const sendArgs: DecodedRuntimeMessageArgs<AuthenticatorFillResponse> = {
-    message,
-    decode: isAuthenticatorFillResponse,
-  }
-  const delivery =
-    await sendDecodedRuntimeMessage<AuthenticatorFillResponse>(sendArgs)
+  const delivery = await sendAuthenticatorCodeRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     const nookTypedArgs0_0: Parameters<typeof setFlightProgress>[0] = {
       step,
@@ -71,7 +64,7 @@ export async function fillAuthenticatorCode({
     return false
   }
   const { response } = delivery
-  if (response.ok !== true) {
+  if (response.kind !== AuthenticatorCodeResponseKind.Ready) {
     const nookTypedArgs0_2: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,

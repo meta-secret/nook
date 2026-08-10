@@ -3,7 +3,11 @@ import {
   type BrowserMessageKey,
 } from '../lib/browser-message-keys'
 import { pageHasBackupCodeHint } from '../lib/backup-code-candidates'
-import { AuthenticatorPreviewResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  AuthenticatorEnrollmentConfirmResponseKind,
+  AuthenticatorEnrollmentStageResponseKind,
+  AuthenticatorPreviewResponseKind,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   clearOtpauthCandidate,
   decodeVisibleOtpauthCandidates,
@@ -20,6 +24,9 @@ import {
 import {
   RuntimeMessageDeliveryKind,
   type AuthenticatorBackupAttachResponse,
+  type AuthenticatorCodeResponse,
+  type AuthenticatorEnrollmentConfirmResponse,
+  type AuthenticatorEnrollmentStageResponse,
   type AuthenticatorOptionsResponse,
   type AuthenticatorPreviewResponse,
   type DecodedRuntimeMessageArgs,
@@ -68,6 +75,15 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   sendAuthenticatorBackupAttachRuntimeMessage: (
     message: object,
   ) => Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>>
+  sendAuthenticatorCodeRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorCodeResponse>>
+  sendAuthenticatorEnrollmentConfirmRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentConfirmResponse>>
+  sendAuthenticatorEnrollmentStageRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentStageResponse>>
   sendAuthenticatorOptionsRuntimeMessage: (
     message: object,
   ) => Promise<RuntimeMessageDelivery<AuthenticatorOptionsResponse>>
@@ -80,42 +96,6 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
     key: BrowserMessageKey
     substitution: string
   }) => string
-}
-
-type EnrollStageResponse = {
-  ok?: boolean
-  stageId?: string
-  reason?: string
-}
-
-type EnrollConfirmResponse = {
-  ok?: boolean
-  secretId?: string
-  reason?: string
-}
-
-function isEnrollStageResponse(
-  response: object,
-): response is EnrollStageResponse {
-  return (
-    'ok' in response &&
-    typeof response.ok === 'boolean' &&
-    (response.ok
-      ? 'stageId' in response && typeof response.stageId === 'string'
-      : !('reason' in response) || typeof response.reason === 'string')
-  )
-}
-
-function isEnrollConfirmResponse(
-  response: object,
-): response is EnrollConfirmResponse {
-  return (
-    'ok' in response &&
-    typeof response.ok === 'boolean' &&
-    (response.ok
-      ? 'secretId' in response && typeof response.secretId === 'string'
-      : !('reason' in response) || typeof response.reason === 'string')
-  )
 }
 
 /** Keep the post-save enrollment widget from being rebuilt by scanAndRender. */
@@ -137,7 +117,9 @@ async function commitStagedEnrollment({
     text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollWorking),
   }
   setHostDescription(nookTypedArgs0_0)
-  const confirmMessage = {
+  const confirmMessage: Parameters<
+    typeof host.sendAuthenticatorEnrollmentConfirmRuntimeMessage
+  >[0] = {
     type: 'nook:website-authenticator-enroll-confirm',
     payload: {
       origin: location.origin,
@@ -145,15 +127,12 @@ async function commitStagedEnrollment({
       stageId,
     },
   }
-  const confirmArgs: DecodedRuntimeMessageArgs<EnrollConfirmResponse> = {
-    message: confirmMessage,
-    decode: isEnrollConfirmResponse,
-  }
   const confirmDelivery =
-    await host.sendDecodedRuntimeMessage<EnrollConfirmResponse>(confirmArgs)
+    await host.sendAuthenticatorEnrollmentConfirmRuntimeMessage(confirmMessage)
   if (
     confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
-    confirmDelivery.response.ok
+    confirmDelivery.response.kind ===
+      AuthenticatorEnrollmentConfirmResponseKind.Completed
   ) {
     const nookTypedArgs0_1: Parameters<typeof setHostDescription>[0] = {
       host,
@@ -173,6 +152,8 @@ async function commitStagedEnrollment({
     holdEnrollmentWidgetAfterSave = true
   } else if (
     confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
+    confirmDelivery.response.kind ===
+      AuthenticatorEnrollmentConfirmResponseKind.Rejected &&
     confirmDelivery.response.reason === 'authenticator-locked'
   ) {
     const nookTypedArgs0_3: Parameters<typeof setHostDescription>[0] = {
@@ -277,7 +258,9 @@ async function beginEnrollmentCeremony({
     callbacks: enrollmentEvidenceCallbacks(nookTypedArgs0_9),
   }
   beginEnrollmentEvidenceWatch(nookTypedArgs1_0)
-  const message = {
+  const message: Parameters<
+    typeof host.sendAuthenticatorEnrollmentStageRuntimeMessage
+  >[0] = {
     type: 'nook:website-authenticator-enroll-stage',
     payload: {
       origin: location.origin,
@@ -285,12 +268,8 @@ async function beginEnrollmentCeremony({
       otpauthUri: otpauthUri.value,
     },
   }
-  const stageArgs: DecodedRuntimeMessageArgs<EnrollStageResponse> = {
-    message,
-    decode: isEnrollStageResponse,
-  }
   const stageDelivery =
-    await host.sendDecodedRuntimeMessage<EnrollStageResponse>(stageArgs)
+    await host.sendAuthenticatorEnrollmentStageRuntimeMessage(message)
   clearOtpauthUri(otpauthUri)
   clearCandidate(candidate)
   if (stageDelivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -309,8 +288,7 @@ async function beginEnrollmentCeremony({
     return
   }
   const { response: stageResponse } = stageDelivery
-  const stageId = stageResponse.stageId
-  if (stageResponse.ok !== true || typeof stageId !== 'string') {
+  if (stageResponse.kind !== AuthenticatorEnrollmentStageResponseKind.Staged) {
     stopPendingEnrollmentWatch()
     const nookTypedArgs0_12: Parameters<typeof setHostDescription>[0] = {
       host,
@@ -325,6 +303,7 @@ async function beginEnrollmentCeremony({
     renderEnrollmentActions(nookTypedArgs0_13)
     return
   }
+  const stageId = stageResponse.stageId
   // Replace the temporary pending watch with the real stage id.
   const nookTypedArgs0_14: Parameters<typeof enrollmentEvidenceCallbacks>[0] = {
     host,

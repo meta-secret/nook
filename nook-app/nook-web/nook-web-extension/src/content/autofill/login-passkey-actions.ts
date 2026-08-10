@@ -16,6 +16,7 @@ import {
 } from '../../lib/login-fill-messages'
 import {
   AuthenticationWorkflowAction,
+  GeneratedPasswordResponseKind,
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -38,6 +39,9 @@ export {
   sendAuthenticationWorkflowSnapshotRuntimeMessage,
   sendAuthenticationOutcomeRuntimeMessage,
   sendAuthenticatorBackupAttachRuntimeMessage,
+  sendAuthenticatorCodeRuntimeMessage,
+  sendAuthenticatorEnrollmentConfirmRuntimeMessage,
+  sendAuthenticatorEnrollmentStageRuntimeMessage,
   sendAuthenticatorOptionsRuntimeMessage,
   sendAuthenticatorPreviewRuntimeMessage,
   sendDecodedRuntimeMessage,
@@ -45,6 +49,9 @@ export {
 } from './runtime-message-adapter'
 export type {
   AuthenticatorBackupAttachResponse,
+  AuthenticatorCodeResponse,
+  AuthenticatorEnrollmentConfirmResponse,
+  AuthenticatorEnrollmentStageResponse,
   AuthenticatorOptionsResponse,
   AuthenticatorPreviewResponse,
   DecodedRuntimeMessageArgs,
@@ -428,7 +435,7 @@ export async function generatePasswordWithNook({
       return
     }
     const { response } = delivery
-    if (response.ok !== true || typeof response.password !== 'string') {
+    if (response.kind !== GeneratedPasswordResponseKind.Generated) {
       const nookTypedArgs0_24: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,

@@ -114,7 +114,10 @@ pub fn decode_authenticator_preview_response(
             preview,
             vault_store_id,
             vault_name,
-        }) if !vault_store_id.trim().is_empty() && !vault_name.trim().is_empty() => {
+        }) if !preview.issuer.trim().is_empty()
+            && !vault_store_id.trim().is_empty()
+            && !vault_name.trim().is_empty() =>
+        {
             Ok(AuthenticatorPreviewResponse::Ready {
                 kind: AuthenticatorPreviewResponseKind::Ready,
                 preview: AuthenticatorEnrollmentPreview {
@@ -235,7 +238,17 @@ mod tests {
 
     #[test]
     fn rejects_missing_authenticator_preview_domain_identity() {
+        let mut blank_issuer = ready_wire(true, "vault", "Personal");
+        let AuthenticatorPreviewResponseWire::Available(AuthenticatorPreviewAvailableWire::Ready {
+            preview,
+            ..
+        }) = &mut blank_issuer
+        else {
+            unreachable!("ready fixture must stay ready")
+        };
+        preview.issuer = " ".to_owned();
         for malformed in [
+            blank_issuer,
             ready_wire(true, " ", "Personal"),
             ready_wire(true, "vault", " "),
             AuthenticatorPreviewResponseWire::Rejected(AuthenticatorPreviewRejectedWire {

@@ -3,19 +3,31 @@ import {
   decodeLoginPickerOpenResponse,
   decodeAuthenticationWorkflowSnapshotResponse,
   decodeAuthenticatorBackupAttachResponse,
+  decodeAuthenticatorCodeResponse,
+  decodeAuthenticatorEnrollmentConfirmResponse,
+  decodeAuthenticatorEnrollmentStageResponse,
   decodeAuthenticatorOptionsResponse,
   decodeAuthenticatorPreviewResponse,
+  decodeGeneratedPasswordResponse,
   decodeWebsiteLoginOptions,
   type AuthenticationWorkflowSnapshot,
   AuthenticationWorkflowSnapshotResponseKind,
   type AuthenticationWorkflowSnapshotResponseWire,
   AuthenticatorBackupAttachResponseKind,
   type AuthenticatorBackupAttachResponseWire,
+  AuthenticatorCodeResponseKind,
+  type AuthenticatorCodeResponseWire,
+  AuthenticatorEnrollmentConfirmResponseKind,
+  type AuthenticatorEnrollmentConfirmResponseWire,
+  AuthenticatorEnrollmentStageResponseKind,
+  type AuthenticatorEnrollmentStageResponseWire,
   AuthenticatorOptionsResponseKind,
   type AuthenticatorOptionsResponseWire,
   type AuthenticatorEnrollmentPreview,
   AuthenticatorPreviewResponseKind,
   type AuthenticatorPreviewResponseWire,
+  GeneratedPasswordResponseKind,
+  type GeneratedPasswordResponseWire,
   LoginPickerOpenResponseKind,
   type LoginPickerOpenResponseWire,
   type WebsiteLoginAccountOption,
@@ -85,6 +97,10 @@ export type AuthenticatorBackupAttachResponse =
       reason: string
     }
 
+export type AuthenticatorCodeResponse =
+  | { kind: AuthenticatorCodeResponseKind.Ready; code: string }
+  | { kind: AuthenticatorCodeResponseKind.Rejected; reason: string }
+
 export type AuthenticatorOptionsResponse =
   | {
       kind: AuthenticatorOptionsResponseKind.Ready
@@ -94,8 +110,29 @@ export type AuthenticatorOptionsResponse =
   | { kind: AuthenticatorOptionsResponseKind.Unavailable }
   | { kind: AuthenticatorOptionsResponseKind.Rejected; reason: string }
 
+export type AuthenticatorEnrollmentStageResponse =
+  | {
+      kind: AuthenticatorEnrollmentStageResponseKind.Staged
+      stageId: string
+    }
+  | {
+      kind: AuthenticatorEnrollmentStageResponseKind.Rejected
+      reason: string
+    }
+
+export type AuthenticatorEnrollmentConfirmResponse =
+  | {
+      kind: AuthenticatorEnrollmentConfirmResponseKind.Completed
+      secretId: string
+    }
+  | {
+      kind: AuthenticatorEnrollmentConfirmResponseKind.Rejected
+      reason: string
+    }
+
 export type GeneratedPasswordResponse =
-  { ok: true; password: string } | { ok: false; reason: string }
+  | { kind: GeneratedPasswordResponseKind.Generated; password: string }
+  | { kind: GeneratedPasswordResponseKind.Rejected; reason: string }
 
 function sendRuntimeMessage(
   message: unknown,
@@ -258,6 +295,27 @@ export async function sendAuthenticatorBackupAttachRuntimeMessage(
   }
 }
 
+export async function sendAuthenticatorCodeRuntimeMessage(
+  message: object,
+): Promise<RuntimeMessageDelivery<AuthenticatorCodeResponse>> {
+  const delivery = await sendRuntimeMessage(message)
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+    return unavailable()
+  }
+  try {
+    await companionWasmReady
+    const responseWire = delivery.response as AuthenticatorCodeResponseWire
+    return {
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: decodeAuthenticatorCodeResponse(
+        responseWire,
+      ) as AuthenticatorCodeResponse,
+    }
+  } catch {
+    return unavailable()
+  }
+}
+
 export async function sendAuthenticatorOptionsRuntimeMessage(
   message: object,
 ): Promise<RuntimeMessageDelivery<AuthenticatorOptionsResponse>> {
@@ -273,6 +331,50 @@ export async function sendAuthenticatorOptionsRuntimeMessage(
       response: decodeAuthenticatorOptionsResponse(
         responseWire,
       ) as AuthenticatorOptionsResponse,
+    }
+  } catch {
+    return unavailable()
+  }
+}
+
+export async function sendAuthenticatorEnrollmentStageRuntimeMessage(
+  message: object,
+): Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentStageResponse>> {
+  const delivery = await sendRuntimeMessage(message)
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+    return unavailable()
+  }
+  try {
+    await companionWasmReady
+    const responseWire =
+      delivery.response as AuthenticatorEnrollmentStageResponseWire
+    return {
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: decodeAuthenticatorEnrollmentStageResponse(
+        responseWire,
+      ) as AuthenticatorEnrollmentStageResponse,
+    }
+  } catch {
+    return unavailable()
+  }
+}
+
+export async function sendAuthenticatorEnrollmentConfirmRuntimeMessage(
+  message: object,
+): Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentConfirmResponse>> {
+  const delivery = await sendRuntimeMessage(message)
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+    return unavailable()
+  }
+  try {
+    await companionWasmReady
+    const responseWire =
+      delivery.response as AuthenticatorEnrollmentConfirmResponseWire
+    return {
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: decodeAuthenticatorEnrollmentConfirmResponse(
+        responseWire,
+      ) as AuthenticatorEnrollmentConfirmResponse,
     }
   } catch {
     return unavailable()
@@ -319,31 +421,18 @@ export async function sendGeneratePasswordRuntimeMessage(
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     return unavailable()
   }
-  const response = delivery.response
-  if (!response || typeof response !== 'object' || !('ok' in response)) {
+  try {
+    await companionWasmReady
+    const responseWire = delivery.response as GeneratedPasswordResponseWire
+    return {
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: decodeGeneratedPasswordResponse(
+        responseWire,
+      ) as GeneratedPasswordResponse,
+    }
+  } catch {
     return unavailable()
   }
-  if (
-    response.ok === true &&
-    'password' in response &&
-    typeof response.password === 'string'
-  ) {
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: { ok: true, password: response.password },
-    }
-  }
-  if (response.ok === false) {
-    const reason =
-      'reason' in response && typeof response.reason === 'string'
-        ? response.reason
-        : 'password-generation-failed'
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: { ok: false, reason },
-    }
-  }
-  return unavailable()
 }
 
 export function sendRuntimeMessageWithoutResponse(message: object): void {

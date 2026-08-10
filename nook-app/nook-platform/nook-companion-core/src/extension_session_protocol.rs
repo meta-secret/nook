@@ -96,6 +96,12 @@ pub enum QueueDisposition {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, tag = "kind", rename_all = "kebab-case")]
+pub enum MessageDefaultQueueDisposition {
+    MessageDefault {},
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(
     deny_unknown_fields,
@@ -345,6 +351,21 @@ pub struct RequestPayload {
     queue: QueueDisposition,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectLoginSaveActionPayload {
+    origin: String,
+    offer_id: String,
+    queue: MessageDefaultQueueDisposition,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectRequestPayload {
+    request_id: String,
+    queue: MessageDefaultQueueDisposition,
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyCeremonyPayload {
@@ -409,9 +430,9 @@ pub enum ExtensionSessionRequest {
     #[serde(rename = "nook:extension-session-commit-login-save")]
     CommitLoginSave(GrantedLoginSaveActionPayload),
     #[serde(rename = "nook:extension-session-dismiss-login-save")]
-    DismissLoginSave(LoginSaveActionPayload),
+    DismissLoginSave(DirectLoginSaveActionPayload),
     #[serde(rename = "nook:extension-session-cancel-passkey")]
-    CancelPasskey(RequestPayload),
+    CancelPasskey(DirectRequestPayload),
     #[serde(rename = "nook:extension-session-register-passkey")]
     RegisterPasskey(PasskeyCeremonyPayload),
     #[serde(rename = "nook:extension-session-assert-passkey")]
@@ -888,6 +909,25 @@ mod tests {
             r#"{"kind":"deadline","expiresAt":42,"priority":"interactive","probe":true}"#,
         ] {
             assert!(serde_json::from_str::<QueueDisposition>(contradictory_queue).is_err());
+        }
+        assert!(
+            serde_json::from_str::<MessageDefaultQueueDisposition>(
+                r#"{"kind":"deadline","expiresAt":42,"priority":"interactive"}"#,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn direct_session_requests_reject_deadline_queue_semantics() {
+        for request in [
+            r#"{"type":"nook:extension-session-dismiss-login-save","payload":{"origin":"https://example.com","offerId":"offer","queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#,
+            r#"{"type":"nook:extension-session-cancel-passkey","payload":{"requestId":"request","queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#,
+        ] {
+            assert_eq!(
+                validate_extension_session_request_json(request),
+                ExtensionSessionRequestValidation::Rejected
+            );
         }
     }
 }
