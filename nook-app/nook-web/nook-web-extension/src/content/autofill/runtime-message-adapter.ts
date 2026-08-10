@@ -1,7 +1,10 @@
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import {
   decodeLoginPickerOpenResponse,
+  decodeAuthenticationWorkflowSnapshotResponse,
   decodeWebsiteLoginOptions,
+  type AuthenticationWorkflowSnapshotResponse,
+  type AuthenticationWorkflowSnapshotResponseWire,
   type LoginPickerOpenResponse,
   type LoginPickerOpenResponseWire,
   type WebsiteLoginOptions,
@@ -111,6 +114,26 @@ export async function sendLoginPickerOpenRuntimeMessage(
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
       response: decodeLoginPickerOpenResponse(responseWire),
+    }
+  } catch {
+    return unavailable()
+  }
+}
+
+export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
+  message: object,
+): Promise<RuntimeMessageDelivery<AuthenticationWorkflowSnapshotResponse>> {
+  const delivery = await sendRuntimeMessage(message)
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+    return unavailable()
+  }
+  try {
+    await companionWasmReady
+    const responseWire =
+      delivery.response as AuthenticationWorkflowSnapshotResponseWire
+    return {
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: decodeAuthenticationWorkflowSnapshotResponse(responseWire),
     }
   } catch {
     return unavailable()

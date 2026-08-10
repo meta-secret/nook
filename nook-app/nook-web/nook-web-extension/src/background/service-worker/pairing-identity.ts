@@ -757,7 +757,6 @@ export async function availableWebsiteGrants({
             status:
               | WebsiteAuthenticatorResponseStatus.Unavailable
               | WebsiteAuthenticatorResponseStatus.Locked
-            accounts: []
           }
     }
 > {
@@ -774,7 +773,6 @@ export async function availableWebsiteGrants({
       response: {
         ok: true,
         status: WebsiteAuthenticatorResponseStatus.Unavailable,
-        accounts: [],
       },
     }
   }
@@ -791,7 +789,6 @@ export async function availableWebsiteGrants({
       response: {
         ok: true,
         status: WebsiteAuthenticatorResponseStatus.Locked,
-        accounts: [],
       },
     }
   }

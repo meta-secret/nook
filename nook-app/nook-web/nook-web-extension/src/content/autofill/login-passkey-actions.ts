@@ -31,6 +31,7 @@ import {
 
 export {
   RuntimeMessageDeliveryKind,
+  sendAuthenticationWorkflowSnapshotRuntimeMessage,
   sendAuthenticationOutcomeRuntimeMessage,
   sendDecodedRuntimeMessage,
   sendRuntimeMessageWithoutResponse,

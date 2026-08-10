@@ -402,6 +402,20 @@ describe('ExtensionSessionMessageDispatcher', () => {
     await Promise.resolve()
     expect(unrelatedMessageResponded).toBe(false)
 
+    let lockMessageResponded = false
+    const lockResponse = () => {
+      lockMessageResponded = true
+    }
+    expect(
+      registration.listener(
+        { type: ExtensionSessionMessageType.Lock },
+        sameExtensionSender,
+        lockResponse,
+      ),
+    ).toBe(false)
+    await Promise.resolve()
+    expect(lockMessageResponded).toBe(false)
+
     const malformedResponse = new Promise<unknown>((resolve) => {
       const sender: chrome.runtime.MessageSender = { id: 'nook-extension' }
       const keepsResponseChannelOpen = registration.listener(

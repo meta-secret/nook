@@ -10,6 +10,7 @@
 )]
 
 mod authentication_workflow;
+mod authentication_workflow_response;
 mod backup_code_candidates;
 mod extension_pairing_state;
 mod extension_persistence;
@@ -25,6 +26,10 @@ pub use authentication_workflow::{
     AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowNotDetected,
     AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage, classify_authentication_workflow,
     classify_authentication_workflow_candidates,
+};
+pub use authentication_workflow_response::{
+    AuthenticationWorkflowSnapshotResponse, AuthenticationWorkflowSnapshotResponseDecodeError,
+    AuthenticationWorkflowSnapshotResponseWire, decode_authentication_workflow_snapshot_response,
 };
 pub use backup_code_candidates::{extract_backup_code_candidates, page_has_backup_code_hint};
 pub use extension_pairing_state::{

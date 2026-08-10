@@ -532,7 +532,11 @@ test('keeps the extension vault independent and switches after valid re-pairing'
         })
         return chrome.runtime.sendMessage({
           type: 'nook:extension-session-list-logins',
-          payload: { ...(grant as object), origin: 'https://example.com' },
+          payload: {
+            ...(grant as object),
+            origin: 'https://example.com',
+            queue: { kind: 'message-default' },
+          },
         })
       },
       replacementGrant,

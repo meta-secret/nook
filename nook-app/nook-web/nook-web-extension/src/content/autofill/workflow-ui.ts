@@ -3,13 +3,8 @@ import {
   type BrowserMessageKey,
 } from '../../lib/browser-message-keys'
 import { compactProgressState } from '../../lib/auth-widget-policy'
-import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
 import type { WebsiteLoginFillResponse } from '../../lib/login-fill-messages'
-import {
-  AuthenticationWorkflowAction,
-  AuthenticationWorkflowKind,
-  AuthenticationWorkflowStage,
-} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { AuthenticationWorkflowKind } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   ExtensionSetupLoadKind,
   loadExtensionSetupState,
@@ -32,57 +27,6 @@ export const OUTCOME_EVIDENCE_TIMEOUT_MS = 8_000
 export const OUTCOME_EVIDENCE_POLL_MS = 250
 
 export type { WebsiteLoginFillResponse as LoginFillResponse }
-
-export type WorkflowSnapshotResponse = {
-  ok?: boolean
-  snapshot?: AuthenticationWorkflowSnapshotView
-  reason?: string
-}
-
-export function isWorkflowSnapshotResponse(
-  response: object,
-): response is WorkflowSnapshotResponse {
-  if (!('ok' in response) || typeof response.ok !== 'boolean') return false
-  if (response.ok === false) {
-    return !('reason' in response) || typeof response.reason === 'string'
-  }
-  if (
-    !('snapshot' in response) ||
-    !response.snapshot ||
-    typeof response.snapshot !== 'object'
-  ) {
-    return false
-  }
-  const snapshot = response.snapshot
-  return (
-    'kind' in snapshot &&
-    typeof snapshot.kind === 'number' &&
-    Number.isInteger(snapshot.kind) &&
-    snapshot.kind >= AuthenticationWorkflowKind.Login &&
-    snapshot.kind <= AuthenticationWorkflowKind.Manual &&
-    'stage' in snapshot &&
-    typeof snapshot.stage === 'number' &&
-    Number.isInteger(snapshot.stage) &&
-    snapshot.stage >= AuthenticationWorkflowStage.Credentials &&
-    snapshot.stage <= AuthenticationWorkflowStage.Manual &&
-    'action' in snapshot &&
-    typeof snapshot.action === 'number' &&
-    Number.isInteger(snapshot.action) &&
-    snapshot.action >= AuthenticationWorkflowAction.ContinueWithNook &&
-    snapshot.action <= AuthenticationWorkflowAction.TakeOver &&
-    'currentStep' in snapshot &&
-    typeof snapshot.currentStep === 'number' &&
-    Number.isInteger(snapshot.currentStep) &&
-    'totalSteps' in snapshot &&
-    typeof snapshot.totalSteps === 'number' &&
-    Number.isInteger(snapshot.totalSteps) &&
-    'requiresHumanApproval' in snapshot &&
-    typeof snapshot.requiresHumanApproval === 'boolean' &&
-    'observationIndex' in snapshot &&
-    typeof snapshot.observationIndex === 'number' &&
-    Number.isInteger(snapshot.observationIndex)
-  )
-}
 
 export type WorkflowCopy = {
   titleKey: BrowserMessageKey

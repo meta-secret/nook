@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { AuthenticationOutcomeVerdict } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   RuntimeMessageDeliveryKind,
+  sendAuthenticationWorkflowSnapshotRuntimeMessage,
   sendAuthenticationOutcomeRuntimeMessage,
   sendDecodedRuntimeMessage,
   sendLoginOptionsRuntimeMessage,
@@ -80,6 +81,18 @@ describe('runtime message adapters', () => {
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
 
+  test('decodes the service worker locked login variant without accounts', async () => {
+    const response = { ok: true, status: 'locked' }
+    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+
+    const delivery = await sendLoginOptionsRuntimeMessage(message)
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
+      expect(delivery.response.kind).toBe('locked')
+    }
+  })
+
   test('decodes a valid login picker response in Rust', async () => {
     const response = {
       ok: true,
@@ -114,6 +127,48 @@ describe('runtime message adapters', () => {
     installRuntimeMock({ kind: RuntimeMockKind.LastError })
 
     const delivery = await sendLoginOptionsRuntimeMessage(message)
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
+  })
+
+  test('decodes a valid workflow snapshot through Rust', async () => {
+    const response = {
+      ok: true,
+      snapshot: {
+        kind: 0,
+        stage: 0,
+        action: 0,
+        currentStep: 1,
+        totalSteps: 3,
+        requiresHumanApproval: true,
+        observationIndex: 0,
+      },
+    }
+    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+
+    const delivery =
+      await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
+  })
+
+  test('rejects an out-of-range workflow snapshot through Rust', async () => {
+    const response = {
+      ok: true,
+      snapshot: {
+        kind: 0,
+        stage: 0,
+        action: 0,
+        currentStep: -1,
+        totalSteps: 300,
+        requiresHumanApproval: true,
+        observationIndex: -1,
+      },
+    }
+    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+
+    const delivery =
+      await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })

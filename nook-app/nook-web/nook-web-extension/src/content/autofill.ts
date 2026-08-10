@@ -4,9 +4,8 @@ import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 import { cancelPendingAuthenticatorPickerRequest } from './autofill/authenticator-actions'
 import {
   cancelPendingLoginPickerRequest,
-  type DecodedRuntimeMessageArgs,
   RuntimeMessageDeliveryKind,
-  sendDecodedRuntimeMessage,
+  sendAuthenticationWorkflowSnapshotRuntimeMessage,
 } from './autofill/login-passkey-actions'
 import {
   beginPendingSaveWatch,
@@ -30,9 +29,7 @@ import {
   renderEnrollmentWidget,
   renderWidget,
 } from './autofill/widget-rendering'
-import type { WorkflowSnapshotResponse } from './autofill/workflow-ui'
 import {
-  isWorkflowSnapshotResponse,
   MAX_WORKFLOW_OBSERVATIONS,
   loadPilotVaultConnection,
 } from './autofill/workflow-ui'
@@ -95,7 +92,9 @@ async function scanAndRender(): Promise<void> {
   }
 
   const boundedCount = (count: number) => Math.min(count, 100)
-  const message = {
+  const message: Parameters<
+    typeof sendAuthenticationWorkflowSnapshotRuntimeMessage
+  >[0] = {
     type: 'nook:authentication-workflow-snapshot',
     payload: {
       origin: location.origin,
@@ -117,23 +116,19 @@ async function scanAndRender(): Promise<void> {
       })),
     },
   }
-  const sendArgs: DecodedRuntimeMessageArgs<WorkflowSnapshotResponse> = {
-    message,
-    decode: isWorkflowSnapshotResponse,
-  }
   const delivery =
-    await sendDecodedRuntimeMessage<WorkflowSnapshotResponse>(sendArgs)
+    await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
   if (sequence !== scanState.sequence) return
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     removeScannedWidget()
     return
   }
   const { response } = delivery
-  const snapshot = response.snapshot
-  if (response.ok !== true || !snapshot) {
+  if (response.kind !== 'matched') {
     removeScannedWidget()
     return
   }
+  const { snapshot } = response
   const selected = workflowForms[snapshot.observationIndex]
   if (!selected) {
     removeScannedWidget()

@@ -342,7 +342,8 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
         typeof message !== 'object' ||
         !('type' in message) ||
         typeof message.type !== 'string' ||
-        !message.type.startsWith('nook:extension-session-')
+        !message.type.startsWith('nook:extension-session-') ||
+        message.type === ExtensionSessionMessageType.Lock
       ) {
         return false
       }
@@ -357,14 +358,6 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
         }
         const request = parsed.request
         const type = request.type
-        if (type === ExtensionSessionMessageType.Lock) {
-          const unsupportedResponse: Parameters<typeof sendResponse>[0] = {
-            ok: false,
-            error: 'Unsupported extension session request.',
-          }
-          sendResponse(unsupportedResponse)
-          return
-        }
         const serviceWorkerOnly =
           type === ExtensionSessionMessageType.SealIdentityHandoff ||
           type === ExtensionSessionMessageType.CancelPasskey

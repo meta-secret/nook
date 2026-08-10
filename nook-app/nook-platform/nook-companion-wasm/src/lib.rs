@@ -34,6 +34,14 @@ pub fn decode_login_picker_open_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
+#[wasm_bindgen(js_name = decodeAuthenticationWorkflowSnapshotResponse)]
+pub fn decode_authentication_workflow_snapshot_response(
+    response: nook_companion_core::AuthenticationWorkflowSnapshotResponseWire,
+) -> Result<nook_companion_core::AuthenticationWorkflowSnapshotResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_authentication_workflow_snapshot_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
 #[wasm_bindgen(js_name = pageHasBackupCodeHint)]
 #[must_use]
 pub fn page_has_backup_code_hint(text: &str) -> bool {

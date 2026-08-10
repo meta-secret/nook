@@ -217,14 +217,13 @@ mod tests {
     }
 
     #[test]
-    fn decision_wire_rejects_a_commit_permission_that_contradicts_the_verdict() {
-        let error = match serde_json::from_str::<AuthenticationOutcomeDecision>(
+    fn decision_wire_rejects_a_commit_permission_that_contradicts_the_verdict() -> anyhow::Result<()>
+    {
+        let result = serde_json::from_str::<AuthenticationOutcomeDecision>(
             r#"{"verdict":1,"allowsCredentialCommit":true}"#,
-        ) {
-            Ok(decision) => {
-                panic!("insufficient evidence must never permit a credential commit: {decision:?}")
-            }
-            Err(error) => error,
+        );
+        let Err(error) = result else {
+            anyhow::bail!("insufficient evidence must never permit a credential commit")
         };
 
         assert!(
@@ -232,6 +231,7 @@ mod tests {
                 .to_string()
                 .contains("authentication outcome decision contradicts its verdict")
         );
+        Ok(())
     }
 
     #[test]

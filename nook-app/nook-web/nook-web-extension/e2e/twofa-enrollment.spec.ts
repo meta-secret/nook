@@ -42,7 +42,11 @@ async function listExtensionAuthenticators(
         globalThis.chrome.runtime.sendMessage(
           {
             type: 'nook:extension-session-list-authenticators',
-            payload: { ...grant, query: '' },
+            payload: {
+              ...grant,
+              query: '',
+              queue: { kind: 'message-default' },
+            },
           },
           resolve,
         )

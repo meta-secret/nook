@@ -39,7 +39,6 @@ type AuthenticatorUnavailableResponse = {
   status:
     | WebsiteAuthenticatorResponseStatus.Unavailable
     | WebsiteAuthenticatorResponseStatus.Locked
-  accounts: []
 }
 type AuthenticatorOptionsResponse =
   | AuthenticatorFailureResponse
