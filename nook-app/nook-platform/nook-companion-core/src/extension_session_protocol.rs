@@ -831,6 +831,105 @@ mod tests {
     }
 
     #[test]
+    fn validates_each_migrated_session_request_family() {
+        let cases = [
+            (
+                "recovery",
+                r#"{"type":"nook:extension-session-recover-passkey","payload":{"credentialId":[1],"userHandle":[2],"prfOutput":[3],"queue":{"kind":"message-default"}}}"#,
+                r#""prfOutput":[3],"#,
+            ),
+            (
+                "pin",
+                r#"{"type":"nook:extension-session-unlock-pin","payload":{"pin":"123456","queue":{"kind":"message-default"}}}"#,
+                r#""pin":"123456","#,
+            ),
+            (
+                "identity handoff",
+                r#"{"type":"nook:extension-session-seal-identity-handoff","payload":{"recipientPublicKey":"recipient","nonce":"nonce","expectedDeviceId":"device","expectedDevicePublicKey":"public","expectedDeviceSigningPublicKey":"signing","queue":{"kind":"message-default"}}}"#,
+                r#""nonce":"nonce","#,
+            ),
+            (
+                "passkey lookup",
+                r#"{"type":"nook:extension-session-list-passkeys","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","rpId":"example.com","origin":"https://example.com","queue":{"kind":"message-default"}}}"#,
+                r#""rpId":"example.com","#,
+            ),
+            (
+                "origin grant",
+                r#"{"type":"nook:extension-session-list-logins","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","origin":"https://example.com","queue":{"kind":"message-default"}}}"#,
+                r#""origin":"https://example.com","#,
+            ),
+            (
+                "secret grant",
+                r#"{"type":"nook:extension-session-reveal-login","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","origin":"https://example.com","secretId":"secret","queue":{"kind":"message-default"}}}"#,
+                r#""secretId":"secret","#,
+            ),
+            (
+                "query grant",
+                r#"{"type":"nook:extension-session-list-authenticators","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","query":"example","queue":{"kind":"message-default"}}}"#,
+                r#""query":"example","#,
+            ),
+            (
+                "secret-id grant",
+                r#"{"type":"nook:extension-session-authenticator-code","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","secretId":"secret","queue":{"kind":"message-default"}}}"#,
+                r#""secretId":"secret","#,
+            ),
+            (
+                "OTP preview",
+                r#"{"type":"nook:extension-session-authenticator-enroll-preview","payload":{"otpauthUri":"otpauth://totp/example","queue":{"kind":"message-default"}}}"#,
+                r#""otpauthUri":"otpauth://totp/example","#,
+            ),
+            (
+                "OTP confirm",
+                r#"{"type":"nook:extension-session-authenticator-enroll-confirm","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","otpauthUri":"otpauth://totp/example","origin":"https://example.com","queue":{"kind":"message-default"}}}"#,
+                r#""otpauthUri":"otpauth://totp/example","#,
+            ),
+            (
+                "backup attach",
+                r#"{"type":"nook:extension-session-authenticator-backup-attach","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","secretId":"secret","codes":["backup"],"mode":"replace","queue":{"kind":"message-default"}}}"#,
+                r#""codes":["backup"],"#,
+            ),
+            (
+                "login-save plan",
+                r#"{"type":"nook:extension-session-plan-login-save","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","origin":"https://example.com","username":"alice","password":"password","queue":{"kind":"message-default"}}}"#,
+                r#""password":"password","#,
+            ),
+            (
+                "pending login-save",
+                r#"{"type":"nook:extension-session-pending-login-save","payload":{"origin":"https://example.com","queue":{"kind":"message-default"}}}"#,
+                r#""origin":"https://example.com","#,
+            ),
+            (
+                "commit login-save",
+                r#"{"type":"nook:extension-session-commit-login-save","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","origin":"https://example.com","offerId":"offer","queue":{"kind":"message-default"}}}"#,
+                r#""offerId":"offer","#,
+            ),
+            (
+                "dismiss login-save",
+                r#"{"type":"nook:extension-session-dismiss-login-save","payload":{"origin":"https://example.com","offerId":"offer","queue":{"kind":"message-default"}}}"#,
+                r#""offerId":"offer","#,
+            ),
+            (
+                "assert ceremony",
+                r#"{"type":"nook:extension-session-assert-passkey","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","requestId":"request","requestJson":"{}","queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#,
+                r#""requestJson":"{}","#,
+            ),
+        ];
+
+        for (family, valid, required_field) in cases {
+            assert_eq!(
+                validate_extension_session_request_json(valid),
+                ExtensionSessionRequestValidation::Accepted,
+                "{family} request should be accepted"
+            );
+            assert_eq!(
+                validate_extension_session_request_json(&valid.replace(required_field, "")),
+                ExtensionSessionRequestValidation::Rejected,
+                "{family} request should require its domain fields"
+            );
+        }
+    }
+
+    #[test]
     fn decodes_login_options_into_a_domain_union() -> anyhow::Result<()> {
         let ready = r#"{"ok":true,"status":"ready","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com"}]}"#;
         assert_eq!(

@@ -1,6 +1,7 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { SerializedStorageProvider } from '../lib/provider-credential-staging'
+import { scrubProviderCredentials } from '../lib/provider-credential-staging'
 import {
   ExtensionSessionRequestValidation,
   type ExtensionSessionRequest as GeneratedExtensionSessionRequest,
@@ -135,6 +136,18 @@ export type ExtensionSessionSensitiveStage =
       request: ExtensionSessionNonImportRequest
     }
 
+enum ExtensionSessionIngressStageKind {
+  Invalid = 'invalid',
+  Staged = 'staged',
+}
+
+type ExtensionSessionIngressStage =
+  | { kind: ExtensionSessionIngressStageKind.Invalid }
+  | {
+      kind: ExtensionSessionIngressStageKind.Staged
+      request: ParsedExtensionSessionTransportRequest
+    }
+
 const sensitiveSessionFields: Readonly<
   Record<ExtensionSessionMessageType, readonly string[]>
 > = {
@@ -220,24 +233,99 @@ export function stageExtensionSessionSensitiveRequest(
   }
 }
 
+function isExtensionSessionMessageType(
+  value: string,
+): value is ExtensionSessionMessageType {
+  return Object.prototype.hasOwnProperty.call(sensitiveSessionFields, value)
+}
+
+function stageExtensionSessionIngressRequest(
+  value: unknown,
+): ExtensionSessionIngressStage {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('type' in value) ||
+    typeof value.type !== 'string' ||
+    !isExtensionSessionMessageType(value.type) ||
+    !('payload' in value) ||
+    !value.payload ||
+    typeof value.payload !== 'object'
+  ) {
+    return { kind: ExtensionSessionIngressStageKind.Invalid }
+  }
+
+  const request = value as ParsedExtensionSessionTransportRequest
+  if (request.type === ExtensionSessionMessageType.ImportVault) {
+    const providers = request.payload.providers
+    if (!Array.isArray(providers)) {
+      request.payload.providers = []
+      return { kind: ExtensionSessionIngressStageKind.Invalid }
+    }
+    try {
+      const stagedProviders = structuredClone(providers)
+      scrubProviderCredentials(providers)
+      request.payload.providers = []
+      return {
+        kind: ExtensionSessionIngressStageKind.Staged,
+        request: {
+          ...request,
+          payload: { ...request.payload, providers: stagedProviders },
+        },
+      }
+    } catch {
+      scrubProviderCredentials(providers)
+      request.payload.providers = []
+      return { kind: ExtensionSessionIngressStageKind.Invalid }
+    }
+  }
+
+  const sensitiveStage = stageExtensionSessionSensitiveRequest(request)
+  return {
+    kind: ExtensionSessionIngressStageKind.Staged,
+    request:
+      sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged
+        ? sensitiveStage.request
+        : request,
+  }
+}
+
+function clearExtensionSessionIngressRequest(
+  request: ParsedExtensionSessionTransportRequest,
+): void {
+  if (request.type === ExtensionSessionMessageType.ImportVault) {
+    scrubProviderCredentials(request.payload.providers)
+    request.payload.providers = []
+    return
+  }
+  clearExtensionSessionSensitiveRequest(request)
+}
+
 export async function parseExtensionSessionRequest(
   value: unknown,
 ): Promise<ExtensionSessionRequestParse> {
+  const ingressStage = stageExtensionSessionIngressRequest(value)
+  if (ingressStage.kind === ExtensionSessionIngressStageKind.Invalid) {
+    return { kind: ExtensionSessionRequestParseKind.Invalid }
+  }
+  const request = ingressStage.request
   try {
     await companionWasmReady
-    const requestWire = value as ExtensionSessionRequestWire
+    const requestWire = request as ExtensionSessionRequestWire
     if (
       validateExtensionSessionRequest(requestWire) !==
       ExtensionSessionRequestValidation.Accepted
     ) {
+      clearExtensionSessionIngressRequest(request)
       return { kind: ExtensionSessionRequestParseKind.Invalid }
     }
   } catch {
+    clearExtensionSessionIngressRequest(request)
     return { kind: ExtensionSessionRequestParseKind.Invalid }
   }
   return {
     kind: ExtensionSessionRequestParseKind.Parsed,
-    request: value as ParsedExtensionSessionTransportRequest,
+    request,
   }
 }
 

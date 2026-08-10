@@ -100,6 +100,52 @@ describe('ExtensionSessionMessageDispatcher', () => {
     await expect(response).resolves.toEqual({ pin: '123456' })
   })
 
+  test('stages browser-owned secrets before awaiting cold WASM', async () => {
+    const payload = {
+      pin: '123456',
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    }
+    const parsing = parseExtensionSessionRequest({
+      type: ExtensionSessionMessageType.CreatePin,
+      payload,
+    })
+
+    expect(payload.pin).toBe('')
+    const parsed = await parsing
+    expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+    if (parsed.kind === ExtensionSessionRequestParseKind.Parsed) {
+      expect(messagePayload(parsed.request).pin).toBe('123456')
+    }
+  })
+
+  test('stages provider credentials before awaiting cold WASM', async () => {
+    const providers = [
+      {
+        id: 'provider',
+        type: 'github' as const,
+        githubPat: 'github_pat_browser_owned_secret',
+      },
+    ]
+    const payload = {
+      vaultStoreId: 'vault',
+      deviceId: 'device',
+      devicePublicKey: 'public',
+      deviceSigningPublicKey: 'signing',
+      providers,
+      eventLogRecords: [],
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    }
+    const parsing = parseExtensionSessionRequest({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload,
+    })
+
+    expect(payload.providers).toEqual([])
+    expect(providers[0]).not.toHaveProperty('githubPat')
+    const parsed = await parsing
+    expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+  })
+
   test('rejects non-serialized providers before dispatching a vault import', async () => {
     const providers = [
       {
