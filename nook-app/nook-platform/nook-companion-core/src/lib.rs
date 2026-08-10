@@ -13,6 +13,7 @@ mod authentication_workflow;
 mod backup_code_candidates;
 mod extension_pairing_state;
 mod extension_persistence;
+mod extension_session_protocol;
 mod oauth_origin_policy;
 mod outcome_evidence;
 mod page_field_classification;
@@ -40,6 +41,11 @@ pub use extension_persistence::{
     ExtensionPersistenceArea, ExtensionPersistenceDatabaseState, ExtensionPersistenceObservation,
     ExtensionPersistenceStoreState, classify_extension_database_names,
     classify_extension_store_names, matching_extension_store_names,
+};
+pub use extension_session_protocol::{
+    ExtensionSessionRequestValidation, WebsiteLoginAccountOption, WebsiteLoginOptions,
+    WebsiteLoginOptionsDecodeError, decode_website_login_options_json,
+    validate_extension_session_request_json,
 };
 pub use oauth_origin_policy::{
     BrowserOAuthProvider, OAuthOriginSupport, OAuthOriginUnsupportedReason,

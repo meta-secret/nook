@@ -24,24 +24,53 @@ async function decodeProviders(providers: object) {
 }
 
 describe('ExtensionSessionMessageDispatcher', () => {
-  test('accepts explicit empty payloads for control commands', () => {
+  test('accepts explicit empty payloads for control commands', async () => {
     for (const type of [
       ExtensionSessionMessageType.MigrateAuthProviders,
       ExtensionSessionMessageType.Reset,
       ExtensionSessionMessageType.Status,
     ]) {
       const message = { type, payload: {} }
-      const parse = parseExtensionSessionRequest(message)
+      const parse = await parseExtensionSessionRequest(message)
       expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     }
   })
 
-  test('rejects payloadless control commands at browser ingress', () => {
+  test('rejects payloadless control commands at browser ingress', async () => {
     const message = {
       type: ExtensionSessionMessageType.Status,
     }
-    const parse = parseExtensionSessionRequest(message)
+    const parse = await parseExtensionSessionRequest(message)
     expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
+  })
+
+  test('rejects malformed provider and event-log elements at Rust ingress', async () => {
+    const grant = {
+      vaultStoreId: 'vault',
+      deviceId: 'device',
+      devicePublicKey: 'public',
+      deviceSigningPublicKey: 'signing',
+    }
+    const malformedProvider = await parseExtensionSessionRequest({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: {
+        ...grant,
+        providers: [{ githubPat: 'secret' }],
+        eventLogRecords: [],
+      },
+    })
+    expect(malformedProvider.kind).toBe(
+      ExtensionSessionRequestParseKind.Invalid,
+    )
+
+    const malformedEvent = await parseExtensionSessionRequest({
+      type: ExtensionSessionMessageType.UpdateVault,
+      payload: {
+        ...grant,
+        eventLogRecords: [{ eventId: 'event' }],
+      },
+    })
+    expect(malformedEvent.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
   })
 
   test('stages sensitive fields and clears the caller-owned payload', async () => {

@@ -9,6 +9,22 @@
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
+#[wasm_bindgen(js_name = validateExtensionSessionRequestJson)]
+#[must_use]
+pub fn validate_extension_session_request_json(
+    serialized: &str,
+) -> nook_companion_core::ExtensionSessionRequestValidation {
+    nook_companion_core::validate_extension_session_request_json(serialized)
+}
+
+#[wasm_bindgen(js_name = decodeWebsiteLoginOptionsJson)]
+pub fn decode_website_login_options_json(
+    serialized: &str,
+) -> Result<nook_companion_core::WebsiteLoginOptions, wasm_bindgen::JsError> {
+    nook_companion_core::decode_website_login_options_json(serialized)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
 #[wasm_bindgen(js_name = pageHasBackupCodeHint)]
 #[must_use]
 pub fn page_has_backup_code_hint(text: &str) -> bool {

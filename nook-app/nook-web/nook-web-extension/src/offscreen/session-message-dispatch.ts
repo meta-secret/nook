@@ -327,43 +327,45 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
   registerRuntimeListener(): void {
     // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      const parsed = parseExtensionSessionRequest(message)
-      if (parsed.kind === ExtensionSessionRequestParseKind.Invalid) return false
-      const request = parsed.request
-      const type = request.type
-      if (type === ExtensionSessionMessageType.Lock) return false
-      const serviceWorkerOnly =
-        type === ExtensionSessionMessageType.SealIdentityHandoff ||
-        type === ExtensionSessionMessageType.CancelPasskey
-      const serviceWorkerSender =
-        !sender.tab &&
-        (!sender.url ||
-          sender.url === chrome.runtime.getURL('background/service-worker.js'))
-      if (
-        sender.id !== chrome.runtime.id ||
-        (serviceWorkerOnly && !serviceWorkerSender) ||
-        !type.startsWith('nook:extension-session-')
-      ) {
-        return false
-      }
-      const direct =
-        type === ExtensionSessionMessageType.DismissLoginSave ||
-        type === ExtensionSessionMessageType.CancelPasskey
-      const response = direct
-        ? this.context.handleMessage(request)
-        : this.enqueue(request)
-      void response
-        .then((value) => sendResponse(value))
-        .catch((error) => {
-          const nookArrowArgs0: Parameters<typeof sendResponse>[0] = {
-            ok: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Extension session failed.',
-          }
-          return sendResponse(nookArrowArgs0)
-        })
+      if (sender.id !== chrome.runtime.id) return false
+      void parseExtensionSessionRequest(message).then((parsed) => {
+        if (parsed.kind === ExtensionSessionRequestParseKind.Invalid) return
+        const request = parsed.request
+        const type = request.type
+        if (type === ExtensionSessionMessageType.Lock) return
+        const serviceWorkerOnly =
+          type === ExtensionSessionMessageType.SealIdentityHandoff ||
+          type === ExtensionSessionMessageType.CancelPasskey
+        const serviceWorkerSender =
+          !sender.tab &&
+          (!sender.url ||
+            sender.url ===
+              chrome.runtime.getURL('background/service-worker.js'))
+        if (
+          (serviceWorkerOnly && !serviceWorkerSender) ||
+          !type.startsWith('nook:extension-session-')
+        ) {
+          return
+        }
+        const direct =
+          type === ExtensionSessionMessageType.DismissLoginSave ||
+          type === ExtensionSessionMessageType.CancelPasskey
+        const response = direct
+          ? this.context.handleMessage(request)
+          : this.enqueue(request)
+        void response
+          .then((value) => sendResponse(value))
+          .catch((error) => {
+            const nookArrowArgs0: Parameters<typeof sendResponse>[0] = {
+              ok: false,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : 'Extension session failed.',
+            }
+            return sendResponse(nookArrowArgs0)
+          })
+      })
       return true
     })
   }

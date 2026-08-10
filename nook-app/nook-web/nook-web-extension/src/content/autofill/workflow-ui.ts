@@ -30,22 +30,6 @@ export const OUTCOME_EVIDENCE_TIMEOUT_MS = 8_000
 
 export const OUTCOME_EVIDENCE_POLL_MS = 250
 
-export enum LoginOptionsResponseStatus {
-  Ready = 'ready',
-  Locked = 'locked',
-  Unavailable = 'unavailable',
-}
-
-export type LoginOptionsResponse = {
-  ok?: boolean
-  status?:
-    | LoginOptionsResponseStatus.Ready
-    | LoginOptionsResponseStatus.Locked
-    | LoginOptionsResponseStatus.Unavailable
-  accounts?: WebsiteLoginAccountOption[]
-  reason?: string
-}
-
 export type { WebsiteLoginFillResponse as LoginFillResponse }
 
 export type WorkflowSnapshotResponse = {
