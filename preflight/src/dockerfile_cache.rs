@@ -62,7 +62,7 @@ fn collect_dockerfiles(directory: &Path, dockerfiles: &mut Vec<PathBuf>) -> io::
     Ok(())
 }
 
-fn is_generated_directory(path: &Path) -> bool {
+pub(super) fn is_generated_directory(path: &Path) -> bool {
     let name = path.file_name().and_then(|name| name.to_str());
     matches!(name, Some(".git" | "node_modules" | "target" | "dist"))
         || path.ends_with(Path::new("nook-web-shared/src/vault-app/lib/nook-wasm"))

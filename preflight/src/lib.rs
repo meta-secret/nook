@@ -9,6 +9,7 @@ mod typescript_domain_boundary;
 mod typescript_state;
 
 pub use dockerfile_cache::dockerfile_cache_mounts;
+use dockerfile_cache::is_generated_directory;
 pub use typescript_domain_boundary::*;
 
 pub use rust_macros::authored_rust_macro_definitions;

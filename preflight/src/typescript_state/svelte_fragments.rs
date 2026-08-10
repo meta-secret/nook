@@ -73,7 +73,7 @@ pub(super) fn svelte_generic_optional_state_lines(
     Ok(lines)
 }
 
-fn collect_svelte_script_fragments_with(
+pub(super) fn collect_svelte_script_fragments_with(
     node: tree_sitter::Node<'_>,
     source: &str,
     lines: &mut Vec<usize>,
