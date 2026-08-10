@@ -328,6 +328,15 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
     // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (sender.id !== chrome.runtime.id) return false
+      if (
+        !message ||
+        typeof message !== 'object' ||
+        !('type' in message) ||
+        typeof message.type !== 'string' ||
+        !message.type.startsWith('nook:extension-session-')
+      ) {
+        return false
+      }
       void parseExtensionSessionRequest(message).then((parsed) => {
         if (parsed.kind === ExtensionSessionRequestParseKind.Invalid) {
           const invalidResponse: Parameters<typeof sendResponse>[0] = {

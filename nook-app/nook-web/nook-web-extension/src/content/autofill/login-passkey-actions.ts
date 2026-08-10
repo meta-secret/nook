@@ -31,9 +31,14 @@ import {
 
 export {
   RuntimeMessageDeliveryKind,
-  sendRuntimeMessage,
+  sendDecodedRuntimeMessage,
+  sendRuntimeMessageWithoutResponse,
 } from './runtime-message-adapter'
-export type { RuntimeMessageDelivery } from './runtime-message-adapter'
+export type {
+  DecodedRuntimeMessageArgs,
+  RuntimeMessageDelivery,
+  RuntimeMessageResponseDecoder,
+} from './runtime-message-adapter'
 
 export type PasskeyWidgetAction =
   | AuthenticationWorkflowAction.UsePasskey

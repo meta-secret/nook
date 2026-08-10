@@ -15,6 +15,7 @@ import {
 import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
 import {
   RuntimeMessageDeliveryKind,
+  type DecodedRuntimeMessageArgs,
   type RuntimeMessageDelivery,
 } from './autofill/login-passkey-actions'
 import {
@@ -31,7 +32,10 @@ import {
 export interface BackupEnrollmentHost extends EnrollmentFlowViewHost {
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
-  sendRuntimeMessage: <T>(message: object) => Promise<RuntimeMessageDelivery<T>>
+  sendDecodedRuntimeMessage: <Response extends object>(
+    args: DecodedRuntimeMessageArgs<Response>,
+  ) => Promise<RuntimeMessageDelivery<Response>>
+  sendRuntimeMessageWithoutResponse: (message: object) => void
   translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (args: {
     key: BrowserMessageKey
@@ -60,6 +64,58 @@ enum BackupAttachMode {
 type BackupAttachResponse = {
   ok?: boolean
   reason?: string
+}
+
+function isBackupAttachResponse(
+  response: object,
+): response is BackupAttachResponse {
+  return (
+    'ok' in response &&
+    typeof response.ok === 'boolean' &&
+    (!('reason' in response) || typeof response.reason === 'string')
+  )
+}
+
+function isAuthenticatorOption(
+  account: object,
+): account is WebsiteAuthenticatorOption {
+  return (
+    'vaultStoreId' in account &&
+    typeof account.vaultStoreId === 'string' &&
+    'secretId' in account &&
+    typeof account.secretId === 'string' &&
+    'vaultName' in account &&
+    typeof account.vaultName === 'string' &&
+    'issuer' in account &&
+    typeof account.issuer === 'string' &&
+    'account' in account &&
+    typeof account.account === 'string'
+  )
+}
+
+function isBackupAuthenticatorOptionsResponse(
+  response: object,
+): response is AuthenticatorOptionsResponse {
+  if (!('ok' in response) || typeof response.ok !== 'boolean') return false
+  if (response.ok === false) return true
+  if (!('status' in response)) return false
+  if (response.status !== AuthenticatorOptionsResponseStatus.Ready) {
+    return (
+      response.status === AuthenticatorOptionsResponseStatus.Locked ||
+      response.status === AuthenticatorOptionsResponseStatus.Unavailable
+    )
+  }
+  return (
+    'accounts' in response &&
+    Array.isArray(response.accounts) &&
+    response.accounts.every((account) =>
+      Boolean(
+        account &&
+        typeof account === 'object' &&
+        isAuthenticatorOption(account),
+      ),
+    )
+  )
 }
 
 function detectEnrollmentHints(): EnrollmentPageHints {
@@ -120,7 +176,7 @@ function showBackupModeChooser({
       text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupWorking),
     }
     setHostDescription(nookTypedArgs0_46)
-    const nookTypedArgs0_5: Parameters<typeof host.sendRuntimeMessage>[0] = {
+    const message = {
       type: 'nook:website-authenticator-backup-attach',
       payload: {
         origin: location.origin,
@@ -130,8 +186,12 @@ function showBackupModeChooser({
         mode,
       },
     }
+    const sendArgs: DecodedRuntimeMessageArgs<BackupAttachResponse> = {
+      message,
+      decode: isBackupAttachResponse,
+    }
     void host
-      .sendRuntimeMessage<BackupAttachResponse>(nookTypedArgs0_5)
+      .sendDecodedRuntimeMessage<BackupAttachResponse>(sendArgs)
       .then((delivery) => {
         if (
           delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
@@ -294,13 +354,17 @@ async function continueBackupWithAuthenticatorOptions({
   host.setBusy(true)
 
   try {
-    const nookTypedArgs0_6: Parameters<typeof host.sendRuntimeMessage>[0] = {
+    const message = {
       type: 'nook:website-authenticator-options',
       payload: { origin: location.origin },
     }
+    const sendArgs: DecodedRuntimeMessageArgs<AuthenticatorOptionsResponse> = {
+      message,
+      decode: isBackupAuthenticatorOptionsResponse,
+    }
     const delivery =
-      await host.sendRuntimeMessage<AuthenticatorOptionsResponse>(
-        nookTypedArgs0_6,
+      await host.sendDecodedRuntimeMessage<AuthenticatorOptionsResponse>(
+        sendArgs,
       )
 
     if (

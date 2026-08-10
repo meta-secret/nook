@@ -356,6 +356,24 @@ describe('ExtensionSessionMessageDispatcher', () => {
       ),
     ).toBe(false)
 
+    let unrelatedMessageResponded = false
+    const unrelatedMessage = { type: 'nook:website-login-options' }
+    const sameExtensionSender: chrome.runtime.MessageSender = {
+      id: 'nook-extension',
+    }
+    const unrelatedResponse = () => {
+      unrelatedMessageResponded = true
+    }
+    expect(
+      registration.listener(
+        unrelatedMessage,
+        sameExtensionSender,
+        unrelatedResponse,
+      ),
+    ).toBe(false)
+    await Promise.resolve()
+    expect(unrelatedMessageResponded).toBe(false)
+
     const malformedResponse = new Promise<unknown>((resolve) => {
       const sender: chrome.runtime.MessageSender = { id: 'nook-extension' }
       const keepsResponseChannelOpen = registration.listener(

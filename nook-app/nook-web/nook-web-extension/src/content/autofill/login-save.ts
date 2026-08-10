@@ -10,7 +10,12 @@ import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import {
   NookWebsiteLoginSaveDecision,
   WebsiteLoginSavePendingState,
+  isWebsiteLoginSaveActionResponse,
+  isWebsiteLoginSaveOfferResponse,
+  isWebsiteLoginSavePendingResponse,
+  type WebsiteLoginSaveActionResponse,
   type WebsiteLoginSaveOfferView,
+  type WebsiteLoginSaveOfferResponse,
   type WebsiteLoginSavePendingResponse,
 } from '../../lib/login-save-messages'
 import type {
@@ -18,8 +23,14 @@ import type {
   AuthenticationOutcomeVerdictView,
 } from '../../lib/outcome-evidence-messages'
 import {
+  isAuthenticationOutcomeResponse,
+  type AuthenticationOutcomeResponse,
+} from '../../lib/outcome-evidence-messages'
+import {
   RuntimeMessageDeliveryKind,
-  sendRuntimeMessage,
+  type DecodedRuntimeMessageArgs,
+  sendDecodedRuntimeMessage,
+  sendRuntimeMessageWithoutResponse,
 } from './login-passkey-actions'
 import {
   SavePageWatchKind,
@@ -39,27 +50,6 @@ import {
   removeWidget,
   translatedMessage,
 } from './workflow-ui'
-
-enum LoginSaveOfferResponseStatus {
-  Ready = 'ready',
-  Locked = 'locked',
-  Unavailable = 'unavailable',
-}
-
-type LoginSaveOfferResponse = {
-  ok?: boolean
-  status?:
-    | LoginSaveOfferResponseStatus.Ready
-    | LoginSaveOfferResponseStatus.Locked
-    | LoginSaveOfferResponseStatus.Unavailable
-  decision?: NookWebsiteLoginSaveDecision
-  offer?: WebsiteLoginSaveOfferView
-}
-
-type LoginSaveActionResponse = {
-  ok?: boolean
-  reason?: string
-}
 
 enum AuthenticationOutcomeReadKind {
   Available = 'available',
@@ -131,17 +121,19 @@ function collectOutcomeObservation({
 async function classifyOutcomeEvidence(
   observation: AuthenticationOutcomeObservationView,
 ): Promise<AuthenticationOutcomeRead> {
-  const nookTypedArgs0_0: Parameters<typeof sendRuntimeMessage>[0] = {
+  const message = {
     type: 'nook:authentication-outcome-classify',
     payload: {
       observation,
       timeoutMs: OUTCOME_EVIDENCE_TIMEOUT_MS,
     },
   }
-  const delivery = await sendRuntimeMessage<{
-    ok?: boolean
-    verdict?: AuthenticationOutcomeVerdictView
-  }>(nookTypedArgs0_0)
+  const sendArgs: DecodedRuntimeMessageArgs<AuthenticationOutcomeResponse> = {
+    message,
+    decode: isAuthenticationOutcomeResponse,
+  }
+  const delivery =
+    await sendDecodedRuntimeMessage<AuthenticationOutcomeResponse>(sendArgs)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok ||
@@ -188,11 +180,11 @@ export async function evaluatePendingSaveEvidence(): Promise<void> {
       observation.errorMarkerPresent)
   ) {
     stopPendingSaveWatch()
-    const nookTypedArgs0_1: Parameters<typeof sendRuntimeMessage>[0] = {
+    const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
       type: 'nook:website-login-save-dismiss',
       payload: { origin: location.origin, offerId: watch.offer.offerId },
     }
-    void sendRuntimeMessage(nookTypedArgs0_1)
+    sendRuntimeMessageWithoutResponse(message)
   }
 }
 
@@ -227,7 +219,7 @@ export function beginPendingSaveWatch(offer: WebsiteLoginSaveOfferView): void {
 async function stageSaveForCredentials(
   credentials: LoginCredentials,
 ): Promise<void> {
-  const nookTypedArgs0_3: Parameters<typeof sendRuntimeMessage>[0] = {
+  const message = {
     type: 'nook:website-login-save-offer',
     payload: {
       origin: location.origin,
@@ -235,16 +227,20 @@ async function stageSaveForCredentials(
       password: credentials.password,
     },
   }
+  const sendArgs: DecodedRuntimeMessageArgs<WebsiteLoginSaveOfferResponse> = {
+    message,
+    decode: isWebsiteLoginSaveOfferResponse,
+  }
   const delivery =
-    await sendRuntimeMessage<LoginSaveOfferResponse>(nookTypedArgs0_3)
+    await sendDecodedRuntimeMessage<WebsiteLoginSaveOfferResponse>(sendArgs)
   credentials.password = ''
   credentials.username = ''
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     return
   }
   const { response } = delivery
-  const offer = response.offer
-  if (response.ok !== true || !offer) return
+  if (response.ok !== true || !('offer' in response)) return
+  const { offer } = response
   if (saveOfferState.dismissedOfferIds.has(offer.offerId)) return
   beginPendingSaveWatch(offer)
 }
@@ -278,12 +274,16 @@ export type PendingSaveOfferLoad =
   | { kind: PendingSaveOfferLoadKind.Loaded; offer: WebsiteLoginSaveOfferView }
 
 export async function loadPendingSaveOffer(): Promise<PendingSaveOfferLoad> {
-  const nookTypedArgs0_4: Parameters<typeof sendRuntimeMessage>[0] = {
+  const message = {
     type: 'nook:website-login-save-pending',
     payload: { origin: location.origin },
   }
+  const sendArgs: DecodedRuntimeMessageArgs<WebsiteLoginSavePendingResponse> = {
+    message,
+    decode: isWebsiteLoginSavePendingResponse,
+  }
   const delivery =
-    await sendRuntimeMessage<WebsiteLoginSavePendingResponse>(nookTypedArgs0_4)
+    await sendDecodedRuntimeMessage<WebsiteLoginSavePendingResponse>(sendArgs)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok ||
@@ -340,11 +340,11 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   )
   dismissButton.addEventListener('click', () => {
     saveOfferState.dismissedOfferIds.add(offer.offerId)
-    const nookTypedArgs0_6: Parameters<typeof sendRuntimeMessage>[0] = {
+    const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
       type: 'nook:website-login-save-dismiss',
       payload: { origin: location.origin, offerId: offer.offerId },
     }
-    void sendRuntimeMessage(nookTypedArgs0_6)
+    sendRuntimeMessageWithoutResponse(message)
     widgetState.dismissed = true
     removeWidget()
   })
@@ -410,7 +410,7 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
       ),
     )
     evidence.elapsedMs = 0
-    const nookTypedArgs0_7: Parameters<typeof sendRuntimeMessage>[0] = {
+    const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
       type: 'nook:website-login-save-commit',
       payload: {
         origin: location.origin,
@@ -418,7 +418,12 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
         evidence,
       },
     }
-    void sendRuntimeMessage<LoginSaveActionResponse>(nookTypedArgs0_7)
+    const sendArgs: DecodedRuntimeMessageArgs<WebsiteLoginSaveActionResponse> =
+      {
+        message,
+        decode: isWebsiteLoginSaveActionResponse,
+      }
+    void sendDecodedRuntimeMessage<WebsiteLoginSaveActionResponse>(sendArgs)
       .then((delivery) => {
         if (
           delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
@@ -464,11 +469,11 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   notNowButton.addEventListener('click', (event) => {
     if (!isTrustedAuthAction(event.isTrusted)) return
     saveOfferState.dismissedOfferIds.add(offer.offerId)
-    const nookTypedArgs0_8: Parameters<typeof sendRuntimeMessage>[0] = {
+    const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
       type: 'nook:website-login-save-dismiss',
       payload: { origin: location.origin, offerId: offer.offerId },
     }
-    void sendRuntimeMessage(nookTypedArgs0_8)
+    sendRuntimeMessageWithoutResponse(message)
     widgetState.dismissed = true
     removeWidget()
   })

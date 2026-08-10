@@ -26,6 +26,76 @@ export type WebsiteLoginSavePendingResponse =
     }
   | { ok: false; reason: string }
 
+export type WebsiteLoginSaveOfferResponse =
+  { ok: true; offer: WebsiteLoginSaveOfferView } | { ok: true } | { ok: false }
+
+export type WebsiteLoginSaveActionResponse =
+  { ok: true } | { ok: false; reason?: string }
+
+function isWebsiteLoginSaveOfferView(
+  offer: object,
+): offer is WebsiteLoginSaveOfferView {
+  return (
+    'offerId' in offer &&
+    typeof offer.offerId === 'string' &&
+    offer.offerId.length > 0 &&
+    'decision' in offer &&
+    (offer.decision === NookWebsiteLoginSaveDecision.Create ||
+      offer.decision === NookWebsiteLoginSaveDecision.Update) &&
+    'vaultStoreId' in offer &&
+    typeof offer.vaultStoreId === 'string' &&
+    offer.vaultStoreId.length > 0 &&
+    'vaultName' in offer &&
+    typeof offer.vaultName === 'string'
+  )
+}
+
+export function isWebsiteLoginSaveOfferResponse(
+  response: object,
+): response is WebsiteLoginSaveOfferResponse {
+  if (!('ok' in response) || typeof response.ok !== 'boolean') return false
+  if (response.ok === false || !('offer' in response)) return true
+  return Boolean(
+    response.offer &&
+    typeof response.offer === 'object' &&
+    isWebsiteLoginSaveOfferView(response.offer),
+  )
+}
+
+export function isWebsiteLoginSavePendingResponse(
+  response: object,
+): response is WebsiteLoginSavePendingResponse {
+  if (!('ok' in response) || typeof response.ok !== 'boolean') return false
+  if (response.ok === false) {
+    return 'reason' in response && typeof response.reason === 'string'
+  }
+  if (!('state' in response)) return false
+  if (response.state === WebsiteLoginSavePendingState.Unavailable) {
+    return !('offer' in response)
+  }
+  return (
+    response.state === WebsiteLoginSavePendingState.Available &&
+    'offer' in response &&
+    Boolean(
+      response.offer &&
+      typeof response.offer === 'object' &&
+      isWebsiteLoginSaveOfferView(response.offer),
+    )
+  )
+}
+
+export function isWebsiteLoginSaveActionResponse(
+  response: object,
+): response is WebsiteLoginSaveActionResponse {
+  return (
+    'ok' in response &&
+    typeof response.ok === 'boolean' &&
+    (response.ok ||
+      !('reason' in response) ||
+      typeof response.reason === 'string')
+  )
+}
+
 export enum WebsiteLoginSaveOfferMessageType {
   NookWebsiteLoginSaveOffer = 'nook:website-login-save-offer',
 }

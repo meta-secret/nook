@@ -20,9 +20,9 @@ export type RuntimeMessageDelivery<Response> =
 export type GeneratedPasswordResponse =
   { ok: true; password: string } | { ok: false; reason: string }
 
-export function sendRuntimeMessage<Response>(
+function sendRuntimeMessage(
   message: unknown,
-): Promise<RuntimeMessageDelivery<Response>> {
+): Promise<RuntimeMessageDelivery<unknown>> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(message, (response: unknown) => {
       if (chrome.runtime.lastError) {
@@ -34,11 +34,42 @@ export function sendRuntimeMessage<Response>(
       }
       const delivered: Parameters<typeof resolve>[0] = {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: response as Response,
+        response,
       }
       resolve(delivered)
     })
   })
+}
+
+export type RuntimeMessageResponseDecoder<Response extends object> = (
+  response: object,
+) => response is Response
+
+export type DecodedRuntimeMessageArgs<Response extends object> = {
+  message: unknown
+  decode: RuntimeMessageResponseDecoder<Response>
+}
+
+export async function sendDecodedRuntimeMessage<Response extends object>({
+  message,
+  decode,
+}: DecodedRuntimeMessageArgs<Response>): Promise<
+  RuntimeMessageDelivery<Response>
+> {
+  const delivery = await sendRuntimeMessage(message)
+  if (
+    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+    !delivery.response ||
+    typeof delivery.response !== 'object'
+  ) {
+    return unavailable()
+  }
+  return decode(delivery.response)
+    ? {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: delivery.response,
+      }
+    : unavailable()
 }
 
 function unavailable<Response>(): RuntimeMessageDelivery<Response> {
@@ -48,7 +79,7 @@ function unavailable<Response>(): RuntimeMessageDelivery<Response> {
 export async function sendLoginOptionsRuntimeMessage(
   message: object,
 ): Promise<RuntimeMessageDelivery<WebsiteLoginOptions>> {
-  const delivery = await sendRuntimeMessage<unknown>(message)
+  const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     return unavailable()
   }
@@ -67,7 +98,7 @@ export async function sendLoginOptionsRuntimeMessage(
 export async function sendLoginPickerOpenRuntimeMessage(
   message: object,
 ): Promise<RuntimeMessageDelivery<LoginPickerOpenResponse>> {
-  const delivery = await sendRuntimeMessage<unknown>(message)
+  const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     return unavailable()
   }
@@ -86,7 +117,7 @@ export async function sendLoginPickerOpenRuntimeMessage(
 export async function sendGeneratePasswordRuntimeMessage(
   message: object,
 ): Promise<RuntimeMessageDelivery<GeneratedPasswordResponse>> {
-  const delivery = await sendRuntimeMessage<unknown>(message)
+  const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     return unavailable()
   }
@@ -118,5 +149,5 @@ export async function sendGeneratePasswordRuntimeMessage(
 }
 
 export function sendRuntimeMessageWithoutResponse(message: object): void {
-  void sendRuntimeMessage<unknown>(message)
+  void sendRuntimeMessage(message)
 }
