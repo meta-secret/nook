@@ -16,7 +16,6 @@ import {
 } from '../../lib/login-fill-messages'
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { LoginPickerKind, pickerState, widgetState } from './state'
-import type { LoginPickerOpenResponse } from './workflow-ui'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
 import {
   LoginFillDeliveryKind,

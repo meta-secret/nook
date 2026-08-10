@@ -4,10 +4,7 @@ import {
 } from '../../lib/browser-message-keys'
 import { compactProgressState } from '../../lib/auth-widget-policy'
 import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
-import type {
-  WebsiteLoginAccountOption,
-  WebsiteLoginFillResponse,
-} from '../../lib/login-fill-messages'
+import type { WebsiteLoginFillResponse } from '../../lib/login-fill-messages'
 import { AuthenticationWorkflowKind } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   ExtensionSetupLoadKind,
