@@ -36,11 +36,19 @@ import { decodeWebsiteLoginFillResponse } from './login-session-response-adapter
 
 type LoginOperationFailure = { ok: false; reason: string; verdict?: string }
 type LoginOperationSuccess = { ok: true }
+enum LoginPickerOpenStatus {
+  Ready = 'ready',
+}
+enum LoginSaveOfferStatus {
+  Unavailable = 'unavailable',
+  Locked = 'locked',
+  Ready = 'ready',
+}
 type LoginPickerOpenResponse =
   | LoginOperationFailure
   | {
       ok: true
-      status: 'ready'
+      status: LoginPickerOpenStatus.Ready
       requestId: string
       expiresAt: number
     }
@@ -49,10 +57,13 @@ type LoginPickerQueryResponse =
   | { ok: true; origin: string; accounts: WebsiteLoginAccountOption[] }
 type LoginSaveOfferResponse =
   | LoginOperationFailure
-  | { ok: true; status: 'unavailable' | 'locked' }
   | {
       ok: true
-      status: 'ready'
+      status: LoginSaveOfferStatus.Unavailable | LoginSaveOfferStatus.Locked
+    }
+  | {
+      ok: true
+      status: LoginSaveOfferStatus.Ready
       decision: NookWebsiteLoginSaveDecision
       offer?: WebsiteLoginSaveOfferView
     }
@@ -113,7 +124,12 @@ export async function openWebsiteLoginPicker({
     await removeLoginPicker(requestId)
     return { ok: false, reason: 'login-picker-open-failed' }
   }
-  return { ok: true, status: 'ready', requestId, expiresAt: request.expiresAt }
+  return {
+    ok: true,
+    status: LoginPickerOpenStatus.Ready,
+    requestId,
+    expiresAt: request.expiresAt,
+  }
 }
 
 export async function queryLoginPicker({
@@ -275,7 +291,7 @@ export async function websiteLoginSaveOffer({
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
     pendingPassword.value = ''
-    return { ok: true, status: 'unavailable' }
+    return { ok: true, status: LoginSaveOfferStatus.Unavailable }
   }
   await ensureExtensionSessionDocument()
   const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
@@ -291,7 +307,7 @@ export async function websiteLoginSaveOffer({
   ) {
     pendingPassword.value = ''
     openCompanionLauncherBestEffort()
-    return { ok: true, status: 'locked' }
+    return { ok: true, status: LoginSaveOfferStatus.Locked }
   }
 
   // Prefer the selected/ready vault, then the first password-filling grant.
@@ -321,7 +337,11 @@ export async function websiteLoginSaveOffer({
     response.decision === NookWebsiteLoginSaveDecision.AlreadySaved ||
     response.decision === NookWebsiteLoginSaveDecision.Invalid
   ) {
-    return { ok: true, status: 'ready', decision: response.decision }
+    return {
+      ok: true,
+      status: LoginSaveOfferStatus.Ready,
+      decision: response.decision,
+    }
   }
   if (
     (response.decision !== NookWebsiteLoginSaveDecision.Create &&
@@ -337,7 +357,12 @@ export async function websiteLoginSaveOffer({
     vaultStoreId: grant.vaultStoreId,
     vaultName: grant.vaultName,
   }
-  return { ok: true, status: 'ready', decision: response.decision, offer }
+  return {
+    ok: true,
+    status: LoginSaveOfferStatus.Ready,
+    decision: response.decision,
+    offer,
+  }
 }
 
 export async function websiteLoginSavePending({

@@ -373,10 +373,7 @@ async function discoverPairedExtensionIdentityOnce(
       discovery: { status: statusMessage.payload.status },
     };
   }
-  const scopes = statusMessage.payload.scopes.filter(
-    (scope): scope is ExtensionConnectScope =>
-      validScopes.has(scope as ExtensionConnectScope),
-  );
+  const scopes = statusMessage.payload.scopes.filter(isExtensionConnectScope);
   if (scopes.length === 0) {
     return {
       kind: ExtensionMessageDeliveryKind.Received,
