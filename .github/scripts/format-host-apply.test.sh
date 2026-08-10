@@ -53,6 +53,8 @@ printf '%s\n' "$script" | grep -q 'task format:diff' \
   || { echo 'format-host-apply test: expected task format:diff entrypoint' >&2; exit 1; }
 printf '%s\n' "$script" | grep -q 'task hive:format' \
   || { echo 'format-host-apply test: expected sealed Hive formatter' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q 'cargo fmt --manifest-path "$repo_root/preflight/Cargo.toml"' \
+  || { echo 'format-host-apply test: expected standalone preflight formatter' >&2; exit 1; }
 printf '%s\n' "$script" | grep -q 'task hive:guest:format' \
   || { echo 'format-host-apply test: expected native Hive guest formatter' >&2; exit 1; }
 printf '%s\n' "$script" | grep -Eq 'task docker:task( |$)' \

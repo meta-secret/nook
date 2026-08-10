@@ -40,6 +40,9 @@ else
   echo '==> Applied sealed-image format changes to the host working tree.'
 fi
 
+# The standalone preflight crate is outside nook-platform's Cargo workspace, so
+# the sealed platform formatter cannot discover it.
+cargo fmt --manifest-path "$repo_root/preflight/Cargo.toml"
 task hive:format
 task loom:format
 git status --short --untracked-files=no
