@@ -55,6 +55,11 @@ test('offer PIN device protection when passkeys are unavailable', async ({
 
   await page.getByTestId('device-protection-create-new-choice').click()
   await expect(page.getByTestId('device-protection-setup-btn')).toBeVisible()
+  await page.getByTestId('device-mode-select').click()
+  await page.getByRole('option', { name: 'High security' }).click()
+  await expect(page.getByTestId('device-mode-select')).toContainText(
+    'High security',
+  )
   await demoBeat(page)
 
   await page.getByTestId('device-protection-setup-btn').click()

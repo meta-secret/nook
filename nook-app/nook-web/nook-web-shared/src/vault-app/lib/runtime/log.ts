@@ -32,6 +32,7 @@ import {
   nookLogGetLevel,
   nookLogInit,
   nookLogSetLevel,
+  nookLogWithData,
 } from "$app-wasm";
 export enum LogLevel {
   Error = "error",
@@ -84,10 +85,29 @@ const FLUSH_INTERVAL_MS = 250;
 /** Cap the pre-init replay queue so early crash loops can't grow unbounded. */
 const PRE_INIT_QUEUE_MAX = 1000;
 
-type PendingRecord = {
-  readonly level: LogLevel;
-  readonly scope: string;
+enum PendingRecordKind {
+  Message = "message",
+  Structured = "structured",
+}
+
+type PendingRecord =
+  | {
+      readonly kind: PendingRecordKind.Message;
+      readonly level: LogLevel;
+      readonly scope: string;
+      readonly message: string;
+    }
+  | {
+      readonly kind: PendingRecordKind.Structured;
+      readonly level: LogLevel;
+      readonly scope: string;
+      readonly message: string;
+      readonly serializedContext: string;
+    };
+
+export type SerializedLogContext = {
   readonly message: string;
+  readonly serializedContext: string;
 };
 
 let wasmReady = false;
@@ -285,6 +305,7 @@ function persistMessage({
   if (!wasmReady) {
     if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
       const pushArgs: Parameters<typeof preInitQueue.push>[0] = {
+        kind: PendingRecordKind.Message,
         level,
         scope,
         message,
@@ -295,6 +316,38 @@ function persistMessage({
   }
   try {
     nookLog(level, scope, message);
+  } catch {
+    // Logging must never break the app.
+  }
+}
+
+/** Persist already-serialized adapter context without accepting a generic value bag. */
+function persistStructured({
+  level,
+  scope,
+  message,
+  serializedContext,
+}: {
+  readonly level: LogLevel;
+  readonly scope: string;
+  readonly message: string;
+  readonly serializedContext: string;
+}): void {
+  if (!wasmReady) {
+    if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
+      const queued: PendingRecord = {
+        kind: PendingRecordKind.Structured,
+        level,
+        scope,
+        message,
+        serializedContext,
+      };
+      preInitQueue.push(queued);
+    }
+    return;
+  }
+  try {
+    nookLogWithData(level, scope, message, serializedContext);
   } catch {
     // Logging must never break the app.
   }
@@ -448,6 +501,7 @@ export type ScopedLogger = {
   info: (message: string) => void;
   debug: (message: string) => void;
   trace: (message: string) => void;
+  warnWithContext: (context: SerializedLogContext) => void;
 };
 
 export function createLogger(scope: string): ScopedLogger {
@@ -497,6 +551,21 @@ export function createLogger(scope: string): ScopedLogger {
         };
         return record(recordArgs6);
       })(),
+    warnWithContext: ({ message, serializedContext }) => {
+      if (!isEnabled(LogLevel.Warn)) return;
+      const echoArgs: Parameters<typeof echo>[0] = {
+        level: LogLevel.Warn,
+        text: `[${scope}] ${message} ${serializedContext}`,
+      };
+      echo(echoArgs);
+      const persistArgs: Parameters<typeof persistStructured>[0] = {
+        level: LogLevel.Warn,
+        scope,
+        message,
+        serializedContext,
+      };
+      persistStructured(persistArgs);
+    },
   };
 }
 
@@ -648,7 +717,16 @@ export function initWasmLogging() {
     const queued = preInitQueue.splice(0, preInitQueue.length);
     for (const entry of queued) {
       try {
-        nookLog(entry.level, entry.scope, entry.message);
+        if (entry.kind === PendingRecordKind.Structured) {
+          nookLogWithData(
+            entry.level,
+            entry.scope,
+            entry.message,
+            entry.serializedContext,
+          );
+        } else {
+          nookLog(entry.level, entry.scope, entry.message);
+        }
       } catch {
         // Ignore — a broken early log must not block startup.
       }

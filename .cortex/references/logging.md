@@ -55,10 +55,11 @@ See [Agent rule: use app logs](#agent-rule-use-app-logs-for-playwright-debug-and
 - **Storage:** IndexedDB database `nook_logs`, store `logs` (auto-increment ring
   buffer, newest ~5000 entries kept). Separate from the vault DB (`nook_db`).
 - **Entry shape:** `{ ts, level, scope, message, data? }`.
-- **Bindings:** `nookLog` (persist-only), `nookLogInit`, `nookLogSetLevel`,
-  `nookLogGetLevel`, `nookLogDump`, `nookLogCount`, `nookLogFlush`,
-  `nookLogClear` (exported from `nook-app/nook-platform/nook-wasm/src/logger.rs`). The web shim wraps
-  these; do not call them directly from app code.
+- **Bindings:** `nookLog` (message-only persist), `nookLogWithData` (serialized
+  context persist), `nookLogInit`, `nookLogSetLevel`, `nookLogGetLevel`,
+  `nookLogDump`, `nookLogCount`, `nookLogFlush`, and `nookLogClear`. They are
+  exported from `nook-app/nook-platform/nook-wasm/src/logger.rs`. The web shim
+  wraps them. Do not call them directly from app code.
 
 ## Levels are persistence-gated
 
@@ -111,12 +112,20 @@ default is `info`. Almost all app logs today are `debug` (`wasm` status drain,
       "total": 120
     },
     "entries": [
-      { "ts": "…", "level": "debug", "scope": "vault", "message": "…" }
+      {
+        "ts": "…",
+        "level": "debug",
+        "scope": "vault",
+        "message": "…",
+        "data": "{\"outcome\":\"passkey_unavailable\"}"
+      }
     ]
   }
   ```
 
-  Each `entries[]` item matches the IndexedDB store: `{ ts, level, scope, message }`.
+  Each `entries[]` item matches the IndexedDB store:
+  `{ ts, level, scope, message, data? }`. `data` is an optional serialized JSON
+  string. It is not a generic domain value.
 
 - **Devtools:** `await window.__nookLog.dump({ minLevel: 'trace', limit: 500 })`,
   `window.__nookLog.count()`, `window.__nookLog.clear()`.
@@ -126,7 +135,11 @@ default is `info`. Almost all app logs today are `debug` (`wasm` status drain,
 - **Web:** `const log = createLogger('scope')` then `log.info(message)` /
   `log.debug(message)` etc. Messages are domain-specific strings. Stray
   `console.*` calls are also captured (scope `console`), but a scoped logger is
-  preferred.
+  preferred. Use `warnWithContext({ message, serializedContext })` only at the
+  logging adapter boundary when a typed, sanitized domain context must remain
+  queryable as the entry's separate `data` field. Serialize the domain value
+  before calling the logger. Do not pass generic value bags into application
+  code.
 - **Common web scopes:** `vault` (session lifecycle), `connect` (unlock/connect),
   `vault-sync`, `vault-local`, `vault-password`, `vault-devices`, `vault-providers`,
   `vault-session`, `vault-lifecycle`, `wasm` (status channel), `wasm-connect`,

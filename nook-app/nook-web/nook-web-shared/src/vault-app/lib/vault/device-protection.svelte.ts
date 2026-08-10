@@ -94,7 +94,11 @@ function logPasskeyCeremony({
   readonly message: string;
   readonly data: ReturnType<typeof sanitizedPasskeyCeremonyData>;
 }): void {
-  log.warn(message + " " + JSON.stringify(data));
+  const context: Parameters<typeof log.warnWithContext>[0] = {
+    message,
+    serializedContext: JSON.stringify(data),
+  };
+  log.warnWithContext(context);
 }
 
 export async function setupDeviceProtection({
