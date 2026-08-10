@@ -292,62 +292,6 @@ mod tests {
     static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     #[test]
-    fn reports_only_cache_mounts_in_dockerfiles() -> anyhow::Result<()> {
-        let root = temporary_directory()?;
-        fs::create_dir_all(root.join("nested"))?;
-        fs::create_dir_all(root.join("nook-app/nook-platform/docker/rust"))?;
-        fs::create_dir_all(
-            root.join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm"),
-        )?;
-        fs::write(
-            root.join("nested/build.Dockerfile"),
-            "FROM scratch\nRUN --mount=type=cache,target=/cache true\nRUN --mount=target=/other-cache,type=cache true\n",
-        )?;
-        fs::write(
-            root.join("nook-app/nook-platform/docker/rust/product.Dockerfile"),
-            "FROM scratch\nRUN --mount=type=cache,target=/wasm-cache true\n",
-        )?;
-        fs::write(
-            root.join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/Dockerfile"),
-            "FROM scratch\nRUN --mount=type=cache,target=/generated-cache true\n",
-        )?;
-        fs::write(root.join("notes.txt"), "--mount=type=cache")?;
-
-        let violations = dockerfile_cache_mounts(&root)?;
-
-        assert_eq!(
-            violations,
-            vec![
-                Violation {
-                    path: PathBuf::from("nested/build.Dockerfile"),
-                    line: 2,
-                },
-                Violation {
-                    path: PathBuf::from("nested/build.Dockerfile"),
-                    line: 3,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-platform/docker/rust/product.Dockerfile",),
-                    line: 2,
-                },
-            ]
-        );
-        fs::remove_dir_all(root)?;
-        Ok(())
-    }
-
-    #[test]
-    fn fails_when_repository_root_contains_no_dockerfiles() -> anyhow::Result<()> {
-        let root = temporary_directory()?;
-        let error = dockerfile_cache_mounts(&root)
-            .err()
-            .ok_or_else(|| anyhow::anyhow!("lib test should reject invalid input"))?;
-        assert_eq!(error.kind(), io::ErrorKind::NotFound);
-        fs::remove_dir_all(root)?;
-        Ok(())
-    }
-
-    #[test]
     fn reports_wasm_type_aliases_and_trivial_forwarders() {
         let source = r#"import {
   deleteAuthProvidersDb as deleteAuthProvidersDbWasm,

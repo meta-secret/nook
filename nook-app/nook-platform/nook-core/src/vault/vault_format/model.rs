@@ -41,3 +41,25 @@ impl VaultFormat {
         Self::Yaml
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_from_path() {
+        assert_eq!(
+            VaultFormat::from_path("nook-events.yaml"),
+            VaultFormat::Yaml
+        );
+        assert_eq!(
+            VaultFormat::from_path("nook-events.backup"),
+            VaultFormat::Yaml
+        );
+        assert_eq!(VaultFormat::from_path("nook-events.yml"), VaultFormat::Yaml);
+        assert_eq!(
+            VaultFormat::from_path("/data/user/nook-events.yaml"),
+            VaultFormat::Yaml
+        );
+    }
+}

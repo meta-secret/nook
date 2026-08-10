@@ -136,3 +136,41 @@ pub fn validate_github_repo_name(name: &str) -> ValidationResult<GithubRepoName>
     }
     Ok(GithubRepoName(repo))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_github_repo_name_defaults_and_rejects_invalid() -> anyhow::Result<()> {
+        assert_eq!(
+            validate_github_repo_name("  ")?.as_str(),
+            DEFAULT_GITHUB_REPO_NAME
+        );
+        assert_eq!(
+            validate_github_repo_name("work-vault")?.as_str(),
+            "work-vault"
+        );
+        assert!(validate_github_repo_name(".").is_err());
+        assert!(validate_github_repo_name("bad name").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn mask_github_pat_named_states() {
+        assert_eq!(mask_github_pat("   "), GithubPatMask::NoToken);
+        assert_eq!(mask_github_pat(""), GithubPatMask::NoToken);
+        assert_eq!(
+            mask_github_pat("github_pat_11AAAAAAAAAA"),
+            GithubPatMask::Hint("github_pat_11A…".to_owned())
+        );
+        assert_eq!(
+            mask_github_pat("ghp_1234567890ABCDEF"),
+            GithubPatMask::Hint("ghp_123456…".to_owned())
+        );
+        assert_eq!(
+            mask_github_pat("ghp_short"),
+            GithubPatMask::Hint("••••".to_owned())
+        );
+    }
+}

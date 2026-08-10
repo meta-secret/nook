@@ -168,3 +168,38 @@ where
         WireEvidence::Legacy(None) => PasskeyLastUsedAtEvidence::Unavailable,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn merge_usage_preserves_creation_evidence_and_applies_observed_usage() {
+        let mut creation = PasskeyBrowserObservation {
+            attachment: PasskeyAuthenticatorAttachment::Platform,
+            transports: vec![PasskeyTransport::Internal],
+            backup_state: PasskeyBackupState::Eligible,
+            aaguid: Some("aaguid-one".to_owned()),
+            browser: PasskeyObservedBrowser::Safari,
+            platform: PasskeyObservedPlatform::MacOs,
+            legacy_client_environment: None,
+        };
+
+        creation.merge_usage(PasskeyBrowserObservation {
+            backup_state: PasskeyBackupState::BackedUp,
+            browser: PasskeyObservedBrowser::Firefox,
+            platform: PasskeyObservedPlatform::Linux,
+            ..PasskeyBrowserObservation::default()
+        });
+
+        assert_eq!(
+            creation.attachment,
+            PasskeyAuthenticatorAttachment::Platform
+        );
+        assert_eq!(creation.transports, [PasskeyTransport::Internal]);
+        assert_eq!(creation.backup_state, PasskeyBackupState::BackedUp);
+        assert_eq!(creation.aaguid.as_deref(), Some("aaguid-one"));
+        assert_eq!(creation.browser, PasskeyObservedBrowser::Firefox);
+        assert_eq!(creation.platform, PasskeyObservedPlatform::Linux);
+    }
+}

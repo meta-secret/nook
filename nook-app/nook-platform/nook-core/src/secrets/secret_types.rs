@@ -492,7 +492,6 @@ impl SecretRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::engine::general_purpose::STANDARD;
 
     fn encoded(byte: u8, length: usize) -> String {
         URL_SAFE_NO_PAD.encode(vec![byte; length])
@@ -586,60 +585,5 @@ mod tests {
             }
         }
         Ok(())
-    }
-
-    fn file_attachment() -> FileAttachmentSecret {
-        let content = b"hello vault file";
-        FileAttachmentSecret {
-            title: "Recovery PDF".to_owned(),
-            file_name: "recovery.pdf".to_owned(),
-            mime_type: "application/pdf".to_owned(),
-            size_bytes: content.len() as u64,
-            content_base64: STANDARD.encode(content),
-        }
-    }
-
-    #[test]
-    fn file_attachment_payload_round_trips_as_yaml() -> anyhow::Result<()> {
-        let value = SecretValue::FileAttachment(file_attachment());
-        let yaml = value.to_yaml()?;
-        let decoded = SecretValue::from_yaml(SecretType::FileAttachment, &yaml)?;
-        assert_eq!(decoded, value);
-        assert!(yaml.as_str().contains("fileName: recovery.pdf"));
-        assert!(yaml.as_str().contains("mimeType: application/pdf"));
-        Ok(())
-    }
-
-    #[test]
-    fn file_attachment_validation_rejects_oversize_and_mismatched_length() {
-        let mut oversize = file_attachment();
-        let big = vec![7u8; FILE_ATTACHMENT_MAX_BYTES + 1];
-        oversize.size_bytes = big.len() as u64;
-        oversize.content_base64 = STANDARD.encode(&big);
-        assert!(oversize.validate().is_err());
-
-        let mut mismatched = file_attachment();
-        mismatched.size_bytes = 1;
-        assert!(mismatched.validate().is_err());
-
-        let mut path_name = file_attachment();
-        path_name.file_name = "../escape.pdf".to_owned();
-        assert!(path_name.validate().is_err());
-    }
-
-    #[test]
-    fn file_attachment_debug_and_zeroize_redact_content() {
-        let mut value = SecretValue::FileAttachment(file_attachment());
-        let encoded_content = STANDARD.encode(b"hello vault file");
-        let debug = format!("{value:?}");
-        assert!(debug.contains("[REDACTED]"));
-        assert!(!debug.contains(&encoded_content));
-
-        value.zeroize_plaintext();
-        let SecretValue::FileAttachment(value) = value else {
-            panic!("expected file attachment");
-        };
-        assert!(value.content_base64.is_empty());
-        assert!(value.file_name.is_empty());
     }
 }

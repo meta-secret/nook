@@ -430,24 +430,6 @@ mod tests {
     }
 
     #[test]
-    fn format_from_path() -> anyhow::Result<()> {
-        assert_eq!(
-            VaultFormat::from_path("nook-events.yaml"),
-            VaultFormat::Yaml
-        );
-        assert_eq!(
-            VaultFormat::from_path("nook-events.backup"),
-            VaultFormat::Yaml
-        );
-        assert_eq!(VaultFormat::from_path("nook-events.yml"), VaultFormat::Yaml);
-        assert_eq!(
-            VaultFormat::from_path("/data/user/nook-events.yaml"),
-            VaultFormat::Yaml
-        );
-        Ok(())
-    }
-
-    #[test]
     fn detect_empty_defaults_to_yaml() -> anyhow::Result<()> {
         assert_eq!(detect_stored_format("")?, VaultFormat::Yaml);
         assert_eq!(detect_stored_format("   \n  \n")?, VaultFormat::Yaml);
