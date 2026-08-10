@@ -5,7 +5,6 @@ import {
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairedVaultUnlockRequestMessage,
-  isExtensionPairingApprovedMessage,
   isOpenCompanionLauncherMessage,
   isOpenSimpleVaultMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
@@ -93,7 +92,7 @@ import {
 } from './service-worker/pairing-identity'
 import { handlePairingStateQuery } from './service-worker/pairing-state-query'
 import {
-  importApprovedPairing,
+  importPairingAfterCompanionReady,
   importLocalEventLogUpdate,
 } from './service-worker/pairing-import'
 import {
@@ -752,19 +751,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (
-    hasPairingApprovedType(message) &&
-    !isExtensionPairingApprovedMessage(message)
-  ) {
-    const nookTypedArgs0_9: Parameters<typeof sendResponse>[0] = {
-      ok: false,
-      reason: 'invalid-pairing-grant',
-    }
-    sendResponse(nookTypedArgs0_9)
-    return false
-  }
-
-  if (isExtensionPairingApprovedMessage(message)) {
+  if (hasPairingApprovedType(message)) {
     if (sender.id !== chrome.runtime.id) {
       const nookTypedArgs0_10: Parameters<typeof sendResponse>[0] = {
         ok: false,
@@ -774,7 +761,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       return false
     }
 
-    void importApprovedPairing(message).then(sendResponse)
+    void importPairingAfterCompanionReady(message).then(sendResponse)
     return true
   }
 
@@ -975,7 +962,7 @@ chrome.runtime.onMessageExternal.addListener(
       return true
     }
 
-    if (!isExtensionPairingApprovedMessage(message) || !isNokeySender(sender)) {
+    if (!hasPairingApprovedType(message) || !isNokeySender(sender)) {
       const nookTypedArgs0_23: Parameters<typeof sendResponse>[0] = {
         ok: false,
         reason: 'invalid-pairing-grant',
@@ -984,7 +971,7 @@ chrome.runtime.onMessageExternal.addListener(
       return false
     }
 
-    void importApprovedPairing(message).then(sendResponse)
+    void importPairingAfterCompanionReady(message).then(sendResponse)
     return true
   },
 )

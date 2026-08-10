@@ -307,11 +307,26 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 >
 > At the final validation boundary, run `task pr:validate PR=<number>` (or add `FULL_E2E=1` for a Main-fix PR).
 > Monitor review feedback while repository-owned exact-head checks run.
-> New actionable feedback takes priority over waiting for checks on a head that must change.
-> Stop watching or cancel obsolete validation, address and resolve the feedback, push the replacement head, and restart validation.
+> New actionable feedback takes priority over checks for a head that must change.
+>
+> When actionable feedback arrives:
+>
+> 1. Stop watching or cancel obsolete validation.
+> 2. Address the feedback.
+> 3. Reply to and resolve the thread.
+> 4. Run pre-push hygiene.
+> 5. Push the replacement head.
+> 6. Restart validation.
+>
 > Let exact-head checks finish only while the actionable feedback queue is empty.
 > A later push invalidates prior results and requires another explicit validation.
-> After any red remote run: fix, `task format`, commit, push, and dispatch the useful focused or complete remote validation again.
+>
+> After any red remote run:
+>
+> 1. Fix the failure.
+> 2. Run `task format`.
+> 3. Commit and push.
+> 4. Dispatch the useful focused or complete remote validation again.
 > See [workflows/remote-execution.md](workflows/remote-execution.md).
 
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.

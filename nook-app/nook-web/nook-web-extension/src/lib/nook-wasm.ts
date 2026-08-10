@@ -95,9 +95,14 @@ enum ExtensionRuntimeRequestType {
   UnlockPin = 'nook:extension-session-unlock-pin',
 }
 
-type ExtensionStatusRequest = { type: ExtensionRuntimeRequestType.Status }
+type ExtensionControlPayload = Readonly<Record<never, never>>
+type ExtensionStatusRequest = {
+  type: ExtensionRuntimeRequestType.Status
+  payload: ExtensionControlPayload
+}
 type ExtensionBeginPasskeySetupRequest = {
   type: ExtensionRuntimeRequestType.BeginPasskeySetup
+  payload: ExtensionControlPayload
 }
 type ExtensionFinishPasskeySetupRequest = {
   type: ExtensionRuntimeRequestType.FinishPasskeySetup
@@ -119,6 +124,7 @@ type ExtensionRecoverPasskeyRequest = {
 }
 type ExtensionUnlockOptionsRequest = {
   type: ExtensionRuntimeRequestType.UnlockOptions
+  payload: ExtensionControlPayload
 }
 type ExtensionUnlockPasskeyRequest = {
   type: ExtensionRuntimeRequestType.UnlockPasskey
@@ -372,6 +378,7 @@ async function createPasskey(
 export async function extensionDeviceProtectionStatus(): Promise<DeviceProtectionStatus> {
   const request: ExtensionStatusRequest = {
     type: ExtensionRuntimeRequestType.Status,
+    payload: {},
   }
   const response = await sessionResponse(request)
   const deviceStatus = deviceProtectionStatus(response.status)
@@ -406,6 +413,7 @@ export type ExtensionSessionDeviceState =
 export async function extensionSessionDevice(): Promise<ExtensionSessionDeviceState> {
   const request: ExtensionStatusRequest = {
     type: ExtensionRuntimeRequestType.Status,
+    payload: {},
   }
   const response = await sessionResponse(request)
   const status = deviceProtectionStatus(response.status)
@@ -430,6 +438,7 @@ export async function createExtensionPasskey(
   await ensureNookWasm()
   const beginRequest: ExtensionBeginPasskeySetupRequest = {
     type: ExtensionRuntimeRequestType.BeginPasskeySetup,
+    payload: {},
   }
   const setup = decodePasskeySetupResponse(await sessionResponse(beginRequest))
   const creationOptions = buildPasskeyCreationOptions(
@@ -480,6 +489,7 @@ export async function unlockExtensionPasskey(): Promise<ExtensionDeviceProtectio
   await ensureNookWasm()
   const optionsRequest: ExtensionUnlockOptionsRequest = {
     type: ExtensionRuntimeRequestType.UnlockOptions,
+    payload: {},
   }
   const material = decodePasskeyUnlockResponse(
     await sessionResponse(optionsRequest),

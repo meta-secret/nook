@@ -14,12 +14,19 @@ Before merge, inspect feedback currently present. Agents must:
 - interrupt obsolete check waiting when actionable feedback requires another
   push.
 
-The actionable feedback queue has priority over waiting for checks. When a new
-finding arrives, stop watching or cancel validation for the obsolete head when
-safe, make the fix, reply and resolve, run pre-push hygiene, and push the
-replacement head. Restart focused or complete validation for that head. Only
-let exact-head validation run to completion while the actionable feedback queue
-is empty.
+The actionable feedback queue has priority over waiting for checks.
+
+When a new finding arrives:
+
+1. Stop watching or cancel validation for the obsolete head when safe.
+2. Make the fix.
+3. Reply to and resolve the thread.
+4. Run pre-push hygiene.
+5. Push the replacement head.
+6. Restart focused or complete validation for that head.
+
+Only let exact-head validation finish while the actionable feedback queue is
+empty.
 
 `task pr:ready` enforces unresolved-thread count alongside the exact-head
 deployment, branch state, and applicable repository-owned PR checks. It reports

@@ -1,4 +1,8 @@
-import type { ExtensionPairingApprovedMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
+import {
+  type ExtensionPairingApprovedMessage,
+  isExtensionPairingApprovedMessage,
+} from '../../../../nook-web-shared/src/extension/runtime-messages'
 import type { ExtensionPairingGrantApproval } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { StorageProvider } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
@@ -26,6 +30,18 @@ import {
   setPairingStorage,
 } from './pairing-identity'
 import { ensureExtensionSessionDocument } from './session-lifecycle'
+
+export async function importPairingAfterCompanionReady(message: object) {
+  try {
+    await companionWasmReady
+  } catch {
+    return { ok: false, reason: 'invalid-pairing-grant' }
+  }
+  if (!isExtensionPairingApprovedMessage(message)) {
+    return { ok: false, reason: 'invalid-pairing-grant' }
+  }
+  return importApprovedPairing(message)
+}
 
 async function reconcilePairingStorage(args: {
   items: ExtensionPairingItems
