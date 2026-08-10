@@ -10,26 +10,25 @@ import {
   type ExtensionPairedVaultIdentityStatusMessage,
   type ExtensionPairedVaultUnlockRequestMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
 import {
   isRuntimeSimpleVaultUrl,
   runtimeSimpleVaultUrl,
 } from '../../lib/simple-vault-runtime'
+import { WebsiteAuthenticatorResponseStatus } from '../../lib/login-fill-messages'
 import {
   parsedWebsitePasskeyRequest,
   WebsitePasskeyRequestParseKind,
   type WebsitePasskeyCeremony,
   type WebsitePasskeyRequest,
 } from '../../lib/webauthn-messages'
-import type { StoredExtensionPairingGrant } from '../pairing-grants'
+import type {
+  ExtensionPairingItems,
+  StoredExtensionPairingGrant,
+} from '../pairing-grants'
 import {
-  firstStoredPairingGrant,
-  isStoredExtensionPairingGrant,
-  migratedLegacyPairingStorageItems,
-  pairingGrantStorageKey,
-  selectedPairingGrant,
-  selectedPairingGrantFirst,
-  SelectedPairingGrantKind,
+  extensionPairingGrantPolicyReady,
   setupStorageKey,
 } from '../pairing-grants'
 import {
@@ -102,6 +101,7 @@ function isPendingIdentityHandoff(
 export function setSessionStorage(
   items: Record<string, unknown>,
 ): Promise<void> {
+  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.storage.session.set(items, () => {
       const message = chrome.runtime.lastError?.message
@@ -114,6 +114,7 @@ export function setSessionStorage(
 export function getSessionStorage(
   key: string,
 ): Promise<Record<string, unknown>> {
+  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.storage.session.get(key, (items) => {
       const message = chrome.runtime.lastError?.message
@@ -124,6 +125,7 @@ export function getSessionStorage(
 }
 
 export function removeSessionStorage(key: string): Promise<void> {
+  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.storage.session.remove(key, () => {
       const message = chrome.runtime.lastError?.message
@@ -133,25 +135,34 @@ export function removeSessionStorage(key: string): Promise<void> {
   })
 }
 
-async function issueIdentityHandoff(
-  nonce: string,
-  pending: PendingIdentityHandoff,
-): Promise<void> {
-  await setSessionStorage({
+async function issueIdentityHandoff({
+  nonce,
+  pending,
+}: {
+  nonce: string
+  pending: PendingIdentityHandoff
+}): Promise<void> {
+  const nookTypedArgs0_0: Parameters<typeof setSessionStorage>[0] = {
     [pendingIdentityHandoffStorageKey(nonce)]: pending,
-  })
+  }
+  await setSessionStorage(nookTypedArgs0_0)
 }
 
 export async function openExtensionPairing(
   device: BeginExtensionPairingMessage['payload'],
 ): Promise<void> {
+  await companionWasmReady
   const nonce = randomNonce()
-  await issueIdentityHandoff(nonce, {
-    kind: PendingIdentityHandoffKind.Pairing,
-    deviceId: device.deviceId,
-    devicePublicKey: device.devicePublicKey,
-    deviceSigningPublicKey: device.deviceSigningPublicKey,
-  })
+  const nookTypedArgs0_1: Parameters<typeof issueIdentityHandoff>[0] = {
+    nonce,
+    pending: {
+      kind: PendingIdentityHandoffKind.Pairing,
+      deviceId: device.deviceId,
+      devicePublicKey: device.devicePublicKey,
+      deviceSigningPublicKey: device.deviceSigningPublicKey,
+    },
+  }
+  await issueIdentityHandoff(nookTypedArgs0_1)
   const url = new URL(runtimeSimpleVaultUrl('extension-connect'))
   url.searchParams.set('device_id', device.deviceId)
   url.searchParams.set('device_public_key', device.devicePublicKey)
@@ -171,7 +182,10 @@ export async function openExtensionPairing(
       ExtensionConnectScope.SyncProviderCredentials,
     ].join(','),
   )
-  void chrome.tabs.create({ url: url.toString() })
+  const nookTypedArgs0_2: Parameters<typeof chrome.tabs.create>[0] = {
+    url: url.toString(),
+  }
+  void chrome.tabs.create(nookTypedArgs0_2)
 }
 
 export function isNokeySender(sender: chrome.runtime.MessageSender): boolean {
@@ -184,6 +198,7 @@ export function isNokeySender(sender: chrome.runtime.MessageSender): boolean {
 }
 
 export function sendSessionMessage(message: unknown): Promise<unknown> {
+  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {
       const error = chrome.runtime.lastError?.message
@@ -199,11 +214,12 @@ async function pairedVaultGrantIsCurrent(
     { kind: PendingIdentityHandoffKind.PairedVault }
   >,
 ): Promise<boolean> {
-  const key = pairingGrantStorageKey(pending.vaultStoreId)
+  const pairingPolicy = await extensionPairingGrantPolicyReady
+  const key = pairingPolicy.pairingGrantStorageKey(pending.vaultStoreId)
   const stored = await getPairingStorage(key)
   const grant = stored[key]
   return (
-    isStoredExtensionPairingGrant(grant) &&
+    pairingPolicy.isStoredExtensionPairingGrant(grant) &&
     grant.deviceId === pending.deviceId &&
     grant.devicePublicKey === pending.devicePublicKey &&
     grant.deviceSigningPublicKey === pending.deviceSigningPublicKey
@@ -253,10 +269,11 @@ export async function createIdentityHandoff(
     }
     await removeSessionStorage(key)
     await ensureExtensionSessionDocument()
-    const response = await sendSessionMessage({
+    const nookTypedArgs0_3: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-seal-identity-handoff',
       payload: message.payload,
-    })
+    }
+    const response = await sendSessionMessage(nookTypedArgs0_3)
     if (
       !!response &&
       typeof response === 'object' &&
@@ -272,7 +289,11 @@ export async function createIdentityHandoff(
         return { ok: false, reason: 'extension-pairing-revoked' }
       }
       const nextNonce = randomNonce()
-      await issueIdentityHandoff(nextNonce, pending)
+      const nookTypedArgs0_4: Parameters<typeof issueIdentityHandoff>[0] = {
+        nonce: nextNonce,
+        pending,
+      }
+      await issueIdentityHandoff(nookTypedArgs0_4)
       return { ok: true, envelope: response.envelope, nextNonce }
     }
     return { ok: false, reason: 'extension-identity-unavailable' }
@@ -354,12 +375,13 @@ export async function discoverPairedVaultIdentity(
     },
   } satisfies ExtensionPairedVaultIdentityStatusMessage
   try {
-    const key = pairingGrantStorageKey(vaultStoreId)
+    const pairingPolicy = await extensionPairingGrantPolicyReady
+    const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
     const stored = await getPairingStorage()
     const grant = stored[key]
-    const selectedGrant = selectedPairingGrant(stored)
+    const selectedGrant = pairingPolicy.selectedPairingGrant(stored)
     if (
-      selectedGrant.kind === SelectedPairingGrantKind.Selected &&
+      selectedGrant.kind === 'selected' &&
       selectedGrant.grant.vaultStoreId !== vaultStoreId
     ) {
       return {
@@ -374,12 +396,12 @@ export async function discoverPairedVaultIdentity(
         },
       }
     }
-    if (!isStoredExtensionPairingGrant(grant)) {
+    if (!pairingPolicy.isStoredExtensionPairingGrant(grant)) {
       const connectedGrant =
-        selectedGrant.kind === SelectedPairingGrantKind.Selected
+        selectedGrant.kind === 'selected'
           ? selectedGrant
-          : firstStoredPairingGrant(stored)
-      if (connectedGrant.kind === SelectedPairingGrantKind.Selected) {
+          : pairingPolicy.firstStoredPairingGrant(stored)
+      if (connectedGrant.kind === 'selected') {
         return {
           type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
           payload: {
@@ -396,10 +418,13 @@ export async function discoverPairedVaultIdentity(
     }
 
     await ensureExtensionSessionDocument()
-    const statusResponse = (await sendSessionMessage({
+    const nookTypedArgs0_5: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-status',
       payload: { queueExpiresAt: message.payload.expiresAt },
-    })) as ExtensionSessionStatusResponse
+    }
+    const statusResponse = (await sendSessionMessage(
+      nookTypedArgs0_5,
+    )) as ExtensionSessionStatusResponse
     if (!isUnlockedSessionStatus(statusResponse)) {
       return {
         type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
@@ -421,13 +446,17 @@ export async function discoverPairedVaultIdentity(
       return unavailable
     }
     const nonce = randomNonce()
-    await issueIdentityHandoff(nonce, {
-      kind: PendingIdentityHandoffKind.PairedVault,
-      vaultStoreId,
-      deviceId: grant.deviceId,
-      devicePublicKey: grant.devicePublicKey,
-      deviceSigningPublicKey: grant.deviceSigningPublicKey,
-    })
+    const nookTypedArgs0_6: Parameters<typeof issueIdentityHandoff>[0] = {
+      nonce,
+      pending: {
+        kind: PendingIdentityHandoffKind.PairedVault,
+        vaultStoreId,
+        deviceId: grant.deviceId,
+        devicePublicKey: grant.devicePublicKey,
+        deviceSigningPublicKey: grant.deviceSigningPublicKey,
+      },
+    }
+    await issueIdentityHandoff(nookTypedArgs0_6)
     return {
       type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
       payload: {
@@ -452,9 +481,10 @@ export async function requestPairedVaultUnlock(
   message: ExtensionPairedVaultUnlockRequestMessage,
 ): Promise<Record<string, unknown>> {
   const { requestId, vaultStoreId } = message.payload
-  const key = pairingGrantStorageKey(vaultStoreId)
+  const pairingPolicy = await extensionPairingGrantPolicyReady
+  const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
   const stored = await getPairingStorage(key)
-  if (!isStoredExtensionPairingGrant(stored[key])) {
+  if (!pairingPolicy.isStoredExtensionPairingGrant(stored[key])) {
     return {
       ok: false,
       requestId,
@@ -465,10 +495,13 @@ export async function requestPairedVaultUnlock(
 
   await ensureExtensionSessionDocument()
   const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
-  const statusResponse = (await sendSessionMessage({
+  const nookTypedArgs0_7: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
     payload: { queueExpiresAt, queuePriority: 'interactive' },
-  })) as ExtensionSessionStatusResponse
+  }
+  const statusResponse = (await sendSessionMessage(
+    nookTypedArgs0_7,
+  )) as ExtensionSessionStatusResponse
   if (!isUnlockedSessionStatus(statusResponse)) {
     await openCompanionLauncher()
   }
@@ -492,7 +525,7 @@ export function hasPairingApprovedType(message: unknown): message is {
 }
 
 export async function setPairingStorage(
-  items: Record<string, unknown>,
+  items: ExtensionPairingItems,
 ): Promise<void> {
   await ensureLegacyPairingMigration()
   await writeExtensionPairingState(items)
@@ -520,6 +553,7 @@ function legacyPairingStorageKeys(stored: Record<string, unknown>): string[] {
 }
 
 function readLegacyPairingStorage(): Promise<Record<string, unknown>> {
+  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.storage.local.get((items) => {
       if (chrome.runtime.lastError) {
@@ -537,6 +571,7 @@ function readLegacyPairingStorage(): Promise<Record<string, unknown>> {
 }
 
 function removeLegacyPairingStorage(keys: string[]): Promise<void> {
+  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.storage.local.remove(keys, () => {
       if (chrome.runtime.lastError) {
@@ -563,8 +598,13 @@ export function ensureLegacyPairingMigration(): Promise<void> {
     const legacy = await readLegacyPairingStorage()
     const legacyKeys = legacyPairingStorageKeys(legacy)
     if (legacyKeys.length === 0) return
+    const legacyPairingRecords = Object.fromEntries(
+      legacyKeys.map((key) => [key, legacy[key]]),
+    )
     const current = await readExtensionPairingState()
-    const migrated = migratedLegacyPairingStorageItems(legacy)
+    const pairingPolicy = await extensionPairingGrantPolicyReady
+    const migrated =
+      pairingPolicy.migratedLegacyPairingStorageItems(legacyPairingRecords)
     if (Object.keys(current).length > 0) {
       const completedKeys = Object.keys(migrated).filter(
         (key) =>
@@ -596,7 +636,7 @@ export function ensureLegacyPairingMigration(): Promise<void> {
 
 export async function getPairingStorage(
   key?: string,
-): Promise<Record<string, unknown>> {
+): Promise<ExtensionPairingItems> {
   await ensureLegacyPairingMigration()
   const stored = await readExtensionPairingState()
   if (!key) return stored
@@ -617,11 +657,17 @@ export type WebsitePasskeyRequestContext =
       request: WebsitePasskeyRequest
     }
 
-export function requestOriginAndRpId(
-  ceremony: WebsitePasskeyCeremony,
-  requestJson: string,
-): WebsitePasskeyRequestContext {
-  const parseArgs = { ceremony, requestJson }
+export function requestOriginAndRpId({
+  ceremony,
+  requestJson,
+}: {
+  ceremony: WebsitePasskeyCeremony
+  requestJson: string
+}): WebsitePasskeyRequestContext {
+  const parseArgs: Parameters<typeof parsedWebsitePasskeyRequest>[0] = {
+    ceremony,
+    requestJson,
+  }
   const parsed = parsedWebsitePasskeyRequest(parseArgs)
   if (parsed.kind === WebsitePasskeyRequestParseKind.Rejected) {
     return { kind: WebsitePasskeyRequestContextKind.Rejected }
@@ -634,10 +680,13 @@ export function requestOriginAndRpId(
   }
 }
 
-export function isAuthorizedWebsiteSender(
-  sender: chrome.runtime.MessageSender,
-  origin: string,
-): boolean {
+export function isAuthorizedWebsiteSender({
+  sender,
+  origin,
+}: {
+  sender: chrome.runtime.MessageSender
+  origin: string
+}): boolean {
   if (
     sender.id !== chrome.runtime.id ||
     !sender.tab ||
@@ -656,51 +705,82 @@ export function isAuthorizedWebsiteSender(
 export async function passkeyPairingGrants(): Promise<
   StoredExtensionPairingGrant[]
 > {
+  const pairingPolicy = await extensionPairingGrantPolicyReady
   const stored = await getPairingStorage()
-  const grants = Object.values(stored).filter(
-    (value): value is StoredExtensionPairingGrant =>
-      isStoredExtensionPairingGrant(value) &&
-      value.scopes.includes(ExtensionConnectScope.PasskeyManagement),
-  )
-  return selectedPairingGrantFirst(stored, grants)
+  return pairingPolicy
+    .selectedPairingGrantFirst(stored)
+    .filter((grant) =>
+      grant.scopes.includes(ExtensionConnectScope.PasskeyManagement),
+    )
 }
 
 export async function passwordPairingGrants(): Promise<
   StoredExtensionPairingGrant[]
 > {
+  const pairingPolicy = await extensionPairingGrantPolicyReady
   const stored = await getPairingStorage()
-  const grants = Object.values(stored).filter(
-    (value): value is StoredExtensionPairingGrant =>
-      isStoredExtensionPairingGrant(value) &&
-      value.scopes.includes(ExtensionConnectScope.PasswordFilling),
-  )
-  return selectedPairingGrantFirst(stored, grants)
+  return pairingPolicy
+    .selectedPairingGrantFirst(stored)
+    .filter((grant) =>
+      grant.scopes.includes(ExtensionConnectScope.PasswordFilling),
+    )
 }
 
-export async function availableWebsiteGrants(
-  origin: string,
-  sender: chrome.runtime.MessageSender,
-  forbiddenReason: string,
-): Promise<
+export async function availableWebsiteGrants({
+  origin,
+  sender,
+  forbiddenReason,
+}: {
+  origin: string
+  sender: chrome.runtime.MessageSender
+  forbiddenReason: string
+}): Promise<
   | { grants: StoredExtensionPairingGrant[] }
-  | { response: Record<string, unknown> }
+  | {
+      response:
+        | { ok: false; reason: string }
+        | {
+            ok: true
+            status:
+              | WebsiteAuthenticatorResponseStatus.Unavailable
+              | WebsiteAuthenticatorResponseStatus.Locked
+            accounts: []
+          }
+    }
 > {
-  if (!isAuthorizedWebsiteSender(sender, origin)) {
+  const nookTypedArgs0_8: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
+    sender,
+    origin,
+  }
+  if (!isAuthorizedWebsiteSender(nookTypedArgs0_8)) {
     return { response: { ok: false, reason: forbiddenReason } }
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
-    return { response: { ok: true, status: 'unavailable', accounts: [] } }
+    return {
+      response: {
+        ok: true,
+        status: WebsiteAuthenticatorResponseStatus.Unavailable,
+        accounts: [],
+      },
+    }
   }
   await ensureExtensionSessionDocument()
   const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
-  const status = await sendSessionMessage({
+  const nookTypedArgs0_9: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
     payload: { queueExpiresAt, queuePriority: 'interactive' },
-  })
+  }
+  const status = await sendSessionMessage(nookTypedArgs0_9)
   if (!isUnlockedSessionStatus(status)) {
     openCompanionLauncherBestEffort()
-    return { response: { ok: true, status: 'locked', accounts: [] } }
+    return {
+      response: {
+        ok: true,
+        status: WebsiteAuthenticatorResponseStatus.Locked,
+        accounts: [],
+      },
+    }
   }
   return { grants }
 }

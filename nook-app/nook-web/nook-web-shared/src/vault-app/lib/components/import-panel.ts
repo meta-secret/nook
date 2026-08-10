@@ -19,18 +19,22 @@ export type ImportAttempt =
   | { kind: ImportAttemptKind.Completed; result: NookImportResult }
   | { kind: ImportAttemptKind.Failed; error: string };
 
-export async function importTextFile(
-  file: File,
-  isSaving: boolean,
-  onImport: (text: string) => Promise<NookImportResult>,
-): Promise<ImportAttempt> {
+export async function importTextFile({
+  file,
+  isSaving,
+  onImport,
+}: {
+  readonly file: File;
+  readonly isSaving: boolean;
+  readonly onImport: (text: string) => Promise<NookImportResult>;
+}): Promise<ImportAttempt> {
   if (isSaving) return { kind: ImportAttemptKind.Skipped };
   try {
     return {
       kind: ImportAttemptKind.Completed,
       result: await onImport(await file.text()),
     };
-  } catch (cause: unknown) {
+  } catch (cause) {
     return {
       kind: ImportAttemptKind.Failed,
       error: cause instanceof Error ? cause.message : String(cause),
@@ -38,11 +42,15 @@ export async function importTextFile(
   }
 }
 
-export async function importBinaryFile(
-  file: File,
-  isSaving: boolean,
-  onImport: (bytes: Uint8Array) => Promise<NookImportResult>,
-): Promise<ImportAttempt> {
+export async function importBinaryFile({
+  file,
+  isSaving,
+  onImport,
+}: {
+  readonly file: File;
+  readonly isSaving: boolean;
+  readonly onImport: (bytes: Uint8Array) => Promise<NookImportResult>;
+}): Promise<ImportAttempt> {
   if (isSaving) return { kind: ImportAttemptKind.Skipped };
   const bytes = new Uint8Array(await file.arrayBuffer());
   try {
@@ -50,7 +58,7 @@ export async function importBinaryFile(
       kind: ImportAttemptKind.Completed,
       result: await onImport(bytes),
     };
-  } catch (cause: unknown) {
+  } catch (cause) {
     return {
       kind: ImportAttemptKind.Failed,
       error: cause instanceof Error ? cause.message : String(cause),

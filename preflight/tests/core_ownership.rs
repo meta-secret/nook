@@ -5,10 +5,10 @@ use nook_preflight::{
     authored_rust_macro_definitions, portable_core_browser_dependencies,
     rust_test_untyped_json_assertions, rust_tsify_implicit_absence_overrides,
     rust_wasm_domain_boundary_escape_hatches, typescript_domain_boundary_boilerplate,
-    typescript_generic_optional_state, typescript_implicit_application_state,
-    typescript_json_round_trip_clones, typescript_mutable_void_state,
-    typescript_null_absence_sentinels, typescript_raw_string_discriminants,
-    typescript_svelte_state_modeling_violations,
+    typescript_extension_persistence_policy, typescript_generic_optional_state,
+    typescript_implicit_application_state, typescript_json_round_trip_clones,
+    typescript_mutable_void_state, typescript_null_absence_sentinels,
+    typescript_raw_string_discriminants, typescript_svelte_state_modeling_violations,
 };
 
 #[test]
@@ -146,6 +146,16 @@ fn typescript_does_not_clone_through_json_serialization() -> anyhow::Result<()> 
     assert!(
         violations.is_empty(),
         "authored TypeScript and Svelte must use direct values or $state.snapshot at reactive boundaries, never JSON parse/stringify cloning: {violations:#?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn extension_persistence_decisions_stay_in_companion_rust() -> anyhow::Result<()> {
+    let violations = typescript_extension_persistence_policy(&repository_root())?;
+    assert!(
+        violations.is_empty(),
+        "TypeScript may observe IndexedDB, but companion Rust must classify extension database and store presence: {violations:#?}"
     );
     Ok(())
 }

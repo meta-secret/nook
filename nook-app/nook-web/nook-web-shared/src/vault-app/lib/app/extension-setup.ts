@@ -21,7 +21,11 @@ export async function loadExtensionSetupOffer(
   activeVault: ActiveVault,
 ): Promise<ExtensionSetupOffer> {
   const setup = await resolveExtensionSetupState(activeVault);
-  return shouldOfferExtensionSetup(setup.status)
+  const offerRequest: Parameters<typeof shouldOfferExtensionSetup>[0] = {
+    status: setup.status,
+    environment: navigator,
+  };
+  return shouldOfferExtensionSetup(offerRequest)
     ? { kind: ExtensionSetupOfferKind.Visible, setup }
     : { kind: ExtensionSetupOfferKind.Hidden };
 }
@@ -44,10 +48,11 @@ export function observeExtensionSetupChanges(
   document.addEventListener("visibilitychange", onVisibilityChange);
 
   const observer = new MutationObserver(() => void refresh());
-  observer.observe(document.documentElement, {
+  const observeArgs: Parameters<typeof observer.observe>[1] = {
     attributes: true,
     attributeFilter: ["data-nook-extension-runtime-id"],
-  });
+  };
+  observer.observe(document.documentElement, observeArgs);
 
   return () => {
     document.removeEventListener("visibilitychange", onVisibilityChange);

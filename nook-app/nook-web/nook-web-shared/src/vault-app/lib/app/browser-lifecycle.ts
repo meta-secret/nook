@@ -27,7 +27,7 @@ type AuthProviderDebugHooks = {
   ): AuthProvidersSnapshot["activeVaultStoreId"];
   loadAuthProviders(): Promise<AuthProvidersSnapshot>;
   saveAuthProviders(
-    snapshot: Parameters<typeof saveAuthProviders>[1],
+    snapshot: AuthProvidersSnapshot,
   ): ReturnType<typeof saveAuthProviders>;
   unselectedVaultScope(): AuthProvidersSnapshot["activeVaultStoreId"];
 };
@@ -74,11 +74,14 @@ export function mountBrowserLifecycle({
           vault.enqueueStorage(() =>
             vault.requireManager().loadAuthProviders(),
           ),
-        saveAuthProviders: (
-          snapshot: Parameters<typeof saveAuthProviders>[1],
-        ) =>
+        saveAuthProviders: (snapshot: AuthProvidersSnapshot) =>
           vault.enqueueStorage(() =>
-            saveAuthProviders(vault.requireManager(), snapshot),
+            (() => {
+              const saveAuthProvidersArgs: Parameters<
+                typeof saveAuthProviders
+              >[0] = { manager: vault.requireManager(), snapshot };
+              return saveAuthProviders(saveAuthProvidersArgs);
+            })(),
           ),
         unselectedVaultScope,
       },
@@ -101,13 +104,19 @@ export function mountBrowserLifecycle({
   };
 }
 
-export function updateApplicationDocument(
-  colorMode: ColorMode,
-  legalRoute: LegalRoute,
-  logsPage: boolean,
-  extensionConnectRoute: boolean,
-  sentinelApplication: boolean,
-): void {
+export function updateApplicationDocument({
+  colorMode,
+  legalRoute,
+  logsPage,
+  extensionConnectRoute,
+  sentinelApplication,
+}: {
+  readonly colorMode: ColorMode;
+  readonly legalRoute: LegalRoute;
+  readonly logsPage: boolean;
+  readonly extensionConnectRoute: boolean;
+  readonly sentinelApplication: boolean;
+}): void {
   document.documentElement.classList.toggle(
     "dark",
     colorMode === ColorMode.Dark,

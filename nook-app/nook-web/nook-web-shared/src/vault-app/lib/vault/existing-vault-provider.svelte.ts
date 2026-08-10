@@ -41,10 +41,13 @@ export type ExistingVaultProviderPreparation =
       provider: ExistingVaultProviderSnapshot;
     };
 
-export function prepareExistingVaultProvider(
-  state: ProviderActionsContext,
-  setupType: StorageProviderType,
-): ExistingVaultProviderPreparation {
+export function prepareExistingVaultProvider({
+  state,
+  setupType,
+}: {
+  readonly state: ProviderActionsContext;
+  readonly setupType: StorageProviderType;
+}): ExistingVaultProviderPreparation {
   const readiness = existingVaultProviderReadiness(
     setupType,
     state.oauthFileDraft.kind === OAuthFileDraftKind.Configured,

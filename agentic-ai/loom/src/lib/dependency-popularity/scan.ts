@@ -2,14 +2,14 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { LoomFailureCode, loomFailureDetail } from '../../loom-failure.ts';
 import {
-  ExternalPropertyPresence,
-  asExternalValue,
-  externalProperty,
-  type ExternalValue,
+  UntrustedYamlPropertyPresence,
+  asUntrustedYamlNode,
+  untrustedYamlProperty,
+  type UntrustedYamlNode,
   isRecord,
 } from '../guards.ts';
 
-import type { ExternalPropertyArgs } from '../guards.ts';
+import type { UntrustedYamlPropertyArgs } from '../guards.ts';
 import type { LoomFailureDetailArgs } from '../../loom-failure.ts';
 export type ManifestDependencies = {
   readonly npmPackages: readonly string[];
@@ -31,19 +31,19 @@ export function scanRepositoryManifests(
 
 function readNpmPackages(packageJsonPath: string): readonly string[] {
   const text = readFileSync(packageJsonPath, 'utf8');
-  const json = asExternalValue(JSON.parse(text) as ExternalValue);
+  const json = asUntrustedYamlNode(JSON.parse(text) as UntrustedYamlNode);
   if (!isRecord(json)) {
     return [];
   }
   const names = new Set<string>();
   for (const section of ['dependencies', 'devDependencies'] as const) {
-    const blockPropertyArgs: ExternalPropertyArgs = {
+    const blockPropertyArgs: UntrustedYamlPropertyArgs = {
       record: json,
       key: section,
     };
-    const blockProperty = externalProperty(blockPropertyArgs);
+    const blockProperty = untrustedYamlProperty(blockPropertyArgs);
     if (
-      blockProperty.presence === ExternalPropertyPresence.Absent ||
+      blockProperty.presence === UntrustedYamlPropertyPresence.Absent ||
       !isRecord(blockProperty.value)
     ) {
       continue;
@@ -82,8 +82,8 @@ function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
     };
     loomFailureDetail(loomFailureDetailArgs4);
   }
-  const metadata = asExternalValue(
-    JSON.parse(new TextDecoder().decode(result.stdout)) as ExternalValue,
+  const metadata = asUntrustedYamlNode(
+    JSON.parse(new TextDecoder().decode(result.stdout)) as UntrustedYamlNode,
   );
   if (!isRecord(metadata)) {
     const loomFailureDetailArgs3: LoomFailureDetailArgs = {
@@ -92,13 +92,13 @@ function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
     };
     loomFailureDetail(loomFailureDetailArgs3);
   }
-  const packagesPropertyArgs: ExternalPropertyArgs = {
+  const packagesPropertyArgs: UntrustedYamlPropertyArgs = {
     record: metadata,
     key: 'packages',
   };
-  const packagesProperty = externalProperty(packagesPropertyArgs);
+  const packagesProperty = untrustedYamlProperty(packagesPropertyArgs);
   if (
-    packagesProperty.presence === ExternalPropertyPresence.Absent ||
+    packagesProperty.presence === UntrustedYamlPropertyPresence.Absent ||
     !Array.isArray(packagesProperty.value)
   ) {
     const loomFailureDetailArgs2: LoomFailureDetailArgs = {
@@ -107,15 +107,16 @@ function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
     };
     loomFailureDetail(loomFailureDetailArgs2);
   }
-  const workspaceMembersPropertyArgs: ExternalPropertyArgs = {
+  const workspaceMembersPropertyArgs: UntrustedYamlPropertyArgs = {
     record: metadata,
     key: 'workspace_members',
   };
-  const workspaceMembersProperty = externalProperty(
+  const workspaceMembersProperty = untrustedYamlProperty(
     workspaceMembersPropertyArgs,
   );
   if (
-    workspaceMembersProperty.presence === ExternalPropertyPresence.Absent ||
+    workspaceMembersProperty.presence ===
+      UntrustedYamlPropertyPresence.Absent ||
     !Array.isArray(workspaceMembersProperty.value)
   ) {
     const loomFailureDetailArgs: LoomFailureDetailArgs = {
@@ -134,10 +135,13 @@ function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
     if (!isRecord(pkg)) {
       continue;
     }
-    const idPropertyArgs: ExternalPropertyArgs = { record: pkg, key: 'id' };
-    const idProperty = externalProperty(idPropertyArgs);
+    const idPropertyArgs: UntrustedYamlPropertyArgs = {
+      record: pkg,
+      key: 'id',
+    };
+    const idProperty = untrustedYamlProperty(idPropertyArgs);
     if (
-      idProperty.presence === ExternalPropertyPresence.Absent ||
+      idProperty.presence === UntrustedYamlPropertyPresence.Absent ||
       typeof idProperty.value !== 'string'
     ) {
       continue;
@@ -145,13 +149,15 @@ function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
     if (!workspaceMembers.has(idProperty.value)) {
       continue;
     }
-    const dependenciesPropertyArgs: ExternalPropertyArgs = {
+    const dependenciesPropertyArgs: UntrustedYamlPropertyArgs = {
       record: pkg,
       key: 'dependencies',
     };
-    const dependenciesProperty = externalProperty(dependenciesPropertyArgs);
+    const dependenciesProperty = untrustedYamlProperty(
+      dependenciesPropertyArgs,
+    );
     if (
-      dependenciesProperty.presence === ExternalPropertyPresence.Absent ||
+      dependenciesProperty.presence === UntrustedYamlPropertyPresence.Absent ||
       !Array.isArray(dependenciesProperty.value)
     ) {
       continue;
@@ -160,24 +166,24 @@ function readExternalWorkspaceCrates(platformRoot: string): readonly string[] {
       if (!isRecord(dep)) {
         continue;
       }
-      const namePropertyArgs: ExternalPropertyArgs = {
+      const namePropertyArgs: UntrustedYamlPropertyArgs = {
         record: dep,
         key: 'name',
       };
-      const nameProperty = externalProperty(namePropertyArgs);
+      const nameProperty = untrustedYamlProperty(namePropertyArgs);
       if (
-        nameProperty.presence === ExternalPropertyPresence.Absent ||
+        nameProperty.presence === UntrustedYamlPropertyPresence.Absent ||
         typeof nameProperty.value !== 'string'
       ) {
         continue;
       }
-      const pathPropertyArgs: ExternalPropertyArgs = {
+      const pathPropertyArgs: UntrustedYamlPropertyArgs = {
         record: dep,
         key: 'path',
       };
-      const pathProperty = externalProperty(pathPropertyArgs);
+      const pathProperty = untrustedYamlProperty(pathPropertyArgs);
       if (
-        pathProperty.presence === ExternalPropertyPresence.Present &&
+        pathProperty.presence === UntrustedYamlPropertyPresence.Present &&
         typeof pathProperty.value === 'string'
       ) {
         continue;

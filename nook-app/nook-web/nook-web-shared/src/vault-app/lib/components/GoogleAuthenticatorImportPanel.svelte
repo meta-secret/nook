@@ -14,6 +14,17 @@
     type ScannerLifecycle,
   } from "./google-authenticator-import-state";
 
+  type CameraScannerOptions = {
+    readonly preferredCamera: "environment";
+    readonly highlightScanRegion: boolean;
+    readonly highlightCodeOutline: boolean;
+    readonly returnDetailedScanResult: true;
+  };
+
+  type QrImageScanOptions = {
+    readonly returnDetailedScanResult: true;
+  };
+
   let {
     vault,
     isSaving,
@@ -63,17 +74,18 @@
     error = "";
     result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     if (scannerState.kind === ScannerLifecycleKind.NotCreated) {
+      const scannerOptions: CameraScannerOptions = {
+        preferredCamera: "environment" as const,
+        highlightScanRegion: true,
+        highlightCodeOutline: true,
+        returnDetailedScanResult: true as const,
+      };
       scannerState = {
         kind: ScannerLifecycleKind.Created,
         scanner: new QrScanner(
           videoElement,
           (scanResult) => addMigrationUri(scanResult.data),
-          {
-            preferredCamera: "environment",
-            highlightScanRegion: true,
-            highlightCodeOutline: true,
-            returnDetailedScanResult: true,
-          },
+          scannerOptions,
         ),
       };
     }
@@ -94,9 +106,10 @@
     error = "";
     result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     try {
-      const scanResult = await QrScanner.scanImage(file, {
-        returnDetailedScanResult: true,
-      });
+      const scanImageOptions: QrImageScanOptions = {
+        returnDetailedScanResult: true as const,
+      };
+      const scanResult = await QrScanner.scanImage(file, scanImageOptions);
       addMigrationUri(scanResult.data);
     } catch {
       error = vault.t(I18N_KEYS.GoogleAuthenticatorImportImageFailed);
@@ -117,7 +130,7 @@
     try {
       result = { kind: AuthenticatorImportOutcomeKind.Completed, result: await onImport(migrationUris) };
       migrationUris = [];
-    } catch (cause: unknown) {
+    } catch (cause) {
       error = cause instanceof Error ? cause.message : String(cause);
     }
   }
@@ -204,9 +217,12 @@
           data-testid="google-authenticator-scanned-count"
         >
           <p class="text-sm font-medium text-foreground">
-            {vault.t(I18N_KEYS.GoogleAuthenticatorImportScannedCount, {
+            {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.GoogleAuthenticatorImportScannedCount,
+  replacements: {
               count: String(migrationUris.length),
-            })}
+            },
+}; return vault.t(translationRequest); })()}
           </p>
           <Button
             type="button"
@@ -251,15 +267,21 @@
           data-testid="google-authenticator-import-result"
         >
           <p class="font-medium">
-            {vault.t(I18N_KEYS.GoogleAuthenticatorImportResultImported, {
+            {(() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.GoogleAuthenticatorImportResultImported,
+  replacements: {
               count: String(result.result.imported),
-            })}
+            },
+}; return vault.t(translationRequest2); })()}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
-            {vault.t(I18N_KEYS.GoogleAuthenticatorImportResultSkipped, {
+            {(() => { const translationRequest3: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.GoogleAuthenticatorImportResultSkipped,
+  replacements: {
               unsupported: String(result.result.skippedUnsupported),
               duplicates: String(result.result.skippedDuplicates),
-            })}
+            },
+}; return vault.t(translationRequest3); })()}
           </p>
         </div>
       {/if}

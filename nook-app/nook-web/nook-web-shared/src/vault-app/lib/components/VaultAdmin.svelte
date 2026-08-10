@@ -33,9 +33,8 @@
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookImportResult } from '$lib/nook'
   import type {
-    OAuthFilePreset,
+    ProviderSetupRequest,
     StorageProvider,
-    StorageProviderType,
   } from '$lib/auth/providers'
   import {
     ActiveVaultKind,
@@ -113,23 +112,18 @@
     onSyncProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
-    onBeginSetup: (
-      type: StorageProviderType,
-      oauthPreset?: OAuthFilePreset,
-    ) => void
+    onBeginSetup: (request: ProviderSetupRequest) => void
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
-    onAddPassword: (label: string, password: string) => void | Promise<void>
+    onAddPassword: (args: { readonly label: string; readonly password: string }) => void | Promise<void>
     onUpdatePassword: (
-      entryId: PasswordEntryId,
-      password: string,
+      args: { readonly entryId: PasswordEntryId; readonly password: string },
     ) => void | Promise<void>
     onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>
-    onIssueCode: (entryId: PasswordEntryId, password: string) => Promise<string>
+    onIssueCode: (args: { readonly entryId: PasswordEntryId; readonly password: string }) => Promise<string>
     onClearCode: () => void
     onImportBitwarden: (
-      json: string,
-      password: string,
+      args: { readonly json: string; readonly password: string },
     ) => Promise<NookImportResult>
     onImportKeePassXc: (csv: string) => Promise<NookImportResult>
     onImportLastPass: (csv: string) => Promise<NookImportResult>
@@ -224,7 +218,7 @@
     )
   }
 
-  function setDraft(entry: NookLocalVaultEntry, value: string) {
+  function setDraft({ entry, value }: { readonly entry: NookLocalVaultEntry; readonly value: string }) {
     drafts = { ...drafts, [entry.storeId]: value }
   }
 
@@ -239,7 +233,8 @@
 
   function beginRename(entry: NookLocalVaultEntry) {
     if (isBusy) return
-    setDraft(entry, entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)))
+    const setDraftArgs: Parameters<typeof setDraft>[0] = { entry, value: entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)) };
+    setDraft(setDraftArgs)
     editingStoreId = {
       kind: VaultLabelEditorKind.Editing,
       storeId: entry.storeId,
@@ -247,7 +242,8 @@
   }
 
   function cancelRename(entry: NookLocalVaultEntry) {
-    setDraft(entry, entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)))
+    const setDraftArgs2: Parameters<typeof setDraft>[0] = { entry, value: entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)) };
+    setDraft(setDraftArgs2)
     if (
       editingStoreId.kind === VaultLabelEditorKind.Editing &&
       editingStoreId.storeId === entry.storeId
@@ -277,7 +273,8 @@
       storeId: entry.storeId,
     }
     try {
-      await vault.renameLocalVault(entry.storeId, draftFor(entry))
+      const renameLocalVaultArgs: Parameters<typeof vault.renameLocalVault>[0] = { storeId: entry.storeId, label: draftFor(entry) };
+      await vault.renameLocalVault(renameLocalVaultArgs)
       if (!vault.errorMsg) {
         editingStoreId = { kind: VaultLabelEditorKind.Closed }
       }
@@ -314,7 +311,7 @@
         data-testid="vault-admin-vault-count"
       >
         <CheckCircle2 class="size-3" />
-        {vault.t(I18N_KEYS.VaultAdminVaultCount, { count: String(vaults.length) })}
+        {(() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.VaultAdminVaultCount, replacements: { count: String(vaults.length) } }; return vault.t(tArgs); })()}
       </span>
     {/snippet}
 
@@ -397,10 +394,9 @@
                   value={draftFor(entry)}
                   disabled={isBusy}
                   oninput={(event) =>
-                    setDraft(
-                      entry,
-                      (event.currentTarget as HTMLInputElement).value,
-                    )}
+                    (() => { const setDraftArgs3: Parameters<typeof setDraft>[0] = { entry, value: (event.currentTarget as HTMLInputElement).value }; return setDraft(
+                      setDraftArgs3,
+                    ); })()}
                   onkeydown={(event) => {
                     if (event.key === 'Enter') {
                       event.preventDefault()
@@ -555,9 +551,9 @@
           <ShieldCheck class="size-3" />
           {passwordEntries.length === 1
             ? vault.t(I18N_KEYS.SettingsPasswordCountSingular)
-            : vault.t(I18N_KEYS.SettingsPasswordCountPlural, {
+            : (() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.SettingsPasswordCountPlural, replacements: {
                 count: String(passwordEntries.length),
-              })}
+              } }; return vault.t(tArgs2); })()}
         {:else}
           <Lock class="size-3" />
           {vault.t(I18N_KEYS.SettingsNoPasswords)}

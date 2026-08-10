@@ -95,9 +95,10 @@ describe('website one-time-code fields', () => {
       usernameFieldCount: 1,
       passwordFieldCount: 0,
     })
-    expect(
-      fillLoginCredentials({ username: 'user@contoso.com', password: '' }),
-    ).toBe(true)
+    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'user@contoso.com', password: '' },
+    }
+    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
     expect(
       document.querySelector<HTMLInputElement>('[name="loginfmt"]')?.value,
     ).toBe('user@contoso.com')
@@ -153,12 +154,13 @@ describe('website one-time-code fields', () => {
       passwordFieldCount: 1,
       currentPasswordFieldCount: 1,
     })
-    expect(
-      fillLoginCredentials({
+    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: {
         username: 'pilot@nook.test',
         password: 'extension-fill-password',
-      }),
-    ).toBe(true)
+      },
+    }
+    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
     expect(document.querySelector<HTMLInputElement>('#email')?.value).toBe(
       'pilot@nook.test',
     )
@@ -281,9 +283,10 @@ describe('website one-time-code fields', () => {
       advanced = true
     })
 
-    expect(
-      fillLoginCredentials({ username: 'pilot@nook.test', password: '' }),
-    ).toBe(true)
+    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'pilot@nook.test', password: '' },
+    }
+    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
     expect(submitLoginForm()).toBe(true)
     expect(advanced).toBe(true)
     expect(
@@ -335,9 +338,10 @@ describe('website one-time-code fields', () => {
       genericPasswordFieldCount: 1,
       currentPasswordFieldCount: 0,
     })
-    expect(
-      fillLoginCredentials({ username: 'pilot', password: 'secret' }),
-    ).toBe(true)
+    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'pilot', password: 'secret' },
+    }
+    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
     expect(
       document.querySelector<HTMLInputElement>('#header-password')?.value,
     ).toBe('')
@@ -452,9 +456,10 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    expect(
-      fillLoginCredentials({ username: 'pilot', password: 'secret' }),
-    ).toBe(true)
+    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'pilot', password: 'secret' },
+    }
+    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
     expect(
       document.querySelector<HTMLInputElement>('[type="hidden"]')?.value,
     ).toBe('token')
@@ -472,9 +477,11 @@ describe('website one-time-code fields', () => {
       </section>
     `
 
-    expect(
-      submitLoginForm(document, { kind: PasswordFormScopeKind.Unowned }),
-    ).toBe(false)
+    const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
+      root: document,
+      formScope: { kind: PasswordFormScopeKind.Unowned },
+    }
+    expect(submitLoginForm(submissionArgs)).toBe(false)
   })
 
   test('does not claim a disabled submit control was activated', () => {
@@ -511,7 +518,10 @@ describe('website one-time-code fields', () => {
     let inputEvents = 0
     field?.addEventListener('input', () => inputEvents++)
 
-    expect(fillOneTimeCode('123456')).toBe(true)
+    const oneTimeCodeFillArgs: Parameters<typeof fillOneTimeCode>[0] = {
+      code: '123456',
+    }
+    expect(fillOneTimeCode(oneTimeCodeFillArgs)).toBe(true)
     expect(field?.value).toBe('123456')
     expect(inputEvents).toBe(1)
     expect(document.activeElement).toBe(field)

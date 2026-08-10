@@ -311,9 +311,9 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
   }
 
   function focusAfterProviderSave(): void {
+    const providerSaveFocusArgs: Parameters<typeof providerSaveFocus>[0] = { unlockSelected: selectedStage === AccessChainStage.Unlock, control: dashboardElement('devices-access-provider-label') };
     const focus = providerSaveFocus(
-      selectedStage === AccessChainStage.Unlock,
-      dashboardElement('devices-access-provider-label'),
+      providerSaveFocusArgs,
     )
     if (focus.kind === ProviderSaveFocusKind.Control) {
       focus.element.focus()
@@ -351,8 +351,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
   }
 
   async function navigateDetailTabs(
-    event: KeyboardEvent,
-    currentStage: AccessChainStage,
+    { event, currentStage }: { readonly event: KeyboardEvent; readonly currentStage: AccessChainStage },
   ): Promise<void> {
     const stages = [
       AccessChainStage.Unlock,
@@ -510,7 +509,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           currentDevice:
             view.protection === DeviceAccessProtectionKind.PasskeyStandard
               ? vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice)
-              : deviceKeyTitle(vault, view.protection),
+              : (() => { const deviceKeyTitleArgs: Parameters<typeof deviceKeyTitle>[0] = { vault, protection: view.protection }; return deviceKeyTitle(deviceKeyTitleArgs); })(),
           currentIdentity: identityTitle,
           selectedIdentity: companionIdentity
             ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentityContext)
@@ -518,16 +517,15 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           vaultGrant: vault.t(I18N_KEYS.DevicesAccessBridgeVaultGrant),
           deviceKey: vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice),
           oneDeviceKey: vault.t(I18N_KEYS.DevicesAccessBridgeOneDeviceKey),
-          identityDescription: protectionLabel(vault, view.protection),
-          identityState: identityStateLabel(vault, view.identityState),
+          identityDescription: (() => { const protectionLabelArgs: Parameters<typeof protectionLabel>[0] = { vault, protection: view.protection }; return protectionLabel(protectionLabelArgs); })(),
+          identityState: (() => { const identityStateLabelArgs: Parameters<typeof identityStateLabel>[0] = { vault, state: view.identityState }; return identityStateLabel(identityStateLabelArgs); })(),
           deviceMetricLabel: vault.t(
             I18N_KEYS.DevicesAccessBridgeDeviceEvidence,
           ),
           vaultMetricLabel: vault.t(I18N_KEYS.DevicesAccessVerifiedVaultsLabel),
-          verifiedVaultCount: vault.t(
-            I18N_KEYS.DevicesAccessBridgeVerifiedVaultCount,
-            { count: String(verifiedVaultCount) },
-          ),
+          verifiedVaultCount: (() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.DevicesAccessBridgeVerifiedVaultCount, replacements: { count: String(verifiedVaultCount) } }; return vault.t(
+            tArgs,
+          ); })(),
           statusMetricLabel: vault.t(I18N_KEYS.DevicesAccessStatusLabel),
           evidenceMetricLabel: vault.t(
             I18N_KEYS.DevicesAccessLastSuccessfulUse,
@@ -559,18 +557,18 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
             I18N_KEYS.DevicesAccessBridgeAppKeyIdentityRelation,
           ),
           identityVaultRelation: (vaultLabel: string) =>
-            vault.t(I18N_KEYS.DevicesAccessBridgeIdentityVaultRelation, {
+            (() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.DevicesAccessBridgeIdentityVaultRelation, replacements: {
               vault: vaultLabel,
-            }),
+            } }; return vault.t(tArgs2); })(),
           deviceVaultRelation: (vaultLabel: string) =>
-            vault.t(I18N_KEYS.DevicesAccessBridgeDeviceVaultRelation, {
+            (() => { const tArgs3: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.DevicesAccessBridgeDeviceVaultRelation, replacements: {
               vault: vaultLabel,
-            }),
+            } }; return vault.t(tArgs3); })(),
           vaultDeviceRelation: (vaultLabel: string) =>
-            vault.t(I18N_KEYS.DevicesAccessBridgeVaultDeviceRelation, {
+            (() => { const tArgs4: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.DevicesAccessBridgeVaultDeviceRelation, replacements: {
               vault: vaultLabel,
-            }),
-          formatEvidence: (value: string) => formatAccessDate(vault, value),
+            } }; return vault.t(tArgs4); })(),
+          formatEvidence: (value: string) => (() => { const formatAccessDateArgs: Parameters<typeof formatAccessDate>[0] = { vault, value }; return formatAccessDate(formatAccessDateArgs); })(),
           unknown: vault.t(I18N_KEYS.DevicesAccessUnknown),
         } satisfies IdentityBridgeCopy}
         <div
@@ -600,16 +598,16 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                 class="mt-2 max-w-4xl text-3xl font-semibold tracking-[-0.025em] text-balance text-foreground sm:text-4xl"
               >
                 {#if selectedPerspective === IdentityBridgePerspective.Identities}
-                  {vault.t(I18N_KEYS.DevicesAccessBridgeIdentityHeadline, {
+                  {(() => { const tArgs5: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.DevicesAccessBridgeIdentityHeadline, replacements: {
                     count: String(verifiedVaultCount),
                     vaults: vault.t(
                       verifiedVaultCount === 1
                         ? I18N_KEYS.DevicesAccessBridgeVaultSingular
                         : I18N_KEYS.DevicesAccessBridgeVaultPlural,
                     ),
-                  })}
+                  } }; return vault.t(tArgs5); })()}
                 {:else if selectedVaultExists}
-                  {vault.t(I18N_KEYS.DevicesAccessBridgeVaultHeadline, {
+                  {(() => { const tArgs6: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.DevicesAccessBridgeVaultHeadline, replacements: {
                     count: selectedVaultIsVerified ? '1' : '0',
                     identities: vault.t(
                       selectedVaultIsVerified
@@ -617,7 +615,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                         : I18N_KEYS.DevicesAccessBridgeIdentityPlural,
                     ),
                     vault: selectedVaultName,
-                  })}
+                  } }; return vault.t(tArgs6); })()}
                 {:else}
                   {vault.t(I18N_KEYS.DevicesAccessBridgeNoSelectedVault)}
                 {/if}
@@ -640,7 +638,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
               {selectedVault}
               {deviceIdentifier}
               identityStatus={view.identityState}
-              protectionLabel={protectionLabel(vault, view.protection)}
+              protectionLabel={(() => { const protectionLabelArgs2: Parameters<typeof protectionLabel>[0] = { vault, protection: view.protection }; return protectionLabel(protectionLabelArgs2); })()}
               deviceIconKind={view.protection ===
               DeviceAccessProtectionKind.PasskeyStandard
                 ? IdentityBridgeDeviceIconKind.RecoverableKey
@@ -666,11 +664,11 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                   x,
                   y,
                 }) =>
-                  vault.t(I18N_KEYS.DevicesAccessBridgeA11yNodeMoved, {
+                  (() => { const tArgs7: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.DevicesAccessBridgeA11yNodeMoved, replacements: {
                     direction,
                     x: String(x),
                     y: String(y),
-                  }),
+                  } }; return vault.t(tArgs7); })(),
                 'edge.a11yDescription.default': vault.t(
                   I18N_KEYS.DevicesAccessBridgeA11yEdge,
                 ),
@@ -713,12 +711,12 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                 {vault.t(I18N_KEYS.DevicesAccessBridgeDetails)}
               </p>
               <h2 class="mt-1.5 text-base font-semibold text-foreground">
-                {panelTitle(vault, selectedStage, view.protection)}
+                {(() => { const panelTitleArgs: Parameters<typeof panelTitle>[0] = { vault, stage: selectedStage, protection: view.protection }; return panelTitle(panelTitleArgs); })()}
               </h2>
               <p
                 class="mt-1 max-w-[70ch] text-sm leading-relaxed text-pretty text-muted-foreground"
               >
-                {panelDescription(vault, selectedStage, view.protection)}
+                {(() => { const panelDescriptionArgs: Parameters<typeof panelDescription>[0] = { vault, stage: selectedStage, protection: view.protection }; return panelDescription(panelDescriptionArgs); })()}
               </p>
             </div>
             <div
@@ -738,7 +736,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                 data-testid="devices-access-node-unlock"
                 onclick={() => (selectedStage = AccessChainStage.Unlock)}
                 onkeydown={(event) =>
-                  void navigateDetailTabs(event, AccessChainStage.Unlock)}
+                  void (() => { const navigateDetailTabsArgs: Parameters<typeof navigateDetailTabs>[0] = { event, currentStage: AccessChainStage.Unlock }; return navigateDetailTabs(navigateDetailTabsArgs); })()}
                 >{vault.t(
                   I18N_KEYS.DevicesAccessBridgeDetailProtection,
                 )}</button
@@ -755,7 +753,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                 data-testid="devices-access-node-device-key"
                 onclick={() => (selectedStage = AccessChainStage.DeviceKey)}
                 onkeydown={(event) =>
-                  void navigateDetailTabs(event, AccessChainStage.DeviceKey)}
+                  void (() => { const navigateDetailTabsArgs2: Parameters<typeof navigateDetailTabs>[0] = { event, currentStage: AccessChainStage.DeviceKey }; return navigateDetailTabs(navigateDetailTabsArgs2); })()}
                 >{vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice)}</button
               >
               <button
@@ -770,7 +768,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                 data-testid="devices-access-node-vaults"
                 onclick={() => (selectedStage = AccessChainStage.Vaults)}
                 onkeydown={(event) =>
-                  void navigateDetailTabs(event, AccessChainStage.Vaults)}
+                  void (() => { const navigateDetailTabsArgs3: Parameters<typeof navigateDetailTabs>[0] = { event, currentStage: AccessChainStage.Vaults }; return navigateDetailTabs(navigateDetailTabsArgs3); })()}
                 >{vault.t(I18N_KEYS.DevicesAccessBridgeDetailVaults)}</button
               >
             </div>

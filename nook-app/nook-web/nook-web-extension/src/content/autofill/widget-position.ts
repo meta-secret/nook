@@ -2,12 +2,17 @@ import type { WidgetPosition } from './state'
 import { widgetState } from './state'
 import { DRAG_THRESHOLD_PX } from './workflow-ui'
 
-export function clampWidgetPosition(
-  left: number,
-  top: number,
-  width: number,
-  height: number,
-): WidgetPosition {
+export function clampWidgetPosition({
+  left,
+  top,
+  width,
+  height,
+}: {
+  left: number
+  top: number
+  width: number
+  height: number
+}): WidgetPosition {
   const margin = 8
   const maxLeft = Math.max(margin, window.innerWidth - width - margin)
   const maxTop = Math.max(margin, window.innerHeight - height - margin)
@@ -17,20 +22,27 @@ export function clampWidgetPosition(
   }
 }
 
-export function applyWidgetPosition(
-  host: HTMLElement,
-  position: WidgetPosition,
-): void {
+export function applyWidgetPosition({
+  host,
+  position,
+}: {
+  host: HTMLElement
+  position: WidgetPosition
+}): void {
   host.style.top = `${position.top}px`
   host.style.left = `${position.left}px`
   host.style.right = 'auto'
 }
 
-export function attachPointerDrag(
-  host: HTMLElement,
-  handle: HTMLElement,
-  options?: { onTap?: () => void },
-): void {
+export function attachPointerDrag({
+  host,
+  handle,
+  options,
+}: {
+  host: HTMLElement
+  handle: HTMLElement
+  options?: { onTap?: () => void }
+}): void {
   enum DragPointerStateKind {
     Released = 'released',
     Captured = 'captured',
@@ -82,14 +94,19 @@ export function attachPointerDrag(
     if (!dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return
     dragged = true
     host.classList.add('dragging')
-    const position = clampWidgetPosition(
-      originLeft + dx,
-      originTop + dy,
-      host.offsetWidth,
-      host.offsetHeight,
-    )
+    const nookTypedArgs0_0: Parameters<typeof clampWidgetPosition>[0] = {
+      left: originLeft + dx,
+      top: originTop + dy,
+      width: host.offsetWidth,
+      height: host.offsetHeight,
+    }
+    const position = clampWidgetPosition(nookTypedArgs0_0)
     widgetState.setPosition(position)
-    applyWidgetPosition(host, position)
+    const nookTypedArgs0_1: Parameters<typeof applyWidgetPosition>[0] = {
+      host,
+      position,
+    }
+    applyWidgetPosition(nookTypedArgs0_1)
   })
 
   const endDrag = (event: PointerEvent) => {

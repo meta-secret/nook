@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { onDestroy, tick } from 'svelte'
   import {
     ExtensionSetupOfferKind,
@@ -79,7 +80,7 @@
       secretsAddFormType.itemType === SecretType.SecureNote,
   )
 
-  function setAddMode(open: boolean, selection: SecretTypeSelection) {
+  function setAddMode({ open, selection }: { readonly open: boolean; readonly selection: SecretTypeSelection }) {
     secretsAddOpen = open
     secretsAddFormType =
       open && selection.kind === SecretTypeSelectionKind.EditingFields
@@ -122,10 +123,11 @@
   }
 
   async function openVaultDevices(): Promise<void> {
-    vault.openSettings(
-      SettingsSection.Storage,
-      SettingsAccordionSection.Devices,
-    )
+    const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
+      section: SettingsSection.Storage,
+      accordion: SettingsAccordionSection.Devices,
+    }
+    vault.openSettings(settingsRequest)
     await tick()
     if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return
     devicesAccessHost.element
@@ -184,7 +186,13 @@
           {needsAnotherDevice}
           onAddSyncProvider={() =>
             vault.openAdmin(AdminAccordionSection.Storage)}
-          onAddDevice={() => vault.openSettings(SettingsSection.Onboard)}
+          onAddDevice={() => {
+            const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
+              section: SettingsSection.Onboard,
+              accordion: SettingsAccordionSection.Devices,
+            }
+            vault.openSettings(settingsRequest)
+          }}
         />
       {/if}
       {#if vault.settingsOpen && vault.settingsSection === SettingsSection.DevicesAccess}
@@ -213,20 +221,38 @@
           passwordError={vault.passwordError}
           enrollmentCode={vault.enrollmentCode}
           onReconnect={onSettingsReconnect}
-          onSyncProvider={(id) => vault.syncProviderById(id)}
+          onSyncProvider={(id) => {
+            const syncRequest: Parameters<typeof vault.syncProviderById>[0] = {
+              providerId: id,
+            }
+            return vault.syncProviderById(syncRequest)
+          }}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
-          onBeginSetup={(type, preset) =>
-            vault.beginProviderSetup(type, preset)}
+          onBeginSetup={(setupRequest) =>
+            vault.beginProviderSetup(setupRequest)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onRemoveProvider={(id) => vault.removeProvider(id)}
-          onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
-          onUpdatePassword={(id, pw) => vault.updateVaultPasswordEntry(id, pw)}
+          onAddPassword={(passwordRequest) =>
+            vault.addVaultPassword(passwordRequest)}
+          onUpdatePassword={(passwordRequest) =>
+            vault.updateVaultPasswordEntry(passwordRequest)}
           onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
-          onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
+          onIssueCode={({ entryId, password }) => {
+            const provider = vault.syncProviders[0]
+            if (!provider) {
+              throw new Error(vault.t(I18N_KEYS.OnboardDeviceChooseSyncProviderErr))
+            }
+            const issueRequest: Parameters<typeof vault.issueEnrollmentCode>[0] = {
+              entryId,
+              password,
+              providerId: provider.id,
+            }
+            return vault.issueEnrollmentCode(issueRequest)
+          }}
           onClearCode={() => vault.clearEnrollmentCode()}
-          onImportBitwarden={(json, password) =>
-            vault.handleBitwardenImport(json, password)}
+          onImportBitwarden={(importRequest) =>
+            vault.handleBitwardenImport(importRequest)}
           onImportKeePassXc={(csv) => vault.handleKeePassXcImport(csv)}
           onImportLastPass={(csv) => vault.handleLastPassImport(csv)}
           onImportKeeper={(csv) => vault.handleKeeperImport(csv)}
@@ -257,14 +283,15 @@
           loginSetup={vault.loginSetup}
           bind:githubPat={vault.githubPat}
           bind:githubRepo={vault.githubRepo}
-          onIssueCode={(entryId, pw, providerId) =>
-            vault.issueEnrollmentCode(entryId, pw, providerId)}
+          onIssueCode={(issueRequest) =>
+            vault.issueEnrollmentCode(issueRequest)}
           onClearCode={() => vault.clearEnrollmentCode()}
-          onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
+          onAddPassword={(passwordRequest) =>
+            vault.addVaultPassword(passwordRequest)}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
-          onBeginSetup={(type, preset) =>
-            vault.beginProviderSetup(type, preset)}
+          onBeginSetup={(setupRequest) =>
+            vault.beginProviderSetup(setupRequest)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onConnectProvider={onSettingsReconnect}
         />
@@ -281,7 +308,8 @@
           hasPasswordEnvelope={vault.hasPasswordEnvelope}
           onApproveJoin={(id) => vault.approveJoin(id)}
           onDenyJoin={(id) => vault.denyJoin(id)}
-          onRenameDevice={(id, label) => vault.renameDevice(id, label)}
+          onRenameDevice={(renameRequest) =>
+            vault.renameDevice(renameRequest)}
           onRevokeDevice={(id) => vault.revokeDevice(id)}
         />
       {:else}
@@ -292,11 +320,13 @@
             isBusy={vault.isSaving || vault.isVerifying}
             onApproveJoin={(id) => vault.approveJoin(id)}
             onRefresh={() => vault.manualSync()}
-            onOpenDevicesSettings={() =>
-              vault.openSettings(
-                SettingsSection.Storage,
-                SettingsAccordionSection.Devices,
-              )}
+            onOpenDevicesSettings={() => {
+              const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
+                section: SettingsSection.Storage,
+                accordion: SettingsAccordionSection.Devices,
+              }
+              vault.openSettings(settingsRequest)
+            }}
           />
         {/if}
         <div class="flex min-h-0 flex-1 flex-col">
@@ -307,10 +337,10 @@
               editRestriction={vault.editRestriction}
               secrets={vault.secrets}
               onAddModeChange={setAddMode}
-              onAddSecret={(id, type, data) =>
-                vault.handleAddSecret(id, type, data)}
-              onReplaceSecret={(oldId, type, data) =>
-                vault.handleReplaceSecret(oldId, type, data)}
+              onAddSecret={(secretRequest) =>
+                vault.handleAddSecret(secretRequest)}
+              onReplaceSecret={(secretRequest) =>
+                vault.handleReplaceSecret(secretRequest)}
               onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
               onGeneratePassword={generatePassword}
             />
@@ -344,11 +374,19 @@
       }}
       onSelectDevicesAccess={() => {
         leaveSecretsEditor()
-        vault.openSettings(SettingsSection.DevicesAccess)
+        const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
+          section: SettingsSection.DevicesAccess,
+          accordion: SettingsAccordionSection.Devices,
+        }
+        vault.openSettings(settingsRequest)
       }}
       onSelectOnboard={() => {
         leaveSecretsEditor()
-        vault.openSettings(SettingsSection.Onboard)
+        const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
+          section: SettingsSection.Onboard,
+          accordion: SettingsAccordionSection.Devices,
+        }
+        vault.openSettings(settingsRequest)
       }}
       onSelectAdmin={() => {
         leaveSecretsEditor()
@@ -356,7 +394,11 @@
       }}
       onSelectSettings={() => {
         leaveSecretsEditor()
-        vault.openSettings()
+        const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
+          section: SettingsSection.Storage,
+          accordion: SettingsAccordionSection.Devices,
+        }
+        vault.openSettings(settingsRequest)
       }}
     />
   </div>

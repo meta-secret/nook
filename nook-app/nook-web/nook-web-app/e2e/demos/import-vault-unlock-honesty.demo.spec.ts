@@ -13,12 +13,15 @@ type DemoVaultWindow = Window & {
     loginPasswordPrompt: boolean
     passwordEntries: Array<{ id: string; label: string; createdAt: string }>
     clearProjectionConflicts(): void
-    stageSecurityConflictForTesting(events: string[], reasons: string[]): void
-    stageStoreIdSyncConflictForTesting(
-      providerLabel: string,
-      localStoreId: string,
-      remoteStoreId: string,
-    ): void
+    stageSecurityConflictForTesting(args: {
+      readonly events: string[]
+      readonly reasons: string[]
+    }): void
+    stageStoreIdSyncConflictForTesting(args: {
+      readonly providerLabel: string
+      readonly localStoreId: string
+      readonly remoteStoreId: string
+    }): void
   }
 }
 
@@ -40,10 +43,13 @@ test('import-as-new-vault conflict and unlock honesty surface', async ({
     if (!vault) {
       throw new Error('__nookVault is unavailable')
     }
-    vault.stageSecurityConflictForTesting(
-      ['sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo'],
-      ['key epoch rotation'],
-    )
+    const securityConflictArgs: Parameters<
+      typeof vault.stageSecurityConflictForTesting
+    >[0] = {
+      events: ['sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo'],
+      reasons: ['key epoch rotation'],
+    }
+    vault.stageSecurityConflictForTesting(securityConflictArgs)
   })
   await expect(
     page.getByText('Security conflict detected', { exact: true }),
@@ -67,11 +73,14 @@ test('import-as-new-vault conflict and unlock honesty surface', async ({
     if (!vault) {
       throw new Error('__nookVault is unavailable')
     }
-    vault.stageStoreIdSyncConflictForTesting(
-      'Google Drive',
-      'store_localDemo01',
-      'store_remoteDemo1',
-    )
+    const storeIdConflictArgs: Parameters<
+      typeof vault.stageStoreIdSyncConflictForTesting
+    >[0] = {
+      providerLabel: 'Google Drive',
+      localStoreId: 'store_localDemo01',
+      remoteStoreId: 'store_remoteDemo1',
+    }
+    vault.stageStoreIdSyncConflictForTesting(storeIdConflictArgs)
   })
 
   await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible({

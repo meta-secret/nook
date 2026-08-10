@@ -5,6 +5,7 @@
   import SentinelCardStack from '../_shared/SentinelCardStack.svelte'
   import VaultTerminal from '../_shared/VaultTerminal.svelte'
   import {
+    type SentinelLaunch,
     SentinelUi,
     VaultAuthExperimentStage,
   } from '../_shared/vault-auth-workflow-state.svelte'
@@ -14,9 +15,9 @@
   let sentinelUi = $state<SentinelUi>(SentinelUi.CardStack)
   let vaultName = $state('')
 
-  function openSentinel(ui: SentinelUi, name: string) {
+  function openSentinel({ ui, vaultName: nextVaultName }: SentinelLaunch) {
     sentinelUi = ui
-    vaultName = name
+    vaultName = nextVaultName
     stage = VaultAuthExperimentStage.Sentinel
   }
 </script>

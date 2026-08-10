@@ -16,7 +16,7 @@ export class SerialOperationQueue {
   }
 }
 
-async function completionOf(operation: Promise<unknown>): Promise<void> {
+async function completionOf<Result>(operation: Promise<Result>): Promise<void> {
   try {
     await operation;
   } catch {

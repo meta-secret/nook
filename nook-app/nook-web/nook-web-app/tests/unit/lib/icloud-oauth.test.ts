@@ -17,6 +17,7 @@ import {
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
 } from '$lib/auth/icloud/config'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 
 function resolvedCloudKitEffect() {
   return vi.fn(async (): Promise<void> => {})
@@ -65,16 +66,16 @@ describe('icloud-oauth', () => {
   })
 
   it('maps tokens to oauth-file icloud config', () => {
-    const config = oauthTokensToICloudConfig(
-      {
+    const config = oauthTokensToICloudConfig({
+      tokens: {
         accessToken: 'ck-web-auth-token',
         accountName: {
           kind: ICloudAccountNameKind.Available,
           value: 'Apple User',
         },
       },
-      oauthConfigurationNotApplicable(),
-    )
+      existing: oauthConfigurationNotApplicable(),
+    })
     expect(config.preset).toBe('icloud')
     expect(config.accessToken).toEqual({
       state: 'accessToken',
@@ -162,6 +163,25 @@ describe('icloud-oauth', () => {
       })
       expect(target.storageTargetId).toContain('icloud-share-v1:')
       expect(target.storageTargetId).not.toContain('ck-web-auth-token')
+    })
+
+    it('keeps an absent current identity signed out', async () => {
+      const saveRecordZones = vi.fn()
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth: resolvedCloudKitEffect(),
+        whenUserSignsIn: vi.fn(),
+        fetchCurrentUserIdentity: resolvedCloudKitEffect(),
+        privateCloudDatabase: {
+          saveRecordZones,
+          saveRecords: vi.fn(),
+          shareWithUI: vi.fn(),
+        },
+      })
+
+      await expect(createICloudSharedVault('nook-events')).rejects.toThrow(
+        I18N_KEYS.ProviderSetupIcloudSharedSignInFirst,
+      )
+      expect(saveRecordZones).not.toHaveBeenCalled()
     })
 
     it('accepts the share and persists participant shared-database routing', async () => {

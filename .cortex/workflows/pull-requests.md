@@ -92,7 +92,7 @@ gh pr create --title "…" --body "…"
 
 See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
-After each push, run useful focused remote tasks. After the final push, explicitly trigger complete validation, inspect feedback already present, and handle every actionable finding. Do not request or wait for external reviewers. See [code-review.md](code-review.md).
+After each coherent push, explicitly trigger complete validation, inspect feedback already present, and handle every actionable finding. Use focused remote tasks only when they shorten diagnosis of a known failure. Do not request or wait for external reviewers. See [code-review.md](code-review.md).
 
 The feedback inspection and readiness audit replace any blind review-batching grace period.
 
@@ -101,7 +101,7 @@ The feedback inspection and readiness audit replace any blind review-batching gr
 **GitHub-hosted execution is the normal build/test path.** `remote.yml` runs allowlisted focused tasks repeatedly against an exact pushed branch head. `pr.yml` is the sole merge-validation pipeline and runs only when an agent explicitly applies a validation label through `task pr:validate`.
 
 ```text
-implement/fix → task loom:pre-push → commit → push/update PR → focused task remote jobs
+implement/fix → task loom:pre-push → commit → push/update PR
 → task loom:pr-land CONFIG=<pr-land-validate-request.yaml> → complete exact-head PR workflow
 ```
 
@@ -261,7 +261,7 @@ Static analysis includes Knip unused findings and jscpd clone/duplicate findings
 2. For **e2e / web failures**, read persisted app logs before changing code: Playwright attachment `nook-app-logs.json`, local `fetchAppLogs(page)` / `/app-logs`, or `dumpNookLogs(page)`.
 3. Fix the root cause.
 4. Run `task loom:pre-push`, commit, and push the completed fix.
-5. Run useful focused `task remote` jobs, then Loom/Task validate and return to monitoring Nook's complete exact-head PR checks.
+5. Run Loom/Task validate and return to monitoring Nook's complete exact-head PR checks. Use a focused `task remote` job only when it shortens diagnosis.
 6. Never request or wait for external review services.
 
 If the failure was obviously fmt-only, `task loom:pre-push` before re-push is enough. Broader failures are proven by the refreshed remote `pr.yml` run on the latest head.
@@ -348,7 +348,7 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–12 checklist.
 
 1. Fetch `origin/main`; branch from it.
 2. Implement; run `task loom:pre-push`; commit and push/open/update the PR.
-3. Use focused `task remote` jobs, then explicitly run Loom/Task validate on the ready head and monitor its repository-owned checks.
+3. Explicitly run Loom/Task validate on the ready head and monitor its repository-owned checks. Use focused `task remote` jobs only for faster isolated diagnosis.
 4. Never request or wait for optional external reviews/checks.
 5. Address and resolve every actionable comment already present.
 6. On failure: fix → `task loom:pre-push` → commit/push → focused remote proof as useful → explicitly trigger complete validation again.

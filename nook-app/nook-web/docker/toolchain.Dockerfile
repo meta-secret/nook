@@ -8,3 +8,6 @@ FROM web-base AS web-deps
 
 COPY nook-app/nook-web/nook-web-app/package.json nook-app/nook-web/nook-web-app/bun.lock ./nook-app/nook-web/nook-web-app/
 RUN cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile
+
+COPY nook-app/nook-web/nook-web-research/package.json nook-app/nook-web/nook-web-research/bun.lock ./nook-app/nook-web/nook-web-research/
+RUN cd nook-app/nook-web/nook-web-research && bun install --frozen-lockfile

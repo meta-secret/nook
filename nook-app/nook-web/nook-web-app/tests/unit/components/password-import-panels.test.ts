@@ -9,6 +9,8 @@ import KeePassXcImportPanel from '$lib/components/KeePassXcImportPanel.svelte'
 import LastPassImportPanel from '$lib/components/LastPassImportPanel.svelte'
 import ProtonPassImportPanel from '$lib/components/ProtonPassImportPanel.svelte'
 import GoogleAuthenticatorImportPanel from '$lib/components/GoogleAuthenticatorImportPanel.svelte'
+import type { TranslationRequest } from '$lib/vault/translation'
+import { translationKey, translationReplacements } from '$lib/vault/translation'
 
 const scanImage = vi.hoisted(() => vi.fn())
 
@@ -23,8 +25,11 @@ vi.mock('qr-scanner', () => ({
 }))
 
 const vault = {
-  t(key: string, values?: Record<string, string>): string {
-    return values ? `${key} ${Object.values(values).join(' ')}` : key
+  t(request: TranslationRequest): string {
+    const replacements = translationReplacements(request)
+    const values = Object.values(replacements)
+    const key = translationKey(request)
+    return values.length > 0 ? `${key} ${values.join(' ')}` : key
   },
 } as unknown as VaultState
 

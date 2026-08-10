@@ -1,8 +1,8 @@
 import {
-  ExternalPropertyPresence,
-  asExternalValue,
-  externalProperty,
-  type ExternalValue,
+  UntrustedYamlPropertyPresence,
+  asUntrustedYamlNode,
+  untrustedYamlProperty,
+  type UntrustedYamlNode,
   isRecord,
 } from '../guards.ts';
 import {
@@ -12,7 +12,7 @@ import {
   type NpmPackageMetrics,
 } from './types.ts';
 
-import type { ExternalPropertyArgs } from '../guards.ts';
+import type { UntrustedYamlPropertyArgs } from '../guards.ts';
 export async function fetchNpmPackageMetrics(
   name: string,
 ): Promise<NpmPackageMetrics> {
@@ -31,11 +31,11 @@ export async function fetchNpmPackageMetrics(
       `npm registry lookup failed for ${name}: HTTP ${metadataResponse.status}`,
     );
   }
-  const downloadsJson = asExternalValue(
-    (await downloadsResponse.json()) as ExternalValue,
+  const downloadsJson = asUntrustedYamlNode(
+    (await downloadsResponse.json()) as UntrustedYamlNode,
   );
-  const metadataJson = asExternalValue(
-    (await metadataResponse.json()) as ExternalValue,
+  const metadataJson = asUntrustedYamlNode(
+    (await metadataResponse.json()) as UntrustedYamlNode,
   );
   const weeklyDownloadsArgs = { value: downloadsJson, name };
   const weeklyDownloads = readWeeklyDownloads(weeklyDownloadsArgs);
@@ -49,7 +49,7 @@ export async function fetchNpmPackageMetrics(
 }
 
 type ReadWeeklyDownloadsArgs = {
-  readonly value: ExternalValue;
+  readonly value: UntrustedYamlNode;
   readonly name: string;
 };
 
@@ -59,13 +59,13 @@ function readWeeklyDownloads(args: ReadWeeklyDownloadsArgs): number {
   if (!isRecord(value)) {
     throw new Error(`npm downloads payload invalid for ${name}`);
   }
-  const downloadsArgs: ExternalPropertyArgs = {
+  const downloadsArgs: UntrustedYamlPropertyArgs = {
     record: value,
     key: 'downloads',
   };
-  const downloads = externalProperty(downloadsArgs);
+  const downloads = untrustedYamlProperty(downloadsArgs);
   if (
-    downloads.presence === ExternalPropertyPresence.Absent ||
+    downloads.presence === UntrustedYamlPropertyPresence.Absent ||
     typeof downloads.value !== 'number'
   ) {
     throw new Error(`npm downloads payload invalid for ${name}`);
@@ -74,28 +74,28 @@ function readWeeklyDownloads(args: ReadWeeklyDownloadsArgs): number {
 }
 
 async function resolveGitHubStars(
-  metadata: ExternalValue,
+  metadata: UntrustedYamlNode,
 ): Promise<GitHubStars> {
   if (!isRecord(metadata)) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const repositoryPropertyArgs: ExternalPropertyArgs = {
+  const repositoryPropertyArgs: UntrustedYamlPropertyArgs = {
     record: metadata,
     key: 'repository',
   };
-  const repositoryProperty = externalProperty(repositoryPropertyArgs);
+  const repositoryProperty = untrustedYamlProperty(repositoryPropertyArgs);
   let repoUrl = '';
-  if (repositoryProperty.presence === ExternalPropertyPresence.Present) {
+  if (repositoryProperty.presence === UntrustedYamlPropertyPresence.Present) {
     if (typeof repositoryProperty.value === 'string') {
       repoUrl = repositoryProperty.value;
     } else if (isRecord(repositoryProperty.value)) {
-      const urlPropertyArgs: ExternalPropertyArgs = {
+      const urlPropertyArgs: UntrustedYamlPropertyArgs = {
         record: repositoryProperty.value,
         key: 'url',
       };
-      const urlProperty = externalProperty(urlPropertyArgs);
+      const urlProperty = untrustedYamlProperty(urlPropertyArgs);
       if (
-        urlProperty.presence === ExternalPropertyPresence.Present &&
+        urlProperty.presence === UntrustedYamlPropertyPresence.Present &&
         typeof urlProperty.value === 'string'
       ) {
         repoUrl = urlProperty.value;
@@ -119,17 +119,19 @@ async function resolveGitHubStars(
   if (!response.ok) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const json = asExternalValue((await response.json()) as ExternalValue);
+  const json = asUntrustedYamlNode(
+    (await response.json()) as UntrustedYamlNode,
+  );
   if (!isRecord(json)) {
     return { presence: GitHubStarsPresence.Unavailable };
   }
-  const starsArgs: ExternalPropertyArgs = {
+  const starsArgs: UntrustedYamlPropertyArgs = {
     record: json,
     key: 'stargazers_count',
   };
-  const stars = externalProperty(starsArgs);
+  const stars = untrustedYamlProperty(starsArgs);
   if (
-    stars.presence === ExternalPropertyPresence.Absent ||
+    stars.presence === UntrustedYamlPropertyPresence.Absent ||
     typeof stars.value !== 'number'
   ) {
     return { presence: GitHubStarsPresence.Unavailable };

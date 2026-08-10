@@ -35,9 +35,11 @@ export class ExistingVaultImportLifecycle {
 
   remember(storeId: string): void {
     if (this.vault.loginSetup.kind !== LoginSetupKind.Active) return;
+    const prepareExistingVaultProviderArgs: Parameters<
+      typeof prepareExistingVaultProvider
+    >[0] = { state: this.vault, setupType: this.vault.loginSetup.providerType };
     const preparation = prepareExistingVaultProvider(
-      this.vault,
-      this.vault.loginSetup.providerType,
+      prepareExistingVaultProviderArgs,
     );
     if (
       preparation.kind === NookExistingVaultProviderReadiness.MissingOauthFile
@@ -136,8 +138,18 @@ export class ExistingVaultImportLifecycle {
     }
   }
 
-  async unlockWithPassword(entryId: string, password: string): Promise<void> {
-    await this.vault.unlockWithPassword(entryId, password);
+  async unlockWithPassword({
+    entryId,
+    password,
+  }: {
+    readonly entryId: string;
+    readonly password: string;
+  }): Promise<void> {
+    const unlockRequest: Parameters<typeof this.vault.unlockWithPassword>[0] = {
+      entryId,
+      password,
+    };
+    await this.vault.unlockWithPassword(unlockRequest);
     if (!this.vault.isAuthenticated) return;
     if (this.waitingForDevice) {
       await this.activatePendingVault();

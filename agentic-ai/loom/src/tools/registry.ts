@@ -22,18 +22,28 @@ import {
   runAgentStatsAssemble,
   runAgentStatsPublish,
   runAgentStatsValidate,
+  type AgentStatsReport,
 } from '../commands/agent-stats.ts';
-import { runCortexAudit } from '../commands/cortex-audit.ts';
-import { runDependencyPopularity } from '../commands/dependency-popularity.ts';
+import {
+  runCortexAudit,
+  type CortexAuditReport,
+} from '../commands/cortex-audit.ts';
+import {
+  runDependencyPopularity,
+  type DependencyPopularityReport,
+} from '../commands/dependency-popularity.ts';
 import {
   runPrLandMergeCheck,
   runPrLandReady,
   runPrLandStatus,
   runPrLandValidate,
+  type PrLandReport,
 } from '../commands/pr-land.ts';
-import { runPrePush } from '../commands/pre-push.ts';
-import { runSkillScaffold } from '../commands/skill-scaffold.ts';
-import { asExternalValue, type ExternalValue } from '../lib/guards.ts';
+import { runPrePush, type PrePushReport } from '../commands/pre-push.ts';
+import {
+  runSkillScaffold,
+  type SkillScaffoldReport,
+} from '../commands/skill-scaffold.ts';
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
 
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
@@ -44,6 +54,14 @@ export type DiscoverableRequest = {
   readonly exampleRequest: string;
   readonly inputSchema: ObjectJsonSchema;
 };
+
+export type LoomCommandResult =
+  | PrePushReport
+  | CortexAuditReport
+  | SkillScaffoldReport
+  | AgentStatsReport
+  | PrLandReport
+  | DependencyPopularityReport;
 const DISCOVERABLE: readonly DiscoverableRequest[] = [
   {
     family: RequestFamily.ToolsList,
@@ -139,64 +157,40 @@ export function listAllRequestFamilies(): readonly RequestFamily[] {
 
 export async function executeRequest(
   request: LoomRequest,
-): Promise<ExternalValue> {
+): Promise<LoomCommandResult> {
   switch (request.family) {
     case RequestFamily.PrePush:
-      return asExternalValue(
-        (await runPrePush(request.prePush)) as ExternalValue,
-      );
+      return runPrePush(request.prePush);
     case RequestFamily.CortexAudit:
-      return asExternalValue(
-        (await runCortexAudit(request.cortexAudit)) as ExternalValue,
-      );
+      return runCortexAudit(request.cortexAudit);
     case RequestFamily.SkillScaffold:
-      return asExternalValue(
-        (await runSkillScaffold(request.skillScaffold)) as ExternalValue,
-      );
+      return runSkillScaffold(request.skillScaffold);
     case RequestFamily.AgentStats: {
       switch (request.operation) {
         case AgentStatsOperation.Assemble:
-          return asExternalValue(
-            (await runAgentStatsAssemble(request.assemble)) as ExternalValue,
-          );
+          return runAgentStatsAssemble(request.assemble);
         case AgentStatsOperation.Validate:
-          return asExternalValue(
-            (await runAgentStatsValidate(request.validate)) as ExternalValue,
-          );
+          return runAgentStatsValidate(request.validate);
         case AgentStatsOperation.Publish:
-          return asExternalValue(
-            (await runAgentStatsPublish(request.publish)) as ExternalValue,
-          );
+          return runAgentStatsPublish(request.publish);
       }
       break;
     }
     case RequestFamily.PrLand: {
       switch (request.operation) {
         case PrLandOperation.Status:
-          return asExternalValue(
-            (await runPrLandStatus(request.status)) as ExternalValue,
-          );
+          return runPrLandStatus(request.status);
         case PrLandOperation.Validate:
-          return asExternalValue(
-            (await runPrLandValidate(request.validate)) as ExternalValue,
-          );
+          return runPrLandValidate(request.validate);
         case PrLandOperation.Ready:
-          return asExternalValue(
-            (await runPrLandReady(request.ready)) as ExternalValue,
-          );
+          return runPrLandReady(request.ready);
         case PrLandOperation.MergeCheck:
-          return asExternalValue(
-            (await runPrLandMergeCheck(request.mergeCheck)) as ExternalValue,
-          );
+          return runPrLandMergeCheck(request.mergeCheck);
       }
       break;
     }
     case RequestFamily.DependencyPopularity:
-      return asExternalValue(
-        (await runDependencyPopularity(
-          request.dependencyPopularity,
-        )) as ExternalValue,
-      );
+      return runDependencyPopularity(request.dependencyPopularity);
     case RequestFamily.ToolsList:
     case RequestFamily.ToolsCall: {
       const loomFailureDetailArgs: LoomFailureDetailArgs = {

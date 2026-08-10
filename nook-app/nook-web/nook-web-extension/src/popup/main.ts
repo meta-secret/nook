@@ -1,4 +1,5 @@
 import { mount } from 'svelte'
+import type { ComponentProps, MountOptions } from 'svelte'
 import { initializeExtensionI18n } from '../lib/i18n'
 import {
   ExtensionSetupLoadKind,
@@ -33,23 +34,27 @@ async function main() {
   const searchParams = new URLSearchParams(window.location.search)
   const i18n = await initializeExtensionI18n()
   if (searchParams.get('intent') === 'authenticator-picker') {
-    mount(AuthenticatorPicker, {
+    const nookTypedArgs0_0: MountOptions<
+      ComponentProps<typeof AuthenticatorPicker>
+    > = {
       target,
       props: {
         i18n,
         requestId: searchParams.get('request') ?? '',
       },
-    })
+    }
+    mount(AuthenticatorPicker, nookTypedArgs0_0)
     return
   }
   if (searchParams.get('intent') === 'login-picker') {
-    mount(LoginPicker, {
+    const nookTypedArgs0_1: MountOptions<ComponentProps<typeof LoginPicker>> = {
       target,
       props: {
         i18n,
         requestId: searchParams.get('request') ?? '',
       },
-    })
+    }
+    mount(LoginPicker, nookTypedArgs0_1)
     return
   }
 
@@ -60,7 +65,7 @@ async function main() {
       ? await extensionSessionDevice()
       : { kind: ExtensionSessionDeviceStateKind.Locked }
 
-  mount(PopupApp, {
+  const nookTypedArgs0_2: MountOptions<ComponentProps<typeof PopupApp>> = {
     target,
     props: {
       i18n,
@@ -70,7 +75,8 @@ async function main() {
       protectionStatus,
       activeSessionDevice,
     },
-  })
+  }
+  mount(PopupApp, nookTypedArgs0_2)
 }
 
 void main()

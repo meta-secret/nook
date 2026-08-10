@@ -47,7 +47,7 @@
 
   let showTransferKeys = $state(false);
 
-  function truncate(value: string, head = 10, tail = 8) {
+  function truncate({ value, head, tail }: { readonly value: string; readonly head: number; readonly tail: number }) {
     if (value.length <= head + tail + 3) return value;
     return `${value.slice(0, head)}…${value.slice(-tail)}`;
   }
@@ -119,7 +119,7 @@
               {vault.t(I18N_KEYS.JoinEnrollmentThisBrowser)}
             </p>
             <p class="mt-1 font-mono text-muted-foreground">
-              {truncate(deviceId)}
+              {(() => { const truncateArgs: Parameters<typeof truncate>[0] = { value: deviceId, head: 14, tail: 10 }; return truncate(truncateArgs); })()}
             </p>
           </div>
         {/if}

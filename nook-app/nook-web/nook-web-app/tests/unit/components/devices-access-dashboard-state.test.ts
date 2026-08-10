@@ -16,21 +16,30 @@ describe('Devices & access dashboard state', () => {
     const storageKey = 'devices-access-test-preference'
     expect(
       parseDevicesAccessNudgePreference(
-        readDevicesAccessNudgeStorage(localStorage, storageKey),
+        readDevicesAccessNudgeStorage({
+          storage: localStorage,
+          storageKey: storageKey,
+        }),
       ),
     ).toBe(DevicesAccessNudgePreference.Visible)
 
     localStorage.setItem(storageKey, DevicesAccessNudgePreference.Dismissed)
     expect(
       parseDevicesAccessNudgePreference(
-        readDevicesAccessNudgeStorage(localStorage, storageKey),
+        readDevicesAccessNudgeStorage({
+          storage: localStorage,
+          storageKey: storageKey,
+        }),
       ),
     ).toBe(DevicesAccessNudgePreference.Dismissed)
 
     localStorage.setItem(storageKey, 'unexpected')
     expect(
       parseDevicesAccessNudgePreference(
-        readDevicesAccessNudgeStorage(localStorage, storageKey),
+        readDevicesAccessNudgeStorage({
+          storage: localStorage,
+          storageKey: storageKey,
+        }),
       ),
     ).toBe(DevicesAccessNudgePreference.Visible)
   })
@@ -38,11 +47,21 @@ describe('Devices & access dashboard state', () => {
   test('names missing and stored browser states at the boundary', () => {
     localStorage.clear()
     const storageKey = 'devices-access-test-storage-state'
-    expect(readDevicesAccessNudgeStorage(localStorage, storageKey)).toEqual({
+    expect(
+      readDevicesAccessNudgeStorage({
+        storage: localStorage,
+        storageKey: storageKey,
+      }),
+    ).toEqual({
       kind: DevicesAccessNudgeStorageKind.Missing,
     })
     localStorage.setItem(storageKey, 'saved')
-    expect(readDevicesAccessNudgeStorage(localStorage, storageKey)).toEqual({
+    expect(
+      readDevicesAccessNudgeStorage({
+        storage: localStorage,
+        storageKey: storageKey,
+      }),
+    ).toEqual({
       kind: DevicesAccessNudgeStorageKind.Stored,
       serialized: 'saved',
     })
@@ -60,52 +79,61 @@ describe('Devices & access dashboard state', () => {
   test('returns focus to the selected link when a save outlives its panel', () => {
     const control = document.createElement('input')
     expect(
-      providerSaveFocus(true, {
-        kind: DashboardElementKind.Mounted,
-        element: control,
+      providerSaveFocus({
+        unlockSelected: true,
+        control: {
+          kind: DashboardElementKind.Mounted,
+          element: control,
+        },
       }),
     ).toEqual({ kind: ProviderSaveFocusKind.Control, element: control })
     // Selecting another link unmounts the input mid-save; focus must not be
     // dropped on the document body.
     expect(
-      providerSaveFocus(false, {
-        kind: DashboardElementKind.Mounted,
-        element: control,
+      providerSaveFocus({
+        unlockSelected: false,
+        control: {
+          kind: DashboardElementKind.Mounted,
+          element: control,
+        },
       }),
     ).toEqual({ kind: ProviderSaveFocusKind.SelectedChainLink })
     expect(
-      providerSaveFocus(true, { kind: DashboardElementKind.Missing }),
+      providerSaveFocus({
+        unlockSelected: true,
+        control: { kind: DashboardElementKind.Missing },
+      }),
     ).toEqual({ kind: ProviderSaveFocusKind.SelectedChainLink })
   })
 
   test('offers the first-run nudge only before any local vault exists', () => {
     expect(
-      shouldShowDevicesAccessNudge(
-        false,
-        0,
-        DevicesAccessNudgePreference.Visible,
-      ),
+      shouldShowDevicesAccessNudge({
+        hasActiveLocalVault: false,
+        localVaultCount: 0,
+        preference: DevicesAccessNudgePreference.Visible,
+      }),
     ).toBe(true)
     expect(
-      shouldShowDevicesAccessNudge(
-        false,
-        1,
-        DevicesAccessNudgePreference.Visible,
-      ),
+      shouldShowDevicesAccessNudge({
+        hasActiveLocalVault: false,
+        localVaultCount: 1,
+        preference: DevicesAccessNudgePreference.Visible,
+      }),
     ).toBe(false)
     expect(
-      shouldShowDevicesAccessNudge(
-        true,
-        1,
-        DevicesAccessNudgePreference.Visible,
-      ),
+      shouldShowDevicesAccessNudge({
+        hasActiveLocalVault: true,
+        localVaultCount: 1,
+        preference: DevicesAccessNudgePreference.Visible,
+      }),
     ).toBe(false)
     expect(
-      shouldShowDevicesAccessNudge(
-        false,
-        0,
-        DevicesAccessNudgePreference.Dismissed,
-      ),
+      shouldShowDevicesAccessNudge({
+        hasActiveLocalVault: false,
+        localVaultCount: 0,
+        preference: DevicesAccessNudgePreference.Dismissed,
+      }),
     ).toBe(false)
   })
 })

@@ -58,7 +58,11 @@ describe('renameLocalVaultLabel', () => {
       isVerifying: false,
     } as unknown as VaultState
 
-    await renameLocalVaultLabel(state, 'store-1', 'New name')
+    await renameLocalVaultLabel({
+      state: state,
+      storeId: 'store-1',
+      label: 'New name',
+    })
 
     expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledOnce()
     expect(wasmMocks.setLocalVaultLabel).toHaveBeenCalledWith(

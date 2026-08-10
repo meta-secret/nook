@@ -1,8 +1,9 @@
 import { expect, test } from '../fixtures'
 import { connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
 
-// Companion WASM must resolve from the sealed shared path under Node/Bun so
-// extension install discovery can run during web verification (companion-ready).
+// The repository-wide typed API contract covers the shared Svelte workspace
+// used by this flow. Keep this demo as the visible proof that extension install
+// discovery still crosses that typed boundary successfully.
 const DEMO_BEAT_MS = 700
 
 async function demoBeat(page: Parameters<typeof connectLocalVault>[0]) {

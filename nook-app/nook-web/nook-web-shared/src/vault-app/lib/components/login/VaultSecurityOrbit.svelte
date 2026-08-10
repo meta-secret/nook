@@ -29,24 +29,24 @@
     [4, 5],
   ]
   let signals = $state<Signal[]>([
-    signal(0, 'AGE', 0),
-    signal(1, 'X25519', 2),
-    signal(2, 'KDF', 4),
+    (() => { const signalArgs: Parameters<typeof signal>[0] = { id: 0, label: 'AGE', slot: 0 }; return signal(signalArgs); })(),
+    (() => { const signalArgs2: Parameters<typeof signal>[0] = { id: 1, label: 'X25519', slot: 2 }; return signal(signalArgs2); })(),
+    (() => { const signalArgs3: Parameters<typeof signal>[0] = { id: 2, label: 'KDF', slot: 4 }; return signal(signalArgs3); })(),
   ])
 
-  function randomBetween(min: number, max: number) {
+  function randomBetween({ min, max }: { readonly min: number; readonly max: number }) {
     return min + Math.random() * (max - min)
   }
 
-  function signal(id: number, label: string, slot: number): Signal {
+  function signal({ id, label, slot }: { readonly id: number; readonly label: string; readonly slot: number }): Signal {
     return {
       id,
       label,
       slot,
-      driftX: Math.round(randomBetween(-11, 11)),
-      driftY: Math.round(randomBetween(-9, 9)),
-      duration: randomBetween(7, 12),
-      delay: -randomBetween(0, 6),
+      driftX: Math.round((() => { const randomBetweenArgs: Parameters<typeof randomBetween>[0] = { min: -11, max: 11 }; return randomBetween(randomBetweenArgs); })()),
+      driftY: Math.round((() => { const randomBetweenArgs2: Parameters<typeof randomBetween>[0] = { min: -9, max: 9 }; return randomBetween(randomBetweenArgs2); })()),
+      duration: (() => { const randomBetweenArgs3: Parameters<typeof randomBetween>[0] = { min: 7, max: 12 }; return randomBetween(randomBetweenArgs3); })(),
+      delay: -(() => { const randomBetweenArgs4: Parameters<typeof randomBetween>[0] = { min: 0, max: 6 }; return randomBetween(randomBetweenArgs4); })(),
       changing: false,
     }
   }
@@ -72,7 +72,7 @@
 
     const timers: number[] = []
 
-    function later(callback: () => void, delay: number) {
+    function later({ callback, delay }: { readonly callback: () => void; readonly delay: number }) {
       const timeout = window.setTimeout(() => {
         const index = timers.indexOf(timeout)
         if (index >= 0) timers.splice(index, 1)
@@ -81,23 +81,26 @@
       timers.push(timeout)
     }
 
-    function schedule(item: Signal, initial = false) {
-      later(
-        () => rotate(item),
-        initial
-          ? 1300 + item.id * 1050 + randomBetween(0, 450)
-          : 4800 + randomBetween(0, 3700),
-      )
+    function schedule({ item, initial }: { readonly item: Signal; readonly initial: boolean }) {
+      const laterArgs: Parameters<typeof later>[0] = {
+        callback: () => rotate(item),
+        delay: initial
+          ? 1300 + item.id * 1050 + (() => { const randomBetweenArgs6: Parameters<typeof randomBetween>[0] = { min: 0, max: 450 }; return randomBetween(randomBetweenArgs6); })()
+          : 4800 + (() => { const randomBetweenArgs5: Parameters<typeof randomBetween>[0] = { min: 0, max: 3700 }; return randomBetween(randomBetweenArgs5); })(),
+      }
+      later(laterArgs)
     }
 
     function rotate(item: Signal) {
       if (document.hidden) {
-        schedule(item)
+        const scheduleArgs: Parameters<typeof schedule>[0] = { item, initial: false };
+        schedule(scheduleArgs)
         return
       }
 
       item.changing = true
-      later(() => {
+      const laterArgs: Parameters<typeof later>[0] = {
+        callback: () => {
         const visibleTerms = new Set(
           signals.map((candidate) => candidate.label),
         )
@@ -110,16 +113,24 @@
         item.slot =
           availableSlots[Math.floor(Math.random() * availableSlots.length)] ??
           item.slot
-        item.driftX = Math.round(randomBetween(-11, 11))
-        item.driftY = Math.round(randomBetween(-9, 9))
-        item.duration = randomBetween(7, 12)
-        item.delay = -randomBetween(0, 6)
+        const randomBetweenArgs7: Parameters<typeof randomBetween>[0] = { min: -11, max: 11 };
+        item.driftX = Math.round(randomBetween(randomBetweenArgs7))
+        const randomBetweenArgs8: Parameters<typeof randomBetween>[0] = { min: -9, max: 9 };
+        item.driftY = Math.round(randomBetween(randomBetweenArgs8))
+        const randomBetweenArgs9: Parameters<typeof randomBetween>[0] = { min: 7, max: 12 };
+        item.duration = randomBetween(randomBetweenArgs9)
+        const randomBetweenArgs10: Parameters<typeof randomBetween>[0] = { min: 0, max: 6 };
+        item.delay = -randomBetween(randomBetweenArgs10)
         item.changing = false
-        schedule(item)
-      }, 420)
+        const scheduleArgs2: Parameters<typeof schedule>[0] = { item, initial: false };
+        schedule(scheduleArgs2)
+        },
+        delay: 420,
+      }
+      later(laterArgs)
     }
 
-    for (const item of signals) schedule(item, true)
+    for (const item of signals) (() => { const scheduleArgs3: Parameters<typeof schedule>[0] = { item, initial: true }; return schedule(scheduleArgs3); })()
 
     return () => {
       for (const timer of timers) window.clearTimeout(timer)

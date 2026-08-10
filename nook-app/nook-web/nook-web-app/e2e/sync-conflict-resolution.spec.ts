@@ -31,10 +31,10 @@ async function setSecurityConflict(page: Page, present: boolean) {
       window as Window & {
         __nookVault?: {
           clearProjectionConflicts(): void
-          stageSecurityConflictForTesting(
-            events: string[],
-            reasons: string[],
-          ): void
+          stageSecurityConflictForTesting(args: {
+            readonly events: string[]
+            readonly reasons: string[]
+          }): void
         }
       }
     ).__nookVault
@@ -42,10 +42,13 @@ async function setSecurityConflict(page: Page, present: boolean) {
       throw new Error('__nookVault is not exposed (dev build required).')
     }
     if (enabled) {
-      vault.stageSecurityConflictForTesting(
-        ['sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo'],
-        ['key epoch rotation'],
-      )
+      const securityConflictArgs: Parameters<
+        typeof vault.stageSecurityConflictForTesting
+      >[0] = {
+        events: ['sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo'],
+        reasons: ['key epoch rotation'],
+      }
+      vault.stageSecurityConflictForTesting(securityConflictArgs)
     } else {
       vault.clearProjectionConflicts()
     }
@@ -57,15 +60,22 @@ async function setContentSyncConflict(page: Page) {
     const vault = (
       window as Window & {
         __nookVault: {
-          stageContentSyncConflictForTesting(
-            providerLabel: string,
-            localVersion: number,
-            remoteVersion: number,
-          ): void
+          stageContentSyncConflictForTesting(args: {
+            readonly providerLabel: string
+            readonly localVersion: number
+            readonly remoteVersion: number
+          }): void
         }
       }
     ).__nookVault
-    vault.stageContentSyncConflictForTesting('Remote provider', 1, 2)
+    const contentConflictArgs: Parameters<
+      typeof vault.stageContentSyncConflictForTesting
+    >[0] = {
+      providerLabel: 'Remote provider',
+      localVersion: 1,
+      remoteVersion: 2,
+    }
+    vault.stageContentSyncConflictForTesting(contentConflictArgs)
   })
 }
 

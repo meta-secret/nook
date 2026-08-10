@@ -3,7 +3,12 @@ import { readFile, readdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
-import { createManifest } from '../../nook-web-extension/src/manifest'
+import {
+  createManifest,
+  type CreateExtensionManifestArgs,
+  ExtensionManifestBuildKind,
+  type ExtensionManifestDeployment,
+} from '../../nook-web-extension/src/manifest'
 import { VAULT_WORKSPACE_OUTPUT_ALIASES } from '../../nook-web-shared/vite-config'
 
 const webRoot = resolve(import.meta.dir, '../..')
@@ -242,7 +247,11 @@ for (const forbidden of [
 
 // createManifest reads companion WASM defaults; await init before calling it.
 await companionWasmReady
-const manifest = createManifest('1.0.0')
+const productionManifestArgs: CreateExtensionManifestArgs = {
+  kind: ExtensionManifestBuildKind.StoreRelease,
+  version: '1.0.0',
+}
+const manifest = createManifest(productionManifestArgs)
 if (
   manifest.externally_connectable.matches.length !== 1 ||
   manifest.externally_connectable.matches[0] !== 'https://simple.nokey.sh/*'
@@ -286,10 +295,19 @@ if (!contentScript.includes('isRuntimeNookVaultAppUrl(location.href)')) {
   )
 }
 
-const previewManifest = createManifest(
-  '1.0.0',
-  'https://pr-391.nokey-simple.pages.dev/',
-)
+const previewManifestDeployment: ExtensionManifestDeployment = {
+  key: 'preview-key',
+  name: 'Nook Passwords Preview',
+  shortName: 'Nook Preview',
+  versionName: '1.0.0 (preview)',
+}
+const previewManifestArgs: CreateExtensionManifestArgs = {
+  kind: ExtensionManifestBuildKind.Channel,
+  version: '1.0.0',
+  simpleVaultBaseUrl: 'https://pr-391.nokey-simple.pages.dev/',
+  deployment: previewManifestDeployment,
+}
+const previewManifest = createManifest(previewManifestArgs)
 if (
   previewManifest.action.default_popup !== 'popup/index.html' ||
   previewManifest.externally_connectable.matches[0] !==

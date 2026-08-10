@@ -7,6 +7,7 @@ vars:
   PLATFORM_ROOT: '{{.APP_ROOT}}/nook-platform'
   WEB_GROUP_ROOT: '{{.APP_ROOT}}/nook-web'
   WEB_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-app'
+  RESEARCH_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-research'
   EXTENSION_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-extension'
   WEB_SHARED_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-shared'
   DOCKER: '{{default "docker" .DOCKER}}'
@@ -257,6 +258,7 @@ tasks:
     cmds:
       - cd "{{.WEB_ROOT}}" && bun run format
       - cd "{{.EXTENSION_ROOT}}" && bun run format
+      - cd "{{.RESEARCH_ROOT}}" && bun run format
       - >-
         sh -c 'if git diff --quiet; then
           echo "==> Web/extension already formatted; no changes." >&2;
@@ -270,6 +272,7 @@ tasks:
     cmds:
       - cd "{{.WEB_ROOT}}" && bun run format:check
       - cd "{{.EXTENSION_ROOT}}" && bun run format:check
+      - cd "{{.RESEARCH_ROOT}}" && bun run format:check
 
 
   default:

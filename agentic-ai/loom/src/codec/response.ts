@@ -1,5 +1,10 @@
-import type { ExternalObjectBuilder, ExternalValue } from '../lib/guards.ts';
-import { sealExternalObject } from '../lib/guards.ts';
+import type {
+  UntrustedYamlMapBuilder,
+  UntrustedYamlNode,
+} from '../lib/guards.ts';
+import { sealUntrustedYamlMap } from '../lib/guards.ts';
+import { asUntrustedYamlNode } from '../lib/guards.ts';
+import type { LoomCommandResult } from '../tools/registry.ts';
 import {
   BlueprintExplanationKind,
   type BlueprintExplanation,
@@ -26,8 +31,15 @@ export type RecoverHint = {
 
 type SuccessResponseBase = {
   readonly ok: true;
-  readonly result: ExternalValue;
+  readonly result: UntrustedYamlNode;
 };
+
+/** Serialize a concrete command report only at the outbound YAML boundary. */
+export function commandResultToResponseValue(
+  result: LoomCommandResult,
+): UntrustedYamlNode {
+  return asUntrustedYamlNode(result as UntrustedYamlNode);
+}
 
 export type SuccessResponse =
   | (SuccessResponseBase & {
@@ -108,7 +120,7 @@ export type SuccessResponseForFamilyArgs = {
     | RequestFamily.SkillScaffold
     | RequestFamily.DependencyPopularity
     | RequestFamily.ToolsList;
-  readonly result: ExternalValue;
+  readonly result: UntrustedYamlNode;
 };
 
 export function successResponseForFamily(
@@ -121,7 +133,7 @@ export function successResponseForFamily(
 
 export type SuccessResponseForAgentStatsArgs = {
   readonly operation: AgentStatsOperation;
-  readonly result: ExternalValue;
+  readonly result: UntrustedYamlNode;
 };
 
 export function successResponseForAgentStats(
@@ -134,7 +146,7 @@ export function successResponseForAgentStats(
 
 export type SuccessResponseForPrLandArgs = {
   readonly operation: PrLandOperation;
-  readonly result: ExternalValue;
+  readonly result: UntrustedYamlNode;
 };
 
 export function successResponseForPrLand(
@@ -248,9 +260,9 @@ export function executeErrorResponseForPrLand(
 
 export function encodeResponse(
   response: SuccessResponse | ErrorResponse,
-): ExternalValue {
+): UntrustedYamlNode {
   if (response.ok) {
-    const encoded: ExternalObjectBuilder = {
+    const encoded: UntrustedYamlMapBuilder = {
       ok: true,
       family: response.family,
       result: response.result,
@@ -261,10 +273,10 @@ export function encodeResponse(
     ) {
       encoded.operation = response.operation;
     }
-    return sealExternalObject(encoded);
+    return sealUntrustedYamlMap(encoded);
   }
 
-  const encoded: ExternalObjectBuilder = {
+  const encoded: UntrustedYamlMapBuilder = {
     ok: false,
     isError: true,
     phase: response.phase,
@@ -279,7 +291,7 @@ export function encodeResponse(
     },
   };
   if ('explanation' in response) {
-    const explanation: ExternalObjectBuilder = {
+    const explanation: UntrustedYamlMapBuilder = {
       kind: response.explanation.kind,
       blueprintPath: response.explanation.blueprintPath,
       blueprintYaml: response.explanation.blueprintYaml,
@@ -289,7 +301,7 @@ export function encodeResponse(
     if (response.explanation.kind === BlueprintExplanationKind.Syntax) {
       explanation.parseMessage = response.explanation.parseMessage;
     }
-    encoded.explanation = sealExternalObject(explanation);
+    encoded.explanation = sealUntrustedYamlMap(explanation);
   }
   if (response.phase === ResponsePhase.Execute) {
     encoded.family = response.family;
@@ -300,7 +312,7 @@ export function encodeResponse(
       encoded.operation = response.operation;
     }
   }
-  return sealExternalObject(encoded);
+  return sealUntrustedYamlMap(encoded);
 }
 
 export function executionFieldError(detail: string): FieldError {

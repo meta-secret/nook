@@ -68,10 +68,13 @@
             class="font-mono text-[11px] leading-relaxed text-amber-700 dark:text-amber-300"
             data-testid="extension-connected-vault"
           >
-            {vault.t(I18N_KEYS.ExtensionSetupConnectedVault, {
+            {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.ExtensionSetupConnectedVault,
+  replacements: {
               vault: state.connectedVaultName ?? '',
               store: state.connectedVaultStoreId ?? '',
-            })}
+            },
+}; return vault.t(translationRequest); })()}
           </p>
         {/if}
         {#if isInstalledUnpaired}

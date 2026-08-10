@@ -115,7 +115,13 @@ const oneTimeCodeCandidateSelector = [
   'input[type="password"]',
 ].join(",");
 
-function setNativeInputValue(input: HTMLInputElement, value: string): void {
+function setNativeInputValue({
+  input,
+  value,
+}: {
+  input: HTMLInputElement;
+  value: string;
+}): void {
   const prototype = Object.getPrototypeOf(input) as HTMLInputElement;
   const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
   if (descriptor?.set) {
@@ -123,8 +129,14 @@ function setNativeInputValue(input: HTMLInputElement, value: string): void {
   } else {
     input.value = value;
   }
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
+  const nookTypedArgs0_0: ConstructorParameters<typeof Event>[1] = {
+    bubbles: true,
+  };
+  input.dispatchEvent(new Event("input", nookTypedArgs0_0));
+  const nookTypedArgs0_1: ConstructorParameters<typeof Event>[1] = {
+    bubbles: true,
+  };
+  input.dispatchEvent(new Event("change", nookTypedArgs0_1));
 }
 
 function isRenderedInput(field: HTMLInputElement): boolean {
@@ -152,11 +164,15 @@ function isRenderedInput(field: HTMLInputElement): boolean {
   return true;
 }
 
-function findFields(
-  root: ParentNode,
-  selector: string,
-  formScope?: PasswordFormScope,
-): HTMLInputElement[] {
+function findFields({
+  root,
+  selector,
+  formScope,
+}: {
+  root: ParentNode;
+  selector: string;
+  formScope?: PasswordFormScope;
+}): HTMLInputElement[] {
   const queryRoot =
     formScope?.kind === PasswordFormScopeKind.Owned
       ? formScope.owner.ownerDocument
@@ -172,25 +188,46 @@ function findFields(
   );
 }
 
-export function findPasswordFields(
-  root: ParentNode = document,
-  formScope?: PasswordFormScope,
-): HTMLInputElement[] {
-  return findFields(root, 'input[type="password"]', formScope).filter(
+export function findPasswordFields({
+  root = document,
+  formScope,
+}: {
+  root?: ParentNode;
+  formScope?: PasswordFormScope;
+}): HTMLInputElement[] {
+  const nookTypedArgs0_0: Parameters<typeof findFields>[0] = {
+    root,
+    selector: 'input[type="password"]',
+    formScope,
+  };
+  return findFields(nookTypedArgs0_0).filter(
     (field) =>
       !field.disabled && field.type === "password" && isRenderedInput(field),
   );
 }
 
-export function findUsernameFields(
-  root: ParentNode = document,
-  formScope?: PasswordFormScope,
-): HTMLInputElement[] {
+export function findUsernameFields({
+  root = document,
+  formScope,
+}: {
+  root?: ParentNode;
+  formScope?: PasswordFormScope;
+}): HTMLInputElement[] {
   const seen = new Set<HTMLInputElement>();
   const fields: HTMLInputElement[] = [];
+  const nookTypedArgs0_1: Parameters<typeof findFields>[0] = {
+    root,
+    selector: usernameFieldSelectors.join(","),
+    formScope,
+  };
+  const nookTypedArgs0_2: Parameters<typeof findFields>[0] = {
+    root,
+    selector: usernameCandidateSelector,
+    formScope,
+  };
   for (const field of [
-    ...findFields(root, usernameFieldSelectors.join(","), formScope),
-    ...findFields(root, usernameCandidateSelector, formScope),
+    ...findFields(nookTypedArgs0_1),
+    ...findFields(nookTypedArgs0_2),
   ]) {
     if (seen.has(field) || !looksLikeUsernameField(field)) continue;
     seen.add(field);
@@ -246,9 +283,11 @@ function hasLoginContext(field: HTMLInputElement): boolean {
   let depth = 0;
   while (container && depth < 6) {
     ancestorIdentities.push(
-      [container.id, container.className, container.getAttribute("role") ?? ""].join(
-        " ",
-      ),
+      [
+        container.id,
+        container.className,
+        container.getAttribute("role") ?? "",
+      ].join(" "),
     );
     container = container.parentElement;
     depth += 1;
@@ -259,9 +298,12 @@ function hasLoginContext(field: HTMLInputElement): boolean {
   const doc = field.ownerDocument;
   const observation = new NookLoginContextObservation(
     form
-      ? [form.id, form.className, form.getAttribute("action") ?? "", form.name].join(
-          " ",
-        )
+      ? [
+          form.id,
+          form.className,
+          form.getAttribute("action") ?? "",
+          form.name,
+        ].join(" ")
       : "",
     ancestorIdentities,
     advanceControl
@@ -280,10 +322,13 @@ function hasLoginContext(field: HTMLInputElement): boolean {
   }
 }
 
-function pageInputObservation(
-  field: HTMLInputElement,
-  loginContext: boolean,
-): NookPageInputFieldObservation {
+function pageInputObservation({
+  field,
+  loginContext,
+}: {
+  field: HTMLInputElement;
+  loginContext: boolean;
+}): NookPageInputFieldObservation {
   return new NookPageInputFieldObservation(
     parsePageInputType(field.type),
     field.disabled,
@@ -296,7 +341,11 @@ function pageInputObservation(
 
 function looksLikeUsernameField(field: HTMLInputElement): boolean {
   if (!isRenderedInput(field)) return false;
-  const observation = pageInputObservation(field, hasLoginContext(field));
+  const nookTypedArgs0_3: Parameters<typeof pageInputObservation>[0] = {
+    field,
+    loginContext: hasLoginContext(field),
+  };
+  const observation = pageInputObservation(nookTypedArgs0_3);
   try {
     return wasmLooksLikeUsernameField(observation);
   } finally {
@@ -306,7 +355,11 @@ function looksLikeUsernameField(field: HTMLInputElement): boolean {
 
 function looksLikeOneTimeCodeField(field: HTMLInputElement): boolean {
   if (!isRenderedInput(field)) return false;
-  const observation = pageInputObservation(field, false);
+  const nookTypedArgs0_4: Parameters<typeof pageInputObservation>[0] = {
+    field,
+    loginContext: false,
+  };
+  const observation = pageInputObservation(nookTypedArgs0_4);
   try {
     return wasmLooksLikeOneTimeCodeField(observation);
   } finally {
@@ -314,17 +367,21 @@ function looksLikeOneTimeCodeField(field: HTMLInputElement): boolean {
   }
 }
 
-export function findOneTimeCodeFields(
-  root: ParentNode = document,
-  formScope?: PasswordFormScope,
-): HTMLInputElement[] {
+export function findOneTimeCodeFields({
+  root = document,
+  formScope,
+}: {
+  root?: ParentNode;
+  formScope?: PasswordFormScope;
+} = {}): HTMLInputElement[] {
   const seen = new Set<HTMLInputElement>();
   const fields: HTMLInputElement[] = [];
-  for (const field of findFields(
+  const nookTypedArgs0_5: Parameters<typeof findFields>[0] = {
     root,
-    oneTimeCodeCandidateSelector,
+    selector: oneTimeCodeCandidateSelector,
     formScope,
-  )) {
+  };
+  for (const field of findFields(nookTypedArgs0_5)) {
     if (seen.has(field) || !looksLikeOneTimeCodeField(field)) continue;
     seen.add(field);
     fields.push(field);
@@ -332,10 +389,13 @@ export function findOneTimeCodeFields(
   return fields;
 }
 
-function hasAutocompleteToken(
-  field: HTMLInputElement,
-  expected: string,
-): boolean {
+function hasAutocompleteToken({
+  field,
+  expected,
+}: {
+  field: HTMLInputElement;
+  expected: string;
+}): boolean {
   return field.autocomplete
     .toLowerCase()
     .split(/\s+/u)
@@ -414,19 +474,42 @@ function pageHasManualCheckpoint(root: ParentNode): boolean {
   return wasmLooksLikeEmailVerificationBody(root.textContent ?? "");
 }
 
-function summarizeRoot(
-  root: ParentNode,
-  formScope?: PasswordFormScope,
-): PasswordFormSummary {
-  const passwordFields = findPasswordFields(root, formScope);
-  const usernameFields = findUsernameFields(root, formScope);
-  const oneTimeCodeFields = findOneTimeCodeFields(root, formScope);
-  const currentPasswordFieldCount = passwordFields.filter((field) =>
-    hasAutocompleteToken(field, "current-password"),
-  ).length;
-  const newPasswordFieldCount = passwordFields.filter((field) =>
-    hasAutocompleteToken(field, "new-password"),
-  ).length;
+function summarizeRoot({
+  root,
+  formScope,
+}: {
+  root: ParentNode;
+  formScope?: PasswordFormScope;
+}): PasswordFormSummary {
+  const nookTypedArgs0_6: Parameters<typeof findPasswordFields>[0] = {
+    root,
+    formScope,
+  };
+  const passwordFields = findPasswordFields(nookTypedArgs0_6);
+  const nookTypedArgs0_7: Parameters<typeof findUsernameFields>[0] = {
+    root,
+    formScope,
+  };
+  const usernameFields = findUsernameFields(nookTypedArgs0_7);
+  const nookTypedArgs0_8: Parameters<typeof findOneTimeCodeFields>[0] = {
+    root,
+    formScope,
+  };
+  const oneTimeCodeFields = findOneTimeCodeFields(nookTypedArgs0_8);
+  const currentPasswordFieldCount = passwordFields.filter((field) => {
+    const nookArrowArgs0: Parameters<typeof hasAutocompleteToken>[0] = {
+      field,
+      expected: "current-password",
+    };
+    return hasAutocompleteToken(nookArrowArgs0);
+  }).length;
+  const newPasswordFieldCount = passwordFields.filter((field) => {
+    const nookArrowArgs1: Parameters<typeof hasAutocompleteToken>[0] = {
+      field,
+      expected: "new-password",
+    };
+    return hasAutocompleteToken(nookArrowArgs1);
+  }).length;
   const forms = new Set<HTMLFormElement>();
 
   for (const field of [
@@ -457,13 +540,17 @@ function summarizeRoot(
 export function summarizePasswordForms(
   root: ParentNode = document,
 ): PasswordFormSummary {
-  return summarizeRoot(root);
+  const nookTypedArgs0_9: Parameters<typeof summarizeRoot>[0] = { root };
+  return summarizeRoot(nookTypedArgs0_9);
 }
 
-function nearestUnownedAuthContainer(
-  field: HTMLInputElement,
-  root: ParentNode,
-): ParentNode {
+function nearestUnownedAuthContainer({
+  field,
+  root,
+}: {
+  field: HTMLInputElement;
+  root: ParentNode;
+}): ParentNode {
   let container = field.parentElement;
   while (container && container !== root) {
     const explicitAuthContainer = container.matches(
@@ -481,9 +568,17 @@ function nearestUnownedAuthContainer(
 }
 
 function isAuthUsernameField(field: HTMLInputElement): boolean {
+  const nookNamedArgs0_0: Parameters<typeof hasAutocompleteToken>[0] = {
+    field,
+    expected: "username",
+  };
+  const nookNamedArgs0_1: Parameters<typeof hasAutocompleteToken>[0] = {
+    field,
+    expected: "email",
+  };
   return (
-    hasAutocompleteToken(field, "username") ||
-    hasAutocompleteToken(field, "email") ||
+    hasAutocompleteToken(nookNamedArgs0_0) ||
+    hasAutocompleteToken(nookNamedArgs0_1) ||
     looksLikeUsernameField(field)
   );
 }
@@ -491,9 +586,14 @@ function isAuthUsernameField(field: HTMLInputElement): boolean {
 export function summarizeAuthenticationWorkflowForms(
   root: ParentNode = document,
 ): PasswordFormObservation[] {
-  const allPasswordFields = findPasswordFields(root);
-  const allUsernameFields = findUsernameFields(root);
-  const allOneTimeCodeFields = findOneTimeCodeFields(root);
+  const nookTypedArgs0_10: Parameters<typeof findPasswordFields>[0] = { root };
+  const allPasswordFields = findPasswordFields(nookTypedArgs0_10);
+  const nookTypedArgs0_11: Parameters<typeof findUsernameFields>[0] = { root };
+  const allUsernameFields = findUsernameFields(nookTypedArgs0_11);
+  const nookTypedArgs0_12: Parameters<typeof findOneTimeCodeFields>[0] = {
+    root,
+  };
+  const allOneTimeCodeFields = findOneTimeCodeFields(nookTypedArgs0_12);
   const authUsernameFields = allUsernameFields.filter(isAuthUsernameField);
   const authFieldCount =
     allPasswordFields.length +
@@ -501,11 +601,18 @@ export function summarizeAuthenticationWorkflowForms(
     allOneTimeCodeFields.length;
   if (authFieldCount === 0) {
     if (!pageHasPasskeyControl(root)) return [];
+    const nookTypedArgs0_2: Parameters<typeof summarizeRoot>[0]["formScope"] = {
+      kind: PasswordFormScopeKind.Unowned,
+    };
+    const nookTypedArgs0_13: Parameters<typeof summarizeRoot>[0] = {
+      root,
+      formScope: nookTypedArgs0_2,
+    };
     return [
       {
         root,
         formScope: { kind: PasswordFormScopeKind.Unowned },
-        summary: summarizeRoot(root, { kind: PasswordFormScopeKind.Unowned }),
+        summary: summarizeRoot(nookTypedArgs0_13),
       },
     ];
   }
@@ -517,129 +624,226 @@ export function summarizeAuthenticationWorkflowForms(
       kind: PasswordFormScopeKind.Owned,
       owner: form,
     };
-    const summary = summarizeRoot(root, formScope);
+    const nookTypedArgs0_14: Parameters<typeof summarizeRoot>[0] = {
+      root,
+      formScope,
+    };
+    const summary = summarizeRoot(nookTypedArgs0_14);
+    const nookNamedArgs0_2: Parameters<typeof findUsernameFields>[0] = {
+      root,
+      formScope,
+    };
     return (
       summary.passwordFieldCount > 0 ||
       summary.oneTimeCodeFieldCount > 0 ||
-      findUsernameFields(root, formScope).some(isAuthUsernameField)
+      findUsernameFields(nookNamedArgs0_2).some(isAuthUsernameField)
     );
   });
-  const observations: PasswordFormObservation[] = forms.map((form) => ({
-    root,
-    formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
-    summary: summarizeRoot(root, {
-      kind: PasswordFormScopeKind.Owned,
-      owner: form,
-    }),
-  }));
+  const observations: PasswordFormObservation[] = forms.map((form) => {
+    const summaryArgs: Parameters<typeof summarizeRoot>[0] = {
+      root,
+      formScope: {
+        kind: PasswordFormScopeKind.Owned,
+        owner: form,
+      },
+    };
+    return {
+      root,
+      formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
+      summary: summarizeRoot(summaryArgs),
+    };
+  });
   const unownedFields = [
     ...allPasswordFields,
     ...authUsernameFields,
     ...allOneTimeCodeFields,
   ].filter((field) => !field.form);
   const unownedContainers = new Set(
-    unownedFields.map((field) => nearestUnownedAuthContainer(field, root)),
+    unownedFields.map((field) => {
+      const nookArrowArgs2: Parameters<typeof nearestUnownedAuthContainer>[0] =
+        { field, root };
+      return nearestUnownedAuthContainer(nookArrowArgs2);
+    }),
   );
   for (const container of unownedContainers) {
     const formScope: PasswordFormScope = {
       kind: PasswordFormScopeKind.Unowned,
     };
-    observations.push({
+    const nookTypedArgs0_15: Parameters<typeof summarizeRoot>[0] = {
       root: container,
       formScope,
-      summary: summarizeRoot(container, formScope),
-    });
+    };
+    const nookTypedArgs0_3: Parameters<typeof observations.push>[0] = {
+      root: container,
+      formScope,
+      summary: summarizeRoot(nookTypedArgs0_15),
+    };
+    observations.push(nookTypedArgs0_3);
   }
-  return observations.sort((left, right) => {
-    const signal = ({ summary }: PasswordFormObservation) =>
-      summary.oneTimeCodeFieldCount > 0
-        ? 5
-        : summary.currentPasswordFieldCount > 0
-          ? 4
-          : summary.genericPasswordFieldCount === 1
-            ? 3
-            : summary.passwordFieldCount > 0
-              ? 2
-              : 1;
-    return signal(right) - signal(left);
-  });
+  return observations.sort(
+    // eslint-disable-next-line max-params -- Array.sort owns the comparator callback signature.
+    (left, right) => {
+      const signal = ({ summary }: PasswordFormObservation) =>
+        summary.oneTimeCodeFieldCount > 0
+          ? 5
+          : summary.currentPasswordFieldCount > 0
+            ? 4
+            : summary.genericPasswordFieldCount === 1
+              ? 3
+              : summary.passwordFieldCount > 0
+                ? 2
+                : 1;
+      return signal(right) - signal(left);
+    },
+  );
 }
 
-export function fillOneTimeCode(
-  code: string,
-  root: ParentNode = document,
-  formScope?: PasswordFormScope,
-): boolean {
-  const field = findOneTimeCodeFields(root, formScope)[0];
+export function fillOneTimeCode({
+  code,
+  root = document,
+  formScope,
+}: {
+  code: string;
+  root?: ParentNode;
+  formScope?: PasswordFormScope;
+}): boolean {
+  const nookTypedArgs0_16: Parameters<typeof findOneTimeCodeFields>[0] = {
+    root,
+    formScope,
+  };
+  const field = findOneTimeCodeFields(nookTypedArgs0_16)[0];
   if (!field) return false;
-  setNativeInputValue(field, code);
+  const nookTypedArgs0_17: Parameters<typeof setNativeInputValue>[0] = {
+    input: field,
+    value: code,
+  };
+  setNativeInputValue(nookTypedArgs0_17);
   field.focus();
   return true;
 }
 
-export function fillLoginCredentials(
-  credentials: LoginCredentials,
-  root: ParentNode = document,
-  formScope?: PasswordFormScope,
-): boolean {
-  const passwordFields = findPasswordFields(root, formScope);
-  const usernameCandidates = findUsernameFields(root, formScope);
+export function fillLoginCredentials({
+  credentials,
+  root = document,
+  formScope,
+}: {
+  credentials: LoginCredentials;
+  root?: ParentNode;
+  formScope?: PasswordFormScope;
+}): boolean {
+  const nookTypedArgs0_18: Parameters<typeof findPasswordFields>[0] = {
+    root,
+    formScope,
+  };
+  const passwordFields = findPasswordFields(nookTypedArgs0_18);
+  const nookTypedArgs0_19: Parameters<typeof findUsernameFields>[0] = {
+    root,
+    formScope,
+  };
+  const usernameCandidates = findUsernameFields(nookTypedArgs0_19);
   const usernameField = usernameCandidates[0];
 
   if (passwordFields.length === 0) {
     if (!usernameField) return false;
-    setNativeInputValue(usernameField, credentials.username);
+    const nookTypedArgs0_20: Parameters<typeof setNativeInputValue>[0] = {
+      input: usernameField,
+      value: credentials.username,
+    };
+    setNativeInputValue(nookTypedArgs0_20);
     usernameField.focus();
     return true;
   }
 
   const passwordField = passwordFields[0];
   if (usernameField) {
-    setNativeInputValue(usernameField, credentials.username);
+    const nookTypedArgs0_21: Parameters<typeof setNativeInputValue>[0] = {
+      input: usernameField,
+      value: credentials.username,
+    };
+    setNativeInputValue(nookTypedArgs0_21);
   }
-  setNativeInputValue(passwordField, credentials.password);
+  const nookTypedArgs0_22: Parameters<typeof setNativeInputValue>[0] = {
+    input: passwordField,
+    value: credentials.password,
+  };
+  setNativeInputValue(nookTypedArgs0_22);
   return true;
 }
 
 /** Fill every `new-password` field (and confirm) without touching current-password. */
-export function fillGeneratedPassword(
-  password: string,
-  root: ParentNode = document,
-  formScope?: PasswordFormScope,
-): boolean {
-  const passwordFields = findPasswordFields(root, formScope);
-  const newPasswordFields = passwordFields.filter((field) =>
-    hasAutocompleteToken(field, "new-password"),
-  );
+export function fillGeneratedPassword({
+  password,
+  root = document,
+  formScope,
+}: {
+  password: string;
+  root?: ParentNode;
+  formScope?: PasswordFormScope;
+}): boolean {
+  const nookTypedArgs0_23: Parameters<typeof findPasswordFields>[0] = {
+    root,
+    formScope,
+  };
+  const passwordFields = findPasswordFields(nookTypedArgs0_23);
+  const newPasswordFields = passwordFields.filter((field) => {
+    const nookArrowArgs3: Parameters<typeof hasAutocompleteToken>[0] = {
+      field,
+      expected: "new-password",
+    };
+    return hasAutocompleteToken(nookArrowArgs3);
+  });
   if (newPasswordFields.length === 0) return false;
   for (const field of newPasswordFields) {
-    setNativeInputValue(field, password);
+    const nookTypedArgs0_24: Parameters<typeof setNativeInputValue>[0] = {
+      input: field,
+      value: password,
+    };
+    setNativeInputValue(nookTypedArgs0_24);
   }
   newPasswordFields[0]?.focus();
   return true;
 }
 
 /** Read username/password from a classified auth form scope for a save offer. */
-export function readLoginCredentials(
-  root: ParentNode = document,
-  formScope?: PasswordFormScope,
-): LoginCredentialsLookup {
-  const passwordFields = findPasswordFields(root, formScope);
+export function readLoginCredentials({
+  root = document,
+  formScope,
+}: {
+  root?: ParentNode;
+  formScope?: PasswordFormScope;
+}): LoginCredentialsLookup {
+  const nookTypedArgs0_25: Parameters<typeof findPasswordFields>[0] = {
+    root,
+    formScope,
+  };
+  const passwordFields = findPasswordFields(nookTypedArgs0_25);
   if (passwordFields.length === 0) {
     return { kind: LoginCredentialsLookupKind.Absent };
   }
 
-  const newPasswordFields = passwordFields.filter((field) =>
-    hasAutocompleteToken(field, "new-password"),
-  );
+  const newPasswordFields = passwordFields.filter((field) => {
+    const nookArrowArgs4: Parameters<typeof hasAutocompleteToken>[0] = {
+      field,
+      expected: "new-password",
+    };
+    return hasAutocompleteToken(nookArrowArgs4);
+  });
   const passwordField =
     newPasswordFields[0] ??
-    passwordFields.find((field) =>
-      hasAutocompleteToken(field, "current-password"),
-    ) ??
+    passwordFields.find((field) => {
+      const nookArrowArgs5: Parameters<typeof hasAutocompleteToken>[0] = {
+        field,
+        expected: "current-password",
+      };
+      return hasAutocompleteToken(nookArrowArgs5);
+    }) ??
     passwordFields[0];
   const password = passwordField.value.trim();
-  const username = findUsernameFields(root, formScope)[0]?.value.trim() ?? "";
+  const nookNamedArgs0_3: Parameters<typeof findUsernameFields>[0] = {
+    root,
+    formScope,
+  };
+  const username = findUsernameFields(nookNamedArgs0_3)[0]?.value.trim() ?? "";
   if (!username || !password) {
     return { kind: LoginCredentialsLookupKind.Absent };
   }
@@ -649,19 +853,34 @@ export function readLoginCredentials(
   };
 }
 
-export function submitLoginForm(
-  root: ParentNode = document,
-  formScope?: PasswordFormScope,
-): boolean {
-  const passwordField = findPasswordFields(root, formScope)[0];
-  const usernameField = findUsernameFields(root, formScope)[0];
+export function submitLoginForm({
+  root = document,
+  formScope,
+}: {
+  root?: ParentNode;
+  formScope?: PasswordFormScope;
+} = {}): boolean {
+  const nookTypedArgs0_26: Parameters<typeof findPasswordFields>[0] = {
+    root,
+    formScope,
+  };
+  const passwordField = findPasswordFields(nookTypedArgs0_26)[0];
+  const nookTypedArgs0_27: Parameters<typeof findUsernameFields>[0] = {
+    root,
+    formScope,
+  };
+  const usernameField = findUsernameFields(nookTypedArgs0_27)[0];
   const anchor = passwordField ?? usernameField;
   if (!anchor) return false;
 
   // Email-first / multi-step logins often use a type=button "Next" control
   // rather than a real submit. Prefer an advance control before requestSubmit
   // only while the password step is still missing.
-  if (!passwordField && clickAdvanceControl(root, formScope)) {
+  const nookNamedArgs0_4: Parameters<typeof clickAdvanceControl>[0] = {
+    root,
+    formScope,
+  };
+  if (!passwordField && clickAdvanceControl(nookNamedArgs0_4)) {
     return true;
   }
 
@@ -682,18 +901,29 @@ export function submitLoginForm(
     ) {
       return false;
     }
-    return observeSubmit(form, () => submitControl.click());
+    const nookTypedArgs0_28: Parameters<typeof observeSubmit>[0] = {
+      form,
+      action: () => submitControl.click(),
+    };
+    return observeSubmit(nookTypedArgs0_28);
   }
   if (typeof form.requestSubmit === "function") {
-    return observeSubmit(form, () => form.requestSubmit());
+    const nookTypedArgs0_29: Parameters<typeof observeSubmit>[0] = {
+      form,
+      action: () => form.requestSubmit(),
+    };
+    return observeSubmit(nookTypedArgs0_29);
   }
   return false;
 }
 
-function clickAdvanceControl(
-  root: ParentNode,
-  formScope?: PasswordFormScope,
-): boolean {
+function clickAdvanceControl({
+  root,
+  formScope,
+}: {
+  root: ParentNode;
+  formScope?: PasswordFormScope;
+}): boolean {
   const queryRoot =
     formScope?.kind === PasswordFormScopeKind.Owned ? formScope.owner : root;
   const controls = Array.from(
@@ -725,15 +955,22 @@ function clickAdvanceControl(
   return false;
 }
 
-function observeSubmit(form: HTMLFormElement, action: () => void): boolean {
+function observeSubmit({
+  form,
+  action,
+}: {
+  form: HTMLFormElement;
+  action: () => void;
+}): boolean {
   let submitted = false;
   const markSubmitted = () => {
     submitted = true;
   };
-  form.addEventListener("submit", markSubmitted, {
+  const nookTypedArgs0_4: Parameters<typeof form.addEventListener>[2] = {
     capture: true,
     once: true,
-  });
+  };
+  form.addEventListener("submit", markSubmitted, nookTypedArgs0_4);
   action();
   form.removeEventListener("submit", markSubmitted, true);
   return submitted;

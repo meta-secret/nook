@@ -27,6 +27,7 @@ WORKDIR /meta-secret/nook
 # Only these small outputs cross the Rust/web boundary. The Rust target/, Cargo registry, and
 # compiler toolchain remain exclusively in the builder's local BuildKit content store.
 COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
+COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules
 RUN ln -s nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/node_modules
 # Playwright uses its own revisioned ffmpeg path for video recording. Browser images provide
 # Debian's ffmpeg package; link that binary into the revision declared by the installed Playwright

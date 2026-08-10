@@ -22,7 +22,7 @@
   }: {
     vault: VaultState
     isSaving: boolean
-    onImport: (json: string, password: string) => Promise<NookImportResult>
+    onImport: (args: { readonly json: string; readonly password: string }) => Promise<NookImportResult>
     onClose?: () => void
     embedded?: boolean
   } = $props()
@@ -53,12 +53,13 @@
     result = { kind: ImportOutcomeKind.NotRun }
     isImporting = true
     try {
+      const onImportArgs: Parameters<typeof onImport>[0] = { json: await file.text(), password };
       result = {
         kind: ImportOutcomeKind.Completed,
-        result: await onImport(await file.text(), password),
+        result: await onImport(onImportArgs),
       }
       password = ''
-    } catch (cause: unknown) {
+    } catch (cause) {
       error = cause instanceof Error ? cause.message : String(cause)
     } finally {
       isImporting = false
@@ -167,15 +168,15 @@
           data-testid="bitwarden-import-result"
         >
           <p class="font-medium">
-            {vault.t(I18N_KEYS.BitwardenImportResultImported, {
+            {(() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.BitwardenImportResultImported, replacements: {
               count: String(result.result.imported),
-            })}
+            } }; return vault.t(tArgs); })()}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
-            {vault.t(I18N_KEYS.BitwardenImportResultSkipped, {
+            {(() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.BitwardenImportResultSkipped, replacements: {
               unsupported: String(result.result.skippedUnsupported),
               duplicates: String(result.result.skippedDuplicates),
-            })}
+            } }; return vault.t(tArgs2); })()}
           </p>
         </div>
       {/if}

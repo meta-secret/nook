@@ -55,8 +55,7 @@
     isUnlocking?: boolean
     onUnlock: () => void | Promise<void>
     onUnlockWithPassword: (
-      entryId: string,
-      password: string,
+      args: { readonly entryId: string; readonly password: string },
     ) => void | Promise<void>
     onSelectPasswordEntry: (selection: PasswordEntrySelection) => void
     onSwitchVault: () => void | Promise<void>

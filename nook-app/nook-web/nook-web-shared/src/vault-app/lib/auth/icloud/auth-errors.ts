@@ -154,10 +154,13 @@ export function cloudKitAuthErrorDetails(
   return {};
 }
 
-function hasErrorToken(
-  details: CloudKitAuthErrorDetails,
-  predicate: (value: string) => boolean,
-): boolean {
+function hasErrorToken({
+  details,
+  predicate,
+}: {
+  readonly details: CloudKitAuthErrorDetails;
+  readonly predicate: (value: string) => boolean;
+}): boolean {
   return [details.code, details.message, details.reason, details.statusText]
     .filter((value): value is string => Boolean(value))
     .some((value) => predicate(value.toUpperCase()));
@@ -167,24 +170,32 @@ function isAuthRequiredCloudKitError(
   details: CloudKitAuthErrorDetails,
 ): boolean {
   if (details.status === 421) return true;
-  return hasErrorToken(details, (value) =>
-    [
-      "AUTHENTICATION_REQUIRED",
-      "REQUEST NEEDS AUTHORIZATION",
-      "NEEDS AUTHORIZATION",
-    ].some((token) => value.includes(token)),
-  );
+  const hasErrorTokenArgs: Parameters<typeof hasErrorToken>[0] = {
+    details,
+    predicate: (value) =>
+      [
+        "AUTHENTICATION_REQUIRED",
+        "REQUEST NEEDS AUTHORIZATION",
+        "NEEDS AUTHORIZATION",
+      ].some((token) => value.includes(token)),
+  };
+  return hasErrorToken(hasErrorTokenArgs);
 }
 
-export function isExpectedCloudKitSignInSetupFailure(
-  error: unknown,
-  hasSignInControl: boolean,
-): boolean {
+export function isExpectedCloudKitSignInSetupFailure({
+  error,
+  hasSignInControl,
+}: {
+  readonly error: unknown;
+  readonly hasSignInControl: boolean;
+}): boolean {
   const details = cloudKitAuthErrorDetails(error);
   if (isAuthRequiredCloudKitError(details)) return hasSignInControl;
-  const isOpaqueUnknown = hasErrorToken(details, (value) =>
-    value.includes("UNKNOWN_ERROR"),
-  );
+  const hasErrorTokenArgs2: Parameters<typeof hasErrorToken>[0] = {
+    details,
+    predicate: (value) => value.includes("UNKNOWN_ERROR"),
+  };
+  const isOpaqueUnknown = hasErrorToken(hasErrorTokenArgs2);
   return isOpaqueUnknown && hasSignInControl;
 }
 
@@ -206,19 +217,33 @@ export function cloudKitAuthErrorTranslationKey(
   }
   const isMisdirectedRequest =
     details.status === 421 ||
-    hasErrorToken(
-      details,
-      (value) => value.includes("421") || value.includes("MISDIRECTED"),
-    );
+    (() => {
+      const hasErrorTokenArgs3: Parameters<typeof hasErrorToken>[0] = {
+        details,
+        predicate: (value) =>
+          value.includes("421") || value.includes("MISDIRECTED"),
+      };
+      return hasErrorToken(hasErrorTokenArgs3);
+    })();
   if (isMisdirectedRequest) {
     return CloudKitAuthErrorTranslationKey.SignInRequired;
   }
   // AUTHENTICATION_FAILED means a bad API token or a disallowed browser Origin.
   if (
-    hasErrorToken(details, (value) =>
-      value.includes("AUTHENTICATION_FAILED"),
-    ) ||
-    hasErrorToken(details, (value) => value.includes("UNKNOWN_ERROR"))
+    (() => {
+      const hasErrorTokenArgs4: Parameters<typeof hasErrorToken>[0] = {
+        details,
+        predicate: (value) => value.includes("AUTHENTICATION_FAILED"),
+      };
+      return hasErrorToken(hasErrorTokenArgs4);
+    })() ||
+    (() => {
+      const hasErrorTokenArgs5: Parameters<typeof hasErrorToken>[0] = {
+        details,
+        predicate: (value) => value.includes("UNKNOWN_ERROR"),
+      };
+      return hasErrorToken(hasErrorTokenArgs5);
+    })()
   ) {
     return CloudKitAuthErrorTranslationKey.UnknownError;
   }

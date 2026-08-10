@@ -1,4 +1,4 @@
-import type { ExternalValue } from '../../lib/guards.ts';
+import type { UntrustedYamlNode } from '../../lib/guards.ts';
 import { RequestFamily } from '../enums.ts';
 import {
   DecodeStatus,
@@ -41,7 +41,7 @@ const ROOT = RequestFamily.SkillScaffold;
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function decodeSkillScaffoldRequest(
-  value: ExternalValue,
+  value: UntrustedYamlNode,
 ): DecodeOutcome<SkillScaffoldRequest> {
   const objectArgs: ExpectObjectArgs = { value, path: ROOT };
   const object = expectObject(objectArgs);

@@ -37,12 +37,15 @@ const vaultAccess = (label: string, verified: boolean) => ({
 
 describe('access chain nodes', () => {
   test('gives every link exactly one identifier of its own', () => {
-    const [passkey, deviceKey, vaults] = buildAccessChainNodes(vault, {
-      protection: DeviceAccessProtectionKind.PasskeyStandard,
-      passkeyName: known('Work laptop'),
-      credentialId: known('passkey_1234'),
-      deviceId: known('device_5678'),
-      vaults: [vaultAccess('Family', true), vaultAccess('Archive', false)],
+    const [passkey, deviceKey, vaults] = buildAccessChainNodes({
+      vault: vault,
+      input: {
+        protection: DeviceAccessProtectionKind.PasskeyStandard,
+        passkeyName: known('Work laptop'),
+        credentialId: known('passkey_1234'),
+        deviceId: known('device_5678'),
+        vaults: [vaultAccess('Family', true), vaultAccess('Archive', false)],
+      },
     })
 
     expect(passkey.stage).toBe(AccessChainStage.Unlock)
@@ -67,7 +70,10 @@ describe('access chain nodes', () => {
     expect(vaults.title).toBe('Family')
     expect(vaults.detail).toEqual({
       kind: AccessNodeDetailKind.Summary,
-      value: `${I18N_KEYS.DevicesAccessVerifiedSummary}({"verified":"1","total":"2"})`,
+      value: {
+        key: I18N_KEYS.DevicesAccessVerifiedSummary,
+        replacements: { verified: '1', total: '2' },
+      },
     })
     expect(vaults.incoming).toEqual({
       kind: AccessChainLinkKind.Relation,
@@ -76,36 +82,46 @@ describe('access chain nodes', () => {
   })
 
   test('keeps one vault name on the link and counts the rest', () => {
-    const [, , vaults] = buildAccessChainNodes(vault, {
-      protection: DeviceAccessProtectionKind.PasskeyStandard,
-      passkeyName: known('Work laptop'),
-      credentialId: known('passkey_1234'),
-      deviceId: known('device_5678'),
-      vaults: [
-        vaultAccess('Family', true),
-        vaultAccess('Archive', true),
-        vaultAccess('Travel', true),
-      ],
+    const [, , vaults] = buildAccessChainNodes({
+      vault: vault,
+      input: {
+        protection: DeviceAccessProtectionKind.PasskeyStandard,
+        passkeyName: known('Work laptop'),
+        credentialId: known('passkey_1234'),
+        deviceId: known('device_5678'),
+        vaults: [
+          vaultAccess('Family', true),
+          vaultAccess('Archive', true),
+          vaultAccess('Travel', true),
+        ],
+      },
     })
 
-    expect(vaults.title).toBe(
-      `${I18N_KEYS.DevicesAccessVerifiedPlusMore}({"label":"Family","count":"2"})`,
-    )
+    expect(vaults.title).toEqual({
+      key: I18N_KEYS.DevicesAccessVerifiedPlusMore,
+      replacements: { label: 'Family', count: '2' },
+    })
   })
 
   test('does not claim access to vaults this device key never opened', () => {
-    const [, , vaults] = buildAccessChainNodes(vault, {
-      protection: DeviceAccessProtectionKind.PasskeyStandard,
-      passkeyName: known('Work laptop'),
-      credentialId: known('passkey_1234'),
-      deviceId: known('device_5678'),
-      vaults: [vaultAccess('Family', false), vaultAccess('Archive', false)],
+    const [, , vaults] = buildAccessChainNodes({
+      vault: vault,
+      input: {
+        protection: DeviceAccessProtectionKind.PasskeyStandard,
+        passkeyName: known('Work laptop'),
+        credentialId: known('passkey_1234'),
+        deviceId: known('device_5678'),
+        vaults: [vaultAccess('Family', false), vaultAccess('Archive', false)],
+      },
     })
 
     expect(vaults.title).toBe(I18N_KEYS.DevicesAccessNoVerifiedVaultsShort)
     expect(vaults.detail).toEqual({
       kind: AccessNodeDetailKind.Summary,
-      value: `${I18N_KEYS.DevicesAccessVerifiedSummary}({"verified":"0","total":"2"})`,
+      value: {
+        key: I18N_KEYS.DevicesAccessVerifiedSummary,
+        replacements: { verified: '0', total: '2' },
+      },
     })
     expect(vaults.incoming).toEqual({
       kind: AccessChainLinkKind.Relation,
@@ -114,12 +130,15 @@ describe('access chain nodes', () => {
   })
 
   test('marks links Nook cannot name yet as absent instead of guessing', () => {
-    const [passkey, , vaults] = buildAccessChainNodes(vault, {
-      protection: DeviceAccessProtectionKind.PasskeyStandard,
-      passkeyName: unknown,
-      credentialId: unknown,
-      deviceId: unknown,
-      vaults: [],
+    const [passkey, , vaults] = buildAccessChainNodes({
+      vault: vault,
+      input: {
+        protection: DeviceAccessProtectionKind.PasskeyStandard,
+        passkeyName: unknown,
+        credentialId: unknown,
+        deviceId: unknown,
+        vaults: [],
+      },
     })
 
     expect(passkey.title).toBe(I18N_KEYS.DevicesAccessPasskeyUnnamed)
@@ -129,12 +148,15 @@ describe('access chain nodes', () => {
   })
 
   test('promises neither a passkey nor a PIN before the browser is prepared', () => {
-    const [unlock] = buildAccessChainNodes(vault, {
-      protection: DeviceAccessProtectionKind.Missing,
-      passkeyName: unknown,
-      credentialId: unknown,
-      deviceId: unknown,
-      vaults: [],
+    const [unlock] = buildAccessChainNodes({
+      vault: vault,
+      input: {
+        protection: DeviceAccessProtectionKind.Missing,
+        passkeyName: unknown,
+        credentialId: unknown,
+        deviceId: unknown,
+        vaults: [],
+      },
     })
 
     expect(unlock.caption).toBe(I18N_KEYS.DevicesAccessStageUnlock)
@@ -142,33 +164,39 @@ describe('access chain nodes', () => {
   })
 
   test('attributes a companion session identity to the paired device', () => {
-    const [session, deviceKey] = buildAccessChainNodes(vault, {
-      protection: DeviceAccessProtectionKind.CompanionSession,
-      passkeyName: unknown,
-      credentialId: unknown,
-      deviceId: known('device_5678'),
-      vaults: [],
+    const [session, deviceKey] = buildAccessChainNodes({
+      vault: vault,
+      input: {
+        protection: DeviceAccessProtectionKind.CompanionSession,
+        passkeyName: unknown,
+        credentialId: unknown,
+        deviceId: known('device_5678'),
+        vaults: [],
+      },
     })
 
     expect(session.title).toBe(I18N_KEYS.DevicesAccessSessionNodeTitle)
     expect(session.detail.kind).toBe(AccessNodeDetailKind.Absent)
     expect(deviceKey.title).toBe(I18N_KEYS.DevicesAccessCompanionIdentity)
     expect(
-      panelTitle(
-        vault,
-        AccessChainStage.DeviceKey,
-        DeviceAccessProtectionKind.CompanionSession,
-      ),
+      panelTitle({
+        vault: vault,
+        stage: AccessChainStage.DeviceKey,
+        protection: DeviceAccessProtectionKind.CompanionSession,
+      }),
     ).toBe(I18N_KEYS.DevicesAccessCompanionIdentity)
   })
 
   test('names a PIN-protected link by who can present it, not by a stored id', () => {
-    const [pin] = buildAccessChainNodes(vault, {
-      protection: DeviceAccessProtectionKind.PinOrPassphrase,
-      passkeyName: unknown,
-      credentialId: known('passkey_ignored'),
-      deviceId: known('device_5678'),
-      vaults: [],
+    const [pin] = buildAccessChainNodes({
+      vault: vault,
+      input: {
+        protection: DeviceAccessProtectionKind.PinOrPassphrase,
+        passkeyName: unknown,
+        credentialId: known('passkey_ignored'),
+        deviceId: known('device_5678'),
+        vaults: [],
+      },
     })
 
     expect(pin.caption).toBe(I18N_KEYS.DevicesAccessStagePin)

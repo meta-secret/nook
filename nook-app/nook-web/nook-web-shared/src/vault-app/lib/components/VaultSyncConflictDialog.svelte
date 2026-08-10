@@ -75,20 +75,23 @@
   )
   const conflictDescription = $derived(
     conflictView.kind === VaultSyncConflictKind.StoreId
-      ? vault.t(
-          isEventLogStoreMismatch
+      ? (() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+          key: isEventLogStoreMismatch
             ? I18N_KEYS.AuthStorageSyncConflictStoreIdEventDesc
             : I18N_KEYS.AuthStorageSyncConflictStoreIdDesc,
-          {
+          replacements: {
             provider: conflict.providerLabel,
             localStore: conflictView.localStoreId,
             remoteStore: conflictView.remoteStoreId,
           },
-        )
-      : vault.t(I18N_KEYS.AuthStorageSyncConflictDesc, {
+        }; return vault.t(translationRequest); })()
+      : (() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictDesc,
+  replacements: {
           provider: conflict.providerLabel,
           version: versionLabel,
-        }),
+        },
+}; return vault.t(translationRequest2); })(),
   )
   const conflictTitle = $derived(
     isStoreIdConflict
@@ -142,13 +145,19 @@
             </span>
             <span class="block text-xs text-muted-foreground">
               {#if conflictView.kind === VaultSyncConflictKind.StoreId}
-                {vault.t(I18N_KEYS.AuthStorageSyncConflictStoreIdLocal, {
+                {(() => { const translationRequest3: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictStoreIdLocal,
+  replacements: {
                   store: conflictView.localStoreId,
-                })}
+                },
+}; return vault.t(translationRequest3); })()}
               {:else}
-                {vault.t(I18N_KEYS.AuthStorageSyncConflictVersion, {
+                {(() => { const translationRequest4: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictVersion,
+  replacements: {
                   version: String(conflictView.localVersion),
-                })}
+                },
+}; return vault.t(translationRequest4); })()}
               {/if}
             </span>
           </span>
@@ -160,19 +169,28 @@
           <Cloud class="mt-0.5 size-4 shrink-0 text-primary" />
           <span>
             <span class="block font-medium text-foreground">
-              {vault.t(I18N_KEYS.AuthStorageSyncConflictRemoteCopy, {
+              {(() => { const translationRequest5: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictRemoteCopy,
+  replacements: {
                 provider: conflict.providerLabel,
-              })}
+              },
+}; return vault.t(translationRequest5); })()}
             </span>
             <span class="block text-xs text-muted-foreground">
               {#if conflictView.kind === VaultSyncConflictKind.StoreId}
-                {vault.t(I18N_KEYS.AuthStorageSyncConflictStoreIdRemote, {
+                {(() => { const translationRequest6: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictStoreIdRemote,
+  replacements: {
                   store: conflictView.remoteStoreId,
-                })}
+                },
+}; return vault.t(translationRequest6); })()}
               {:else}
-                {vault.t(I18N_KEYS.AuthStorageSyncConflictVersion, {
+                {(() => { const translationRequest7: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictVersion,
+  replacements: {
                   version: String(conflictView.remoteVersion),
-                })}
+                },
+}; return vault.t(translationRequest7); })()}
               {/if}
             </span>
           </span>
@@ -218,9 +236,12 @@
             {#if isBusy}
               <RefreshCw class="size-4 animate-spin" />
             {/if}
-            {vault.t(I18N_KEYS.AuthStorageSyncConflictKeepRemote, {
+            {(() => { const translationRequest8: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AuthStorageSyncConflictKeepRemote,
+  replacements: {
               provider: conflict.providerLabel,
-            })}
+            },
+}; return vault.t(translationRequest8); })()}
           </Button>
           <Button
             type="button"

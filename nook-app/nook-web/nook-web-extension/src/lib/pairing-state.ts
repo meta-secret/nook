@@ -1,5 +1,5 @@
 import {
-  isExtensionReadySetupState,
+  extensionPairingGrantPolicyReady,
   type ExtensionReadySetupState,
 } from '../background/pairing-grants'
 
@@ -32,7 +32,8 @@ export function isExtensionPairingStateQueryMessage(
   )
 }
 
-export function loadExtensionSetupState(): Promise<ExtensionSetupLoad> {
+export async function loadExtensionSetupState(): Promise<ExtensionSetupLoad> {
+  const pairingPolicy = await extensionPairingGrantPolicyReady
   return new Promise((resolve) => {
     const queryMessage: ExtensionPairingStateQueryMessage = {
       type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
@@ -49,7 +50,7 @@ export function loadExtensionSetupState(): Promise<ExtensionSetupLoad> {
         !('ok' in response) ||
         response.ok !== true ||
         !('setup' in response) ||
-        !isExtensionReadySetupState(response.setup)
+        !pairingPolicy.isExtensionReadySetupState(response.setup)
       ) {
         const unavailable: ExtensionSetupLoad = {
           kind: ExtensionSetupLoadKind.Unavailable,

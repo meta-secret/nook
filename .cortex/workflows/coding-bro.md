@@ -32,8 +32,9 @@ Default PR-first loop:
 2. **Prepare the PR path** — create a feature branch and decide whether this will be a draft or normal PR.
 3. **Implement functionality** — make scoped changes on the feature branch.
 4. **Push and create/update the PR** — once the branch has a coherent formatted commit, push it and open the PR. Subsequent experimental commits update the same PR without starting the complete validation pipeline.
-5. **Iterate on hosted workers, then validate explicitly:**
-   - Run allowlisted `task remote TASK_NAME=<name>` jobs as useful.
+5. **Validate explicitly on hosted workers:**
+   - Run allowlisted `task remote TASK_NAME=<name>` only for isolated diagnostics that finish sooner than complete validation.
+   - Do not use focused tasks as a prerequisite for complete validation.
    - At the final boundary, run `task pr:preflight PR=<number>` and `task pr:validate PR=<number>`.
    - Monitor the path-applicable `PR / Verify and preview` and `Web research / Build and deploy research catalog` workflows.
    - PRs fixing a failure observed on `main` must trigger the Main-equivalent suite with `task pr:validate PR=<number> FULL_E2E=1`.
@@ -42,7 +43,8 @@ Default PR-first loop:
    - Inspect failed logs, check app logs for web/e2e failures, fix, `task format`, and push the completed fix.
    - This includes Knip unused findings, jscpd clone/duplicate findings, and every other mechanical gate.
    - Fix the code; do not silence the check.
-   - Push the completed fix, optionally run focused remote tasks, then explicitly trigger complete validation again.
+   - Push the completed fix, then explicitly trigger complete validation again.
+   - Use a focused remote task only when it shortens diagnosis of a known failure.
 7. **Settle existing review feedback** — inspect the current comments and reviews, reply to every actionable human or automated finding, and resolve each thread. Do not request or wait for optional reviewers.
 8. **Merge automatically when ready** — require `task pr:ready PR=<number>`, then squash-merge as soon as the branch is current, Nook's applicable repository-owned PR test checks are green and all actionable comments are resolved. Do not pause for a ready-PR handoff or separate merge permission.
 
@@ -69,14 +71,14 @@ See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
 ### ⛔ Format, push, execute on GitHub-hosted workers
 
-Once the current change is coherent and checkable, run pre-push hygiene, then commit and push/open or update the PR. Ordinary pushes do not start complete PR validation. Dispatch focused allowlisted tasks while iterating, then request the complete exact-head workflow once the branch is ready:
+Once the current change is coherent and checkable, run pre-push hygiene, then commit and push/open or update the PR. Ordinary pushes do not start complete PR validation. Request the complete exact-head workflow as soon as the branch is ready. Use a focused task only when it shortens diagnosis.
 
 ```text
 WRONG: implement → local task check / full tests / build → push
 WRONG: implement → push dirty/uncommitted source → remote task tests an older SHA
 WRONG: implement → push → assume complete PR validation started automatically
-RIGHT: implement → task loom:pre-push → commit → push → task remote as useful
-       → task loom:pr-land CONFIG=<pr-land-validate-request.yaml> when ready
+RIGHT: implement → task loom:pre-push → commit → push
+       → task loom:pr-land CONFIG=<pr-land-validate-request.yaml>
        → exact-head GitHub Actions
 ```
 
@@ -88,14 +90,16 @@ Required pre-push hygiene always runs before the push:
 - the UI demo contract when UI paths change
 
 Focused builds/tests run through `task remote` only after the exact commit is pushed.
+Use them only when they isolate a known failure faster than complete validation.
+Do not run a broad focused batch before complete validation.
 
 If Actions fails:
 
 1. fix the failure
 2. run `task format` again
 3. commit and push the complete fix
-4. dispatch the useful focused task
-5. trigger the complete PR workflow again
+4. trigger the complete PR workflow again
+5. dispatch a focused task only if a known failure needs faster isolation
 
 **PR GitHub Actions is the sole merge validation pipeline.**
 
@@ -243,7 +247,6 @@ task remote TASK_NAME=rust:test
 ```text
 implement → task loom:pre-push
            → commit → push → gh pr create/update
-           → focused task remote jobs as useful
            → task loom:pr-land CONFIG=<pr-land-validate-request.yaml>
            → monitor exact-head GitHub Actions
 ```
@@ -328,7 +331,7 @@ Do not wait for post-merge Main. Any performance fix belongs in a separate norma
 
 - **Never push directly to `main`.** Branch → PR → squash merge.
 - **Always `task format` before every push** — host-applied, unconditional; never rely on sealed-only `task extension:format`. When UI paths change, pass the UI demo contract against `origin/main` before push. See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
-- **Never stop after push.** Run focused hosted tasks as useful, explicitly trigger complete PR validation, then own failures, comments, conflicts, and readiness through squash merge.
+- **Never stop after push.** Explicitly trigger complete PR validation, then own failures, comments, conflicts, and readiness through squash merge. Use focused hosted tasks only to shorten diagnosis.
 - **GitHub Actions is the only product gate and heavy execution surface** — do not run `task check`, `task ci:pr`, full suites, builds, or e2e on the agent machine. See [remote-execution.md](remote-execution.md).
 - **Use persisted app logs for e2e analysis** — read `nook-app-logs.json`, call `fetchAppLogs`, or open `/app-logs`; see [logging.md](../references/logging.md).
 - **Never merge after a Nook PR-test failure without a green Actions run on the latest head.**

@@ -34,7 +34,13 @@ const legacyAuthenticator = {
 
 function renderLegacyAuthenticatorEditor() {
   const onReplaceSecret = vi
-    .fn<(oldId: string, type: SecretType, data: string) => Promise<void>>()
+    .fn<
+      (request: {
+        readonly oldId: string
+        readonly type: SecretType
+        readonly data: string
+      }) => Promise<void>
+    >()
     .mockResolvedValue()
   const view = render(AddSecretForm, {
     vault,
@@ -113,13 +119,13 @@ describe('AddSecretForm authenticator editing', () => {
     await fireEvent.click(view.getByTestId('save-secret-btn'))
 
     await waitFor(() => expect(onReplaceSecret).toHaveBeenCalledTimes(1))
-    const [, type, yaml] = onReplaceSecret.mock.calls[0]
-    expect(type).toBe(SecretType.Authenticator)
-    expect(yaml).toContain('algorithm: SHA256')
-    expect(yaml).toContain('digits: 8')
-    expect(yaml).toContain('period: 45')
-    expect(yaml).toContain('recovery-one')
-    expect(yaml).toContain('recovery-two')
+    const request = onReplaceSecret.mock.calls[0][0]
+    expect(request.type).toBe(SecretType.Authenticator)
+    expect(request.data).toContain('algorithm: SHA256')
+    expect(request.data).toContain('digits: 8')
+    expect(request.data).toContain('period: 45')
+    expect(request.data).toContain('recovery-one')
+    expect(request.data).toContain('recovery-two')
   })
 
   test('resets hidden protocol settings and recovery codes when the setup key changes', async () => {
@@ -132,12 +138,12 @@ describe('AddSecretForm authenticator editing', () => {
     await fireEvent.click(view.getByTestId('save-secret-btn'))
 
     await waitFor(() => expect(onReplaceSecret).toHaveBeenCalledTimes(1))
-    const [, type, yaml] = onReplaceSecret.mock.calls[0]
-    expect(type).toBe(SecretType.Authenticator)
-    expect(yaml).toContain('algorithm: SHA1')
-    expect(yaml).toContain('digits: 6')
-    expect(yaml).toContain('period: 30')
-    expect(yaml).not.toContain('recovery-one')
-    expect(yaml).not.toContain('recovery-two')
+    const request = onReplaceSecret.mock.calls[0][0]
+    expect(request.type).toBe(SecretType.Authenticator)
+    expect(request.data).toContain('algorithm: SHA1')
+    expect(request.data).toContain('digits: 6')
+    expect(request.data).toContain('period: 30')
+    expect(request.data).not.toContain('recovery-one')
+    expect(request.data).not.toContain('recovery-two')
   })
 })

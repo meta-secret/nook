@@ -16,6 +16,7 @@ import {
   startVaultDiscoveryTimeout,
   VAULT_ASSESS_TIMEOUT_ERROR_NAME,
 } from "$lib/vault/vault-discovery-timeout";
+import { eventOutboxRequestForProvider } from "$lib/vault/sync.svelte";
 
 const log = createLogger("vault-provider-connection");
 
@@ -74,10 +75,11 @@ export async function discoverStagedVaultStoreId(
         )
       ).trim();
     })();
-    const timeout = startVaultDiscoveryTimeout(
-      state.t(I18N_KEYS.AuthStorageSyncFailed),
-      30_000,
-    );
+    const timeoutArgs: Parameters<typeof startVaultDiscoveryTimeout>[0] = {
+      message: state.t(I18N_KEYS.AuthStorageSyncFailed),
+      timeoutMs: 30_000,
+    };
+    const timeout = startVaultDiscoveryTimeout(timeoutArgs);
     try {
       const storeId = await Promise.race([discovery, timeout.completion]);
       if (storeId && state.hasManager) {
@@ -87,11 +89,9 @@ export async function discoverStagedVaultStoreId(
               state.requireManager().vaultRecoveryOptions(),
             ),
           );
-        } catch (error) {
+        } catch {
           state.clearExistingVaultRecoverySummary();
-          log.warn("vault recovery summary unavailable", {
-            error: error instanceof Error ? error.message : String(error),
-          });
+          log.warn("vault recovery summary unavailable");
         }
       }
       return storeId;
@@ -129,14 +129,19 @@ export async function connectAndSyncStagedProvider(
       state.errorMsg = state.t(I18N_KEYS.ErrorsCloudSyncProviderRequired);
       return;
     }
-    await state.flushRemoteEventOutboxNow(provider);
-    await state.syncProviderById(provider.id, {
-      quiet: true,
-      propagateError: true,
-    });
+    const request = eventOutboxRequestForProvider(provider);
+    await state.flushRemoteEventOutboxNow(request);
+    const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[0] = {
+      providerId: provider.id,
+      options: {
+        quiet: true,
+        propagateError: true,
+      },
+    };
+    await state.syncProviderById(syncProviderByIdArgs);
     state.clearLoginSetup();
     state.addProviderOpen = false;
-  } catch (error: unknown) {
+  } catch (error) {
     const assessTimedOut =
       error instanceof Error && error.name === VAULT_ASSESS_TIMEOUT_ERROR_NAME;
     const stagedConflict =

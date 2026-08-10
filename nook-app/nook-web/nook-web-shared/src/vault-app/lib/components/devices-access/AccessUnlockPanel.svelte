@@ -120,7 +120,10 @@ behind one disclosure.
           {vault.t(I18N_KEYS.DevicesAccessLastSuccessfulUse)}
         </dt>
         <dd class="mt-1.5 text-sm text-foreground">
-          {lastUsedLabel(vault, lastUsedAt)}
+          {(() => { const labelRequest: Parameters<typeof lastUsedLabel>[0] = {
+            vault,
+            value: lastUsedAt,
+          }; return lastUsedLabel(labelRequest); })()}
         </dd>
       </div>
       <div>
@@ -129,7 +132,10 @@ behind one disclosure.
         </dt>
         <dd class="mt-1.5 text-sm text-foreground">
           {createdAt.kind === DashboardTimestampKind.Known
-            ? formatAccessDate(vault, createdAt.value)
+            ? (() => { const dateRequest: Parameters<typeof formatAccessDate>[0] = {
+                vault,
+                value: createdAt.value,
+              }; return formatAccessDate(dateRequest); })()
             : unknown}
         </dd>
       </div>
@@ -192,7 +198,10 @@ behind one disclosure.
             {vault.t(I18N_KEYS.DevicesAccessAttachment)}
           </dt>
           <dd class="mt-1 text-sm text-foreground">
-            {attachmentLabel(vault, attachment)}
+            {(() => { const labelRequest: Parameters<typeof attachmentLabel>[0] = {
+              vault,
+              value: attachment,
+            }; return attachmentLabel(labelRequest); })()}
           </dd>
         </div>
         <div>
@@ -200,7 +209,10 @@ behind one disclosure.
             {vault.t(I18N_KEYS.DevicesAccessBackupStatus)}
           </dt>
           <dd class="mt-1 text-sm text-foreground">
-            {backupLabel(vault, backupState)}
+            {(() => { const labelRequest: Parameters<typeof backupLabel>[0] = {
+              vault,
+              value: backupState,
+            }; return backupLabel(labelRequest); })()}
           </dd>
         </div>
         <div>
@@ -208,7 +220,10 @@ behind one disclosure.
             {vault.t(I18N_KEYS.DevicesAccessTransports)}
           </dt>
           <dd class="mt-1 text-sm text-foreground">
-            {transportsLabel(vault, transports)}
+            {(() => { const labelRequest: Parameters<typeof transportsLabel>[0] = {
+              vault,
+              values: transports,
+            }; return transportsLabel(labelRequest); })()}
           </dd>
         </div>
         <div>
@@ -216,7 +231,11 @@ behind one disclosure.
             {vault.t(I18N_KEYS.DevicesAccessLastClient)}
           </dt>
           <dd class="mt-1 text-sm text-foreground">
-            {clientEnvironmentLabel(vault, observedBrowser, observedPlatform)}
+            {(() => { const labelRequest: Parameters<typeof clientEnvironmentLabel>[0] = {
+              vault,
+              browser: observedBrowser,
+              platform: observedPlatform,
+            }; return clientEnvironmentLabel(labelRequest); })()}
           </dd>
         </div>
         <div>

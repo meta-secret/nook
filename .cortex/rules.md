@@ -300,20 +300,40 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 > 1. **`task format`**
 > 2. **commit**
 > 3. **push**
-> 4. **allowlisted `task remote TASK_NAME=<name>` as useful**
+> 4. **optional allowlisted `task remote TASK_NAME=<name>` for isolated diagnostics**
 >
 > Heavy builds/tests do not run on the agent machine.
 > Ordinary pushes deliberately do not start the complete PR workflow.
+> Focused tasks are not a prerequisite for complete validation.
+> Prefer complete validation when parallel PR jobs finish sooner than a broad sequential focused batch.
 >
 > At the final validation boundary, run `task pr:validate PR=<number>` (or add `FULL_E2E=1` for a Main-fix PR).
-> Then monitor the repository-owned exact-head checks.
+> Monitor review feedback while repository-owned exact-head checks run.
+> New actionable feedback takes priority over checks for a head that must change.
+>
+> When actionable feedback arrives:
+>
+> 1. Stop watching or cancel obsolete validation.
+> 2. Address the feedback.
+> 3. Reply to and resolve the thread.
+> 4. Run pre-push hygiene.
+> 5. Push the replacement head.
+> 6. Restart validation.
+>
+> Let exact-head checks finish only while the actionable feedback queue is empty.
 > A later push invalidates prior results and requires another explicit validation.
-> After any red remote run: fix, `task format`, commit, push, and dispatch the useful focused or complete remote validation again.
+>
+> After any red remote run:
+>
+> 1. Fix the failure.
+> 2. Run `task format`.
+> 3. Commit and push.
+> 4. Dispatch the useful focused or complete remote validation again.
 > See [workflows/remote-execution.md](workflows/remote-execution.md).
 
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
 - **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task.
-- Steps: fetch, branch from `origin/main`, implement, **always `task format`**, commit and push/open/update the PR, use focused hosted tasks while iterating, explicitly trigger complete PR validation when ready, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically.
+- Steps: fetch, branch from `origin/main`, implement, **always `task format`**, commit and push/open/update the PR, use focused hosted tasks only for useful isolated diagnostics, explicitly trigger complete PR validation as soon as the coherent head is ready, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically.
 - Do not stop at a ready-PR handoff or ask for separate merge permission.
 - Do not run heavy product checks locally.
 - **Finish at implementation PR merge.** A successful squash merge completes normal implementation delivery.

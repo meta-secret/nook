@@ -1,9 +1,9 @@
 import {
-  ExternalPropertyPresence,
-  externalProperty,
+  UntrustedYamlPropertyPresence,
+  untrustedYamlProperty,
   isRecord,
-  type ExternalObject,
-  type ExternalValue,
+  type UntrustedYamlMap,
+  type UntrustedYamlNode,
 } from '../lib/guards.ts';
 import { RemoteTaskPresence, type RemoteTask } from './args/pr-land.ts';
 import { AgentStatsOperation, PrLandOperation } from './enums.ts';
@@ -25,15 +25,15 @@ import {
 } from './field-vocabulary.ts';
 
 import type { FieldErrorArgs, JoinPathArgs } from './field-error.ts';
-import type { ExternalPropertyArgs } from '../lib/guards.ts';
+import type { UntrustedYamlPropertyArgs } from '../lib/guards.ts';
 export type ExpectObjectArgs = {
-  readonly value: ExternalValue;
+  readonly value: UntrustedYamlNode;
   readonly path: string;
 };
 
 export function expectObject(
   args: ExpectObjectArgs,
-): DecodeOutcome<ExternalObject> {
+): DecodeOutcome<UntrustedYamlMap> {
   if (!isRecord(args.value)) {
     const fieldErrorArgs12: FieldErrorArgs = {
       path: args.path,
@@ -45,7 +45,7 @@ export function expectObject(
 }
 
 export type DenyUnknownKeysArgs<FieldName extends string> = {
-  readonly record: ExternalObject;
+  readonly record: UntrustedYamlMap;
   readonly fields: RequestFieldVocabulary<FieldName>;
   readonly path: string;
 };
@@ -70,7 +70,7 @@ export function denyUnknownKeys<FieldName extends string>(
 }
 
 export type ExpectFieldArgs<FieldName extends string> = {
-  readonly record: ExternalObject;
+  readonly record: UntrustedYamlMap;
   readonly key: FieldName;
   readonly path: string;
 };
@@ -80,12 +80,12 @@ export function expectBoolean<FieldName extends string>(
 ): DecodeOutcome<boolean> {
   const fieldPathArgs4: JoinPathArgs = { base: args.path, key: args.key };
   const fieldPath = joinPath(fieldPathArgs4);
-  const propertyArgs5: ExternalPropertyArgs = {
+  const propertyArgs5: UntrustedYamlPropertyArgs = {
     record: args.record,
     key: args.key,
   };
-  const property = externalProperty(propertyArgs5);
-  if (property.presence === ExternalPropertyPresence.Absent) {
+  const property = untrustedYamlProperty(propertyArgs5);
+  if (property.presence === UntrustedYamlPropertyPresence.Absent) {
     const fieldErrorArgs10: FieldErrorArgs = {
       path: fieldPath,
       issue: FieldIssue.MissingRequiredField,
@@ -107,12 +107,12 @@ export function expectString<FieldName extends string>(
 ): DecodeOutcome<string> {
   const fieldPathArgs3: JoinPathArgs = { base: args.path, key: args.key };
   const fieldPath = joinPath(fieldPathArgs3);
-  const propertyArgs4: ExternalPropertyArgs = {
+  const propertyArgs4: UntrustedYamlPropertyArgs = {
     record: args.record,
     key: args.key,
   };
-  const property = externalProperty(propertyArgs4);
-  if (property.presence === ExternalPropertyPresence.Absent) {
+  const property = untrustedYamlProperty(propertyArgs4);
+  if (property.presence === UntrustedYamlPropertyPresence.Absent) {
     const fieldErrorArgs8: FieldErrorArgs = {
       path: fieldPath,
       issue: FieldIssue.MissingRequiredField,
@@ -134,12 +134,12 @@ export function expectPositiveInt<FieldName extends string>(
 ): DecodeOutcome<number> {
   const fieldPathArgs2: JoinPathArgs = { base: args.path, key: args.key };
   const fieldPath = joinPath(fieldPathArgs2);
-  const propertyArgs3: ExternalPropertyArgs = {
+  const propertyArgs3: UntrustedYamlPropertyArgs = {
     record: args.record,
     key: args.key,
   };
-  const property = externalProperty(propertyArgs3);
-  if (property.presence === ExternalPropertyPresence.Absent) {
+  const property = untrustedYamlProperty(propertyArgs3);
+  if (property.presence === UntrustedYamlPropertyPresence.Absent) {
     const fieldErrorArgs6: FieldErrorArgs = {
       path: fieldPath,
       issue: FieldIssue.MissingRequiredField,
@@ -165,13 +165,13 @@ export function expectRemoteTask<FieldName extends string>(
 ): DecodeOutcome<RemoteTask> {
   const fieldPathArgs: JoinPathArgs = { base: args.path, key: args.key };
   const fieldPath = joinPath(fieldPathArgs);
-  const propertyArgs2: ExternalPropertyArgs = {
+  const propertyArgs2: UntrustedYamlPropertyArgs = {
     record: args.record,
     key: args.key,
   };
-  const property = externalProperty(propertyArgs2);
+  const property = untrustedYamlProperty(propertyArgs2);
   if (
-    property.presence === ExternalPropertyPresence.Absent ||
+    property.presence === UntrustedYamlPropertyPresence.Absent ||
     isExternalNull(property.value)
   ) {
     const omittedTask: RemoteTask = { presence: RemoteTaskPresence.Omitted };
@@ -192,14 +192,17 @@ export function expectRemoteTask<FieldName extends string>(
 }
 
 export type DecodeExactlyOneOperationArgs<T extends string> = {
-  readonly record: ExternalObject;
+  readonly record: UntrustedYamlMap;
   readonly path: string;
   readonly operations: readonly T[];
 };
 
 export function decodeExactlyOneOperation<T extends string>(
   args: DecodeExactlyOneOperationArgs<T>,
-): DecodeOutcome<{ readonly operation: T; readonly payload: ExternalValue }> {
+): DecodeOutcome<{
+  readonly operation: T;
+  readonly payload: UntrustedYamlNode;
+}> {
   const keys = Object.keys(args.record);
   const operationKeys = keys.filter((key) =>
     args.operations.includes(key as T),
@@ -228,12 +231,12 @@ export function decodeExactlyOneOperation<T extends string>(
     return decodeErr(errors);
   }
   const operation = operationKeys[0] as T;
-  const propertyArgs: ExternalPropertyArgs = {
+  const propertyArgs: UntrustedYamlPropertyArgs = {
     record: args.record,
     key: operation,
   };
-  const property = externalProperty(propertyArgs);
-  if (property.presence === ExternalPropertyPresence.Absent) {
+  const property = untrustedYamlProperty(propertyArgs);
+  if (property.presence === UntrustedYamlPropertyPresence.Absent) {
     const joinPathArgs: JoinPathArgs = { base: args.path, key: operation };
     const fieldErrorArgs: FieldErrorArgs = {
       path: joinPath(joinPathArgs),

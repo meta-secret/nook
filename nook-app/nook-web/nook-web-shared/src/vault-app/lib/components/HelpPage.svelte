@@ -26,9 +26,13 @@
   } = $props()
 
   function scrollToSection(id: string) {
+    const scrollIntoViewArgs: ScrollIntoViewOptions = {
+      behavior: 'smooth',
+      block: 'start',
+    };
     document
       .getElementById(`help-${id}`)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      ?.scrollIntoView(scrollIntoViewArgs)
   }
 
   function handleSectionJump(event: Event) {

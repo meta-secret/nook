@@ -72,7 +72,7 @@
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.deviceId !== vault.deviceId),
   )
-  const participantChoices = Array.from({ length: 15 }, (_, index) => index + 2)
+  const participantChoices = [...Array(15).keys()].map((index) => index + 2)
   const policyValid = $derived(
     name.trim().length > 0 &&
       Number.isInteger(participantCount) &&
@@ -144,11 +144,12 @@
     if (!policyValid || isBusy || actionBusy) return
     actionBusy = true
     try {
-      await onStart({
+      const onStartArgs: Parameters<typeof onStart>[0] = {
         label: name.trim(),
         participantCount,
         threshold,
-      })
+      };
+      await onStart(onStartArgs)
     } finally {
       actionBusy = false
     }
@@ -261,17 +262,15 @@
                 class="inline-flex items-center gap-2 border border-[#4f7a46] px-4 py-2 text-xs"
                 data-testid="sentinel-genesis-copy-request"
                 onclick={() =>
-                  void copySentinelRequest(
-                    request,
-                    () => {
+                  void (() => { const copySentinelRequestArgs: Parameters<typeof copySentinelRequest>[0] = { request, onCopied: () => {
                       copied = true
                       setTimeout(() => (copied = false), 1500)
-                    },
-                    () =>
+                    }, onFailure: () =>
                       (vault.errorMsg = vault.t(
                         I18N_KEYS.LoginSentinelGenesisCopyFailed,
-                      )),
-                  )}
+                      )) }; return copySentinelRequest(
+                    copySentinelRequestArgs,
+                  ); })()}
               >
                 <Copy class="size-4" />
                 {copied ? vault.t(I18N_KEYS.CommonCopied) : vault.t(I18N_KEYS.CommonCopy)}
@@ -330,7 +329,7 @@
                 {vault.t(I18N_KEYS.LoginSentinelTerminalThresholdQuestion)}
               </p>
               <div class="mt-3 flex flex-wrap gap-2">
-                {#each Array.from({ length: participantCount - 1 }, (_, index) => index + 2) as choice (choice)}
+                {#each [...Array(participantCount - 1).keys()].map((index) => index + 2) as choice (choice)}
                   <button
                     {...choice === threshold
                       ? { 'data-testid': 'sentinel-genesis-threshold' }
@@ -365,13 +364,11 @@
                   isBusy ||
                   actionBusy}
                 onclick={() =>
-                  void runSentinelDashboardAction(
-                    status === SentinelGenesisPhase.ReadyToFinalize &&
+                  void (() => { const runSentinelDashboardActionArgs: Parameters<typeof runSentinelDashboardAction>[0] = { allowed: status === SentinelGenesisPhase.ReadyToFinalize &&
                       !isBusy &&
-                      !actionBusy,
-                    (value) => (actionBusy = value),
-                    onFinalize,
-                  )}
+                      !actionBusy, setBusy: (value) => (actionBusy = value), action: onFinalize }; return runSentinelDashboardAction(
+                    runSentinelDashboardActionArgs,
+                  ); })()}
               >
                 <KeyRound class="size-4" />
                 {vault.t(I18N_KEYS.LoginSentinelGenesisFinalize)}

@@ -18,11 +18,12 @@
   let svgHtml = $state('')
   let renderError = $state('')
 
-  async function paintDiagram(src: string, diagramTheme: MermaidTheme) {
+  async function paintDiagram({ src, diagramTheme }: { readonly src: string; readonly diagramTheme: MermaidTheme }) {
     renderError = ''
     try {
-      svgHtml = await renderMermaidDiagram(src, diagramTheme)
-    } catch (error: unknown) {
+      const renderMermaidDiagramArgs: Parameters<typeof renderMermaidDiagram>[0] = { source: src, theme: diagramTheme };
+      svgHtml = await renderMermaidDiagram(renderMermaidDiagramArgs)
+    } catch (error) {
       svgHtml = ''
       renderError =
         error instanceof Error ? error.message : 'Failed to render diagram'
@@ -30,7 +31,8 @@
   }
 
   $effect(() => {
-    void paintDiagram(source, theme)
+    const paintDiagramArgs: Parameters<typeof paintDiagram>[0] = { src: source, diagramTheme: theme };
+    void paintDiagram(paintDiagramArgs)
   })
 </script>
 

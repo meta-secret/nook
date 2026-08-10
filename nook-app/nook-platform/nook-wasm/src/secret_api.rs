@@ -646,50 +646,11 @@ mod wasm_tests {
     use super::*;
     use crate::{
         NookAuthenticationOutcomeObservation, NookAuthenticationPageObservation,
-        NookAuthenticationPageObservations, NookExtensionPairingState, NookSecretPage,
-        authentication_workflow_snapshot, classify_authentication_outcome_with_default_timeout,
-        generate_totp_code, verify_totp_code, wasm_storage_mode_for_provider,
+        NookAuthenticationPageObservations, NookSecretPage, authentication_workflow_snapshot,
+        classify_authentication_outcome_with_default_timeout, generate_totp_code, verify_totp_code,
+        wasm_storage_mode_for_provider,
     };
-    use wasm_bindgen::JsCast;
     use wasm_bindgen_test::wasm_bindgen_test;
-
-    #[wasm_bindgen_test]
-    fn extension_pairing_state_round_trips_as_a_plain_object() -> Result<(), wasm_bindgen::JsError>
-    {
-        let key = "nook:extension-pairing-grant:store-test";
-        let input = serde_json::json!({
-            (key): {
-                "vaultType": "simple",
-                "deviceId": "device-test",
-                "devicePublicKey": "age1test",
-                "deviceSigningPublicKey": "signing-test",
-                "deviceLabel": "Nook Extension",
-                "vaultStoreId": "store-test",
-                "vaultName": "Personal",
-                "approvedAt": "2026-07-25T00:00:00.000Z",
-                "scopes": ["password-filling"],
-                "syncProviderCount": 0,
-                "eventCount": 1,
-                "eventLogHeads": ["event-1"],
-                "lastLocalSyncAt": "2026-07-25T00:00:01.000Z"
-            }
-        });
-        let input = serde::Serialize::serialize(
-            &input,
-            &serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true),
-        )
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?
-        .unchecked_into::<js_sys::Object>();
-        let state = NookExtensionPairingState::from_object(&input)?;
-        let output = state.to_object()?;
-
-        assert!(
-            js_sys::Reflect::has(&output, &key.into())
-                .map_err(|_| wasm_bindgen::JsError::new("failed to inspect reflected field"))?
-        );
-        assert!(!output.is_instance_of::<js_sys::Map>());
-        Ok(())
-    }
 
     #[wasm_bindgen_test]
     fn provider_storage_modes_round_trip_in_wasm() -> Result<(), wasm_bindgen::JsError> {

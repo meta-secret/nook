@@ -9,7 +9,26 @@ Before merge, inspect feedback currently present. Agents must:
 
 - address every active actionable finding;
 - reply on the targeted thread before resolving it;
-- re-query until unresolved review threads are zero.
+- re-query until unresolved review threads are zero;
+- keep polling feedback while repository checks run after each push; and
+- interrupt obsolete check waiting when actionable feedback requires another
+  push.
+
+The actionable feedback queue has priority over waiting for checks.
+
+When a new finding arrives:
+
+1. Stop watching or cancel validation for the obsolete head when safe.
+2. Make the fix.
+3. Reply to and resolve the thread.
+4. Run pre-push hygiene.
+5. Push the replacement head.
+6. Restart complete validation for that head.
+
+Use a focused task instead only when it isolates a known failure faster.
+
+Only let exact-head validation finish while the actionable feedback queue is
+empty.
 
 `task pr:ready` enforces unresolved-thread count alongside the exact-head
 deployment, branch state, and applicable repository-owned PR checks. It reports
@@ -28,12 +47,13 @@ Cursor, CodeRabbit, or another service:
 2. Make the minimal correct fix or document why no change is needed.
 3. Run `task format` when files changed; use focused hosted tasks as useful.
 4. Commit and push the completed fix, then explicitly trigger complete PR
-   validation for the replacement head.
+   validation for the replacement head while continuing to poll feedback.
 5. Reply on the original thread or comment with the fix and validation when a
    targeted reply is possible.
 6. Resolve only after the targeted reply is visible and the finding is fixed or
    explicitly invalidated.
-7. Re-query the feedback currently present once before handoff or merge.
+7. Re-query feedback throughout validation and immediately before handoff or
+   merge.
 
 Inspect every external-service review comment already present. An optional
 review service never makes its delivered feedback optional; classify

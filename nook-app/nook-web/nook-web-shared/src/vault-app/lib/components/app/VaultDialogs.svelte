@@ -73,9 +73,12 @@
       {#each vault.replacementConflicts as conflict (conflict.oldSecretId)}
         <div class="rounded border border-amber-400/30 p-3">
           <p class="text-amber-100">
-            {vault.t(I18N_KEYS.AppConflictOriginal, {
+            {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AppConflictOriginal,
+  replacements: {
               id: shortId(conflict.oldSecretId),
-            })}
+            },
+}; return vault.t(translationRequest); })()}
           </p>
           <div class="mt-2 flex flex-wrap gap-2">
             {#each conflict.candidateSecretIds as candidateSecretId (candidateSecretId)}
@@ -83,15 +86,22 @@
                 size="sm"
                 variant="secondary"
                 disabled={vault.isSaving}
-                onclick={() =>
-                  vault.resolveReplacementConflict(
-                    conflict.oldSecretId,
-                    candidateSecretId,
-                  )}
+                onclick={() => {
+                  const resolutionRequest: Parameters<
+                    typeof vault.resolveReplacementConflict
+                  >[0] = {
+                    oldSecretId: conflict.oldSecretId,
+                    chosenSecretId: candidateSecretId,
+                  }
+                  void vault.resolveReplacementConflict(resolutionRequest)
+                }}
               >
-                {vault.t(I18N_KEYS.AppConflictKeep, {
+                {(() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.AppConflictKeep,
+  replacements: {
                   id: shortId(candidateSecretId),
-                })}
+                },
+}; return vault.t(translationRequest2); })()}
               </Button>
             {/each}
           </div>

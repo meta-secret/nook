@@ -3,6 +3,10 @@ import {
   ExtensionSessionMessageType,
   ExtensionSessionMessageDispatcher,
 } from '../src/offscreen/session-message-dispatch'
+import {
+  ExtensionSessionRequestParseKind,
+  parseExtensionSessionRequest,
+} from '../src/offscreen/session-request-adapter'
 import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 function messagePayload(message: unknown): Record<string, unknown> {
@@ -20,10 +24,29 @@ async function decodeProviders(providers: object) {
 }
 
 describe('ExtensionSessionMessageDispatcher', () => {
+  test('accepts explicit empty payloads for control commands', () => {
+    for (const type of [
+      ExtensionSessionMessageType.MigrateAuthProviders,
+      ExtensionSessionMessageType.Reset,
+      ExtensionSessionMessageType.Status,
+    ]) {
+      const message = { type, payload: {} }
+      const parse = parseExtensionSessionRequest(message)
+      expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+    }
+  })
+
+  test('rejects payloadless control commands at browser ingress', () => {
+    const message = {
+      type: ExtensionSessionMessageType.Status,
+    }
+    const parse = parseExtensionSessionRequest(message)
+    expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
+  })
+
   test('stages sensitive fields and clears the caller-owned payload', async () => {
     const payload: Record<string, unknown> = { pin: '123456' }
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders,
       handleMessage: async (message) => ({
         pin: messagePayload(message).pin,
@@ -51,7 +74,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     }
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders,
       handleMessage: async () => {
         handled = true
@@ -77,7 +99,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const payload: Record<string, unknown> = { providers: 'missing-array' }
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders,
       handleMessage: async () => {
         handled = true
@@ -103,7 +124,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const payload: Record<string, unknown> = { providers }
     let handledGithubPat = ''
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders,
       handleMessage: async (message) => {
         const handledProviders = messagePayload(message).providers
@@ -141,7 +161,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -193,7 +212,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
       { githubPat: 'github_pat_canceled_staged_secret' },
     ] as object as StorageProvider[]
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -237,7 +255,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
     ] as object as StorageProvider[]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -294,7 +311,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
       },
     } as typeof chrome
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messagePayload,
       decodeProviders,
       handleMessage: async () => ({ ok: true }),
     })

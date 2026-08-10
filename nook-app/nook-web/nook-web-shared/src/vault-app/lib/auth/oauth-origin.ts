@@ -23,10 +23,13 @@ export type OAuthOriginSupport =
 
 type BrowserLocation = Pick<Location, "origin" | "hostname">;
 
-export function resolveOAuthOriginSupport(
-  provider: BrowserOAuthProvider,
-  location: BrowserLocation,
-): OAuthOriginSupport {
+export function resolveOAuthOriginSupport({
+  provider,
+  location,
+}: {
+  readonly provider: BrowserOAuthProvider;
+  readonly location: BrowserLocation;
+}): OAuthOriginSupport {
   const resolved = wasmResolveOAuthOriginSupport(
     provider,
     location.origin,
@@ -58,5 +61,8 @@ export function resolveCurrentOAuthOriginSupport(
       origin: "",
     };
   }
-  return resolveOAuthOriginSupport(provider, window.location);
+  const resolveOAuthOriginSupportArgs: Parameters<
+    typeof resolveOAuthOriginSupport
+  >[0] = { provider, location: window.location };
+  return resolveOAuthOriginSupport(resolveOAuthOriginSupportArgs);
 }

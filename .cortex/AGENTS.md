@@ -328,6 +328,26 @@ Every task-owning implementation agent with GitHub write access must:
 - Revalidate the exact head.
 - Squash-merge when `task pr:ready PR=<number>` succeeds.
 
+After every push:
+
+- monitor review feedback while repository checks run;
+- prioritize new actionable feedback over checks for a head that must change;
+- let exact-head checks finish only while the actionable queue is empty.
+
+When actionable feedback arrives:
+
+1. Stop watching or cancel obsolete validation.
+2. Fix the feedback.
+3. Reply to and resolve the thread.
+4. Run pre-push hygiene.
+5. Push the replacement head.
+6. Restart validation.
+
+Immediately before merge, prove both conditions:
+
+- zero unresolved threads;
+- green checks for the current head.
+
 Do not stop at a ready-PR handoff or ask for separate merge permission.
 
 Stop without a merge only for a concrete blocker or an explicitly read-only request.
@@ -389,7 +409,12 @@ Never use `task extension:format` as the only format step before push.
 
 Only after that commit → push.
 
-Use `task remote` for focused hosted feedback.
+Use `task remote` only when a focused gate gives faster diagnostic feedback.
+
+Do not run focused tasks as a prerequisite for complete validation.
+
+Prefer complete validation when its parallel jobs are faster than a sequential
+focused batch.
 
 Use `task pr:validate` for complete exact-head validation.
 
@@ -423,6 +448,12 @@ calls. Assign a named typed argument value first. Loom uses ESLint
 `loom/no-raw-object-arguments`. Nook web uses
 `nook-typed-api/no-raw-object-arguments`. Full contract:
 [dynamic-skills/typescript-named-args.md](dynamic-skills/typescript-named-args.md).
+
+Nook browser-extension TypeScript owns browser observation and lifecycle glue.
+Portable classification, validation, policy, and workflow decisions belong in
+Rust. Size-sensitive content-script policy uses `nook-companion-core` through
+`nook-companion-wasm`. Full contract:
+[dynamic-skills/rust-typescript-code-separation.md](dynamic-skills/rust-typescript-code-separation.md).
 
 Bun must be installed. Stop and ask for Bun if `bun --version` fails.
 
@@ -471,8 +502,8 @@ The normal loop:
 1. Pre-push hygiene
 2. Commit
 3. Push
-4. Focused `task remote` runs as useful
-5. Explicit `task pr:validate` at the complete validation boundary
+4. Optional focused `task remote` runs for isolated diagnostics
+5. Explicit `task pr:validate` as soon as the coherent head is ready
 
 Ordinary PR pushes do not start the full PR workflow.
 
@@ -480,7 +511,10 @@ A later push makes prior checks stale.
 
 The agent must explicitly validate the new exact head before readiness can succeed.
 
-Heavy focused debugging also runs through the allowlisted remote task catalog.
+Heavy focused debugging runs through the allowlisted remote task catalog.
+
+Do not batch broad gates sequentially when complete PR validation runs them in
+parallel with a shorter critical path.
 
 Local execution is reserved for formatting, the UI demo contract, repository inspection, and interactive development sessions that require a persistent local server/browser.
 
@@ -612,7 +646,7 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 
 ## 6. Workflows (`workflows/`)
 
-- [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task loom:pre-push`** → commit/push → focused hosted tasks → Loom/Task validate → fix loop → readiness audit → automatic agent-owned squash merge).
+- [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task loom:pre-push`** → commit/push → Loom/Task validate → optional focused diagnosis → fix loop → readiness audit → automatic agent-owned squash merge).
 - [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 - [`agentic-ai/loom/README.md`](../agentic-ai/loom/README.md) — **Loom**: YAML tool protocol for mechanical cortex rites.
 - [references/loom-tools.md](references/loom-tools.md) — Loom request/response contracts and examples.

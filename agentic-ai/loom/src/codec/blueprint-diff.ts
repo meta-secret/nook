@@ -2,9 +2,9 @@ import { createTwoFilesPatch } from 'diff';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
-  ExternalPropertyPresence,
-  externalProperty,
-  type ExternalValue,
+  UntrustedYamlPropertyPresence,
+  untrustedYamlProperty,
+  type UntrustedYamlNode,
   isRecord,
 } from '../lib/guards.ts';
 import { findRepoRoot } from '../lib/repo.ts';
@@ -15,7 +15,7 @@ import {
 } from './enums.ts';
 import { stringifyYaml } from './yaml.ts';
 
-import type { ExternalPropertyArgs } from '../lib/guards.ts';
+import type { UntrustedYamlPropertyArgs } from '../lib/guards.ts';
 export enum BlueprintOperationMarker {
   FamilyRoot = 'familyRoot',
 }
@@ -146,7 +146,7 @@ export function explainSyntaxFailure(
 }
 
 export function explainAgainstBlueprint(
-  received: ExternalValue,
+  received: UntrustedYamlNode,
 ): BlueprintExplanation {
   const selected = selectBlueprint(received);
   const blueprint = loadBlueprint(selected.blueprintPath);
@@ -186,7 +186,7 @@ function normalizeYamlText(text: string): string {
   return text.endsWith('\n') ? text : `${text}\n`;
 }
 
-function selectBlueprint(received: ExternalValue): BlueprintRef {
+function selectBlueprint(received: UntrustedYamlNode): BlueprintRef {
   if (!isRecord(received)) {
     return DEFAULT_BLUEPRINT;
   }
@@ -198,14 +198,14 @@ function selectBlueprint(received: ExternalValue): BlueprintRef {
     return DEFAULT_BLUEPRINT;
   }
   const family = familyKey as RequestFamily;
-  const payloadPropertyArgs: ExternalPropertyArgs = {
+  const payloadPropertyArgs: UntrustedYamlPropertyArgs = {
     record: received,
     key: family,
   };
-  const payloadProperty = externalProperty(payloadPropertyArgs);
+  const payloadProperty = untrustedYamlProperty(payloadPropertyArgs);
   if (
     (family === RequestFamily.AgentStats || family === RequestFamily.PrLand) &&
-    payloadProperty.presence === ExternalPropertyPresence.Present &&
+    payloadProperty.presence === UntrustedYamlPropertyPresence.Present &&
     isRecord(payloadProperty.value)
   ) {
     const operationKeys = Object.keys(payloadProperty.value);

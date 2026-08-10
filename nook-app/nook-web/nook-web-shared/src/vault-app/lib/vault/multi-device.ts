@@ -3,7 +3,11 @@ import type { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp, type NookSecretRecord } from "$lib/nook";
 import { createLogger } from "$lib/runtime/log";
 import { JoinEnrollmentState } from "$app-wasm";
-import { EventOutboxTargetKind } from "$lib/vault/sync-operation-state";
+import {
+  EventOutboxRequestKind,
+  EventOutboxTargetKind,
+  type EventOutboxRequest,
+} from "$lib/vault/sync-operation-state";
 
 const log = createLogger("vault-devices");
 
@@ -15,7 +19,13 @@ export async function refreshPendingJoinsFromProviders(state: VaultState) {
   await state.hydrateMultiDeviceState();
 }
 
-export async function approveJoin(state: VaultState, joinDeviceId: string) {
+export async function approveJoin({
+  state,
+  joinDeviceId,
+}: {
+  readonly state: VaultState;
+  readonly joinDeviceId: string;
+}) {
   if (!state.hasManager) return;
   state.errorMsg = "";
   state.dismissSuccess();
@@ -26,18 +36,24 @@ export async function approveJoin(state: VaultState, joinDeviceId: string) {
     )) as NookSecretRecord[];
     for (const record of rawRecords) record.free();
     await state.refreshSecretsFromSession();
-    await state.flushRemoteEventOutboxNow();
+    const request: EventOutboxRequest = {
+      kind: EventOutboxRequestKind.Default,
+    };
+    await state.flushRemoteEventOutboxNow(request);
     await state.hydrateMultiDeviceState();
     state.pendingJoins = state.pendingJoins.filter(
       (entry) => entry.deviceId !== joinDeviceId,
     );
-    await state.fanOutSyncToProviders({ quiet: true });
+    const fanOutSyncToProvidersArgs: Parameters<
+      typeof state.fanOutSyncToProviders
+    >[0] = { quiet: true };
+    await state.fanOutSyncToProviders(fanOutSyncToProvidersArgs);
     state.pendingJoins = state.pendingJoins.filter(
       (entry) => entry.deviceId !== joinDeviceId,
     );
     state.showSuccess(state.t(I18N_KEYS.ToastsDeviceApproved));
-    log.info("join request approved", { joinDeviceId });
-  } catch (e: unknown) {
+    log.info("join request approved");
+  } catch (e) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to approve join request.";
   } finally {
@@ -45,7 +61,13 @@ export async function approveJoin(state: VaultState, joinDeviceId: string) {
   }
 }
 
-export async function denyJoin(state: VaultState, joinDeviceId: string) {
+export async function denyJoin({
+  state,
+  joinDeviceId,
+}: {
+  readonly state: VaultState;
+  readonly joinDeviceId: string;
+}) {
   if (!state.hasManager) return;
   state.errorMsg = "";
   state.dismissSuccess();
@@ -59,7 +81,7 @@ export async function denyJoin(state: VaultState, joinDeviceId: string) {
     await state.hydrateMultiDeviceState();
     state.scheduleFanOutSyncAfterLocalSave();
     state.showSuccess(state.t(I18N_KEYS.ToastsJoinDenied));
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to deny join request.";
   } finally {
@@ -67,11 +89,15 @@ export async function denyJoin(state: VaultState, joinDeviceId: string) {
   }
 }
 
-export async function renameDevice(
-  state: VaultState,
-  authId: string,
-  label: string,
-) {
+export async function renameDevice({
+  state,
+  authId,
+  label,
+}: {
+  readonly state: VaultState;
+  readonly authId: string;
+  readonly label: string;
+}) {
   if (!state.hasManager) return;
   state.errorMsg = "";
   state.dismissSuccess();
@@ -87,7 +113,7 @@ export async function renameDevice(
         ? state.t(I18N_KEYS.ToastsDeviceRenamed)
         : state.t(I18N_KEYS.ToastsDeviceNameReset),
     );
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to rename device.";
     throw e;
@@ -96,7 +122,13 @@ export async function renameDevice(
   }
 }
 
-export async function revokeDevice(state: VaultState, authId: string) {
+export async function revokeDevice({
+  state,
+  authId,
+}: {
+  readonly state: VaultState;
+  readonly authId: string;
+}) {
   if (!state.hasManager) return;
   const isSelf = state.vaultMembers.some(
     (member) => member.authId === authId && member.deviceId === state.deviceId,
@@ -118,7 +150,7 @@ export async function revokeDevice(state: VaultState, authId: string) {
     await state.hydrateMultiDeviceState();
     state.scheduleFanOutSyncAfterLocalSave();
     state.showSuccess(state.t(I18N_KEYS.ToastsDeviceRevoked));
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to revoke device access.";
     throw e;
@@ -133,7 +165,10 @@ export async function confirmJoinRequest(state: VaultState) {
   state.dismissSuccess();
   state.isVerifying = true;
   try {
-    const target = state.eventOutboxTarget();
+    const request: EventOutboxRequest = {
+      kind: EventOutboxRequestKind.Default,
+    };
+    const target = state.eventOutboxTarget(request);
     const storageArgs =
       target.kind === EventOutboxTargetKind.Remote
         ? target.args
@@ -146,7 +181,7 @@ export async function confirmJoinRequest(state: VaultState) {
     await state.ensureProviderSaved();
     state.joinEnrollmentPrompt = JoinEnrollmentState.Pending;
     state.awaitingJoinApproval = true;
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to request vault access.";
   } finally {
@@ -174,7 +209,11 @@ export async function enrollAndConnect(state: VaultState) {
         .enroll_and_connect(...state.wasmStorageArgs(), secretsKey, membersKey),
     )) as NookSecretRecord[];
     for (const record of rawRecords) record.free();
-    await state.loadSecretPage("", 0);
+    const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
+      query: "",
+      requestedOffset: 0,
+    };
+    await state.loadSecretPage(loadPageArgs);
     state.markVaultUnlocked();
     state.enrollSecretsKey = "";
     state.enrollMembersKey = "";
@@ -182,14 +221,11 @@ export async function enrollAndConnect(state: VaultState) {
     void state.hydrateMultiDeviceState();
     await state.syncFromStorage();
     state.showSuccess(state.t(I18N_KEYS.ToastsEnrolledConnected));
-    log.info("enrolled and connected", {
-      secrets: rawRecords.length,
-      mode: state.storageMode,
-    });
+    log.info("enrolled and connected");
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.closeSettings();
     state.startIdleSessionTracking();
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to enroll with vault keys.";
   } finally {

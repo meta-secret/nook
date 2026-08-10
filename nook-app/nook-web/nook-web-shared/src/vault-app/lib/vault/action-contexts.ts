@@ -5,7 +5,10 @@ import type {
   NookSyncConflictReview,
 } from "$app-wasm";
 import type { NookVaultSyncResult, VaultAccessStatus } from "$lib/nook";
-import type { StorageProvider } from "$lib/auth/providers";
+import type {
+  ProviderSetupRequest,
+  StorageProvider,
+} from "$lib/auth/providers";
 import type {
   LocalProviderLookup,
   StagedRemoteStorage,
@@ -18,11 +21,13 @@ import type { VaultSessionState } from "$lib/vault/state/session.svelte";
 import type { VaultSyncState } from "$lib/vault/state/sync.svelte";
 import type { VaultUiState } from "$lib/vault/state/ui.svelte";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
+import type { TranslationRequest } from "$lib/vault/translation";
 import type {
   AdminAccordionSection,
   SettingsAccordionSection,
   SettingsSection,
 } from "$lib/vault/state/ui.svelte";
+import type { EventOutboxRequest } from "$lib/vault/sync-operation-state";
 
 type ProviderStateFields = Pick<
   VaultProviderState,
@@ -83,7 +88,7 @@ type ProviderSessionFields = Pick<
 
 interface SharedStorageActionsContext {
   enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T>;
-  t(key: string, values?: Record<string, string>): string;
+  t(request: TranslationRequest): string;
 }
 
 interface ProviderActionPorts extends SharedStorageActionsContext {
@@ -98,11 +103,11 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   connectAndSyncStagedProvider(): Promise<void>;
   dismissSuccess(): void;
   ensureProviderSaved(): Promise<boolean>;
-  flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void>;
+  flushRemoteEventOutboxNow(request: EventOutboxRequest): Promise<void>;
   handleRemoteVaultAssessStatus(
     accessStatus: VaultAccessStatus,
   ): Promise<boolean>;
-  loadDb(): Promise<unknown>;
+  loadDb(): Promise<void>;
   persistProviders(options?: { replace?: boolean }): Promise<void>;
   resetVaultSessionState(resetManager?: boolean): void;
   refreshPasswordEntriesList(): Promise<boolean>;
@@ -111,10 +116,10 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
     args: [string, string, string],
   ): Promise<boolean>;
   stagedRemoteStorageArgs(): StagedRemoteStorage;
-  syncProviderById(
-    providerId: string,
-    options?: { quiet?: boolean; propagateError?: boolean },
-  ): Promise<void>;
+  syncProviderById(request: {
+    readonly providerId: string;
+    readonly options?: { quiet?: boolean; propagateError?: boolean };
+  }): Promise<void>;
   wasmStorageArgs(): [string, string, string];
 }
 
@@ -180,7 +185,10 @@ type SyncStateFields = Pick<
 > & {
   fanOutSyncChain: Promise<void>;
   isSyncScheduled(): boolean;
-  scheduleSync(callback: () => void, intervalMs: number): void;
+  scheduleSync(request: {
+    readonly callback: () => void;
+    readonly intervalMs: number;
+  }): void;
 };
 
 interface SyncActionPorts extends SharedStorageActionsContext {
@@ -195,7 +203,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   stopScheduledSync(): boolean;
   clearUnlockedSession(resetManager?: boolean): void;
   beginAddProvider(): void;
-  beginProviderSetup(type: "local-folder"): void;
+  beginProviderSetup(request: ProviderSetupRequest): void;
   openAdmin(accordion: AdminAccordionSection): void;
   ensureOAuthTokensFresh(): Promise<void>;
   ensureProviderSavedAfterConflict(
@@ -209,10 +217,13 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   initDeviceIdentity(options?: {
     allowPendingAuthorization?: boolean;
   }): Promise<void>;
-  loadDb(): Promise<unknown>;
+  loadDb(): Promise<void>;
   persistProviders(options?: { replace?: boolean }): Promise<void>;
   providerWasmArgs(provider: StorageProvider): [string, string, string];
-  raceStorageTimeout<T>(promise: Promise<T>, label: string): Promise<T>;
+  raceStorageTimeout<T>(request: {
+    readonly promise: Promise<T>;
+    readonly label: string;
+  }): Promise<T>;
   assessVaultConnectStatus(
     args?: [string, string, string],
   ): Promise<VaultAccessStatus>;
@@ -222,7 +233,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   refreshSecretsFromSession(): Promise<void>;
   runFanOutSyncAfterLocalSave(): Promise<void>;
   runFanOutSyncToProviders(options?: { quiet?: boolean }): Promise<void>;
-  flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void>;
+  flushRemoteEventOutboxNow(request: EventOutboxRequest): Promise<void>;
   removeProvider(providerId: string): Promise<void>;
   ensureProviderSaved(): Promise<boolean>;
   showSuccess(message: string): void;
@@ -236,15 +247,15 @@ interface SyncActionPorts extends SharedStorageActionsContext {
     quiet?: boolean;
     force?: boolean;
   }): Promise<void>;
-  syncProviderById(
-    providerId: string,
-    options?: { quiet?: boolean; propagateError?: boolean },
-  ): Promise<void>;
-  updateProviderSyncMetadata(
-    providerId: string,
-    yaml: string,
-    revision: NookProviderSyncRevision,
-  ): Promise<void>;
+  syncProviderById(request: {
+    readonly providerId: string;
+    readonly options?: { quiet?: boolean; propagateError?: boolean };
+  }): Promise<void>;
+  updateProviderSyncMetadata(request: {
+    readonly providerId: string;
+    readonly yaml: string;
+    readonly revision: NookProviderSyncRevision;
+  }): Promise<void>;
   wasmStorageArgs(): [string, string, string];
 }
 
@@ -347,17 +358,17 @@ export type UiActionsContext = Pick<
     clearUnlockedSession(resetManager?: boolean): void;
     dismissSuccess(): void;
     enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T>;
-    refreshDeviceState(): Promise<unknown>;
+    refreshDeviceState(): Promise<void>;
     refreshLocalVaultCatalog(): Promise<void>;
     stopIdleSessionTracking(): void;
     stopVaultSync(): void;
-    t(key: string, values?: Record<string, string>): string;
+    t(request: TranslationRequest): string;
     waitForStorageChain(): Promise<void>;
   };
 
 export type OpenSettingsArgs = {
-  section?: SettingsSection;
-  accordion?: SettingsAccordionSection;
+  readonly section: SettingsSection;
+  readonly accordion: SettingsAccordionSection;
 };
 
 export type OpenAdminAccordion = AdminAccordionSection;

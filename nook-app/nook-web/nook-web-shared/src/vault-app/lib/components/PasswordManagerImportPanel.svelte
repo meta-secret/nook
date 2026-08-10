@@ -37,6 +37,7 @@
         })
     )
 
+  // eslint-disable-next-line svelte/no-unused-props -- The discriminated props object preserves the format/onImport relationship.
   let props: Props = $props()
   let selectedFile = $state<ImportFileSelection>({
     kind: ImportFileSelectionKind.NotSelected,
@@ -66,7 +67,12 @@
     isImporting = true
     try {
       if (props.format === PasswordImportFormat.Text) {
-        const imported = await importTextFile(file, false, props.onImport)
+        const importRequest: Parameters<typeof importTextFile>[0] = {
+          file,
+          isSaving: false,
+          onImport: props.onImport,
+        }
+        const imported = await importTextFile(importRequest)
         if (imported.kind === ImportAttemptKind.Completed) {
           result = {
             kind: PasswordImportOutcomeKind.Completed,
@@ -77,7 +83,12 @@
         }
         return
       }
-      const imported = await importBinaryFile(file, false, props.onImport)
+      const importRequest: Parameters<typeof importBinaryFile>[0] = {
+        file,
+        isSaving: false,
+        onImport: props.onImport,
+      }
+      const imported = await importBinaryFile(importRequest)
       if (imported.kind === ImportAttemptKind.Completed) {
         result = {
           kind: PasswordImportOutcomeKind.Completed,
@@ -169,15 +180,21 @@
           data-testid={props.resultTestId}
         >
           <p class="font-medium">
-            {props.vault.t(props.messages.resultImported, {
+            {(() => { const translationRequest: Parameters<typeof props.vault.t>[0] = {
+  key: props.messages.resultImported,
+  replacements: {
               count: String(result.result.imported),
-            })}
+            },
+}; return props.vault.t(translationRequest); })()}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
-            {props.vault.t(props.messages.resultSkipped, {
+            {(() => { const translationRequest2: Parameters<typeof props.vault.t>[0] = {
+  key: props.messages.resultSkipped,
+  replacements: {
               unsupported: String(result.result.skippedUnsupported),
               duplicates: String(result.result.skippedDuplicates),
-            })}
+            },
+}; return props.vault.t(translationRequest2); })()}
           </p>
         </div>
       {/if}

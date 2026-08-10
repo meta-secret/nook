@@ -18,8 +18,7 @@
   const deviceModes = [DeviceMode.Standard, DeviceMode.AntiHacker]
 
   function modeTranslationKey(
-    mode: DeviceMode,
-    suffix: DeviceModeTranslationPart,
+    { mode, suffix }: { readonly mode: DeviceMode; readonly suffix: DeviceModeTranslationPart },
   ) {
     if (mode === DeviceMode.AntiHacker) {
       return suffix === DeviceModeTranslationPart.Title
@@ -31,8 +30,7 @@
       : I18N_KEYS.DeviceProtectionModeStandardDescription
   }
 
-  function selectMode(value: unknown) {
-    if (typeof value !== 'string') return
+  function selectMode(value: string) {
     const selectedMode = Number(value)
     if (selectedMode === DeviceMode.Standard)
       vault.draftDeviceMode = DeviceMode.Standard
@@ -58,26 +56,24 @@
       aria-describedby={`${id}-description`}
     >
       {vault.t(
-        modeTranslationKey(
-          vault.draftDeviceMode,
-          DeviceModeTranslationPart.Title,
-        ),
+        (() => { const modeTranslationKeyArgs: Parameters<typeof modeTranslationKey>[0] = { mode: vault.draftDeviceMode, suffix: DeviceModeTranslationPart.Title }; return modeTranslationKey(
+          modeTranslationKeyArgs,
+        ); })(),
       )}
     </Select.Trigger>
     <Select.Content portalProps={{ disabled: true }}>
       {#each deviceModes as mode (mode)}
         <Select.Item value={String(mode)}>
-          {vault.t(modeTranslationKey(mode, DeviceModeTranslationPart.Title))}
+          {vault.t((() => { const modeTranslationKeyArgs2: Parameters<typeof modeTranslationKey>[0] = { mode, suffix: DeviceModeTranslationPart.Title }; return modeTranslationKey(modeTranslationKeyArgs2); })())}
         </Select.Item>
       {/each}
     </Select.Content>
   </Select.Root>
   <p id={`${id}-description`} class="text-xs text-pretty text-muted-foreground">
     {vault.t(
-      modeTranslationKey(
-        vault.draftDeviceMode,
-        DeviceModeTranslationPart.Description,
-      ),
+      (() => { const modeTranslationKeyArgs3: Parameters<typeof modeTranslationKey>[0] = { mode: vault.draftDeviceMode, suffix: DeviceModeTranslationPart.Description }; return modeTranslationKey(
+        modeTranslationKeyArgs3,
+      ); })(),
     )}
   </p>
 </div>

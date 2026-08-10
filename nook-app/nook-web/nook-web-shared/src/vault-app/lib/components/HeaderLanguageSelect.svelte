@@ -14,7 +14,10 @@
   let root = $state<HTMLDivElement>()
 
   function selectLocale(locale: NookAppLocale) {
-    void vault.updateLocale(locale)
+    const localeRequest: Parameters<typeof vault.updateLocale>[0] = {
+      newLocale: locale,
+    }
+    void vault.updateLocale(localeRequest)
     open = false
   }
 

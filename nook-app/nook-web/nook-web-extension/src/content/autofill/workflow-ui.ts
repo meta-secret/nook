@@ -4,7 +4,11 @@ import {
 } from '../../lib/browser-message-keys'
 import { compactProgressState } from '../../lib/auth-widget-policy'
 import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
-import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
+import type {
+  WebsiteLoginAccountOption,
+  WebsiteLoginFillResponse,
+} from '../../lib/login-fill-messages'
+import { AuthenticationWorkflowKind } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   ExtensionSetupLoadKind,
   loadExtensionSetupState,
@@ -42,12 +46,7 @@ export type LoginOptionsResponse = {
   reason?: string
 }
 
-export type LoginFillResponse = {
-  ok?: boolean
-  username?: string
-  password?: string
-  reason?: string
-}
+export type { WebsiteLoginFillResponse as LoginFillResponse }
 
 export type WorkflowSnapshotResponse = {
   ok?: boolean
@@ -60,29 +59,30 @@ export type WorkflowCopy = {
   descriptionKey: BrowserMessageKey
 }
 
-export function workflowCopy(kind: string): WorkflowCopy {
+export function workflowCopy(kind: AuthenticationWorkflowKind): WorkflowCopy {
   switch (kind) {
-    case 'login':
+    case AuthenticationWorkflowKind.Login:
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetLoginDescription,
       }
-    case 'signup':
+    case AuthenticationWorkflowKind.Signup:
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetSignupTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetSignupDescription,
       }
-    case 'password-change':
+    case AuthenticationWorkflowKind.PasswordChange:
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeDescription,
       }
-    case 'totp-challenge':
+    case AuthenticationWorkflowKind.TotpChallenge:
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorDescription,
       }
-    default:
+    case AuthenticationWorkflowKind.TotpEnrollment:
+    case AuthenticationWorkflowKind.Manual:
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetManualTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetManualDescription,
@@ -90,22 +90,38 @@ export function workflowCopy(kind: string): WorkflowCopy {
   }
 }
 
-export function progressLabel(currentStep: number, totalSteps: number): string {
+export function progressLabel({
+  currentStep,
+  totalSteps,
+}: {
+  currentStep: number
+  totalSteps: number
+}): string {
   return `${translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel)} · ${currentStep}/${totalSteps}`
 }
 
-export function setFlightProgress(
-  step: HTMLParagraphElement,
-  title: HTMLHeadingElement,
-  currentStep: number,
-  totalSteps: number,
-  titleKey: BrowserMessageKey,
-): void {
-  step.textContent = progressLabel(currentStep, totalSteps)
+export function setFlightProgress({
+  step,
+  title,
+  currentStep,
+  totalSteps,
+  titleKey,
+}: {
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  currentStep: number
+  totalSteps: number
+  titleKey: BrowserMessageKey
+}): void {
+  const nookTypedArgs0_0: Parameters<typeof progressLabel>[0] = {
+    currentStep,
+    totalSteps,
+  }
+  step.textContent = progressLabel(nookTypedArgs0_0)
   title.textContent = translatedMessage(titleKey)
   const root = step.getRootNode()
   if (root instanceof ShadowRoot) {
-    const compactProgressArgs = {
+    const compactProgressArgs: Parameters<typeof compactProgressState>[0] = {
       pilotLabel: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel),
       currentStep,
       totalSteps,
@@ -167,10 +183,13 @@ export function translatedMessage(key: BrowserMessageKey): string {
   return chrome.i18n.getMessage(key) || 'Nook'
 }
 
-export function translatedMessageWithSubstitution(
-  key: BrowserMessageKey,
-  substitution: string,
-): string {
+export function translatedMessageWithSubstitution({
+  key,
+  substitution,
+}: {
+  key: BrowserMessageKey
+  substitution: string
+}): string {
   return chrome.i18n.getMessage(key, substitution) || 'Nook'
 }
 
@@ -183,10 +202,13 @@ export async function loadPilotVaultConnection(): Promise<PilotVaultConnection> 
 
 export function vaultConnectionLabel(connection: PilotVaultConnection): string {
   if (connection.connected && connection.vaultName) {
-    return translatedMessageWithSubstitution(
-      BROWSER_MESSAGE_KEYS.WidgetVaultConnected,
-      connection.vaultName,
-    )
+    const nookTypedArgs0_1: Parameters<
+      typeof translatedMessageWithSubstitution
+    >[0] = {
+      key: BROWSER_MESSAGE_KEYS.WidgetVaultConnected,
+      substitution: connection.vaultName,
+    }
+    return translatedMessageWithSubstitution(nookTypedArgs0_1)
   }
   return translatedMessage(BROWSER_MESSAGE_KEYS.WidgetVaultNotConnected)
 }

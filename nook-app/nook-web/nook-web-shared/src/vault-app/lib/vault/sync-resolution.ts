@@ -29,11 +29,15 @@ import { refreshLoginUnlockCapabilities } from "$lib/vault/login-unlock-capabili
 
 const log = createLogger("vault-sync-resolution");
 
-export async function resolveReplacementConflict(
-  state: SyncActionsContext,
-  oldSecretId: string,
-  chosenSecretId: string,
-): Promise<void> {
+export async function resolveReplacementConflict({
+  state,
+  oldSecretId,
+  chosenSecretId,
+}: {
+  readonly state: SyncActionsContext;
+  readonly oldSecretId: string;
+  readonly chosenSecretId: string;
+}): Promise<void> {
   if (!state.hasManager || state.isSaving) return;
   state.isSaving = true;
   state.errorMsg = "";
@@ -48,7 +52,7 @@ export async function resolveReplacementConflict(
     await state.refreshReplacementConflicts();
     void state.runFanOutSyncAfterLocalSave();
     state.showSuccess(state.t(I18N_KEYS.ToastsSecretConflictResolved));
-  } catch (error: unknown) {
+  } catch (error) {
     state.errorMsg =
       error instanceof Error
         ? error.message
@@ -86,7 +90,10 @@ export async function refreshReplacementConflicts(
       return [conflicts, securityConflicts] as const;
     },
   );
-  state.replaceProjectionConflicts(conflicts, securityConflicts);
+  const replaceProjectionConflictsArgs: Parameters<
+    typeof state.replaceProjectionConflicts
+  >[0] = { replacementConflicts: conflicts, securityConflicts };
+  state.replaceProjectionConflicts(replaceProjectionConflictsArgs);
 }
 
 export async function resolveSyncConflictKeepLocal(
@@ -98,14 +105,9 @@ export async function resolveSyncConflictKeepLocal(
     state.isVerifying
   )
     return;
-  const conflict = review;
-
   state.isVerifying = true;
   state.errorMsg = "";
-  log.info("sync conflict resolved (keep local)", {
-    provider: conflict.providerLabel,
-    kind: conflict.conflictKind,
-  });
+  log.info("sync conflict resolved (keep local)");
   state.errorMsg = state.t(I18N_KEYS.ErrorsWholeVaultConflictResolutionRetired);
   state.isVerifying = false;
 }
@@ -119,12 +121,7 @@ export async function resolveSyncConflictKeepRemote(
     state.isVerifying
   )
     return;
-  const conflict = review;
-
-  log.info("sync conflict resolved (keep remote)", {
-    provider: conflict.providerLabel,
-    kind: conflict.conflictKind,
-  });
+  log.info("sync conflict resolved (keep remote)");
   state.errorMsg = state.t(I18N_KEYS.ErrorsWholeVaultConflictResolutionRetired);
   state.isVerifying = false;
 }
@@ -145,7 +142,7 @@ export async function confirmRecoverRemoteVault(
       return;
     }
     await state.refreshPasswordEntriesList();
-  } catch (error: unknown) {
+  } catch (error) {
     state.errorMsg =
       error instanceof Error
         ? error.message
@@ -165,7 +162,7 @@ export async function confirmCreateFreshRemoteVault(
     state.isVerifying = true;
     try {
       await state.loadDb();
-    } catch (error: unknown) {
+    } catch (error) {
       state.errorMsg =
         error instanceof Error
           ? error.message
@@ -186,14 +183,20 @@ export function clearRemoteVaultRecovery(state: SyncActionsContext): void {
 }
 
 /** Finish connect/sync that was paused when the conflict dialog opened. */
-async function resumeConnectAfterSyncConflict(
-  state: SyncActionsContext,
-  providerId: string,
-  pendingProvider: boolean,
-): Promise<void> {
+async function resumeConnectAfterSyncConflict({
+  state,
+  providerId,
+  pendingProvider,
+}: {
+  readonly state: SyncActionsContext;
+  readonly providerId: string;
+  readonly pendingProvider: boolean;
+}): Promise<void> {
   if (state.isAuthenticated) {
     if (!pendingProvider) {
-      await state.syncProviderById(providerId, { quiet: true });
+      const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[0] =
+        { providerId, options: { quiet: true } };
+      await state.syncProviderById(syncProviderByIdArgs);
     }
     await state.hydrateMultiDeviceState();
     return;
@@ -288,11 +291,14 @@ export async function resolveSyncConflictImportRemote(
     providerSave = { kind: ConflictProviderSaveKind.Saved, providerId };
     if (conflict.remoteYaml.trim()) {
       const remoteRevision = conflict.remoteRevision;
-      await state.updateProviderSyncMetadata(
+      const metadataRequest: Parameters<
+        typeof state.updateProviderSyncMetadata
+      >[0] = {
         providerId,
-        conflict.remoteYaml,
-        remoteRevision,
-      );
+        yaml: conflict.remoteYaml,
+        revision: remoteRevision,
+      };
+      await state.updateProviderSyncMetadata(metadataRequest);
     } else {
       state.providers = state.providers.map((provider) =>
         provider.id === providerId
@@ -314,12 +320,14 @@ export async function resolveSyncConflictImportRemote(
     if (state.localVaults.length <= 1) {
       await refreshLoginUnlockCapabilities(state);
     }
-    state.showSuccess(
-      state.t(I18N_KEYS.AuthStorageSyncConflictImportedVault, {
+    const tArgs: Parameters<typeof state.t>[0] = {
+      key: I18N_KEYS.AuthStorageSyncConflictImportedVault,
+      replacements: {
         provider: providerLabel,
-      }),
-    );
-  } catch (error: unknown) {
+      },
+    };
+    state.showSuccess(state.t(tArgs));
+  } catch (error) {
     state.errorMsg =
       error instanceof Error
         ? error.message
@@ -332,10 +340,9 @@ export async function resolveSyncConflictImportRemote(
     providerSave.kind === ConflictProviderSaveKind.Saved &&
     !importedAsSeparateVault
   ) {
-    await resumeConnectAfterSyncConflict(
-      state,
-      providerSave.providerId,
-      pendingProvider,
-    );
+    const resumeConnectAfterSyncConflictArgs: Parameters<
+      typeof resumeConnectAfterSyncConflict
+    >[0] = { state, providerId: providerSave.providerId, pendingProvider };
+    await resumeConnectAfterSyncConflict(resumeConnectAfterSyncConflictArgs);
   }
 }

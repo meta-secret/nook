@@ -5,12 +5,13 @@
     LogsPageStateKind,
     type LogsPageState,
   } from './app-logs-api-page-state'
+  import {
+    formatAppLogsError,
+    formatAppLogsLoading,
+    formatAppLogsPayload,
+  } from './app-logs-json-serialization'
 
   let state = $state<LogsPageState>({ kind: LogsPageStateKind.Loading })
-
-  function preserveJsonValue(_key: string, value: unknown): unknown {
-    return value
-  }
 
   onMount(() => {
     document.title = 'Nook app logs (JSON)'
@@ -39,21 +40,11 @@
 
 <main class="app-logs-api-page">
   {#if state.kind === LogsPageStateKind.Failed}
-    <pre data-testid="app-logs-error">{JSON.stringify(
-        { error: state.message },
-        preserveJsonValue,
-        2,
-      )}</pre>
+    <pre data-testid="app-logs-error">{formatAppLogsError(state.message)}</pre>
   {:else if state.kind === LogsPageStateKind.Loaded}
-    <pre data-testid="app-logs-json">{JSON.stringify(
-        state.payload,
-        preserveJsonValue,
-        2,
-      )}</pre>
+    <pre data-testid="app-logs-json">{formatAppLogsPayload(state.payload)}</pre>
   {:else}
-    <pre data-testid="app-logs-loading">{JSON.stringify({
-        loading: true,
-      })}</pre>
+    <pre data-testid="app-logs-loading">{formatAppLogsLoading()}</pre>
   {/if}
 </main>
 

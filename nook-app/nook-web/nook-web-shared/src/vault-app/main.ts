@@ -2,11 +2,13 @@ import { mount } from "svelte";
 import "./app.css";
 import { configuredVaultApplication, type VaultApplication } from "$app-wasm";
 import { ensureAppWasm } from "$lib/runtime/wasm-bootstrap";
+import { companionWasmReady } from "$web-shared/extension/companion-ready";
 
 export async function mountVaultApp(
   expectedKind: VaultApplication,
 ): Promise<void> {
   await ensureAppWasm(expectedKind);
+  await companionWasmReady;
   const configuredKind = configuredVaultApplication();
   if (configuredKind !== expectedKind) {
     throw new Error(
@@ -17,5 +19,6 @@ export async function mountVaultApp(
   if (!target) throw new Error("Vault app mount target is missing");
   if (!target) throw new Error("Vault application root is missing.");
   const { default: App } = await import("./App.svelte");
-  mount(App, { target });
+  const mountArgs: { readonly target: HTMLElement } = { target };
+  mount(App, mountArgs);
 }

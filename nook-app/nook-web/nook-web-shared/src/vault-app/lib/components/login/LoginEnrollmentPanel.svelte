@@ -20,8 +20,7 @@
     initialCode?: string;
     openFormInitially?: boolean;
     onUseEnrollmentCode?: (
-      code: string,
-      password: string,
+      args: { readonly code: string; readonly password: string },
     ) => void | Promise<void>;
   } = $props();
 
@@ -110,7 +109,8 @@
             e.preventDefault();
             const trimmed = enrollmentCodeInput.trim();
             if (!trimmed) return;
-            void onUseEnrollmentCode(trimmed, enrollmentPasswordInput);
+            const onUseEnrollmentCodeArgs: Parameters<typeof onUseEnrollmentCode>[0] = { code: trimmed, password: enrollmentPasswordInput };
+            void onUseEnrollmentCode(onUseEnrollmentCodeArgs);
           }}
         >
           <div class="flex items-start justify-between gap-3">

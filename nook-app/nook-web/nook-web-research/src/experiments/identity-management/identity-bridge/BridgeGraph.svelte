@@ -30,9 +30,15 @@
     [BridgeGraphEdgeType.GrantLanes]: BridgeGrantEdge,
   }
   let compact = $state(false)
-  const graph = $derived(
-    buildBridgeGraph(perspective, identityId, vaultId, compact),
-  )
+  const graph = $derived.by(() => {
+    const graphContext: Parameters<typeof buildBridgeGraph>[0] = {
+      perspective,
+      identityId,
+      vaultId,
+      compact,
+    }
+    return buildBridgeGraph(graphContext)
+  })
 
   $effect(() => {
     const media = window.matchMedia('(width < 48rem)')

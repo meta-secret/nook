@@ -24,9 +24,7 @@
     authenticatorCode: AuthenticatorCodePresentation
     isCopied: (fieldKey: string) => boolean
     onCopyToClipboard: (
-      text: string,
-      id: string,
-      field: string,
+      args: { readonly text: string; readonly id: string; readonly field: string },
     ) => Promise<void>
     onCopySecret: (id: string) => Promise<void>
     vault: VaultState
@@ -54,9 +52,9 @@
       >
       {#if authenticatorCode.kind === AuthenticatorCodePresentationKind.Visible}
         <p class="mt-0.5 text-[10px] text-muted-foreground">
-          {vault.t(I18N_KEYS.VaultFieldsCodeExpiresIn, {
+          {(() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.VaultFieldsCodeExpiresIn, replacements: {
             count: String(authenticatorCode.code.secondsRemaining),
-          })}
+          } }; return vault.t(tArgs); })()}
         </p>
       {/if}
     </div>
@@ -64,11 +62,9 @@
       <button
         type="button"
         onclick={() =>
-          void onCopyToClipboard(
-            authenticatorCode.code.code,
-            item.id,
-            'current-code',
-          )}
+          void (() => { const onCopyToClipboardArgs: Parameters<typeof onCopyToClipboard>[0] = { text: authenticatorCode.code.code, id: item.id, field: 'current-code' }; return onCopyToClipboard(
+            onCopyToClipboardArgs,
+          ); })()}
         aria-label={vault.t(I18N_KEYS.VaultCopyCurrentCode)}
         class="shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
       >
@@ -108,7 +104,7 @@
       <button
         type="button"
         onclick={() =>
-          void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
+          void (() => { const onCopyToClipboardArgs2: Parameters<typeof onCopyToClipboard>[0] = { text: item.websiteUrl, id: item.id, field: 'website' }; return onCopyToClipboard(onCopyToClipboardArgs2); })()}
         aria-label={vault.t(I18N_KEYS.VaultCopyWebsiteUrl)}
         class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
       >
@@ -166,11 +162,9 @@
               <button
                 type="button"
                 onclick={() =>
-                  void onCopyToClipboard(
-                    backupCode,
-                    item.id,
-                    `backup-${backupIndex}`,
-                  )}
+                  void (() => { const onCopyToClipboardArgs3: Parameters<typeof onCopyToClipboard>[0] = { text: backupCode, id: item.id, field: `backup-${backupIndex}` }; return onCopyToClipboard(
+                    onCopyToClipboardArgs3,
+                  ); })()}
                 aria-label={vault.t(I18N_KEYS.VaultCopyBackupCode)}
                 class="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
               >

@@ -1,4 +1,4 @@
-import type { ExternalValue } from '../../lib/guards.ts';
+import type { UntrustedYamlNode } from '../../lib/guards.ts';
 import { RequestFamily } from '../enums.ts';
 import { DecodeStatus, decodeErr, type DecodeOutcome } from '../field-error.ts';
 import {
@@ -31,7 +31,7 @@ export type PrePushRequest = {
 const ROOT = RequestFamily.PrePush;
 
 export function decodePrePushRequest(
-  value: ExternalValue,
+  value: UntrustedYamlNode,
 ): DecodeOutcome<PrePushRequest> {
   const objectArgs: ExpectObjectArgs = { value, path: ROOT };
   const object = expectObject(objectArgs);

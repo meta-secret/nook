@@ -122,57 +122,18 @@ pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {
 }
 
 /// Read all extension pairing metadata from extension-origin Rexie storage.
-#[wasm_bindgen]
-pub struct NookExtensionPairingState(
-    std::collections::HashMap<String, crate::storage::extension_state::ExtensionPairingRecord>,
-);
-
-#[wasm_bindgen]
-impl NookExtensionPairingState {
-    #[wasm_bindgen(js_name = fromObject)]
-    pub fn from_object(entries: &js_sys::Object) -> Result<Self, wasm_bindgen::JsError> {
-        serde_wasm_bindgen::from_value(entries.clone().into())
-            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
-            .and_then(|entries| {
-                crate::storage::extension_state::validate_entries(&entries)?;
-                Ok(Self(entries))
-            })
-    }
-
-    #[wasm_bindgen(js_name = toObject)]
-    pub fn to_object(&self) -> Result<js_sys::Object, wasm_bindgen::JsError> {
-        serde::Serialize::serialize(
-            &self.0,
-            &serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true),
-        )
-        .map(wasm_bindgen::JsCast::unchecked_into)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
-    }
-}
-
-impl NookExtensionPairingState {
-    fn entries(
-        &self,
-    ) -> &std::collections::HashMap<String, crate::storage::extension_state::ExtensionPairingRecord>
-    {
-        &self.0
-    }
-}
-
-/// Read all extension pairing metadata from extension-origin Rexie storage.
 #[wasm_bindgen(js_name = readExtensionPairingState)]
 pub async fn read_extension_pairing_state()
--> Result<NookExtensionPairingState, wasm_bindgen::JsError> {
-    let entries = crate::storage::extension_state::read_all().await?;
-    Ok(NookExtensionPairingState(entries))
+-> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
+    Ok(crate::storage::extension_state::read_all().await?)
 }
 
 /// Persist extension pairing metadata in extension-origin Rexie storage.
 #[wasm_bindgen(js_name = writeExtensionPairingState)]
 pub async fn write_extension_pairing_state(
-    state: &NookExtensionPairingState,
+    state: nook_companion_core::ExtensionPairingState,
 ) -> Result<(), wasm_bindgen::JsError> {
-    crate::storage::extension_state::write_all(state.entries()).await?;
+    crate::storage::extension_state::write_all(&state).await?;
     Ok(())
 }
 
@@ -188,10 +149,10 @@ pub async fn remove_extension_pairing_state(
 /// Atomically remove and persist extension pairing metadata in Rexie storage.
 #[wasm_bindgen(js_name = reconcileExtensionPairingState)]
 pub async fn reconcile_extension_pairing_state(
-    state: &NookExtensionPairingState,
+    state: nook_companion_core::ExtensionPairingState,
     removed_keys: Vec<String>,
 ) -> Result<(), wasm_bindgen::JsError> {
-    crate::storage::extension_state::reconcile(state.entries(), &removed_keys).await?;
+    crate::storage::extension_state::reconcile(&state, &removed_keys).await?;
     Ok(())
 }
 

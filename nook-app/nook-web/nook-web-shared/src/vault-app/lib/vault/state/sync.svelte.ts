@@ -54,31 +54,47 @@ export class VaultSyncState {
   get securityConflicts(): readonly NookSecurityConflict[] {
     return this.securityConflictState;
   }
-  replaceProjectionConflicts(
-    replacementConflicts: NookReplacementConflict[],
-    securityConflicts: NookSecurityConflict[],
-  ): void {
+  replaceProjectionConflicts({
+    replacementConflicts,
+    securityConflicts,
+  }: {
+    readonly replacementConflicts: NookReplacementConflict[];
+    readonly securityConflicts: NookSecurityConflict[];
+  }): void {
     for (const conflict of this.replacementConflictState) conflict.free();
     for (const conflict of this.securityConflictState) conflict.free();
     this.replacementConflictState = replacementConflicts;
     this.securityConflictState = securityConflicts;
   }
   clearProjectionConflicts(): void {
-    this.replaceProjectionConflicts([], []);
+    const replaceProjectionConflictsArgs: Parameters<
+      typeof this.replaceProjectionConflicts
+    >[0] = { replacementConflicts: [], securityConflicts: [] };
+    this.replaceProjectionConflicts(replaceProjectionConflictsArgs);
   }
   /** E2E/dev boundary: construct the injected domain record in Rust. */
-  stageSecurityConflictForTesting(events: string[], reasons: string[]): void {
+  stageSecurityConflictForTesting({
+    events,
+    reasons,
+  }: {
+    readonly events: string[];
+    readonly reasons: string[];
+  }): void {
     for (const conflict of this.securityConflictState) conflict.free();
     this.securityConflictState = [
       NookSecurityConflict.fromDisplayParts(events, reasons),
     ];
   }
   /** E2E/dev boundary: construct the injected content conflict in Rust. */
-  stageContentSyncConflictForTesting(
-    providerLabel: string,
-    localVersion: number,
-    remoteVersion: number,
-  ): void {
+  stageContentSyncConflictForTesting({
+    providerLabel,
+    localVersion,
+    remoteVersion,
+  }: {
+    readonly providerLabel: string;
+    readonly localVersion: number;
+    readonly remoteVersion: number;
+  }): void {
     this.stageSyncConflict(
       NookPendingSyncConflict.forTestingContent(
         providerLabel,
@@ -88,11 +104,15 @@ export class VaultSyncState {
     );
   }
   /** E2E/dev boundary: construct the injected store-id conflict in Rust. */
-  stageStoreIdSyncConflictForTesting(
-    providerLabel: string,
-    localStoreId: string,
-    remoteStoreId: string,
-  ): void {
+  stageStoreIdSyncConflictForTesting({
+    providerLabel,
+    localStoreId,
+    remoteStoreId,
+  }: {
+    readonly providerLabel: string;
+    readonly localStoreId: string;
+    readonly remoteStoreId: string;
+  }): void {
     this.stageSyncConflict(
       NookPendingSyncConflict.forTestingStoreId(
         providerLabel,

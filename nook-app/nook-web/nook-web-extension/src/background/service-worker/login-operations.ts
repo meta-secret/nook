@@ -2,7 +2,13 @@ import {
   NookWebsiteLoginSaveDecision,
   WebsiteLoginSavePendingState,
   type WebsiteLoginSaveOfferView,
+  type WebsiteLoginSavePendingResponse,
 } from '../../lib/login-save-messages'
+import {
+  WebsiteAuthenticatorResponseStatus,
+  type WebsiteLoginAccountOption,
+  type WebsiteLoginFillResponse,
+} from '../../lib/login-fill-messages'
 import { classifyAuthenticationOutcomeWithDefaultTimeout } from '../vault-runtime'
 import {
   LoginPickerLoadKind,
@@ -27,17 +33,76 @@ import {
   isUnlockedSessionStatus,
   openCompanionLauncherBestEffort,
 } from './session-lifecycle'
+import {
+  decodeLoginOperationResponse,
+  decodeLoginSaveActionResponse,
+  decodeWebsiteLoginFillResponse,
+  isLoginPickerPageAcknowledgement,
+  type LoginOperationFailure,
+  type LoginOperationSuccess,
+  type LoginSaveActionResponse,
+} from './login-session-response-adapter'
 
-export async function openWebsiteLoginPicker(
-  message: { payload: { origin: string } },
-  sender: chrome.runtime.MessageSender,
-): Promise<unknown> {
-  const access = await availableWebsiteGrants(
-    message.payload.origin,
+enum LoginPickerOpenStatus {
+  Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+}
+enum LoginSaveOfferStatus {
+  Unavailable = 'unavailable',
+  Locked = 'locked',
+  Ready = 'ready',
+}
+type LoginPickerOpenResponse =
+  | LoginOperationFailure
+  | {
+      ok: true
+      status: LoginPickerOpenStatus.Ready
+      requestId: string
+      expiresAt: number
+    }
+  | {
+      ok: true
+      status: LoginPickerOpenStatus.Locked | LoginPickerOpenStatus.Unavailable
+    }
+type LoginPickerQueryResponse =
+  | LoginOperationFailure
+  | { ok: true; origin: string; accounts: WebsiteLoginAccountOption[] }
+type LoginSaveOfferResponse =
+  | LoginOperationFailure
+  | {
+      ok: true
+      status: LoginSaveOfferStatus.Unavailable | LoginSaveOfferStatus.Locked
+    }
+  | {
+      ok: true
+      status: LoginSaveOfferStatus.Ready
+      decision: NookWebsiteLoginSaveDecision
+      offer?: WebsiteLoginSaveOfferView
+    }
+export async function openWebsiteLoginPicker({
+  message,
+  sender,
+}: {
+  message: { payload: { origin: string } }
+  sender: chrome.runtime.MessageSender
+}): Promise<LoginPickerOpenResponse> {
+  const nookTypedArgs0_0: Parameters<typeof availableWebsiteGrants>[0] = {
+    origin: message.payload.origin,
     sender,
-    'login-forbidden-origin',
-  )
-  if ('response' in access) return access.response
+    forbiddenReason: 'login-forbidden-origin',
+  }
+  const access = await availableWebsiteGrants(nookTypedArgs0_0)
+  if ('response' in access) {
+    if (!access.response.ok) return access.response
+    return {
+      ok: true,
+      status:
+        access.response.status === WebsiteAuthenticatorResponseStatus.Locked
+          ? LoginPickerOpenStatus.Locked
+          : LoginPickerOpenStatus.Unavailable,
+    }
+  }
   if (
     !sender.tab ||
     !('id' in sender.tab) ||
@@ -47,7 +112,7 @@ export async function openWebsiteLoginPicker(
   }
 
   const requestId = randomNonce()
-  const request = {
+  const request: Parameters<typeof storeLoginPicker>[0] = {
     requestId,
     origin: message.payload.origin,
     tabId: sender.tab.id,
@@ -60,27 +125,39 @@ export async function openWebsiteLoginPicker(
   pickerUrl.searchParams.set('request', requestId)
   try {
     if (chrome.windows?.create) {
-      await chrome.windows.create({
+      const nookTypedArgs0_1: Parameters<typeof chrome.windows.create>[0] = {
         url: pickerUrl.toString(),
         type: 'popup',
         width: 460,
         height: 620,
         focused: true,
-      })
+      }
+      await chrome.windows.create(nookTypedArgs0_1)
     } else {
-      await chrome.tabs.create({ url: pickerUrl.toString() })
+      const nookTypedArgs0_2: Parameters<typeof chrome.tabs.create>[0] = {
+        url: pickerUrl.toString(),
+      }
+      await chrome.tabs.create(nookTypedArgs0_2)
     }
   } catch {
     await removeLoginPicker(requestId)
     return { ok: false, reason: 'login-picker-open-failed' }
   }
-  return { ok: true, status: 'ready', requestId, expiresAt: request.expiresAt }
+  return {
+    ok: true,
+    status: LoginPickerOpenStatus.Ready,
+    requestId,
+    expiresAt: request.expiresAt,
+  }
 }
 
-export async function queryLoginPicker(
-  message: { payload: { requestId: string; query: string } },
-  sender: chrome.runtime.MessageSender,
-): Promise<unknown> {
+export async function queryLoginPicker({
+  message,
+  sender,
+}: {
+  message: { payload: { requestId: string; query: string } }
+  sender: chrome.runtime.MessageSender
+}): Promise<LoginPickerQueryResponse> {
   if (!isLoginPickerSender(sender)) {
     return { ok: false, reason: 'login-picker-forbidden' }
   }
@@ -92,24 +169,28 @@ export async function queryLoginPicker(
   const grants = (await passwordPairingGrants()).filter((grant) =>
     request.allowedVaultStoreIds.includes(grant.vaultStoreId),
   )
-  const accounts = await loginAccountsForOrigin(
+  const nookTypedArgs0_0: Parameters<typeof loginAccountsForOrigin>[0] = {
     grants,
-    request.origin,
-    message.payload.query,
-  )
+    origin: request.origin,
+    query: message.payload.query,
+  }
+  const accounts = await loginAccountsForOrigin(nookTypedArgs0_0)
   return { ok: true, origin: request.origin, accounts }
 }
 
-export async function selectLoginPicker(
+export async function selectLoginPicker({
+  message,
+  sender,
+}: {
   message: {
     payload: {
       requestId: string
       vaultStoreId: string
       secretId: string
     }
-  },
-  sender: chrome.runtime.MessageSender,
-): Promise<unknown> {
+  }
+  sender: chrome.runtime.MessageSender
+}): Promise<LoginOperationSuccess | LoginOperationFailure> {
   if (!isLoginPickerSender(sender)) {
     return { ok: false, reason: 'login-picker-forbidden' }
   }
@@ -121,7 +202,11 @@ export async function selectLoginPicker(
   const grants = (await passwordPairingGrants()).filter((grant) =>
     request.allowedVaultStoreIds.includes(grant.vaultStoreId),
   )
-  const accounts = await loginAccountsForOrigin(grants, request.origin)
+  const nookTypedArgs0_1: Parameters<typeof loginAccountsForOrigin>[0] = {
+    grants,
+    origin: request.origin,
+  }
+  const accounts = await loginAccountsForOrigin(nookTypedArgs0_1)
   const selected = accounts.find(
     (account) =>
       account.vaultStoreId === message.payload.vaultStoreId &&
@@ -131,7 +216,7 @@ export async function selectLoginPicker(
     return { ok: false, reason: 'login-picker-selection-invalid' }
   }
   try {
-    const response: unknown = await chrome.tabs.sendMessage(request.tabId, {
+    const nookTypedArgs0_3: Parameters<typeof chrome.tabs.sendMessage>[1] = {
       type: 'nook:website-login-selected',
       payload: {
         origin: request.origin,
@@ -141,13 +226,12 @@ export async function selectLoginPicker(
           secretId: selected.secretId,
         },
       },
-    })
-    if (
-      !response ||
-      typeof response !== 'object' ||
-      !('ok' in response) ||
-      response.ok !== true
-    ) {
+    }
+    const response = await chrome.tabs.sendMessage(
+      request.tabId,
+      nookTypedArgs0_3,
+    )
+    if (!isLoginPickerPageAcknowledgement(response)) {
       return { ok: false, reason: 'login-picker-page-unavailable' }
     }
   } catch {
@@ -157,63 +241,79 @@ export async function selectLoginPicker(
   return { ok: true }
 }
 
-export async function cancelLoginPicker(
-  message: { payload: { requestId: string } },
-  sender: chrome.runtime.MessageSender,
-): Promise<unknown> {
+export async function cancelLoginPicker({
+  message,
+  sender,
+}: {
+  message: { payload: { requestId: string } }
+  sender: chrome.runtime.MessageSender
+}): Promise<LoginOperationSuccess | LoginOperationFailure> {
   const loaded = await loadLoginPicker(message.payload.requestId)
   if (loaded.kind === LoginPickerLoadKind.Unavailable) {
     return { ok: true }
   }
   const { request } = loaded
+  const nookNamedArgs0_0: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
+    sender,
+    origin: request.origin,
+  }
   if (
     !isLoginPickerSender(sender) &&
-    !isAuthorizedWebsiteSender(sender, request.origin)
+    !isAuthorizedWebsiteSender(nookNamedArgs0_0)
   ) {
     return { ok: false, reason: 'login-picker-forbidden' }
   }
   await removeLoginPicker(request.requestId)
   try {
-    await chrome.tabs.sendMessage(request.tabId, {
+    const nookTypedArgs0_4: Parameters<typeof chrome.tabs.sendMessage>[1] = {
       type: 'nook:website-login-canceled',
       payload: {
         origin: request.origin,
         requestId: request.requestId,
       },
-    })
+    }
+    await chrome.tabs.sendMessage(request.tabId, nookTypedArgs0_4)
   } catch {
     // The website may have navigated while its picker was open.
   }
   return { ok: true }
 }
 
-export async function websiteLoginSaveOffer(
+export async function websiteLoginSaveOffer({
+  message,
+  sender,
+}: {
   message: {
     payload: {
       origin: string
       username: string
       password: string
     }
-  },
-  sender: chrome.runtime.MessageSender,
-): Promise<unknown> {
+  }
+  sender: chrome.runtime.MessageSender
+}): Promise<LoginSaveOfferResponse> {
   const pendingPassword = { value: message.payload.password }
   message.payload.password = ''
-  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+  const nookTypedArgs0_5: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
+    sender,
+    origin: message.payload.origin,
+  }
+  if (!isAuthorizedWebsiteSender(nookTypedArgs0_5)) {
     pendingPassword.value = ''
     return { ok: false, reason: 'login-save-forbidden-origin' }
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
     pendingPassword.value = ''
-    return { ok: true, status: 'unavailable' }
+    return { ok: true, status: LoginSaveOfferStatus.Unavailable }
   }
   await ensureExtensionSessionDocument()
   const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
-  const status = await sendSessionMessage({
+  const nookTypedArgs0_6: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
     payload: { queueExpiresAt, queuePriority: 'interactive' },
-  })
+  }
+  const status = await sendSessionMessage(nookTypedArgs0_6)
   if (
     !status ||
     typeof status !== 'object' ||
@@ -221,12 +321,12 @@ export async function websiteLoginSaveOffer(
   ) {
     pendingPassword.value = ''
     openCompanionLauncherBestEffort()
-    return { ok: true, status: 'locked' }
+    return { ok: true, status: LoginSaveOfferStatus.Locked }
   }
 
   // Prefer the selected/ready vault, then the first password-filling grant.
   const grant = grants[0]
-  const response = await sendSessionMessage({
+  const nookTypedArgs0_7: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-plan-login-save',
     payload: {
       ...grant,
@@ -234,7 +334,8 @@ export async function websiteLoginSaveOffer(
       username: message.payload.username,
       password: pendingPassword.value,
     },
-  })
+  }
+  const response = await sendSessionMessage(nookTypedArgs0_7)
   pendingPassword.value = ''
   if (
     !response ||
@@ -250,7 +351,11 @@ export async function websiteLoginSaveOffer(
     response.decision === NookWebsiteLoginSaveDecision.AlreadySaved ||
     response.decision === NookWebsiteLoginSaveDecision.Invalid
   ) {
-    return { ok: true, status: 'ready', decision: response.decision }
+    return {
+      ok: true,
+      status: LoginSaveOfferStatus.Ready,
+      decision: response.decision,
+    }
   }
   if (
     (response.decision !== NookWebsiteLoginSaveDecision.Create &&
@@ -266,14 +371,26 @@ export async function websiteLoginSaveOffer(
     vaultStoreId: grant.vaultStoreId,
     vaultName: grant.vaultName,
   }
-  return { ok: true, status: 'ready', decision: response.decision, offer }
+  return {
+    ok: true,
+    status: LoginSaveOfferStatus.Ready,
+    decision: response.decision,
+    offer,
+  }
 }
 
-export async function websiteLoginSavePending(
-  message: { payload: { origin: string } },
-  sender: chrome.runtime.MessageSender,
-): Promise<unknown> {
-  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+export async function websiteLoginSavePending({
+  message,
+  sender,
+}: {
+  message: { payload: { origin: string } }
+  sender: chrome.runtime.MessageSender
+}): Promise<WebsiteLoginSavePendingResponse> {
+  const nookTypedArgs0_8: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
+    sender,
+    origin: message.payload.origin,
+  }
+  if (!isAuthorizedWebsiteSender(nookTypedArgs0_8)) {
     return { ok: false, reason: 'login-save-forbidden-origin' }
   }
   const grants = await passwordPairingGrants()
@@ -281,10 +398,11 @@ export async function websiteLoginSavePending(
     return { ok: true, state: WebsiteLoginSavePendingState.Unavailable }
   }
   await ensureExtensionSessionDocument()
-  const response = await sendSessionMessage({
+  const nookTypedArgs0_9: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-pending-login-save',
     payload: { origin: message.payload.origin },
-  })
+  }
+  const response = await sendSessionMessage(nookTypedArgs0_9)
   if (
     !response ||
     typeof response !== 'object' ||
@@ -303,7 +421,7 @@ export async function websiteLoginSavePending(
   }
   const staged = response.offer as {
     offerId?: string
-    decision?: unknown
+    decision?: number
     vaultStoreId?: string
   }
   const grant = grants.find(
@@ -326,7 +444,10 @@ export async function websiteLoginSavePending(
   return { ok: true, state: WebsiteLoginSavePendingState.Available, offer }
 }
 
-export async function websiteLoginSaveCommit(
+export async function websiteLoginSaveCommit({
+  message,
+  sender,
+}: {
   message: {
     payload: {
       origin: string
@@ -341,10 +462,14 @@ export async function websiteLoginSaveCommit(
         elapsedMs: number
       }
     }
-  },
-  sender: chrome.runtime.MessageSender,
-): Promise<unknown> {
-  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+  }
+  sender: chrome.runtime.MessageSender
+}): Promise<LoginSaveActionResponse> {
+  const nookTypedArgs0_10: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
+    sender,
+    origin: message.payload.origin,
+  }
+  if (!isAuthorizedWebsiteSender(nookTypedArgs0_10)) {
     return { ok: false, reason: 'login-save-forbidden-origin' }
   }
   const verdict = await classifyAuthenticationOutcomeWithDefaultTimeout(
@@ -362,10 +487,11 @@ export async function websiteLoginSaveCommit(
     return { ok: false, reason: 'login-save-unavailable' }
   }
   await ensureExtensionSessionDocument()
-  const pending = await sendSessionMessage({
+  const nookTypedArgs0_11: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-pending-login-save',
     payload: { origin: message.payload.origin },
-  })
+  }
+  const pending = await sendSessionMessage(nookTypedArgs0_11)
   let grant = grants[0]!
   if (
     pending &&
@@ -384,9 +510,11 @@ export async function websiteLoginSaveCommit(
     )
     if (matchingGrant) grant = matchingGrant
   }
-  const status = await sendSessionMessage({
+  const nookTypedArgs0_12: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
-  })
+    payload: {},
+  }
+  const status = await sendSessionMessage(nookTypedArgs0_12)
   if (
     !status ||
     typeof status !== 'object' ||
@@ -395,60 +523,82 @@ export async function websiteLoginSaveCommit(
     openCompanionLauncherBestEffort()
     return { ok: false, reason: 'login-save-locked' }
   }
-  return sendSessionMessage({
+  const nookTypedArgs0_13: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-commit-login-save',
     payload: {
       ...grant,
       origin: message.payload.origin,
       offerId: message.payload.offerId,
     },
-  })
+  }
+  return decodeLoginSaveActionResponse(
+    await sendSessionMessage(nookTypedArgs0_13),
+  )
 }
 
-export async function websiteLoginSaveDismiss(
-  message: { payload: { origin: string; offerId: string } },
-  sender: chrome.runtime.MessageSender,
-): Promise<unknown> {
-  if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
+export async function websiteLoginSaveDismiss({
+  message,
+  sender,
+}: {
+  message: { payload: { origin: string; offerId: string } }
+  sender: chrome.runtime.MessageSender
+}): Promise<LoginOperationSuccess | LoginOperationFailure> {
+  const nookTypedArgs0_14: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
+    sender,
+    origin: message.payload.origin,
+  }
+  if (!isAuthorizedWebsiteSender(nookTypedArgs0_14)) {
     return { ok: false, reason: 'login-save-forbidden-origin' }
   }
   await ensureExtensionSessionDocument()
-  return sendSessionMessage({
+  const nookTypedArgs0_15: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-dismiss-login-save',
     payload: {
       origin: message.payload.origin,
       offerId: message.payload.offerId,
     },
-  })
+  }
+  return decodeLoginOperationResponse(
+    await sendSessionMessage(nookTypedArgs0_15),
+  )
 }
 
-export async function websiteLoginFill(
+export async function websiteLoginFill({
+  message,
+  sender,
+}: {
   message: {
     payload: {
       origin: string
       vaultStoreId: string
       secretId: string
     }
-  },
-  sender: chrome.runtime.MessageSender,
-): Promise<unknown> {
-  const access = await authorizedWebsiteGrant(
-    message.payload.origin,
-    message.payload.vaultStoreId,
+  }
+  sender: chrome.runtime.MessageSender
+}): Promise<WebsiteLoginFillResponse> {
+  const nookTypedArgs0_16: Parameters<
+    typeof authorizedWebsiteGrant
+  >[0]['reasons'] = {
+    forbidden: 'login-forbidden-origin',
+    missing: 'login-vault-not-granted',
+    locked: 'login-locked',
+  }
+  const nookTypedArgs0_2: Parameters<typeof authorizedWebsiteGrant>[0] = {
+    origin: message.payload.origin,
+    vaultStoreId: message.payload.vaultStoreId,
     sender,
-    {
-      forbidden: 'login-forbidden-origin',
-      missing: 'login-vault-not-granted',
-      locked: 'login-locked',
-    },
-  )
+    reasons: nookTypedArgs0_16,
+  }
+  const access = await authorizedWebsiteGrant(nookTypedArgs0_2)
   if ('response' in access) return access.response
-  return sendSessionMessage({
+  const nookTypedArgs0_17: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-reveal-login',
     payload: {
       ...access.grant,
       origin: message.payload.origin,
       secretId: message.payload.secretId,
     },
-  })
+  }
+  const response = await sendSessionMessage(nookTypedArgs0_17)
+  return decodeWebsiteLoginFillResponse(response)
 }

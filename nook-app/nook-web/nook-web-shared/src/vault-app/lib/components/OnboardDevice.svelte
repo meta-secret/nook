@@ -18,13 +18,14 @@
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import { Button } from '$lib/components/ui/button'
-  import { buildEnrollmentLink } from '$lib/enrollment/code'
+  import { buildEnrollmentLink, getEnrollmentLinkBase } from '$lib/enrollment/code'
   import {
     GITHUB_PROVIDER_TYPE,
+    GOOGLE_DRIVE_OAUTH_FILE_PRESET,
     isICloudProvider,
     localizeProviderLabel,
     providerStorageDetail,
-    type OAuthFilePreset,
+    type ProviderSetupRequest,
     type StorageProvider,
     type StorageProviderType,
   } from '$lib/auth/providers'
@@ -101,18 +102,13 @@
     githubPat: string
     githubRepo: string
     onIssueCode: (
-      entryId: PasswordEntryId,
-      password: string,
-      providerId: string,
+      args: { readonly entryId: PasswordEntryId; readonly password: string; readonly providerId: string },
     ) => Promise<string>
     onClearCode: () => void
-    onAddPassword: (label: string, password: string) => void | Promise<void>
+    onAddPassword: (args: { readonly label: string; readonly password: string }) => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
-    onBeginSetup: (
-      type: StorageProviderType,
-      oauthPreset?: OAuthFilePreset,
-    ) => void
+    onBeginSetup: (request: ProviderSetupRequest) => void
     onCancelSetup: () => void
     onConnectProvider: () => void | Promise<void>
   } = $props()
@@ -143,7 +139,7 @@
       ? vault.oauthFileDraft.config.preset
       : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
         ? vault.oauthSetupSelection.preset
-        : 'google-drive',
+        : GOOGLE_DRIVE_OAUTH_FILE_PRESET,
   )
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
@@ -175,10 +171,9 @@
   let generateStepOpen = $state(false)
 
   const effectiveProviderId = $derived.by(() => {
+    const firstCompatibleProviderArgs: Parameters<typeof firstCompatibleProvider>[0] = { providers: syncProviders, replicationType: vault.vaultArchitecture.replication_type, preference: selectedProviderIdState };
     const selection = firstCompatibleProvider(
-      syncProviders,
-      vault.vaultArchitecture.replication_type,
-      selectedProviderIdState,
+      firstCompatibleProviderArgs,
     )
     return selection.kind === CompatibleProviderSelectionKind.Selected
       ? selection.provider.id
@@ -241,9 +236,14 @@
   const wizardReady = $derived(
     hasPasswordSelection && hasCompatibleSyncProviders,
   )
-  const enrollmentLink = $derived.by(() =>
-    enrollmentCode ? buildEnrollmentLink(enrollmentCode) : '',
-  )
+  const enrollmentLink = $derived.by(() => {
+    if (!enrollmentCode) return ''
+    const enrollmentLinkRequest: Parameters<typeof buildEnrollmentLink>[0] = {
+      code: enrollmentCode,
+      baseUrl: getEnrollmentLinkBase(),
+    }
+    return buildEnrollmentLink(enrollmentLinkRequest)
+  })
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return ''
     return peekEnrollmentIssuedAt(enrollmentCode)
@@ -254,30 +254,33 @@
 
   const passwordStepSubtitle = $derived(
     selectedPassword.kind === ResolvedOnboardingPasswordKind.Available
-      ? vault.t(I18N_KEYS.OnboardDeviceWizardPasswordSelected, {
+      ? (() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.OnboardDeviceWizardPasswordSelected, replacements: {
           label: selectedPassword.entry.label,
-        })
+        } }; return vault.t(tArgs2); })()
       : hasPasswords
         ? passwordEntries.length === 1
           ? vault.t(I18N_KEYS.OnboardDeviceWizardPasswordChooseSingular)
-          : vault.t(I18N_KEYS.OnboardDeviceWizardPasswordChoosePlural, {
+          : (() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.OnboardDeviceWizardPasswordChoosePlural, replacements: {
               count: String(passwordEntries.length),
-            })
+            } }; return vault.t(tArgs); })()
         : vault.t(I18N_KEYS.OnboardDeviceWizardPasswordSubtitle),
   )
 
   const syncStepSubtitle = $derived(
     hasCompatibleSyncProviders
       ? compatibleSyncProviders.length === 1
-        ? vault.t(I18N_KEYS.OnboardDeviceWizardSyncReadySingular, {
-            label: localizeProviderLabel(
-              compatibleSyncProviders[0]?.label ?? '',
-              vault.t,
-            ),
-          })
-        : vault.t(I18N_KEYS.OnboardDeviceWizardSyncReadyPlural, {
+        ? (() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+            key: I18N_KEYS.OnboardDeviceWizardSyncReadySingular,
+            replacements: {
+              label: (() => { const localizeProviderLabelArgs: Parameters<typeof localizeProviderLabel>[0] = {
+                label: compatibleSyncProviders[0]?.label ?? '',
+                t: vault.t,
+              }; return localizeProviderLabel(localizeProviderLabelArgs); })(),
+            },
+          }; return vault.t(translationRequest); })()
+        : (() => { const tArgs3: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.OnboardDeviceWizardSyncReadyPlural, replacements: {
             count: String(compatibleSyncProviders.length),
-          })
+          } }; return vault.t(tArgs3); })()
       : hasSyncProviders
         ? vault.t(I18N_KEYS.OnboardDeviceNoCompatibleSyncProviders)
         : hasPasswords
@@ -336,7 +339,8 @@
       return
     }
     try {
-      await onAddPassword(passwordLabelInput.trim(), newPasswordInput)
+      const onAddPasswordArgs: Parameters<typeof onAddPassword>[0] = { label: passwordLabelInput.trim(), password: newPasswordInput };
+      await onAddPassword(onAddPasswordArgs)
       passwordLabelInput = ''
       newPasswordInput = ''
       newPasswordConfirm = ''
@@ -366,13 +370,14 @@
     }
     isGenerating = true
     try {
-      await onIssueCode(
-        selectedPassword.entry.id,
-        passwordInput,
-        selectedProvider.provider.id,
-      )
+      const issueRequest: Parameters<typeof onIssueCode>[0] = {
+        entryId: selectedPassword.entry.id,
+        password: passwordInput,
+        providerId: selectedProvider.provider.id,
+      }
+      await onIssueCode(issueRequest)
       passwordInput = ''
-    } catch (e: unknown) {
+    } catch (e) {
       localError =
         e instanceof Error ? e.message : vault.t(I18N_KEYS.OnboardDeviceFailedQrErr)
     } finally {
@@ -428,10 +433,10 @@
           {vault.t(I18N_KEYS.OnboardDeviceSentinelReadinessLabel)}
         </p>
         <p class="mt-0.5 text-sm font-semibold text-foreground">
-          {vault.t(I18N_KEYS.OnboardDeviceSentinelReadinessCount, {
+          {(() => { const tArgs5: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.OnboardDeviceSentinelReadinessCount, replacements: {
             ready: String(sentinelReadyParticipants),
             required: String(sentinelRequiredParticipants),
-          })}
+          } }; return vault.t(tArgs5); })()}
         </p>
       </div>
 
@@ -459,9 +464,9 @@
         data-testid="sentinel-compatible-provider-status"
       >
         {hasCompatibleSyncProviders
-          ? vault.t(I18N_KEYS.OnboardDeviceSentinelProviderReady, {
+          ? (() => { const tArgs6: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.OnboardDeviceSentinelProviderReady, replacements: {
               count: String(compatibleSyncProviders.length),
-            })
+            } }; return vault.t(tArgs6); })()
           : vault.t(I18N_KEYS.OnboardDeviceSentinelProviderMissing)}
       </p>
 
@@ -480,11 +485,13 @@
           type="button"
           size="sm"
           data-testid="sentinel-review-joins"
-          onclick={() =>
-            vault.openSettings(
-              SettingsSection.Storage,
-              SettingsAccordionSection.Devices,
-            )}
+          onclick={() => {
+            const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
+              section: SettingsSection.Storage,
+              accordion: SettingsAccordionSection.Devices,
+            }
+            vault.openSettings(settingsRequest)
+          }}
         >
           <ShieldCheck class="size-4" />
           {vault.t(I18N_KEYS.OnboardDeviceSentinelReviewJoins)}
@@ -551,9 +558,9 @@
                           ? 'text-muted-foreground'
                           : 'text-muted-foreground/80'}"
                       >
-                        {vault.t(I18N_KEYS.VaultPasswordsAddedDate, {
+                        {(() => { const tArgs7: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.VaultPasswordsAddedDate, replacements: {
                           date: entry.createdAt.slice(0, 10),
-                        })}
+                        } }; return vault.t(tArgs7); })()}
                       </span>
                     {/if}
                   </span>
@@ -777,7 +784,7 @@
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2">
                     <span class="truncate font-medium"
-                      >{localizeProviderLabel(provider.label, vault.t)}</span
+                      >{(() => { const localizeProviderLabelArgs2: Parameters<typeof localizeProviderLabel>[0] = { label: provider.label, t: vault.t }; return localizeProviderLabel(localizeProviderLabelArgs2); })()}</span
                     >
                   </div>
                   <div
@@ -786,7 +793,7 @@
                       : 'text-muted-foreground/80'}"
                     data-testid="onboard-provider-detail-{provider.id}"
                   >
-                    {providerStorageDetail(provider, vault.t)}
+                    {(() => { const providerStorageDetailArgs: Parameters<typeof providerStorageDetail>[0] = { provider, t: vault.t }; return providerStorageDetail(providerStorageDetailArgs); })()}
                   </div>
                   <div
                     class="text-[11px] {compatible
@@ -864,9 +871,9 @@
             >
               {selectedPassword.kind ===
               ResolvedOnboardingPasswordKind.Available
-                ? vault.t(I18N_KEYS.VaultPasswordsPasswordFor, {
+                ? (() => { const tArgs8: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.VaultPasswordsPasswordFor, replacements: {
                     label: selectedPassword.entry.label,
-                  })
+                  } }; return vault.t(tArgs8); })()
                 : vault.t(I18N_KEYS.VaultPasswordsConfirmPassword)}
             </label>
             <input
@@ -969,9 +976,9 @@
         {enrollmentLink}
         instruction={vault.t(I18N_KEYS.OnboardDeviceReadyDesc)}
         issuedSuffix={issuedAt
-          ? vault.t(I18N_KEYS.OnboardDeviceIssuedTime, {
+          ? (() => { const tArgs9: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.OnboardDeviceIssuedTime, replacements: {
               time: issuedAt.slice(0, 19).replace('T', ' ') + ' UTC',
-            })
+            } }; return vault.t(tArgs9); })()
           : ''}
         linkTitle={vault.t(I18N_KEYS.OnboardDeviceLinkTitle)}
         linkDescription={vault.t(I18N_KEYS.OnboardDeviceLinkDesc)}

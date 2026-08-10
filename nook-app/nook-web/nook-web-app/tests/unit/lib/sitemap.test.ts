@@ -14,10 +14,11 @@ describe('sitemap', () => {
   })
 
   test('buildSitemapXml emits valid loc tags for nokey.sh', () => {
-    const xml = buildSitemapXml(
-      'https://nokey.sh',
-      new Date('2026-06-28T12:00:00Z'),
-    )
+    const sitemapArgs: Parameters<typeof buildSitemapXml>[0] = {
+      siteUrl: 'https://nokey.sh',
+      lastmod: new Date('2026-06-28T12:00:00Z'),
+    }
+    const xml = buildSitemapXml(sitemapArgs)
     expect(xml).toContain('<loc>https://nokey.sh/</loc>')
     expect(xml).toContain('<loc>https://nokey.sh/privacy.html</loc>')
     expect(xml).toContain('<loc>https://nokey.sh/terms.html</loc>')
@@ -59,8 +60,11 @@ describe('sitemap', () => {
   })
 
   test('absoluteSiteUrl normalizes trailing slashes', () => {
-    expect(absoluteSiteUrl('https://nokey.sh/', '/privacy.html')).toBe(
-      'https://nokey.sh/privacy.html',
-    )
+    expect(
+      absoluteSiteUrl({
+        siteUrl: 'https://nokey.sh/',
+        path: '/privacy.html',
+      }),
+    ).toBe('https://nokey.sh/privacy.html')
   })
 })

@@ -98,8 +98,13 @@
     actionBusy = true
     vault.errorMsg = ''
     try {
-      response = await createSentinelUnlockResponse(vault, storeId, payload)
-    } catch (error: unknown) {
+      const responseRequest: Parameters<typeof createSentinelUnlockResponse>[0] = {
+        state: vault,
+        storeId,
+        request: payload,
+      }
+      response = await createSentinelUnlockResponse(responseRequest)
+    } catch (error) {
       vault.errorMsg =
         error instanceof Error
           ? vault.resolveErrorMessage(error.message)

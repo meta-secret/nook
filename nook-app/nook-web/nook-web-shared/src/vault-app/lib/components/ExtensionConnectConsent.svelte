@@ -18,7 +18,9 @@
   } from '$lib/auth/providers'
   import { Button } from '$lib/components/ui/button'
   import {
+    deliverExtensionPairingApproval,
     ExtensionConnectScope,
+    ExtensionPairingDeliveryKind,
     type ExtensionConnectRequest,
   } from '$lib/extension/connect'
   import type { VaultState } from '$lib/vault.svelte'
@@ -40,15 +42,20 @@
   let error = $state('')
   let handoffError = $state('')
 
-  const scopeTranslationKeys: Record<ExtensionConnectScope, I18nKey> = {
-    [ExtensionConnectScope.VaultAccess]:
-      I18N_KEYS.ExtensionConsentScopeVaultAccess,
-    [ExtensionConnectScope.PasswordFilling]:
-      I18N_KEYS.ExtensionConsentScopePasswordFilling,
-    [ExtensionConnectScope.PasskeyManagement]:
-      I18N_KEYS.ExtensionConsentScopePasskeyManagement,
-    [ExtensionConnectScope.SyncProviderCredentials]:
-      I18N_KEYS.ExtensionConsentScopeSyncProviderCredentials,
+  function scopeTranslationKey(scope: ExtensionConnectScope): I18nKey {
+    if (scope === ExtensionConnectScope.VaultAccess) {
+      return I18N_KEYS.ExtensionConsentScopeVaultAccess
+    }
+    if (scope === ExtensionConnectScope.PasswordFilling) {
+      return I18N_KEYS.ExtensionConsentScopePasswordFilling
+    }
+    if (scope === ExtensionConnectScope.PasskeyManagement) {
+      return I18N_KEYS.ExtensionConsentScopePasskeyManagement
+    }
+    if (scope === ExtensionConnectScope.SyncProviderCredentials) {
+      return I18N_KEYS.ExtensionConsentScopeSyncProviderCredentials
+    }
+    throw new Error('Unsupported extension connection scope.')
   }
 
   const canApprove = $derived(
@@ -59,7 +66,7 @@
       !approved,
   )
 
-  function truncate(value: string, head = 14, tail = 10) {
+  function truncate({ value, head, tail }: { readonly value: string; readonly head: number; readonly tail: number }) {
     if (value.length <= head + tail + 3) return value
     return `${value.slice(0, head)}...${value.slice(-tail)}`
   }
@@ -76,32 +83,8 @@
   }
 
   function sendGrantToExtension(
-    providers: StorageProvider[],
-    vaultStoreId: string,
-    vaultName: string,
-    eventLogRecords: ExtensionEventLogRecord[],
+    { providers, vaultStoreId, vaultName, eventLogRecords }: { readonly providers: StorageProvider[]; readonly vaultStoreId: string; readonly vaultName: string; readonly eventLogRecords: ExtensionEventLogRecord[] },
   ): Promise<void> {
-    const runtime = (
-      globalThis as typeof globalThis & {
-        chrome?: {
-          runtime?: {
-            sendMessage?: (
-              extensionId: string,
-              message: unknown,
-              callback: (response?: unknown) => void,
-            ) => void
-            lastError?: { message?: string }
-          }
-        }
-      }
-    ).chrome?.runtime
-
-    if (!runtime?.sendMessage) {
-      return Promise.reject(
-        new Error(vault.t(I18N_KEYS.ExtensionConsentMessagingUnavailable)),
-      )
-    }
-
     const message: ExtensionPairingApprovedMessage = {
       type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
       payload: {
@@ -118,68 +101,27 @@
       },
       eventLogRecords,
     }
-
-    const sendOnce = () =>
-      new Promise<void>((resolve, reject) => {
-        runtime.sendMessage?.(
-          request.extensionRuntimeId,
-          message,
-          (response) => {
-            const runtimeError = runtime.lastError?.message
-            if (runtimeError) {
-              reject(new Error(runtimeError))
-              return
-            }
-            if (
-              !!response &&
-              typeof response === 'object' &&
-              'ok' in response &&
-              (response as { ok?: unknown }).ok === true
-            ) {
-              resolve()
-              return
-            }
-            const migrationRequired =
-              !!response &&
-              typeof response === 'object' &&
-              (('reason' in response &&
-                response.reason ===
-                  'auth-provider-plaintext-migration-required') ||
-                ('error' in response &&
-                  response.error ===
-                    'auth-provider-plaintext-migration-required'))
-            reject(
-              new Error(
-                migrationRequired
-                  ? `${vault.t(I18N_KEYS.ExtensionConsentGrantRejected)} (${vault.t(
-                      I18N_KEYS.ExtensionConsentPlaintextProviderMigrationRequired,
-                    )})`
-                  : vault.t(I18N_KEYS.ExtensionConsentGrantRejected),
-              ),
-            )
-          },
-        )
-      })
-
     return (async () => {
-      let lastError = new Error(vault.t(I18N_KEYS.ExtensionConsentGrantRejected))
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        try {
-          await sendOnce()
-          return
-        } catch (caught) {
-          lastError =
-            caught instanceof Error
-              ? caught
-              : new Error(vault.t(I18N_KEYS.ExtensionConsentGrantRejected))
-          if (attempt < 2) {
-            await new Promise<void>((resolve) =>
-              window.setTimeout(resolve, 150),
-            )
-          }
-        }
+      const deliveryArgs: Parameters<
+        typeof deliverExtensionPairingApproval
+      >[0] = { request, message }
+      const delivery = await deliverExtensionPairingApproval(deliveryArgs)
+      if (delivery.kind === ExtensionPairingDeliveryKind.Delivered) return
+      if (
+        delivery.kind === ExtensionPairingDeliveryKind.MessagingUnavailable
+      ) {
+        throw new Error(
+          vault.t(I18N_KEYS.ExtensionConsentMessagingUnavailable),
+        )
       }
-      throw lastError
+      const detail =
+        delivery.kind ===
+        ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired
+          ? ` (${vault.t(I18N_KEYS.ExtensionConsentPlaintextProviderMigrationRequired)})`
+          : ''
+      throw new Error(
+        `${vault.t(I18N_KEYS.ExtensionConsentGrantRejected)}${detail}`,
+      )
     })()
   }
 
@@ -215,32 +157,31 @@
           vault.requireManager().loadAuthProviders(),
         )
         const matchingProviders = authProviders.providers.filter(
-          (provider) => providerBelongsToVault(provider, vaultStoreId),
+          (provider) => (() => { const providerBelongsToVaultArgs: Parameters<typeof providerBelongsToVault>[0] = { provider, storeId: vaultStoreId }; return providerBelongsToVault(providerBelongsToVaultArgs); })(),
         )
-        grantedProviders = sealAuthProvidersForDevicePublicKey(
-          request.devicePublicKey,
-          {
+        const sealAuthProvidersForDevicePublicKeyArgs: Parameters<typeof sealAuthProvidersForDevicePublicKey>[1] = {
             providers: matchingProviders,
             activeVaultStoreId: activeVaultScope(vaultStoreId),
-          },
+          };
+        grantedProviders = sealAuthProvidersForDevicePublicKey(
+          request.devicePublicKey,
+          sealAuthProvidersForDevicePublicKeyArgs,
         ).providers
       }
       const eventLogRecordValues = await vault.enqueueStorage(() =>
         vault.requireManager().exportEventLogRecords(),
       )
       try {
+        const sendGrantToExtensionArgs: Parameters<typeof sendGrantToExtension>[0] = { providers: grantedProviders, vaultStoreId, vaultName: activeVaultName(), eventLogRecords: eventLogRecordValues.toArray() as ExtensionEventLogRecord[] };
         await sendGrantToExtension(
-          grantedProviders,
-          vaultStoreId,
-          activeVaultName(),
-          eventLogRecordValues.toArray() as ExtensionEventLogRecord[],
+          sendGrantToExtensionArgs,
         )
       } catch (caught) {
         handoffError =
           caught instanceof Error
-            ? vault.t(I18N_KEYS.ExtensionConsentHandoffFailedDetail, {
+            ? (() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.ExtensionConsentHandoffFailedDetail, replacements: {
                 error: caught.message,
-              })
+              } }; return vault.t(tArgs); })()
             : vault.t(I18N_KEYS.ExtensionConsentHandoffFailed)
       } finally {
         eventLogRecordValues.free()
@@ -310,7 +251,7 @@
         class="mt-1 truncate font-mono text-[11px] text-muted-foreground"
         title={request.devicePublicKey}
       >
-        {truncate(request.devicePublicKey)}
+        {(() => { const truncateArgs: Parameters<typeof truncate>[0] = { value: request.devicePublicKey, head: 14, tail: 10 }; return truncate(truncateArgs); })()}
       </p>
     </div>
     <div class="rounded-md border border-border/40 bg-muted/20 px-3 py-2">
@@ -322,7 +263,7 @@
         class="mt-1 truncate font-mono text-[11px] text-muted-foreground"
         title={request.deviceSigningPublicKey}
       >
-        {truncate(request.deviceSigningPublicKey)}
+        {(() => { const truncateArgs2: Parameters<typeof truncate>[0] = { value: request.deviceSigningPublicKey, head: 14, tail: 10 }; return truncate(truncateArgs2); })()}
       </p>
     </div>
   </div>
@@ -337,7 +278,7 @@
           class="flex items-center gap-2 rounded-md border border-border/40 bg-background/70 px-3 py-2 text-sm text-foreground"
         >
           <Check class="size-3.5 text-primary" />
-          {vault.t(scopeTranslationKeys[scope])}
+          {vault.t(scopeTranslationKey(scope))}
         </li>
       {/each}
     </ul>

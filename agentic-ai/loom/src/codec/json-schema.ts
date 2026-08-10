@@ -1,7 +1,7 @@
 /**
  * Typed JSON Schema fragments for Loom toolsList discovery.
  *
- * These are Loom domain types, not untyped object bags and not ExternalValue.
+ * These are Loom domain types, not untyped object bags and not UntrustedYamlNode.
  */
 
 export enum JsonSchemaType {

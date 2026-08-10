@@ -161,6 +161,7 @@ function seoStaticFiles(outputDirectory: string): Plugin {
     server.middlewares.use((request, response, next) => {
       const pathname = request.url?.split(/[?#]/, 1)[0]
       const siteUrl = siteUrlFromEnv(process.env)
+      const sitemapArgs: Parameters<typeof buildSitemapXml>[0] = { siteUrl }
       const staticFile =
         pathname === '/robots.txt'
           ? {
@@ -171,7 +172,7 @@ function seoStaticFiles(outputDirectory: string): Plugin {
           : pathname === '/sitemap.xml'
             ? {
                 kind: SeoStaticFileKind.Served,
-                body: buildSitemapXml(siteUrl),
+                body: buildSitemapXml(sitemapArgs),
                 contentType: 'application/xml; charset=utf-8',
               }
             : { kind: SeoStaticFileKind.PassThrough }
@@ -194,7 +195,8 @@ function seoStaticFiles(outputDirectory: string): Plugin {
     writeBundle() {
       const outDir = join(process.cwd(), outputDirectory)
       const siteUrl = siteUrlFromEnv(process.env)
-      writeFileSync(join(outDir, 'sitemap.xml'), buildSitemapXml(siteUrl))
+      const sitemapArgs: Parameters<typeof buildSitemapXml>[0] = { siteUrl }
+      writeFileSync(join(outDir, 'sitemap.xml'), buildSitemapXml(sitemapArgs))
       writeFileSync(join(outDir, 'robots.txt'), buildRobotsTxt(siteUrl))
     },
   }

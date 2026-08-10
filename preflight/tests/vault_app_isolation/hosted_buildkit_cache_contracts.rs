@@ -200,7 +200,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         isolation.contains("await companionWasmReady")
-            && isolation.contains("createManifest('1.0.0')"),
+            && isolation.contains("createManifest(productionManifestArgs)"),
         "verify:isolation must await companion WASM before createManifest"
     );
     assert!(

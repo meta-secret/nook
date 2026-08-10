@@ -4,7 +4,8 @@
 //! This module owns whether those signals are sufficient to treat a workflow
 //! as complete before durably creating or replacing credentials.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Default wall-clock budget while waiting for success evidence after submit.
@@ -15,8 +16,9 @@ pub const DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS: u32 = 8_000;
 /// Independent boolean sensors are intentional: content scripts report each
 /// signal separately and Rust owns the composition policy.
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationOutcomeObservation {
     /// Document URL left a login/signup/password-change-like path.
     pub navigated_away_from_auth_path: bool,
@@ -34,10 +36,36 @@ pub struct AuthenticationOutcomeObservation {
     pub elapsed_ms: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct AuthenticationOutcomeClassification {
+    pub observation: AuthenticationOutcomeObservation,
+    pub timeout_ms: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi)]
+pub struct AuthenticationOutcomeDecision {
+    pub verdict: AuthenticationOutcomeVerdict,
+    pub allows_credential_commit: bool,
+}
+
+impl AuthenticationOutcomeDecision {
+    #[must_use]
+    pub const fn classify(observation: AuthenticationOutcomeObservation, timeout_ms: u32) -> Self {
+        let verdict = classify_authentication_outcome(observation, timeout_ms);
+        Self {
+            verdict,
+            allows_credential_commit: verdict.allows_credential_commit(),
+        }
+    }
+}
+
 /// Classification of collected outcome evidence.
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthenticationOutcomeVerdict {
     Sufficient,
     Insufficient,
@@ -60,6 +88,32 @@ impl AuthenticationOutcomeVerdict {
     #[must_use]
     pub const fn allows_credential_commit(self) -> bool {
         matches!(self, Self::Sufficient)
+    }
+}
+
+impl Serialize for AuthenticationOutcomeVerdict {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u32(*self as u32)
+    }
+}
+
+impl<'de> Deserialize<'de> for AuthenticationOutcomeVerdict {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u32::deserialize(deserializer)? {
+            0 => Ok(Self::Sufficient),
+            1 => Ok(Self::Insufficient),
+            2 => Ok(Self::Conflicting),
+            3 => Ok(Self::Timeout),
+            value => Err(serde::de::Error::custom(format!(
+                "invalid authentication outcome verdict: {value}"
+            ))),
+        }
     }
 }
 
@@ -110,6 +164,34 @@ mod tests {
     }
 
     #[test]
+    fn wasm_decision_roundtrips_generated_numeric_verdict() -> anyhow::Result<()> {
+        let decision = AuthenticationOutcomeDecision {
+            verdict: AuthenticationOutcomeVerdict::Conflicting,
+            allows_credential_commit: false,
+        };
+        let serialized = serde_json::to_string(&decision)?;
+        let roundtrip: AuthenticationOutcomeDecision = serde_json::from_str(&serialized)?;
+        assert_eq!(roundtrip, decision);
+        for (expected, value) in [
+            AuthenticationOutcomeVerdict::Sufficient,
+            AuthenticationOutcomeVerdict::Insufficient,
+            AuthenticationOutcomeVerdict::Conflicting,
+            AuthenticationOutcomeVerdict::Timeout,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let serialized = serde_json::to_string(&value)?;
+            assert_eq!(serialized, expected.to_string());
+            assert_eq!(
+                serde_json::from_str::<AuthenticationOutcomeVerdict>(&serialized)?,
+                value
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn navigation_alone_is_never_sufficient() {
         let observation = AuthenticationOutcomeObservation {
             navigated_away_from_auth_path: true,
@@ -137,6 +219,16 @@ mod tests {
             AuthenticationOutcomeVerdict::Sufficient
         );
         assert!(AuthenticationOutcomeVerdict::Sufficient.allows_credential_commit());
+        assert_eq!(
+            AuthenticationOutcomeDecision::classify(
+                observation,
+                DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS
+            ),
+            AuthenticationOutcomeDecision {
+                verdict: AuthenticationOutcomeVerdict::Sufficient,
+                allows_credential_commit: true,
+            }
+        );
     }
 
     #[test]

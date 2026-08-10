@@ -1,13 +1,13 @@
 import {
-  ExternalPropertyPresence,
-  asExternalValue,
-  externalProperty,
-  type ExternalObject,
-  type ExternalValue,
+  UntrustedYamlPropertyPresence,
+  asUntrustedYamlNode,
+  untrustedYamlProperty,
+  type UntrustedYamlMap,
+  type UntrustedYamlNode,
   isRecord,
 } from './guards.ts';
 
-import type { ExternalPropertyArgs } from './guards.ts';
+import type { UntrustedYamlPropertyArgs } from './guards.ts';
 export type AgentStatsValidation = {
   readonly ok: boolean;
   readonly errors: string[];
@@ -23,9 +23,9 @@ export function validateAgentStatsYaml(
 ): AgentStatsValidation {
   const { content, expectedPrNumber } = args;
 
-  let parsed: ExternalValue;
+  let parsed: UntrustedYamlNode;
   try {
-    parsed = asExternalValue(Bun.YAML.parse(content) as ExternalValue);
+    parsed = asUntrustedYamlNode(Bun.YAML.parse(content) as UntrustedYamlNode);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { ok: false, errors: [`YAML parse failed: ${message}`] };
@@ -36,46 +36,46 @@ export function validateAgentStatsYaml(
   }
 
   const errors: string[] = [];
-  const schemaVersionArgs: ExternalPropertyArgs = {
+  const schemaVersionArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'schema_version',
   };
-  const schemaVersion = externalProperty(schemaVersionArgs);
+  const schemaVersion = untrustedYamlProperty(schemaVersionArgs);
   if (
-    schemaVersion.presence === ExternalPropertyPresence.Absent ||
+    schemaVersion.presence === UntrustedYamlPropertyPresence.Absent ||
     schemaVersion.value !== 3
   ) {
     errors.push('schema_version must be 3');
   }
 
-  const sourcePrPropertyArgs: ExternalPropertyArgs = {
+  const sourcePrPropertyArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'source_pr',
   };
-  const sourcePrProperty = externalProperty(sourcePrPropertyArgs);
+  const sourcePrProperty = untrustedYamlProperty(sourcePrPropertyArgs);
   const sourcePr =
-    sourcePrProperty.presence === ExternalPropertyPresence.Present &&
+    sourcePrProperty.presence === UntrustedYamlPropertyPresence.Present &&
     isRecord(sourcePrProperty.value)
       ? sourcePrProperty.value
       : emptyObject();
   if (
-    sourcePrProperty.presence === ExternalPropertyPresence.Absent ||
+    sourcePrProperty.presence === UntrustedYamlPropertyPresence.Absent ||
     !isRecord(sourcePrProperty.value)
   ) {
     errors.push('source_pr must be a mapping');
   } else {
-    const numberPropertyArgs: ExternalPropertyArgs = {
+    const numberPropertyArgs: UntrustedYamlPropertyArgs = {
       record: sourcePr,
       key: 'number',
     };
-    const numberProperty = externalProperty(numberPropertyArgs);
+    const numberProperty = untrustedYamlProperty(numberPropertyArgs);
     if (
-      numberProperty.presence === ExternalPropertyPresence.Absent ||
+      numberProperty.presence === UntrustedYamlPropertyPresence.Absent ||
       numberProperty.value !== expectedPrNumber
     ) {
       errors.push(
         `source_pr.number (${String(
-          numberProperty.presence === ExternalPropertyPresence.Present
+          numberProperty.presence === UntrustedYamlPropertyPresence.Present
             ? numberProperty.value
             : '',
         )}) must match filename PR ${expectedPrNumber}`,
@@ -90,13 +90,13 @@ export function validateAgentStatsYaml(
       'opened_at',
       'merged_at',
     ] as const) {
-      const propertyArgs5: ExternalPropertyArgs = {
+      const propertyArgs5: UntrustedYamlPropertyArgs = {
         record: sourcePr,
         key: key,
       };
-      const property = externalProperty(propertyArgs5);
+      const property = untrustedYamlProperty(propertyArgs5);
       if (
-        property.presence === ExternalPropertyPresence.Absent ||
+        property.presence === UntrustedYamlPropertyPresence.Absent ||
         typeof property.value !== 'string' ||
         property.value === ''
       ) {
@@ -104,13 +104,13 @@ export function validateAgentStatsYaml(
       }
     }
     for (const key of ['elapsed_seconds', 'open_to_merge_seconds'] as const) {
-      const propertyArgs4: ExternalPropertyArgs = {
+      const propertyArgs4: UntrustedYamlPropertyArgs = {
         record: sourcePr,
         key: key,
       };
-      const property = externalProperty(propertyArgs4);
+      const property = untrustedYamlProperty(propertyArgs4);
       if (
-        property.presence === ExternalPropertyPresence.Absent ||
+        property.presence === UntrustedYamlPropertyPresence.Absent ||
         !isNonNegativeInt(property.value)
       ) {
         errors.push(`source_pr.${key} must be a non-negative integer`);
@@ -118,18 +118,18 @@ export function validateAgentStatsYaml(
     }
   }
 
-  const summaryPropertyArgs: ExternalPropertyArgs = {
+  const summaryPropertyArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'summary',
   };
-  const summaryProperty = externalProperty(summaryPropertyArgs);
+  const summaryProperty = untrustedYamlProperty(summaryPropertyArgs);
   const summary =
-    summaryProperty.presence === ExternalPropertyPresence.Present &&
+    summaryProperty.presence === UntrustedYamlPropertyPresence.Present &&
     isRecord(summaryProperty.value)
       ? summaryProperty.value
       : emptyObject();
   if (
-    summaryProperty.presence === ExternalPropertyPresence.Absent ||
+    summaryProperty.presence === UntrustedYamlPropertyPresence.Absent ||
     !isRecord(summaryProperty.value)
   ) {
     errors.push('summary must be a mapping');
@@ -146,10 +146,13 @@ export function validateAgentStatsYaml(
       'agent_requested_rerun_count',
       'merge_attempt_count',
     ] as const) {
-      const propertyArgs3: ExternalPropertyArgs = { record: summary, key: key };
-      const property = externalProperty(propertyArgs3);
+      const propertyArgs3: UntrustedYamlPropertyArgs = {
+        record: summary,
+        key: key,
+      };
+      const property = untrustedYamlProperty(propertyArgs3);
       if (
-        property.presence === ExternalPropertyPresence.Absent ||
+        property.presence === UntrustedYamlPropertyPresence.Absent ||
         !isNonNegativeInt(property.value)
       ) {
         errors.push(`summary.${key} must be a non-negative integer`);
@@ -157,66 +160,66 @@ export function validateAgentStatsYaml(
     }
   }
 
-  const inventoryPropertyArgs: ExternalPropertyArgs = {
+  const inventoryPropertyArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'test_inventory',
   };
-  const inventoryProperty = externalProperty(inventoryPropertyArgs);
+  const inventoryProperty = untrustedYamlProperty(inventoryPropertyArgs);
   const inventory =
-    inventoryProperty.presence === ExternalPropertyPresence.Present &&
+    inventoryProperty.presence === UntrustedYamlPropertyPresence.Present &&
     isRecord(inventoryProperty.value)
       ? inventoryProperty.value
       : emptyObject();
   if (
-    inventoryProperty.presence === ExternalPropertyPresence.Absent ||
+    inventoryProperty.presence === UntrustedYamlPropertyPresence.Absent ||
     !isRecord(inventoryProperty.value)
   ) {
     errors.push('test_inventory must be a mapping');
   } else {
-    const measuredAtArgs: ExternalPropertyArgs = {
+    const measuredAtArgs: UntrustedYamlPropertyArgs = {
       record: inventory,
       key: 'measured_at',
     };
-    const measuredAt = externalProperty(measuredAtArgs);
+    const measuredAt = untrustedYamlProperty(measuredAtArgs);
     if (
-      measuredAt.presence === ExternalPropertyPresence.Absent ||
+      measuredAt.presence === UntrustedYamlPropertyPresence.Absent ||
       typeof measuredAt.value !== 'string'
     ) {
       errors.push('test_inventory.measured_at must be a string');
     }
-    const inventoryHeadShaArgs: ExternalPropertyArgs = {
+    const inventoryHeadShaArgs: UntrustedYamlPropertyArgs = {
       record: inventory,
       key: 'head_sha',
     };
-    const inventoryHeadSha = externalProperty(inventoryHeadShaArgs);
+    const inventoryHeadSha = untrustedYamlProperty(inventoryHeadShaArgs);
     if (
-      inventoryHeadSha.presence === ExternalPropertyPresence.Absent ||
+      inventoryHeadSha.presence === UntrustedYamlPropertyPresence.Absent ||
       typeof inventoryHeadSha.value !== 'string'
     ) {
       errors.push('test_inventory.head_sha must be a string');
     }
-    const sourceHeadShaArgs: ExternalPropertyArgs = {
+    const sourceHeadShaArgs: UntrustedYamlPropertyArgs = {
       record: sourcePr,
       key: 'head_sha',
     };
-    const sourceHeadSha = externalProperty(sourceHeadShaArgs);
+    const sourceHeadSha = untrustedYamlProperty(sourceHeadShaArgs);
     if (
-      sourcePrProperty.presence === ExternalPropertyPresence.Present &&
+      sourcePrProperty.presence === UntrustedYamlPropertyPresence.Present &&
       isRecord(sourcePrProperty.value) &&
-      sourceHeadSha.presence === ExternalPropertyPresence.Present &&
+      sourceHeadSha.presence === UntrustedYamlPropertyPresence.Present &&
       typeof sourceHeadSha.value === 'string' &&
-      inventoryHeadSha.presence === ExternalPropertyPresence.Present &&
+      inventoryHeadSha.presence === UntrustedYamlPropertyPresence.Present &&
       inventoryHeadSha.value !== sourceHeadSha.value
     ) {
       errors.push('test_inventory.head_sha must match source_pr.head_sha');
     }
-    const byTypePropertyArgs: ExternalPropertyArgs = {
+    const byTypePropertyArgs: UntrustedYamlPropertyArgs = {
       record: inventory,
       key: 'by_type',
     };
-    const byTypeProperty = externalProperty(byTypePropertyArgs);
+    const byTypeProperty = untrustedYamlProperty(byTypePropertyArgs);
     if (
-      byTypeProperty.presence === ExternalPropertyPresence.Absent ||
+      byTypeProperty.presence === UntrustedYamlPropertyPresence.Absent ||
       !isRecord(byTypeProperty.value)
     ) {
       errors.push('test_inventory.by_type must be a mapping');
@@ -224,13 +227,13 @@ export function validateAgentStatsYaml(
       const byType = byTypeProperty.value;
       let sum = 0;
       for (const key of ['rust', 'preflight', 'web_unit', 'e2e'] as const) {
-        const propertyArgs2: ExternalPropertyArgs = {
+        const propertyArgs2: UntrustedYamlPropertyArgs = {
           record: byType,
           key: key,
         };
-        const property = externalProperty(propertyArgs2);
+        const property = untrustedYamlProperty(propertyArgs2);
         if (
-          property.presence === ExternalPropertyPresence.Absent ||
+          property.presence === UntrustedYamlPropertyPresence.Absent ||
           !isNonNegativeInt(property.value)
         ) {
           errors.push(
@@ -240,13 +243,13 @@ export function validateAgentStatsYaml(
           sum += property.value;
         }
       }
-      const totalPropertyArgs: ExternalPropertyArgs = {
+      const totalPropertyArgs: UntrustedYamlPropertyArgs = {
         record: inventory,
         key: 'total',
       };
-      const totalProperty = externalProperty(totalPropertyArgs);
+      const totalProperty = untrustedYamlProperty(totalPropertyArgs);
       if (
-        totalProperty.presence === ExternalPropertyPresence.Present &&
+        totalProperty.presence === UntrustedYamlPropertyPresence.Present &&
         isNonNegativeInt(totalProperty.value) &&
         totalProperty.value !== sum
       ) {
@@ -261,68 +264,71 @@ export function validateAgentStatsYaml(
     'pr_retriggers',
     'merge_attempts',
   ] as const) {
-    const propertyArgs: ExternalPropertyArgs = { record: parsed, key: key };
-    const property = externalProperty(propertyArgs);
+    const propertyArgs: UntrustedYamlPropertyArgs = {
+      record: parsed,
+      key: key,
+    };
+    const property = untrustedYamlProperty(propertyArgs);
     if (
-      property.presence === ExternalPropertyPresence.Absent ||
+      property.presence === UntrustedYamlPropertyPresence.Absent ||
       !Array.isArray(property.value)
     ) {
       errors.push(`${key} must be a list`);
     }
   }
 
-  const comparisonArgs: ExternalPropertyArgs = {
+  const comparisonArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'comparison',
   };
-  const comparison = externalProperty(comparisonArgs);
+  const comparison = untrustedYamlProperty(comparisonArgs);
   if (
-    comparison.presence === ExternalPropertyPresence.Absent ||
+    comparison.presence === UntrustedYamlPropertyPresence.Absent ||
     !isRecord(comparison.value)
   ) {
     errors.push('comparison must be a mapping');
   }
-  const wasteAssessmentArgs: ExternalPropertyArgs = {
+  const wasteAssessmentArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'waste_assessment',
   };
-  const wasteAssessment = externalProperty(wasteAssessmentArgs);
+  const wasteAssessment = untrustedYamlProperty(wasteAssessmentArgs);
   if (
-    wasteAssessment.presence === ExternalPropertyPresence.Absent ||
+    wasteAssessment.presence === UntrustedYamlPropertyPresence.Absent ||
     !isRecord(wasteAssessment.value)
   ) {
     errors.push('waste_assessment must be a mapping');
   }
-  const cacheTelemetryArgs: ExternalPropertyArgs = {
+  const cacheTelemetryArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'cache_telemetry',
   };
-  const cacheTelemetry = externalProperty(cacheTelemetryArgs);
+  const cacheTelemetry = untrustedYamlProperty(cacheTelemetryArgs);
   if (
-    cacheTelemetry.presence === ExternalPropertyPresence.Absent ||
+    cacheTelemetry.presence === UntrustedYamlPropertyPresence.Absent ||
     !isRecord(cacheTelemetry.value)
   ) {
     errors.push('cache_telemetry must be a mapping');
   }
 
-  const localExecutionsArgs: ExternalPropertyArgs = {
+  const localExecutionsArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'local_executions',
   };
-  const localExecutions = externalProperty(localExecutionsArgs);
+  const localExecutions = untrustedYamlProperty(localExecutionsArgs);
   if (
-    summaryProperty.presence === ExternalPropertyPresence.Present &&
+    summaryProperty.presence === UntrustedYamlPropertyPresence.Present &&
     isRecord(summaryProperty.value) &&
-    localExecutions.presence === ExternalPropertyPresence.Present &&
+    localExecutions.presence === UntrustedYamlPropertyPresence.Present &&
     Array.isArray(localExecutions.value)
   ) {
-    const countArgs4: ExternalPropertyArgs = {
+    const countArgs4: UntrustedYamlPropertyArgs = {
       record: summary,
       key: 'local_execution_count',
     };
-    const count = externalProperty(countArgs4);
+    const count = untrustedYamlProperty(countArgs4);
     if (
-      count.presence === ExternalPropertyPresence.Present &&
+      count.presence === UntrustedYamlPropertyPresence.Present &&
       count.value !== localExecutions.value.length
     ) {
       errors.push(
@@ -330,24 +336,24 @@ export function validateAgentStatsYaml(
       );
     }
   }
-  const githubActionsRunsArgs: ExternalPropertyArgs = {
+  const githubActionsRunsArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'github_actions_runs',
   };
-  const githubActionsRuns = externalProperty(githubActionsRunsArgs);
+  const githubActionsRuns = untrustedYamlProperty(githubActionsRunsArgs);
   if (
-    summaryProperty.presence === ExternalPropertyPresence.Present &&
+    summaryProperty.presence === UntrustedYamlPropertyPresence.Present &&
     isRecord(summaryProperty.value) &&
-    githubActionsRuns.presence === ExternalPropertyPresence.Present &&
+    githubActionsRuns.presence === UntrustedYamlPropertyPresence.Present &&
     Array.isArray(githubActionsRuns.value)
   ) {
-    const countArgs3: ExternalPropertyArgs = {
+    const countArgs3: UntrustedYamlPropertyArgs = {
       record: summary,
       key: 'github_actions_run_count',
     };
-    const count = externalProperty(countArgs3);
+    const count = untrustedYamlProperty(countArgs3);
     if (
-      count.presence === ExternalPropertyPresence.Present &&
+      count.presence === UntrustedYamlPropertyPresence.Present &&
       count.value !== githubActionsRuns.value.length
     ) {
       errors.push(
@@ -355,24 +361,24 @@ export function validateAgentStatsYaml(
       );
     }
   }
-  const mergeAttemptsArgs: ExternalPropertyArgs = {
+  const mergeAttemptsArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'merge_attempts',
   };
-  const mergeAttempts = externalProperty(mergeAttemptsArgs);
+  const mergeAttempts = untrustedYamlProperty(mergeAttemptsArgs);
   if (
-    summaryProperty.presence === ExternalPropertyPresence.Present &&
+    summaryProperty.presence === UntrustedYamlPropertyPresence.Present &&
     isRecord(summaryProperty.value) &&
-    mergeAttempts.presence === ExternalPropertyPresence.Present &&
+    mergeAttempts.presence === UntrustedYamlPropertyPresence.Present &&
     Array.isArray(mergeAttempts.value)
   ) {
-    const countArgs2: ExternalPropertyArgs = {
+    const countArgs2: UntrustedYamlPropertyArgs = {
       record: summary,
       key: 'merge_attempt_count',
     };
-    const count = externalProperty(countArgs2);
+    const count = untrustedYamlProperty(countArgs2);
     if (
-      count.presence === ExternalPropertyPresence.Present &&
+      count.presence === UntrustedYamlPropertyPresence.Present &&
       count.value !== mergeAttempts.value.length
     ) {
       errors.push(
@@ -380,24 +386,24 @@ export function validateAgentStatsYaml(
       );
     }
   }
-  const prRetriggersArgs: ExternalPropertyArgs = {
+  const prRetriggersArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'pr_retriggers',
   };
-  const prRetriggers = externalProperty(prRetriggersArgs);
+  const prRetriggers = untrustedYamlProperty(prRetriggersArgs);
   if (
-    summaryProperty.presence === ExternalPropertyPresence.Present &&
+    summaryProperty.presence === UntrustedYamlPropertyPresence.Present &&
     isRecord(summaryProperty.value) &&
-    prRetriggers.presence === ExternalPropertyPresence.Present &&
+    prRetriggers.presence === UntrustedYamlPropertyPresence.Present &&
     Array.isArray(prRetriggers.value)
   ) {
-    const countArgs: ExternalPropertyArgs = {
+    const countArgs: UntrustedYamlPropertyArgs = {
       record: summary,
       key: 'pr_retrigger_count',
     };
-    const count = externalProperty(countArgs);
+    const count = untrustedYamlProperty(countArgs);
     if (
-      count.presence === ExternalPropertyPresence.Present &&
+      count.presence === UntrustedYamlPropertyPresence.Present &&
       count.value !== prRetriggers.value.length
     ) {
       errors.push('summary.pr_retrigger_count must match pr_retriggers length');
@@ -407,10 +413,10 @@ export function validateAgentStatsYaml(
   return { ok: errors.length === 0, errors };
 }
 
-function emptyObject(): ExternalObject {
+function emptyObject(): UntrustedYamlMap {
   return {};
 }
 
-function isNonNegativeInt(value: ExternalValue): boolean {
+function isNonNegativeInt(value: UntrustedYamlNode): boolean {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }

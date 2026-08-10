@@ -33,7 +33,7 @@
     },
   ] as const
 
-  function handleTabKeydown(event: KeyboardEvent, index: number) {
+  function handleTabKeydown({ event, index }: { readonly event: KeyboardEvent; readonly index: number }) {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     event.preventDefault()
     const offset = event.key === 'ArrowRight' ? 1 : -1
@@ -65,7 +65,7 @@
       tabindex={active === workflow.id ? 0 : -1}
       data-testid={`login-vault-workflow-${workflow.id}`}
       onclick={() => onSelect(workflow.id)}
-      onkeydown={(event) => handleTabKeydown(event, index)}
+      onkeydown={(event) => (() => { const handleTabKeydownArgs: Parameters<typeof handleTabKeydown>[0] = { event, index }; return handleTabKeydown(handleTabKeydownArgs); })()}
     >
       <workflow.icon class="size-4" />
       <span class="truncate">{vault.t(workflow.label)}</span>

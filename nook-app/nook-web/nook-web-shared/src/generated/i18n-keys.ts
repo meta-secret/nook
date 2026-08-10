@@ -1826,10 +1826,12 @@ export const I18N_KEYS = {
 } as const
 
 export type I18nKey = (typeof I18N_KEYS)[keyof typeof I18N_KEYS]
-export type I18nTranslator = (
-  key: I18nKey,
-  replacements?: Record<string, string>,
-) => string
+export type I18nTranslationRequest = {
+  key: I18nKey
+  replacements?: Record<string, string>
+}
+
+export type I18nTranslator = (request: I18nTranslationRequest) => string
 
 export type PasswordImportMessageKeys = {
   title: I18nKey

@@ -76,29 +76,63 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   let selected = $state<NodeRef>(defaultNode(graphById(GraphId.Tangle)))
 
   const graph = $derived(graphById(graphId))
-  const highlight = $derived(highlightFor(graph, selected))
-  const reads = $derived(graph.vaults.map((vault) => readFor(graph, vault)))
+  const highlight = $derived.by(() => {
+    const selectionContext: Parameters<typeof highlightFor>[0] = {
+      graph,
+      node: selected,
+    }
+    return highlightFor(selectionContext)
+  })
+  const reads = $derived(
+    graph.vaults.map((vault) => {
+      const nookNamedArgument236: Parameters<typeof readFor>[0] = {
+        source: graph,
+        vault,
+      }
+      return readFor(nookNamedArgument236)
+    }),
+  )
   const others = $derived(
-    graph.devices.filter((device) => !isHere(graph, device)),
+    graph.devices.filter((device) => {
+      const nookNamedArgument237: Parameters<typeof isHere>[0] = {
+        graph,
+        device,
+      }
+      return !isHere(nookNamedArgument237)
+    }),
   )
 
-  function reachFor(mine: boolean, usable: boolean): PathReach {
+  function reachFor({
+    mine,
+    usable,
+  }: {
+    mine: boolean
+    usable: boolean
+  }): PathReach {
     if (!usable) return PathReach.PasskeyElsewhere
     return mine ? PathReach.Now : PathReach.OtherDevice
   }
 
-  function rank(reach: PathReach): number {
-    if (reach === PathReach.Now) return 0
-    return reach === PathReach.OtherDevice ? 1 : 2
-  }
-
-  function strandFor(
-    source: KeyGraph,
-    vault: Vault,
-    device: Device,
-    passkey: Passkey,
-  ): Strand {
-    const mine = isHere(source, device)
+  function strandFor({
+    source,
+    vault,
+    device,
+    passkey,
+  }: {
+    source: KeyGraph
+    vault: Vault
+    device: Device
+    passkey: Passkey
+  }): Strand {
+    const nookNamedArgument238: Parameters<typeof isHere>[0] = {
+      graph: source,
+      device,
+    }
+    const mine = isHere(nookNamedArgument238)
+    const nookNamedArgument239: Parameters<typeof reachFor>[0] = {
+      mine,
+      usable: passkey.reach === Reach.Here,
+    }
     return {
       key: `${vault.id}-${device.id}-${passkey.id}`,
       passkeyId: passkey.id,
@@ -109,20 +143,52 @@ get a quiet footer: they exist, and that is all this browser can say about them.
       deviceShortId: device.shortId,
       deviceLabel: device.label,
       mine,
-      reach: reachFor(mine, passkey.reach === Reach.Here),
+      reach: reachFor(nookNamedArgument239),
     }
   }
 
-  function readFor(source: KeyGraph, vault: Vault): VaultRead {
-    const strands = devicesForVault(source, vault)
-      .flatMap((device) =>
-        passkeysForDevice(source, device).map((passkey) =>
-          strandFor(source, vault, device, passkey),
-        ),
-      )
-      .sort((left, right) => rank(left.reach) - rank(right.reach))
+  function readFor({
+    source,
+    vault,
+  }: {
+    source: KeyGraph
+    vault: Vault
+  }): VaultRead {
+    const nookNamedArgument240: Parameters<typeof devicesForVault>[0] = {
+      graph: source,
+      vault,
+    }
+    const discoveredStrands = devicesForVault(nookNamedArgument240).flatMap(
+      (device) => {
+        const nookNamedArgument241: Parameters<typeof passkeysForDevice>[0] = {
+          graph: source,
+          device,
+        }
+        return passkeysForDevice(nookNamedArgument241).map((passkey) => {
+          const nookNamedArgument242: Parameters<typeof strandFor>[0] = {
+            source,
+            vault,
+            device,
+            passkey,
+          }
+          return strandFor(nookNamedArgument242)
+        })
+      },
+    )
+    const reachOrder = [
+      PathReach.Now,
+      PathReach.OtherDevice,
+      PathReach.PasskeyElsewhere,
+    ]
+    const strands = reachOrder.flatMap((reach) =>
+      discoveredStrands.filter((strand) => strand.reach === reach),
+    )
     const reaching = new Set(strands.map((strand) => strand.passkeyId))
     const managers = new Set(strands.map((strand) => strand.store)).size
+    const nookNamedArgument243: Parameters<typeof gradeOf>[0] = {
+      passkeys: reaching.size,
+      managers,
+    }
     return {
       vault,
       strands,
@@ -130,11 +196,17 @@ get a quiet footer: they exist, and that is all this browser can say about them.
       managers,
       now: strands.filter((strand) => strand.reach === PathReach.Now).length,
       pips: source.passkeys.map((passkey) => reaching.has(passkey.id)),
-      grade: gradeOf(reaching.size, managers),
+      grade: gradeOf(nookNamedArgument243),
     }
   }
 
-  function gradeOf(passkeys: number, managers: number): Redundancy {
+  function gradeOf({
+    passkeys,
+    managers,
+  }: {
+    passkeys: number
+    managers: number
+  }): Redundancy {
     if (passkeys === 0) return Redundancy.Severed
     if (passkeys === 1) return Redundancy.Single
     return managers === 1 ? Redundancy.OneManager : Redundancy.Spread
@@ -178,7 +250,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     return 'bg-[#a8431c]'
   }
 
-  function braceY(count: number, index: number): number {
+  function braceY({ count, index }: { count: number; index: number }): number {
     return ((index + 0.5) / count) * 100
   }
 
@@ -196,11 +268,11 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     return 'Passkey not available on this browser'
   }
 
-  function pick(kind: NodeKind, id: string) {
+  function pick({ kind, id }: { kind: NodeKind; id: string }) {
     selected = { kind, id }
   }
 
-  function isSelected(kind: NodeKind, id: string): boolean {
+  function isSelected({ kind, id }: { kind: NodeKind; id: string }): boolean {
     return selected.kind === kind && selected.id === id
   }
 
@@ -229,7 +301,11 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   }
 
   function vaultCount(passkey: Passkey): string {
-    const count = vaultsForPasskey(graph, passkey.id).length
+    const nookNamedArgument244: Parameters<typeof vaultsForPasskey>[0] = {
+      graph,
+      passkeyId: passkey.id,
+    }
+    const count = vaultsForPasskey(nookNamedArgument244).length
     return count === 1 ? '1 vault' : `${count} vaults`
   }
 
@@ -251,9 +327,13 @@ get a quiet footer: they exist, and that is all this browser can say about them.
 
   <section class="mx-auto max-w-3xl px-5 pt-28 pb-20 sm:px-8 sm:pt-24">
     {#each hereDevices(graph) as device (device.id)}
+      {@const deviceSelection: Parameters<typeof isSelected>[0] = {
+        kind: NodeKind.Device,
+        id: device.id,
+      }}
       <article
         class={`border-2 bg-[#fffdf7] px-4 py-4 transition motion-reduce:transition-none sm:px-5 ${
-          isSelected(NodeKind.Device, device.id)
+          isSelected(deviceSelection)
             ? 'border-[#1a1815]'
             : 'border-[#1a1815]/70'
         }`}
@@ -263,10 +343,10 @@ get a quiet footer: they exist, and that is all this browser can say about them.
             <p class="{CAPS} text-[#1a1815]/50">My device</p>
             <button
               type="button"
-              aria-pressed={isSelected(NodeKind.Device, device.id)}
+              aria-pressed={isSelected(deviceSelection)}
               aria-label={`My device key ${device.shortId}`}
               class="mt-1 flex items-center gap-2 font-mono text-[26px] leading-none tracking-[0.08em]"
-              onclick={() => pick(NodeKind.Device, device.id)}
+              onclick={() => pick(deviceSelection)}
             >
               <Laptop class="size-5 shrink-0" aria-hidden="true" />
               {device.shortId}
@@ -313,14 +393,22 @@ get a quiet footer: they exist, and that is all this browser can say about them.
 
     <ul class="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
       {#each graph.passkeys as passkey (passkey.id)}
-        {@const chosen = isSelected(NodeKind.Passkey, passkey.id)}
+        {@const passkeySelection: Parameters<typeof isSelected>[0] = {
+          kind: NodeKind.Passkey,
+          id: passkey.id,
+        }}
+        {@const vaultLookup: Parameters<typeof vaultsForPasskey>[0] = {
+          graph,
+          passkeyId: passkey.id,
+        }}
+        {@const chosen = isSelected(passkeySelection)}
         <li class={dimRow(highlight.passkeyIds.includes(passkey.id))}>
           <button
             type="button"
             aria-pressed={chosen}
             aria-label={`Passkey ${passkey.shortId} in ${storeLabel(passkey.store)}`}
             class={`flex h-full w-full items-center gap-2.5 rounded-r-md rounded-l-full border bg-[#fffdf7] py-2 pr-3 pl-2 text-left transition motion-reduce:transition-none ${chosenEdge(chosen)}`}
-            onclick={() => pick(NodeKind.Passkey, passkey.id)}
+            onclick={() => pick(passkeySelection)}
           >
             <span
               class="grid size-8 shrink-0 place-items-center rounded-full border-2"
@@ -362,7 +450,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
                 <span class="sr-only">{vaultCount(passkey)}</span>
                 <VaultIcon class="size-2.5" aria-hidden="true" />
                 <span class="{CAPS} text-[9px]" aria-hidden="true">
-                  {vaultsForPasskey(graph, passkey.id).length}
+                  {vaultsForPasskey(vaultLookup).length}
                 </span>
               </span>
             </span>
@@ -380,8 +468,12 @@ get a quiet footer: they exist, and that is all this browser can say about them.
 
     <ul class="mt-3 space-y-3">
       {#each reads as read (read.vault.id)}
+        {@const vaultSelection: Parameters<typeof isSelected>[0] = {
+          kind: NodeKind.Vault,
+          id: read.vault.id,
+        }}
         {@const lit = highlight.vaultIds.includes(read.vault.id)}
-        {@const chosen = isSelected(NodeKind.Vault, read.vault.id)}
+        {@const chosen = isSelected(vaultSelection)}
         <li
           class={`border border-l-2 transition motion-reduce:transition-none ${gradeEdge(read.grade)} ${chosen ? 'border-y-[#1a1815] border-r-[#1a1815]' : 'border-y-[#1a1815]/20 border-r-[#1a1815]/20'} ${dimRow(lit)} ${
             read.grade === Redundancy.Severed
@@ -395,7 +487,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
               aria-pressed={chosen}
               aria-label={vaultName(read)}
               class="flex shrink-0 flex-col justify-center gap-1.5 border-b border-[#1a1815]/15 bg-[#fffdf7] px-4 py-3 text-left sm:w-56 sm:border-r sm:border-b-0"
-              onclick={() => pick(NodeKind.Vault, read.vault.id)}
+              onclick={() => pick(vaultSelection)}
             >
               <span class="flex items-center gap-2">
                 <VaultIcon
@@ -440,8 +532,12 @@ get a quiet footer: they exist, and that is all this browser can say about them.
                 focusable="false"
               >
                 {#each read.strands as strand, index (strand.key)}
+                  {@const bracePosition: Parameters<typeof braceY>[0] = {
+                    count: read.strands.length,
+                    index,
+                  }}
                   <path
-                    d={`M24 ${braceY(read.strands.length, index)} H17 C9 ${braceY(read.strands.length, index)} 9 50 0 50`}
+                    d={`M24 ${braceY(bracePosition)} H17 C9 ${braceY(bracePosition)} 9 50 0 50`}
                     fill="none"
                     vector-effect="non-scaling-stroke"
                     stroke-width={strand.reach === PathReach.Now ? 1.5 : 1}
@@ -471,6 +567,18 @@ get a quiet footer: they exist, and that is all this browser can say about them.
                 style={`grid-template-rows: repeat(${read.strands.length}, minmax(0, 1fr))`}
               >
                 {#each read.strands as strand (strand.key)}
+                  {@const strandDeviceSelection: Parameters<
+                    typeof isSelected
+                  >[0] = {
+                    kind: NodeKind.Device,
+                    id: strand.deviceId,
+                  }}
+                  {@const strandPasskeySelection: Parameters<
+                    typeof isSelected
+                  >[0] = {
+                    kind: NodeKind.Passkey,
+                    id: strand.passkeyId,
+                  }}
                   {@const strandLit = highlight.passkeyIds.includes(
                     strand.passkeyId,
                   )}
@@ -484,19 +592,16 @@ get a quiet footer: they exist, and that is all this browser can say about them.
                     ></span>
                     <button
                       type="button"
-                      aria-pressed={isSelected(
-                        NodeKind.Device,
-                        strand.deviceId,
-                      )}
+                      aria-pressed={isSelected(strandDeviceSelection)}
                       aria-label={strand.mine
                         ? 'Through my device key'
                         : `Through device key ${strand.deviceShortId}, ${strand.deviceLabel}`}
                       class={`flex w-[6.5rem] shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[10px] tracking-[0.12em] uppercase transition motion-reduce:transition-none ${
                         strand.mine
                           ? 'bg-[#1a1815] text-[#f6f3ec]'
-                          : `border text-[#1a1815]/55 ${chosenEdge(isSelected(NodeKind.Device, strand.deviceId))}`
+                          : `border text-[#1a1815]/55 ${chosenEdge(isSelected(strandDeviceSelection))}`
                       }`}
-                      onclick={() => pick(NodeKind.Device, strand.deviceId)}
+                      onclick={() => pick(strandDeviceSelection)}
                     >
                       <Laptop class="size-3 shrink-0" aria-hidden="true" />
                       {strand.mine ? 'my device' : strand.deviceShortId}
@@ -512,17 +617,14 @@ get a quiet footer: they exist, and that is all this browser can say about them.
                     ></span>
                     <button
                       type="button"
-                      aria-pressed={isSelected(
-                        NodeKind.Passkey,
-                        strand.passkeyId,
-                      )}
+                      aria-pressed={isSelected(strandPasskeySelection)}
                       aria-label={`Passkey ${strand.passkeyShortId} in ${strand.storeName}`}
                       class={`shrink-0 border-b font-mono text-[13px] tracking-[0.06em] transition motion-reduce:transition-none ${
-                        isSelected(NodeKind.Passkey, strand.passkeyId)
+                        isSelected(strandPasskeySelection)
                           ? 'border-b-[#1a1815]'
                           : 'border-b-transparent'
                       }`}
-                      onclick={() => pick(NodeKind.Passkey, strand.passkeyId)}
+                      onclick={() => pick(strandPasskeySelection)}
                     >
                       {strand.passkeyShortId}
                     </button>
@@ -560,16 +662,20 @@ get a quiet footer: they exist, and that is all this browser can say about them.
       <div class="mt-10 flex flex-wrap items-baseline gap-x-3 gap-y-2">
         <span class="{CAPS} text-[#1a1815]/35">Other devices</span>
         {#each others as device (device.id)}
+          {@const otherDeviceSelection: Parameters<typeof isSelected>[0] = {
+            kind: NodeKind.Device,
+            id: device.id,
+          }}
           <button
             type="button"
-            aria-pressed={isSelected(NodeKind.Device, device.id)}
+            aria-pressed={isSelected(otherDeviceSelection)}
             aria-label={`Device key ${device.shortId}, ${device.label}`}
             class={`flex items-center gap-1.5 border-b transition motion-reduce:transition-none ${
-              isSelected(NodeKind.Device, device.id)
+              isSelected(otherDeviceSelection)
                 ? 'border-b-[#1a1815]/50'
                 : 'border-b-transparent'
             }`}
-            onclick={() => pick(NodeKind.Device, device.id)}
+            onclick={() => pick(otherDeviceSelection)}
           >
             <span class="font-mono text-[12px] text-[#1a1815]/55">
               {device.shortId}

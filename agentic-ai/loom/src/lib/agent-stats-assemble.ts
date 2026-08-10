@@ -1,15 +1,15 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
-  ExternalPropertyPresence,
-  asExternalValue,
-  externalProperty,
+  UntrustedYamlPropertyPresence,
+  asUntrustedYamlNode,
+  untrustedYamlProperty,
   isRecord,
-  type ExternalObject,
-  type ExternalObjectBuilder,
-  type ExternalValue,
+  type UntrustedYamlMap,
+  type UntrustedYamlMapBuilder,
+  type UntrustedYamlNode,
 } from './guards.ts';
-import { sealExternalObject } from './guards.ts';
+import { sealUntrustedYamlMap } from './guards.ts';
 import { runCommand } from './run.ts';
 import {
   LoomFailureCode,
@@ -17,17 +17,17 @@ import {
   loomFailureDetail,
 } from '../loom-failure.ts';
 
-import type { ExternalPropertyArgs } from './guards.ts';
+import type { UntrustedYamlPropertyArgs } from './guards.ts';
 import type { RunCommandArgs } from './run.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 export type ScratchEventLog = {
   readonly started_at: string;
   readonly change_surface: string;
-  readonly local_executions: ExternalObject[];
-  readonly pr_retriggers: ExternalObject[];
-  readonly merge_attempts: ExternalObject[];
-  readonly comparison: ExternalObject;
-  readonly waste_assessment: ExternalObject;
+  readonly local_executions: UntrustedYamlMap[];
+  readonly pr_retriggers: UntrustedYamlMap[];
+  readonly merge_attempts: UntrustedYamlMap[];
+  readonly comparison: UntrustedYamlMap;
+  readonly waste_assessment: UntrustedYamlMap;
   readonly cache_telemetry: OptionalRecord;
   readonly test_inventory: OptionalRecord;
 };
@@ -40,7 +40,7 @@ export enum OptionalRecordKind {
 type OptionalRecord =
   | {
       readonly kind: OptionalRecordKind.Present;
-      readonly value: ExternalObject;
+      readonly value: UntrustedYamlMap;
     }
   | { readonly kind: OptionalRecordKind.Missing };
 
@@ -53,14 +53,14 @@ export type AssembleOptions = {
 
 export type AssembledStats = {
   readonly yaml: string;
-  readonly record: ExternalObject;
+  readonly record: UntrustedYamlMap;
 };
 
 export function loadScratchEventLog(scratchPath: string): ScratchEventLog {
-  let parsed: ExternalValue;
+  let parsed: UntrustedYamlNode;
   try {
-    parsed = asExternalValue(
-      JSON.parse(readFileSync(scratchPath, 'utf8')) as ExternalValue,
+    parsed = asUntrustedYamlNode(
+      JSON.parse(readFileSync(scratchPath, 'utf8')) as UntrustedYamlNode,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -112,23 +112,27 @@ export function loadScratchEventLog(scratchPath: string): ScratchEventLog {
     key: 'comparison',
     failure: 'scratch.comparison must be an object',
   };
-  const comparison = requireExternalObject(comparisonArgs);
+  const comparison = requireUntrustedYamlMap(comparisonArgs);
   const wasteAssessmentArgs = {
     record: parsed,
     key: 'waste_assessment',
     failure: 'scratch.waste_assessment must be an object',
   };
-  const wasteAssessment = requireExternalObject(wasteAssessmentArgs);
-  const cacheTelemetryPropertyArgs: ExternalPropertyArgs = {
+  const wasteAssessment = requireUntrustedYamlMap(wasteAssessmentArgs);
+  const cacheTelemetryPropertyArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'cache_telemetry',
   };
-  const cacheTelemetryProperty = externalProperty(cacheTelemetryPropertyArgs);
-  const testInventoryPropertyArgs: ExternalPropertyArgs = {
+  const cacheTelemetryProperty = untrustedYamlProperty(
+    cacheTelemetryPropertyArgs,
+  );
+  const testInventoryPropertyArgs: UntrustedYamlPropertyArgs = {
     record: parsed,
     key: 'test_inventory',
   };
-  const testInventoryProperty = externalProperty(testInventoryPropertyArgs);
+  const testInventoryProperty = untrustedYamlProperty(
+    testInventoryPropertyArgs,
+  );
 
   return {
     started_at: startedAt,
@@ -139,7 +143,8 @@ export function loadScratchEventLog(scratchPath: string): ScratchEventLog {
     comparison,
     waste_assessment: wasteAssessment,
     cache_telemetry:
-      cacheTelemetryProperty.presence === ExternalPropertyPresence.Present &&
+      cacheTelemetryProperty.presence ===
+        UntrustedYamlPropertyPresence.Present &&
       isRecord(cacheTelemetryProperty.value)
         ? {
             kind: OptionalRecordKind.Present,
@@ -147,7 +152,8 @@ export function loadScratchEventLog(scratchPath: string): ScratchEventLog {
           }
         : { kind: OptionalRecordKind.Missing },
     test_inventory:
-      testInventoryProperty.presence === ExternalPropertyPresence.Present &&
+      testInventoryProperty.presence ===
+        UntrustedYamlPropertyPresence.Present &&
       isRecord(testInventoryProperty.value)
         ? {
             kind: OptionalRecordKind.Present,
@@ -182,9 +188,11 @@ export async function assembleAgentStats(
     loomFailureDetail(loomFailureDetailArgs12);
   }
 
-  let pr: ExternalObject;
+  let pr: UntrustedYamlMap;
   try {
-    const parsed = asExternalValue(JSON.parse(prJson.stdout) as ExternalValue);
+    const parsed = asUntrustedYamlNode(
+      JSON.parse(prJson.stdout) as UntrustedYamlNode,
+    );
     if (!isRecord(parsed)) {
       const loomFailureDetailArgs11: LoomFailureDetailArgs = {
         code: LoomFailureCode.PrMetadataInvalid,
@@ -202,10 +210,13 @@ export async function assembleAgentStats(
     loomFailureDetail(loomFailureDetailArgs10);
   }
 
-  const statePropertyArgs: ExternalPropertyArgs = { record: pr, key: 'state' };
-  const stateProperty = externalProperty(statePropertyArgs);
+  const statePropertyArgs: UntrustedYamlPropertyArgs = {
+    record: pr,
+    key: 'state',
+  };
+  const stateProperty = untrustedYamlProperty(statePropertyArgs);
   if (
-    stateProperty.presence === ExternalPropertyPresence.Absent ||
+    stateProperty.presence === UntrustedYamlPropertyPresence.Absent ||
     stateProperty.value !== 'MERGED'
   ) {
     const loomFailureDetailArgs9: LoomFailureDetailArgs = {
@@ -221,23 +232,23 @@ export async function assembleAgentStats(
     code: LoomFailureCode.PrMetadataInvalid,
   };
   const mergedAt = requireExternalString(mergedAtArgs);
-  const mergeCommitPropertyArgs: ExternalPropertyArgs = {
+  const mergeCommitPropertyArgs: UntrustedYamlPropertyArgs = {
     record: pr,
     key: 'mergeCommit',
   };
-  const mergeCommitProperty = externalProperty(mergeCommitPropertyArgs);
+  const mergeCommitProperty = untrustedYamlProperty(mergeCommitPropertyArgs);
   const mergeCommit =
-    mergeCommitProperty.presence === ExternalPropertyPresence.Present &&
+    mergeCommitProperty.presence === UntrustedYamlPropertyPresence.Present &&
     isRecord(mergeCommitProperty.value)
       ? mergeCommitProperty.value
       : {};
-  const oidPropertyArgs: ExternalPropertyArgs = {
+  const oidPropertyArgs: UntrustedYamlPropertyArgs = {
     record: mergeCommit,
     key: 'oid',
   };
-  const oidProperty = externalProperty(oidPropertyArgs);
+  const oidProperty = untrustedYamlProperty(oidPropertyArgs);
   const headSha =
-    oidProperty.presence === ExternalPropertyPresence.Present &&
+    oidProperty.presence === UntrustedYamlPropertyPresence.Present &&
     typeof oidProperty.value === 'string'
       ? oidProperty.value
       : '';
@@ -260,7 +271,7 @@ export async function assembleAgentStats(
   const localSeconds = sumDurationSeconds(localExecutions);
   const actionsSeconds = sumDurationSeconds(runs);
 
-  let inventory: ExternalObject;
+  let inventory: UntrustedYamlMap;
   if (scratch.test_inventory.kind === OptionalRecordKind.Present) {
     inventory = scratch.test_inventory.value;
   } else if (options.includeInventory) {
@@ -292,13 +303,13 @@ export async function assembleAgentStats(
           jobs: [],
         };
 
-  const createdAtPropertyArgs: ExternalPropertyArgs = {
+  const createdAtPropertyArgs: UntrustedYamlPropertyArgs = {
     record: pr,
     key: 'createdAt',
   };
-  const createdAtProperty = externalProperty(createdAtPropertyArgs);
+  const createdAtProperty = untrustedYamlProperty(createdAtPropertyArgs);
   const openedAt =
-    createdAtProperty.presence === ExternalPropertyPresence.Present &&
+    createdAtProperty.presence === UntrustedYamlPropertyPresence.Present &&
     typeof createdAtProperty.value === 'string'
       ? createdAtProperty.value
       : scratch.started_at;
@@ -333,7 +344,7 @@ export async function assembleAgentStats(
     items: localExecutions,
     category: 'check',
   };
-  const sealExternalObjectArgs2 = {
+  const sealUntrustedYamlMapArgs2 = {
     local_execution_count: localExecutions.length,
     local_check_count: countByCategory(countByCategoryArgs3),
     local_test_count: countByCategory(countByCategoryArgs2),
@@ -343,23 +354,23 @@ export async function assembleAgentStats(
     github_actions_seconds: actionsSeconds,
     pr_retrigger_count: scratch.pr_retriggers.length,
     agent_requested_rerun_count: scratch.pr_retriggers.filter((item) => {
-      const kindArgs: ExternalPropertyArgs = { record: item, key: 'kind' };
-      const kind = externalProperty(kindArgs);
-      const triggerArgs: ExternalPropertyArgs = {
+      const kindArgs: UntrustedYamlPropertyArgs = { record: item, key: 'kind' };
+      const kind = untrustedYamlProperty(kindArgs);
+      const triggerArgs: UntrustedYamlPropertyArgs = {
         record: item,
         key: 'trigger',
       };
-      const trigger = externalProperty(triggerArgs);
+      const trigger = untrustedYamlProperty(triggerArgs);
       return (
-        (kind.presence === ExternalPropertyPresence.Present &&
+        (kind.presence === UntrustedYamlPropertyPresence.Present &&
           kind.value === 'agent_requested') ||
-        (trigger.presence === ExternalPropertyPresence.Present &&
+        (trigger.presence === UntrustedYamlPropertyPresence.Present &&
           trigger.value === 'manual_rerun')
       );
     }).length,
     merge_attempt_count: scratch.merge_attempts.length,
   };
-  const sealExternalObjectArgs3 = {
+  const sealUntrustedYamlMapArgs3 = {
     number: options.prNumber,
     url,
     title,
@@ -374,10 +385,10 @@ export async function assembleAgentStats(
       Math.round((mergedMs - openedMs) / 1000),
     ),
   };
-  const recordBuilder: ExternalObjectBuilder = {
+  const recordBuilder: UntrustedYamlMapBuilder = {
     schema_version: 3,
-    source_pr: sealExternalObject(sealExternalObjectArgs3),
-    summary: sealExternalObject(sealExternalObjectArgs2),
+    source_pr: sealUntrustedYamlMap(sealUntrustedYamlMapArgs3),
+    summary: sealUntrustedYamlMap(sealUntrustedYamlMapArgs2),
     test_inventory: inventory,
     local_executions: localExecutions,
     github_actions_runs: runs,
@@ -387,7 +398,7 @@ export async function assembleAgentStats(
     comparison: scratch.comparison,
     waste_assessment: scratch.waste_assessment,
   };
-  const record = sealExternalObject(recordBuilder);
+  const record = sealUntrustedYamlMap(recordBuilder);
 
   return {
     yaml: Bun.YAML.stringify(record),
@@ -403,7 +414,7 @@ type CollectGithubActionsRunsArgs = {
 
 function collectGithubActionsRuns(
   args: CollectGithubActionsRunsArgs,
-): ExternalObject[] {
+): UntrustedYamlMap[] {
   const { repoRoot, prNumber, headSha } = args;
 
   const listedArgs4: RunCommandArgs = {
@@ -427,9 +438,9 @@ function collectGithubActionsRuns(
     loomFailureDetail(loomFailureDetailArgs6);
   }
 
-  let runs: ExternalValue;
+  let runs: UntrustedYamlNode;
   try {
-    runs = asExternalValue(JSON.parse(listed.stdout) as ExternalValue);
+    runs = asUntrustedYamlNode(JSON.parse(listed.stdout) as UntrustedYamlNode);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const loomFailureDetailArgs5: LoomFailureDetailArgs = {
@@ -446,31 +457,31 @@ function collectGithubActionsRuns(
     loomFailureDetail(loomFailureDetailArgs4);
   }
 
-  const out: ExternalObject[] = [];
+  const out: UntrustedYamlMap[] = [];
   for (const run of runs) {
     if (!isRecord(run)) {
       continue;
     }
-    const headShaPropertyArgs: ExternalPropertyArgs = {
+    const headShaPropertyArgs: UntrustedYamlPropertyArgs = {
       record: run,
       key: 'headSha',
     };
-    const headShaProperty = externalProperty(headShaPropertyArgs);
+    const headShaProperty = untrustedYamlProperty(headShaPropertyArgs);
     if (
-      headShaProperty.presence === ExternalPropertyPresence.Absent ||
+      headShaProperty.presence === UntrustedYamlPropertyPresence.Absent ||
       headShaProperty.value !== headSha
     ) {
       continue;
     }
     const createdAtArgs = { record: run, key: 'createdAt' };
     const createdAt = optionalExternalString(createdAtArgs);
-    const updatedAtPropertyArgs: ExternalPropertyArgs = {
+    const updatedAtPropertyArgs: UntrustedYamlPropertyArgs = {
       record: run,
       key: 'updatedAt',
     };
-    const updatedAtProperty = externalProperty(updatedAtPropertyArgs);
+    const updatedAtProperty = untrustedYamlProperty(updatedAtPropertyArgs);
     const updatedAt =
-      updatedAtProperty.presence === ExternalPropertyPresence.Present &&
+      updatedAtProperty.presence === UntrustedYamlPropertyPresence.Present &&
       typeof updatedAtProperty.value === 'string'
         ? updatedAtProperty.value
         : createdAt;
@@ -480,47 +491,47 @@ function collectGithubActionsRuns(
       Number.isNaN(startedMs) || Number.isNaN(finishedMs)
         ? 0
         : Math.max(0, Math.round((finishedMs - startedMs) / 1000));
-    const attemptPropertyArgs: ExternalPropertyArgs = {
+    const attemptPropertyArgs: UntrustedYamlPropertyArgs = {
       record: run,
       key: 'attempt',
     };
-    const attemptProperty = externalProperty(attemptPropertyArgs);
-    const conclusionPropertyArgs: ExternalPropertyArgs = {
+    const attemptProperty = untrustedYamlProperty(attemptPropertyArgs);
+    const conclusionPropertyArgs: UntrustedYamlPropertyArgs = {
       record: run,
       key: 'conclusion',
     };
-    const conclusionProperty = externalProperty(conclusionPropertyArgs);
-    const statusPropertyArgs: ExternalPropertyArgs = {
+    const conclusionProperty = untrustedYamlProperty(conclusionPropertyArgs);
+    const statusPropertyArgs: UntrustedYamlPropertyArgs = {
       record: run,
       key: 'status',
     };
-    const statusProperty = externalProperty(statusPropertyArgs);
-    const optionalExternalValueArgs = { record: run, key: 'event' };
-    const optionalExternalValueArgs2 = { record: run, key: 'databaseId' };
-    const optionalExternalValueArgs3 = { record: run, key: 'workflowName' };
-    const sealExternalObjectArgs = {
-      workflow: optionalExternalValue(optionalExternalValueArgs3),
-      run_id: optionalExternalValue(optionalExternalValueArgs2),
+    const statusProperty = untrustedYamlProperty(statusPropertyArgs);
+    const optionalUntrustedYamlNodeArgs = { record: run, key: 'event' };
+    const optionalUntrustedYamlNodeArgs2 = { record: run, key: 'databaseId' };
+    const optionalUntrustedYamlNodeArgs3 = { record: run, key: 'workflowName' };
+    const sealUntrustedYamlMapArgs = {
+      workflow: optionalUntrustedYamlNode(optionalUntrustedYamlNodeArgs3),
+      run_id: optionalUntrustedYamlNode(optionalUntrustedYamlNodeArgs2),
       run_attempt:
-        attemptProperty.presence === ExternalPropertyPresence.Present &&
+        attemptProperty.presence === UntrustedYamlPropertyPresence.Present &&
         typeof attemptProperty.value === 'number'
           ? attemptProperty.value
           : 1,
       head_sha: headSha,
-      trigger: optionalExternalValue(optionalExternalValueArgs),
+      trigger: optionalUntrustedYamlNode(optionalUntrustedYamlNodeArgs),
       started_at: createdAt,
       finished_at: updatedAt,
       duration_seconds: durationSeconds,
       conclusion:
-        conclusionProperty.presence === ExternalPropertyPresence.Present &&
+        conclusionProperty.presence === UntrustedYamlPropertyPresence.Present &&
         typeof conclusionProperty.value === 'string'
           ? conclusionProperty.value
-          : statusProperty.presence === ExternalPropertyPresence.Present
+          : statusProperty.presence === UntrustedYamlPropertyPresence.Present
             ? String(statusProperty.value)
             : '',
       source_pr: prNumber,
     };
-    out.push(sealExternalObject(sealExternalObjectArgs));
+    out.push(sealUntrustedYamlMap(sealUntrustedYamlMapArgs));
   }
   return out;
 }
@@ -530,7 +541,7 @@ type CountTestInventoryArgs = {
   readonly headSha: string;
 };
 
-function countTestInventory(args: CountTestInventoryArgs): ExternalObject {
+function countTestInventory(args: CountTestInventoryArgs): UntrustedYamlMap {
   const { repoRoot, headSha } = args;
 
   const measuredAt = new Date().toISOString();
@@ -618,16 +629,16 @@ function countPlaywright(repoRoot: string): number {
   return matches.length;
 }
 
-function sumDurationSeconds(items: ExternalObject[]): number {
+function sumDurationSeconds(items: UntrustedYamlMap[]): number {
   let total = 0;
   for (const item of items) {
-    const durationArgs: ExternalPropertyArgs = {
+    const durationArgs: UntrustedYamlPropertyArgs = {
       record: item,
       key: 'duration_seconds',
     };
-    const duration = externalProperty(durationArgs);
+    const duration = untrustedYamlProperty(durationArgs);
     if (
-      duration.presence === ExternalPropertyPresence.Present &&
+      duration.presence === UntrustedYamlPropertyPresence.Present &&
       typeof duration.value === 'number'
     ) {
       total += duration.value;
@@ -637,7 +648,7 @@ function sumDurationSeconds(items: ExternalObject[]): number {
 }
 
 type CountByCategoryArgs = {
-  readonly items: ExternalObject[];
+  readonly items: UntrustedYamlMap[];
   readonly category: string;
 };
 
@@ -645,33 +656,33 @@ function countByCategory(args: CountByCategoryArgs): number {
   const { items, category } = args;
 
   return items.filter((item) => {
-    const propertyArgs4: ExternalPropertyArgs = {
+    const propertyArgs4: UntrustedYamlPropertyArgs = {
       record: item,
       key: 'category',
     };
-    const property = externalProperty(propertyArgs4);
+    const property = untrustedYamlProperty(propertyArgs4);
     return (
-      property.presence === ExternalPropertyPresence.Present &&
+      property.presence === UntrustedYamlPropertyPresence.Present &&
       property.value === category
     );
   }).length;
 }
 
 type RequireExternalStringArgs = {
-  readonly record: ExternalObject;
+  readonly record: UntrustedYamlMap;
   readonly key: string;
   readonly failure: string;
   readonly code?: LoomFailureCode;
 };
 
 function requireExternalString(args: RequireExternalStringArgs): string {
-  const propertyArgs3: ExternalPropertyArgs = {
+  const propertyArgs3: UntrustedYamlPropertyArgs = {
     record: args.record,
     key: args.key,
   };
-  const property = externalProperty(propertyArgs3);
+  const property = untrustedYamlProperty(propertyArgs3);
   if (
-    property.presence === ExternalPropertyPresence.Absent ||
+    property.presence === UntrustedYamlPropertyPresence.Absent ||
     typeof property.value !== 'string' ||
     property.value.length === 0
   ) {
@@ -685,21 +696,21 @@ function requireExternalString(args: RequireExternalStringArgs): string {
 }
 
 type RequireExternalArrayArgs = {
-  readonly record: ExternalObject;
+  readonly record: UntrustedYamlMap;
   readonly key: string;
   readonly failure: string;
 };
 
 function requireExternalArray(
   args: RequireExternalArrayArgs,
-): readonly ExternalValue[] {
-  const propertyArgs2: ExternalPropertyArgs = {
+): readonly UntrustedYamlNode[] {
+  const propertyArgs2: UntrustedYamlPropertyArgs = {
     record: args.record,
     key: args.key,
   };
-  const property = externalProperty(propertyArgs2);
+  const property = untrustedYamlProperty(propertyArgs2);
   if (
-    property.presence === ExternalPropertyPresence.Absent ||
+    property.presence === UntrustedYamlPropertyPresence.Absent ||
     !Array.isArray(property.value)
   ) {
     const loomFailureDetailArgs2: LoomFailureDetailArgs = {
@@ -711,22 +722,22 @@ function requireExternalArray(
   return property.value;
 }
 
-type RequireExternalObjectArgs = {
-  readonly record: ExternalObject;
+type RequireUntrustedYamlMapArgs = {
+  readonly record: UntrustedYamlMap;
   readonly key: string;
   readonly failure: string;
 };
 
-function requireExternalObject(
-  args: RequireExternalObjectArgs,
-): ExternalObject {
-  const propertyArgs: ExternalPropertyArgs = {
+function requireUntrustedYamlMap(
+  args: RequireUntrustedYamlMapArgs,
+): UntrustedYamlMap {
+  const propertyArgs: UntrustedYamlPropertyArgs = {
     record: args.record,
     key: args.key,
   };
-  const property = externalProperty(propertyArgs);
+  const property = untrustedYamlProperty(propertyArgs);
   if (
-    property.presence === ExternalPropertyPresence.Absent ||
+    property.presence === UntrustedYamlPropertyPresence.Absent ||
     !isRecord(property.value)
   ) {
     const loomFailureDetailArgs: LoomFailureDetailArgs = {
@@ -739,14 +750,14 @@ function requireExternalObject(
 }
 
 type OptionalExternalFieldArgs = {
-  readonly record: ExternalObject;
+  readonly record: UntrustedYamlMap;
   readonly key: string;
 };
 
 function optionalExternalString(args: OptionalExternalFieldArgs): string {
-  const property = externalProperty(args);
+  const property = untrustedYamlProperty(args);
   if (
-    property.presence === ExternalPropertyPresence.Present &&
+    property.presence === UntrustedYamlPropertyPresence.Present &&
     typeof property.value === 'string'
   ) {
     return property.value;
@@ -754,9 +765,11 @@ function optionalExternalString(args: OptionalExternalFieldArgs): string {
   return '';
 }
 
-function optionalExternalValue(args: OptionalExternalFieldArgs): ExternalValue {
-  const property = externalProperty(args);
-  if (property.presence === ExternalPropertyPresence.Present) {
+function optionalUntrustedYamlNode(
+  args: OptionalExternalFieldArgs,
+): UntrustedYamlNode {
+  const property = untrustedYamlProperty(args);
+  if (property.presence === UntrustedYamlPropertyPresence.Present) {
     return property.value;
   }
   return '';

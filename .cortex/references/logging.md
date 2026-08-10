@@ -111,21 +111,20 @@ default is `info`. Almost all app logs today are `debug` (`wasm` status drain,
       "total": 120
     },
     "entries": [
-      { "ts": "…", "level": "debug", "scope": "vault", "message": "…", "data": "…" }
+      { "ts": "…", "level": "debug", "scope": "vault", "message": "…" }
     ]
   }
   ```
 
-  Each `entries[]` item matches the IndexedDB store: `{ ts, level, scope, message, data? }`.
-  `data` is an optional JSON string when structured context was logged.
+  Each `entries[]` item matches the IndexedDB store: `{ ts, level, scope, message }`.
 
 - **Devtools:** `await window.__nookLog.dump({ minLevel: 'trace', limit: 500 })`,
   `window.__nookLog.count()`, `window.__nookLog.clear()`.
 
 ## Logging from code
 
-- **Web:** `const log = createLogger('scope')` then `log.info(msg, data)` /
-  `log.debug(...)` etc. `data` may be any JSON-serialisable value. Stray
+- **Web:** `const log = createLogger('scope')` then `log.info(message)` /
+  `log.debug(message)` etc. Messages are domain-specific strings. Stray
   `console.*` calls are also captured (scope `console`), but a scoped logger is
   preferred.
 - **Common web scopes:** `vault` (session lifecycle), `connect` (unlock/connect),

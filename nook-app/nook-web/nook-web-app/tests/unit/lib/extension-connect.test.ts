@@ -7,6 +7,8 @@ import {
   ExtensionConnectScope,
   ExtensionIdentityRequestSource,
   ExtensionConnectRequestStateKind,
+  ExtensionPairingDeliveryKind,
+  deliverExtensionPairingApproval,
   extensionConnectRequestFromLocation,
   isExtensionConnectPath,
   openInstalledExtension,
@@ -18,6 +20,7 @@ import {
   isExtensionLocalEventLogUpdatedMessage,
   isOpenCompanionLauncherMessage,
   ExtensionPairingVaultType,
+  ExtensionPairingApprovedMessageType,
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairedVaultIdentityStatusMessage,
@@ -25,6 +28,11 @@ import {
   isExtensionPairingApprovedMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
+  extensionPairingGrantPolicyReady,
+  setupStorageKey,
+} from '../../../../nook-web-extension/src/background/pairing-grants'
+
+const {
   extensionPairingGrantStorageItems,
   extensionStoredPairingGrantStorageItems,
   isStoredExtensionPairingGrant,
@@ -33,11 +41,8 @@ import {
   pairingGrantStorageKey,
   selectedPairingGrant,
   selectedPairingGrantFirst,
-  SelectedPairingGrantKind,
   setupAfterPairingGrantRemoval,
-  PairingSetupAfterRemovalKind,
-  setupStorageKey,
-} from '../../../../nook-web-extension/src/background/pairing-grants'
+} = await extensionPairingGrantPolicyReady
 
 function locationFromUrl(url: string): Location {
   return new URL(url) as unknown as Location
@@ -170,6 +175,119 @@ describe('extension pairing approved message', () => {
     },
   ]
 
+  function approvalDeliveryArgs(): Parameters<
+    typeof deliverExtensionPairingApproval
+  >[0] {
+    return {
+      request: {
+        source: ExtensionIdentityRequestSource.ExtensionConnect,
+        deviceId: 'device-1',
+        devicePublicKey: 'age1device',
+        deviceSigningPublicKey: 'signing-key',
+        extensionRuntimeId: 'extension-123',
+        deviceLabel: 'Nook Extension',
+        nonce: 'nonce-1',
+        scopes: [ExtensionConnectScope.VaultAccess],
+      },
+      message: {
+        type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
+        payload: {
+          vaultType: ExtensionPairingVaultType.Simple,
+          deviceId: 'device-1',
+          devicePublicKey: 'age1device',
+          deviceSigningPublicKey: 'signing-key',
+          deviceLabel: 'Nook Extension',
+          vaultStoreId: 'store-1',
+          vaultName: 'Personal',
+          approvedAt: '2026-07-07T00:00:00.000Z',
+          scopes: [ExtensionConnectScope.VaultAccess],
+          providers: [],
+        },
+        eventLogRecords,
+      },
+    }
+  }
+
+  test('delivers an approved grant through the extension callback', async () => {
+    const sendMessage = vi.fn(
+      (...args: [string, unknown, (response?: unknown) => void]) => {
+        args[2]({ ok: true })
+      },
+    )
+    vi.stubGlobal('chrome', { runtime: { sendMessage } })
+
+    await expect(
+      deliverExtensionPairingApproval(approvalDeliveryArgs()),
+    ).resolves.toEqual({ kind: ExtensionPairingDeliveryKind.Delivered })
+    expect(sendMessage).toHaveBeenCalledOnce()
+  })
+
+  test('retries a callback that supplies no response argument', async () => {
+    vi.useFakeTimers()
+    const sendMessage = vi.fn(
+      (...args: [string, unknown, (response?: unknown) => void]) => {
+        args[2]()
+      },
+    )
+    vi.stubGlobal('chrome', { runtime: { sendMessage } })
+
+    const delivery = deliverExtensionPairingApproval(approvalDeliveryArgs())
+    await vi.runAllTimersAsync()
+    await expect(delivery).resolves.toEqual({
+      kind: ExtensionPairingDeliveryKind.MessagingUnavailable,
+    })
+    expect(sendMessage).toHaveBeenCalledTimes(3)
+  })
+
+  test('retries runtime errors and callback timeouts', async () => {
+    vi.useFakeTimers()
+    const runtimeErrorSend = vi.fn(
+      (...args: [string, unknown, (response?: unknown) => void]) => {
+        args[2]({ ok: true })
+      },
+    )
+    vi.stubGlobal('chrome', {
+      runtime: {
+        sendMessage: runtimeErrorSend,
+        lastError: { message: 'gone' },
+      },
+    })
+    const runtimeErrorDelivery = deliverExtensionPairingApproval(
+      approvalDeliveryArgs(),
+    )
+    await vi.runAllTimersAsync()
+    await expect(runtimeErrorDelivery).resolves.toEqual({
+      kind: ExtensionPairingDeliveryKind.MessagingUnavailable,
+    })
+
+    const timeoutSend = vi.fn()
+    vi.stubGlobal('chrome', { runtime: { sendMessage: timeoutSend } })
+    const timeoutDelivery = deliverExtensionPairingApproval(
+      approvalDeliveryArgs(),
+    )
+    await vi.runAllTimersAsync()
+    await expect(timeoutDelivery).resolves.toEqual({
+      kind: ExtensionPairingDeliveryKind.MessagingUnavailable,
+    })
+    expect(timeoutSend).toHaveBeenCalledTimes(3)
+  })
+
+  test('classifies plaintext provider migration rejection', async () => {
+    vi.useFakeTimers()
+    const sendMessage = vi.fn(
+      (...args: [string, unknown, (response?: unknown) => void]) => {
+        args[2]({ reason: 'auth-provider-plaintext-migration-required' })
+      },
+    )
+    vi.stubGlobal('chrome', { runtime: { sendMessage } })
+
+    const delivery = deliverExtensionPairingApproval(approvalDeliveryArgs())
+    await vi.runAllTimersAsync()
+    await expect(delivery).resolves.toEqual({
+      kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
+    })
+  })
+
   test('accepts complete approved grants', () => {
     expect(
       isExtensionPairingApprovedMessage({
@@ -234,8 +352,10 @@ describe('extension pairing approved message', () => {
   })
 
   test('maps approved grants into extension-owned storage keys', () => {
-    const items = extensionPairingGrantStorageItems(
-      {
+    const storageItemsArgs: Parameters<
+      typeof extensionPairingGrantStorageItems
+    >[0] = {
+      grant: {
         vaultType: ExtensionPairingVaultType.Simple,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
@@ -248,18 +368,16 @@ describe('extension pairing approved message', () => {
           ExtensionConnectScope.VaultAccess,
           ExtensionConnectScope.SyncProviderCredentials,
         ],
-        providers: [
-          { id: 'local-1', type: 'local' },
-          { id: 'gh-1', type: 'github' },
-        ],
+        syncProviderCount: 2,
       },
-      {
+      imported: {
         vaultStoreId: 'store-1',
         eventCount: 3,
         heads: ['event-3'],
         accessGranted: true,
       },
-    )
+    }
+    const items = extensionPairingGrantStorageItems(storageItemsArgs)
 
     expect(items[pairingGrantStorageKey('store-1')]).toMatchObject({
       deviceId: 'device-1',
@@ -314,8 +432,10 @@ describe('extension pairing approved message', () => {
   })
 
   test('keeps passive updates from selecting another paired vault', () => {
-    const approved = extensionPairingGrantStorageItems(
-      {
+    const approvedStorageItemsArgs: Parameters<
+      typeof extensionPairingGrantStorageItems
+    >[0] = {
+      grant: {
         vaultType: ExtensionPairingVaultType.Simple,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
@@ -325,29 +445,35 @@ describe('extension pairing approved message', () => {
         vaultName: 'Personal',
         approvedAt: '2026-07-25T00:00:00.000Z',
         scopes: [ExtensionConnectScope.VaultAccess],
-        providers: [],
+        syncProviderCount: 0,
       },
-      {
+      imported: {
         vaultStoreId: 'store-1',
         eventCount: 2,
         heads: ['event-2'],
         accessGranted: true,
       },
-    )
+    }
+    const approved = extensionPairingGrantStorageItems(approvedStorageItemsArgs)
     const grant = approved[pairingGrantStorageKey('store-1')]
     if (!isStoredExtensionPairingGrant(grant)) {
       throw new Error('expected the approved pairing grant')
     }
 
-    const passive = extensionStoredPairingGrantStorageItems(
+    const passiveStorageItemsArgs: Parameters<
+      typeof extensionStoredPairingGrantStorageItems
+    >[0] = {
       grant,
-      {
+      imported: {
         vaultStoreId: 'store-1',
         eventCount: 3,
         heads: ['event-3'],
         accessGranted: true,
       },
-      false,
+      select: false,
+    }
+    const passive = extensionStoredPairingGrantStorageItems(
+      passiveStorageItemsArgs,
     )
 
     expect(passive[pairingGrantStorageKey('store-1')]).toMatchObject({
@@ -358,8 +484,10 @@ describe('extension pairing approved message', () => {
   })
 
   test('restores the newest surviving grant when the selected vault is removed', () => {
-    const first = extensionPairingGrantStorageItems(
-      {
+    const firstStorageItemsArgs: Parameters<
+      typeof extensionPairingGrantStorageItems
+    >[0] = {
+      grant: {
         vaultType: ExtensionPairingVaultType.Simple,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
@@ -369,17 +497,20 @@ describe('extension pairing approved message', () => {
         vaultName: 'Personal',
         approvedAt: '2026-07-24T00:00:00.000Z',
         scopes: [ExtensionConnectScope.VaultAccess],
-        providers: [],
+        syncProviderCount: 0,
       },
-      {
+      imported: {
         vaultStoreId: 'store-1',
         eventCount: 2,
         heads: ['event-2'],
         accessGranted: true,
       },
-    )
-    const second = extensionPairingGrantStorageItems(
-      {
+    }
+    const first = extensionPairingGrantStorageItems(firstStorageItemsArgs)
+    const secondStorageItemsArgs: Parameters<
+      typeof extensionPairingGrantStorageItems
+    >[0] = {
+      grant: {
         vaultType: ExtensionPairingVaultType.Simple,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
@@ -389,41 +520,42 @@ describe('extension pairing approved message', () => {
         vaultName: 'Work',
         approvedAt: '2026-07-25T00:00:00.000Z',
         scopes: [ExtensionConnectScope.VaultAccess],
-        providers: [],
+        syncProviderCount: 0,
       },
-      {
+      imported: {
         vaultStoreId: 'store-2',
         eventCount: 4,
         heads: ['event-4'],
         accessGranted: true,
       },
-    )
+    }
+    const second = extensionPairingGrantStorageItems(secondStorageItemsArgs)
     const stored = { ...first, ...second }
 
-    expect(setupAfterPairingGrantRemoval(stored, 'store-2')).toEqual({
-      kind: PairingSetupAfterRemovalKind.Ready,
+    const removalArgs: Parameters<typeof setupAfterPairingGrantRemoval>[0] = {
+      stored,
+      removedVaultStoreId: 'store-2',
+    }
+    expect(setupAfterPairingGrantRemoval(removalArgs)).toEqual({
+      kind: 'ready',
       setup: expect.objectContaining({
         selectedVaultStoreId: 'store-1',
         selectedVaultName: 'Personal',
         eventCount: 2,
       }),
     })
-    const grants = [
-      stored[pairingGrantStorageKey('store-1')],
-      stored[pairingGrantStorageKey('store-2')],
-    ] as Parameters<typeof selectedPairingGrantFirst>[1]
-    expect(selectedPairingGrantFirst(stored, grants)[0]?.vaultStoreId).toBe(
-      'store-2',
-    )
+    expect(selectedPairingGrantFirst(stored)[0]?.vaultStoreId).toBe('store-2')
     expect(selectedPairingGrant(stored)).toEqual({
-      kind: SelectedPairingGrantKind.Selected,
+      kind: 'selected',
       grant: expect.objectContaining({ vaultStoreId: 'store-2' }),
     })
   })
 
   test('migrates the uniquely selected valid legacy grant into Rexie shape', () => {
-    const current = extensionPairingGrantStorageItems(
-      {
+    const currentStorageItemsArgs: Parameters<
+      typeof extensionPairingGrantStorageItems
+    >[0] = {
+      grant: {
         vaultType: ExtensionPairingVaultType.Simple,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
@@ -433,22 +565,30 @@ describe('extension pairing approved message', () => {
         vaultName: 'Personal',
         approvedAt: '2026-07-25T00:00:00.000Z',
         scopes: [ExtensionConnectScope.VaultAccess],
-        providers: [],
+        syncProviderCount: 0,
       },
-      {
+      imported: {
         vaultStoreId: 'store-1',
         eventCount: 3,
         heads: ['event-3'],
         accessGranted: true,
       },
-    )
-    const key = pairingGrantStorageKey('store-1')
-    const { eventCount, eventLogHeads, lastLocalSyncAt, ...legacyGrant } =
-      current[key] as Record<string, unknown>
-    const legacySetup = {
-      ...(current[setupStorageKey] as Record<string, unknown>),
     }
-    delete legacySetup.selectedVaultStoreId
+    const current = extensionPairingGrantStorageItems(currentStorageItemsArgs)
+    const key = pairingGrantStorageKey('store-1')
+    const currentGrant = current[key]
+    if (!isStoredExtensionPairingGrant(currentGrant)) {
+      throw new Error('expected a stored extension pairing grant')
+    }
+    const { eventCount, eventLogHeads, lastLocalSyncAt, ...legacyGrant } =
+      currentGrant
+    const currentSetup = current[setupStorageKey]
+    if (!isExtensionReadySetupState(currentSetup)) {
+      throw new Error('expected a ready extension setup')
+    }
+    const { selectedVaultStoreId: _selectedVaultStoreId, ...legacySetup } =
+      currentSetup
+    void _selectedVaultStoreId
     const migrated = migratedLegacyPairingStorageItems({
       [key]: legacyGrant,
       [setupStorageKey]: legacySetup,

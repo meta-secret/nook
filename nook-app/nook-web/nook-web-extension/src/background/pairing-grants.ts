@@ -1,366 +1,199 @@
-import type { ExtensionPairingApprovedGrant } from '../../../nook-web-shared/src/extension/runtime-messages'
+import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+import {
+  createExtensionPairingState,
+  extensionPairingGrantStorageKey,
+  extensionSetupAfterPairingGrantRemoval,
+  firstExtensionPairingGrant,
+  isExtensionReadySetupJson,
+  isStoredExtensionPairingGrantJson,
+  migrateLegacyExtensionPairingStateJson,
+  orderedExtensionPairingGrants,
+  refreshExtensionPairingGrant,
+  selectedExtensionPairingGrant,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  CreateExtensionPairingStateInput,
+  ExtensionPairingGrantApproval,
+  ExtensionPairingGrantRemovalInput,
+  ExtensionPairingRecord,
+  ExtensionPairingState,
+  ExtensionReadySetup,
+  ExtensionSetupAfterRemoval,
+  ImportedExtensionEventLog,
+  RefreshExtensionPairingGrantInput,
+  SelectedExtensionPairingGrant,
+  StoredExtensionPairingGrant,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export const setupStorageKey = 'nook:extension-setup'
 
-export type StoredExtensionPairingGrant = Omit<
-  ExtensionPairingApprovedGrant,
-  'providers'
-> & {
-  syncProviderCount: number
-  eventCount: number
-  eventLogHeads: string[]
-  lastLocalSyncAt: string
+export type ExtensionReadySetupState = ExtensionReadySetup
+export type ImportedEventLogState = ImportedExtensionEventLog
+export type PairingSetupAfterRemoval = ExtensionSetupAfterRemoval
+export type SelectedPairingGrant = SelectedExtensionPairingGrant
+export type { StoredExtensionPairingGrant }
+export type ExtensionPairingItems = Record<string, ExtensionPairingRecord>
+
+function stateFromItems(items: ExtensionPairingItems): ExtensionPairingState {
+  return {
+    entries: Object.entries(items).map(([key, record]) => ({ key, record })),
+  }
 }
 
-export function pairingGrantStorageKey(vaultStoreId: string): string {
-  return `nook:extension-pairing-grant:${vaultStoreId}`
+function itemsFromState(state: ExtensionPairingState): ExtensionPairingItems {
+  return Object.fromEntries(
+    state.entries.map(({ key, record }) => [key, record]),
+  )
 }
 
-export enum ExtensionReadySetupStateStatus {
-  Ready = 'ready',
+enum TransportJsonResultKind {
+  Serialized = 'serialized',
+  SerializationFailed = 'serialization-failed',
 }
 
-export type ExtensionReadySetupState = {
-  status: ExtensionReadySetupStateStatus.Ready
-  deviceLabel: string
-  pairedVaults: string[]
-  selectedVaultStoreId: string
-  selectedVaultName: string
-  syncProviderCount: number
-  eventCount: number
-  eventLogHeads: string[]
-  lastLocalSyncAt: string
+type TransportJsonResult =
+  | { kind: TransportJsonResultKind.Serialized; json: string }
+  | { kind: TransportJsonResultKind.SerializationFailed }
+
+function transportJson(value: unknown): TransportJsonResult {
+  try {
+    const json = JSON.stringify(value)
+    if (typeof json !== 'string') {
+      return { kind: TransportJsonResultKind.SerializationFailed }
+    }
+    return {
+      kind: TransportJsonResultKind.Serialized,
+      json,
+    }
+  } catch {
+    return { kind: TransportJsonResultKind.SerializationFailed }
+  }
 }
 
-export type ImportedEventLogState = {
-  vaultStoreId: string
-  eventCount: number
-  heads: string[]
-  accessGranted: boolean
+function pairingGrantStorageKey(vaultStoreId: string): string {
+  return extensionPairingGrantStorageKey(vaultStoreId)
 }
 
-export function isStoredExtensionPairingGrant(
+function isStoredExtensionPairingGrant(
   value: unknown,
 ): value is StoredExtensionPairingGrant {
-  if (!value || typeof value !== 'object') return false
-  const grant = value as Record<string, unknown>
+  const result = transportJson(value)
   return (
-    grant.vaultType === 'simple' &&
-    typeof grant.deviceId === 'string' &&
-    typeof grant.devicePublicKey === 'string' &&
-    typeof grant.deviceSigningPublicKey === 'string' &&
-    typeof grant.deviceLabel === 'string' &&
-    typeof grant.vaultStoreId === 'string' &&
-    typeof grant.vaultName === 'string' &&
-    typeof grant.approvedAt === 'string' &&
-    Array.isArray(grant.scopes) &&
-    grant.scopes.every((scope) => typeof scope === 'string') &&
-    typeof grant.syncProviderCount === 'number' &&
-    Number.isInteger(grant.syncProviderCount) &&
-    grant.syncProviderCount >= 0 &&
-    typeof grant.eventCount === 'number' &&
-    Number.isInteger(grant.eventCount) &&
-    grant.eventCount > 0 &&
-    Array.isArray(grant.eventLogHeads) &&
-    grant.eventLogHeads.length > 0 &&
-    grant.eventLogHeads.every((head) => typeof head === 'string') &&
-    typeof grant.lastLocalSyncAt === 'string' &&
-    grant.lastLocalSyncAt.length > 0
+    result.kind === TransportJsonResultKind.Serialized &&
+    isStoredExtensionPairingGrantJson(result.json)
   )
 }
 
-export function isExtensionReadySetupState(
+function isExtensionReadySetupState(
   value: unknown,
 ): value is ExtensionReadySetupState {
-  if (!value || typeof value !== 'object') return false
-
-  const state = value as Record<string, unknown>
+  const result = transportJson(value)
   return (
-    state.status === ExtensionReadySetupStateStatus.Ready &&
-    typeof state.deviceLabel === 'string' &&
-    Array.isArray(state.pairedVaults) &&
-    state.pairedVaults.length > 0 &&
-    state.pairedVaults.every((vault) => typeof vault === 'string') &&
-    typeof state.selectedVaultStoreId === 'string' &&
-    state.selectedVaultStoreId.length > 0 &&
-    typeof state.selectedVaultName === 'string' &&
-    state.selectedVaultName.length > 0 &&
-    typeof state.syncProviderCount === 'number' &&
-    Number.isInteger(state.syncProviderCount) &&
-    state.syncProviderCount >= 0 &&
-    typeof state.eventCount === 'number' &&
-    Number.isInteger(state.eventCount) &&
-    state.eventCount > 0 &&
-    Array.isArray(state.eventLogHeads) &&
-    state.eventLogHeads.length > 0 &&
-    state.eventLogHeads.every((head) => typeof head === 'string') &&
-    typeof state.lastLocalSyncAt === 'string'
+    result.kind === TransportJsonResultKind.Serialized &&
+    isExtensionReadySetupJson(result.json)
   )
 }
 
-export function setupStateFromPairingGrant(
-  grant: StoredExtensionPairingGrant,
-): ExtensionReadySetupState {
-  return {
-    status: ExtensionReadySetupStateStatus.Ready,
-    deviceLabel: grant.deviceLabel,
-    pairedVaults: [grant.vaultName],
-    selectedVaultStoreId: grant.vaultStoreId,
-    selectedVaultName: grant.vaultName,
-    syncProviderCount: grant.syncProviderCount,
-    eventCount: grant.eventCount,
-    eventLogHeads: grant.eventLogHeads,
-    lastLocalSyncAt: grant.lastLocalSyncAt,
-  }
+type ExtensionPairingGrantStorageItemsArgs = {
+  grant: ExtensionPairingGrantApproval
+  imported: ImportedEventLogState
 }
 
-function storedPairingGrant(
-  grant: Omit<
-    StoredExtensionPairingGrant,
-    'eventCount' | 'eventLogHeads' | 'lastLocalSyncAt'
-  >,
-  imported: ImportedEventLogState,
-): StoredExtensionPairingGrant {
-  if (imported.vaultStoreId !== grant.vaultStoreId) {
-    throw new Error('Imported event log does not match the approved vault.')
+function extensionPairingGrantStorageItems(
+  args: ExtensionPairingGrantStorageItemsArgs,
+): ExtensionPairingItems {
+  const input: CreateExtensionPairingStateInput = {
+    grant: args.grant,
+    imported: args.imported,
+    observedAt: new Date().toISOString(),
   }
-  if (!imported.accessGranted) {
-    throw new Error('Imported event log does not grant this extension access.')
-  }
-  return {
-    ...grant,
-    eventCount: imported.eventCount,
-    eventLogHeads: imported.heads,
-    lastLocalSyncAt: new Date().toISOString(),
-  }
+  return itemsFromState(createExtensionPairingState(input))
 }
 
-export function extensionPairingGrantStorageItems(
-  grant: ExtensionPairingApprovedGrant,
-  imported: ImportedEventLogState,
-): Record<string, unknown> {
-  const storedGrant = storedPairingGrant(
-    {
-      vaultType: grant.vaultType,
-      deviceId: grant.deviceId,
-      devicePublicKey: grant.devicePublicKey,
-      deviceSigningPublicKey: grant.deviceSigningPublicKey,
-      deviceLabel: grant.deviceLabel,
-      vaultStoreId: grant.vaultStoreId,
-      vaultName: grant.vaultName,
-      approvedAt: grant.approvedAt,
-      scopes: grant.scopes,
-      syncProviderCount: grant.providers.length,
-    },
-    imported,
-  )
-  return {
-    [pairingGrantStorageKey(storedGrant.vaultStoreId)]: storedGrant,
-    [setupStorageKey]: setupStateFromPairingGrant(storedGrant),
+type ExtensionStoredPairingGrantStorageItemsArgs = {
+  grant: StoredExtensionPairingGrant
+  imported: ImportedEventLogState
+  select: boolean
+}
+
+function extensionStoredPairingGrantStorageItems(
+  args: ExtensionStoredPairingGrantStorageItemsArgs,
+): ExtensionPairingItems {
+  const input: RefreshExtensionPairingGrantInput = {
+    ...args,
+    observedAt: new Date().toISOString(),
   }
+  return itemsFromState(refreshExtensionPairingGrant(input))
 }
 
-export function extensionStoredPairingGrantStorageItems(
-  grant: StoredExtensionPairingGrant,
-  imported: ImportedEventLogState,
-  select: boolean,
-): Record<string, unknown> {
-  const updatedGrant = storedPairingGrant(grant, imported)
-  return {
-    [pairingGrantStorageKey(updatedGrant.vaultStoreId)]: updatedGrant,
-    ...(select
-      ? { [setupStorageKey]: setupStateFromPairingGrant(updatedGrant) }
-      : {}),
-  }
+type SetupAfterPairingGrantRemovalArgs = {
+  stored: ExtensionPairingItems
+  removedVaultStoreId: string
 }
 
-export enum PairingSetupAfterRemovalKind {
-  NoPairedVault = 'no-paired-vault',
-  Ready = 'ready',
-}
-
-export type PairingSetupAfterRemoval =
-  | { kind: PairingSetupAfterRemovalKind.NoPairedVault }
-  | {
-      kind: PairingSetupAfterRemovalKind.Ready
-      setup: ExtensionReadySetupState
-    }
-
-export function setupAfterPairingGrantRemoval(
-  stored: Record<string, unknown>,
-  removedVaultStoreId: string,
+function setupAfterPairingGrantRemoval(
+  args: SetupAfterPairingGrantRemovalArgs,
 ): PairingSetupAfterRemoval {
-  const current = stored[setupStorageKey]
-  if (
-    isExtensionReadySetupState(current) &&
-    current.selectedVaultStoreId !== removedVaultStoreId
-  ) {
-    return { kind: PairingSetupAfterRemovalKind.Ready, setup: current }
+  const input: ExtensionPairingGrantRemovalInput = {
+    state: stateFromItems(args.stored),
+    removedVaultStoreId: args.removedVaultStoreId,
   }
-  const remaining = Object.entries(stored)
-    .filter(
-      ([key, value]) =>
-        key !== pairingGrantStorageKey(removedVaultStoreId) &&
-        key.startsWith('nook:extension-pairing-grant:') &&
-        isStoredExtensionPairingGrant(value),
-    )
-    .map(([, grant]) => grant as StoredExtensionPairingGrant)
-    .sort((left, right) => right.approvedAt.localeCompare(left.approvedAt))
-  const remainingGrant = remaining[0]
-  return remainingGrant
-    ? {
-        kind: PairingSetupAfterRemovalKind.Ready,
-        setup: setupStateFromPairingGrant(remainingGrant),
-      }
-    : { kind: PairingSetupAfterRemovalKind.NoPairedVault }
+  return extensionSetupAfterPairingGrantRemoval(input)
 }
 
-export function selectedPairingGrantFirst(
-  stored: Record<string, unknown>,
-  grants: StoredExtensionPairingGrant[],
+function selectedPairingGrantFirst(
+  stored: ExtensionPairingItems,
 ): StoredExtensionPairingGrant[] {
-  const setup = stored[setupStorageKey]
-  if (!isExtensionReadySetupState(setup)) {
-    return [...grants].sort((left, right) =>
-      right.approvedAt.localeCompare(left.approvedAt),
-    )
-  }
-  const selectedVaultStoreId = setup.selectedVaultStoreId
-  return [...grants].sort((left, right) => {
-    const leftSelected = left.vaultStoreId === selectedVaultStoreId
-    const rightSelected = right.vaultStoreId === selectedVaultStoreId
-    if (leftSelected !== rightSelected) return leftSelected ? -1 : 1
-    return right.approvedAt.localeCompare(left.approvedAt)
-  })
+  return orderedExtensionPairingGrants(stateFromItems(stored))
 }
 
-export enum SelectedPairingGrantKind {
-  NotSelected = 'not-selected',
-  Selected = 'selected',
-}
-
-export type SelectedPairingGrant =
-  | { kind: SelectedPairingGrantKind.NotSelected }
-  | {
-      kind: SelectedPairingGrantKind.Selected
-      grant: StoredExtensionPairingGrant
-    }
-
-export function selectedPairingGrant(
-  stored: Record<string, unknown>,
+function selectedPairingGrant(
+  stored: ExtensionPairingItems,
 ): SelectedPairingGrant {
-  const setup = stored[setupStorageKey]
-  if (!isExtensionReadySetupState(setup)) {
-    return { kind: SelectedPairingGrantKind.NotSelected }
-  }
-  const grant = stored[pairingGrantStorageKey(setup.selectedVaultStoreId)]
-  return isStoredExtensionPairingGrant(grant)
-    ? { kind: SelectedPairingGrantKind.Selected, grant }
-    : { kind: SelectedPairingGrantKind.NotSelected }
+  return selectedExtensionPairingGrant(stateFromItems(stored))
 }
 
-export function firstStoredPairingGrant(
-  stored: Record<string, unknown>,
+function firstStoredPairingGrant(
+  stored: ExtensionPairingItems,
 ): SelectedPairingGrant {
-  const grants = Object.entries(stored)
-    .filter(
-      ([key, value]) =>
-        key.startsWith('nook:extension-pairing-grant:') &&
-        isStoredExtensionPairingGrant(value),
-    )
-    .map(([, grant]) => grant as StoredExtensionPairingGrant)
-  const first = selectedPairingGrantFirst(stored, grants)[0]
-  return first
-    ? { kind: SelectedPairingGrantKind.Selected, grant: first }
-    : { kind: SelectedPairingGrantKind.NotSelected }
+  return firstExtensionPairingGrant(stateFromItems(stored))
 }
 
-type LegacyStoredExtensionPairingGrant = Omit<
-  StoredExtensionPairingGrant,
-  'eventCount' | 'eventLogHeads' | 'lastLocalSyncAt'
->
-
-type LegacyExtensionReadySetupState = Omit<
-  ExtensionReadySetupState,
-  'selectedVaultStoreId'
->
-
-function isLegacyStoredExtensionPairingGrant(
-  value: unknown,
-): value is LegacyStoredExtensionPairingGrant {
-  if (!value || typeof value !== 'object') return false
-  const grant = value as Record<string, unknown>
-  return (
-    grant.vaultType === 'simple' &&
-    typeof grant.deviceId === 'string' &&
-    typeof grant.devicePublicKey === 'string' &&
-    typeof grant.deviceSigningPublicKey === 'string' &&
-    typeof grant.deviceLabel === 'string' &&
-    typeof grant.vaultStoreId === 'string' &&
-    typeof grant.vaultName === 'string' &&
-    typeof grant.approvedAt === 'string' &&
-    Array.isArray(grant.scopes) &&
-    grant.scopes.every((scope) => typeof scope === 'string') &&
-    typeof grant.syncProviderCount === 'number' &&
-    Number.isInteger(grant.syncProviderCount) &&
-    grant.syncProviderCount >= 0
-  )
-}
-
-function isLegacyExtensionReadySetupState(
-  value: unknown,
-): value is LegacyExtensionReadySetupState {
-  if (!value || typeof value !== 'object') return false
-  const state = value as Record<string, unknown>
-  return (
-    state.status === ExtensionReadySetupStateStatus.Ready &&
-    typeof state.deviceLabel === 'string' &&
-    Array.isArray(state.pairedVaults) &&
-    state.pairedVaults.length > 0 &&
-    state.pairedVaults.every((vault) => typeof vault === 'string') &&
-    typeof state.selectedVaultName === 'string' &&
-    state.selectedVaultName.length > 0 &&
-    typeof state.syncProviderCount === 'number' &&
-    Number.isInteger(state.syncProviderCount) &&
-    state.syncProviderCount >= 0 &&
-    typeof state.eventCount === 'number' &&
-    Number.isInteger(state.eventCount) &&
-    state.eventCount > 0 &&
-    Array.isArray(state.eventLogHeads) &&
-    state.eventLogHeads.length > 0 &&
-    state.eventLogHeads.every((head) => typeof head === 'string') &&
-    typeof state.lastLocalSyncAt === 'string' &&
-    state.lastLocalSyncAt.length > 0
-  )
-}
-
-export function migratedLegacyPairingStorageItems(
+function migratedLegacyPairingStorageItems(
   legacy: Record<string, unknown>,
-): Record<string, unknown> {
-  const setup = legacy[setupStorageKey]
-  if (!isLegacyExtensionReadySetupState(setup)) return {}
-  const selected = Object.entries(legacy).filter(
-    ([key, value]) =>
-      key.startsWith('nook:extension-pairing-grant:') &&
-      isLegacyStoredExtensionPairingGrant(value) &&
-      value.vaultName === setup.selectedVaultName,
-  )
-  if (
-    selected.length !== 1 ||
-    !selected[0] ||
-    !isLegacyStoredExtensionPairingGrant(selected[0][1])
-  ) {
+): ExtensionPairingItems {
+  const result = transportJson(legacy)
+  if (result.kind === TransportJsonResultKind.SerializationFailed) return {}
+  try {
+    return itemsFromState(migrateLegacyExtensionPairingStateJson(result.json))
+  } catch {
     return {}
   }
-  const [key, grant] = selected[0]
-  const migrated: StoredExtensionPairingGrant = {
-    ...grant,
-    eventCount: setup.eventCount,
-    eventLogHeads: setup.eventLogHeads,
-    lastLocalSyncAt: setup.lastLocalSyncAt,
-  }
-  return {
-    [key]: migrated,
-    [setupStorageKey]: setupStateFromPairingGrant(migrated),
-  }
 }
+
+export type ExtensionPairingGrantPolicy = {
+  pairingGrantStorageKey: typeof pairingGrantStorageKey
+  isStoredExtensionPairingGrant: typeof isStoredExtensionPairingGrant
+  isExtensionReadySetupState: typeof isExtensionReadySetupState
+  extensionPairingGrantStorageItems: typeof extensionPairingGrantStorageItems
+  extensionStoredPairingGrantStorageItems: typeof extensionStoredPairingGrantStorageItems
+  setupAfterPairingGrantRemoval: typeof setupAfterPairingGrantRemoval
+  selectedPairingGrantFirst: typeof selectedPairingGrantFirst
+  selectedPairingGrant: typeof selectedPairingGrant
+  firstStoredPairingGrant: typeof firstStoredPairingGrant
+  migratedLegacyPairingStorageItems: typeof migratedLegacyPairingStorageItems
+}
+
+export const extensionPairingGrantPolicyReady: Promise<ExtensionPairingGrantPolicy> =
+  companionWasmReady.then(() => ({
+    pairingGrantStorageKey,
+    isStoredExtensionPairingGrant,
+    isExtensionReadySetupState,
+    extensionPairingGrantStorageItems,
+    extensionStoredPairingGrantStorageItems,
+    setupAfterPairingGrantRemoval,
+    selectedPairingGrantFirst,
+    selectedPairingGrant,
+    firstStoredPairingGrant,
+    migratedLegacyPairingStorageItems,
+  }))

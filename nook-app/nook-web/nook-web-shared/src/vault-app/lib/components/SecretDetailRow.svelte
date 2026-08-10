@@ -62,9 +62,7 @@
     onEditItem: (item: NookSecretListItem) => Promise<void>
     onDeleteSecret: (id: string) => Promise<void>
     onCopyToClipboard: (
-      text: string,
-      id: string,
-      field: string,
+      args: { readonly text: string; readonly id: string; readonly field: string },
     ) => Promise<void>
     onCopySecret: (id: string) => Promise<void>
     vault: VaultState
@@ -96,7 +94,8 @@
       const words = item.seedWordCount
       const label = name || vault.t(I18N_KEYS.VaultFieldsUnnamedSeedPhrase)
       if (words === 12 || words === 24) {
-        return `${label} · ${vault.t(I18N_KEYS.VaultFieldsWordsCount, { count: String(words) })}`
+        const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.VaultFieldsWordsCount, replacements: { count: String(words) } };
+        return `${label} · ${vault.t(tArgs)}`
       }
       return label
     }
@@ -187,9 +186,10 @@
     for (let index = 0; index < binary.length; index += 1) {
       bytes[index] = binary.charCodeAt(index)
     }
-    const blob = new Blob([bytes], {
+    const BlobArgs: ConstructorParameters<typeof Blob>[1] = {
       type: reveal.record.mimeType || 'application/octet-stream',
-    })
+    };
+    const blob = new Blob([bytes], BlobArgs)
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -360,7 +360,7 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
+                    void (() => { const onCopyToClipboardArgs: Parameters<typeof onCopyToClipboard>[0] = { text: item.websiteUrl, id: item.id, field: 'website' }; return onCopyToClipboard(onCopyToClipboardArgs); })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyWebsiteUrl)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -386,7 +386,7 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(item.username, item.id, 'username')}
+                    void (() => { const onCopyToClipboardArgs2: Parameters<typeof onCopyToClipboard>[0] = { text: item.username, id: item.id, field: 'username' }; return onCopyToClipboard(onCopyToClipboardArgs2); })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyUsername)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -453,7 +453,7 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
+                    void (() => { const onCopyToClipboardArgs3: Parameters<typeof onCopyToClipboard>[0] = { text: item.websiteUrl, id: item.id, field: 'website' }; return onCopyToClipboard(onCopyToClipboardArgs3); })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyWebsiteUrl)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -507,7 +507,7 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(item.expiresAt, item.id, 'expires')}
+                    void (() => { const onCopyToClipboardArgs4: Parameters<typeof onCopyToClipboard>[0] = { text: item.expiresAt, id: item.id, field: 'expires' }; return onCopyToClipboard(onCopyToClipboardArgs4); })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyExpirationDate)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -533,7 +533,7 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(item.name, item.id, 'name')}
+                    void (() => { const onCopyToClipboardArgs5: Parameters<typeof onCopyToClipboard>[0] = { text: item.name, id: item.id, field: 'name' }; return onCopyToClipboard(onCopyToClipboardArgs5); })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyAccountName)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -651,11 +651,9 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(
-                      item.cardholderName,
-                      item.id,
-                      'cardholder',
-                    )}
+                    void (() => { const onCopyToClipboardArgs6: Parameters<typeof onCopyToClipboard>[0] = { text: item.cardholderName, id: item.id, field: 'cardholder' }; return onCopyToClipboard(
+                      onCopyToClipboardArgs6,
+                    ); })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyCardholderName)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -688,11 +686,9 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(
-                      reveal.record.cardNumber,
-                      item.id,
-                      'card-number',
-                    )}
+                    void (() => { const onCopyToClipboardArgs7: Parameters<typeof onCopyToClipboard>[0] = { text: reveal.record.cardNumber, id: item.id, field: 'card-number' }; return onCopyToClipboard(
+                      onCopyToClipboardArgs7,
+                    ); })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyCardNumber)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
                 >
@@ -718,11 +714,9 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(
-                      cardExpiration,
-                      item.id,
-                      'expiration',
-                    )}
+                    void (() => { const onCopyToClipboardArgs8: Parameters<typeof onCopyToClipboard>[0] = { text: cardExpiration, id: item.id, field: 'expiration' }; return onCopyToClipboard(
+                      onCopyToClipboardArgs8,
+                    ); })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyExpiration)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
@@ -753,7 +747,7 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(reveal.record.cvv, item.id, 'cvv')}
+                    void (() => { const onCopyToClipboardArgs9: Parameters<typeof onCopyToClipboard>[0] = { text: reveal.record.cvv, id: item.id, field: 'cvv' }; return onCopyToClipboard(onCopyToClipboardArgs9); })()}
                   aria-label={vault.t(I18N_KEYS.VaultCopyCvv)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
                 >

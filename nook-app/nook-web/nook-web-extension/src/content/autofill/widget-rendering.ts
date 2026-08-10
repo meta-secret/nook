@@ -2,6 +2,7 @@ import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
+import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   detectEnrollmentHints,
   renderEnrollmentActions,
@@ -15,7 +16,6 @@ import {
   cancelPendingLoginPickerRequest,
   continueWithNook,
   generatePasswordWithNook,
-  PasskeyWidgetAction,
   proposePasskeyWithNook,
 } from './login-passkey-actions'
 import {
@@ -33,10 +33,13 @@ import {
 import type { PilotVaultConnection } from './workflow-ui'
 import { removeWidget, translatedMessage, workflowCopy } from './workflow-ui'
 
-export function renderEnrollmentWidget(
-  hints: EnrollmentPageHints,
-  vaultConnection: PilotVaultConnection,
-): void {
+export function renderEnrollmentWidget({
+  hints,
+  vaultConnection,
+}: {
+  hints: EnrollmentPageHints
+  vaultConnection: PilotVaultConnection
+}): void {
   if (widgetState.dismissed) {
     removeWidget()
     return
@@ -57,33 +60,51 @@ export function renderEnrollmentWidget(
   }
   if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
 
-  const shell = createWidgetShell(enrollmentCopy(hints), vaultConnection, 1, 1)
+  const nookTypedArgs0_0: Parameters<typeof createWidgetShell>[0] = {
+    copy: enrollmentCopy(hints),
+    vaultConnection,
+    currentStep: 1,
+    totalSteps: 1,
+  }
+  const shell = createWidgetShell(nookTypedArgs0_0)
   const { body, step, title, description, continueButton, openVaultButton } =
     shell
   continueButton.hidden = true
   openVaultButton.hidden = true
-  mountWidgetShell(shell, workflowKey, {
+  const workflowRoot: Parameters<typeof mountWidgetShell>[0]['workflowRoot'] = {
     kind: WidgetWorkflowRootKind.Unassigned,
-  })
+  }
+  const nookTypedArgs0_1: Parameters<typeof mountWidgetShell>[0] = {
+    shell,
+    workflowKey,
+    workflowRoot,
+  }
+  mountWidgetShell(nookTypedArgs0_1)
 
-  renderEnrollmentActions(
-    buildEnrollmentFlowHost(
-      body,
-      step,
-      title,
-      description,
-      continueButton,
-      openVaultButton,
-    ),
+  const nookTypedArgs0_2: Parameters<typeof buildEnrollmentFlowHost>[0] = {
+    panel: body,
+    step,
+    title,
+    description,
+    continueButton,
+    openVaultButton,
+  }
+  const nookTypedArgs1_0: Parameters<typeof renderEnrollmentActions>[0] = {
+    host: buildEnrollmentFlowHost(nookTypedArgs0_2),
     hints,
-  )
+  }
+  renderEnrollmentActions(nookTypedArgs1_0)
 }
 
-export function renderWidget(
-  snapshot: AuthenticationWorkflowSnapshotView,
-  workflow: PasswordFormObservation,
-  vaultConnection: PilotVaultConnection,
-): void {
+export function renderWidget({
+  snapshot,
+  workflow,
+  vaultConnection,
+}: {
+  snapshot: AuthenticationWorkflowSnapshotView
+  workflow: PasswordFormObservation
+  vaultConnection: PilotVaultConnection
+}): void {
   if (widgetState.dismissed) {
     removeWidget()
     return
@@ -115,28 +136,29 @@ export function renderWidget(
   }
   if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
 
-  const shell = createWidgetShell(
-    workflowCopy(snapshot.kind),
+  const nookTypedArgs0_3: Parameters<typeof createWidgetShell>[0] = {
+    copy: workflowCopy(snapshot.kind),
     vaultConnection,
-    snapshot.currentStep,
-    snapshot.totalSteps,
-  )
+    currentStep: snapshot.currentStep,
+    totalSteps: snapshot.totalSteps,
+  }
+  const shell = createWidgetShell(nookTypedArgs0_3)
   const { body, step, title, description, continueButton, openVaultButton } =
     shell
   const canContinueWithNook =
-    snapshot.action === 'continue-with-nook' ||
-    snapshot.action === 'fill-totp' ||
-    snapshot.action === 'generate-password' ||
-    snapshot.action === PasskeyWidgetAction.UsePasskey ||
-    snapshot.action === PasskeyWidgetAction.CreatePasskey
+    snapshot.action === AuthenticationWorkflowAction.ContinueWithNook ||
+    snapshot.action === AuthenticationWorkflowAction.FillTotp ||
+    snapshot.action === AuthenticationWorkflowAction.GeneratePassword ||
+    snapshot.action === AuthenticationWorkflowAction.UsePasskey ||
+    snapshot.action === AuthenticationWorkflowAction.CreatePasskey
   const continueMessageKey =
-    snapshot.action === 'fill-totp'
+    snapshot.action === AuthenticationWorkflowAction.FillTotp
       ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
-      : snapshot.action === 'generate-password'
+      : snapshot.action === AuthenticationWorkflowAction.GeneratePassword
         ? BROWSER_MESSAGE_KEYS.WidgetGeneratePassword
-        : snapshot.action === PasskeyWidgetAction.UsePasskey
+        : snapshot.action === AuthenticationWorkflowAction.UsePasskey
           ? BROWSER_MESSAGE_KEYS.WidgetUsePasskey
-          : snapshot.action === PasskeyWidgetAction.CreatePasskey
+          : snapshot.action === AuthenticationWorkflowAction.CreatePasskey
             ? BROWSER_MESSAGE_KEYS.WidgetCreatePasskey
             : canContinueWithNook
               ? BROWSER_MESSAGE_KEYS.WidgetContinue
@@ -156,37 +178,46 @@ export function renderWidget(
       removeWidget()
       return
     }
-    if (snapshot.action === 'fill-totp') {
-      void continueWithAuthenticator(
-        workflow,
-        step,
-        title,
-        description,
-        continueButton,
-      )
-    } else if (snapshot.action === 'generate-password') {
-      void generatePasswordWithNook(
-        workflow,
-        step,
-        title,
-        description,
-        continueButton,
-      )
+    if (snapshot.action === AuthenticationWorkflowAction.FillTotp) {
+      const nookTypedArgs0_4: Parameters<typeof continueWithAuthenticator>[0] =
+        {
+          workflow,
+          step,
+          title,
+          description,
+          continueButton,
+        }
+      void continueWithAuthenticator(nookTypedArgs0_4)
     } else if (
-      snapshot.action === PasskeyWidgetAction.UsePasskey ||
-      snapshot.action === PasskeyWidgetAction.CreatePasskey
+      snapshot.action === AuthenticationWorkflowAction.GeneratePassword
     ) {
-      void proposePasskeyWithNook(description, continueButton, snapshot.action)
-    } else {
-      void continueWithNook(
+      const nookTypedArgs0_5: Parameters<typeof generatePasswordWithNook>[0] = {
+        workflow,
         step,
         title,
         description,
         continueButton,
-        openVaultButton,
-        body,
+      }
+      void generatePasswordWithNook(nookTypedArgs0_5)
+    } else if (
+      snapshot.action === AuthenticationWorkflowAction.UsePasskey ||
+      snapshot.action === AuthenticationWorkflowAction.CreatePasskey
+    ) {
+      const nookTypedArgs0_6: Parameters<typeof proposePasskeyWithNook>[0] = {
+        description,
+        continueButton,
+        action: snapshot.action,
+      }
+      void proposePasskeyWithNook(nookTypedArgs0_6)
+    } else {
+      const nookTypedArgs0_7: Parameters<typeof continueWithNook>[0] = {
+        step,
+        title,
+        description,
+        continueButton,
         workflow,
-      )
+      }
+      void continueWithNook(nookTypedArgs0_7)
     }
   })
 
@@ -206,23 +237,33 @@ export function renderWidget(
   })
 
   body.append(takeOverButton)
-  mountWidgetShell(shell, workflowKey, {
+  const nookTypedArgs0_1: Parameters<
+    typeof mountWidgetShell
+  >[0]['workflowRoot'] = {
     kind: WidgetWorkflowRootKind.Assigned,
     observation: workflow,
-  })
+  }
+  const nookTypedArgs0_8: Parameters<typeof mountWidgetShell>[0] = {
+    shell,
+    workflowKey,
+    workflowRoot: nookTypedArgs0_1,
+  }
+  mountWidgetShell(nookTypedArgs0_8)
 
   const enrollmentHints = detectEnrollmentHints()
   if (enrollmentHints.qr || enrollmentHints.backupCodes) {
-    renderEnrollmentActions(
-      buildEnrollmentFlowHost(
-        body,
-        step,
-        title,
-        description,
-        continueButton,
-        openVaultButton,
-      ),
-      enrollmentHints,
-    )
+    const nookTypedArgs0_9: Parameters<typeof buildEnrollmentFlowHost>[0] = {
+      panel: body,
+      step,
+      title,
+      description,
+      continueButton,
+      openVaultButton,
+    }
+    const nookTypedArgs1_1: Parameters<typeof renderEnrollmentActions>[0] = {
+      host: buildEnrollmentFlowHost(nookTypedArgs0_9),
+      hints: enrollmentHints,
+    }
+    renderEnrollmentActions(nookTypedArgs1_1)
   }
 }

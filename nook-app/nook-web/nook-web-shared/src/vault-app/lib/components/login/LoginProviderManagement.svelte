@@ -10,9 +10,8 @@
   } from '@lucide/svelte'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import type {
-    OAuthFilePreset,
+    ProviderSetupRequest,
     StorageProvider,
-    StorageProviderType,
   } from '$lib/auth/providers'
   import {
     GITHUB_PROVIDER_TYPE,
@@ -45,8 +44,7 @@
     open?: boolean
     addingProvider?: boolean
     onBeginSetup?: (
-      type: StorageProviderType,
-      oauthPreset?: OAuthFilePreset,
+      request: ProviderSetupRequest,
     ) => void
     onCancelAddProvider?: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
@@ -57,11 +55,12 @@
 
   function confirmRemoveProvider(provider: StorageProvider) {
     if (!onRemoveProvider) return
-    const ok = confirm(
-      vault.t(I18N_KEYS.AuthStorageConfirmRemove, {
+    const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.AuthStorageConfirmRemove, replacements: {
         label: provider.label,
         signedOutNote: '',
-      }),
+      } };
+    const ok = confirm(
+      vault.t(tArgs),
     )
     if (ok) {
       void onRemoveProvider(provider.id)
@@ -170,13 +169,13 @@
               {/if}
               <div class="min-w-0 flex-1">
                 <div class="truncate text-sm font-medium text-foreground">
-                  {localizeProviderLabel(provider.label, vault.t)}
+                  {(() => { const localizeProviderLabelArgs: Parameters<typeof localizeProviderLabel>[0] = { label: provider.label, t: vault.t }; return localizeProviderLabel(localizeProviderLabelArgs); })()}
                 </div>
                 <div
                   class="truncate text-xs text-muted-foreground"
                   data-testid="provider-detail-{provider.id}"
                 >
-                  {providerStorageDetail(provider, vault.t)}
+                  {(() => { const providerStorageDetailArgs: Parameters<typeof providerStorageDetail>[0] = { provider, t: vault.t }; return providerStorageDetail(providerStorageDetailArgs); })()}
                 </div>
               </div>
               {#if onRemoveProvider}

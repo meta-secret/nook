@@ -71,17 +71,26 @@
     if (secs < 5) return vault ? vault.t(I18N_KEYS.StatusBarJustNow) : 'just now'
     if (secs < 60)
       return vault
-        ? vault.t(I18N_KEYS.StatusBarSecsAgo, { secs: String(secs) })
+        ? (() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.StatusBarSecsAgo,
+  replacements: { secs: String(secs) },
+}; return vault.t(translationRequest); })()
         : `${secs}s ago`
     const mins = Math.floor(secs / 60)
     if (mins < 60)
       return vault
-        ? vault.t(I18N_KEYS.StatusBarMinsAgo, { mins: String(mins) })
+        ? (() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.StatusBarMinsAgo,
+  replacements: { mins: String(mins) },
+}; return vault.t(translationRequest2); })()
         : `${mins}m ago`
     return vault
-      ? vault.t(I18N_KEYS.StatusBarHoursAgo, {
+      ? (() => { const translationRequest3: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.StatusBarHoursAgo,
+  replacements: {
           hours: String(Math.floor(mins / 60)),
-        })
+        },
+}; return vault.t(translationRequest3); })()
       : `${Math.floor(mins / 60)}h ago`
   }
 
@@ -110,9 +119,13 @@
   const syncDetail = $derived.by(() => {
     if (!vault || !showSyncStatus) return ''
     if (vault.syncingProviderLabel.kind === SyncProviderLabelKind.Active) {
-      return vault.t(I18N_KEYS.StatusBarSyncingTo, {
+      const translationRequest4: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.StatusBarSyncingTo,
+  replacements: {
         provider: vault.syncingProviderLabel.label,
-      })
+      },
+};
+      return vault.t(translationRequest4)
     }
     if (vault.isFanOutSyncing) {
       return vault.t(I18N_KEYS.StatusBarSyncingProviders)
@@ -120,9 +133,12 @@
     if (vault.syncProviderCount > 0) {
       return vault.syncProviderCount === 1
         ? vault.t(I18N_KEYS.StatusBarSyncProvidersSingular)
-        : vault.t(I18N_KEYS.StatusBarSyncProvidersPlural, {
+        : (() => { const translationRequest5: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.StatusBarSyncProvidersPlural,
+  replacements: {
             count: String(vault.syncProviderCount),
-          })
+          },
+}; return vault.t(translationRequest5); })()
     }
     return vault.t(I18N_KEYS.StatusBarSavedLocalOnly)
   })

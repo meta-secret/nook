@@ -83,7 +83,7 @@
         rel="noopener noreferrer"
         data-testid="github-new-token-btn"
         class={cn(
-          buttonVariants({ variant: 'default', size: 'sm' }),
+          (() => { const buttonVariantsArgs: Parameters<typeof buttonVariants>[0] = { variant: 'default', size: 'sm' }; return buttonVariants(buttonVariantsArgs); })(),
           'w-full sm:w-auto',
         )}
       >
@@ -131,9 +131,12 @@
             class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
           />
           <p class="text-[11px] text-muted-foreground text-pretty">
-            {vault.t(I18N_KEYS.ProviderSetupStoredLocallyDesc, {
+            {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.ProviderSetupStoredLocallyDesc,
+  replacements: {
               repo: githubRepo.trim() || DEFAULT_GITHUB_REPO,
-            })}
+            },
+}; return vault.t(translationRequest); })()}
           </p>
         </div>
       </div>

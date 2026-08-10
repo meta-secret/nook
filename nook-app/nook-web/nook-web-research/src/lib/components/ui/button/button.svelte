@@ -1,7 +1,3 @@
-<script lang="ts" module>
-  export { ButtonSize, ButtonVariant, buttonVariants } from './button-state'
-</script>
-
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { HTMLButtonAttributes } from 'svelte/elements'
@@ -20,10 +16,14 @@
     size?: ButtonSize
     children?: Snippet
   } = $props()
+  let variantInput: Parameters<typeof buttonVariants>[0] = $derived({
+    variant,
+    size,
+  })
 </script>
 
 <button
-  class={cn(buttonVariants({ variant, size }), className)}
+  class={cn(buttonVariants(variantInput), className)}
   {type}
   {...restProps}
 >

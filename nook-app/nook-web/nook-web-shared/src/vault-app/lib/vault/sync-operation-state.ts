@@ -18,6 +18,23 @@ export type EventOutboxTarget =
       args: [string, string, string];
     };
 
+export enum EventOutboxRequestKind {
+  Default = "default",
+  LocalFolder = "local-folder",
+  Remote = "remote",
+}
+
+export type EventOutboxRequest =
+  | { kind: EventOutboxRequestKind.Default }
+  | {
+      kind: EventOutboxRequestKind.LocalFolder;
+      provider: StorageProvider;
+    }
+  | {
+      kind: EventOutboxRequestKind.Remote;
+      provider: StorageProvider;
+    };
+
 export enum ConflictProviderSaveKind {
   NotSaved = "not-saved",
   Saved = "saved",

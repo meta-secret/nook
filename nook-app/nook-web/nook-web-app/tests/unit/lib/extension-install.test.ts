@@ -114,13 +114,16 @@ describe('extension install target', () => {
   ])('does not support installation in an $label', ({ environment }) => {
     expect(browserSupportsExtensionInstallation(environment)).toBe(false)
     expect(
-      shouldOfferExtensionSetup(ExtensionSetupStatus.NotInstalled, environment),
+      shouldOfferExtensionSetup({
+        status: ExtensionSetupStatus.NotInstalled,
+        environment: environment,
+      }),
     ).toBe(false)
     expect(
-      shouldOfferExtensionSetup(
-        ExtensionSetupStatus.InstalledUnpaired,
-        environment,
-      ),
+      shouldOfferExtensionSetup({
+        status: ExtensionSetupStatus.InstalledUnpaired,
+        environment: environment,
+      }),
     ).toBe(true)
   })
 

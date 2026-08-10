@@ -97,16 +97,22 @@ function serializeAssertion(
   }
 }
 
-function publicCredential(
-  ceremony: WebsitePasskeyCeremony,
-  result: Record<string, unknown>,
-): Credential {
+function publicCredential({
+  ceremony,
+  result,
+}: {
+  ceremony: WebsitePasskeyCeremony
+  result: Record<string, unknown>
+}): Credential {
   const id = result.credentialId
   if (typeof id !== 'string')
     throw new DOMException('Invalid Nook response.', 'DataError')
   const rawId = bytes(id)
   const clientDataJSON = bytes(result.clientDataJSON)
-  const response =
+  const response: Record<
+    string,
+    ArrayBuffer | (() => string[]) | (() => number)
+  > =
     ceremony === WebsitePasskeyCeremony.Create
       ? {
           clientDataJSON,
@@ -142,11 +148,15 @@ function publicCredential(
   } as unknown as Credential
 }
 
-async function extensionCeremony(
-  ceremony: WebsitePasskeyCeremony,
-  options: CredentialCreationOptions | CredentialRequestOptions,
-  fallback: () => ReturnType<CredentialsContainer['get']>,
-): ReturnType<CredentialsContainer['get']> {
+async function extensionCeremony({
+  ceremony,
+  options,
+  fallback,
+}: {
+  ceremony: WebsitePasskeyCeremony
+  options: CredentialCreationOptions | CredentialRequestOptions
+  fallback: () => ReturnType<CredentialsContainer['get']>
+}): ReturnType<CredentialsContainer['get']> {
   if (!('publicKey' in options) || !options.publicKey) return fallback()
   if ('mediation' in options && options.mediation === 'conditional')
     return fallback()
@@ -166,6 +176,7 @@ async function extensionCeremony(
   const signal = options.signal
 
   return new Promise<Awaited<ReturnType<CredentialsContainer['get']>>>(
+    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
     (resolve, reject) => {
       let settled = false
       const finish = (callback: () => void) => {
@@ -177,10 +188,12 @@ async function extensionCeremony(
         callback()
       }
       const abort = () => {
-        window.postMessage(
-          { source: REQUEST_SOURCE, type: 'cancel', requestId: id },
-          location.origin,
-        )
+        const nookTypedArgs0_0: Parameters<typeof window.postMessage>[0] = {
+          source: REQUEST_SOURCE,
+          type: 'cancel',
+          requestId: id,
+        }
+        window.postMessage(nookTypedArgs0_0, location.origin)
         finish(() =>
           reject(
             signal?.reason ??
@@ -202,7 +215,13 @@ async function extensionCeremony(
           event.data.action === ExtensionResponseAction.Result &&
           event.data.result
         ) {
-          finish(() => resolve(publicCredential(ceremony, event.data.result!)))
+          finish(() => {
+            const credentialArgs: Parameters<typeof publicCredential>[0] = {
+              ceremony,
+              result: event.data.result!,
+            }
+            return resolve(publicCredential(credentialArgs))
+          })
         } else {
           finish(() =>
             reject(
@@ -215,10 +234,12 @@ async function extensionCeremony(
         }
       }
       const timer = window.setTimeout(() => {
-        window.postMessage(
-          { source: REQUEST_SOURCE, type: 'cancel', requestId: id },
-          location.origin,
-        )
+        const nookTypedArgs0_1: Parameters<typeof window.postMessage>[0] = {
+          source: REQUEST_SOURCE,
+          type: 'cancel',
+          requestId: id,
+        }
+        window.postMessage(nookTypedArgs0_1, location.origin)
         finish(() =>
           reject(
             new DOMException('The operation timed out.', 'NotAllowedError'),
@@ -226,18 +247,17 @@ async function extensionCeremony(
         )
       }, timeout)
       window.addEventListener('message', receive)
-      signal?.addEventListener('abort', abort, { once: true })
-      window.postMessage(
-        {
-          source: REQUEST_SOURCE,
-          type: 'request',
-          requestId: id,
-          ceremony,
-          request,
-          expiresAt: Date.now() + timeout,
-        },
-        location.origin,
-      )
+      const abortOptions: AddEventListenerOptions = { once: true }
+      signal?.addEventListener('abort', abort, abortOptions)
+      const nookTypedArgs0_2: Parameters<typeof window.postMessage>[0] = {
+        source: REQUEST_SOURCE,
+        type: 'request',
+        requestId: id,
+        ceremony,
+        request,
+        expiresAt: Date.now() + timeout,
+      }
+      window.postMessage(nookTypedArgs0_2, location.origin)
     },
   )
 }
@@ -247,22 +267,32 @@ const prototype = Object.getPrototypeOf(credentials) as CredentialsContainer
 const nativeCreate = prototype.create
 const nativeGet = prototype.get
 
-Object.defineProperty(prototype, 'create', {
+const nookTypedArgs0_3: Parameters<typeof Object.defineProperty>[2] = {
   configurable: true,
   writable: true,
+  // eslint-disable-next-line max-params -- CredentialsContainer owns this browser override signature.
   value(this: CredentialsContainer, options: CredentialCreationOptions) {
-    return extensionCeremony(WebsitePasskeyCeremony.Create, options, () =>
-      nativeCreate.call(this, options),
-    )
+    const nookTypedArgs0_0: Parameters<typeof extensionCeremony>[0] = {
+      ceremony: WebsitePasskeyCeremony.Create,
+      options,
+      fallback: () => nativeCreate.call(this, options),
+    }
+    return extensionCeremony(nookTypedArgs0_0)
   },
-})
+}
+Object.defineProperty(prototype, 'create', nookTypedArgs0_3)
 
-Object.defineProperty(prototype, 'get', {
+const nookTypedArgs0_4: Parameters<typeof Object.defineProperty>[2] = {
   configurable: true,
   writable: true,
+  // eslint-disable-next-line max-params -- CredentialsContainer owns this browser override signature.
   value(this: CredentialsContainer, options: CredentialRequestOptions) {
-    return extensionCeremony(WebsitePasskeyCeremony.Get, options, () =>
-      nativeGet.call(this, options),
-    )
+    const nookTypedArgs0_1: Parameters<typeof extensionCeremony>[0] = {
+      ceremony: WebsitePasskeyCeremony.Get,
+      options,
+      fallback: () => nativeGet.call(this, options),
+    }
+    return extensionCeremony(nookTypedArgs0_1)
   },
-})
+}
+Object.defineProperty(prototype, 'get', nookTypedArgs0_4)

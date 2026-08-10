@@ -4,7 +4,10 @@ import { createEnrollmentQrOptions, enrollmentQrSize } from '$lib/enrollment/qr'
 describe('createEnrollmentQrOptions', () => {
   test('configures a styled enrollment QR with quartile correction', () => {
     const link = 'https://nook.example/#enroll=abc123'
-    const options = createEnrollmentQrOptions(link)
+    const options = createEnrollmentQrOptions({
+      enrollmentLink: link,
+      dense: false,
+    })
 
     expect(options.width).toBe(enrollmentQrSize)
     expect(options.height).toBe(enrollmentQrSize)
@@ -22,10 +25,10 @@ describe('createEnrollmentQrOptions', () => {
   })
 
   test('uses maximum capacity without a badge for dense member invitations', () => {
-    const options = createEnrollmentQrOptions(
-      'https://nook.example/app/#sentinel-onboard=x',
-      true,
-    )
+    const options = createEnrollmentQrOptions({
+      enrollmentLink: 'https://nook.example/app/#sentinel-onboard=x',
+      dense: true,
+    })
 
     expect(options.qrOptions?.errorCorrectionLevel).toBe('L')
     expect(Object.hasOwn(options, 'image')).toBe(false)

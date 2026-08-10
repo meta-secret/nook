@@ -1,8 +1,12 @@
-export async function runSentinelDashboardAction(
-  allowed: boolean,
-  setBusy: (busy: boolean) => void,
-  action: () => unknown | Promise<unknown>,
-): Promise<void> {
+export async function runSentinelDashboardAction({
+  allowed,
+  setBusy,
+  action,
+}: {
+  readonly allowed: boolean;
+  readonly setBusy: (busy: boolean) => void;
+  readonly action: () => void | Promise<void>;
+}): Promise<void> {
   if (!allowed) return;
   setBusy(true);
   try {
@@ -12,11 +16,15 @@ export async function runSentinelDashboardAction(
   }
 }
 
-export async function copySentinelRequest(
-  request: string,
-  onCopied: () => void,
-  onFailure: () => void,
-): Promise<void> {
+export async function copySentinelRequest({
+  request,
+  onCopied,
+  onFailure,
+}: {
+  readonly request: string;
+  readonly onCopied: () => void;
+  readonly onFailure: () => void;
+}): Promise<void> {
   if (!request) return;
   try {
     await navigator.clipboard.writeText(request);

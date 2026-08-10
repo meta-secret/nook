@@ -3,11 +3,15 @@ import type { NookSecretRecord } from "$lib/nook";
 export type DecryptedSecrets = Record<string, NookSecretRecord>;
 export type SecretLoader = (id: string) => Promise<NookSecretRecord>;
 
-export async function toggleSecretExposure(
-  records: DecryptedSecrets,
-  id: string,
-  load: SecretLoader,
-): Promise<DecryptedSecrets> {
+export async function toggleSecretExposure({
+  records,
+  id,
+  load,
+}: {
+  readonly records: DecryptedSecrets;
+  readonly id: string;
+  readonly load: SecretLoader;
+}): Promise<DecryptedSecrets> {
   const current = records[id];
   if (current) {
     current.free();
@@ -18,12 +22,17 @@ export async function toggleSecretExposure(
   return { ...records, [id]: await load(id) };
 }
 
-export async function withDecryptedSecret<T>(
-  records: DecryptedSecrets,
-  id: string,
-  load: SecretLoader,
-  action: (record: NookSecretRecord) => Promise<T> | T,
-): Promise<T> {
+export async function withDecryptedSecret<T>({
+  records,
+  id,
+  load,
+  action,
+}: {
+  readonly records: DecryptedSecrets;
+  readonly id: string;
+  readonly load: SecretLoader;
+  readonly action: (record: NookSecretRecord) => Promise<T> | T;
+}): Promise<T> {
   const cached = records[id];
   if (cached) return action(cached);
 

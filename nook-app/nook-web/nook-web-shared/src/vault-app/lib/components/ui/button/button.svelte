@@ -1,7 +1,31 @@
 <script lang="ts" module>
   import { tv, type VariantProps } from 'tailwind-variants'
 
-  export const buttonVariants = tv({
+  type ButtonVariantConfig = {
+    readonly base: string
+    readonly variants: {
+      readonly variant: {
+        readonly default: string
+        readonly destructive: string
+        readonly outline: string
+        readonly secondary: string
+        readonly ghost: string
+        readonly link: string
+      }
+      readonly size: {
+        readonly default: string
+        readonly sm: string
+        readonly lg: string
+        readonly icon: string
+      }
+    }
+    readonly defaultVariants: {
+      readonly variant: 'default'
+      readonly size: 'default'
+    }
+  }
+
+  const buttonVariantConfig: ButtonVariantConfig = {
     base: 'ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
     variants: {
       variant: {
@@ -26,7 +50,8 @@
       variant: 'default',
       size: 'default',
     },
-  })
+  }
+  export const buttonVariants = tv(buttonVariantConfig)
 
   export type ButtonVariant = VariantProps<typeof buttonVariants>['variant']
   export type ButtonSize = VariantProps<typeof buttonVariants>['size']
@@ -52,7 +77,7 @@
 </script>
 
 <button
-  class={cn(buttonVariants({ variant, size }), className)}
+  class={cn((() => { const buttonVariantsArgs: Parameters<typeof buttonVariants>[0] = { variant, size }; return buttonVariants(buttonVariantsArgs); })(), className)}
   {type}
   {...restProps}
 >

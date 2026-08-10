@@ -80,7 +80,11 @@ async function scanAndRender(): Promise<void> {
     cancelPendingLoginPickerRequest()
     const vaultConnection = await loadPilotVaultConnection()
     if (sequence !== scanState.sequence) return
-    renderEnrollmentWidget(enrollmentHints, vaultConnection)
+    const nookTypedArgs0_0: Parameters<typeof renderEnrollmentWidget>[0] = {
+      hints: enrollmentHints,
+      vaultConnection,
+    }
+    renderEnrollmentWidget(nookTypedArgs0_0)
     return
   }
   if (workflowForms.length === 0) {
@@ -89,7 +93,7 @@ async function scanAndRender(): Promise<void> {
   }
 
   const boundedCount = (count: number) => Math.min(count, 100)
-  const delivery = await sendRuntimeMessage<WorkflowSnapshotResponse>({
+  const nookTypedArgs0_0: Parameters<typeof sendRuntimeMessage>[0] = {
     type: 'nook:authentication-workflow-snapshot',
     payload: {
       origin: location.origin,
@@ -110,7 +114,9 @@ async function scanAndRender(): Promise<void> {
         matchingPasskeyAccountCount: 0,
       })),
     },
-  })
+  }
+  const delivery =
+    await sendRuntimeMessage<WorkflowSnapshotResponse>(nookTypedArgs0_0)
   if (sequence !== scanState.sequence) return
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     removeScannedWidget()
@@ -129,7 +135,12 @@ async function scanAndRender(): Promise<void> {
   }
   const vaultConnection = await loadPilotVaultConnection()
   if (sequence !== scanState.sequence) return
-  renderWidget(snapshot, selected, vaultConnection)
+  const nookTypedArgs0_1: Parameters<typeof renderWidget>[0] = {
+    snapshot,
+    workflow: selected,
+    vaultConnection,
+  }
+  renderWidget(nookTypedArgs0_1)
 }
 
 function scheduleScan() {
@@ -155,7 +166,7 @@ void companionWasmReady.then(() => {
   void scanAndRender()
 
   const observer = new MutationObserver(scheduleScan)
-  observer.observe(document.documentElement, {
+  const nookTypedArgs0_1: Parameters<typeof observer.observe>[1] = {
     attributes: true,
     attributeFilter: [
       'aria-hidden',
@@ -170,5 +181,6 @@ void companionWasmReady.then(() => {
     ],
     childList: true,
     subtree: true,
-  })
+  }
+  observer.observe(document.documentElement, nookTypedArgs0_1)
 })

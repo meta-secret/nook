@@ -1,7 +1,7 @@
 import {
-  ExternalPropertyPresence,
-  externalProperty,
-  type ExternalValue,
+  UntrustedYamlPropertyPresence,
+  untrustedYamlProperty,
+  type UntrustedYamlNode,
   isRecord,
 } from '../lib/guards.ts';
 import {
@@ -48,7 +48,7 @@ import {
   type PrLandLoomRequest,
 } from './request-pr-land.ts';
 import type { FieldErrorArgs, JoinPathArgs } from './field-error.ts';
-import type { ExternalPropertyArgs } from '../lib/guards.ts';
+import type { UntrustedYamlPropertyArgs } from '../lib/guards.ts';
 export type LoomRequest =
   | { readonly family: RequestFamily.PrePush; readonly prePush: PrePushRequest }
   | {
@@ -86,14 +86,14 @@ const ROOT_FAMILIES: readonly RequestFamily[] = [
 ];
 
 export function decodeLoomRequest(
-  value: ExternalValue,
+  value: UntrustedYamlNode,
 ): DecodeOutcome<LoomRequest> {
   const decodeLoomRequestAtArgs = { value, path: '', allowToolsCall: true };
   return decodeLoomRequestAt(decodeLoomRequestAtArgs);
 }
 
 type DecodeLoomRequestAtArgs = {
-  readonly value: ExternalValue;
+  readonly value: UntrustedYamlNode;
   readonly path: string;
   readonly allowToolsCall: boolean;
 };
@@ -146,12 +146,12 @@ function decodeLoomRequestAt(
     };
     return decodeErr([fieldError(fieldErrorArgs3)]);
   }
-  const payloadPropertyArgs: ExternalPropertyArgs = {
+  const payloadPropertyArgs: UntrustedYamlPropertyArgs = {
     record: object.value,
     key: family,
   };
-  const payloadProperty = externalProperty(payloadPropertyArgs);
-  if (payloadProperty.presence === ExternalPropertyPresence.Absent) {
+  const payloadProperty = untrustedYamlProperty(payloadPropertyArgs);
+  if (payloadProperty.presence === UntrustedYamlPropertyPresence.Absent) {
     const joinPathArgs3: JoinPathArgs = { base: path, key: family };
     const fieldErrorArgs2: FieldErrorArgs = {
       path: joinPath(joinPathArgs3),
@@ -169,7 +169,7 @@ function decodeLoomRequestAt(
 
 type DecodeFamilyArgs = {
   readonly family: RequestFamily;
-  readonly payload: ExternalValue;
+  readonly payload: UntrustedYamlNode;
   readonly path: string;
 };
 

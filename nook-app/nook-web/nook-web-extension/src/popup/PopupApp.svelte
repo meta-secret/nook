@@ -110,31 +110,31 @@
 
   function refreshLoginDetection(): void {
     loginDetectionView = { kind: LoginDetectionViewKind.Loading }
-    chrome.runtime.sendMessage(
-      { type: 'nook:query-active-tab-login-detection' },
-      (response: unknown) => {
-        if (
-          chrome.runtime.lastError ||
-          !isOkResponse(response) ||
-          !response ||
-          typeof response !== 'object' ||
-          !('status' in response) ||
-          (response.status !== LoginDetectionStatus.Detected &&
-            response.status !== LoginDetectionStatus.NotDetected &&
-            response.status !== LoginDetectionStatus.Unavailable)
-        ) {
-          loginDetectionView = {
-            kind: LoginDetectionViewKind.Ready,
-            status: LoginDetectionStatus.Unavailable,
-          }
-          return
-        }
+    const message: { type: string } = {
+      type: 'nook:query-active-tab-login-detection',
+    }
+    chrome.runtime.sendMessage(message, (response: unknown) => {
+      if (
+        chrome.runtime.lastError ||
+        !isOkResponse(response) ||
+        !response ||
+        typeof response !== 'object' ||
+        !('status' in response) ||
+        (response.status !== LoginDetectionStatus.Detected &&
+          response.status !== LoginDetectionStatus.NotDetected &&
+          response.status !== LoginDetectionStatus.Unavailable)
+      ) {
         loginDetectionView = {
           kind: LoginDetectionViewKind.Ready,
-          status: response.status as LoginDetectionStatus,
+          status: LoginDetectionStatus.Unavailable,
         }
-      },
-    )
+        return
+      }
+      loginDetectionView = {
+        kind: LoginDetectionViewKind.Ready,
+        status: response.status as LoginDetectionStatus,
+      }
+    })
   }
 
   $effect(() => {
@@ -142,7 +142,11 @@
     refreshLoginDetection()
   })
 
-  function errorMessage(caught: unknown, fallbackKey: I18nKey): string {
+  function errorMessage(args: {
+    caught: unknown
+    fallbackKey: I18nKey
+  }): string {
+    const { caught, fallbackKey } = args
     if (!(caught instanceof Error)) return translatePlain(fallbackKey)
     if (caught.message.includes('PASSKEY_CEREMONY_NOT_ALLOWED')) {
       return translatePlain(fallbackKey)
@@ -158,38 +162,37 @@
 
   function openSimpleVault(): void {
     error = ''
-    chrome.runtime.sendMessage(
-      { type: 'nook:open-simple-vault' },
-      (response: unknown) => {
-        if (chrome.runtime.lastError || !isOkResponse(response)) {
-          error = translatePlain(I18N_KEYS.ExtensionConnectStartFailed)
-          return
-        }
-        window.close()
-      },
-    )
+    const message: { type: string } = { type: 'nook:open-simple-vault' }
+    chrome.runtime.sendMessage(message, (response: unknown) => {
+      if (chrome.runtime.lastError || !isOkResponse(response)) {
+        error = translatePlain(I18N_KEYS.ExtensionConnectStartFailed)
+        return
+      }
+      window.close()
+    })
   }
 
   function beginPairing(device: ExtensionDeviceProtectionResult): void {
     busy = true
     error = ''
-    chrome.runtime.sendMessage(
-      {
-        type: 'nook:begin-extension-pairing',
-        payload: {
-          ...device,
-          deviceLabel: translatePlain(I18N_KEYS.ExtensionSetupProfileTitle),
-        },
+    const message: {
+      type: string
+      payload: ExtensionDeviceProtectionResult & { deviceLabel: string }
+    } = {
+      type: 'nook:begin-extension-pairing',
+      payload: {
+        ...device,
+        deviceLabel: translatePlain(I18N_KEYS.ExtensionSetupProfileTitle),
       },
-      (response: unknown) => {
-        busy = false
-        if (chrome.runtime.lastError || !isOkResponse(response)) {
-          error = translatePlain(I18N_KEYS.ExtensionConnectStartFailed)
-          return
-        }
-        window.close()
-      },
-    )
+    }
+    chrome.runtime.sendMessage(message, (response: unknown) => {
+      busy = false
+      if (chrome.runtime.lastError || !isOkResponse(response)) {
+        error = translatePlain(I18N_KEYS.ExtensionConnectStartFailed)
+        return
+      }
+      window.close()
+    })
   }
 
   function stayAsCompanion(): void {
@@ -209,10 +212,12 @@
     enterCompanionHome(activeSessionDevice.device)
   })
 
-  async function runDeviceAction(
-    action: () => Promise<ExtensionDeviceProtectionResult>,
-    fallbackKey: I18nKey = I18N_KEYS.ExtensionSetupPasskeySetupFailed,
-  ): Promise<void> {
+  async function runDeviceAction(args: {
+    action: () => Promise<ExtensionDeviceProtectionResult>
+    fallbackKey?: I18nKey
+  }): Promise<void> {
+    const { action, fallbackKey = I18N_KEYS.ExtensionSetupPasskeySetupFailed } =
+      args
     busy = true
     error = ''
     try {
@@ -232,29 +237,42 @@
         )
         return
       }
-      error = errorMessage(caught, fallbackKey)
+      const errorArgs: Parameters<typeof errorMessage>[0] = {
+        caught,
+        fallbackKey,
+      }
+      error = errorMessage(errorArgs)
     }
   }
 
   function createPasskey(): void {
-    void runDeviceAction(() => {
-      const args = { passkeyLabel, deviceMode }
-      return createExtensionPasskey(args)
-    }, I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed)
+    const args: Parameters<typeof runDeviceAction>[0] = {
+      action: () => {
+        const createArgs: Parameters<typeof createExtensionPasskey>[0] = {
+          passkeyLabel,
+          deviceMode,
+        }
+        return createExtensionPasskey(createArgs)
+      },
+      fallbackKey: I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed,
+    }
+    void runDeviceAction(args)
   }
 
   function useExistingPasskey(): void {
-    void runDeviceAction(
-      recoverExtensionPasskey,
-      I18N_KEYS.DeviceProtectionPasskeyRecoveryNotAllowed,
-    )
+    const args: Parameters<typeof runDeviceAction>[0] = {
+      action: recoverExtensionPasskey,
+      fallbackKey: I18N_KEYS.DeviceProtectionPasskeyRecoveryNotAllowed,
+    }
+    void runDeviceAction(args)
   }
 
   function unlockPasskey(): void {
-    void runDeviceAction(
-      unlockExtensionPasskey,
-      I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed,
-    )
+    const args: Parameters<typeof runDeviceAction>[0] = {
+      action: unlockExtensionPasskey,
+      fallbackKey: I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed,
+    }
+    void runDeviceAction(args)
   }
 
   function createPin(): void {
@@ -262,17 +280,19 @@
       error = translatePlain(I18N_KEYS.DeviceProtectionPinMismatch)
       return
     }
-    void runDeviceAction(
-      () => createExtensionPin(pin),
-      I18N_KEYS.DeviceProtectionPinSetupFailed,
-    )
+    const args: Parameters<typeof runDeviceAction>[0] = {
+      action: () => createExtensionPin(pin),
+      fallbackKey: I18N_KEYS.DeviceProtectionPinSetupFailed,
+    }
+    void runDeviceAction(args)
   }
 
   function unlockPin(): void {
-    void runDeviceAction(
-      () => unlockExtensionPin(pin),
-      I18N_KEYS.DeviceProtectionPinUnlockFailed,
-    )
+    const args: Parameters<typeof runDeviceAction>[0] = {
+      action: () => unlockExtensionPin(pin),
+      fallbackKey: I18N_KEYS.DeviceProtectionPinUnlockFailed,
+    }
+    void runDeviceAction(args)
   }
 </script>
 

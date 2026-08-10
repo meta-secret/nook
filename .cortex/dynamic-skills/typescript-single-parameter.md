@@ -10,9 +10,7 @@ Multi-argument APIs must use a named object type.
 Applies to:
 
 - `agentic-ai/loom` authored TypeScript;
-- migrated `nook-app/nook-web` paths selected by the shared ESLint config.
-
-Nook web expands enforcement one green package slice at a time.
+- all authored production TypeScript and Svelte under `nook-app/nook-web`.
 
 Generated bindings are excluded.
 

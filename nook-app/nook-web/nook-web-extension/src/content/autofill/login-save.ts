@@ -5,7 +5,7 @@ import {
   readLoginCredentials,
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { AuthenticationOutcomeVerdict } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { AuthenticationOutcomeVerdict } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import {
   NookWebsiteLoginSaveDecision,
@@ -89,11 +89,15 @@ function pageLooksLikeAuthPath(pathname: string): boolean {
   )
 }
 
-function collectOutcomeObservation(
-  startedAt: number,
-  authPath: string,
-  sawMutation: boolean,
-): AuthenticationOutcomeObservationView {
+function collectOutcomeObservation({
+  startedAt,
+  authPath,
+  sawMutation,
+}: {
+  startedAt: number
+  authPath: string
+  sawMutation: boolean
+}): AuthenticationOutcomeObservationView {
   const successMarkerPresent = Boolean(
     document.querySelector(
       '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
@@ -127,16 +131,17 @@ function collectOutcomeObservation(
 async function classifyOutcomeEvidence(
   observation: AuthenticationOutcomeObservationView,
 ): Promise<AuthenticationOutcomeRead> {
-  const delivery = await sendRuntimeMessage<{
-    ok?: boolean
-    verdict?: AuthenticationOutcomeVerdictView
-  }>({
+  const nookTypedArgs0_0: Parameters<typeof sendRuntimeMessage>[0] = {
     type: 'nook:authentication-outcome-classify',
     payload: {
       observation,
       timeoutMs: OUTCOME_EVIDENCE_TIMEOUT_MS,
     },
-  })
+  }
+  const delivery = await sendRuntimeMessage<{
+    ok?: boolean
+    verdict?: AuthenticationOutcomeVerdictView
+  }>(nookTypedArgs0_0)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok ||
@@ -153,11 +158,12 @@ async function classifyOutcomeEvidence(
 export async function evaluatePendingSaveEvidence(): Promise<void> {
   if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
   const { watch } = saveOfferState.watch
-  const observation = collectOutcomeObservation(
-    watch.startedAt,
-    watch.authPath,
-    watch.sawMutation,
-  )
+  const nookTypedArgs0_0: Parameters<typeof collectOutcomeObservation>[0] = {
+    startedAt: watch.startedAt,
+    authPath: watch.authPath,
+    sawMutation: watch.sawMutation,
+  }
+  const observation = collectOutcomeObservation(nookTypedArgs0_0)
   const verdictRead = await classifyOutcomeEvidence(observation)
   if (
     verdictRead.kind === AuthenticationOutcomeReadKind.Unavailable ||
@@ -182,10 +188,11 @@ export async function evaluatePendingSaveEvidence(): Promise<void> {
       observation.errorMarkerPresent)
   ) {
     stopPendingSaveWatch()
-    void sendRuntimeMessage({
+    const nookTypedArgs0_1: Parameters<typeof sendRuntimeMessage>[0] = {
       type: 'nook:website-login-save-dismiss',
       payload: { origin: location.origin, offerId: watch.offer.offerId },
-    })
+    }
+    void sendRuntimeMessage(nookTypedArgs0_1)
   }
 }
 
@@ -204,11 +211,12 @@ export function beginPendingSaveWatch(offer: WebsiteLoginSaveOfferView): void {
     saveOfferState.watch.watch.sawMutation = true
     void evaluatePendingSaveEvidence()
   })
-  watch.observer.observe(document.documentElement, {
+  const nookTypedArgs0_2: Parameters<typeof watch.observer.observe>[1] = {
     childList: true,
     subtree: true,
     attributes: true,
-  })
+  }
+  watch.observer.observe(document.documentElement, nookTypedArgs0_2)
   watch.timer = window.setInterval(() => {
     void evaluatePendingSaveEvidence()
   }, OUTCOME_EVIDENCE_POLL_MS)
@@ -219,14 +227,16 @@ export function beginPendingSaveWatch(offer: WebsiteLoginSaveOfferView): void {
 async function stageSaveForCredentials(
   credentials: LoginCredentials,
 ): Promise<void> {
-  const delivery = await sendRuntimeMessage<LoginSaveOfferResponse>({
+  const nookTypedArgs0_3: Parameters<typeof sendRuntimeMessage>[0] = {
     type: 'nook:website-login-save-offer',
     payload: {
       origin: location.origin,
       username: credentials.username,
       password: credentials.password,
     },
-  })
+  }
+  const delivery =
+    await sendRuntimeMessage<LoginSaveOfferResponse>(nookTypedArgs0_3)
   credentials.password = ''
   credentials.username = ''
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -249,7 +259,11 @@ export function captureSubmittedLogin(event: Event): void {
       candidate.formScope.owner === target,
   )
   if (!workflow || workflow.summary.passwordFieldCount === 0) return
-  const credentials = readLoginCredentials(workflow.root, workflow.formScope)
+  const nookTypedArgs0_1: Parameters<typeof readLoginCredentials>[0] = {
+    root: workflow.root,
+    formScope: workflow.formScope,
+  }
+  const credentials = readLoginCredentials(nookTypedArgs0_1)
   if (credentials.kind === LoginCredentialsLookupKind.Absent) return
   void stageSaveForCredentials(credentials.credentials)
 }
@@ -264,10 +278,12 @@ export type PendingSaveOfferLoad =
   | { kind: PendingSaveOfferLoadKind.Loaded; offer: WebsiteLoginSaveOfferView }
 
 export async function loadPendingSaveOffer(): Promise<PendingSaveOfferLoad> {
-  const delivery = await sendRuntimeMessage<WebsiteLoginSavePendingResponse>({
+  const nookTypedArgs0_4: Parameters<typeof sendRuntimeMessage>[0] = {
     type: 'nook:website-login-save-pending',
     payload: { origin: location.origin },
-  })
+  }
+  const delivery =
+    await sendRuntimeMessage<WebsiteLoginSavePendingResponse>(nookTypedArgs0_4)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok ||
@@ -293,7 +309,10 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
     translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel),
   )
   host.setAttribute('aria-expanded', 'true')
-  const shadow = host.attachShadow({ mode: 'open' })
+  const nookTypedArgs0_5: Parameters<typeof host.attachShadow>[0] = {
+    mode: 'open',
+  }
+  const shadow = host.attachShadow(nookTypedArgs0_5)
 
   const panel = document.createElement('div')
   panel.className = 'panel'
@@ -305,7 +324,11 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
 
   const step = document.createElement('p')
   step.className = 'step-label'
-  step.textContent = progressLabel(4, 4)
+  const nookTypedArgs0_2: Parameters<typeof progressLabel>[0] = {
+    currentStep: 4,
+    totalSteps: 4,
+  }
+  step.textContent = progressLabel(nookTypedArgs0_2)
 
   const dismissButton = document.createElement('button')
   dismissButton.type = 'button'
@@ -317,10 +340,11 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   )
   dismissButton.addEventListener('click', () => {
     saveOfferState.dismissedOfferIds.add(offer.offerId)
-    void sendRuntimeMessage({
+    const nookTypedArgs0_6: Parameters<typeof sendRuntimeMessage>[0] = {
       type: 'nook:website-login-save-dismiss',
       payload: { origin: location.origin, offerId: offer.offerId },
-    })
+    }
+    void sendRuntimeMessage(nookTypedArgs0_6)
     widgetState.dismissed = true
     removeWidget()
   })
@@ -329,7 +353,11 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   const body = document.createElement('div')
   body.className = 'body'
 
-  const mark = createWidgetMark('mark', 52)
+  const nookTypedArgs0_3: Parameters<typeof createWidgetMark>[0] = {
+    className: 'mark',
+    size: 52,
+  }
+  const mark = createWidgetMark(nookTypedArgs0_3)
 
   const title = document.createElement('h1')
   title.textContent = translatedMessage(
@@ -364,11 +392,12 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
     if (!isTrustedAuthAction(event.isTrusted) || widgetState.busy) return
     widgetState.busy = true
     saveButton.disabled = true
-    const evidence = collectOutcomeObservation(
-      Date.now(),
-      location.pathname,
-      false,
-    )
+    const nookTypedArgs0_4: Parameters<typeof collectOutcomeObservation>[0] = {
+      startedAt: Date.now(),
+      authPath: location.pathname,
+      sawMutation: false,
+    }
+    const evidence = collectOutcomeObservation(nookTypedArgs0_4)
     // Commit re-checks the live page; require an explicit success marker now.
     evidence.successMarkerPresent = Boolean(
       document.querySelector(
@@ -381,14 +410,15 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
       ),
     )
     evidence.elapsedMs = 0
-    void sendRuntimeMessage<LoginSaveActionResponse>({
+    const nookTypedArgs0_7: Parameters<typeof sendRuntimeMessage>[0] = {
       type: 'nook:website-login-save-commit',
       payload: {
         origin: location.origin,
         offerId: offer.offerId,
         evidence,
       },
-    })
+    }
+    void sendRuntimeMessage<LoginSaveActionResponse>(nookTypedArgs0_7)
       .then((delivery) => {
         if (
           delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
@@ -434,10 +464,11 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   notNowButton.addEventListener('click', (event) => {
     if (!isTrustedAuthAction(event.isTrusted)) return
     saveOfferState.dismissedOfferIds.add(offer.offerId)
-    void sendRuntimeMessage({
+    const nookTypedArgs0_8: Parameters<typeof sendRuntimeMessage>[0] = {
       type: 'nook:website-login-save-dismiss',
       payload: { origin: location.origin, offerId: offer.offerId },
-    })
+    }
+    void sendRuntimeMessage(nookTypedArgs0_8)
     widgetState.dismissed = true
     removeWidget()
   })
@@ -557,8 +588,16 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   document.documentElement.append(host)
   widgetState.attachHost(host)
   widgetState.assignWorkflowKey(`save:${offer.offerId}`)
-  attachPointerDrag(host, toolbar)
+  const pointerDragArgs: Parameters<typeof attachPointerDrag>[0] = {
+    host,
+    handle: toolbar,
+  }
+  attachPointerDrag(pointerDragArgs)
   if (widgetState.placement.kind === WidgetPlacementKind.Positioned) {
-    applyWidgetPosition(host, widgetState.placement.position)
+    const nookTypedArgs0_6: Parameters<typeof applyWidgetPosition>[0] = {
+      host,
+      position: widgetState.placement.position,
+    }
+    applyWidgetPosition(nookTypedArgs0_6)
   }
 }

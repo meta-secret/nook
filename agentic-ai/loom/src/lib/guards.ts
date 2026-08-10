@@ -1,30 +1,36 @@
-/** Untrusted YAML/JSON scalar, array, or object payload. */
-export type ExternalValue =
-  string | number | boolean | readonly ExternalValue[] | ExternalObject;
+/**
+ * Boundary-only YAML/JSON syntax node.
+ *
+ * This is the narrow transport exception to Loom's domain-value rule. Decode
+ * it immediately. Never use it for command state, application APIs, or domain
+ * results.
+ */
+export type UntrustedYamlNode =
+  string | number | boolean | readonly UntrustedYamlNode[] | UntrustedYamlMap;
 
 /** Untrusted object map from YAML/JSON. */
-export type ExternalObject = {
-  readonly [key: string]: ExternalValue;
+export type UntrustedYamlMap = {
+  readonly [key: string]: UntrustedYamlNode;
 };
 
-/** Mutable builder for encoding external objects. */
-export type ExternalObjectBuilder = {
-  [key: string]: ExternalValue;
+/** Mutable adapter builder for a serialized Loom response map. */
+export type UntrustedYamlMapBuilder = {
+  [key: string]: UntrustedYamlNode;
 };
 
-export enum ExternalPropertyPresence {
+export enum UntrustedYamlPropertyPresence {
   Present = 'present',
   Absent = 'absent',
 }
 
-export type ExternalProperty =
+export type UntrustedYamlProperty =
   | {
-      readonly presence: ExternalPropertyPresence.Present;
-      readonly value: ExternalValue;
+      readonly presence: UntrustedYamlPropertyPresence.Present;
+      readonly value: UntrustedYamlNode;
     }
-  | { readonly presence: ExternalPropertyPresence.Absent };
+  | { readonly presence: UntrustedYamlPropertyPresence.Absent };
 
-export function isRecord(value: ExternalValue): value is ExternalObject {
+export function isRecord(value: UntrustedYamlNode): value is UntrustedYamlMap {
   return (
     typeof value === 'object' &&
     value instanceof Object &&
@@ -32,35 +38,39 @@ export function isRecord(value: ExternalValue): value is ExternalObject {
   );
 }
 
-export function isNonEmptyString(value: ExternalValue): value is string {
+export function isNonEmptyString(value: UntrustedYamlNode): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
 /** Boundary-only bridge for a host parse result before immediate decoding. */
-export function asExternalValue(value: ExternalValue): ExternalValue {
+export function asUntrustedYamlNode(
+  value: UntrustedYamlNode,
+): UntrustedYamlNode {
   return value;
 }
 
-export type ExternalPropertyArgs = {
-  readonly record: ExternalObject;
+export type UntrustedYamlPropertyArgs = {
+  readonly record: UntrustedYamlMap;
   readonly key: string;
 };
 
 /** Read one property without authoring `undefined` from index access. */
-export function externalProperty(args: ExternalPropertyArgs): ExternalProperty {
+export function untrustedYamlProperty(
+  args: UntrustedYamlPropertyArgs,
+): UntrustedYamlProperty {
   for (const [entryKey, value] of Object.entries(args.record)) {
     if (entryKey === args.key) {
       return {
-        presence: ExternalPropertyPresence.Present,
+        presence: UntrustedYamlPropertyPresence.Present,
         value,
       };
     }
   }
-  return { presence: ExternalPropertyPresence.Absent };
+  return { presence: UntrustedYamlPropertyPresence.Absent };
 }
 
-export function sealExternalObject(
-  builder: ExternalObjectBuilder,
-): ExternalObject {
+export function sealUntrustedYamlMap(
+  builder: UntrustedYamlMapBuilder,
+): UntrustedYamlMap {
   return builder;
 }

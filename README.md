@@ -226,12 +226,15 @@ App code lives under `nook-app/`. Dependencies flow one way:
 
 ```text
 nook-vault-simple / nook-vault-sentinel / nook-web-extension
-  └─> nook-wasm              browser I/O + session bridge
-       └─> nook-core         vault application services, secrets, sync policy
-            ├─> nook-event-log
-            │    ├─> nook-auth2
-            │    └─> nook-replication
-            └─> nook-app-common
+  ├─> nook-wasm              browser I/O + full vault session bridge
+  │    ├─> nook-core         vault application services, secrets, sync policy
+  │    │    ├─> nook-event-log
+  │    │    │    ├─> nook-auth2
+  │    │    │    └─> nook-replication
+  │    │    └─> nook-app-common
+  │    └─> nook-companion-core
+  └─> nook-companion-wasm   size-sensitive extension policy bridge
+       └─> nook-companion-core
 
 nook-auth2 ──> nook-app-common
 ```
@@ -246,7 +249,9 @@ nook-auth2 ──> nook-app-common
 | `nook-replication` | Portable replication: causal DAG indexing, append-only replica sets, outbox and repair planning |
 | `nook-event-log` | Portable vault history: canonical signed events, actor authorization, deterministic projection, key epochs |
 | `nook-core` | Vault application domain: typed plaintext secrets, encryption workflows, provider-neutral sync and session policy |
-| `nook-wasm` | `wasm-bindgen` bridge, IndexedDB / GitHub I/O, session manager |
+| `nook-companion-core` | Portable extension policy: authentication workflow, pairing records and migration, host and field classification |
+| `nook-companion-wasm` | Small `wasm-bindgen` bridge exposing companion policy to extension contexts |
+| `nook-wasm` | Full `wasm-bindgen` bridge, IndexedDB / GitHub I/O, session manager; depends on both vault and companion domain crates |
 | `nook-vault-simple` | Independent Svelte 5 Simple Vault application |
 | `nook-vault-sentinel` | Independent Svelte 5 Sentinel Vault application |
 | `nook-web-app` | Public site and unified local e2e harness |

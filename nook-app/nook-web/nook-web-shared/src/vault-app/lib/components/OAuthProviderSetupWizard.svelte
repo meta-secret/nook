@@ -108,13 +108,14 @@
   const oauthOriginUnsupported = $derived(!oauthOriginSupport.supported)
   const oauthOriginUnsupportedMessage = $derived.by(() => {
     if (oauthOriginSupport.supported) return ''
-    return vault.t(
-      oauthOriginSupport.reason ===
+    const translationRequest: Parameters<typeof vault.t>[0] = {
+      key: oauthOriginSupport.reason ===
         OAuthOriginUnsupportedReason.CloudflarePrPreview
         ? I18N_KEYS.ProviderSetupOauthPreviewOriginUnsupported
         : I18N_KEYS.ProviderSetupOauthOriginUnsupported,
-      { origin: oauthOriginSupport.origin },
-    )
+      replacements: { origin: oauthOriginSupport.origin },
+    };
+    return vault.t(translationRequest)
   })
 
   let connectionStepOpen = $state(true)
@@ -148,11 +149,14 @@
       if (isSharedICloud) {
         await oauthActions.createICloudSharedProvider(vault)
       } else {
-        await oauthActions.createGoogleSharedFolder(vault, collaboratorEmail)
+        const createRequest: Parameters<
+          typeof oauthActions.createGoogleSharedFolder
+        >[0] = { state: vault, collaboratorEmail }
+        await oauthActions.createGoogleSharedFolder(createRequest)
       }
       sharedFolderStepOpen = false
       syncStepOpen = true
-    } catch (error: unknown) {
+    } catch (error) {
       vault.errorMsg =
         error instanceof Error
           ? error.message
@@ -172,13 +176,19 @@
     vault.errorMsg = ''
     try {
       if (isSharedICloud) {
-        await oauthActions.useICloudSharedProvider(vault, sharedFolderRef)
+        const useRequest: Parameters<
+          typeof oauthActions.useICloudSharedProvider
+        >[0] = { state: vault, shareReference: sharedFolderRef }
+        await oauthActions.useICloudSharedProvider(useRequest)
       } else {
-        await oauthActions.useGoogleSharedFolder(vault, sharedFolderRef)
+        const useRequest: Parameters<
+          typeof oauthActions.useGoogleSharedFolder
+        >[0] = { state: vault, folderRef: sharedFolderRef }
+        await oauthActions.useGoogleSharedFolder(useRequest)
       }
       sharedFolderStepOpen = false
       syncStepOpen = true
-    } catch (error: unknown) {
+    } catch (error) {
       vault.errorMsg =
         error instanceof Error
           ? error.message
@@ -204,17 +214,7 @@
       ) {
         return
       }
-      log.info('CloudKit native sign-in click observed', {
-        eventPhase: event.eventPhase,
-        ...(event.target instanceof Element
-          ? { targetTag: event.target.tagName }
-          : {}),
-        ...(event.currentTarget instanceof Element
-          ? { currentTargetTag: event.currentTarget.tagName }
-          : {}),
-        isTrusted: event.isTrusted,
-        defaultPrevented: event.defaultPrevented,
-      })
+      log.info('CloudKit native sign-in click observed')
       if (deferredSignInPending) {
         log.info('CloudKit native sign-in click ignored: wait already pending')
         return
@@ -228,23 +228,23 @@
           vault.icloudOAuthBusy ||
           oauthSignedIn
         ) {
-          log.info('CloudKit native sign-in deferred wait skipped', {
-            ready: vault.icloudOAuthReady,
-            busy: vault.icloudOAuthBusy,
-            signedIn: oauthSignedIn,
-          })
+          log.info('CloudKit native sign-in deferred wait skipped')
           return
         }
         log.info('CloudKit native sign-in deferred wait started')
-        void oauthActions.signInWithICloud(vault, {
-          clickPreparedControl: false,
-        })
+        const signInWithICloudArgs: Parameters<typeof oauthActions.signInWithICloud>[0] = {
+          state: vault,
+          options: { clickPreparedControl: false },
+        };
+        void oauthActions.signInWithICloud(signInWithICloudArgs)
       }, 0)
     }
-    node.addEventListener('click', handleClick, { capture: true })
+    const addEventListenerArgs: Parameters<typeof node.addEventListener>[2] = { capture: true };
+    node.addEventListener('click', handleClick, addEventListenerArgs)
     return {
       destroy() {
-        node.removeEventListener('click', handleClick, { capture: true })
+        const removeEventListenerArgs: Parameters<typeof node.removeEventListener>[2] = { capture: true };
+        node.removeEventListener('click', handleClick, removeEventListenerArgs)
       },
     }
   }
@@ -500,7 +500,7 @@
           {#if oauthBusy || icloudSignInPreparing}
             <div
               class={cn(
-                buttonVariants({ variant: 'default', size: 'sm' }),
+                (() => { const buttonVariantsArgs: Parameters<typeof buttonVariants>[0] = { variant: 'default', size: 'sm' }; return buttonVariants(buttonVariantsArgs); })(),
                 'absolute inset-0 w-full sm:w-auto',
               )}
             >
@@ -512,7 +512,7 @@
         <button
           type="button"
           class={cn(
-            buttonVariants({ variant: 'default', size: 'sm' }),
+            (() => { const buttonVariantsArgs2: Parameters<typeof buttonVariants>[0] = { variant: 'default', size: 'sm' }; return buttonVariants(buttonVariantsArgs2); })(),
             'w-full sm:w-auto',
           )}
           data-testid="google-sign-in-btn"
@@ -555,14 +555,20 @@
             : 'google-account-status'}
         >
           {isICloud
-            ? vault.t(I18N_KEYS.ProviderSetupIcloudSignedInAs, {
+            ? (() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.ProviderSetupIcloudSignedInAs,
+  replacements: {
                 account:
                   oauthAccount || vault.t(I18N_KEYS.AuthStorageIcloudSignedIn),
-              })
-            : vault.t(I18N_KEYS.ProviderSetupGoogleSignedInAs, {
+              },
+}; return vault.t(translationRequest2); })()
+            : (() => { const translationRequest3: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.ProviderSetupGoogleSignedInAs,
+  replacements: {
                 account:
                   oauthAccount || vault.t(I18N_KEYS.AuthStorageGoogleSignedIn),
-              })}
+              },
+}; return vault.t(translationRequest3); })()}
         </p>
       {/if}
 

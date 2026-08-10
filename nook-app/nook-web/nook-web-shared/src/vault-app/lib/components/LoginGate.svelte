@@ -18,7 +18,7 @@
   } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import type {
-    OAuthFilePreset,
+    ProviderSetupRequest,
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth/providers'
@@ -126,19 +126,14 @@
     onUnlock: () => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
-    onBeginSetup: (
-      type: StorageProviderType,
-      oauthPreset?: OAuthFilePreset,
-    ) => void
+    onBeginSetup: (request: ProviderSetupRequest) => void
     onCancelSetup: () => void
     onOpenHelp?: () => void
     onUseEnrollmentCode?: (
-      code: string,
-      password: string,
+      args: { readonly code: string; readonly password: string },
     ) => void | Promise<void>
     onUnlockWithPassword: (
-      entryId: string,
-      password: string,
+      args: { readonly entryId: string; readonly password: string },
     ) => void | Promise<void>
     onSwitchVault: () => void | Promise<void>
     onSentinelUnlocked?: () => void | Promise<void>
@@ -221,14 +216,16 @@
   ): Promise<void> {
     devicesAccessTrigger = trigger
     devicesAccessOpen = true
-    history.pushState({}, '', workspacePath(WorkspaceRoute.DevicesAccess))
+    const pushStateArgs: Parameters<typeof history.pushState>[0] = {};
+    history.pushState(pushStateArgs, '', workspacePath(WorkspaceRoute.DevicesAccess))
     await tick()
     focusHostButton('devices-access-back')
   }
 
   async function closeDevicesAccess(): Promise<void> {
     devicesAccessOpen = false
-    history.pushState({}, '', workspacePath(WorkspaceRoute.Vault))
+    const pushStateArgs2: Parameters<typeof history.pushState>[0] = {};
+    history.pushState(pushStateArgs2, '', workspacePath(WorkspaceRoute.Vault))
     await tick()
     const testId =
       devicesAccessTrigger === DevicesAccessTriggerKind.Nudge
@@ -239,10 +236,10 @@
 
   onMount(() => {
     try {
+      const readDevicesAccessNudgeStorageArgs: Parameters<typeof readDevicesAccessNudgeStorage>[0] = { storage: localStorage, storageKey: devicesAccessNudgeStorageKey };
       devicesAccessNudgePreference = parseDevicesAccessNudgePreference(
         readDevicesAccessNudgeStorage(
-          localStorage,
-          devicesAccessNudgeStorageKey,
+          readDevicesAccessNudgeStorageArgs,
         ),
       )
     } catch {
@@ -417,11 +414,9 @@
       </Button>
     </div>
 
-    {#if shouldShowDevicesAccessNudge(
-      vault.localVaultPresent,
-      vault.localVaults.length,
-      devicesAccessNudgePreference,
-    )}
+    {#if (() => { const shouldShowDevicesAccessNudgeArgs: Parameters<typeof shouldShowDevicesAccessNudge>[0] = { hasActiveLocalVault: vault.localVaultPresent, localVaultCount: vault.localVaults.length, preference: devicesAccessNudgePreference }; return shouldShowDevicesAccessNudge(
+      shouldShowDevicesAccessNudgeArgs,
+    ); })()}
       <aside
         class="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/8 p-4 sm:flex-row sm:items-center sm:justify-between"
         data-testid="devices-access-nudge"
@@ -476,8 +471,12 @@
       passwordEntryId={peekEnrollmentEntryId(prefillEnrollmentCode)}
       passwordEntryLabel={prefillEnrollmentEntryLabel}
       {isVerifying}
-      onSubmit={(password) =>
-        onUseEnrollmentCode!(prefillEnrollmentCode, password)}
+      onSubmit={(password) => {
+        const enrollmentRequest: Parameters<
+          NonNullable<typeof onUseEnrollmentCode>
+        >[0] = { code: prefillEnrollmentCode, password }
+        return onUseEnrollmentCode!(enrollmentRequest)
+      }}
     />
   {:else if showCreateVault || sentinelInvitationRequest.trim()}
     <LoginCreateVaultChooser
@@ -488,22 +487,26 @@
       {usesExtensionDeviceIdentity}
       {onCreateDeviceVault}
       {onStartSentinelGenesis}
-      onAddSentinelGenesisParticipantResponse={(payload, participantLabel) =>
-        sentinelGenesisActions.addParticipantResponse(
-          vault,
+      onAddSentinelGenesisParticipantResponse={({ payload, participantLabel }) => {
+        const participantRequest: Parameters<
+          typeof sentinelGenesisActions.addParticipantResponse
+        >[0] = {
+          state: vault,
           payload,
-          participantLabel,
-        )}
+          participantLabel: participantLabel ?? '',
+        }
+        return sentinelGenesisActions.addParticipantResponse(participantRequest)
+      }}
       onFinalizeSentinelGenesis={() => sentinelGenesisActions.finalize(vault)}
       onCreateSentinelGenesisParticipantResponse={onCreateSentinelGenesisParticipantResponse ??
         ((payload) =>
-          sentinelGenesisActions.createParticipantResponse(vault, payload))}
+          (() => { const createParticipantResponseArgs: Parameters<typeof sentinelGenesisActions.createParticipantResponse>[0] = { state: vault, requestPayload: payload }; return sentinelGenesisActions.createParticipantResponse(createParticipantResponseArgs); })())}
       onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelGenesisPublicKeyAnnouncement ??
         (() => sentinelGenesisActions.createPublicKeyAnnouncement(vault))}
       onRememberSentinelGenesisRequest={(payload) =>
-        sentinelGenesisActions.rememberRequest(vault, payload)}
+        (() => { const rememberRequestArgs: Parameters<typeof sentinelGenesisActions.rememberRequest>[0] = { state: vault, requestPayload: payload }; return sentinelGenesisActions.rememberRequest(rememberRequestArgs); })()}
       onReceiveSentinelGenesisShare={(payload) =>
-        sentinelGenesisActions.acceptShareDelivery(vault, payload)}
+        (() => { const acceptShareDeliveryArgs: Parameters<typeof sentinelGenesisActions.acceptShareDelivery>[0] = { state: vault, payload }; return sentinelGenesisActions.acceptShareDelivery(acceptShareDeliveryArgs); })()}
       onCompleteSentinelGenesisDelivery={() =>
         sentinelGenesisActions.completeDelivery(vault)}
       sentinelGenesisPhase={vault.sentinelGenesisPhase}
@@ -557,13 +560,13 @@
             {:else if showLocalUnlock}
               {vault.t(I18N_KEYS.LoginOpenVaultTitle)}
             {:else if showSetup}
-              {vault.t(I18N_KEYS.OnboardingConnectTo, {
+              {(() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.OnboardingConnectTo, replacements: {
                 provider: setupIs('github')
                   ? 'GitHub'
                   : setupIs('local-folder')
                     ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
                     : vault.t(I18N_KEYS.OnboardingLocalStorage),
-              })}
+              } }; return vault.t(tArgs); })()}
             {:else if addProviderOpen}
               {vault.t(I18N_KEYS.OnboardingAddProvider)}
             {:else}

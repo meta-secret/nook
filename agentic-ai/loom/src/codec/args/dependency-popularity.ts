@@ -1,4 +1,4 @@
-import type { ExternalValue } from '../../lib/guards.ts';
+import type { UntrustedYamlNode } from '../../lib/guards.ts';
 import { RequestFamily } from '../enums.ts';
 import { DecodeStatus, decodeErr, type DecodeOutcome } from '../field-error.ts';
 import {
@@ -40,7 +40,7 @@ export type DependencyPopularityRequest = {
 const ROOT = RequestFamily.DependencyPopularity;
 
 export function decodeDependencyPopularityRequest(
-  value: ExternalValue,
+  value: UntrustedYamlNode,
 ): DecodeOutcome<DependencyPopularityRequest> {
   const objectArgs: ExpectObjectArgs = { value, path: ROOT };
   const object = expectObject(objectArgs);

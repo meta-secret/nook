@@ -377,7 +377,17 @@ this crate.
   - The smoke covers pairing, vault, login-fill, lock, and restart flow.
   - It then removes its temporary browser and vault state.
   - Production is intentionally rejected because the smoke creates vault data.
-- **Domain boundary:** The extension may consume WASM/domain APIs through explicit bridge modules when needed, but must not reimplement vault format logic, crypto, validation, password generation, or search filtering in TypeScript.
+- **Domain boundary:** The extension uses Rust/WASM for portable policy,
+  domain-payload validation, persistence classification, and workflow decisions.
+  - TypeScript owns Chrome APIs, DOM access, WebAuthn ceremony calls, timers,
+    and browser lifecycle orchestration.
+  - TypeScript passes concrete browser observations into Rust.
+  - Rust returns typed decisions that TypeScript applies through browser APIs.
+  - TypeScript may validate Chrome and DOM transport envelopes before it passes
+    their concrete domain payloads to Rust.
+  - The extension must not reimplement vault format logic, crypto, validation,
+    password generation, search filtering, or portable observation
+    classification in TypeScript.
 - **Local projection bridge:**
   - Simple Vault publishes its canonical encrypted, signed event log after local mutations and provider pulls.
   - A content script restricted to the configured Simple origin transports that snapshot to the service worker.

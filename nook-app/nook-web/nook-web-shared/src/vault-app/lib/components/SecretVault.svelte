@@ -72,15 +72,13 @@
     isSaving: boolean
     editRestriction?: VaultEditRestriction
     secrets?: NookSecretListItem[]
-    onAddSecret: (id: string, type: SecretType, data: string) => Promise<void>
+    onAddSecret: (args: { readonly id: string; readonly type: SecretType; readonly data: string }) => Promise<void>
     onReplaceSecret: (
-      oldId: string,
-      type: SecretType,
-      data: string,
+      args: { readonly oldId: string; readonly type: SecretType; readonly data: string },
     ) => Promise<void>
     onDeleteSecret: (id: string) => Promise<void>
     onGeneratePassword: (options: PasswordGenerationOptions) => string
-    onAddModeChange?: (open: boolean, selection: SecretTypeSelection) => void
+    onAddModeChange?: (args: { readonly open: boolean; readonly selection: SecretTypeSelection }) => void
   } = $props()
 
   const editsBlocked = $derived(
@@ -199,20 +197,26 @@
     return Object.entries(dict)
       .map(([site, items]) => ({
         site,
-        items: items.sort((a, b) => a.type - b.type),
+        items: items.sort(// eslint-disable-next-line max-params -- Host API owns this positional callback signature.
+        (a, b) => a.type - b.type),
       }))
-      .sort((a, b) => a.site.localeCompare(b.site))
+      .sort(// eslint-disable-next-line max-params -- Host API owns this positional callback signature.
+      (a, b) => a.site.localeCompare(b.site))
   })
 
   function notifyAddMode() {
-    onAddModeChange?.(addSecretOpen, formSelectedType)
+    const onAddModeChangeArgs: Parameters<NonNullable<typeof onAddModeChange>>[0] = { open: addSecretOpen, selection: formSelectedType };
+    onAddModeChange?.(onAddModeChangeArgs)
   }
 
-  function selectTypeFilter(value: unknown) {
-    if (typeof value !== 'string') return
+  function selectTypeFilter(value: string) {
     if (value === 'all') {
       vault.secretTypeFilter = NookSecretTypeFilter.All
-      void vault.loadSecretPage(searchPattern.trim(), 0)
+      const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
+        query: searchPattern.trim(),
+        requestedOffset: 0,
+      }
+      void vault.loadSecretPage(pageRequest)
       return
     }
     const nextFilter = typeFilters.find(
@@ -220,7 +224,11 @@
     )
     if (!nextFilter) return
     vault.secretTypeFilter = nextFilter.filter
-    void vault.loadSecretPage(searchPattern.trim(), 0)
+    const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
+      query: searchPattern.trim(),
+      requestedOffset: 0,
+    }
+    void vault.loadSecretPage(pageRequest)
   }
 
   function resetTransientSecretViews() {
@@ -279,7 +287,11 @@
     const query = searchPattern.trim()
     if (query === vault.secretQuery) return
     const timer = setTimeout(() => {
-      void vault.loadSecretPage(query, 0)
+      const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
+        query,
+        requestedOffset: 0,
+      }
+      void vault.loadSecretPage(pageRequest)
     }, 200)
     return () => clearTimeout(timer)
   })
@@ -290,7 +302,7 @@
       formSelectedType.itemType === SecretType.SecureNote,
   )
 
-  async function copyToClipboard(text: string, id: string, field: string) {
+  async function copyToClipboard({ text, id, field }: { readonly text: string; readonly id: string; readonly field: string }) {
     await navigator.clipboard.writeText(text)
     copiedKey = {
       kind: ClipboardNoticeKind.Visible,
@@ -323,10 +335,9 @@
 
   async function toggleReveal(id: string) {
     const revealing = !(id in decryptedSecrets)
+    const toggleSecretExposureArgs: Parameters<typeof toggleSecretExposure>[0] = { records: decryptedSecrets, id, load: (secretId) => vault.decryptSecret(secretId) };
     decryptedSecrets = await toggleSecretExposure(
-      decryptedSecrets,
-      id,
-      (secretId) => vault.decryptSecret(secretId),
+      toggleSecretExposureArgs,
     )
     if (revealing) {
       expandedSecrets = { ...expandedSecrets, [id]: true }
@@ -344,12 +355,13 @@
   }
 
   async function copySecret(id: string) {
-    await withDecryptedSecret(
-      decryptedSecrets,
+    const exposureRequest: Parameters<typeof withDecryptedSecret>[0] = {
+      records: decryptedSecrets,
       id,
-      (secretId) => vault.decryptSecret(secretId),
-      (record) => copyToClipboard(record.primaryCredential, id, 'secret'),
-    )
+      load: (secretId) => vault.decryptSecret(secretId),
+      action: (record) => (() => { const copyToClipboardArgs: Parameters<typeof copyToClipboard>[0] = { text: record.primaryCredential, id, field: 'secret' }; return copyToClipboard(copyToClipboardArgs); })(),
+    }
+    await withDecryptedSecret(exposureRequest)
   }
 
   async function refreshAuthenticatorCode(id: string) {
@@ -447,13 +459,13 @@
         <div>
           <p class="text-sm font-semibold text-foreground">
             {vault.secretTotal !== visibleItemCount
-              ? vault.t(I18N_KEYS.VaultSecretCountPage, {
+              ? (() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.VaultSecretCountPage, replacements: {
                   count: String(visibleItemCount),
                   total: String(vault.secretTotal),
-                })
-              : vault.t(I18N_KEYS.VaultSecretCount, {
+                } }; return vault.t(tArgs2); })()
+              : (() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.VaultSecretCount, replacements: {
                   count: String(visibleItemCount),
-                })}
+                } }; return vault.t(tArgs); })()}
           </p>
         </div>
         <div class="flex w-full shrink-0 items-center gap-2 sm:w-auto">
@@ -579,9 +591,9 @@
                     <span
                       class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
                     >
-                      {vault.t(I18N_KEYS.VaultSecretCount, {
+                      {(() => { const tArgs3: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.VaultSecretCount, replacements: {
                         count: String(group.items.length),
-                      })}
+                      } }; return vault.t(tArgs3); })()}
                     </span>
                   {/if}
                 </div>
@@ -624,20 +636,25 @@
                 variant="outline"
                 data-testid="secret-page-previous"
                 disabled={vault.secretPageOffset === 0}
-                onclick={() =>
-                  vault.loadSecretPage(
-                    vault.secretQuery,
-                    Math.max(0, vault.secretPageOffset - vault.secretPageSize),
-                  )}
+                onclick={() => {
+                  const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
+                    query: vault.secretQuery,
+                    requestedOffset: Math.max(
+                      0,
+                      vault.secretPageOffset - vault.secretPageSize,
+                    ),
+                  }
+                  void vault.loadSecretPage(pageRequest)
+                }}
               >
                 <ChevronLeft class="size-3.5" />
                 {vault.t(I18N_KEYS.VaultPreviousPage)}
               </Button>
               <span class="text-xs text-muted-foreground">
-                {vault.t(I18N_KEYS.VaultPageStatus, {
+                {(() => { const tArgs4: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.VaultPageStatus, replacements: {
                   page: String(currentPage),
                   total: String(pageCount),
-                })}
+                } }; return vault.t(tArgs4); })()}
               </span>
               <Button
                 size="sm"
@@ -645,11 +662,14 @@
                 data-testid="secret-page-next"
                 disabled={vault.secretPageOffset + vault.secretPageSize >=
                   vault.secretTotal}
-                onclick={() =>
-                  vault.loadSecretPage(
-                    vault.secretQuery,
-                    vault.secretPageOffset + vault.secretPageSize,
-                  )}
+                onclick={() => {
+                  const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
+                    query: vault.secretQuery,
+                    requestedOffset:
+                      vault.secretPageOffset + vault.secretPageSize,
+                  }
+                  void vault.loadSecretPage(pageRequest)
+                }}
               >
                 {vault.t(I18N_KEYS.VaultNextPage)}
                 <ChevronRight class="size-3.5" />

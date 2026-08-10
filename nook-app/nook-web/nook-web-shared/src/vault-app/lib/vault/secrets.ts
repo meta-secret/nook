@@ -7,7 +7,7 @@ import type {
   SecretType,
 } from "$lib/nook";
 import { generateSecretId, VaultAccessStatus } from "$lib/nook";
-import { createLogger } from "$lib/runtime/log";
+import { createLogger, runtimeFailure } from "$lib/runtime/log";
 import {
   JoinEnrollmentState,
   RemoteVaultRecoveryState,
@@ -76,30 +76,33 @@ export async function loadDb(state: VaultState) {
         state.syncProviders[state.syncProviders.length - 1] ??
         state.providers[state.providers.length - 1];
       if (provider?.type === "local-folder") {
-        await syncLocalFolderProvider(state, provider);
+        const syncLocalFolderProviderArgs: Parameters<
+          typeof syncLocalFolderProvider
+        >[0] = { state, provider };
+        await syncLocalFolderProvider(syncLocalFolderProviderArgs);
       }
     }
 
     if (!state.isAuthenticated && state.syncProviders.length > 0) {
-      await state.syncProviderById(state.syncProviders[0]!.id, { quiet: true });
+      const syncProviderRequest: Parameters<typeof state.syncProviderById>[0] =
+        {
+          providerId: state.syncProviders[0]!.id,
+          options: { quiet: true },
+        };
+      await state.syncProviderById(syncProviderRequest);
     }
 
     let accessStatus = await state.assessVaultConnectStatus();
     let storageConnection: StorageConnection = {
       kind: StorageConnectionKind.Configured,
     };
-    log.debug("loadDb assess", {
-      accessStatus,
-      localVaultPresent: state.localVaultPresent,
-      joinEnrollmentPrompt: state.joinEnrollmentPrompt,
-      syncProviders: state.syncProviders.length,
-    });
+    log.debug("loadDb assess");
 
     if (
       accessStatus === VaultAccessStatus.NeedsEnrollment ||
       accessStatus === VaultAccessStatus.JoinPending
     ) {
-      log.info("loadDb waiting on enrollment", { accessStatus });
+      log.info("loadDb waiting on enrollment");
     }
 
     // A joiner device keeps a pre-approval projection in the local cache
@@ -115,7 +118,7 @@ export async function loadDb(state: VaultState) {
     ) {
       const providerArgs = state.providerWasmArgs(state.syncProviders[0]!);
       const remoteStatus = await state.assessVaultConnectStatus(providerArgs);
-      log.debug("loadDb provider re-assess", { remoteStatus });
+      log.debug("loadDb provider re-assess");
       if (remoteStatus === VaultAccessStatus.Ready) {
         accessStatus = VaultAccessStatus.Ready;
         storageConnection = {
@@ -165,15 +168,20 @@ export async function loadDb(state: VaultState) {
         storageConnection.kind === StorageConnectionKind.RemoteRecovery
           ? storageConnection.args
           : state.connectStorageArgs();
-      log.debug("loadDb connect", { mode: connectArgs[0] });
+      log.debug("loadDb connect");
       const connectPromise =
         state.remoteVaultRecoveryState === RemoteVaultRecoveryState.ConnectFresh
           ? state.requireManager().connect_fresh(...connectArgs)
           : state.requireManager().connect(...connectArgs);
       state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
+      const startVaultDiscoveryTimeoutArgs: Parameters<
+        typeof startVaultDiscoveryTimeout
+      >[0] = {
+        message: state.t(I18N_KEYS.ToastsErrorTimeout),
+        timeoutMs: 30_000,
+      };
       const timeout = startVaultDiscoveryTimeout(
-        state.t(I18N_KEYS.ToastsErrorTimeout),
-        30_000,
+        startVaultDiscoveryTimeoutArgs,
       );
       try {
         return (await Promise.race([
@@ -185,7 +193,11 @@ export async function loadDb(state: VaultState) {
       }
     });
     freeSecretRecords(rawRecords);
-    await state.loadSecretPage("", 0);
+    const loadSecretPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
+      query: "",
+      requestedOffset: 0,
+    };
+    await state.loadSecretPage(loadSecretPageArgs);
     // Load sync providers before unlocking the UI. Otherwise a fast local
     // edit (especially delete, which used to fire-and-forget fan-out) can run
     // while `syncProviders` is still empty and never push the event remotely.
@@ -196,11 +208,7 @@ export async function loadDb(state: VaultState) {
     await state.refreshPasswordEntriesList();
     await state.hydrateMultiDeviceState();
     state.markVaultUnlocked();
-    log.info("vault connected", {
-      mode: state.storageMode,
-      secrets: state.secretTotal,
-      accessStatus,
-    });
+    log.info("vault connected");
     if (state.storageMode === "local") {
       state.showSuccess(state.t(I18N_KEYS.ToastsLocalLoaded));
     } else if (state.storageMode === "local-folder") {
@@ -210,16 +218,25 @@ export async function loadDb(state: VaultState) {
     } else {
       state.showSuccess(state.t(I18N_KEYS.ToastsGithubConnected));
     }
-  } catch (e: unknown) {
+  } catch (e) {
     state.isAuthenticated = false;
     const message = e instanceof Error ? e.message : String(e);
-    log.warn("loadDb failed", message);
-    if (await surfaceSentinelCeremonyIfNeeded(state, e)) {
+    log.warn("loadDb failed" + " " + JSON.stringify(message));
+    if (
+      await (() => {
+        const surfaceSentinelCeremonyIfNeededArgs: Parameters<
+          typeof surfaceSentinelCeremonyIfNeeded
+        >[0] = { state, failure: runtimeFailure(e) };
+        return surfaceSentinelCeremonyIfNeeded(
+          surfaceSentinelCeremonyIfNeededArgs,
+        );
+      })()
+    ) {
       state.refreshVaultArchitectureFromManager();
       await refreshSentinelUnlockStatus(state);
       return;
     }
-    if (isSentinelCeremonyRequiredError(e)) {
+    if (isSentinelCeremonyRequiredError(runtimeFailure(e))) {
       state.sentinelCeremonyPrompt = true;
       state.errorMsg = "";
       return;
@@ -228,7 +245,9 @@ export async function loadDb(state: VaultState) {
   } finally {
     if (state.isAuthenticated) {
       try {
-        await state.syncFromStorage({ force: true });
+        const syncFromStorageArgs: Parameters<typeof state.syncFromStorage>[0] =
+          { force: true };
+        await state.syncFromStorage(syncFromStorageArgs);
       } catch {
         // Post-unlock sync should not block the login gate.
       }
@@ -239,13 +258,21 @@ export async function loadDb(state: VaultState) {
   }
 }
 
-async function runPasswordManagerImport(
-  state: VaultState,
-  importFromManager: (manager: NookVaultManager) => Promise<NookImportResult>,
-  sourceName: string,
-  successKey: string,
-  failureKey: string,
-): Promise<NookImportResult> {
+async function runPasswordManagerImport({
+  state,
+  importFromManager,
+  sourceName,
+  successKey,
+  failureKey,
+}: {
+  readonly state: VaultState;
+  readonly importFromManager: (
+    manager: NookVaultManager,
+  ) => Promise<NookImportResult>;
+  readonly sourceName: string;
+  readonly successKey: string;
+  readonly failureKey: string;
+}): Promise<NookImportResult> {
   if (!state.hasManager)
     throw new Error(state.t(I18N_KEYS.ErrorsEngineUnavailable));
   const manager = state.requireManager();
@@ -263,17 +290,21 @@ async function runPasswordManagerImport(
     const result = await state.enqueueStorage(() => importFromManager(manager));
     await state.runFanOutSyncAfterLocalSave();
     await state.refreshSecretsFromSession();
-    log.info(`${sourceName} import completed`, {
-      imported: result.imported,
-      skippedUnsupported: result.skippedUnsupported,
-      skippedDuplicates: result.skippedDuplicates,
-    });
-    state.showSuccess(state.t(successKey, { count: String(result.imported) }));
+    log.info(`${sourceName} import completed`);
+    const tArgs: Parameters<typeof state.t>[0] = {
+      key: successKey,
+      replacements: { count: String(result.imported) },
+    };
+    state.showSuccess(state.t(tArgs));
     return result;
-  } catch (error: unknown) {
-    state.errorMsg = state.t(failureKey, {
-      error: error instanceof Error ? error.message : String(error),
-    });
+  } catch (error) {
+    const tArgs2: Parameters<typeof state.t>[0] = {
+      key: failureKey,
+      replacements: {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    };
+    state.errorMsg = state.t(tArgs2);
     throw error;
   } finally {
     state.isSaving = false;
@@ -296,27 +327,37 @@ async function prepareSecretMutation(state: VaultState): Promise<boolean> {
   return true;
 }
 
-export async function handleAddSecret(
-  state: VaultState,
-  id: string,
-  type: SecretType,
-  data: string,
-) {
+export async function handleAddSecret({
+  state,
+  id,
+  type,
+  data,
+}: {
+  readonly state: VaultState;
+  readonly id: string;
+  readonly type: SecretType;
+  readonly data: string;
+}) {
   if (!(await prepareSecretMutation(state))) return;
   try {
     await state.enqueueStorage(async () => {
+      const raceStorageTimeoutArgs: Parameters<
+        typeof state.raceStorageTimeout
+      >[0] = {
+        promise: state.requireManager().add_secret(id, type, data),
+        label: "Add secret",
+      };
       const rawRecords = (await state.raceStorageTimeout(
-        state.requireManager().add_secret(id, type, data),
-        "Add secret",
+        raceStorageTimeoutArgs,
       )) as NookSecretRecord[];
       freeSecretRecords(rawRecords);
     });
     await state.refreshSecretsFromSession();
-    log.info("secret added", { id, type });
+    log.info("secret added");
     state.showSuccess(state.t(I18N_KEYS.ToastsSecretSaved));
     await state.runFanOutSyncAfterLocalSave();
     await state.refreshSecretsFromSession();
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg = `Failed to save secret: ${e instanceof Error ? e.message : String(e)}`;
     throw e;
   } finally {
@@ -324,138 +365,207 @@ export async function handleAddSecret(
   }
 }
 
-export async function handleBitwardenImport(
-  state: VaultState,
-  json: string,
-  password: string,
-): Promise<NookImportResult> {
-  return runPasswordManagerImport(
+export async function handleBitwardenImport({
+  state,
+  json,
+  password,
+}: {
+  readonly state: VaultState;
+  readonly json: string;
+  readonly password: string;
+}): Promise<NookImportResult> {
+  const runPasswordManagerImportArgs: Parameters<
+    typeof runPasswordManagerImport
+  >[0] = {
     state,
-    (manager) => manager.importBitwardenJson(json, password),
-    "Bitwarden",
-    I18N_KEYS.ToastsBitwardenImported,
-    I18N_KEYS.BitwardenImportFailed,
-  );
+    importFromManager: (manager) => manager.importBitwardenJson(json, password),
+    sourceName: "Bitwarden",
+    successKey: I18N_KEYS.ToastsBitwardenImported,
+    failureKey: I18N_KEYS.BitwardenImportFailed,
+  };
+  return runPasswordManagerImport(runPasswordManagerImportArgs);
 }
 
-export async function handleKeePassXcImport(
-  state: VaultState,
-  csv: string,
-): Promise<NookImportResult> {
-  return runPasswordManagerImport(
+export async function handleKeePassXcImport({
+  state,
+  csv,
+}: {
+  readonly state: VaultState;
+  readonly csv: string;
+}): Promise<NookImportResult> {
+  const runPasswordManagerImportArgs2: Parameters<
+    typeof runPasswordManagerImport
+  >[0] = {
     state,
-    (manager) => manager.importKeePassXcCsv(csv),
-    "KeePassXC",
-    I18N_KEYS.ToastsKeepassxcImported,
-    I18N_KEYS.KeepassxcImportFailed,
-  );
+    importFromManager: (manager) => manager.importKeePassXcCsv(csv),
+    sourceName: "KeePassXC",
+    successKey: I18N_KEYS.ToastsKeepassxcImported,
+    failureKey: I18N_KEYS.KeepassxcImportFailed,
+  };
+  return runPasswordManagerImport(runPasswordManagerImportArgs2);
 }
 
-export async function handleLastPassImport(
-  state: VaultState,
-  csv: string,
-): Promise<NookImportResult> {
-  return runPasswordManagerImport(
+export async function handleLastPassImport({
+  state,
+  csv,
+}: {
+  readonly state: VaultState;
+  readonly csv: string;
+}): Promise<NookImportResult> {
+  const runPasswordManagerImportArgs3: Parameters<
+    typeof runPasswordManagerImport
+  >[0] = {
     state,
-    (manager) => manager.importLastPassCsv(csv),
-    "LastPass",
-    I18N_KEYS.ToastsLastpassImported,
-    I18N_KEYS.LastpassImportFailed,
-  );
+    importFromManager: (manager) => manager.importLastPassCsv(csv),
+    sourceName: "LastPass",
+    successKey: I18N_KEYS.ToastsLastpassImported,
+    failureKey: I18N_KEYS.LastpassImportFailed,
+  };
+  return runPasswordManagerImport(runPasswordManagerImportArgs3);
 }
 
-export async function handleKeeperImport(
-  state: VaultState,
-  csv: string,
-): Promise<NookImportResult> {
-  return runPasswordManagerImport(
+export async function handleKeeperImport({
+  state,
+  csv,
+}: {
+  readonly state: VaultState;
+  readonly csv: string;
+}): Promise<NookImportResult> {
+  const runPasswordManagerImportArgs4: Parameters<
+    typeof runPasswordManagerImport
+  >[0] = {
     state,
-    (manager) => manager.importKeeperCsv(csv),
-    "Keeper",
-    I18N_KEYS.ToastsKeeperImported,
-    I18N_KEYS.KeeperImportFailed,
-  );
+    importFromManager: (manager) => manager.importKeeperCsv(csv),
+    sourceName: "Keeper",
+    successKey: I18N_KEYS.ToastsKeeperImported,
+    failureKey: I18N_KEYS.KeeperImportFailed,
+  };
+  return runPasswordManagerImport(runPasswordManagerImportArgs4);
 }
 
-export async function handleOnePasswordImport(
-  state: VaultState,
-  archive: Uint8Array,
-): Promise<NookImportResult> {
-  return runPasswordManagerImport(
+export async function handleOnePasswordImport({
+  state,
+  archive,
+}: {
+  readonly state: VaultState;
+  readonly archive: Uint8Array;
+}): Promise<NookImportResult> {
+  const runPasswordManagerImportArgs5: Parameters<
+    typeof runPasswordManagerImport
+  >[0] = {
     state,
-    (manager) => manager.importOnePasswordPux(archive),
-    "1Password",
-    I18N_KEYS.ToastsOnepasswordImported,
-    I18N_KEYS.OnepasswordImportFailed,
-  );
+    importFromManager: (manager) => manager.importOnePasswordPux(archive),
+    sourceName: "1Password",
+    successKey: I18N_KEYS.ToastsOnepasswordImported,
+    failureKey: I18N_KEYS.OnepasswordImportFailed,
+  };
+  return runPasswordManagerImport(runPasswordManagerImportArgs5);
 }
 
-export async function handleApplePasswordsImport(
-  state: VaultState,
-  exportBytes: Uint8Array,
-): Promise<NookImportResult> {
-  return runPasswordManagerImport(
+export async function handleApplePasswordsImport({
+  state,
+  exportBytes,
+}: {
+  readonly state: VaultState;
+  readonly exportBytes: Uint8Array;
+}): Promise<NookImportResult> {
+  const runPasswordManagerImportArgs6: Parameters<
+    typeof runPasswordManagerImport
+  >[0] = {
     state,
-    (manager) => manager.importApplePasswordsExport(exportBytes),
-    "Safari / Apple Passwords",
-    I18N_KEYS.ToastsApplePasswordsImported,
-    I18N_KEYS.ApplePasswordsImportFailed,
-  );
+    importFromManager: (manager) =>
+      manager.importApplePasswordsExport(exportBytes),
+    sourceName: "Safari / Apple Passwords",
+    successKey: I18N_KEYS.ToastsApplePasswordsImported,
+    failureKey: I18N_KEYS.ApplePasswordsImportFailed,
+  };
+  return runPasswordManagerImport(runPasswordManagerImportArgs6);
 }
 
-export async function handleChromePasswordsImport(
-  state: VaultState,
-  csv: string,
-): Promise<NookImportResult> {
-  return runPasswordManagerImport(
+export async function handleChromePasswordsImport({
+  state,
+  csv,
+}: {
+  readonly state: VaultState;
+  readonly csv: string;
+}): Promise<NookImportResult> {
+  const runPasswordManagerImportArgs7: Parameters<
+    typeof runPasswordManagerImport
+  >[0] = {
     state,
-    (manager) => manager.importChromePasswordsCsv(csv),
-    "Chrome passwords",
-    I18N_KEYS.ToastsChromePasswordsImported,
-    I18N_KEYS.ChromePasswordsImportFailed,
-  );
+    importFromManager: (manager) => manager.importChromePasswordsCsv(csv),
+    sourceName: "Chrome passwords",
+    successKey: I18N_KEYS.ToastsChromePasswordsImported,
+    failureKey: I18N_KEYS.ChromePasswordsImportFailed,
+  };
+  return runPasswordManagerImport(runPasswordManagerImportArgs7);
 }
 
-export async function handleDashlaneImport(
-  state: VaultState,
-  exportBytes: Uint8Array,
-): Promise<NookImportResult> {
-  return runPasswordManagerImport(
+export async function handleDashlaneImport({
+  state,
+  exportBytes,
+}: {
+  readonly state: VaultState;
+  readonly exportBytes: Uint8Array;
+}): Promise<NookImportResult> {
+  const runPasswordManagerImportArgs8: Parameters<
+    typeof runPasswordManagerImport
+  >[0] = {
     state,
-    (manager) => manager.importDashlaneExport(exportBytes),
-    "Dashlane",
-    I18N_KEYS.ToastsDashlaneImported,
-    I18N_KEYS.DashlaneImportFailed,
-  );
+    importFromManager: (manager) => manager.importDashlaneExport(exportBytes),
+    sourceName: "Dashlane",
+    successKey: I18N_KEYS.ToastsDashlaneImported,
+    failureKey: I18N_KEYS.DashlaneImportFailed,
+  };
+  return runPasswordManagerImport(runPasswordManagerImportArgs8);
 }
 
-export async function handleGoogleAuthenticatorImport(
-  state: VaultState,
-  migrationUris: string[],
-): Promise<NookImportResult> {
-  return runPasswordManagerImport(
+export async function handleGoogleAuthenticatorImport({
+  state,
+  migrationUris,
+}: {
+  readonly state: VaultState;
+  readonly migrationUris: string[];
+}): Promise<NookImportResult> {
+  const runPasswordManagerImportArgs9: Parameters<
+    typeof runPasswordManagerImport
+  >[0] = {
     state,
-    (manager) => manager.importGoogleAuthenticatorMigration(migrationUris),
-    "Google Authenticator",
-    I18N_KEYS.ToastsGoogleAuthenticatorImported,
-    I18N_KEYS.GoogleAuthenticatorImportFailed,
-  );
+    importFromManager: (manager) =>
+      manager.importGoogleAuthenticatorMigration(migrationUris),
+    sourceName: "Google Authenticator",
+    successKey: I18N_KEYS.ToastsGoogleAuthenticatorImported,
+    failureKey: I18N_KEYS.GoogleAuthenticatorImportFailed,
+  };
+  return runPasswordManagerImport(runPasswordManagerImportArgs9);
 }
 
-export async function handleProtonPassImport(
-  state: VaultState,
-  exportBytes: Uint8Array,
-): Promise<NookImportResult> {
-  return runPasswordManagerImport(
+export async function handleProtonPassImport({
+  state,
+  exportBytes,
+}: {
+  readonly state: VaultState;
+  readonly exportBytes: Uint8Array;
+}): Promise<NookImportResult> {
+  const runPasswordManagerImportArgs10: Parameters<
+    typeof runPasswordManagerImport
+  >[0] = {
     state,
-    (manager) => manager.importProtonPass(exportBytes),
-    "Proton Pass",
-    I18N_KEYS.ToastsProtonPassImported,
-    I18N_KEYS.ProtonPassImportFailed,
-  );
+    importFromManager: (manager) => manager.importProtonPass(exportBytes),
+    sourceName: "Proton Pass",
+    successKey: I18N_KEYS.ToastsProtonPassImported,
+    failureKey: I18N_KEYS.ProtonPassImportFailed,
+  };
+  return runPasswordManagerImport(runPasswordManagerImportArgs10);
 }
 
-export async function handleDeleteSecret(state: VaultState, id: string) {
+export async function handleDeleteSecret({
+  state,
+  id,
+}: {
+  readonly state: VaultState;
+  readonly id: string;
+}) {
   if (!state.hasManager) return;
   const editRestriction = state.editRestriction;
   if (editRestriction.decision !== VaultEditDecision.Allowed) {
@@ -485,14 +595,14 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
     committed = true;
     deletedRecord?.free();
     await state.refreshSecretsFromSession();
-    log.info("secret deleted", { id });
+    log.info("secret deleted");
     state.showSuccess(state.t(I18N_KEYS.ToastsSecretDeleted));
     // Match add/replace: await fan-out so the delete event is pushed before
     // callers observe remote state (and so an empty provider list is not a
     // silent no-op race right after unlock).
     await state.runFanOutSyncAfterLocalSave();
     await state.refreshSecretsFromSession();
-  } catch (e: unknown) {
+  } catch (e) {
     if (!committed) {
       state.secrets = previousSecrets;
     }
@@ -503,12 +613,17 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
   }
 }
 
-export async function handleReplaceSecret(
-  state: VaultState,
-  oldId: string,
-  type: SecretType,
-  data: string,
-) {
+export async function handleReplaceSecret({
+  state,
+  oldId,
+  type,
+  data,
+}: {
+  readonly state: VaultState;
+  readonly oldId: string;
+  readonly type: SecretType;
+  readonly data: string;
+}) {
   if (!(await prepareSecretMutation(state))) return;
   try {
     const newId = generateSecretId();
@@ -519,10 +634,10 @@ export async function handleReplaceSecret(
       freeSecretRecords(rawRecords);
     });
     await state.refreshSecretsFromSession();
-    log.info("secret replaced", { oldId, newId, type });
+    log.info("secret replaced");
     await state.runFanOutSyncAfterLocalSave();
     state.showSuccess(state.t(I18N_KEYS.ToastsItemUpdated));
-  } catch (e: unknown) {
+  } catch (e) {
     state.errorMsg = `Failed to update item: ${e instanceof Error ? e.message : String(e)}`;
     throw e;
   } finally {
@@ -573,14 +688,23 @@ export async function refreshSecretsFromSession(
     state.secretPageRequestOffset = 0;
     return;
   }
-  await loadSecretPage(state, state.secretQuery, state.secretPageRequestOffset);
+  const loadSecretPageArgs2: Parameters<typeof loadSecretPage>[0] = {
+    state,
+    query: state.secretQuery,
+    requestedOffset: state.secretPageRequestOffset,
+  };
+  await loadSecretPage(loadSecretPageArgs2);
 }
 
-export async function loadSecretPage(
-  state: VaultState,
-  query: string,
-  requestedOffset = 0,
-): Promise<void> {
+export async function loadSecretPage({
+  state,
+  query,
+  requestedOffset,
+}: {
+  readonly state: VaultState;
+  readonly query: string;
+  readonly requestedOffset: number;
+}): Promise<void> {
   if (!state.hasManager) return;
   // Publish the request immediately so maintenance refreshes queued behind it
   // cannot re-submit the previous query or page.
@@ -643,11 +767,15 @@ export async function loadSecretPage(
   state.secretQuery = query;
 }
 
-export function applyConnectedSecretPage(
-  state: VaultState,
-  page: NookSecretPage,
-  query: string,
-): void {
+export function applyConnectedSecretPage({
+  state,
+  page,
+  query,
+}: {
+  readonly state: VaultState;
+  readonly page: NookSecretPage;
+  readonly query: string;
+}): void {
   const records = page.takeItems();
   const total = page.total;
   const offset = page.offset;
@@ -660,20 +788,26 @@ export function applyConnectedSecretPage(
   state.secretQuery = query;
 }
 
-export async function decryptSecret(
-  state: VaultState,
-  id: string,
-): Promise<NookSecretRecord> {
+export async function decryptSecret({
+  state,
+  id,
+}: {
+  readonly state: VaultState;
+  readonly id: string;
+}): Promise<NookSecretRecord> {
   if (!state.hasManager) {
     throw new Error("Vault manager is not initialized.");
   }
   return state.enqueueStorage(() => state.requireManager().decryptSecret(id));
 }
 
-export async function currentAuthenticatorCode(
-  state: VaultState,
-  id: string,
-): Promise<AuthenticatorCodeView> {
+export async function currentAuthenticatorCode({
+  state,
+  id,
+}: {
+  readonly state: VaultState;
+  readonly id: string;
+}): Promise<AuthenticatorCodeView> {
   if (!state.hasManager) {
     throw new Error("Vault manager is not initialized.");
   }

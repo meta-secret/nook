@@ -1,4 +1,4 @@
-import type { ExternalValue } from '../lib/guards.ts';
+import type { UntrustedYamlNode } from '../lib/guards.ts';
 import {
   AgentStatsOperation,
   PrLandOperation,
@@ -42,7 +42,7 @@ export type AgentStatsLoomRequest =
     };
 
 export type DecodeAgentStatsFamilyArgs = {
-  readonly value: ExternalValue;
+  readonly value: UntrustedYamlNode;
   readonly path: string;
 };
 

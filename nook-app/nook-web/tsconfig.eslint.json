@@ -13,6 +13,8 @@
     "nook-web-extension/e2e/**/*.ts",
     "nook-web-extension/e2e/**/*.svelte",
     "nook-web-extension/playwright.config.ts",
+    "nook-web-research/src/**/*.ts",
+    "nook-web-research/src/**/*.svelte",
     "nook-web-app/vite.config.ts",
     "nook-web-shared/src/**/*.ts",
     "nook-web-shared/src/**/*.svelte",

@@ -162,9 +162,12 @@
         >
           {vaultCount === 1
             ? vault.t(I18N_KEYS.VaultSwitcherOneOnDevice)
-            : vault.t(I18N_KEYS.VaultSwitcherCountOnDevice, {
+            : (() => { const translationRequest: Parameters<typeof vault.t>[0] = {
+  key: I18N_KEYS.VaultSwitcherCountOnDevice,
+  replacements: {
                 count: String(vaultCount),
-              })}
+              },
+}; return vault.t(translationRequest); })()}
         </p>
         <ul class="max-h-64 space-y-0.5 overflow-y-auto">
           {#each vaults as entry (entry.storeId)}

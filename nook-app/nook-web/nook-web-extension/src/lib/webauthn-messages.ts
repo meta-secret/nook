@@ -40,6 +40,54 @@ export type WebsitePasskeyCancelMessage = {
   }
 }
 
+export type WebsitePasskeyAccount = {
+  credentialId: string
+  userName: string
+  userDisplayName: string
+}
+
+export type WebsitePasskeyVaultOption = {
+  vaultStoreId: string
+  vaultName: string
+  account?: WebsitePasskeyAccount
+}
+
+export enum WebsitePasskeyOptionsStatus {
+  Unavailable = 'unavailable',
+  Locked = 'locked',
+  Ready = 'ready',
+}
+
+export type WebsitePasskeyOptionsResponse =
+  | { ok: false; reason: string }
+  | {
+      ok: true
+      status: WebsitePasskeyOptionsStatus
+      options: WebsitePasskeyVaultOption[]
+    }
+
+export type WebsitePasskeyRegistrationResponse = {
+  ok: true
+  credentialId: string
+  clientDataJSON: string
+  attestationObject: string
+  transports: string[]
+}
+
+export type WebsitePasskeyAssertionResponse = {
+  ok: true
+  credentialId: string
+  clientDataJSON: string
+  authenticatorData: string
+  signature: string
+  userHandle: string
+}
+
+export type WebsitePasskeyPerformResponse =
+  | { ok: false; reason: string }
+  | WebsitePasskeyRegistrationResponse
+  | WebsitePasskeyAssertionResponse
+
 function validBase(message: object): message is {
   payload: WebsitePasskeyOptionsMessage['payload']
 } {
