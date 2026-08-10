@@ -11,6 +11,7 @@
 
 mod authentication_workflow;
 mod authentication_workflow_response;
+mod authenticator_backup_attach_response;
 mod authenticator_preview_response;
 mod backup_code_candidates;
 mod extension_pairing_state;
@@ -33,6 +34,11 @@ pub use authentication_workflow_response::{
     AuthenticationWorkflowSnapshotResponse, AuthenticationWorkflowSnapshotResponseDecodeError,
     AuthenticationWorkflowSnapshotResponseKind, AuthenticationWorkflowSnapshotResponseWire,
     decode_authentication_workflow_snapshot_response,
+};
+pub use authenticator_backup_attach_response::{
+    AuthenticatorBackupAttachResponse, AuthenticatorBackupAttachResponseDecodeError,
+    AuthenticatorBackupAttachResponseKind, AuthenticatorBackupAttachResponseWire,
+    decode_authenticator_backup_attach_response,
 };
 pub use authenticator_preview_response::{
     AuthenticatorEnrollmentPreview, AuthenticatorPreviewResponse,

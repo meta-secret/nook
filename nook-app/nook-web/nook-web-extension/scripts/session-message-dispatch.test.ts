@@ -433,6 +433,59 @@ describe('ExtensionSessionMessageDispatcher', () => {
     await expect(blockerResponse).resolves.toEqual({ ok: true })
   })
 
+  test('honors a vault-import deadline and scrubs expired staging', async () => {
+    let releaseBlocker: () => void = () => {
+      throw new Error('queue blocker was not initialized')
+    }
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve
+    })
+    const stagedProviders = [
+      { githubPat: 'github_pat_expired_queue_secret' },
+    ] as object as StorageProvider[]
+    const handledTypes: string[] = []
+    const dispatcher = new ExtensionSessionMessageDispatcher({
+      decodeProviders: async () => stagedProviders,
+      handleMessage: async (message) => {
+        handledTypes.push(message.type)
+        if (message.type === ExtensionSessionMessageType.CreatePin) {
+          await blocker
+        }
+        return { ok: true }
+      },
+    })
+
+    const blockerResponse = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.CreatePin,
+      payload: {
+        pin: '123456',
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
+    })
+    const importResponse = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: {
+        providers: [{ githubPat: 'caller-secret' }],
+        queue: {
+          kind: 'deadline',
+          expiresAt: Date.now() + 10,
+          priority: 'interactive',
+        },
+      },
+    })
+    const importRejection = expect(importResponse).rejects.toThrow(
+      'EXTENSION_SESSION_REQUEST_EXPIRED',
+    )
+
+    await Bun.sleep(20)
+    releaseBlocker()
+    await expect(blockerResponse).resolves.toEqual({ ok: true })
+    await importRejection
+    await Promise.resolve()
+    expect(handledTypes).toEqual([ExtensionSessionMessageType.CreatePin])
+    expect(stagedProviders[0]).not.toHaveProperty('githubPat')
+  })
+
   test('cancels a running import when the session generation changes', async () => {
     let finishDecode: (providers: StorageProvider[]) => void = () => {
       throw new Error('provider decoder was not initialized')

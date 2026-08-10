@@ -2,11 +2,14 @@ import { companionWasmReady } from '../../../../nook-web-shared/src/extension/co
 import {
   decodeLoginPickerOpenResponse,
   decodeAuthenticationWorkflowSnapshotResponse,
+  decodeAuthenticatorBackupAttachResponse,
   decodeAuthenticatorPreviewResponse,
   decodeWebsiteLoginOptions,
   type AuthenticationWorkflowSnapshot,
   AuthenticationWorkflowSnapshotResponseKind,
   type AuthenticationWorkflowSnapshotResponseWire,
+  AuthenticatorBackupAttachResponseKind,
+  type AuthenticatorBackupAttachResponseWire,
   type AuthenticatorEnrollmentPreview,
   AuthenticatorPreviewResponseKind,
   type AuthenticatorPreviewResponseWire,
@@ -68,6 +71,13 @@ export type AuthenticatorPreviewResponse =
   | { kind: AuthenticatorPreviewResponseKind.Unavailable }
   | {
       kind: AuthenticatorPreviewResponseKind.Rejected
+      reason: string
+    }
+
+export type AuthenticatorBackupAttachResponse =
+  | { kind: AuthenticatorBackupAttachResponseKind.Completed }
+  | {
+      kind: AuthenticatorBackupAttachResponseKind.Rejected
       reason: string
     }
 
@@ -207,6 +217,28 @@ export async function sendAuthenticatorPreviewRuntimeMessage(
       response: decodeAuthenticatorPreviewResponse(
         responseWire,
       ) as AuthenticatorPreviewResponse,
+    }
+  } catch {
+    return unavailable()
+  }
+}
+
+export async function sendAuthenticatorBackupAttachRuntimeMessage(
+  message: object,
+): Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>> {
+  const delivery = await sendRuntimeMessage(message)
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+    return unavailable()
+  }
+  try {
+    await companionWasmReady
+    const responseWire =
+      delivery.response as AuthenticatorBackupAttachResponseWire
+    return {
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: decodeAuthenticatorBackupAttachResponse(
+        responseWire,
+      ) as AuthenticatorBackupAttachResponse,
     }
   } catch {
     return unavailable()

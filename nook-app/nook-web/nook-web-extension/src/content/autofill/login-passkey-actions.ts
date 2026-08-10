@@ -37,11 +37,13 @@ export {
   RuntimeMessageDeliveryKind,
   sendAuthenticationWorkflowSnapshotRuntimeMessage,
   sendAuthenticationOutcomeRuntimeMessage,
+  sendAuthenticatorBackupAttachRuntimeMessage,
   sendAuthenticatorPreviewRuntimeMessage,
   sendDecodedRuntimeMessage,
   sendRuntimeMessageWithoutResponse,
 } from './runtime-message-adapter'
 export type {
+  AuthenticatorBackupAttachResponse,
   AuthenticatorPreviewResponse,
   DecodedRuntimeMessageArgs,
   RuntimeMessageDelivery,

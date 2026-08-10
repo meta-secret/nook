@@ -197,11 +197,15 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
 
   private async enqueueVaultImport({
     message,
+    priority,
+    requestedExpiry,
   }: {
     message: Extract<
       ParsedExtensionSessionTransportRequest,
       { type: ExtensionSessionMessageType.ImportVault }
     >
+    priority: SessionOperationPriority
+    requestedExpiry: RequestedQueueExpiry
   }): Promise<ExtensionSessionDispatchResponse<SessionResponse>> {
     const payload = message.payload
     const operationGeneration = this.operationGeneration
@@ -275,8 +279,14 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
         }
       },
       options: {
-        priority: SessionOperationPriority.Interactive,
-        expiry: { kind: SessionOperationExpiryKind.None },
+        priority,
+        expiry:
+          requestedExpiry.kind === RequestedQueueExpiryKind.Requested
+            ? {
+                kind: SessionOperationExpiryKind.Deadline,
+                expiresAt: requestedExpiry.expiresAt,
+              }
+            : { kind: SessionOperationExpiryKind.None },
         cleanup: {
           kind: SessionOperationCleanupKind.OnExpire,
           run: clearQueuedStaging,
@@ -290,12 +300,6 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
     message: ParsedExtensionSessionTransportRequest,
   ): Promise<ExtensionSessionDispatchResponse<SessionResponse>> {
     const type = message.type
-    if (type === ExtensionSessionMessageType.ImportVault) {
-      const nookNamedArgs0_3: Parameters<typeof this.enqueueVaultImport>[0] = {
-        message,
-      }
-      return this.enqueueVaultImport(nookNamedArgs0_3)
-    }
     const requestedExpiry = requestedQueueExpiry(message)
     const priority =
       requestedExpiry.kind === RequestedQueueExpiryKind.Requested
@@ -304,7 +308,17 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
             ExtensionSessionQueuePriority.Interactive
           ? SessionOperationPriority.Interactive
           : SessionOperationPriority.Probe
-        : sessionMessagePriority(type)
+        : type === ExtensionSessionMessageType.ImportVault
+          ? SessionOperationPriority.Interactive
+          : sessionMessagePriority(type)
+    if (type === ExtensionSessionMessageType.ImportVault) {
+      const nookNamedArgs0_3: Parameters<typeof this.enqueueVaultImport>[0] = {
+        message,
+        priority,
+        requestedExpiry,
+      }
+      return this.enqueueVaultImport(nookNamedArgs0_3)
+    }
     const sensitiveStage = stageExtensionSessionSensitiveRequest(message)
     if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged) {
       const nookNamedArgs0_4: Parameters<

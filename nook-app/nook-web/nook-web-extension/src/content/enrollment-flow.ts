@@ -19,6 +19,7 @@ import {
 } from './enrollment-outcome'
 import {
   RuntimeMessageDeliveryKind,
+  type AuthenticatorBackupAttachResponse,
   type AuthenticatorPreviewResponse,
   type DecodedRuntimeMessageArgs,
   type RuntimeMessageDelivery,
@@ -63,6 +64,9 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   sendAuthenticationOutcomeRuntimeMessage: (
     message: object,
   ) => Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>>
+  sendAuthenticatorBackupAttachRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>>
   sendAuthenticatorPreviewRuntimeMessage: (
     message: object,
   ) => Promise<RuntimeMessageDelivery<AuthenticatorPreviewResponse>>

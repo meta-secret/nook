@@ -2,12 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import {
   AuthenticationOutcomeVerdict,
   AuthenticationWorkflowSnapshotResponseKind,
+  AuthenticatorBackupAttachResponseKind,
   AuthenticatorPreviewResponseKind,
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   RuntimeMessageDeliveryKind,
+  sendAuthenticatorBackupAttachRuntimeMessage,
   sendAuthenticatorPreviewRuntimeMessage,
   sendAuthenticationWorkflowSnapshotRuntimeMessage,
   sendAuthenticationOutcomeRuntimeMessage,
@@ -217,6 +219,33 @@ describe('runtime message adapters', () => {
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
     const delivery = await sendAuthenticatorPreviewRuntimeMessage(message)
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
+  })
+
+  test('decodes a completed backup attachment through Rust', async () => {
+    installRuntimeMock({
+      kind: RuntimeMockKind.Response,
+      response: { ok: true },
+    })
+
+    const delivery = await sendAuthenticatorBackupAttachRuntimeMessage(message)
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
+      expect(delivery.response.kind).toBe(
+        AuthenticatorBackupAttachResponseKind.Completed,
+      )
+    }
+  })
+
+  test('rejects a contradictory backup attachment through Rust', async () => {
+    installRuntimeMock({
+      kind: RuntimeMockKind.Response,
+      response: { ok: true, reason: 'authenticator-locked' },
+    })
+
+    const delivery = await sendAuthenticatorBackupAttachRuntimeMessage(message)
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })

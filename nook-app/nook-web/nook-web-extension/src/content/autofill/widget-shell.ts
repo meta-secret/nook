@@ -8,6 +8,7 @@ import {
   cancelPendingLoginPickerRequest,
   sendDecodedRuntimeMessage,
   sendAuthenticationOutcomeRuntimeMessage,
+  sendAuthenticatorBackupAttachRuntimeMessage,
   sendAuthenticatorPreviewRuntimeMessage,
   sendRuntimeMessageWithoutResponse,
 } from './login-passkey-actions'
@@ -280,6 +281,7 @@ export function buildEnrollmentFlowHost({
     isBusy: () => widgetState.busy,
     sendDecodedRuntimeMessage,
     sendAuthenticationOutcomeRuntimeMessage,
+    sendAuthenticatorBackupAttachRuntimeMessage,
     sendAuthenticatorPreviewRuntimeMessage,
     sendRuntimeMessageWithoutResponse,
     translatedMessage,

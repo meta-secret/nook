@@ -8,6 +8,7 @@ import {
   pageHasBackupCodeHint,
 } from '../lib/backup-code-candidates'
 import { pageHasQrEnrollmentHint } from '../lib/page-qr-capture'
+import { AuthenticatorBackupAttachResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   isTrustedAuthAction,
   safeSavedOptionNumber,
@@ -15,6 +16,7 @@ import {
 import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
 import {
   RuntimeMessageDeliveryKind,
+  type AuthenticatorBackupAttachResponse,
   type DecodedRuntimeMessageArgs,
   type RuntimeMessageDelivery,
 } from './autofill/login-passkey-actions'
@@ -35,6 +37,9 @@ export interface BackupEnrollmentHost extends EnrollmentFlowViewHost {
   sendDecodedRuntimeMessage: <Response extends object>(
     args: DecodedRuntimeMessageArgs<Response>,
   ) => Promise<RuntimeMessageDelivery<Response>>
+  sendAuthenticatorBackupAttachRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>>
   sendRuntimeMessageWithoutResponse: (message: object) => void
   translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (args: {
@@ -59,21 +64,6 @@ type AuthenticatorOptionsResponse = {
 enum BackupAttachMode {
   Replace = 'replace',
   Merge = 'merge',
-}
-
-type BackupAttachResponse = {
-  ok?: boolean
-  reason?: string
-}
-
-function isBackupAttachResponse(
-  response: object,
-): response is BackupAttachResponse {
-  return (
-    'ok' in response &&
-    typeof response.ok === 'boolean' &&
-    (!('reason' in response) || typeof response.reason === 'string')
-  )
 }
 
 function isAuthenticatorOption(
@@ -176,7 +166,9 @@ function showBackupModeChooser({
       text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupWorking),
     }
     setHostDescription(nookTypedArgs0_46)
-    const message = {
+    const message: Parameters<
+      typeof host.sendAuthenticatorBackupAttachRuntimeMessage
+    >[0] = {
       type: 'nook:website-authenticator-backup-attach',
       payload: {
         origin: location.origin,
@@ -186,16 +178,13 @@ function showBackupModeChooser({
         mode,
       },
     }
-    const sendArgs: DecodedRuntimeMessageArgs<BackupAttachResponse> = {
-      message,
-      decode: isBackupAttachResponse,
-    }
     void host
-      .sendDecodedRuntimeMessage<BackupAttachResponse>(sendArgs)
+      .sendAuthenticatorBackupAttachRuntimeMessage(message)
       .then((delivery) => {
         if (
           delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
-          delivery.response?.ok
+          delivery.response.kind ===
+            AuthenticatorBackupAttachResponseKind.Completed
         ) {
           const nookTypedArgs0_47: Parameters<typeof setHostDescription>[0] = {
             host,
@@ -206,7 +195,9 @@ function showBackupModeChooser({
           setHostDescription(nookTypedArgs0_47)
         } else if (
           delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
-          delivery.response?.reason === 'authenticator-locked'
+          delivery.response.kind ===
+            AuthenticatorBackupAttachResponseKind.Rejected &&
+          delivery.response.reason === 'authenticator-locked'
         ) {
           const nookTypedArgs0_48: Parameters<typeof setHostDescription>[0] = {
             host,
