@@ -102,19 +102,27 @@ describe('ExtensionSessionMessageDispatcher', () => {
 
   test('stages browser-owned secrets before awaiting cold WASM', async () => {
     const payload = {
-      pin: '123456',
+      vaultStoreId: 'vault',
+      deviceId: 'device',
+      devicePublicKey: 'public',
+      deviceSigningPublicKey: 'signing',
+      origin: 'https://example.com',
+      username: 'alice',
+      password: 'password',
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     }
     const parsing = parseExtensionSessionRequest({
-      type: ExtensionSessionMessageType.CreatePin,
+      type: ExtensionSessionMessageType.PlanLoginSave,
       payload,
     })
 
-    expect(payload.pin).toBe('')
+    expect(payload.username).toBe('')
+    expect(payload.password).toBe('')
     const parsed = await parsing
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parsed.kind === ExtensionSessionRequestParseKind.Parsed) {
-      expect(messagePayload(parsed.request).pin).toBe('123456')
+      expect(messagePayload(parsed.request).username).toBe('alice')
+      expect(messagePayload(parsed.request).password).toBe('password')
     }
   })
 
