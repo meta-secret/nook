@@ -179,16 +179,13 @@ mod tests {
     }
 
     #[test]
-    fn persistence_area_uses_the_wasm_numeric_representation() {
-        match serde_json::to_string(&ExtensionPersistenceArea::EventLog) {
-            Ok(serialized) => assert_eq!(serialized, "1"),
-            Err(error) => panic!("persistence area should serialize: {error}"),
-        }
+    fn persistence_area_uses_the_wasm_numeric_representation() -> anyhow::Result<()> {
+        let serialized = serde_json::to_string(&ExtensionPersistenceArea::EventLog)?;
+        assert_eq!(serialized, "1");
 
-        match serde_json::from_str::<ExtensionPersistenceArea>("2") {
-            Ok(decoded) => assert_eq!(decoded, ExtensionPersistenceArea::Provider),
-            Err(error) => panic!("numeric persistence area should deserialize: {error}"),
-        }
+        let decoded = serde_json::from_str::<ExtensionPersistenceArea>("2")?;
+        assert_eq!(decoded, ExtensionPersistenceArea::Provider);
         assert!(serde_json::from_str::<ExtensionPersistenceArea>("3").is_err());
+        Ok(())
     }
 }

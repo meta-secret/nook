@@ -547,10 +547,8 @@ pub fn migrate_legacy_pairing_state_json(
                     last_local_sync_at: setup.last_local_sync_at.clone(),
                 }
             }
-            LegacyExtensionPairingRecord::Grant(_) => {
-                return Err(ExtensionPairingStateError::InvalidLegacyState);
-            }
-            LegacyExtensionPairingRecord::Setup(_) => continue,
+            LegacyExtensionPairingRecord::Grant(_)
+            | LegacyExtensionPairingRecord::Setup(_) => continue,
         };
         if key != grant_storage_key(&grant.vault_store_id) {
             return Err(ExtensionPairingStateError::InvalidLegacyState);
@@ -567,8 +565,19 @@ pub fn migrate_legacy_pairing_state_json(
     if setup.sync_provider_count != selected.sync_provider_count {
         return Err(ExtensionPairingStateError::InvalidLegacyState);
     }
+    let migrated_vault_names: std::collections::HashSet<_> = entries
+        .iter()
+        .filter_map(|entry| match &entry.record {
+            ExtensionPairingRecord::Grant(grant) => Some(grant.vault_name.as_str()),
+            ExtensionPairingRecord::Setup(_) => None,
+        })
+        .collect();
     let mut ready_setup = setup_from_grant(&selected);
-    ready_setup.paired_vaults = setup.paired_vaults;
+    ready_setup.paired_vaults = setup
+        .paired_vaults
+        .into_iter()
+        .filter(|vault_name| migrated_vault_names.contains(vault_name.as_str()))
+        .collect();
     entries.push(ExtensionPairingEntry {
         key: EXTENSION_SETUP_KEY.to_owned(),
         record: ExtensionPairingRecord::Setup(ready_setup),
@@ -837,6 +846,33 @@ mod tests {
             migrated.selected_grant().map(|grant| grant.vault_store_id),
             Some("store-test".to_owned())
         );
+        Ok(())
+    }
+
+    #[test]
+    fn migration_quarantines_incomplete_non_selected_pairing_grants() -> anyhow::Result<()> {
+        let mut setup = legacy_setup();
+        setup.paired_vaults.push("Team".to_owned());
+        let mut records = legacy_pairing_state(legacy_grant("store-test"), setup);
+        let mut incomplete_team = legacy_grant("store-team");
+        incomplete_team.vault_name = "Team".to_owned();
+        records.insert(
+            grant_storage_key(&incomplete_team.vault_store_id),
+            LegacyExtensionPairingRecord::Grant(incomplete_team),
+        );
+        let serialized = serde_json::to_string(&records)?;
+
+        let migrated = migrate_legacy_pairing_state_json(&serialized)?;
+
+        assert_eq!(migrated.ordered_grants().len(), 1);
+        assert_eq!(migrated.grant("store-team"), None);
+        assert_eq!(
+            migrated
+                .ready_setup()
+                .map(|setup| setup.paired_vaults.clone()),
+            Some(vec!["Personal".to_owned()])
+        );
+        migrated.validate()?;
         Ok(())
     }
 

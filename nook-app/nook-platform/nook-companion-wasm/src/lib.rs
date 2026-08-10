@@ -596,17 +596,17 @@ mod wasm_tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn persistence_observation_round_trips_the_numeric_wasm_enum() {
+    fn persistence_observation_round_trips_the_numeric_wasm_enum() -> anyhow::Result<()> {
         let observation = ExtensionPersistenceObservation {
             area: ExtensionPersistenceArea::EventLog,
             observed_names: vec!["events".to_owned()],
         };
 
-        let js_value = serde_wasm_bindgen::to_value(&observation)
-            .expect("observation should serialize through the wasm adapter");
-        let decoded: ExtensionPersistenceObservation = serde_wasm_bindgen::from_value(js_value)
-            .expect("numeric wasm enum should deserialize through the wasm adapter");
+        let js_value = serde_wasm_bindgen::to_value(&observation)?;
+        let decoded: ExtensionPersistenceObservation =
+            serde_wasm_bindgen::from_value(js_value)?;
 
         assert_eq!(decoded, observation);
+        Ok(())
     }
 }
