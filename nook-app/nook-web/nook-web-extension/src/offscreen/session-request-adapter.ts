@@ -187,8 +187,8 @@ const sensitiveSessionFields: Readonly<
   [ExtensionSessionMessageType.CommitLoginSave]: [],
   [ExtensionSessionMessageType.DismissLoginSave]: [],
   [ExtensionSessionMessageType.CancelPasskey]: [],
-  [ExtensionSessionMessageType.RegisterPasskey]: [],
-  [ExtensionSessionMessageType.AssertPasskey]: [],
+  [ExtensionSessionMessageType.RegisterPasskey]: ['requestJson'],
+  [ExtensionSessionMessageType.AssertPasskey]: ['requestJson'],
   [ExtensionSessionMessageType.Lock]: [],
 }
 

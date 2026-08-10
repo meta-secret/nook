@@ -53,6 +53,12 @@ pub enum QueuePriority {
     Interactive,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+pub enum PasskeyCeremonyPriority {
+    Interactive,
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(
     tag = "kind",
@@ -78,7 +84,7 @@ pub enum PasskeyCeremonyQueueDisposition {
     Deadline {
         #[serde(deserialize_with = "deserialize_finite_f64")]
         expires_at: f64,
-        priority: QueuePriority,
+        priority: PasskeyCeremonyPriority,
     },
 }
 
@@ -820,6 +826,10 @@ mod tests {
         assert_eq!(
             validate_extension_session_request_json(ceremony),
             ExtensionSessionRequestValidation::Accepted
+        );
+        assert_eq!(
+            validate_extension_session_request_json(&ceremony.replace("interactive", "probe")),
+            ExtensionSessionRequestValidation::Rejected
         );
         assert_eq!(
             validate_extension_session_request_json(&ceremony.replace(

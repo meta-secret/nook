@@ -212,6 +212,105 @@ pub fn decode_authenticator_preview_response(
 mod tests {
     use super::*;
 
+    fn preview(algorithm: AuthenticatorPreviewAlgorithmWire) -> AuthenticatorEnrollmentPreviewWire {
+        AuthenticatorEnrollmentPreviewWire {
+            issuer: "Nook".to_owned(),
+            account: "alice".to_owned(),
+            website_url: "https://example.com".to_owned(),
+            algorithm,
+            digits: AuthenticatorPreviewDigits(6),
+            period: AuthenticatorPreviewPeriod(30),
+        }
+    }
+
+    fn ready_wire(
+        ok: bool,
+        vault_store_id: &str,
+        vault_name: &str,
+    ) -> AuthenticatorPreviewResponseWire {
+        AuthenticatorPreviewResponseWire::Available(AuthenticatorPreviewAvailableWire::Ready {
+            ok,
+            preview: preview(AuthenticatorPreviewAlgorithmWire::Sha256),
+            vault_store_id: vault_store_id.to_owned(),
+            vault_name: vault_name.to_owned(),
+        })
+    }
+
+    #[test]
+    fn decodes_each_authenticator_preview_response_variant() {
+        assert_eq!(
+            decode_authenticator_preview_response(ready_wire(true, "vault", "Personal")),
+            Ok(AuthenticatorPreviewResponse::Ready {
+                kind: AuthenticatorPreviewResponseKind::Ready,
+                preview: AuthenticatorEnrollmentPreview {
+                    issuer: "Nook".to_owned(),
+                    account: "alice".to_owned(),
+                    website_url: "https://example.com".to_owned(),
+                    algorithm: AuthenticatorPreviewAlgorithm::Sha256,
+                    digits: 6,
+                    period: 30,
+                },
+                vault_store_id: "vault".to_owned(),
+            })
+        );
+        assert_eq!(
+            decode_authenticator_preview_response(AuthenticatorPreviewResponseWire::Available(
+                AuthenticatorPreviewAvailableWire::Unavailable { ok: true },
+            )),
+            Ok(AuthenticatorPreviewResponse::Unavailable {
+                kind: AuthenticatorPreviewResponseKind::Unavailable,
+            })
+        );
+        assert_eq!(
+            decode_authenticator_preview_response(AuthenticatorPreviewResponseWire::Rejected(
+                AuthenticatorPreviewRejectedWire {
+                    ok: false,
+                    reason: "vault-locked".to_owned(),
+                },
+            )),
+            Ok(AuthenticatorPreviewResponse::Rejected {
+                kind: AuthenticatorPreviewResponseKind::Rejected,
+                reason: "vault-locked".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_contradictory_authenticator_preview_success_states() {
+        for contradictory in [
+            ready_wire(false, "vault", "Personal"),
+            AuthenticatorPreviewResponseWire::Available(
+                AuthenticatorPreviewAvailableWire::Unavailable { ok: false },
+            ),
+            AuthenticatorPreviewResponseWire::Rejected(AuthenticatorPreviewRejectedWire {
+                ok: true,
+                reason: "vault-locked".to_owned(),
+            }),
+        ] {
+            assert_eq!(
+                decode_authenticator_preview_response(contradictory),
+                Err(AuthenticatorPreviewResponseDecodeError)
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_missing_authenticator_preview_domain_identity() {
+        for malformed in [
+            ready_wire(true, " ", "Personal"),
+            ready_wire(true, "vault", " "),
+            AuthenticatorPreviewResponseWire::Rejected(AuthenticatorPreviewRejectedWire {
+                ok: false,
+                reason: " ".to_owned(),
+            }),
+        ] {
+            assert_eq!(
+                decode_authenticator_preview_response(malformed),
+                Err(AuthenticatorPreviewResponseDecodeError)
+            );
+        }
+    }
+
     #[test]
     fn rejects_invalid_totp_preview_metadata() {
         for malformed in [

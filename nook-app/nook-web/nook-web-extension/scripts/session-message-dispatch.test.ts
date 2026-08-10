@@ -126,6 +126,37 @@ describe('ExtensionSessionMessageDispatcher', () => {
     }
   })
 
+  test('stages passkey request JSON before awaiting cold WASM', async () => {
+    for (const type of [
+      ExtensionSessionMessageType.RegisterPasskey,
+      ExtensionSessionMessageType.AssertPasskey,
+    ]) {
+      const payload = {
+        vaultStoreId: 'vault',
+        deviceId: 'device',
+        devicePublicKey: 'public',
+        deviceSigningPublicKey: 'signing',
+        requestId: 'request',
+        requestJson: '{"challenge":"browser-owned-secret"}',
+        queue: {
+          kind: 'deadline' as const,
+          expiresAt: 42,
+          priority: 'interactive' as const,
+        },
+      }
+      const parsing = parseExtensionSessionRequest({ type, payload })
+
+      expect(payload.requestJson).toBe('')
+      const parsed = await parsing
+      expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+      if (parsed.kind === ExtensionSessionRequestParseKind.Parsed) {
+        expect(messagePayload(parsed.request).requestJson).toBe(
+          '{"challenge":"browser-owned-secret"}',
+        )
+      }
+    }
+  })
+
   test('stages provider credentials before awaiting cold WASM', async () => {
     const providers = [
       {
