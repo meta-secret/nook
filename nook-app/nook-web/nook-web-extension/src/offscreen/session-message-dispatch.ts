@@ -329,10 +329,24 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (sender.id !== chrome.runtime.id) return false
       void parseExtensionSessionRequest(message).then((parsed) => {
-        if (parsed.kind === ExtensionSessionRequestParseKind.Invalid) return
+        if (parsed.kind === ExtensionSessionRequestParseKind.Invalid) {
+          const invalidResponse: Parameters<typeof sendResponse>[0] = {
+            ok: false,
+            error: 'Invalid extension session request.',
+          }
+          sendResponse(invalidResponse)
+          return
+        }
         const request = parsed.request
         const type = request.type
-        if (type === ExtensionSessionMessageType.Lock) return
+        if (type === ExtensionSessionMessageType.Lock) {
+          const unsupportedResponse: Parameters<typeof sendResponse>[0] = {
+            ok: false,
+            error: 'Unsupported extension session request.',
+          }
+          sendResponse(unsupportedResponse)
+          return
+        }
         const serviceWorkerOnly =
           type === ExtensionSessionMessageType.SealIdentityHandoff ||
           type === ExtensionSessionMessageType.CancelPasskey
@@ -345,6 +359,11 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
           (serviceWorkerOnly && !serviceWorkerSender) ||
           !type.startsWith('nook:extension-session-')
         ) {
+          const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
+            ok: false,
+            error: 'Forbidden extension session request.',
+          }
+          sendResponse(forbiddenResponse)
           return
         }
         const direct =

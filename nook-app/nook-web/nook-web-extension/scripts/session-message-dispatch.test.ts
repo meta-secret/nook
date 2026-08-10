@@ -308,7 +308,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(stagedProviders[0]).not.toHaveProperty('githubPat')
   })
 
-  test('rejects runtime messages from another extension', () => {
+  test('rejects foreign and malformed runtime messages without hanging', async () => {
     type RuntimeListener = (
       message: unknown,
       sender: chrome.runtime.MessageSender,
@@ -355,5 +355,19 @@ describe('ExtensionSessionMessageDispatcher', () => {
         () => {},
       ),
     ).toBe(false)
+
+    const malformedResponse = new Promise<unknown>((resolve) => {
+      const sender: chrome.runtime.MessageSender = { id: 'nook-extension' }
+      const keepsResponseChannelOpen = registration.listener(
+        { type: ExtensionSessionMessageType.Status },
+        sender,
+        resolve,
+      )
+      expect(keepsResponseChannelOpen).toBe(true)
+    })
+    await expect(malformedResponse).resolves.toEqual({
+      ok: false,
+      error: 'Invalid extension session request.',
+    })
   })
 })

@@ -14,47 +14,47 @@ pub enum ExtensionSessionRequestValidation {
     Rejected,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(transparent)]
-struct SensitiveString(String);
+pub struct SessionSecretText(String);
 
-impl Zeroize for SensitiveString {
+impl Zeroize for SessionSecretText {
     fn zeroize(&mut self) {
         self.0.zeroize();
     }
 }
 
-impl Drop for SensitiveString {
+impl Drop for SessionSecretText {
     fn drop(&mut self) {
         self.zeroize();
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(transparent)]
-struct SensitiveBytes(Vec<u8>);
+pub struct SessionSecretBytes(Vec<u8>);
 
-impl Zeroize for SensitiveBytes {
+impl Zeroize for SessionSecretBytes {
     fn zeroize(&mut self) {
         self.0.zeroize();
     }
 }
 
-impl Drop for SensitiveBytes {
+impl Drop for SessionSecretBytes {
     fn drop(&mut self) {
         self.zeroize();
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-enum QueuePriority {
+pub enum QueuePriority {
     Interactive,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct QueueMetadata {
+pub struct QueueMetadata {
     #[serde(default, deserialize_with = "deserialize_optional_finite_f64")]
     queue_expires_at: Option<f64>,
     #[serde(default, deserialize_with = "deserialize_optional_non_null")]
@@ -88,81 +88,81 @@ where
     deserialize_finite_f64(deserializer).map(Some)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct VaultGrant {
+pub struct VaultGrant {
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
     device_signing_public_key: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-struct SerializedStorageProvider {
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+pub struct SerializedStorageProvider {
     id: String,
     #[serde(rename = "type")]
     provider_type: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-struct ExtensionVaultEventPayload {
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+pub struct ExtensionVaultEventPayload {
     schema_version: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct ExtensionEventLogRecord {
+pub struct ExtensionEventLogRecord {
     event_id: String,
     path: String,
     event: ExtensionVaultEventPayload,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
-struct EmptyPayload {
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Tsify)]
+pub struct EmptyPayload {
     #[serde(flatten)]
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct FinishPasskeySetupPayload {
-    credential_id: SensitiveBytes,
-    user_handle: SensitiveBytes,
-    prf_input: SensitiveBytes,
-    prf_output: SensitiveBytes,
+pub struct FinishPasskeySetupPayload {
+    credential_id: SessionSecretBytes,
+    user_handle: SessionSecretBytes,
+    prf_input: SessionSecretBytes,
+    prf_output: SessionSecretBytes,
     device_mode: u32,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct RecoverPasskeyPayload {
-    credential_id: SensitiveBytes,
-    user_handle: SensitiveBytes,
-    prf_output: SensitiveBytes,
+pub struct RecoverPasskeyPayload {
+    credential_id: SessionSecretBytes,
+    user_handle: SessionSecretBytes,
+    prf_output: SessionSecretBytes,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct UnlockPasskeyPayload {
-    prf_output: SensitiveBytes,
+pub struct UnlockPasskeyPayload {
+    prf_output: SessionSecretBytes,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-struct PinPayload {
-    pin: SensitiveString,
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+pub struct PinPayload {
+    pin: SessionSecretText,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct IdentityHandoffPayload {
+pub struct IdentityHandoffPayload {
     recipient_public_key: String,
     nonce: String,
     expected_device_id: String,
@@ -172,9 +172,9 @@ struct IdentityHandoffPayload {
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct ImportVaultPayload {
+pub struct ImportVaultPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     providers: Vec<SerializedStorageProvider>,
@@ -183,9 +183,9 @@ struct ImportVaultPayload {
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct UpdateVaultPayload {
+pub struct UpdateVaultPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     event_log_records: Vec<ExtensionEventLogRecord>,
@@ -193,9 +193,9 @@ struct UpdateVaultPayload {
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct PasskeyLookupPayload {
+pub struct PasskeyLookupPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     rp_id: String,
@@ -204,8 +204,8 @@ struct PasskeyLookupPayload {
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-struct OriginGrantPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+pub struct OriginGrantPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     origin: String,
@@ -213,9 +213,9 @@ struct OriginGrantPayload {
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct SecretGrantPayload {
+pub struct SecretGrantPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     origin: String,
@@ -224,8 +224,8 @@ struct SecretGrantPayload {
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-struct QueryGrantPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+pub struct QueryGrantPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     query: String,
@@ -233,9 +233,9 @@ struct QueryGrantPayload {
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct SecretIdGrantPayload {
+pub struct SecretIdGrantPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     secret_id: String,
@@ -243,67 +243,67 @@ struct SecretIdGrantPayload {
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct OtpauthPayload {
-    otpauth_uri: SensitiveString,
+pub struct OtpauthPayload {
+    otpauth_uri: SessionSecretText,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct OtpauthGrantPayload {
+pub struct OtpauthGrantPayload {
     #[serde(flatten)]
     grant: VaultGrant,
-    otpauth_uri: SensitiveString,
+    otpauth_uri: SessionSecretText,
     origin: String,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct BackupAttachPayload {
+pub struct BackupAttachPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     secret_id: String,
-    codes: Vec<SensitiveString>,
+    codes: Vec<SessionSecretText>,
     mode: String,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-struct LoginSavePlanPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+pub struct LoginSavePlanPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     origin: String,
-    username: SensitiveString,
-    password: SensitiveString,
+    username: SessionSecretText,
+    password: SessionSecretText,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-struct OriginPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+pub struct OriginPayload {
     origin: String,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct LoginSaveActionPayload {
+pub struct LoginSaveActionPayload {
     origin: String,
     offer_id: String,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct GrantedLoginSaveActionPayload {
+pub struct GrantedLoginSaveActionPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     origin: String,
@@ -312,30 +312,30 @@ struct GrantedLoginSaveActionPayload {
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct RequestPayload {
+pub struct RequestPayload {
     request_id: String,
     #[serde(flatten)]
     queue: QueueMetadata,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct PasskeyCeremonyPayload {
+pub struct PasskeyCeremonyPayload {
     #[serde(flatten)]
     grant: VaultGrant,
     request_id: String,
-    request_json: SensitiveString,
+    request_json: SessionSecretText,
     #[serde(deserialize_with = "deserialize_finite_f64")]
     queue_expires_at: f64,
     #[serde(default, deserialize_with = "deserialize_optional_non_null")]
     queue_priority: Option<QueuePriority>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(tag = "type", content = "payload")]
-enum ExtensionSessionRequest {
+pub enum ExtensionSessionRequest {
     #[serde(rename = "nook:extension-session-reset")]
     Reset(EmptyPayload),
     #[serde(rename = "nook:extension-session-migrate-auth-providers")]
@@ -400,11 +400,12 @@ enum ExtensionSessionRequest {
 
 /// A concrete session request decoded directly from the browser value.
 ///
-/// The inner wire representation stays private so callers cannot use it as a
-/// generic value bag. Sensitive allocations are erased as soon as validation
+/// The generated boundary exposes the exact request union rather than a generic
+/// JavaScript value. Sensitive allocations are erased as soon as validation
 /// finishes.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Tsify)]
 #[serde(transparent)]
+#[tsify(from_wasm_abi)]
 pub struct ExtensionSessionRequestWire(ExtensionSessionRequest);
 
 impl Drop for ExtensionSessionRequestWire {
@@ -481,9 +482,9 @@ pub fn validate_extension_session_request_json(
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct WebsiteLoginAccountWire {
+pub struct WebsiteLoginAccountWire {
     vault_store_id: String,
     vault_name: String,
     secret_id: String,
@@ -492,17 +493,17 @@ struct WebsiteLoginAccountWire {
     website_host: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-enum WebsiteLoginOptionsStatusWire {
+pub enum WebsiteLoginOptionsStatusWire {
     Ready,
     Locked,
     Unavailable,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-struct WebsiteLoginOptionsWire {
+pub struct WebsiteLoginOptionsWire {
     ok: bool,
     status: Option<WebsiteLoginOptionsStatusWire>,
     accounts: Option<Vec<WebsiteLoginAccountWire>>,
@@ -510,8 +511,9 @@ struct WebsiteLoginOptionsWire {
 }
 
 /// Concrete companion response decoded at the browser runtime boundary.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(transparent)]
+#[tsify(from_wasm_abi)]
 pub struct WebsiteLoginOptionsWireValue(WebsiteLoginOptionsWire);
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, Tsify)]
@@ -592,6 +594,85 @@ pub fn decode_website_login_options(
         Some(WebsiteLoginOptionsStatusWire::Locked) => Ok(WebsiteLoginOptions::Locked),
         Some(WebsiteLoginOptionsStatusWire::Unavailable) => Ok(WebsiteLoginOptions::Unavailable),
         None => Err(WebsiteLoginOptionsDecodeError::Malformed),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+pub enum LoginPickerOpenStatusWire {
+    Ready,
+    Locked,
+    Unavailable,
+}
+
+/// Concrete service-worker response presented to the content-script boundary.
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
+pub struct LoginPickerOpenResponseWire {
+    ok: bool,
+    status: Option<LoginPickerOpenStatusWire>,
+    request_id: Option<String>,
+    expires_at: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, Tsify)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+#[tsify(into_wasm_abi)]
+pub enum LoginPickerOpenResponse {
+    Failed,
+    Ready { request_id: String, expires_at: f64 },
+    Locked,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("login picker open response is malformed")]
+pub struct LoginPickerOpenResponseDecodeError;
+
+pub fn decode_login_picker_open_response(
+    wire: LoginPickerOpenResponseWire,
+) -> Result<LoginPickerOpenResponse, LoginPickerOpenResponseDecodeError> {
+    if !wire.ok {
+        return if wire.status.is_none() && wire.request_id.is_none() && wire.expires_at.is_none() {
+            Ok(LoginPickerOpenResponse::Failed)
+        } else {
+            Err(LoginPickerOpenResponseDecodeError)
+        };
+    }
+
+    match wire.status {
+        Some(LoginPickerOpenStatusWire::Ready) => {
+            let request_id = wire
+                .request_id
+                .filter(|request_id| !request_id.trim().is_empty())
+                .ok_or(LoginPickerOpenResponseDecodeError)?;
+            let expires_at = wire
+                .expires_at
+                .filter(|expires_at| expires_at.is_finite())
+                .ok_or(LoginPickerOpenResponseDecodeError)?;
+            Ok(LoginPickerOpenResponse::Ready {
+                request_id,
+                expires_at,
+            })
+        }
+        Some(LoginPickerOpenStatusWire::Locked)
+            if wire.request_id.is_none() && wire.expires_at.is_none() =>
+        {
+            Ok(LoginPickerOpenResponse::Locked)
+        }
+        Some(LoginPickerOpenStatusWire::Unavailable)
+            if wire.request_id.is_none() && wire.expires_at.is_none() =>
+        {
+            Ok(LoginPickerOpenResponse::Unavailable)
+        }
+        Some(LoginPickerOpenStatusWire::Locked | LoginPickerOpenStatusWire::Unavailable) | None => {
+            Err(LoginPickerOpenResponseDecodeError)
+        }
     }
 }
 
@@ -677,6 +758,40 @@ mod tests {
             decode_website_login_options_json(&ready.replacen("\"vault\"", "\"\"", 1)).is_err()
         );
         assert!(decode_website_login_options_json(r#"{"ok":true,"status":"ready"}"#).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn picker_ready_state_owns_complete_metadata() -> anyhow::Result<()> {
+        let ready = LoginPickerOpenResponseWire {
+            ok: true,
+            status: Some(LoginPickerOpenStatusWire::Ready),
+            request_id: Some("request".to_owned()),
+            expires_at: Some(42.0),
+        };
+        assert_eq!(
+            decode_login_picker_open_response(ready)?,
+            LoginPickerOpenResponse::Ready {
+                request_id: "request".to_owned(),
+                expires_at: 42.0,
+            }
+        );
+
+        let incomplete_ready = LoginPickerOpenResponseWire {
+            ok: true,
+            status: Some(LoginPickerOpenStatusWire::Ready),
+            request_id: None,
+            expires_at: Some(42.0),
+        };
+        assert!(decode_login_picker_open_response(incomplete_ready).is_err());
+
+        let invalid_locked = LoginPickerOpenResponseWire {
+            ok: true,
+            status: Some(LoginPickerOpenStatusWire::Locked),
+            request_id: Some("request".to_owned()),
+            expires_at: None,
+        };
+        assert!(decode_login_picker_open_response(invalid_locked).is_err());
         Ok(())
     }
 }

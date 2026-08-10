@@ -33,6 +33,7 @@ export {
   RuntimeMessageDeliveryKind,
   sendRuntimeMessage,
 } from './runtime-message-adapter'
+export type { RuntimeMessageDelivery } from './runtime-message-adapter'
 
 export type PasskeyWidgetAction =
   | AuthenticationWorkflowAction.UsePasskey
@@ -207,7 +208,7 @@ async function openLoginPicker({
   const delivery = await sendLoginPickerOpenRuntimeMessage(nookTypedArgs0_3)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    !delivery.response?.ok
+    delivery.response.kind === 'failed'
   ) {
     const nookTypedArgs0_10: Parameters<typeof setFlightProgress>[0] = {
       step,
@@ -227,7 +228,7 @@ async function openLoginPicker({
     return
   }
   const { response } = delivery
-  if (response.status === 'locked') {
+  if (response.kind === 'locked') {
     const nookTypedArgs0_12: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,
@@ -245,7 +246,7 @@ async function openLoginPicker({
     setStatus(nookTypedArgs0_13)
     return
   }
-  if (response.status === 'unavailable') {
+  if (response.kind === 'unavailable') {
     const nookTypedArgs0_14: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,
@@ -263,11 +264,7 @@ async function openLoginPicker({
     setStatus(nookTypedArgs0_15)
     return
   }
-  if (
-    !response.requestId ||
-    typeof response.expiresAt !== 'number' ||
-    response.expiresAt <= Date.now()
-  ) {
+  if (response.expiresAt <= Date.now()) {
     const nookTypedArgs0_16: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,

@@ -5,6 +5,7 @@ import type {
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   ExtensionSessionRequestValidation,
+  type ExtensionSessionRequestWire,
   validateExtensionSessionRequest,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
@@ -286,8 +287,9 @@ export async function parseExtensionSessionRequest(
 ): Promise<ExtensionSessionRequestParse> {
   try {
     await companionWasmReady
+    const requestWire = value as ExtensionSessionRequestWire
     if (
-      validateExtensionSessionRequest(value) !==
+      validateExtensionSessionRequest(requestWire) !==
       ExtensionSessionRequestValidation.Accepted
     ) {
       return { kind: ExtensionSessionRequestParseKind.Invalid }

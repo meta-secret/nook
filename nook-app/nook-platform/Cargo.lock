@@ -1903,6 +1903,7 @@ dependencies = [
  "tsify",
  "url",
  "wasm-bindgen",
+ "zeroize",
 ]
 
 [[package]]

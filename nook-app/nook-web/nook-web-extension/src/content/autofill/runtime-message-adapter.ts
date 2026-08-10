@@ -1,12 +1,12 @@
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import {
+  decodeLoginPickerOpenResponse,
   decodeWebsiteLoginOptions,
-  type WebsiteLoginOptions,
-} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import {
   type LoginPickerOpenResponse,
-  LoginPickerOpenResponseStatus,
-} from './workflow-ui'
+  type LoginPickerOpenResponseWire,
+  type WebsiteLoginOptions,
+  type WebsiteLoginOptionsWireValue,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export enum RuntimeMessageDeliveryKind {
   Delivered = 'delivered',
@@ -20,21 +20,8 @@ export type RuntimeMessageDelivery<Response> =
 export type GeneratedPasswordResponse =
   { ok: true; password: string } | { ok: false; reason: string }
 
-function isLoginPickerOpenResponseStatus(
-  status: string,
-): status is LoginPickerOpenResponseStatus {
-  switch (status) {
-    case LoginPickerOpenResponseStatus.Ready:
-    case LoginPickerOpenResponseStatus.Locked:
-    case LoginPickerOpenResponseStatus.Unavailable:
-      return true
-    default:
-      return false
-  }
-}
-
 export function sendRuntimeMessage<Response>(
-  message: object,
+  message: unknown,
 ): Promise<RuntimeMessageDelivery<Response>> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(message, (response: unknown) => {
@@ -67,9 +54,10 @@ export async function sendLoginOptionsRuntimeMessage(
   }
   try {
     await companionWasmReady
+    const responseWire = delivery.response as WebsiteLoginOptionsWireValue
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeWebsiteLoginOptions(delivery.response),
+      response: decodeWebsiteLoginOptions(responseWire),
     }
   } catch {
     return unavailable()
@@ -83,47 +71,15 @@ export async function sendLoginPickerOpenRuntimeMessage(
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     return unavailable()
   }
-  const response = delivery.response
-  if (!response || typeof response !== 'object' || !('ok' in response)) {
-    return unavailable()
-  }
-  if (response.ok === false) {
+  try {
+    await companionWasmReady
+    const responseWire = delivery.response as LoginPickerOpenResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: { ok: false },
+      response: decodeLoginPickerOpenResponse(responseWire),
     }
-  }
-  if (
-    response.ok !== true ||
-    !('status' in response) ||
-    typeof response.status !== 'string' ||
-    !isLoginPickerOpenResponseStatus(response.status)
-  ) {
+  } catch {
     return unavailable()
-  }
-  if (
-    'requestId' in response &&
-    'expiresAt' in response &&
-    typeof response.requestId === 'string' &&
-    typeof response.expiresAt === 'number' &&
-    Number.isFinite(response.expiresAt)
-  ) {
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: {
-        ok: true,
-        status: response.status,
-        requestId: response.requestId,
-        expiresAt: response.expiresAt,
-      },
-    }
-  }
-  return {
-    kind: RuntimeMessageDeliveryKind.Delivered,
-    response: {
-      ok: true,
-      status: response.status,
-    },
   }
 }
 

@@ -43,10 +43,11 @@ pub use extension_persistence::{
     classify_extension_store_names, matching_extension_store_names,
 };
 pub use extension_session_protocol::{
-    ExtensionSessionRequestValidation, ExtensionSessionRequestWire, WebsiteLoginAccountOption,
+    ExtensionSessionRequestValidation, ExtensionSessionRequestWire, LoginPickerOpenResponse,
+    LoginPickerOpenResponseDecodeError, LoginPickerOpenResponseWire, WebsiteLoginAccountOption,
     WebsiteLoginOptions, WebsiteLoginOptionsDecodeError, WebsiteLoginOptionsWireValue,
-    decode_website_login_options, decode_website_login_options_json,
-    validate_extension_session_request_json,
+    decode_login_picker_open_response, decode_website_login_options,
+    decode_website_login_options_json, validate_extension_session_request_json,
 };
 pub use oauth_origin_policy::{
     BrowserOAuthProvider, OAuthOriginSupport, OAuthOriginUnsupportedReason,

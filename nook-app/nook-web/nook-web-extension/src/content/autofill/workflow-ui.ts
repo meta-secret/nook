@@ -144,22 +144,6 @@ export type AuthenticatorFillResponse = {
   code?: string
 }
 
-export enum LoginPickerOpenResponseStatus {
-  Ready = 'ready',
-  Locked = 'locked',
-  Unavailable = 'unavailable',
-}
-
-export type LoginPickerOpenResponse = {
-  ok?: boolean
-  status?:
-    | LoginPickerOpenResponseStatus.Ready
-    | LoginPickerOpenResponseStatus.Locked
-    | LoginPickerOpenResponseStatus.Unavailable
-  requestId?: string
-  expiresAt?: number
-}
-
 export function translatedMessage(key: BrowserMessageKey): string {
   return chrome.i18n.getMessage(key) || 'Nook'
 }
