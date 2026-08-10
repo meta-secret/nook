@@ -3,7 +3,7 @@ import {
   type BrowserMessageKey,
 } from '../lib/browser-message-keys'
 import { pageHasBackupCodeHint } from '../lib/backup-code-candidates'
-import type { OtpauthEnrollmentPreview } from '../lib/enrollment-messages'
+import { AuthenticatorPreviewResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   clearOtpauthCandidate,
   decodeVisibleOtpauthCandidates,
@@ -19,6 +19,7 @@ import {
 } from './enrollment-outcome'
 import {
   RuntimeMessageDeliveryKind,
+  type AuthenticatorPreviewResponse,
   type DecodedRuntimeMessageArgs,
   type RuntimeMessageDelivery,
 } from './autofill/login-passkey-actions'
@@ -62,26 +63,15 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   sendAuthenticationOutcomeRuntimeMessage: (
     message: object,
   ) => Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>>
+  sendAuthenticatorPreviewRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorPreviewResponse>>
   sendRuntimeMessageWithoutResponse: (message: object) => void
   translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (args: {
     key: BrowserMessageKey
     substitution: string
   }) => string
-}
-
-enum EnrollPreviewResponseStatus {
-  Ready = 'ready',
-  Unavailable = 'unavailable',
-}
-
-type EnrollPreviewResponse = {
-  ok?: boolean
-  status?:
-    EnrollPreviewResponseStatus.Ready | EnrollPreviewResponseStatus.Unavailable
-  preview?: OtpauthEnrollmentPreview
-  vaultStoreId?: string
-  reason?: string
 }
 
 type EnrollStageResponse = {
@@ -117,47 +107,6 @@ function isEnrollConfirmResponse(
     (response.ok
       ? 'secretId' in response && typeof response.secretId === 'string'
       : !('reason' in response) || typeof response.reason === 'string')
-  )
-}
-
-function isEnrollmentPreview(
-  preview: object,
-): preview is OtpauthEnrollmentPreview {
-  return (
-    'issuer' in preview &&
-    typeof preview.issuer === 'string' &&
-    'account' in preview &&
-    typeof preview.account === 'string' &&
-    'websiteUrl' in preview &&
-    typeof preview.websiteUrl === 'string' &&
-    'algorithm' in preview &&
-    typeof preview.algorithm === 'string' &&
-    'digits' in preview &&
-    typeof preview.digits === 'number' &&
-    'period' in preview &&
-    typeof preview.period === 'number'
-  )
-}
-
-function isEnrollPreviewResponse(
-  response: object,
-): response is EnrollPreviewResponse {
-  if (!('ok' in response) || typeof response.ok !== 'boolean') return false
-  if (response.ok === false) {
-    return !('reason' in response) || typeof response.reason === 'string'
-  }
-  if (!('status' in response)) return false
-  if (response.status === EnrollPreviewResponseStatus.Unavailable) return true
-  return (
-    response.status === EnrollPreviewResponseStatus.Ready &&
-    'preview' in response &&
-    Boolean(
-      response.preview &&
-      typeof response.preview === 'object' &&
-      isEnrollmentPreview(response.preview),
-    ) &&
-    'vaultStoreId' in response &&
-    typeof response.vaultStoreId === 'string'
   )
 }
 
@@ -469,23 +418,20 @@ async function showQrPreview({
   host.setBusy(true)
 
   try {
-    const message = {
+    const message: Parameters<
+      typeof host.sendAuthenticatorPreviewRuntimeMessage
+    >[0] = {
       type: 'nook:website-authenticator-enroll-preview',
       payload: {
         origin: location.origin,
         otpauthUri: otpauthUri.value,
       },
     }
-    const previewArgs: DecodedRuntimeMessageArgs<EnrollPreviewResponse> = {
-      message,
-      decode: isEnrollPreviewResponse,
-    }
-    const delivery =
-      await host.sendDecodedRuntimeMessage<EnrollPreviewResponse>(previewArgs)
+    const delivery = await host.sendAuthenticatorPreviewRuntimeMessage(message)
 
     if (
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-      !delivery.response?.ok
+      delivery.response.kind === AuthenticatorPreviewResponseKind.Rejected
     ) {
       const nookTypedArgs0_20: Parameters<typeof setHostDescription>[0] = {
         host,
@@ -503,7 +449,7 @@ async function showQrPreview({
     }
     const { response } = delivery
 
-    if (response.status === EnrollPreviewResponseStatus.Unavailable) {
+    if (response.kind === AuthenticatorPreviewResponseKind.Unavailable) {
       const nookTypedArgs0_22: Parameters<typeof setHostDescription>[0] = {
         host,
         text: unavailableMessage(host),
@@ -519,23 +465,11 @@ async function showQrPreview({
       return
     }
 
-    const preview = response.preview
-    const vaultStoreId = response.vaultStoreId
-    if (!preview || !vaultStoreId) {
-      const nookTypedArgs0_24: Parameters<typeof setHostDescription>[0] = {
-        host,
-        text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
-      }
-      setHostDescription(nookTypedArgs0_24)
-      const nookTypedArgs0_25: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_25)
-      clearOtpauthUri(otpauthUri)
-      clearCandidate(candidate)
-      return
+    if (response.kind !== AuthenticatorPreviewResponseKind.Ready) {
+      throw new Error('Rust returned an unexpected authenticator preview.')
     }
+
+    const { preview, vaultStoreId } = response
 
     const nookTypedArgs0_26: Parameters<typeof setHostDescription>[0] = {
       host,

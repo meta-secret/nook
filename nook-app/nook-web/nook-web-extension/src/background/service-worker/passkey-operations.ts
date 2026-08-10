@@ -13,7 +13,7 @@ import {
   type WebsitePasskeyVaultOption,
 } from '../../lib/webauthn-messages'
 import {
-  extensionSessionInteractiveDeadline,
+  extensionSessionPasskeyCeremonyDeadline,
   extensionSessionProbeDeadline,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
 } from '../../offscreen/session-request-adapter'
@@ -275,7 +275,9 @@ export async function performWebsitePasskey({
         ...grant,
         requestId: message.payload.requestId,
         requestJson: websitePasskeyRequestJson(requestJsonArgs),
-        queue: extensionSessionInteractiveDeadline(message.payload.expiresAt),
+        queue: extensionSessionPasskeyCeremonyDeadline(
+          message.payload.expiresAt,
+        ),
       },
     }
     return passkeyCeremonyResponseFromSession(

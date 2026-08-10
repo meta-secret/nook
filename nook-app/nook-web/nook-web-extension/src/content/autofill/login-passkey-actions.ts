@@ -14,7 +14,11 @@ import {
   type WebsiteLoginAccountOption,
   WebsiteLoginRevealMessageType,
 } from '../../lib/login-fill-messages'
-import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  AuthenticationWorkflowAction,
+  LoginPickerOpenResponseKind,
+  WebsiteLoginOptionsKind,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { LoginPickerKind, pickerState, widgetState } from './state'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
 import {
@@ -33,10 +37,12 @@ export {
   RuntimeMessageDeliveryKind,
   sendAuthenticationWorkflowSnapshotRuntimeMessage,
   sendAuthenticationOutcomeRuntimeMessage,
+  sendAuthenticatorPreviewRuntimeMessage,
   sendDecodedRuntimeMessage,
   sendRuntimeMessageWithoutResponse,
 } from './runtime-message-adapter'
 export type {
+  AuthenticatorPreviewResponse,
   DecodedRuntimeMessageArgs,
   RuntimeMessageDelivery,
   RuntimeMessageResponseDecoder,
@@ -215,7 +221,7 @@ async function openLoginPicker({
   const delivery = await sendLoginPickerOpenRuntimeMessage(nookTypedArgs0_3)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    delivery.response.kind === 'failed'
+    delivery.response.kind === LoginPickerOpenResponseKind.Failed
   ) {
     const nookTypedArgs0_10: Parameters<typeof setFlightProgress>[0] = {
       step,
@@ -235,7 +241,7 @@ async function openLoginPicker({
     return
   }
   const { response } = delivery
-  if (response.kind === 'locked') {
+  if (response.kind === LoginPickerOpenResponseKind.Locked) {
     const nookTypedArgs0_12: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,
@@ -253,7 +259,7 @@ async function openLoginPicker({
     setStatus(nookTypedArgs0_13)
     return
   }
-  if (response.kind === 'unavailable') {
+  if (response.kind === LoginPickerOpenResponseKind.Unavailable) {
     const nookTypedArgs0_14: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,
@@ -578,7 +584,7 @@ export async function continueWithNook({
 
     if (
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-      delivery.response.kind === 'rejected'
+      delivery.response.kind === WebsiteLoginOptionsKind.Rejected
     ) {
       const nookTypedArgs0_33: Parameters<typeof setFlightProgress>[0] = {
         step,
@@ -599,7 +605,7 @@ export async function continueWithNook({
     }
     const { response } = delivery
 
-    if (response.kind === 'locked') {
+    if (response.kind === WebsiteLoginOptionsKind.Locked) {
       const nookTypedArgs0_35: Parameters<typeof setFlightProgress>[0] = {
         step,
         title,
@@ -618,7 +624,7 @@ export async function continueWithNook({
       return
     }
 
-    if (response.kind === 'unavailable') {
+    if (response.kind === WebsiteLoginOptionsKind.Unavailable) {
       const nookTypedArgs0_37: Parameters<typeof setFlightProgress>[0] = {
         step,
         title,

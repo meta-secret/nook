@@ -1,8 +1,9 @@
 //! Typed runtime response boundary for authentication workflow snapshots.
 
 use crate::authentication_workflow::AuthenticationWorkflowSnapshot;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
+use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -25,7 +26,7 @@ pub struct AuthenticationWorkflowRejectedResponseWire {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(untagged)]
+#[serde(untagged, rename_all_fields = "camelCase")]
 #[tsify(from_wasm_abi)]
 pub enum AuthenticationWorkflowSnapshotResponseWire {
     Matched(AuthenticationWorkflowMatchedResponseWire),
@@ -34,20 +35,37 @@ pub enum AuthenticationWorkflowSnapshotResponseWire {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
-#[serde(
-    tag = "kind",
-    rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
-)]
+#[serde(untagged)]
 #[tsify(into_wasm_abi)]
 pub enum AuthenticationWorkflowSnapshotResponse {
     Matched {
+        kind: AuthenticationWorkflowSnapshotResponseKind,
         snapshot: AuthenticationWorkflowSnapshot,
     },
-    NoMatch,
+    NoMatch {
+        kind: AuthenticationWorkflowSnapshotResponseKind,
+    },
     Rejected {
+        kind: AuthenticationWorkflowSnapshotResponseKind,
         reason: String,
     },
+}
+
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthenticationWorkflowSnapshotResponseKind {
+    Matched,
+    NoMatch,
+    Rejected,
+}
+
+impl Serialize for AuthenticationWorkflowSnapshotResponseKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u8(*self as u8)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -61,15 +79,21 @@ pub fn decode_authentication_workflow_snapshot_response(
     match wire {
         AuthenticationWorkflowSnapshotResponseWire::Matched(
             AuthenticationWorkflowMatchedResponseWire { ok: true, snapshot },
-        ) => Ok(AuthenticationWorkflowSnapshotResponse::Matched { snapshot }),
+        ) => Ok(AuthenticationWorkflowSnapshotResponse::Matched {
+            kind: AuthenticationWorkflowSnapshotResponseKind::Matched,
+            snapshot,
+        }),
         AuthenticationWorkflowSnapshotResponseWire::NoMatch(
             AuthenticationWorkflowNoMatchResponseWire { ok: true },
-        ) => Ok(AuthenticationWorkflowSnapshotResponse::NoMatch),
+        ) => Ok(AuthenticationWorkflowSnapshotResponse::NoMatch {
+            kind: AuthenticationWorkflowSnapshotResponseKind::NoMatch,
+        }),
         AuthenticationWorkflowSnapshotResponseWire::Rejected(
             AuthenticationWorkflowRejectedResponseWire { ok: false, reason },
-        ) if !reason.trim().is_empty() => {
-            Ok(AuthenticationWorkflowSnapshotResponse::Rejected { reason })
-        }
+        ) if !reason.trim().is_empty() => Ok(AuthenticationWorkflowSnapshotResponse::Rejected {
+            kind: AuthenticationWorkflowSnapshotResponseKind::Rejected,
+            reason,
+        }),
         AuthenticationWorkflowSnapshotResponseWire::Matched(_)
         | AuthenticationWorkflowSnapshotResponseWire::NoMatch(_)
         | AuthenticationWorkflowSnapshotResponseWire::Rejected(_) => {

@@ -960,6 +960,8 @@ async function handleMessage(
     }
     case ExtensionSessionMessageType.Lock:
       return { ok: true }
+    default:
+      throw new Error('Extension session received an unsupported request.')
   }
 }
 

@@ -19,7 +19,7 @@ import {
   ExtensionSessionQueuePriority,
   type ExtensionSessionNonImportRequest,
   type ExtensionSessionRequest,
-  type ExtensionSessionTransportRequest,
+  type ParsedExtensionSessionTransportRequest,
   ExtensionSessionRequestParseKind,
   ExtensionSessionSensitiveStageKind,
   parseExtensionSessionRequest,
@@ -107,7 +107,7 @@ type RequestedQueueExpiry =
   | { kind: RequestedQueueExpiryKind.Requested; expiresAt: number }
 
 function requestedQueueExpiry(
-  request: ExtensionSessionTransportRequest,
+  request: ParsedExtensionSessionTransportRequest,
 ): RequestedQueueExpiry {
   const { queue } = request.payload
   if (queue.kind === ExtensionSessionQueueKind.MessageDefault) {
@@ -195,8 +195,8 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
     message,
   }: {
     message: Extract<
-      ExtensionSessionTransportRequest,
-      { type: (typeof ExtensionSessionMessageType)['ImportVault'] }
+      ParsedExtensionSessionTransportRequest,
+      { type: ExtensionSessionMessageType.ImportVault }
     >
   }): Promise<ExtensionSessionDispatchResponse<SessionResponse>> {
     const payload = message.payload
@@ -283,7 +283,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
   }
 
   enqueue(
-    message: ExtensionSessionTransportRequest,
+    message: ParsedExtensionSessionTransportRequest,
   ): Promise<ExtensionSessionDispatchResponse<SessionResponse>> {
     const type = message.type
     if (type === ExtensionSessionMessageType.ImportVault) {

@@ -42,6 +42,14 @@ pub fn decode_authentication_workflow_snapshot_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
+#[wasm_bindgen(js_name = decodeAuthenticatorPreviewResponse)]
+pub fn decode_authenticator_preview_response(
+    response: nook_companion_core::AuthenticatorPreviewResponseWire,
+) -> Result<nook_companion_core::AuthenticatorPreviewResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_authenticator_preview_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
 #[wasm_bindgen(js_name = pageHasBackupCodeHint)]
 #[must_use]
 pub fn page_has_backup_code_hint(text: &str) -> bool {

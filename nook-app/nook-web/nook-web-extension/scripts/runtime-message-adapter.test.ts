@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import { AuthenticationOutcomeVerdict } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  AuthenticationOutcomeVerdict,
+  AuthenticationWorkflowSnapshotResponseKind,
+  AuthenticatorPreviewAlgorithm,
+  AuthenticatorPreviewResponseKind,
+  LoginPickerOpenResponseKind,
+  WebsiteLoginOptionsKind,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   RuntimeMessageDeliveryKind,
+  sendAuthenticatorPreviewRuntimeMessage,
   sendAuthenticationWorkflowSnapshotRuntimeMessage,
   sendAuthenticationOutcomeRuntimeMessage,
   sendDecodedRuntimeMessage,
@@ -68,7 +76,7 @@ describe('runtime message adapters', () => {
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
-      expect(delivery.response.kind).toBe('ready')
+      expect(delivery.response.kind).toBe(WebsiteLoginOptionsKind.Ready)
     }
   })
 
@@ -89,7 +97,7 @@ describe('runtime message adapters', () => {
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
-      expect(delivery.response.kind).toBe('locked')
+      expect(delivery.response.kind).toBe(WebsiteLoginOptionsKind.Locked)
     }
   })
 
@@ -106,7 +114,11 @@ describe('runtime message adapters', () => {
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
-      expect(delivery.response.kind).toBe('ready')
+      expect(delivery.response.kind).toBe(LoginPickerOpenResponseKind.Ready)
+      if (delivery.response.kind === LoginPickerOpenResponseKind.Ready) {
+        expect(delivery.response.requestId).toBe('request-1')
+        expect(delivery.response.expiresAt).toBe(12_345)
+      }
     }
   })
 
@@ -150,6 +162,66 @@ describe('runtime message adapters', () => {
       await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
+      expect(delivery.response.kind).toBe(
+        AuthenticationWorkflowSnapshotResponseKind.Matched,
+      )
+    }
+  })
+
+  test('decodes a concrete authenticator preview through Rust', async () => {
+    const response = {
+      ok: true,
+      status: 'ready',
+      preview: {
+        issuer: 'Nook',
+        account: 'person@example.test',
+        websiteUrl: 'https://example.test',
+        algorithm: 'SHA256',
+        digits: 6,
+        period: 30,
+      },
+      vaultStoreId: 'vault-1',
+      vaultName: 'Personal',
+    }
+    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+
+    const delivery = await sendAuthenticatorPreviewRuntimeMessage(message)
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
+      expect(delivery.response.kind).toBe(
+        AuthenticatorPreviewResponseKind.Ready,
+      )
+      if (delivery.response.kind === AuthenticatorPreviewResponseKind.Ready) {
+        expect(delivery.response.vaultStoreId).toBe('vault-1')
+        expect(delivery.response.preview.algorithm).toBe(
+          AuthenticatorPreviewAlgorithm.Sha256,
+        )
+      }
+    }
+  })
+
+  test('rejects malformed authenticator preview metadata in Rust', async () => {
+    const response = {
+      ok: true,
+      status: 'ready',
+      preview: {
+        issuer: 'Nook',
+        account: 'person@example.test',
+        websiteUrl: 'https://example.test',
+        algorithm: 'MD5',
+        digits: 6.5,
+        period: -1,
+      },
+      vaultStoreId: 'vault-1',
+      vaultName: 'Personal',
+    }
+    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+
+    const delivery = await sendAuthenticatorPreviewRuntimeMessage(message)
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
 
   test('rejects an out-of-range workflow snapshot through Rust', async () => {

@@ -5,10 +5,22 @@ import {
   ExtensionSessionRequestValidation,
   type ExtensionSessionRequest as GeneratedExtensionSessionRequest,
   type ExtensionSessionRequestWire,
+  type PasskeyCeremonyQueueDisposition,
   type QueueDisposition,
   validateExtensionSessionRequest,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
+
+type EnumeratedExtensionSessionRequest<Request> = Request extends {
+  type: infer RequestType extends string
+}
+  ? Omit<Request, 'type'> & {
+      type: Extract<ExtensionSessionMessageType, RequestType>
+    }
+  : never
+
+type TypedExtensionSessionRequest =
+  EnumeratedExtensionSessionRequest<GeneratedExtensionSessionRequest>
 
 export enum ExtensionSessionQueueKind {
   MessageDefault = 'message-default',
@@ -49,11 +61,21 @@ export function extensionSessionInteractiveDeadline(
   }
 }
 
+export function extensionSessionPasskeyCeremonyDeadline(
+  expiresAt: number,
+): PasskeyCeremonyQueueDisposition {
+  return {
+    kind: ExtensionSessionQueueKind.Deadline,
+    expiresAt,
+    priority: ExtensionSessionQueuePriority.Interactive,
+  }
+}
+
 type GeneratedExtensionSessionImportRequest = Extract<
   GeneratedExtensionSessionRequest,
-  { type: (typeof ExtensionSessionMessageType)['ImportVault'] }
+  { type: `${ExtensionSessionMessageType.ImportVault}` }
 >
-export type ExtensionSessionNonImportRequest = Exclude<
+type GeneratedExtensionSessionNonImportRequest = Exclude<
   GeneratedExtensionSessionRequest,
   GeneratedExtensionSessionImportRequest
 >
@@ -65,9 +87,20 @@ type ExtensionSessionImportTransportRequest = {
   > & { providers: SerializedStorageProvider[] }
 }
 export type ExtensionSessionTransportRequest =
-  ExtensionSessionNonImportRequest | ExtensionSessionImportTransportRequest
+  | GeneratedExtensionSessionNonImportRequest
+  | ExtensionSessionImportTransportRequest
+export type ParsedExtensionSessionTransportRequest =
+  EnumeratedExtensionSessionRequest<ExtensionSessionTransportRequest>
+type TypedExtensionSessionImportRequest = Extract<
+  TypedExtensionSessionRequest,
+  { type: ExtensionSessionMessageType.ImportVault }
+>
+export type ExtensionSessionNonImportRequest = Exclude<
+  TypedExtensionSessionRequest,
+  TypedExtensionSessionImportRequest
+>
 type ExtensionSessionImportRequest = {
-  type: GeneratedExtensionSessionImportRequest['type']
+  type: TypedExtensionSessionImportRequest['type']
   payload: Omit<
     GeneratedExtensionSessionImportRequest['payload'],
     'providers'
@@ -87,7 +120,7 @@ export type ExtensionSessionRequestParse =
   | { kind: ExtensionSessionRequestParseKind.Invalid }
   | {
       kind: ExtensionSessionRequestParseKind.Parsed
-      request: ExtensionSessionTransportRequest
+      request: ParsedExtensionSessionTransportRequest
     }
 
 export enum ExtensionSessionSensitiveStageKind {
@@ -204,7 +237,7 @@ export async function parseExtensionSessionRequest(
   }
   return {
     kind: ExtensionSessionRequestParseKind.Parsed,
-    request: value as ExtensionSessionTransportRequest,
+    request: value as ParsedExtensionSessionTransportRequest,
   }
 }
 

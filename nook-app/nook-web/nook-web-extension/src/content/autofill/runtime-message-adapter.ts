@@ -2,12 +2,18 @@ import { companionWasmReady } from '../../../../nook-web-shared/src/extension/co
 import {
   decodeLoginPickerOpenResponse,
   decodeAuthenticationWorkflowSnapshotResponse,
+  decodeAuthenticatorPreviewResponse,
   decodeWebsiteLoginOptions,
-  type AuthenticationWorkflowSnapshotResponse,
+  type AuthenticationWorkflowSnapshot,
+  AuthenticationWorkflowSnapshotResponseKind,
   type AuthenticationWorkflowSnapshotResponseWire,
-  type LoginPickerOpenResponse,
+  type AuthenticatorEnrollmentPreview,
+  AuthenticatorPreviewResponseKind,
+  type AuthenticatorPreviewResponseWire,
+  LoginPickerOpenResponseKind,
   type LoginPickerOpenResponseWire,
-  type WebsiteLoginOptions,
+  type WebsiteLoginAccountOption,
+  WebsiteLoginOptionsKind,
   type WebsiteLoginOptionsWireValue,
   type AuthenticationOutcomeDecision,
   validateCompanionAuthenticationOutcomeDecision,
@@ -22,6 +28,48 @@ export enum RuntimeMessageDeliveryKind {
 export type RuntimeMessageDelivery<Response> =
   | { kind: RuntimeMessageDeliveryKind.Delivered; response: Response }
   | { kind: RuntimeMessageDeliveryKind.Unavailable }
+
+export type WebsiteLoginOptions =
+  | {
+      kind: WebsiteLoginOptionsKind.Ready
+      accounts: WebsiteLoginAccountOption[]
+    }
+  | { kind: WebsiteLoginOptionsKind.Locked }
+  | { kind: WebsiteLoginOptionsKind.Unavailable }
+  | { kind: WebsiteLoginOptionsKind.Rejected; reason: string }
+
+export type LoginPickerOpenResponse =
+  | { kind: LoginPickerOpenResponseKind.Failed }
+  | {
+      kind: LoginPickerOpenResponseKind.Ready
+      requestId: string
+      expiresAt: number
+    }
+  | { kind: LoginPickerOpenResponseKind.Locked }
+  | { kind: LoginPickerOpenResponseKind.Unavailable }
+
+export type AuthenticationWorkflowSnapshotResponse =
+  | {
+      kind: AuthenticationWorkflowSnapshotResponseKind.Matched
+      snapshot: AuthenticationWorkflowSnapshot
+    }
+  | { kind: AuthenticationWorkflowSnapshotResponseKind.NoMatch }
+  | {
+      kind: AuthenticationWorkflowSnapshotResponseKind.Rejected
+      reason: string
+    }
+
+export type AuthenticatorPreviewResponse =
+  | {
+      kind: AuthenticatorPreviewResponseKind.Ready
+      preview: AuthenticatorEnrollmentPreview
+      vaultStoreId: string
+    }
+  | { kind: AuthenticatorPreviewResponseKind.Unavailable }
+  | {
+      kind: AuthenticatorPreviewResponseKind.Rejected
+      reason: string
+    }
 
 export type GeneratedPasswordResponse =
   { ok: true; password: string } | { ok: false; reason: string }
@@ -94,7 +142,7 @@ export async function sendLoginOptionsRuntimeMessage(
     const responseWire = delivery.response as WebsiteLoginOptionsWireValue
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeWebsiteLoginOptions(responseWire),
+      response: decodeWebsiteLoginOptions(responseWire) as WebsiteLoginOptions,
     }
   } catch {
     return unavailable()
@@ -113,7 +161,9 @@ export async function sendLoginPickerOpenRuntimeMessage(
     const responseWire = delivery.response as LoginPickerOpenResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeLoginPickerOpenResponse(responseWire),
+      response: decodeLoginPickerOpenResponse(
+        responseWire,
+      ) as LoginPickerOpenResponse,
     }
   } catch {
     return unavailable()
@@ -133,7 +183,30 @@ export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
       delivery.response as AuthenticationWorkflowSnapshotResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeAuthenticationWorkflowSnapshotResponse(responseWire),
+      response: decodeAuthenticationWorkflowSnapshotResponse(
+        responseWire,
+      ) as AuthenticationWorkflowSnapshotResponse,
+    }
+  } catch {
+    return unavailable()
+  }
+}
+
+export async function sendAuthenticatorPreviewRuntimeMessage(
+  message: object,
+): Promise<RuntimeMessageDelivery<AuthenticatorPreviewResponse>> {
+  const delivery = await sendRuntimeMessage(message)
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+    return unavailable()
+  }
+  try {
+    await companionWasmReady
+    const responseWire = delivery.response as AuthenticatorPreviewResponseWire
+    return {
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: decodeAuthenticatorPreviewResponse(
+        responseWire,
+      ) as AuthenticatorPreviewResponse,
     }
   } catch {
     return unavailable()

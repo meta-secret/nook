@@ -1,4 +1,7 @@
-import type { OtpauthEnrollmentPreview } from '../lib/enrollment-messages'
+import {
+  AuthenticatorPreviewAlgorithm,
+  type AuthenticatorEnrollmentPreview,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
@@ -152,7 +155,7 @@ export function renderPreviewDetails({
 }: {
   container: HTMLElement
   host: EnrollmentFlowViewHost
-  preview: OtpauthEnrollmentPreview
+  preview: AuthenticatorEnrollmentPreview
 }): void {
   const details = document.createElement('div')
   details.className = 'account-list'
@@ -160,7 +163,10 @@ export function renderPreviewDetails({
     [BROWSER_MESSAGE_KEYS.WidgetEnrollIssuer, preview.issuer],
     [BROWSER_MESSAGE_KEYS.WidgetEnrollAccount, preview.account],
     [BROWSER_MESSAGE_KEYS.WidgetEnrollOrigin, location.origin],
-    [BROWSER_MESSAGE_KEYS.WidgetEnrollAlgorithm, preview.algorithm],
+    [
+      BROWSER_MESSAGE_KEYS.WidgetEnrollAlgorithm,
+      authenticatorPreviewAlgorithmLabel(preview.algorithm),
+    ],
     [BROWSER_MESSAGE_KEYS.WidgetEnrollDigits, String(preview.digits)],
     [BROWSER_MESSAGE_KEYS.WidgetEnrollPeriod, String(preview.period)],
   ]
@@ -171,4 +177,17 @@ export function renderPreviewDetails({
     details.append(line)
   }
   container.append(details)
+}
+
+function authenticatorPreviewAlgorithmLabel(
+  algorithm: AuthenticatorPreviewAlgorithm,
+): string {
+  switch (algorithm) {
+    case AuthenticatorPreviewAlgorithm.Sha1:
+      return 'SHA1'
+    case AuthenticatorPreviewAlgorithm.Sha256:
+      return 'SHA256'
+    case AuthenticatorPreviewAlgorithm.Sha512:
+      return 'SHA512'
+  }
 }

@@ -2,7 +2,7 @@
 
 #![allow(dead_code)] // Serde reads the private wire fields during concrete decoding.
 
-use serde::{Deserialize, Deserializer, de::Error as _};
+use serde::{Deserialize, Deserializer, Serializer, de::Error as _};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroize;
@@ -61,6 +61,20 @@ pub enum QueuePriority {
 )]
 pub enum QueueDisposition {
     MessageDefault,
+    Deadline {
+        #[serde(deserialize_with = "deserialize_finite_f64")]
+        expires_at: f64,
+        priority: QueuePriority,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum PasskeyCeremonyQueueDisposition {
     Deadline {
         #[serde(deserialize_with = "deserialize_finite_f64")]
         expires_at: f64,
@@ -308,7 +322,7 @@ pub struct PasskeyCeremonyPayload {
     grant: VaultGrant,
     request_id: String,
     request_json: SessionSecretText,
-    queue: QueueDisposition,
+    queue: PasskeyCeremonyQueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
@@ -494,7 +508,7 @@ pub struct WebsiteLoginOptionsRejectedWire {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(untagged)]
+#[serde(untagged, rename_all_fields = "camelCase")]
 pub enum WebsiteLoginOptionsWire {
     Available(WebsiteLoginOptionsAvailableWire),
     Rejected(WebsiteLoginOptionsRejectedWire),
@@ -519,17 +533,41 @@ pub struct WebsiteLoginAccountOption {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, Tsify)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(untagged, rename_all_fields = "camelCase")]
 #[tsify(into_wasm_abi)]
 pub enum WebsiteLoginOptions {
     Ready {
+        kind: WebsiteLoginOptionsKind,
         accounts: Vec<WebsiteLoginAccountOption>,
     },
-    Locked,
-    Unavailable,
+    Locked {
+        kind: WebsiteLoginOptionsKind,
+    },
+    Unavailable {
+        kind: WebsiteLoginOptionsKind,
+    },
     Rejected {
+        kind: WebsiteLoginOptionsKind,
         reason: String,
     },
+}
+
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WebsiteLoginOptionsKind {
+    Ready,
+    Locked,
+    Unavailable,
+    Rejected,
+}
+
+impl serde::Serialize for WebsiteLoginOptionsKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u8(*self as u8)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -561,6 +599,7 @@ pub fn decode_website_login_options(
                 return Err(WebsiteLoginOptionsDecodeError::Malformed);
             }
             Ok(WebsiteLoginOptions::Ready {
+                kind: WebsiteLoginOptionsKind::Ready,
                 accounts: accounts
                     .into_iter()
                     .map(|account| WebsiteLoginAccountOption {
@@ -577,15 +616,22 @@ pub fn decode_website_login_options(
         WebsiteLoginOptionsWire::Available(WebsiteLoginOptionsAvailableWire::Locked { ok })
             if ok =>
         {
-            Ok(WebsiteLoginOptions::Locked)
+            Ok(WebsiteLoginOptions::Locked {
+                kind: WebsiteLoginOptionsKind::Locked,
+            })
         }
         WebsiteLoginOptionsWire::Available(WebsiteLoginOptionsAvailableWire::Unavailable {
             ok,
-        }) if ok => Ok(WebsiteLoginOptions::Unavailable),
+        }) if ok => Ok(WebsiteLoginOptions::Unavailable {
+            kind: WebsiteLoginOptionsKind::Unavailable,
+        }),
         WebsiteLoginOptionsWire::Rejected(WebsiteLoginOptionsRejectedWire {
             ok: false,
             reason,
-        }) if !reason.trim().is_empty() => Ok(WebsiteLoginOptions::Rejected { reason }),
+        }) if !reason.trim().is_empty() => Ok(WebsiteLoginOptions::Rejected {
+            kind: WebsiteLoginOptionsKind::Rejected,
+            reason,
+        }),
         WebsiteLoginOptionsWire::Available(_)
         | WebsiteLoginOptionsWire::Rejected(WebsiteLoginOptionsRejectedWire { .. }) => {
             Err(WebsiteLoginOptionsDecodeError::Malformed)
@@ -632,17 +678,41 @@ pub enum LoginPickerOpenResponseWire {
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, Tsify)]
-#[serde(
-    tag = "kind",
-    rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
-)]
+#[serde(untagged, rename_all_fields = "camelCase")]
 #[tsify(into_wasm_abi)]
 pub enum LoginPickerOpenResponse {
+    Failed {
+        kind: LoginPickerOpenResponseKind,
+    },
+    Ready {
+        kind: LoginPickerOpenResponseKind,
+        request_id: String,
+        expires_at: f64,
+    },
+    Locked {
+        kind: LoginPickerOpenResponseKind,
+    },
+    Unavailable {
+        kind: LoginPickerOpenResponseKind,
+    },
+}
+
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoginPickerOpenResponseKind {
     Failed,
-    Ready { request_id: String, expires_at: f64 },
+    Ready,
     Locked,
     Unavailable,
+}
+
+impl serde::Serialize for LoginPickerOpenResponseKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u8(*self as u8)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -658,21 +728,28 @@ pub fn decode_login_picker_open_response(
             request_id,
             expires_at,
         }) if ok && !request_id.trim().is_empty() => Ok(LoginPickerOpenResponse::Ready {
+            kind: LoginPickerOpenResponseKind::Ready,
             request_id,
             expires_at,
         }),
         LoginPickerOpenResponseWire::Available(LoginPickerOpenAvailableWire::Locked { ok })
             if ok =>
         {
-            Ok(LoginPickerOpenResponse::Locked)
+            Ok(LoginPickerOpenResponse::Locked {
+                kind: LoginPickerOpenResponseKind::Locked,
+            })
         }
         LoginPickerOpenResponseWire::Available(LoginPickerOpenAvailableWire::Unavailable {
             ok,
-        }) if ok => Ok(LoginPickerOpenResponse::Unavailable),
+        }) if ok => Ok(LoginPickerOpenResponse::Unavailable {
+            kind: LoginPickerOpenResponseKind::Unavailable,
+        }),
         LoginPickerOpenResponseWire::Failed(LoginPickerOpenFailedWire { ok: false, reason })
             if !reason.trim().is_empty() =>
         {
-            Ok(LoginPickerOpenResponse::Failed)
+            Ok(LoginPickerOpenResponse::Failed {
+                kind: LoginPickerOpenResponseKind::Failed,
+            })
         }
         LoginPickerOpenResponseWire::Available(_)
         | LoginPickerOpenResponseWire::Failed(LoginPickerOpenFailedWire { .. }) => {
@@ -739,6 +816,18 @@ mod tests {
             ),
             ExtensionSessionRequestValidation::Rejected
         );
+        let ceremony = r#"{"type":"nook:extension-session-register-passkey","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","requestId":"request","requestJson":"{}","queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
+        assert_eq!(
+            validate_extension_session_request_json(ceremony),
+            ExtensionSessionRequestValidation::Accepted
+        );
+        assert_eq!(
+            validate_extension_session_request_json(&ceremony.replace(
+                r#"{"kind":"deadline","expiresAt":42,"priority":"interactive"}"#,
+                r#"{"kind":"message-default"}"#,
+            )),
+            ExtensionSessionRequestValidation::Rejected
+        );
     }
 
     #[test]
@@ -747,6 +836,7 @@ mod tests {
         assert_eq!(
             decode_website_login_options_json(ready)?,
             WebsiteLoginOptions::Ready {
+                kind: WebsiteLoginOptionsKind::Ready,
                 accounts: vec![WebsiteLoginAccountOption {
                     vault_store_id: "vault".to_owned(),
                     vault_name: "Personal".to_owned(),
@@ -772,6 +862,7 @@ mod tests {
         assert_eq!(
             decode_login_picker_open_response(ready)?,
             LoginPickerOpenResponse::Ready {
+                kind: LoginPickerOpenResponseKind::Ready,
                 request_id: "request".to_owned(),
                 expires_at: 42.0,
             }
