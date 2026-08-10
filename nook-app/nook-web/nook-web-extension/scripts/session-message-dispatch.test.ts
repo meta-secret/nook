@@ -79,6 +79,38 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(malformedEvent.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
   })
 
+  test('accepts complete vault events at Rust ingress', async () => {
+    const message = {
+      type: ExtensionSessionMessageType.UpdateVault,
+      payload: {
+        vaultStoreId: 'vault',
+        deviceId: 'device',
+        devicePublicKey: 'public',
+        deviceSigningPublicKey: 'signing',
+        eventLogRecords: [
+          {
+            eventId: 'event',
+            path: 'path',
+            event: {
+              schema_version: 2,
+              store_id: 'store_testtoken11',
+              actor_id: `key_${'0'.repeat(64)}`,
+              actor_signing_public_key: '0'.repeat(64),
+              parents: [],
+              created_at: '2026-08-10T00:00:00Z',
+              key_epoch: 'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
+              operations: [{ type: 'vault-cleared' }],
+              signature: `ed25519:${'0'.repeat(128)}`,
+            },
+          },
+        ],
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
+    }
+    const parse = await parseExtensionSessionRequest(message)
+    expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+  })
+
   test('validates a credential-safe provider identity without discarding metadata', async () => {
     const provider = {
       id: 'github',

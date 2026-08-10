@@ -147,11 +147,43 @@ pub enum SerializedStorageProviderType {
     OAuthFile,
 }
 
+/// A complete encrypted vault event crossing the extension session boundary.
+///
+/// Rust deserializes the existing event-log domain type. The TypeScript shape
+/// is exhaustive so browser glue can carry the domain value without a generic
+/// object or value bag.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields)]
-pub struct ExtensionVaultEventPayload {
-    schema_version: u64,
-}
+#[serde(transparent)]
+#[tsify(type = r#"{
+    schema_version: number;
+    store_id: string;
+    actor_id: string;
+    actor_signing_public_key: string;
+    parents: string[];
+    created_at: string;
+    key_epoch: string;
+    operations: (
+        | { type: "vault-imported"; source_content_hash: string; secrets: { id: string; type: "login" | "api-key" | "seed-phrase" | "secure-note" | "passkey" | "authenticator" | "credit-card" | "file-attachment"; ciphertext: string; identity_fingerprint: string; fingerprint: string }[]; password_entries: { id: string; label: string; created_at: string; envelope: { version: number; kdf: string; work_factor: number; ciphertext: string } }[] }
+        | { type: "secret-created"; secret: { id: string; type: "login" | "api-key" | "seed-phrase" | "secure-note" | "passkey" | "authenticator" | "credit-card" | "file-attachment"; ciphertext: string; identity_fingerprint: string; fingerprint: string } }
+        | { type: "secret-deleted"; secret_id: string }
+        | { type: "secret-replaced"; old_id: string; new_secret: { id: string; type: "login" | "api-key" | "seed-phrase" | "secure-note" | "passkey" | "authenticator" | "credit-card" | "file-attachment"; ciphertext: string; identity_fingerprint: string; fingerprint: string } }
+        | { type: "secret-conflict-resolved"; old_id: string; chosen_secret_id: string; rejected_secret_ids: string[] }
+        | { type: "join-requested"; device_id: string; encryption_public_key: string; signing_public_key: string; label: string }
+        | { type: "join-approved"; device_id: string; encryption_public_key: string; signing_public_key: string; label: string; secrets_key_ciphertext: string; members_key_ciphertext: string }
+        | { type: "sentinel-participant-enrolled"; device_id: string; encryption_public_key: string; signing_public_key: string; label: string }
+        | { type: "sentinel-shares-issued"; shares: { device_id: string; version: number; threshold: number; required_participants: number; share_index: number; ciphertext: string }[] }
+        | { type: "join-denied"; device_id: string }
+        | { type: "member-renamed"; device_id: string; label: string }
+        | { type: "device-revoked"; device_id: string }
+        | { type: "password-added"; entry_id: string; label: string; created_at: string; envelope: { version: number; kdf: string; work_factor: number; ciphertext: string } }
+        | { type: "password-rotated"; entry_id: string; envelope: { version: number; kdf: string; work_factor: number; ciphertext: string } }
+        | { type: "password-removed"; entry_id: string }
+        | { type: "vault-cleared" }
+        | { type: "epoch-checkpoint"; secrets: { id: string; type: "login" | "api-key" | "seed-phrase" | "secure-note" | "passkey" | "authenticator" | "credit-card" | "file-attachment"; ciphertext: string; identity_fingerprint: string; fingerprint: string }[]; members_checkpoint_hash: string }
+    )[];
+    signature: string;
+}"#)]
+pub struct ExtensionVaultEventPayload(nook_event_log::VaultEvent);
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -673,9 +705,36 @@ mod tests {
 
     #[test]
     fn validates_concrete_provider_and_event_log_elements() {
-        let valid = r#"{"type":"nook:extension-session-import-vault","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","providers":[{"id":"provider","type":"github"}],"eventLogRecords":[{"eventId":"event","path":"path","event":{"schema_version":1}}],"queue":{"kind":"message-default"}}}"#;
+        let valid_event = serde_json::json!({
+            "schema_version": 2,
+            "store_id": "store_testtoken11",
+            "actor_id": format!("key_{}", "0".repeat(64)),
+            "actor_signing_public_key": "0".repeat(64),
+            "parents": [],
+            "created_at": "2026-08-10T00:00:00Z",
+            "key_epoch": "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo",
+            "operations": [{ "type": "vault-cleared" }],
+            "signature": format!("ed25519:{}", "0".repeat(128)),
+        });
+        let valid_request = serde_json::json!({
+            "type": "nook:extension-session-import-vault",
+            "payload": {
+                "vaultStoreId": "vault",
+                "deviceId": "device",
+                "devicePublicKey": "public",
+                "deviceSigningPublicKey": "signing",
+                "providers": [{ "id": "provider", "type": "github" }],
+                "eventLogRecords": [{
+                    "eventId": "event",
+                    "path": "path",
+                    "event": valid_event,
+                }],
+                "queue": { "kind": "message-default" },
+            },
+        });
+        let valid = valid_request.to_string();
         assert_eq!(
-            validate_extension_session_request_json(valid),
+            validate_extension_session_request_json(&valid),
             ExtensionSessionRequestValidation::Accepted
         );
 
@@ -688,10 +747,8 @@ mod tests {
             ExtensionSessionRequestValidation::Rejected
         );
 
-        let malformed_event = valid.replace(
-            r#"{"eventId":"event","path":"path","event":{"schema_version":1}}"#,
-            r#"{"eventId":"event"}"#,
-        );
+        let valid_signature = format!(r#""signature":"ed25519:{}""#, "0".repeat(128));
+        let malformed_event = valid.replace(&valid_signature, r#""signature":1"#);
         assert_eq!(
             validate_extension_session_request_json(&malformed_event),
             ExtensionSessionRequestValidation::Rejected
