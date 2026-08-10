@@ -702,11 +702,9 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
         source_dockerfile
             .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common")
     );
-    assert!(
-        source_dockerfile.contains(
-            "cargo llvm-cov nextest --no-clean --profile ci -p nook-authenticator-domain -p nook-auth2"
-        )
-    );
+    assert!(source_dockerfile.contains(
+        "cargo llvm-cov nextest --no-clean --profile ci -p nook-authenticator-domain -p nook-auth2"
+    ));
     assert!(
         source_dockerfile
             .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-replication")
