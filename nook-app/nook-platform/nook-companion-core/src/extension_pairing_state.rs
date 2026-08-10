@@ -547,8 +547,9 @@ pub fn migrate_legacy_pairing_state_json(
                     last_local_sync_at: setup.last_local_sync_at.clone(),
                 }
             }
-            LegacyExtensionPairingRecord::Grant(_)
-            | LegacyExtensionPairingRecord::Setup(_) => continue,
+            LegacyExtensionPairingRecord::Grant(_) | LegacyExtensionPairingRecord::Setup(_) => {
+                continue;
+            }
         };
         if key != grant_storage_key(&grant.vault_store_id) {
             return Err(ExtensionPairingStateError::InvalidLegacyState);

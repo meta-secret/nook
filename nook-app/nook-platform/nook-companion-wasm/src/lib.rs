@@ -596,15 +596,15 @@ mod wasm_tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn persistence_observation_round_trips_the_numeric_wasm_enum() -> anyhow::Result<()> {
+    fn persistence_observation_round_trips_the_numeric_wasm_enum()
+    -> Result<(), serde_wasm_bindgen::Error> {
         let observation = ExtensionPersistenceObservation {
             area: ExtensionPersistenceArea::EventLog,
             observed_names: vec!["events".to_owned()],
         };
 
         let js_value = serde_wasm_bindgen::to_value(&observation)?;
-        let decoded: ExtensionPersistenceObservation =
-            serde_wasm_bindgen::from_value(js_value)?;
+        let decoded: ExtensionPersistenceObservation = serde_wasm_bindgen::from_value(js_value)?;
 
         assert_eq!(decoded, observation);
         Ok(())
