@@ -7,9 +7,13 @@ use serde::Deserialize;
 use tokio::process::Command;
 
 use self::command::{gh_output, git_output, run_git_status};
+use self::main_run::select_successful_main_run;
+use self::readiness::validate_review_and_deployment_readiness;
 use self::workbench::validate_workbench_completion;
 
 mod command;
+mod main_run;
+mod readiness;
 mod workbench;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -193,31 +197,6 @@ async fn main_repair_merge_and_main(
     let successful_main_sha =
         select_successful_main_run(&applicable_runs, &merge_commit.oid)?.to_owned();
     Ok((pull_request, successful_main_sha))
-}
-
-fn select_successful_main_run<'a>(
-    runs: &'a [DeliveryRun],
-    merge_commit: &str,
-) -> crate::HiveResult<&'a str> {
-    for run in runs {
-        if run.status != "completed" {
-            continue;
-        }
-        if run.conclusion == "success" {
-            return Ok(run.head_sha.as_str());
-        }
-        if matches!(run.conclusion.as_str(), "cancelled" | "skipped" | "neutral") {
-            continue;
-        }
-        return Err(crate::error::HiveError::message(format!(
-            "Hive repair delivery failed on Main: run at {} concluded {}",
-            run.head_sha, run.conclusion
-        )));
-    }
-    Err(crate::error::HiveError::message(format!(
-        "Hive repair delivery is incomplete: no successful Main workflow contains merge {}",
-        merge_commit
-    )))
 }
 
 fn latest_delivery_generation<'a>(
@@ -434,194 +413,14 @@ fn successful_or_merge_cancelled(
         })
 }
 
-async fn validate_review_and_deployment_readiness(
-    repository: &Path,
-    pull_request: &DeliveryPullRequest,
-) -> crate::HiveResult<()> {
-    let number = pull_request.number.to_string();
-    let repository_state: serde_json::Value = serde_json::from_str(
-        &gh_output(repository, &["repo", "view", "--json", "nameWithOwner"]).await?,
-    )
-    .hive_context("GitHub returned invalid repository identity")?;
-    let name_with_owner = repository_state
-        .get("nameWithOwner")
-        .and_then(serde_json::Value::as_str)
-        .hive_context("GitHub repository identity omitted nameWithOwner")?;
-    let (owner, name) = name_with_owner
-        .split_once('/')
-        .hive_context("GitHub repository identity is malformed")?;
-    let mut unresolved = 0;
-    let mut cursor: Option<String> = None;
-    loop {
-        let review_query = format!(
-            "query($number:Int!,$cursor:String){{repository(owner:\"{owner}\",name:\"{name}\"){{pullRequest(number:$number){{reviewThreads(first:100,after:$cursor){{nodes{{isResolved}} pageInfo{{hasNextPage endCursor}}}}}}}}}}"
-        );
-        let mut arguments = vec![
-            "api".to_owned(),
-            "graphql".to_owned(),
-            "-F".to_owned(),
-            format!("number={number}"),
-            "-f".to_owned(),
-            format!("query={review_query}"),
-        ];
-        if let Some(value) = cursor.as_deref() {
-            arguments.extend(["-F".to_owned(), format!("cursor={value}")]);
-        }
-        let references = arguments.iter().map(String::as_str).collect::<Vec<_>>();
-        let review: serde_json::Value =
-            serde_json::from_str(&gh_output(repository, &references).await?)
-                .hive_context("GitHub returned invalid Hive review state")?;
-        let threads = review
-            .pointer("/data/repository/pullRequest/reviewThreads")
-            .hive_context("GitHub review response omitted review threads")?;
-        unresolved += threads
-            .get("nodes")
-            .and_then(serde_json::Value::as_array)
-            .hive_context("GitHub review response omitted review thread nodes")?
-            .iter()
-            .filter(|thread| {
-                thread
-                    .get("isResolved")
-                    .and_then(serde_json::Value::as_bool)
-                    == Some(false)
-            })
-            .count();
-        if threads
-            .pointer("/pageInfo/hasNextPage")
-            .and_then(serde_json::Value::as_bool)
-            != Some(true)
-        {
-            break;
-        }
-        cursor = threads
-            .pointer("/pageInfo/endCursor")
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_owned);
-        if cursor.is_none() {
-            return Err(crate::error::HiveError::message(
-                "GitHub review pagination omitted its cursor",
-            ));
-        }
-    }
-    if unresolved > 0 {
-        return Err(crate::error::HiveError::message(format!(
-            "Hive repair delivery is incomplete: PR #{} has {} unresolved review thread(s)",
-            pull_request.number, unresolved
-        )));
-    }
-    validate_non_thread_feedback(repository, pull_request.number).await?;
-
-    let deployments: serde_json::Value = serde_json::from_str(
-        &gh_output(
-            repository,
-            &[
-                "api",
-                "-X",
-                "GET",
-                "repos/{owner}/{repo}/deployments",
-                "-f",
-                "environment=github-pages",
-                "-f",
-                &format!("sha={}", pull_request.head_ref_oid),
-                "-f",
-                "per_page=20",
-            ],
-        )
-        .await?,
-    )
-    .hive_context("GitHub returned invalid deployment state")?;
-    let mut state = None;
-    for deployment_id in deployments
-        .as_array()
-        .hive_context("GitHub deployment response is not an array")?
-        .iter()
-        .filter_map(|deployment| deployment.get("id").and_then(serde_json::Value::as_u64))
-    {
-        let statuses: serde_json::Value = serde_json::from_str(
-            &gh_output(
-                repository,
-                &[
-                    "api",
-                    "-X",
-                    "GET",
-                    &format!("repos/{{owner}}/{{repo}}/deployments/{deployment_id}/statuses"),
-                    "-f",
-                    "per_page=1",
-                ],
-            )
-            .await?,
-        )
-        .hive_context("GitHub returned invalid deployment status")?;
-        state = statuses
-            .as_array()
-            .and_then(|items| items.first())
-            .and_then(|status| status.get("state"))
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_owned);
-        if state.is_some() {
-            break;
-        }
-    }
-    if state.as_deref() != Some("success") {
-        return Err(crate::error::HiveError::message(format!(
-            "Hive repair delivery is incomplete: PR #{} exact-head github-pages deployment is {:?}",
-            pull_request.number,
-            state.as_deref()
-        )));
-    }
-    Ok(())
-}
-
-async fn validate_non_thread_feedback(repository: &Path, number: u64) -> crate::HiveResult<()> {
-    for surface in ["issues/{number}/comments", "pulls/{number}/reviews"] {
-        let endpoint = format!(
-            "repos/{{owner}}/{{repo}}/{}",
-            surface.replace("{number}", &number.to_string())
-        );
-        let arguments = feedback_api_arguments(&endpoint);
-        let references = arguments.iter().map(String::as_str).collect::<Vec<_>>();
-        let bodies = gh_output(repository, &references).await?;
-        if is_actionable_feedback(&bodies) {
-            return Err(crate::error::HiveError::message(format!(
-                "Hive repair delivery is incomplete: PR #{number} has actionable non-thread feedback"
-            )));
-        }
-    }
-    Ok(())
-}
-
-fn feedback_api_arguments(endpoint: &str) -> Vec<String> {
-    ["api", "--paginate", "--jq", ".[].body", endpoint]
-        .into_iter()
-        .map(str::to_owned)
-        .collect()
-}
-
-fn is_actionable_feedback(body: &str) -> bool {
-    [
-        "[P0",
-        "[P1",
-        "[P2",
-        "[P3",
-        "changes requested",
-        "request changes",
-    ]
-    .iter()
-    .any(|marker| {
-        body.to_ascii_lowercase()
-            .contains(&marker.to_ascii_lowercase())
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use crate::HiveContext;
 
     use super::{
-        DeliveryCheck, DeliveryCommit, DeliveryLabel, DeliveryPullRequest, DeliveryRun,
-        delivery_generation, feedback_api_arguments, is_actionable_feedback,
-        latest_delivery_generation, select_successful_main_run, validate_full_e2e_checks,
-        validate_merged_hive_pull_request, validate_repository_checks,
+        DeliveryCheck, DeliveryCommit, DeliveryLabel, DeliveryPullRequest, delivery_generation,
+        latest_delivery_generation, validate_full_e2e_checks, validate_merged_hive_pull_request,
+        validate_repository_checks,
     };
 
     fn pull_request(
@@ -672,30 +471,6 @@ mod tests {
                 },
             ],
         }
-    }
-
-    #[test]
-    fn paginated_feedback_bodies_preserve_actionable_markers() -> anyhow::Result<()> {
-        let arguments = feedback_api_arguments("repos/{owner}/{repo}/issues/42/comments");
-        let bodies =
-            "Automated summary: looks good.\n[P1] Resolve the delivery race.\nMore detail.";
-
-        assert_eq!(
-            arguments,
-            [
-                "api",
-                "--paginate",
-                "--jq",
-                ".[].body",
-                "repos/{owner}/{repo}/issues/42/comments"
-            ]
-        );
-        assert!(!arguments.iter().any(|argument| argument == "--slurp"));
-        assert!(is_actionable_feedback(bodies));
-        assert!(!is_actionable_feedback(
-            "Automated summary: checks passed.\nThis report is informational."
-        ));
-        Ok(())
     }
 
     #[test]
@@ -928,51 +703,6 @@ mod tests {
                 crate::error::HiveError::message("Main does not exercise Hive-only verification")
             })?;
         assert!(error.to_string().contains("Hive Rust"));
-        Ok(())
-    }
-
-    fn run(sha: &str, conclusion: &str, created_at: &str) -> DeliveryRun {
-        DeliveryRun {
-            head_sha: sha.to_owned(),
-            status: "completed".to_owned(),
-            conclusion: conclusion.to_owned(),
-            created_at: created_at.to_owned(),
-        }
-    }
-
-    #[test]
-    fn failed_repair_run_is_not_hidden_by_a_successful_descendant() -> anyhow::Result<()> {
-        let runs = vec![
-            run("repair", "failure", "2026-07-28T01:00:00Z"),
-            run("descendant", "success", "2026-07-28T02:00:00Z"),
-        ];
-        let error = select_successful_main_run(&runs, "merge")
-            .err()
-            .ok_or_else(|| {
-                crate::error::HiveError::message("an explicit failure must remain terminal")
-            })?;
-        assert!(error.to_string().contains("repair"));
-        Ok(())
-    }
-
-    #[test]
-    fn cancelled_run_can_coalesce_into_a_successful_descendant() -> crate::HiveResult<()> {
-        let runs = vec![
-            run("repair", "cancelled", "2026-07-28T01:00:00Z"),
-            run("descendant", "success", "2026-07-28T02:00:00Z"),
-        ];
-        assert_eq!(select_successful_main_run(&runs, "merge")?, "descendant");
-        Ok(())
-    }
-
-    #[test]
-    fn first_successful_completed_descendant_is_selected_chronologically() -> crate::HiveResult<()>
-    {
-        let runs = vec![
-            run("first", "success", "2026-07-28T01:00:00Z"),
-            run("second", "success", "2026-07-28T02:00:00Z"),
-        ];
-        assert_eq!(select_successful_main_run(&runs, "merge")?, "first");
         Ok(())
     }
 }

@@ -15,18 +15,9 @@ use crate::store::TaskStore;
 mod admin;
 mod block;
 mod claim_retry;
+mod enqueue;
+mod migration;
 mod rearm;
-
-const CONSTRAINTS: &[&str] = &[
-    "CREATE CONSTRAINT hive_task_id IF NOT EXISTS FOR (node:Task) REQUIRE node.id IS UNIQUE",
-    "CREATE CONSTRAINT hive_agent_id IF NOT EXISTS FOR (node:Agent) REQUIRE node.id IS UNIQUE",
-    "CREATE CONSTRAINT hive_attempt_id IF NOT EXISTS FOR (node:Attempt) REQUIRE node.id IS UNIQUE",
-    "CREATE CONSTRAINT hive_artifact_id IF NOT EXISTS FOR (node:Artifact) REQUIRE node.id IS UNIQUE",
-    "CREATE CONSTRAINT hive_activity_id IF NOT EXISTS FOR (node:TaskActivity) REQUIRE node.id IS UNIQUE",
-    "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
-    "CREATE INDEX hive_activity_timeline IF NOT EXISTS FOR (node:TaskActivity) ON (node.created_at)",
-];
-const LATEST_SCHEMA_VERSION: i64 = 8;
 #[derive(Clone)]
 pub struct Neo4jTaskStore {
     pub(crate) graph: Graph,
@@ -49,111 +40,7 @@ pub struct QueueTaskStatus {
 #[async_trait]
 impl TaskStore for Neo4jTaskStore {
     async fn migrate(&self) -> crate::HiveResult<()> {
-        let mut rows = self
-            .graph
-            .execute(query(
-                "MATCH (migration:HiveSchemaMigration)
-                 RETURN max(migration.version) AS version",
-            ))
-            .await?;
-        let installed_version = rows
-            .next()
-            .await?
-            .and_then(|row| row.get::<i64>("version").ok())
-            .unwrap_or(0);
-        if installed_version > LATEST_SCHEMA_VERSION {
-            return Err(crate::error::HiveError::message(format!(
-                "Hive graph schema {installed_version} is newer than supported version {LATEST_SCHEMA_VERSION}"
-            )));
-        }
-        if installed_version == 1 {
-            let mut rows = self
-                .graph
-                .execute(query(
-                    "MATCH (task:Task)
-                     WHERE task.source_commit IS NULL
-                     RETURN count(task) AS legacy_tasks",
-                ))
-                .await?;
-            let legacy_tasks = rows
-                .next()
-                .await?
-                .and_then(|row| row.get::<i64>("legacy_tasks").ok())
-                .unwrap_or(0);
-            if legacy_tasks > 0 {
-                return Err(crate::error::HiveError::message(format!(
-                    "Hive schema 1 contains {legacy_tasks} task(s) without source_commit; \
-                     drain or remove those legacy tasks before upgrading to schema 2"
-                )));
-            }
-        }
-        if installed_version < 3 {
-            self.graph
-                .run(query(
-                    "MATCH (task:Task)
-                     WHERE task.manual_retry_used IS NULL
-                     SET task.manual_retry_used = false",
-                ))
-                .await
-                .hive_context("failed to initialize schema-3 manual retry state")?;
-        }
-        if installed_version < 4 {
-            self.graph
-                .run(query(
-                    "MATCH (task:Task)
-                     SET task.last_retry_release =
-                       coalesce(task.last_retry_release, '')
-                     REMOVE task.manual_retry_used",
-                ))
-                .await
-                .hive_context("failed to initialize schema-4 release-scoped retry state")?;
-        }
-        if installed_version < 7 {
-            self.graph
-                .run(query(
-                    "MATCH (task:Task)
-                     OPTIONAL MATCH (activity:TaskActivity)-[:FOR_TASK]->(task)
-                     WITH task, max(activity.created_at) AS latest_activity_at
-                     WHERE latest_activity_at IS NOT NULL
-                     SET task.latest_activity_at = latest_activity_at",
-                ))
-                .await
-                .hive_context("failed to backfill schema-7 latest activity state")?;
-        }
-        if installed_version < 8 {
-            self.graph
-                .run(query(
-                    "MATCH (task:Task)
-                     WHERE task.obsolete IS NULL
-                     SET task.obsolete = false",
-                ))
-                .await
-                .hive_context("failed to backfill schema-8 task retirement state")?;
-            self.graph
-                .run(query(
-                    "MATCH (attempt:Attempt)
-                     WHERE attempt.obsolete IS NULL
-                     SET attempt.obsolete = false",
-                ))
-                .await
-                .hive_context("failed to backfill schema-8 attempt retirement state")?;
-        }
-        for statement in CONSTRAINTS {
-            self.graph
-                .run(query(statement))
-                .await
-                .with_hive_context(|| format!("failed to apply graph migration: {statement}"))?;
-        }
-        self.graph
-            .run(
-                query(
-                    "MERGE (migration:HiveSchemaMigration {version: $version})
-                     ON CREATE SET migration.applied_at = timestamp()",
-                )
-                .param("version", LATEST_SCHEMA_VERSION),
-            )
-            .await?;
-        Ok(())
+        migration::migrate(&self.graph).await
     }
 
     async fn register_agent(&self, agent_id: &AgentId, pod_name: &str) -> crate::HiveResult<()> {
@@ -174,99 +61,7 @@ impl TaskStore for Neo4jTaskStore {
     }
 
     async fn enqueue(&self, task: &EnqueueTask) -> crate::HiveResult<()> {
-        task.validate()?;
-        let mut transaction = self.graph.start_txn().await?;
-        let enqueue_token = Uuid::new_v4().to_string();
-        let mut rows = transaction
-            .execute(
-                query(
-                    "MERGE (task:Task {id: $id})
-                     ON CREATE SET task.created_at = timestamp(),
-                                   task.attempt_count = 0,
-                                   task.last_retry_release = '',
-                                   task.version = 0,
-                                   task.obsolete = false,
-                                   task.enqueue_token = $enqueue_token,
-                                   task.kind = $kind,
-                                   task.trigger_kind = $trigger_kind,
-                                   task.prompt = $prompt,
-                                   task.source_commit = $source_commit,
-                                   task.priority = $priority,
-                                   task.max_attempts = $max_attempts,
-                                   task.status = 'BLOCKED',
-                                   task.updated_at = timestamp()
-                     RETURN task.enqueue_token = $enqueue_token AS created",
-                )
-                .param("id", task.id.as_str())
-                .param("enqueue_token", enqueue_token.as_str())
-                .param("kind", task.kind.as_str())
-                .param("trigger_kind", task.trigger.as_str())
-                .param("prompt", task.prompt.as_str())
-                .param("source_commit", task.source_commit.as_str())
-                .param("priority", task.priority)
-                .param("max_attempts", task.max_attempts),
-            )
-            .await?;
-        let created = rows
-            .next(transaction.handle())
-            .await?
-            .is_some_and(|row| row.get::<bool>("created").unwrap_or(false));
-        if !created {
-            transaction.rollback().await?;
-            return Err(crate::error::HiveError::message(format!(
-                "task {} already exists",
-                task.id
-            )));
-        }
-
-        for dependency in &task.dependencies {
-            let mut rows = transaction
-                .execute(
-                    query(
-                        "MATCH (task:Task {id: $id}), (dependency:Task {id: $dependency})
-                         WHERE dependency.source_commit = task.source_commit
-                         MERGE (task)-[:DEPENDS_ON]->(dependency)
-                         SET dependency.version = coalesce(dependency.version, 0) + 1
-                         RETURN dependency.id AS id",
-                    )
-                    .param("id", task.id.as_str())
-                    .param("dependency", dependency.as_str()),
-                )
-                .await
-                .with_hive_context(|| format!("dependency {} does not exist", dependency))?;
-            if rows.next(transaction.handle()).await?.is_none() {
-                transaction.rollback().await?;
-                return Err(crate::error::HiveError::message(format!(
-                    "dependency {dependency} does not exist or targets a different source commit"
-                )));
-            }
-            drop(rows);
-            Self::rearm_obsolete_subtree(&mut transaction, dependency).await?;
-        }
-
-        transaction
-            .run(
-                query(
-                    "MATCH (task:Task {id: $id})
-                     OPTIONAL MATCH (task)-[:DEPENDS_ON]->(dependency:Task)
-                     WITH task, count(dependency) AS dependency_count,
-                          count(CASE WHEN dependency.status = 'COMPLETED' THEN 1 END) AS completed_count,
-                          count(CASE WHEN dependency.status = 'FAILED' THEN 1 END) AS failed_count
-                     SET task.status = CASE
-                       WHEN failed_count > 0 THEN 'FAILED'
-                       WHEN dependency_count = completed_count THEN 'READY'
-                       ELSE 'BLOCKED'
-                     END,
-                     task.failure_reason = CASE
-                       WHEN failed_count > 0 THEN 'dependency failed before task enqueue'
-                       ELSE null
-                     END",
-                )
-                .param("id", task.id.as_str()),
-            )
-            .await?;
-        transaction.commit().await?;
-        Ok(())
+        self.enqueue_task(task).await
     }
 
     async fn active_delivery(
@@ -274,28 +69,7 @@ impl TaskStore for Neo4jTaskStore {
         source_commit: &str,
         kind: &str,
     ) -> crate::HiveResult<Option<TaskId>> {
-        let mut rows = self
-            .graph
-            .execute(
-                query(
-                    "MATCH (root:Task {source_commit: $source_commit, kind: $kind})
-                     WHERE root.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
-                        OR EXISTS {
-                          MATCH (root)-[:DEPENDS_ON*1..]->(descendant:Task)
-                          WHERE descendant.status = 'CANCELLING'
-                        }
-                     RETURN root.id AS id
-                     ORDER BY root.created_at
-                     LIMIT 1",
-                )
-                .param("source_commit", source_commit)
-                .param("kind", kind),
-            )
-            .await?;
-        rows.next()
-            .await?
-            .map(|row| Ok(TaskId::new(row.get::<String>("id")?)?))
-            .transpose()
+        self.active_delivery_task(source_commit, kind).await
     }
 
     async fn cancel(&self, task_id: &TaskId, reason: &str) -> crate::HiveResult<bool> {
