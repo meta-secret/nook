@@ -150,8 +150,12 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
 
   private enqueueSensitiveMessage({
     request,
+    priority,
+    expiresAt,
   }: {
     request: ExtensionSessionNonImportRequest
+    priority: SessionOperationPriority
+    expiresAt: number
   }): Promise<SessionResponse> {
     let payloadResidency: SensitivePayloadResidency = {
       kind: SensitivePayloadResidencyKind.Resident,
@@ -177,10 +181,10 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
         }
       },
       options: {
-        priority: SessionOperationPriority.Interactive,
+        priority,
         expiry: {
           kind: SessionOperationExpiryKind.Deadline,
-          expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+          expiresAt,
         },
         cleanup: {
           kind: SessionOperationCleanupKind.OnExpire,
@@ -307,6 +311,11 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
         typeof this.enqueueSensitiveMessage
       >[0] = {
         request: sensitiveStage.request,
+        priority,
+        expiresAt:
+          requestedExpiry.kind === RequestedQueueExpiryKind.Requested
+            ? requestedExpiry.expiresAt
+            : Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
       }
       return this.enqueueSensitiveMessage(nookNamedArgs0_4)
     }

@@ -20,6 +20,7 @@ mod oauth_origin_policy;
 mod outcome_evidence;
 mod page_field_classification;
 mod vault_host_policy;
+mod website_login_options_response;
 mod website_passkey_proposal;
 
 pub use authentication_workflow::{
@@ -34,7 +35,7 @@ pub use authentication_workflow_response::{
     decode_authentication_workflow_snapshot_response,
 };
 pub use authenticator_preview_response::{
-    AuthenticatorEnrollmentPreview, AuthenticatorPreviewAlgorithm, AuthenticatorPreviewResponse,
+    AuthenticatorEnrollmentPreview, AuthenticatorPreviewResponse,
     AuthenticatorPreviewResponseDecodeError, AuthenticatorPreviewResponseKind,
     AuthenticatorPreviewResponseWire, decode_authenticator_preview_response,
 };
@@ -56,10 +57,8 @@ pub use extension_persistence::{
 };
 pub use extension_session_protocol::{
     ExtensionSessionRequestValidation, ExtensionSessionRequestWire, LoginPickerOpenResponse,
-    LoginPickerOpenResponseDecodeError, LoginPickerOpenResponseWire, WebsiteLoginAccountOption,
-    WebsiteLoginOptions, WebsiteLoginOptionsDecodeError, WebsiteLoginOptionsWireValue,
-    decode_login_picker_open_response, decode_website_login_options,
-    decode_website_login_options_json, validate_extension_session_request_json,
+    LoginPickerOpenResponseDecodeError, LoginPickerOpenResponseWire,
+    decode_login_picker_open_response, validate_extension_session_request_json,
 };
 pub use oauth_origin_policy::{
     BrowserOAuthProvider, OAuthOriginSupport, OAuthOriginUnsupportedReason,
@@ -81,5 +80,9 @@ pub use vault_host_policy::{
     is_simple_vault_hostname, matching_sentinel_vault_base_url,
     nook_vault_app_exclude_match_patterns, normalize_simple_vault_base_url,
     sentinel_vault_match_patterns, simple_vault_match_pattern, simple_vault_url,
+};
+pub use website_login_options_response::{
+    WebsiteLoginAccountOption, WebsiteLoginOptions, WebsiteLoginOptionsDecodeError,
+    WebsiteLoginOptionsWireValue, decode_website_login_options, decode_website_login_options_json,
 };
 pub use website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};

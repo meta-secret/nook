@@ -2,6 +2,7 @@
 members = [
     "nook-app-common",
     "nook-auth2",
+    "nook-authenticator-domain",
     "nook-replication",
     "nook-event-log",
     "nook-companion-core",

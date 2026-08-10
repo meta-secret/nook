@@ -1,7 +1,4 @@
-import {
-  AuthenticatorPreviewAlgorithm,
-  type AuthenticatorEnrollmentPreview,
-} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type { AuthenticatorEnrollmentPreview } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
@@ -180,14 +177,14 @@ export function renderPreviewDetails({
 }
 
 function authenticatorPreviewAlgorithmLabel(
-  algorithm: AuthenticatorPreviewAlgorithm,
+  algorithm: AuthenticatorEnrollmentPreview['algorithm'],
 ): string {
   switch (algorithm) {
-    case AuthenticatorPreviewAlgorithm.Sha1:
+    case 'SHA1':
       return 'SHA1'
-    case AuthenticatorPreviewAlgorithm.Sha256:
+    case 'SHA256':
       return 'SHA256'
-    case AuthenticatorPreviewAlgorithm.Sha512:
+    case 'SHA512':
       return 'SHA512'
   }
 }

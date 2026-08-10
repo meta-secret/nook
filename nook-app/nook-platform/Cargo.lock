@@ -1880,6 +1880,7 @@ dependencies = [
  "hex",
  "hkdf 0.13.0",
  "nook-app-common",
+ "nook-authenticator-domain",
  "pbkdf2 0.13.0",
  "percent-encoding",
  "serde",
@@ -1893,10 +1894,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nook-authenticator-domain"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "nook-companion-core"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "nook-authenticator-domain",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
@@ -1938,6 +1948,7 @@ dependencies = [
  "hmac 0.13.0",
  "nook-app-common",
  "nook-auth2",
+ "nook-authenticator-domain",
  "nook-companion-core",
  "nook-event-log",
  "p256 0.14.0",

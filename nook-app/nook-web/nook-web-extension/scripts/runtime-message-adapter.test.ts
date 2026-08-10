@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import {
   AuthenticationOutcomeVerdict,
   AuthenticationWorkflowSnapshotResponseKind,
-  AuthenticatorPreviewAlgorithm,
   AuthenticatorPreviewResponseKind,
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
@@ -195,9 +194,7 @@ describe('runtime message adapters', () => {
       )
       if (delivery.response.kind === AuthenticatorPreviewResponseKind.Ready) {
         expect(delivery.response.vaultStoreId).toBe('vault-1')
-        expect(delivery.response.preview.algorithm).toBe(
-          AuthenticatorPreviewAlgorithm.Sha256,
-        )
+        expect(delivery.response.preview.algorithm).toBe('SHA256')
       }
     }
   })

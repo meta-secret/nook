@@ -7,6 +7,27 @@ use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroize;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Tsify)]
+#[tsify(type = "0 | 1")]
+pub struct PasskeyDeviceModeWire(nook_authenticator_domain::PasskeyDeviceProtectionMode);
+
+impl<'de> Deserialize<'de> for PasskeyDeviceModeWire {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u32::deserialize(deserializer)? {
+            0 => Ok(Self(
+                nook_authenticator_domain::PasskeyDeviceProtectionMode::Standard,
+            )),
+            1 => Ok(Self(
+                nook_authenticator_domain::PasskeyDeviceProtectionMode::AntiHacker,
+            )),
+            _ => Err(D::Error::custom("device mode is not supported")),
+        }
+    }
+}
+
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExtensionSessionRequestValidation {
@@ -151,7 +172,7 @@ pub struct FinishPasskeySetupPayload {
     user_handle: SessionSecretBytes,
     prf_input: SessionSecretBytes,
     prf_output: SessionSecretBytes,
-    device_mode: u32,
+    device_mode: PasskeyDeviceModeWire,
     queue: QueueDisposition,
 }
 
@@ -276,7 +297,8 @@ pub struct BackupAttachPayload {
     grant: VaultGrant,
     secret_id: String,
     codes: Vec<SessionSecretText>,
-    mode: String,
+    #[tsify(type = "'replace' | 'merge'")]
+    mode: nook_authenticator_domain::BackupCodeAttachMode,
     queue: QueueDisposition,
 }
 
@@ -477,171 +499,6 @@ pub fn validate_extension_session_request_json(
         ExtensionSessionRequestValidation::Accepted
     } else {
         ExtensionSessionRequestValidation::Rejected
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-pub struct WebsiteLoginAccountWire {
-    vault_store_id: String,
-    vault_name: String,
-    secret_id: String,
-    username: String,
-    website_url: String,
-    website_host: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, tag = "status", rename_all = "kebab-case")]
-pub enum WebsiteLoginOptionsAvailableWire {
-    Ready {
-        ok: bool,
-        accounts: Vec<WebsiteLoginAccountWire>,
-    },
-    Locked {
-        ok: bool,
-    },
-    Unavailable {
-        ok: bool,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields)]
-pub struct WebsiteLoginOptionsRejectedWire {
-    ok: bool,
-    reason: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(untagged, rename_all_fields = "camelCase")]
-pub enum WebsiteLoginOptionsWire {
-    Available(WebsiteLoginOptionsAvailableWire),
-    Rejected(WebsiteLoginOptionsRejectedWire),
-}
-
-/// Concrete companion response decoded at the browser runtime boundary.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(transparent)]
-#[tsify(from_wasm_abi)]
-pub struct WebsiteLoginOptionsWireValue(WebsiteLoginOptionsWire);
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi)]
-pub struct WebsiteLoginAccountOption {
-    pub vault_store_id: String,
-    pub vault_name: String,
-    pub secret_id: String,
-    pub username: String,
-    pub website_url: String,
-    pub website_host: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, Tsify)]
-#[serde(untagged, rename_all_fields = "camelCase")]
-#[tsify(into_wasm_abi)]
-pub enum WebsiteLoginOptions {
-    Ready {
-        kind: WebsiteLoginOptionsKind,
-        accounts: Vec<WebsiteLoginAccountOption>,
-    },
-    Locked {
-        kind: WebsiteLoginOptionsKind,
-    },
-    Unavailable {
-        kind: WebsiteLoginOptionsKind,
-    },
-    Rejected {
-        kind: WebsiteLoginOptionsKind,
-        reason: String,
-    },
-}
-
-#[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WebsiteLoginOptionsKind {
-    Ready,
-    Locked,
-    Unavailable,
-    Rejected,
-}
-
-impl serde::Serialize for WebsiteLoginOptionsKind {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_u8(*self as u8)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum WebsiteLoginOptionsDecodeError {
-    #[error("website login options response is malformed")]
-    Malformed,
-}
-
-pub fn decode_website_login_options_json(
-    serialized: &str,
-) -> Result<WebsiteLoginOptions, WebsiteLoginOptionsDecodeError> {
-    let wire = serde_json::from_str::<WebsiteLoginOptionsWireValue>(serialized)
-        .map_err(|_| WebsiteLoginOptionsDecodeError::Malformed)?;
-    decode_website_login_options(wire)
-}
-
-pub fn decode_website_login_options(
-    wire: WebsiteLoginOptionsWireValue,
-) -> Result<WebsiteLoginOptions, WebsiteLoginOptionsDecodeError> {
-    let WebsiteLoginOptionsWireValue(wire) = wire;
-    match wire {
-        WebsiteLoginOptionsWire::Available(WebsiteLoginOptionsAvailableWire::Ready {
-            ok,
-            accounts,
-        }) if ok => {
-            if accounts.iter().any(|account| {
-                account.vault_store_id.trim().is_empty() || account.secret_id.trim().is_empty()
-            }) {
-                return Err(WebsiteLoginOptionsDecodeError::Malformed);
-            }
-            Ok(WebsiteLoginOptions::Ready {
-                kind: WebsiteLoginOptionsKind::Ready,
-                accounts: accounts
-                    .into_iter()
-                    .map(|account| WebsiteLoginAccountOption {
-                        vault_store_id: account.vault_store_id,
-                        vault_name: account.vault_name,
-                        secret_id: account.secret_id,
-                        username: account.username,
-                        website_url: account.website_url,
-                        website_host: account.website_host,
-                    })
-                    .collect(),
-            })
-        }
-        WebsiteLoginOptionsWire::Available(WebsiteLoginOptionsAvailableWire::Locked { ok })
-            if ok =>
-        {
-            Ok(WebsiteLoginOptions::Locked {
-                kind: WebsiteLoginOptionsKind::Locked,
-            })
-        }
-        WebsiteLoginOptionsWire::Available(WebsiteLoginOptionsAvailableWire::Unavailable {
-            ok,
-        }) if ok => Ok(WebsiteLoginOptions::Unavailable {
-            kind: WebsiteLoginOptionsKind::Unavailable,
-        }),
-        WebsiteLoginOptionsWire::Rejected(WebsiteLoginOptionsRejectedWire {
-            ok: false,
-            reason,
-        }) if !reason.trim().is_empty() => Ok(WebsiteLoginOptions::Rejected {
-            kind: WebsiteLoginOptionsKind::Rejected,
-            reason,
-        }),
-        WebsiteLoginOptionsWire::Available(_)
-        | WebsiteLoginOptionsWire::Rejected(WebsiteLoginOptionsRejectedWire { .. }) => {
-            Err(WebsiteLoginOptionsDecodeError::Malformed)
-        }
     }
 }
 
@@ -940,27 +797,21 @@ mod tests {
     }
 
     #[test]
-    fn decodes_login_options_into_a_domain_union() -> anyhow::Result<()> {
-        let ready = r#"{"ok":true,"status":"ready","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com"}]}"#;
+    fn rejects_open_ended_session_domain_values() {
+        let passkey_setup = r#"{"type":"nook:extension-session-finish-passkey-setup","payload":{"credentialId":[1],"userHandle":[2],"prfInput":[3],"prfOutput":[4],"deviceMode":1,"queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
         assert_eq!(
-            decode_website_login_options_json(ready)?,
-            WebsiteLoginOptions::Ready {
-                kind: WebsiteLoginOptionsKind::Ready,
-                accounts: vec![WebsiteLoginAccountOption {
-                    vault_store_id: "vault".to_owned(),
-                    vault_name: "Personal".to_owned(),
-                    secret_id: "secret".to_owned(),
-                    username: "alice".to_owned(),
-                    website_url: "https://example.com".to_owned(),
-                    website_host: "example.com".to_owned(),
-                }]
-            }
+            validate_extension_session_request_json(
+                &passkey_setup.replace(r#""deviceMode":1"#, r#""deviceMode":2"#),
+            ),
+            ExtensionSessionRequestValidation::Rejected
         );
-        assert!(
-            decode_website_login_options_json(&ready.replacen("\"vault\"", "\"\"", 1)).is_err()
+        let backup_attach = r#"{"type":"nook:extension-session-authenticator-backup-attach","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","secretId":"secret","codes":["backup"],"mode":"replace","queue":{"kind":"message-default"}}}"#;
+        assert_eq!(
+            validate_extension_session_request_json(
+                &backup_attach.replace(r#""mode":"replace""#, r#""mode":"append""#),
+            ),
+            ExtensionSessionRequestValidation::Rejected
         );
-        assert!(decode_website_login_options_json(r#"{"ok":true,"status":"ready"}"#).is_err());
-        Ok(())
     }
 
     #[test]

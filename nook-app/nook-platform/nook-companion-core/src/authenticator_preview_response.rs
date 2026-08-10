@@ -1,50 +1,9 @@
 //! Typed runtime response boundary for validated TOTP enrollment previews.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use nook_authenticator_domain::{TotpAlgorithm, TotpDigits, TotpPeriod};
+use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(rename_all = "UPPERCASE")]
-enum AuthenticatorPreviewAlgorithmWire {
-    Sha1,
-    Sha256,
-    Sha512,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct AuthenticatorPreviewDigits(u32);
-
-impl<'de> Deserialize<'de> for AuthenticatorPreviewDigits {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = u32::deserialize(deserializer)?;
-        if (6..=8).contains(&value) {
-            Ok(Self(value))
-        } else {
-            Err(D::Error::custom("TOTP digits must be between 6 and 8"))
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct AuthenticatorPreviewPeriod(u64);
-
-impl<'de> Deserialize<'de> for AuthenticatorPreviewPeriod {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = u64::deserialize(deserializer)?;
-        if (15..=300).contains(&value) {
-            Ok(Self(value))
-        } else {
-            Err(D::Error::custom("TOTP period must be between 15 and 300"))
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -52,11 +11,12 @@ pub struct AuthenticatorEnrollmentPreviewWire {
     issuer: String,
     account: String,
     website_url: String,
-    algorithm: AuthenticatorPreviewAlgorithmWire,
+    #[tsify(type = "'SHA1' | 'SHA256' | 'SHA512'")]
+    algorithm: TotpAlgorithm,
     #[tsify(type = "number")]
-    digits: AuthenticatorPreviewDigits,
+    digits: TotpDigits,
     #[tsify(type = "number")]
-    period: AuthenticatorPreviewPeriod,
+    period: TotpPeriod,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
@@ -93,23 +53,6 @@ pub enum AuthenticatorPreviewResponseWire {
     Rejected(AuthenticatorPreviewRejectedWire),
 }
 
-#[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AuthenticatorPreviewAlgorithm {
-    Sha1,
-    Sha256,
-    Sha512,
-}
-
-impl Serialize for AuthenticatorPreviewAlgorithm {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_u8(*self as u8)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi)]
@@ -117,7 +60,8 @@ pub struct AuthenticatorEnrollmentPreview {
     pub issuer: String,
     pub account: String,
     pub website_url: String,
-    pub algorithm: AuthenticatorPreviewAlgorithm,
+    #[tsify(type = "'SHA1' | 'SHA256' | 'SHA512'")]
+    pub algorithm: TotpAlgorithm,
     pub digits: u32,
     pub period: u64,
 }
@@ -171,20 +115,15 @@ pub fn decode_authenticator_preview_response(
             vault_store_id,
             vault_name,
         }) if !vault_store_id.trim().is_empty() && !vault_name.trim().is_empty() => {
-            let algorithm = match preview.algorithm {
-                AuthenticatorPreviewAlgorithmWire::Sha1 => AuthenticatorPreviewAlgorithm::Sha1,
-                AuthenticatorPreviewAlgorithmWire::Sha256 => AuthenticatorPreviewAlgorithm::Sha256,
-                AuthenticatorPreviewAlgorithmWire::Sha512 => AuthenticatorPreviewAlgorithm::Sha512,
-            };
             Ok(AuthenticatorPreviewResponse::Ready {
                 kind: AuthenticatorPreviewResponseKind::Ready,
                 preview: AuthenticatorEnrollmentPreview {
                     issuer: preview.issuer,
                     account: preview.account,
                     website_url: preview.website_url,
-                    algorithm,
-                    digits: preview.digits.0,
-                    period: preview.period.0,
+                    algorithm: preview.algorithm,
+                    digits: preview.digits.get(),
+                    period: preview.period.get(),
                 },
                 vault_store_id,
             })
@@ -212,14 +151,14 @@ pub fn decode_authenticator_preview_response(
 mod tests {
     use super::*;
 
-    fn preview(algorithm: AuthenticatorPreviewAlgorithmWire) -> AuthenticatorEnrollmentPreviewWire {
+    fn preview(algorithm: TotpAlgorithm) -> AuthenticatorEnrollmentPreviewWire {
         AuthenticatorEnrollmentPreviewWire {
             issuer: "Nook".to_owned(),
             account: "alice".to_owned(),
             website_url: "https://example.com".to_owned(),
             algorithm,
-            digits: AuthenticatorPreviewDigits(6),
-            period: AuthenticatorPreviewPeriod(30),
+            digits: TotpDigits::default(),
+            period: TotpPeriod::default(),
         }
     }
 
@@ -230,7 +169,7 @@ mod tests {
     ) -> AuthenticatorPreviewResponseWire {
         AuthenticatorPreviewResponseWire::Available(AuthenticatorPreviewAvailableWire::Ready {
             ok,
-            preview: preview(AuthenticatorPreviewAlgorithmWire::Sha256),
+            preview: preview(TotpAlgorithm::Sha256),
             vault_store_id: vault_store_id.to_owned(),
             vault_name: vault_name.to_owned(),
         })
@@ -246,7 +185,7 @@ mod tests {
                     issuer: "Nook".to_owned(),
                     account: "alice".to_owned(),
                     website_url: "https://example.com".to_owned(),
-                    algorithm: AuthenticatorPreviewAlgorithm::Sha256,
+                    algorithm: TotpAlgorithm::Sha256,
                     digits: 6,
                     period: 30,
                 },

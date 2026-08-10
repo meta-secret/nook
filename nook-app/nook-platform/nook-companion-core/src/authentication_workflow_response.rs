@@ -122,6 +122,53 @@ mod tests {
             )
             .is_err()
         );
+
+        let no_match = AuthenticationWorkflowSnapshotResponseWire::NoMatch(
+            AuthenticationWorkflowNoMatchResponseWire { ok: true },
+        );
+        assert_eq!(
+            decode_authentication_workflow_snapshot_response(no_match)?,
+            AuthenticationWorkflowSnapshotResponse::NoMatch {
+                kind: AuthenticationWorkflowSnapshotResponseKind::NoMatch,
+            }
+        );
+
+        let rejected = AuthenticationWorkflowSnapshotResponseWire::Rejected(
+            AuthenticationWorkflowRejectedResponseWire {
+                ok: false,
+                reason: "vault-locked".to_owned(),
+            },
+        );
+        assert_eq!(
+            decode_authentication_workflow_snapshot_response(rejected)?,
+            AuthenticationWorkflowSnapshotResponse::Rejected {
+                kind: AuthenticationWorkflowSnapshotResponseKind::Rejected,
+                reason: "vault-locked".to_owned(),
+            }
+        );
+
+        for malformed in [
+            AuthenticationWorkflowSnapshotResponseWire::NoMatch(
+                AuthenticationWorkflowNoMatchResponseWire { ok: false },
+            ),
+            AuthenticationWorkflowSnapshotResponseWire::Rejected(
+                AuthenticationWorkflowRejectedResponseWire {
+                    ok: true,
+                    reason: "vault-locked".to_owned(),
+                },
+            ),
+            AuthenticationWorkflowSnapshotResponseWire::Rejected(
+                AuthenticationWorkflowRejectedResponseWire {
+                    ok: false,
+                    reason: " ".to_owned(),
+                },
+            ),
+        ] {
+            assert_eq!(
+                decode_authentication_workflow_snapshot_response(malformed),
+                Err(AuthenticationWorkflowSnapshotResponseDecodeError)
+            );
+        }
         Ok(())
     }
 }
