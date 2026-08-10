@@ -32,6 +32,7 @@ import {
   ensureExtensionSessionDocument,
   isUnlockedSessionStatus,
 } from './session-lifecycle'
+import { extensionSessionGrantIdentity } from '../pairing-grants'
 
 const pendingWebsitePasskeyRequests = new Set<string>()
 
@@ -85,7 +86,7 @@ async function matchingPasskeyAccountCountForOrigin({
     const nookTypedArgs0_1: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-list-passkeys',
       payload: {
-        ...grant,
+        ...extensionSessionGrantIdentity(grant),
         rpId: hostname,
         origin,
         queue: extensionSessionProbeDeadline(queueExpiresAt),
@@ -187,7 +188,7 @@ export async function websitePasskeyOptions({
     const nookTypedArgs0_4: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-list-passkeys',
       payload: {
-        ...grant,
+        ...extensionSessionGrantIdentity(grant),
         rpId: context.rpId,
         origin: context.origin,
         queue: extensionSessionProbeDeadline(message.payload.expiresAt),
@@ -272,7 +273,7 @@ export async function performWebsitePasskey({
           ? 'nook:extension-session-register-passkey'
           : 'nook:extension-session-assert-passkey',
       payload: {
-        ...grant,
+        ...extensionSessionGrantIdentity(grant),
         requestId: message.payload.requestId,
         requestJson: websitePasskeyRequestJson(requestJsonArgs),
         queue: extensionSessionPasskeyCeremonyDeadline(

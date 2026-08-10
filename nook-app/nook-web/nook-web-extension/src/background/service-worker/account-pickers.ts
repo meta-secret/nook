@@ -2,7 +2,10 @@ import {
   type WebsiteAuthenticatorOption,
   type WebsiteLoginAccountOption,
 } from '../../lib/login-fill-messages'
-import type { StoredExtensionPairingGrant } from '../pairing-grants'
+import {
+  extensionSessionGrantIdentity,
+  type StoredExtensionPairingGrant,
+} from '../pairing-grants'
 import {
   extensionSessionInteractiveDeadline,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
@@ -170,7 +173,7 @@ export async function authenticatorAccounts({
     const nookTypedArgs0_1: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-list-authenticators',
       payload: {
-        ...grant,
+        ...extensionSessionGrantIdentity(grant),
         query,
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
@@ -256,7 +259,7 @@ export async function loginAccountsForOrigin({
     const nookTypedArgs0_5: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-list-logins',
       payload: {
-        ...grant,
+        ...extensionSessionGrantIdentity(grant),
         origin,
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },

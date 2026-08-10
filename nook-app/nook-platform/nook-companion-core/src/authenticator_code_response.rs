@@ -3,22 +3,46 @@
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
+use zeroize::Zeroize;
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[derive(Debug, Deserialize, Serialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "string")]
+pub struct AuthenticatorCodeSecret(String);
+
+impl AuthenticatorCodeSecret {
+    fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Zeroize for AuthenticatorCodeSecret {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+impl Drop for AuthenticatorCodeSecret {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+#[derive(Debug, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct AuthenticatorCodeReadyWire {
     ok: bool,
-    code: String,
+    code: AuthenticatorCodeSecret,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[derive(Debug, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct AuthenticatorCodeRejectedWire {
     ok: bool,
     reason: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[derive(Debug, Deserialize, Tsify)]
 #[serde(untagged)]
 #[tsify(from_wasm_abi)]
 pub enum AuthenticatorCodeResponseWire {
@@ -42,13 +66,13 @@ impl Serialize for AuthenticatorCodeResponseKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Debug, Serialize, Tsify)]
 #[serde(untagged)]
 #[tsify(into_wasm_abi)]
 pub enum AuthenticatorCodeResponse {
     Ready {
         kind: AuthenticatorCodeResponseKind,
-        code: String,
+        code: AuthenticatorCodeSecret,
     },
     Rejected {
         kind: AuthenticatorCodeResponseKind,
@@ -69,7 +93,7 @@ pub fn decode_authenticator_code_response(
 ) -> Result<AuthenticatorCodeResponse, AuthenticatorCodeResponseDecodeError> {
     match wire {
         AuthenticatorCodeResponseWire::Ready(AuthenticatorCodeReadyWire { ok: true, code })
-            if is_totp_code(&code) =>
+            if is_totp_code(code.as_str()) =>
         {
             Ok(AuthenticatorCodeResponse::Ready {
                 kind: AuthenticatorCodeResponseKind::Ready,
@@ -98,7 +122,7 @@ mod tests {
         for code in ["123456", "1234567", "12345678"] {
             let wire = AuthenticatorCodeResponseWire::Ready(AuthenticatorCodeReadyWire {
                 ok: true,
-                code: code.to_owned(),
+                code: AuthenticatorCodeSecret(code.to_owned()),
             });
             assert!(matches!(
                 decode_authenticator_code_response(wire),

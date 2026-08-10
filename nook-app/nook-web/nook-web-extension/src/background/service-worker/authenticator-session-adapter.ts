@@ -2,7 +2,10 @@ import type {
   OtpauthEnrollmentPreview,
   WebsiteAuthenticatorBackupAttachMessageMode,
 } from '../../lib/enrollment-messages'
-import type { StoredExtensionPairingGrant } from '../pairing-grants'
+import {
+  extensionSessionGrantIdentity,
+  type StoredExtensionPairingGrant,
+} from '../pairing-grants'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../offscreen/session-request-adapter'
 import { sendSessionMessage } from './pairing-identity'
 
@@ -38,7 +41,7 @@ export async function authenticatorCodeFromSession({
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-code',
     payload: {
-      ...grant,
+      ...extensionSessionGrantIdentity(grant),
       secretId,
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
@@ -117,7 +120,7 @@ export async function confirmAuthenticatorEnrollment({
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-enroll-confirm',
     payload: {
-      ...grant,
+      ...extensionSessionGrantIdentity(grant),
       otpauthUri,
       origin,
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
@@ -140,7 +143,7 @@ export async function attachAuthenticatorBackupCodes({
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-backup-attach',
     payload: {
-      ...grant,
+      ...extensionSessionGrantIdentity(grant),
       secretId,
       codes,
       mode,

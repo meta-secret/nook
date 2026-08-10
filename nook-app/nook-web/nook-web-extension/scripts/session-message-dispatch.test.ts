@@ -79,6 +79,44 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(malformedEvent.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
   })
 
+  test('validates a credential-safe provider identity without discarding metadata', async () => {
+    const provider = {
+      id: 'github',
+      type: 'github',
+      label: 'Personal GitHub',
+      githubPat: { state: 'token', value: 'secret' },
+      githubRepo: { state: 'defaultRepository' },
+      oauthFile: { state: 'notApplicable' },
+      localFolder: { state: 'notApplicable' },
+      storeId: { state: 'unscoped' },
+      createdAt: '2026-08-10T00:00:00Z',
+    }
+    const message = {
+      type: ExtensionSessionMessageType.ImportVault,
+      payload: {
+        vaultStoreId: 'vault',
+        deviceId: 'device',
+        devicePublicKey: 'public',
+        deviceSigningPublicKey: 'signing',
+        providers: [provider],
+        eventLogRecords: [],
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
+    }
+
+    const parse = await parseExtensionSessionRequest(message)
+
+    expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+    if (parse.kind !== ExtensionSessionRequestParseKind.Parsed) return
+    const stagedProvider = parse.request.payload.providers[0] as StorageProvider
+    expect(stagedProvider.label).toBe('Personal GitHub')
+    expect(stagedProvider.githubPat).toEqual({
+      state: 'token',
+      value: 'secret',
+    })
+    expect(provider.githubPat).toEqual({ state: 'missing' })
+  })
+
   test('stages sensitive fields and clears the caller-owned payload', async () => {
     const payload: Record<string, unknown> = {
       pin: '123456',

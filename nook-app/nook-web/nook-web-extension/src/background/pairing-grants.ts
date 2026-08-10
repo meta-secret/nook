@@ -34,6 +34,22 @@ export type SelectedPairingGrant = SelectedExtensionPairingGrant
 export type { StoredExtensionPairingGrant }
 export type ExtensionPairingItems = Record<string, ExtensionPairingRecord>
 
+export type ExtensionSessionGrantIdentity = Pick<
+  StoredExtensionPairingGrant,
+  'vaultStoreId' | 'deviceId' | 'devicePublicKey' | 'deviceSigningPublicKey'
+>
+
+export function extensionSessionGrantIdentity(
+  grant: StoredExtensionPairingGrant,
+): ExtensionSessionGrantIdentity {
+  return {
+    vaultStoreId: grant.vaultStoreId,
+    deviceId: grant.deviceId,
+    devicePublicKey: grant.devicePublicKey,
+    deviceSigningPublicKey: grant.deviceSigningPublicKey,
+  }
+}
+
 function stateFromItems(items: ExtensionPairingItems): ExtensionPairingState {
   return {
     entries: Object.entries(items).map(([key, record]) => ({ key, record })),

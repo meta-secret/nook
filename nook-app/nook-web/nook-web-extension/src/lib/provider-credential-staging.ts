@@ -4,6 +4,15 @@ import type { ExtensionStorageProviderPayload } from '../../../nook-web-shared/s
 export type SerializedStorageProvider =
   StorageProvider | ExtensionStorageProviderPayload
 
+export function extensionSessionProviderIdentities(
+  providers: SerializedStorageProvider[],
+): ExtensionStorageProviderPayload[] {
+  return providers.map((provider) => ({
+    id: provider.id,
+    type: provider.type,
+  }))
+}
+
 export enum ProviderCredentialStagingKind {
   InvalidInput = 'invalid-input',
   Staged = 'staged',

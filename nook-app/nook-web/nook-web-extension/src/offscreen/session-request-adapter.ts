@@ -1,7 +1,10 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { SerializedStorageProvider } from '../lib/provider-credential-staging'
-import { scrubProviderCredentials } from '../lib/provider-credential-staging'
+import {
+  extensionSessionProviderIdentities,
+  scrubProviderCredentials,
+} from '../lib/provider-credential-staging'
 import {
   ExtensionSessionRequestValidation,
   type ExtensionSessionRequest as GeneratedExtensionSessionRequest,
@@ -311,7 +314,20 @@ export async function parseExtensionSessionRequest(
   const request = ingressStage.request
   try {
     await companionWasmReady
-    const requestWire = request as ExtensionSessionRequestWire
+    const validationRequest =
+      request.type === ExtensionSessionMessageType.ImportVault
+        ? {
+            ...request,
+            payload: {
+              ...request.payload,
+              providers: extensionSessionProviderIdentities(
+                request.payload.providers,
+              ),
+            },
+          }
+        : request
+    const requestWire: ExtensionSessionRequestWire =
+      validationRequest as ExtensionSessionRequestWire
     if (
       validateExtensionSessionRequest(requestWire) !==
       ExtensionSessionRequestValidation.Accepted

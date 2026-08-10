@@ -14,6 +14,7 @@ import {
   type WebsiteLoginFillResponse,
 } from '../../lib/login-fill-messages'
 import { classifyAuthenticationOutcomeWithDefaultTimeout } from '../vault-runtime'
+import { extensionSessionGrantIdentity } from '../pairing-grants'
 import {
   extensionSessionInteractiveDeadline,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
@@ -322,7 +323,7 @@ export async function websiteLoginSaveOffer({
   const nookTypedArgs0_7: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-plan-login-save',
     payload: {
-      ...grant,
+      ...extensionSessionGrantIdentity(grant),
       origin: message.payload.origin,
       username: message.payload.username,
       password: pendingPassword.value,
@@ -531,7 +532,7 @@ export async function websiteLoginSaveCommit({
   const nookTypedArgs0_13: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-commit-login-save',
     payload: {
-      ...grant,
+      ...extensionSessionGrantIdentity(grant),
       origin: message.payload.origin,
       offerId: message.payload.offerId,
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
