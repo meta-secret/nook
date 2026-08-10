@@ -442,6 +442,7 @@ export async function websiteLoginSaveCommit({
   }
   const nookTypedArgs0_12: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
+    payload: {},
   }
   const status = await sendSessionMessage(nookTypedArgs0_12)
   if (

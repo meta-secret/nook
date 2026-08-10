@@ -42,15 +42,20 @@
   let error = $state('')
   let handoffError = $state('')
 
-  const scopeTranslationKeys: Record<ExtensionConnectScope, I18nKey> = {
-    [ExtensionConnectScope.VaultAccess]:
-      I18N_KEYS.ExtensionConsentScopeVaultAccess,
-    [ExtensionConnectScope.PasswordFilling]:
-      I18N_KEYS.ExtensionConsentScopePasswordFilling,
-    [ExtensionConnectScope.PasskeyManagement]:
-      I18N_KEYS.ExtensionConsentScopePasskeyManagement,
-    [ExtensionConnectScope.SyncProviderCredentials]:
-      I18N_KEYS.ExtensionConsentScopeSyncProviderCredentials,
+  function scopeTranslationKey(scope: ExtensionConnectScope): I18nKey {
+    if (scope === ExtensionConnectScope.VaultAccess) {
+      return I18N_KEYS.ExtensionConsentScopeVaultAccess
+    }
+    if (scope === ExtensionConnectScope.PasswordFilling) {
+      return I18N_KEYS.ExtensionConsentScopePasswordFilling
+    }
+    if (scope === ExtensionConnectScope.PasskeyManagement) {
+      return I18N_KEYS.ExtensionConsentScopePasskeyManagement
+    }
+    if (scope === ExtensionConnectScope.SyncProviderCredentials) {
+      return I18N_KEYS.ExtensionConsentScopeSyncProviderCredentials
+    }
+    throw new Error('Unsupported extension connection scope.')
   }
 
   const canApprove = $derived(
@@ -273,7 +278,7 @@
           class="flex items-center gap-2 rounded-md border border-border/40 bg-background/70 px-3 py-2 text-sm text-foreground"
         >
           <Check class="size-3.5 text-primary" />
-          {vault.t(scopeTranslationKeys[scope])}
+          {vault.t(scopeTranslationKey(scope))}
         </li>
       {/each}
     </ul>

@@ -20,7 +20,10 @@ import {
   type ExtensionConnectRequestFor,
   type PairedExtensionIdentityDiscoveryFor,
 } from "$web-shared/extension/extension-connect-types";
-import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
+import {
+  ExtensionConnectScope,
+  isExtensionConnectScope,
+} from "$web-shared/extension/extension-connect-scope";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
@@ -60,12 +63,6 @@ export type InstalledExtensionRuntime =
       extensionRuntimeId: string;
     };
 
-const validScopes = new Set<ExtensionConnectScope>([
-  ExtensionConnectScope.VaultAccess,
-  ExtensionConnectScope.PasswordFilling,
-  ExtensionConnectScope.PasskeyManagement,
-  ExtensionConnectScope.SyncProviderCredentials,
-]);
 const extensionRuntimeIdAttribute = "data-nook-extension-runtime-id";
 const EXTENSION_MESSAGE_TIMEOUT_MS = 5_000;
 
@@ -81,9 +78,7 @@ function parseScopes(params: URLSearchParams): ExtensionConnectScope[] {
     .map((scope) => scope.trim())
     .filter(Boolean);
 
-  return scopes.filter((scope): scope is ExtensionConnectScope =>
-    validScopes.has(scope as ExtensionConnectScope),
-  );
+  return scopes.filter(isExtensionConnectScope);
 }
 
 export function extensionConnectRequestFromLocation(

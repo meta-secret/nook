@@ -103,10 +103,12 @@ async function importDecodedApprovedPairing(
     try {
       const nookTypedArgs0_1: Parameters<typeof sendSessionMessage>[0] = {
         type: ExtensionSessionMessageType.MigrateAuthProviders,
+        payload: {},
       }
       await sendSessionMessage(nookTypedArgs0_1)
       const nookTypedArgs0_2: Parameters<typeof sendSessionMessage>[0] = {
         type: ExtensionSessionMessageType.Reset,
+        payload: {},
       }
       await sendSessionMessage(nookTypedArgs0_2)
       // Snapshot before scrubbing so lazy extension IPC cannot observe
