@@ -28,28 +28,37 @@ export function decodeWebsiteLoginFillResponse(
 }
 
 export function isLoginPickerPageAcknowledgement(response: unknown): boolean {
-  return (
-    response !== null &&
-    typeof response === 'object' &&
-    'ok' in response &&
-    response.ok === true
-  )
+  if (!response || typeof response !== 'object') return false
+  return 'ok' in response && response.ok === true
 }
 
-function loginOperationFailure(
-  response: unknown,
-): LoginOperationFailure | undefined {
+enum LoginOperationFailureDecodeKind {
+  Invalid = 'invalid',
+  Failure = 'failure',
+}
+
+type LoginOperationFailureDecode =
+  | { kind: LoginOperationFailureDecodeKind.Invalid }
+  | {
+      kind: LoginOperationFailureDecodeKind.Failure
+      failure: LoginOperationFailure
+    }
+
+function loginOperationFailure(response: unknown): LoginOperationFailureDecode {
   if (
-    response !== null &&
+    response &&
     typeof response === 'object' &&
     'ok' in response &&
     response.ok === false &&
     'reason' in response &&
     typeof response.reason === 'string'
   ) {
-    return { ok: false, reason: response.reason }
+    return {
+      kind: LoginOperationFailureDecodeKind.Failure,
+      failure: { ok: false, reason: response.reason },
+    }
   }
-  return undefined
+  return { kind: LoginOperationFailureDecodeKind.Invalid }
 }
 
 function isLoginSaveDecision(
@@ -69,10 +78,12 @@ function isLoginSaveDecision(
 export function decodeLoginSaveActionResponse(
   response: unknown,
 ): LoginSaveActionResponse {
-  const failure = loginOperationFailure(response)
-  if (failure) return failure
+  const failureDecode = loginOperationFailure(response)
+  if (failureDecode.kind === LoginOperationFailureDecodeKind.Failure) {
+    return failureDecode.failure
+  }
   if (
-    response !== null &&
+    response &&
     typeof response === 'object' &&
     'ok' in response &&
     response.ok === true &&
@@ -95,10 +106,12 @@ export function decodeLoginSaveActionResponse(
 export function decodeLoginOperationResponse(
   response: unknown,
 ): LoginOperationSuccess | LoginOperationFailure {
-  const failure = loginOperationFailure(response)
-  if (failure) return failure
+  const failureDecode = loginOperationFailure(response)
+  if (failureDecode.kind === LoginOperationFailureDecodeKind.Failure) {
+    return failureDecode.failure
+  }
   if (
-    response !== null &&
+    response &&
     typeof response === 'object' &&
     'ok' in response &&
     response.ok === true
