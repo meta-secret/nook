@@ -313,7 +313,14 @@ export async function authorizeWithExternalDeviceIdentity({
       await continueInitializationAfterDeviceUnlock(state);
     }
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
-    log.info("extension identity adopted");
+    const adoptedIdentity: { readonly deviceId: string } = {
+      deviceId: state.deviceId,
+    };
+    const context: Parameters<typeof log.infoWithContext>[0] = {
+      message: "extension identity adopted",
+      serializedContext: JSON.stringify(adoptedIdentity),
+    };
+    log.infoWithContext(context);
     return true;
   } catch {
     await state.enqueueStorage(() =>

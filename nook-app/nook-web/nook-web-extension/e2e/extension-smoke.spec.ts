@@ -357,7 +357,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         extensionId,
         malformedProviderGrant,
       ),
-    ).toEqual({ ok: false, reason: 'invalid-provider-payload' })
+    ).toEqual({ ok: false, reason: 'invalid-pairing-grant' })
     expect(await readExtensionPersistenceSnapshot(worker)).toEqual(
       persistenceBeforeMalformedProvider,
     )
