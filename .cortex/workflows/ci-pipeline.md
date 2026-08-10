@@ -574,14 +574,22 @@ task web:test:e2e:github            # → sync-live
 
 ## Portable Rust crate coverage export
 
-The `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-log` coverage gate runs during the `builder-debug` stage in `nook-app/nook-platform/docker/rust/product.Dockerfile`.
+The portable Rust coverage gate runs during the `builder-debug` stage in
+`nook-app/nook-platform/docker/rust/product.Dockerfile`. It covers
+`nook-app-common`, `nook-authenticator-domain`, `nook-auth2`,
+`nook-replication`, `nook-event-log`, `nook-companion-core`, and `nook-core`.
 
 **Image build:**
 
 - Source-sensitive layers are ordered by Rust dependency edge.
-- Sibling leaf/foundations `nook-app-common`, `nook-auth2`, `nook-replication`, and `nook-event-log` are copied, linted, and coverage-tested before `nook-core`.
+- Leaf and foundation crates are copied in dependency order. This includes
+  `nook-app-common`, `nook-authenticator-domain`, `nook-auth2`,
+  `nook-replication`, `nook-event-log`, and `nook-companion-core`. Each is
+  linted and coverage-tested before `nook-core`.
 - The `nook-core` coverage run uses `--no-clean`.
-- The final report across all five crates enforces the committed floor and writes reusable artifacts to `/opt/nook/coverage/nook-core` in the image.
+- The final report across all seven portable crates enforces the committed
+  floor. It writes reusable artifacts to `/opt/nook/coverage/nook-core` in the
+  image.
 
 **PR CI split:**
 

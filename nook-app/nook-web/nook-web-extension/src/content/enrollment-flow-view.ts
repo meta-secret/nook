@@ -160,10 +160,7 @@ export function renderPreviewDetails({
     [BROWSER_MESSAGE_KEYS.WidgetEnrollIssuer, preview.issuer],
     [BROWSER_MESSAGE_KEYS.WidgetEnrollAccount, preview.account],
     [BROWSER_MESSAGE_KEYS.WidgetEnrollOrigin, location.origin],
-    [
-      BROWSER_MESSAGE_KEYS.WidgetEnrollAlgorithm,
-      authenticatorPreviewAlgorithmLabel(preview.algorithm),
-    ],
+    [BROWSER_MESSAGE_KEYS.WidgetEnrollAlgorithm, preview.algorithm],
     [BROWSER_MESSAGE_KEYS.WidgetEnrollDigits, String(preview.digits)],
     [BROWSER_MESSAGE_KEYS.WidgetEnrollPeriod, String(preview.period)],
   ]
@@ -174,17 +171,4 @@ export function renderPreviewDetails({
     details.append(line)
   }
   container.append(details)
-}
-
-function authenticatorPreviewAlgorithmLabel(
-  algorithm: AuthenticatorEnrollmentPreview['algorithm'],
-): string {
-  switch (algorithm) {
-    case 'SHA1':
-      return 'SHA1'
-    case 'SHA256':
-      return 'SHA256'
-    case 'SHA512':
-      return 'SHA512'
-  }
 }

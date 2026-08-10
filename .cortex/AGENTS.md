@@ -452,7 +452,9 @@ calls. Assign a named typed argument value first. Loom uses ESLint
 Nook browser-extension TypeScript owns browser observation and lifecycle glue.
 Portable classification, validation, policy, and workflow decisions belong in
 Rust. Size-sensitive content-script policy uses `nook-companion-core` through
-`nook-companion-wasm`. Full contract:
+`nook-companion-wasm`. Shared authenticator numbers, modes, and closed
+vocabularies belong in `nook-authenticator-domain`. Both `nook-core` and
+`nook-companion-core` consume that leaf crate. Full contract:
 [dynamic-skills/rust-typescript-code-separation.md](dynamic-skills/rust-typescript-code-separation.md).
 
 Bun must be installed. Stop and ask for Bun if `bun --version` fails.

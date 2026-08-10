@@ -3,6 +3,7 @@ import {
   decodeLoginPickerOpenResponse,
   decodeAuthenticationWorkflowSnapshotResponse,
   decodeAuthenticatorBackupAttachResponse,
+  decodeAuthenticatorOptionsResponse,
   decodeAuthenticatorPreviewResponse,
   decodeWebsiteLoginOptions,
   type AuthenticationWorkflowSnapshot,
@@ -10,6 +11,8 @@ import {
   type AuthenticationWorkflowSnapshotResponseWire,
   AuthenticatorBackupAttachResponseKind,
   type AuthenticatorBackupAttachResponseWire,
+  AuthenticatorOptionsResponseKind,
+  type AuthenticatorOptionsResponseWire,
   type AuthenticatorEnrollmentPreview,
   AuthenticatorPreviewResponseKind,
   type AuthenticatorPreviewResponseWire,
@@ -18,6 +21,7 @@ import {
   type WebsiteLoginAccountOption,
   WebsiteLoginOptionsKind,
   type WebsiteLoginOptionsWireValue,
+  type WebsiteAuthenticatorOption as CompanionWebsiteAuthenticatorOption,
   type AuthenticationOutcomeDecision,
   validateCompanionAuthenticationOutcomeDecision,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -80,6 +84,15 @@ export type AuthenticatorBackupAttachResponse =
       kind: AuthenticatorBackupAttachResponseKind.Rejected
       reason: string
     }
+
+export type AuthenticatorOptionsResponse =
+  | {
+      kind: AuthenticatorOptionsResponseKind.Ready
+      accounts: CompanionWebsiteAuthenticatorOption[]
+    }
+  | { kind: AuthenticatorOptionsResponseKind.Locked }
+  | { kind: AuthenticatorOptionsResponseKind.Unavailable }
+  | { kind: AuthenticatorOptionsResponseKind.Rejected; reason: string }
 
 export type GeneratedPasswordResponse =
   { ok: true; password: string } | { ok: false; reason: string }
@@ -239,6 +252,27 @@ export async function sendAuthenticatorBackupAttachRuntimeMessage(
       response: decodeAuthenticatorBackupAttachResponse(
         responseWire,
       ) as AuthenticatorBackupAttachResponse,
+    }
+  } catch {
+    return unavailable()
+  }
+}
+
+export async function sendAuthenticatorOptionsRuntimeMessage(
+  message: object,
+): Promise<RuntimeMessageDelivery<AuthenticatorOptionsResponse>> {
+  const delivery = await sendRuntimeMessage(message)
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+    return unavailable()
+  }
+  try {
+    await companionWasmReady
+    const responseWire = delivery.response as AuthenticatorOptionsResponseWire
+    return {
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: decodeAuthenticatorOptionsResponse(
+        responseWire,
+      ) as AuthenticatorOptionsResponse,
     }
   } catch {
     return unavailable()

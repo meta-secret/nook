@@ -12,6 +12,7 @@
 mod authentication_workflow;
 mod authentication_workflow_response;
 mod authenticator_backup_attach_response;
+mod authenticator_options_response;
 mod authenticator_preview_response;
 mod backup_code_candidates;
 mod extension_pairing_state;
@@ -39,6 +40,11 @@ pub use authenticator_backup_attach_response::{
     AuthenticatorBackupAttachResponse, AuthenticatorBackupAttachResponseDecodeError,
     AuthenticatorBackupAttachResponseKind, AuthenticatorBackupAttachResponseWire,
     decode_authenticator_backup_attach_response,
+};
+pub use authenticator_options_response::{
+    AuthenticatorOptionsResponse, AuthenticatorOptionsResponseDecodeError,
+    AuthenticatorOptionsResponseKind, AuthenticatorOptionsResponseWire, WebsiteAuthenticatorOption,
+    decode_authenticator_options_response,
 };
 pub use authenticator_preview_response::{
     AuthenticatorEnrollmentPreview, AuthenticatorPreviewResponse,

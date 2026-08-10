@@ -50,6 +50,14 @@ pub fn decode_authenticator_backup_attach_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
+#[wasm_bindgen(js_name = decodeAuthenticatorOptionsResponse)]
+pub fn decode_authenticator_options_response(
+    response: nook_companion_core::AuthenticatorOptionsResponseWire,
+) -> Result<nook_companion_core::AuthenticatorOptionsResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_authenticator_options_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
 #[wasm_bindgen(js_name = decodeAuthenticatorPreviewResponse)]
 pub fn decode_authenticator_preview_response(
     response: nook_companion_core::AuthenticatorPreviewResponseWire,

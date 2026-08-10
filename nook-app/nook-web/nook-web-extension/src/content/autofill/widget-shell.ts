@@ -9,6 +9,7 @@ import {
   sendDecodedRuntimeMessage,
   sendAuthenticationOutcomeRuntimeMessage,
   sendAuthenticatorBackupAttachRuntimeMessage,
+  sendAuthenticatorOptionsRuntimeMessage,
   sendAuthenticatorPreviewRuntimeMessage,
   sendRuntimeMessageWithoutResponse,
 } from './login-passkey-actions'
@@ -282,6 +283,7 @@ export function buildEnrollmentFlowHost({
     sendDecodedRuntimeMessage,
     sendAuthenticationOutcomeRuntimeMessage,
     sendAuthenticatorBackupAttachRuntimeMessage,
+    sendAuthenticatorOptionsRuntimeMessage,
     sendAuthenticatorPreviewRuntimeMessage,
     sendRuntimeMessageWithoutResponse,
     translatedMessage,

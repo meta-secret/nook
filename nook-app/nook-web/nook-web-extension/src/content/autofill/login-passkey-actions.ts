@@ -38,12 +38,14 @@ export {
   sendAuthenticationWorkflowSnapshotRuntimeMessage,
   sendAuthenticationOutcomeRuntimeMessage,
   sendAuthenticatorBackupAttachRuntimeMessage,
+  sendAuthenticatorOptionsRuntimeMessage,
   sendAuthenticatorPreviewRuntimeMessage,
   sendDecodedRuntimeMessage,
   sendRuntimeMessageWithoutResponse,
 } from './runtime-message-adapter'
 export type {
   AuthenticatorBackupAttachResponse,
+  AuthenticatorOptionsResponse,
   AuthenticatorPreviewResponse,
   DecodedRuntimeMessageArgs,
   RuntimeMessageDelivery,

@@ -3,6 +3,7 @@ import {
   AuthenticationOutcomeVerdict,
   AuthenticationWorkflowSnapshotResponseKind,
   AuthenticatorBackupAttachResponseKind,
+  AuthenticatorOptionsResponseKind,
   AuthenticatorPreviewResponseKind,
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
@@ -10,6 +11,7 @@ import {
 import {
   RuntimeMessageDeliveryKind,
   sendAuthenticatorBackupAttachRuntimeMessage,
+  sendAuthenticatorOptionsRuntimeMessage,
   sendAuthenticatorPreviewRuntimeMessage,
   sendAuthenticationWorkflowSnapshotRuntimeMessage,
   sendAuthenticationOutcomeRuntimeMessage,
@@ -246,6 +248,57 @@ describe('runtime message adapters', () => {
     })
 
     const delivery = await sendAuthenticatorBackupAttachRuntimeMessage(message)
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
+  })
+
+  test('decodes concrete authenticator account identities through Rust', async () => {
+    installRuntimeMock({
+      kind: RuntimeMockKind.Response,
+      response: {
+        ok: true,
+        status: 'ready',
+        accounts: [
+          {
+            vaultStoreId: 'vault-1',
+            vaultName: 'Personal',
+            secretId: 'secret-1',
+            issuer: 'Nook',
+            account: 'person@example.test',
+          },
+        ],
+      },
+    })
+
+    const delivery = await sendAuthenticatorOptionsRuntimeMessage(message)
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
+      expect(delivery.response.kind).toBe(
+        AuthenticatorOptionsResponseKind.Ready,
+      )
+    }
+  })
+
+  test('rejects blank authenticator account identities through Rust', async () => {
+    installRuntimeMock({
+      kind: RuntimeMockKind.Response,
+      response: {
+        ok: true,
+        status: 'ready',
+        accounts: [
+          {
+            vaultStoreId: ' ',
+            vaultName: 'Personal',
+            secretId: 'secret-1',
+            issuer: 'Nook',
+            account: 'person@example.test',
+          },
+        ],
+      },
+    })
+
+    const delivery = await sendAuthenticatorOptionsRuntimeMessage(message)
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
