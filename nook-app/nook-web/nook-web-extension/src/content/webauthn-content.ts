@@ -8,6 +8,7 @@ import {
   WebsitePasskeyCeremony,
   WebsitePasskeyCancelMessageType,
   WebsitePasskeyOptionsMessageType,
+  WebsitePasskeyOptionsStatus,
   WebsitePasskeyPerformMessageType,
   type WebsitePasskeyCancelMessage,
   type WebsitePasskeyOptionsMessage,
@@ -55,10 +56,6 @@ enum PasskeyOptionChoiceKind {
 type PasskeyOptionChoice =
   | { kind: PasskeyOptionChoiceKind.BrowserFallback }
   | { kind: PasskeyOptionChoiceKind.Selected; option: PasskeyOption }
-
-enum PasskeyOptionsStatus {
-  Ready = 'ready',
-}
 
 function t({
   key,
@@ -220,13 +217,13 @@ async function handleRequest(request: PageRequest): Promise<void> {
   } satisfies WebsitePasskeyOptionsMessage
   const optionsResponse = await runtimeMessage<{
     ok?: boolean
-    status?: PasskeyOptionsStatus
+    status?: WebsitePasskeyOptionsStatus
     options?: unknown
   }>(nookTypedArgs0_4)
   const options = validOptions(optionsResponse?.options)
   if (
     optionsResponse?.ok !== true ||
-    optionsResponse.status !== PasskeyOptionsStatus.Ready ||
+    optionsResponse.status !== WebsitePasskeyOptionsStatus.Ready ||
     options.length === 0
   ) {
     const nookTypedArgs0_2: Parameters<typeof respond>[0] = {

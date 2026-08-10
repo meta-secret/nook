@@ -179,6 +179,103 @@ export type ExtensionSessionRequestParse =
       request: ExtensionSessionRequest
     }
 
+export enum ExtensionSessionSensitiveStageKind {
+  NotRequired = 'not-required',
+  Staged = 'staged',
+}
+
+export type ExtensionSessionSensitiveStage =
+  | { kind: ExtensionSessionSensitiveStageKind.NotRequired }
+  | {
+      kind: ExtensionSessionSensitiveStageKind.Staged
+      request: ExtensionSessionRequest
+    }
+
+const sensitiveSessionFields: Readonly<
+  Record<ExtensionSessionMessageType, readonly string[]>
+> = {
+  [ExtensionSessionMessageType.Reset]: [],
+  [ExtensionSessionMessageType.MigrateAuthProviders]: [],
+  [ExtensionSessionMessageType.Status]: [],
+  [ExtensionSessionMessageType.BeginPasskeySetup]: [],
+  [ExtensionSessionMessageType.FinishPasskeySetup]: [
+    'credentialId',
+    'userHandle',
+    'prfInput',
+    'prfOutput',
+  ],
+  [ExtensionSessionMessageType.RecoverPasskey]: [
+    'credentialId',
+    'userHandle',
+    'prfOutput',
+  ],
+  [ExtensionSessionMessageType.UnlockOptions]: [],
+  [ExtensionSessionMessageType.UnlockPasskey]: ['prfOutput'],
+  [ExtensionSessionMessageType.CreatePin]: ['pin'],
+  [ExtensionSessionMessageType.UnlockPin]: ['pin'],
+  [ExtensionSessionMessageType.SealIdentityHandoff]: [],
+  [ExtensionSessionMessageType.ImportVault]: [],
+  [ExtensionSessionMessageType.UpdateVault]: [],
+  [ExtensionSessionMessageType.ListPasskeys]: [],
+  [ExtensionSessionMessageType.ListLogins]: [],
+  [ExtensionSessionMessageType.RevealLogin]: [],
+  [ExtensionSessionMessageType.ListAuthenticators]: [],
+  [ExtensionSessionMessageType.AuthenticatorCode]: [],
+  [ExtensionSessionMessageType.AuthenticatorEnrollPreview]: ['otpauthUri'],
+  [ExtensionSessionMessageType.AuthenticatorEnrollCode]: ['otpauthUri'],
+  [ExtensionSessionMessageType.AuthenticatorEnrollConfirm]: ['otpauthUri'],
+  [ExtensionSessionMessageType.AuthenticatorBackupAttach]: ['codes'],
+  [ExtensionSessionMessageType.PlanLoginSave]: ['password'],
+  [ExtensionSessionMessageType.PendingLoginSave]: [],
+  [ExtensionSessionMessageType.CommitLoginSave]: [],
+  [ExtensionSessionMessageType.DismissLoginSave]: [],
+  [ExtensionSessionMessageType.CancelPasskey]: [],
+  [ExtensionSessionMessageType.RegisterPasskey]: [],
+  [ExtensionSessionMessageType.AssertPasskey]: [],
+  [ExtensionSessionMessageType.Lock]: [],
+}
+
+function clearSensitiveFieldValue(value: unknown): void {
+  if (Array.isArray(value)) value.fill(0)
+}
+
+export function clearExtensionSessionSensitiveRequest(
+  request: ExtensionSessionRequest,
+): void {
+  const payload = request.payload as Record<string, unknown>
+  for (const field of sensitiveSessionFields[request.type]) {
+    clearSensitiveFieldValue(payload[field])
+    payload[field] = typeof payload[field] === 'string' ? '' : []
+  }
+}
+
+export function stageExtensionSessionSensitiveRequest(
+  request: ExtensionSessionRequest,
+): ExtensionSessionSensitiveStage {
+  const fields = sensitiveSessionFields[request.type]
+  if (fields.length === 0) {
+    return { kind: ExtensionSessionSensitiveStageKind.NotRequired }
+  }
+  const sourcePayload = request.payload as Record<string, unknown>
+  const stagedPayload = { ...sourcePayload }
+  for (const field of fields) {
+    const value = sourcePayload[field]
+    stagedPayload[field] = Array.isArray(value) ? [...value] : value
+    clearSensitiveFieldValue(value)
+    sourcePayload[field] = typeof value === 'string' ? '' : []
+  }
+  const replacementArgs: Parameters<
+    typeof replaceExtensionSessionRequestPayload
+  >[0] = {
+    request,
+    payload: stagedPayload,
+  }
+  return {
+    kind: ExtensionSessionSensitiveStageKind.Staged,
+    request: replaceExtensionSessionRequestPayload(replacementArgs),
+  }
+}
+
 enum FieldKind {
   String = 'string',
   Number = 'number',
@@ -316,11 +413,13 @@ const requestFields: Readonly<
     ...grantFields,
     stringField('requestId'),
     stringField('requestJson'),
+    numberField('queueExpiresAt'),
   ],
   [ExtensionSessionMessageType.AssertPasskey]: [
     ...grantFields,
     stringField('requestId'),
     stringField('requestJson'),
+    numberField('queueExpiresAt'),
   ],
   [ExtensionSessionMessageType.Lock]: [],
 }

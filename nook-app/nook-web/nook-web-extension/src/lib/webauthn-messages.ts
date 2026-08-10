@@ -52,11 +52,17 @@ export type WebsitePasskeyVaultOption = {
   account?: WebsitePasskeyAccount
 }
 
+export enum WebsitePasskeyOptionsStatus {
+  Unavailable = 'unavailable',
+  Locked = 'locked',
+  Ready = 'ready',
+}
+
 export type WebsitePasskeyOptionsResponse =
   | { ok: false; reason: string }
   | {
       ok: true
-      status: 'unavailable' | 'locked' | 'ready'
+      status: WebsitePasskeyOptionsStatus
       options: WebsitePasskeyVaultOption[]
     }
 

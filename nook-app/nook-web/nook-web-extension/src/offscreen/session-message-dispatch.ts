@@ -12,10 +12,12 @@ import {
 } from '../lib/session-operation-queue'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import {
+  clearExtensionSessionSensitiveRequest,
   type ExtensionSessionRequest,
   ExtensionSessionRequestParseKind,
+  ExtensionSessionSensitiveStageKind,
   parseExtensionSessionRequest,
-  replaceExtensionSessionRequestPayload,
+  stageExtensionSessionSensitiveRequest,
 } from './session-request-adapter'
 
 export { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
@@ -30,25 +32,14 @@ enum SensitivePayloadResidencyKind {
 type SensitivePayloadResidency =
   | {
       kind: SensitivePayloadResidencyKind.Resident
-      payload: SessionPayloadRecord
+      request: ExtensionSessionRequest
     }
   | { kind: SensitivePayloadResidencyKind.Cleared }
 
 type SessionMessageDispatchContext = {
-  handleMessage: (message: ExtensionSessionRequest) => Promise<object | void>
+  handleMessage: (message: ExtensionSessionRequest) => Promise<object>
   decodeProviders: (providers: StorageProvider[]) => Promise<StorageProvider[]>
 }
-
-type SessionPayloadValue =
-  | string
-  | number
-  | number[]
-  | string[]
-  | StorageProvider[]
-  | object[]
-  | undefined
-
-type SessionPayloadRecord = Record<string, SessionPayloadValue>
 
 function sessionMessagePriority(
   type: ExtensionSessionMessageType,
@@ -100,9 +91,9 @@ type RequestedQueueExpiry =
   | { kind: RequestedQueueExpiryKind.Requested; expiresAt: number }
 
 function requestedQueueExpiry(
-  payload: SessionPayloadRecord,
+  request: ExtensionSessionRequest,
 ): RequestedQueueExpiry {
-  const value = payload.queueExpiresAt
+  const value = request.payload.queueExpiresAt
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return { kind: RequestedQueueExpiryKind.NotRequested }
   }
@@ -110,59 +101,6 @@ function requestedQueueExpiry(
     kind: RequestedQueueExpiryKind.Requested,
     expiresAt: Math.min(value, Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS),
   }
-}
-
-const sensitiveSessionFields: Readonly<
-  Record<ExtensionSessionMessageType, readonly string[]>
-> = {
-  [ExtensionSessionMessageType.Reset]: [],
-  [ExtensionSessionMessageType.MigrateAuthProviders]: [],
-  [ExtensionSessionMessageType.Status]: [],
-  [ExtensionSessionMessageType.BeginPasskeySetup]: [],
-  [ExtensionSessionMessageType.FinishPasskeySetup]: [
-    'credentialId',
-    'userHandle',
-    'prfInput',
-    'prfOutput',
-  ],
-  [ExtensionSessionMessageType.RecoverPasskey]: [
-    'credentialId',
-    'userHandle',
-    'prfOutput',
-  ],
-  [ExtensionSessionMessageType.UnlockPasskey]: ['prfOutput'],
-  [ExtensionSessionMessageType.CreatePin]: ['pin'],
-  [ExtensionSessionMessageType.UnlockPin]: ['pin'],
-  [ExtensionSessionMessageType.PlanLoginSave]: ['password'],
-  [ExtensionSessionMessageType.AuthenticatorEnrollPreview]: ['otpauthUri'],
-  [ExtensionSessionMessageType.AuthenticatorEnrollCode]: ['otpauthUri'],
-  [ExtensionSessionMessageType.AuthenticatorEnrollConfirm]: ['otpauthUri'],
-  [ExtensionSessionMessageType.AuthenticatorBackupAttach]: ['codes'],
-  [ExtensionSessionMessageType.SealIdentityHandoff]: [],
-  [ExtensionSessionMessageType.ImportVault]: [],
-  [ExtensionSessionMessageType.UpdateVault]: [],
-  [ExtensionSessionMessageType.ListPasskeys]: [],
-  [ExtensionSessionMessageType.ListLogins]: [],
-  [ExtensionSessionMessageType.RevealLogin]: [],
-  [ExtensionSessionMessageType.ListAuthenticators]: [],
-  [ExtensionSessionMessageType.AuthenticatorCode]: [],
-  [ExtensionSessionMessageType.PendingLoginSave]: [],
-  [ExtensionSessionMessageType.CommitLoginSave]: [],
-  [ExtensionSessionMessageType.DismissLoginSave]: [],
-  [ExtensionSessionMessageType.CancelPasskey]: [],
-  [ExtensionSessionMessageType.RegisterPasskey]: [],
-  [ExtensionSessionMessageType.AssertPasskey]: [],
-  [ExtensionSessionMessageType.Lock]: [],
-}
-
-function copySensitiveValue(value: SessionPayloadValue): SessionPayloadValue {
-  if (Array.isArray(value)) return [...value]
-  if (value instanceof Uint8Array) return new Uint8Array(value)
-  return value
-}
-
-function clearSensitiveValue(value: SessionPayloadValue): void {
-  if (Array.isArray(value) || value instanceof Uint8Array) value.fill(0)
 }
 
 enum StagingOwnership {
@@ -190,32 +128,18 @@ export class ExtensionSessionMessageDispatcher {
   }
 
   private enqueueSensitiveMessage({
-    message,
-    payload,
-    fields,
+    request,
   }: {
-    message: ExtensionSessionRequest
-    payload: SessionPayloadRecord
-    fields: readonly string[]
-  }): Promise<object | void> {
+    request: ExtensionSessionRequest
+  }): Promise<object> {
     let payloadResidency: SensitivePayloadResidency = {
       kind: SensitivePayloadResidencyKind.Resident,
-      payload: { ...payload },
-    }
-    for (const field of fields) {
-      if (payloadResidency.kind === SensitivePayloadResidencyKind.Resident) {
-        payloadResidency.payload[field] = copySensitiveValue(payload[field])
-      }
-      clearSensitiveValue(payload[field])
-      payload[field] = typeof payload[field] === 'string' ? '' : []
+      request,
     }
     const clearPending = () => {
       if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared)
         return
-      for (const field of fields) {
-        clearSensitiveValue(payloadResidency.payload[field])
-        delete payloadResidency.payload[field]
-      }
+      clearExtensionSessionSensitiveRequest(payloadResidency.request)
       payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
     }
     const nookNamedArgs1_0: Parameters<typeof this.operations.enqueue>[0] = {
@@ -223,23 +147,12 @@ export class ExtensionSessionMessageDispatcher {
         if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
           throw new Error('Extension session request expired.')
         }
-        const operationPayload = payloadResidency.payload
+        const operationRequest = payloadResidency.request
         payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
         try {
-          const nookNamedArgs0_0: Parameters<
-            typeof replaceExtensionSessionRequestPayload
-          >[0] = {
-            request: message,
-            payload: operationPayload,
-          }
-          return await this.context.handleMessage(
-            replaceExtensionSessionRequestPayload(nookNamedArgs0_0),
-          )
+          return await this.context.handleMessage(operationRequest)
         } finally {
-          for (const field of fields) {
-            clearSensitiveValue(operationPayload[field])
-            delete operationPayload[field]
-          }
+          clearExtensionSessionSensitiveRequest(operationRequest)
         }
       },
       options: {
@@ -259,11 +172,13 @@ export class ExtensionSessionMessageDispatcher {
 
   private async enqueueVaultImport({
     message,
-    payload,
   }: {
-    message: ExtensionSessionRequest
-    payload: SessionPayloadRecord
-  }): Promise<object | void> {
+    message: Extract<
+      ExtensionSessionRequest,
+      { type: ExtensionSessionMessageType.ImportVault }
+    >
+  }): Promise<object> {
+    const payload = message.payload
     const operationGeneration = this.operationGeneration
     if (!Array.isArray(payload.providers)) {
       payload.providers = []
@@ -309,30 +224,23 @@ export class ExtensionSessionMessageDispatcher {
         }
         if (staging.providers.length === 0) {
           stagingOwnership = StagingOwnership.Cleared
-          const nookNamedArgs0_1: Parameters<
-            typeof replaceExtensionSessionRequestPayload
+          const emptyProviderRequest: Parameters<
+            typeof this.context.handleMessage
           >[0] = {
-            request: message,
-            payload: {
-              ...payload,
-              providers: staging.providers,
-            },
+            ...message,
+            payload: { ...payload, providers: staging.providers },
           }
-          return this.context.handleMessage(
-            replaceExtensionSessionRequestPayload(nookNamedArgs0_1),
-          )
+          return this.context.handleMessage(emptyProviderRequest)
         }
         const stagedProviders = staging.providers
         try {
-          const nookNamedArgs0_2: Parameters<
-            typeof replaceExtensionSessionRequestPayload
+          const stagedProviderRequest: Parameters<
+            typeof this.context.handleMessage
           >[0] = {
-            request: message,
+            ...message,
             payload: { ...payload, providers: stagedProviders },
           }
-          return await this.context.handleMessage(
-            replaceExtensionSessionRequestPayload(nookNamedArgs0_2),
-          )
+          return await this.context.handleMessage(stagedProviderRequest)
         } finally {
           scrubProviderCredentials(stagedProviders)
           payload.providers = []
@@ -351,31 +259,27 @@ export class ExtensionSessionMessageDispatcher {
     return this.operations.enqueue(nookNamedArgs1_1)
   }
 
-  enqueue(message: ExtensionSessionRequest): Promise<object | void> {
+  enqueue(message: ExtensionSessionRequest): Promise<object> {
     const type = message.type
-    const payload = message.payload as SessionPayloadRecord
     if (type === ExtensionSessionMessageType.ImportVault) {
       const nookNamedArgs0_3: Parameters<typeof this.enqueueVaultImport>[0] = {
         message,
-        payload,
       }
       return this.enqueueVaultImport(nookNamedArgs0_3)
     }
-    const requestedExpiry = requestedQueueExpiry(payload)
+    const requestedExpiry = requestedQueueExpiry(message)
     const priority =
       requestedExpiry.kind === RequestedQueueExpiryKind.Requested
-        ? payload.queuePriority === 'interactive'
+        ? message.payload.queuePriority === 'interactive'
           ? SessionOperationPriority.Interactive
           : SessionOperationPriority.Probe
         : sessionMessagePriority(type)
-    const sensitiveFields = sensitiveSessionFields[type]
-    if (sensitiveFields.length > 0) {
+    const sensitiveStage = stageExtensionSessionSensitiveRequest(message)
+    if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged) {
       const nookNamedArgs0_4: Parameters<
         typeof this.enqueueSensitiveMessage
       >[0] = {
-        message,
-        payload,
-        fields: sensitiveFields,
+        request: sensitiveStage.request,
       }
       return this.enqueueSensitiveMessage(nookNamedArgs0_4)
     }

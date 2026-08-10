@@ -8,6 +8,7 @@ import {
   WebsitePasskeyCeremony,
   type WebsitePasskeyRequestJsonArgs,
   type WebsitePasskeyOptionsResponse,
+  WebsitePasskeyOptionsStatus,
   type WebsitePasskeyPerformResponse,
   type WebsitePasskeyVaultOption,
 } from '../../lib/webauthn-messages'
@@ -137,7 +138,11 @@ export async function websitePasskeyOptions({
   }
   const grants = await passkeyPairingGrants()
   if (grants.length === 0)
-    return { ok: true, status: 'unavailable', options: [] }
+    return {
+      ok: true,
+      status: WebsitePasskeyOptionsStatus.Unavailable,
+      options: [],
+    }
   await ensureExtensionSessionDocument()
   const nookTypedArgs0_3: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
@@ -149,12 +154,16 @@ export async function websitePasskeyOptions({
     typeof status !== 'object' ||
     !isUnlockedSessionStatus(status)
   ) {
-    return { ok: true, status: 'locked', options: [] }
+    return {
+      ok: true,
+      status: WebsitePasskeyOptionsStatus.Locked,
+      options: [],
+    }
   }
   if (message.payload.ceremony === WebsitePasskeyCeremony.Create) {
     return {
       ok: true,
-      status: 'ready',
+      status: WebsitePasskeyOptionsStatus.Ready,
       options: grants.map((grant) => ({
         vaultStoreId: grant.vaultStoreId,
         vaultName: grant.vaultName,
@@ -185,7 +194,7 @@ export async function websitePasskeyOptions({
       }
     }
   }
-  return { ok: true, status: 'ready', options }
+  return { ok: true, status: WebsitePasskeyOptionsStatus.Ready, options }
 }
 
 export async function performWebsitePasskey({
