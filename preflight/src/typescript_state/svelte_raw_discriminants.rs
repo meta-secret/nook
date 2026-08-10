@@ -1,5 +1,6 @@
 use super::{
-    collect_svelte_script_fragments_with, typescript_code_raw_string_discriminant_lines,
+    svelte_fragments::collect_svelte_script_fragments_with,
+    typescript_code_raw_string_discriminant_lines,
     typescript_template_raw_string_discriminant_lines,
 };
 

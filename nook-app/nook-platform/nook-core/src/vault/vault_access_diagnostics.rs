@@ -6,158 +6,21 @@
 //! private device material, or decrypted secret values.
 
 use crate::EventId;
+use crate::ProjectionEpoch;
 use crate::errors::VaultResult;
-use crate::secret_types::{SecretType, StoredSecretRecord};
-use crate::vault_ids::{AuthKeyId, DeviceId, SecretId};
+use crate::secret_types::StoredSecretRecord;
+use crate::vault_ids::{AuthKeyId, SecretId};
 use crate::vault_wire::AgeArmoredCiphertext;
 use crate::{
     DeviceIdentity, VaultCrypto, VaultMetaRecord, is_auth_id, parse_auth_envelopes,
     pending_join_for_device, resolve_members_key, resolve_secrets_key,
 };
-use crate::{ProjectionEpoch, VaultProjection};
 use crate::{VaultEvent, VaultEventSchemaVersion, VaultOperation};
-use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum VaultKeyAccessDiagnosticStatus {
-    EnrolledDecryptable,
-    AuthRowMissing,
-    JoinPending,
-    DeviceIdentityMismatch,
-    EnvelopeDecryptFailed,
-    UnsupportedEpoch,
-    CorruptCiphertext,
-}
+mod model;
 
-impl VaultKeyAccessDiagnosticStatus {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::EnrolledDecryptable => "enrolled_decryptable",
-            Self::AuthRowMissing => "auth_row_missing",
-            Self::JoinPending => "join_pending",
-            Self::DeviceIdentityMismatch => "device_identity_mismatch",
-            Self::EnvelopeDecryptFailed => "envelope_decrypt_failed",
-            Self::UnsupportedEpoch => "unsupported_epoch",
-            Self::CorruptCiphertext => "corrupt_ciphertext",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum VaultRecordDecryptabilityStatus {
-    Decryptable,
-    AuthRowMissing,
-    JoinPending,
-    DeviceIdentityMismatch,
-    EnvelopeDecryptFailed,
-    UnsupportedEpoch,
-    UnknownEpoch,
-    CorruptCiphertext,
-}
-
-impl VaultRecordDecryptabilityStatus {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Decryptable => "decryptable",
-            Self::AuthRowMissing => "auth_row_missing",
-            Self::JoinPending => "join_pending",
-            Self::DeviceIdentityMismatch => "device_identity_mismatch",
-            Self::EnvelopeDecryptFailed => "envelope_decrypt_failed",
-            Self::UnsupportedEpoch => "unsupported_epoch",
-            Self::UnknownEpoch => "unknown_epoch",
-            Self::CorruptCiphertext => "corrupt_ciphertext",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum VaultEpochDiagnosticStatus {
-    CurrentEpoch,
-    OlderEpoch,
-    UnknownEpoch,
-    UnsupportedEpoch,
-}
-
-impl VaultEpochDiagnosticStatus {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::CurrentEpoch => "current_epoch",
-            Self::OlderEpoch => "older_epoch",
-            Self::UnknownEpoch => "unknown_epoch",
-            Self::UnsupportedEpoch => "unsupported_epoch",
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VaultKeyAccessDiagnostic {
-    pub status: VaultKeyAccessDiagnosticStatus,
-    pub device_id: DeviceId,
-    pub auth_id: AuthKeyId,
-    pub explanation: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VaultSecretAccessDiagnostic {
-    pub secret_id: SecretId,
-    pub secret_type: SecretType,
-    pub status: VaultRecordDecryptabilityStatus,
-    pub epoch_status: VaultEpochDiagnosticStatus,
-    pub epoch: DiagnosticEpoch,
-    pub explanation: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VaultEpochHistoryDiagnostic {
-    pub epoch_id: String,
-    pub started_by: String,
-    pub reason: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VaultEventPayloadAccessDiagnostic {
-    pub event_id: String,
-    pub key_epoch: String,
-    pub epoch_status: VaultEpochDiagnosticStatus,
-    pub encrypted_payloads: usize,
-    pub explanation: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VaultAccessDiagnosticsReport {
-    pub key_access: VaultKeyAccessDiagnostic,
-    pub auth_key_ids: Vec<AuthKeyId>,
-    pub current_epoch: DiagnosticEpoch,
-    pub epoch_history: Vec<VaultEpochHistoryDiagnostic>,
-    pub secrets: Vec<VaultSecretAccessDiagnostic>,
-    pub events: Vec<VaultEventPayloadAccessDiagnostic>,
-    pub warnings: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "state", content = "epochId", rename_all = "snake_case")]
-pub enum DiagnosticEpoch {
-    Unknown,
-    Known(String),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ProjectionDiagnosticInput<'a> {
-    Unavailable,
-    Available(&'a VaultProjection),
-}
+pub use model::*;
 
 #[derive(Debug, Clone, Copy)]
 enum SecretEpochRef<'a> {
@@ -568,9 +431,9 @@ mod tests {
     use super::*;
     use crate::{
         ApiKeySecret, EncryptedSecretPayload, GenesisImportPayload, IsoTimestamp, KeyEpoch,
-        PasswordEntryId, PasswordEnvelope, PasswordUnlockEntry, SecretValue, Sha256Hex,
-        SigningIdentity, StoreId, StoredRecordPayload, VaultResult, build_genesis_import_event,
-        generate_vault_keys, genesis_auth_record,
+        PasswordEntryId, PasswordEnvelope, PasswordUnlockEntry, SecretType, SecretValue, Sha256Hex,
+        SigningIdentity, StoreId, StoredRecordPayload, VaultProjection, VaultResult,
+        build_genesis_import_event, generate_vault_keys, genesis_auth_record,
     };
     use ed25519_dalek::SigningKey;
 
