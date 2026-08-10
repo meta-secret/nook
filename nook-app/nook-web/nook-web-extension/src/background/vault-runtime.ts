@@ -36,6 +36,7 @@ import type {
   AuthenticationOutcomeObservationView,
   AuthenticationOutcomeVerdictView,
 } from '../lib/outcome-evidence-messages'
+import type { SerializedStorageProvider } from '../lib/provider-credential-staging'
 import type {
   ExtensionPairingItems,
   ImportedEventLogState,
@@ -50,23 +51,22 @@ type BackgroundWasmStartup =
   | { kind: BackgroundWasmStartupKind.NotStarted }
   | {
       kind: BackgroundWasmStartupKind.Initializing
-      operation: Promise<unknown>
+      operation: Promise<void>
     }
 
 let backgroundWasmStartup: BackgroundWasmStartup = {
   kind: BackgroundWasmStartupKind.NotStarted,
 }
 
-function ensureExtensionWasm(): Promise<unknown> {
+function ensureExtensionWasm(): Promise<void> {
   if (backgroundWasmStartup.kind === BackgroundWasmStartupKind.Initializing) {
     return backgroundWasmStartup.operation
   }
   const nookTypedArgs0_0: Parameters<typeof initNookWasm>[0] = {
     module_or_path: chrome.runtime.getURL('background/nook_wasm_bg.wasm'),
   }
-  const operation = initNookWasm(nookTypedArgs0_0).then((value) => {
+  const operation = initNookWasm(nookTypedArgs0_0).then(() => {
     configureVaultApplication(VaultApplication.Extension)
-    return value
   })
   backgroundWasmStartup = {
     kind: BackgroundWasmStartupKind.Initializing,
@@ -249,7 +249,7 @@ export async function importExtensionEventLog({
 }
 
 export async function decodeExtensionStorageProviders(
-  providers: object,
+  providers: SerializedStorageProvider[],
 ): Promise<StorageProvider[]> {
   await ensureExtensionWasm()
   const snapshot: AuthProvidersSnapshot = {

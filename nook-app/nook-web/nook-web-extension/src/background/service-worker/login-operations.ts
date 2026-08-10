@@ -4,9 +4,10 @@ import {
   type WebsiteLoginSaveOfferView,
   type WebsiteLoginSavePendingResponse,
 } from '../../lib/login-save-messages'
-import type {
-  WebsiteLoginAccountOption,
-  WebsiteLoginFillResponse,
+import {
+  WebsiteAuthenticatorResponseStatus,
+  type WebsiteLoginAccountOption,
+  type WebsiteLoginFillResponse,
 } from '../../lib/login-fill-messages'
 import { classifyAuthenticationOutcomeWithDefaultTimeout } from '../vault-runtime'
 import {
@@ -33,14 +34,19 @@ import {
   openCompanionLauncherBestEffort,
 } from './session-lifecycle'
 import {
+  decodeLoginOperationResponse,
+  decodeLoginSaveActionResponse,
   decodeWebsiteLoginFillResponse,
   isLoginPickerPageAcknowledgement,
+  type LoginOperationFailure,
+  type LoginOperationSuccess,
+  type LoginSaveActionResponse,
 } from './login-session-response-adapter'
 
-type LoginOperationFailure = { ok: false; reason: string; verdict?: string }
-type LoginOperationSuccess = { ok: true }
 enum LoginPickerOpenStatus {
   Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
 }
 enum LoginSaveOfferStatus {
   Unavailable = 'unavailable',
@@ -54,6 +60,10 @@ type LoginPickerOpenResponse =
       status: LoginPickerOpenStatus.Ready
       requestId: string
       expiresAt: number
+    }
+  | {
+      ok: true
+      status: LoginPickerOpenStatus.Locked | LoginPickerOpenStatus.Unavailable
     }
 type LoginPickerQueryResponse =
   | LoginOperationFailure
@@ -70,9 +80,6 @@ type LoginSaveOfferResponse =
       decision: NookWebsiteLoginSaveDecision
       offer?: WebsiteLoginSaveOfferView
     }
-type LoginSaveActionResponse =
-  LoginOperationFailure | { ok: true; decision?: NookWebsiteLoginSaveDecision }
-
 export async function openWebsiteLoginPicker({
   message,
   sender,
@@ -86,7 +93,16 @@ export async function openWebsiteLoginPicker({
     forbiddenReason: 'login-forbidden-origin',
   }
   const access = await availableWebsiteGrants(nookTypedArgs0_0)
-  if ('response' in access) return access.response
+  if ('response' in access) {
+    if (!access.response.ok) return access.response
+    return {
+      ok: true,
+      status:
+        access.response.status === WebsiteAuthenticatorResponseStatus.Locked
+          ? LoginPickerOpenStatus.Locked
+          : LoginPickerOpenStatus.Unavailable,
+    }
+  }
   if (
     !sender.tab ||
     !('id' in sender.tab) ||
@@ -515,7 +531,9 @@ export async function websiteLoginSaveCommit({
       offerId: message.payload.offerId,
     },
   }
-  return sendSessionMessage(nookTypedArgs0_13)
+  return decodeLoginSaveActionResponse(
+    await sendSessionMessage(nookTypedArgs0_13),
+  )
 }
 
 export async function websiteLoginSaveDismiss({
@@ -540,7 +558,9 @@ export async function websiteLoginSaveDismiss({
       offerId: message.payload.offerId,
     },
   }
-  return sendSessionMessage(nookTypedArgs0_15)
+  return decodeLoginOperationResponse(
+    await sendSessionMessage(nookTypedArgs0_15),
+  )
 }
 
 export async function websiteLoginFill({

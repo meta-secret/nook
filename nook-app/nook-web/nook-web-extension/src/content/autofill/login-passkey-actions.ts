@@ -10,7 +10,10 @@ import {
   PasskeyControlLookupKind,
   submitLoginForm,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
+import {
+  type WebsiteLoginAccountOption,
+  WebsiteLoginRevealMessageType,
+} from '../../lib/login-fill-messages'
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { LoginPickerKind, pickerState, widgetState } from './state'
 import type {
@@ -88,7 +91,7 @@ export async function fillAndSubmitAccount({
   continueButton: HTMLButtonElement
 }): Promise<boolean> {
   const nookTypedArgs0_2: Parameters<typeof sendLoginFillMessage>[0] = {
-    type: 'nook:website-login-fill',
+    type: WebsiteLoginRevealMessageType.NookWebsiteLoginFill,
     payload: {
       origin: location.origin,
       vaultStoreId: account.vaultStoreId,

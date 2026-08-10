@@ -18,6 +18,7 @@ import { scrubProviderCredentials } from '../lib/provider-credential-staging'
 import {
   ExtensionSessionMessageType,
   ExtensionSessionMessageDispatcher,
+  type SessionMessageDispatchContext,
 } from './session-message-dispatch'
 import type { ExtensionSessionRequest } from './session-request-adapter'
 import {
@@ -957,18 +958,19 @@ async function handleMessage(
   }
 }
 
-const nookTypedArgs0_4: ConstructorParameters<
-  typeof ExtensionSessionMessageDispatcher
->[0] = {
-  handleMessage,
-  decodeProviders: async (providers) => {
-    const snapshot: AuthProvidersSnapshot = {
-      providers: providers as StorageProvider[],
-      activeVaultStoreId: { state: 'unselected' },
-    }
-    return decodeStorageProviders(snapshot).providers
-  },
-}
+type ExtensionSessionResponse = Awaited<ReturnType<typeof handleMessage>>
+
+const nookTypedArgs0_4: SessionMessageDispatchContext<ExtensionSessionResponse> =
+  {
+    handleMessage,
+    decodeProviders: async (providers) => {
+      const snapshot: AuthProvidersSnapshot = {
+        providers: providers as StorageProvider[],
+        activeVaultStoreId: { state: 'unselected' },
+      }
+      return decodeStorageProviders(snapshot).providers
+    },
+  }
 const sessionMessageDispatcher = new ExtensionSessionMessageDispatcher(
   nookTypedArgs0_4,
 )

@@ -1,4 +1,8 @@
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type { ExtensionStorageProviderPayload } from '../../../nook-web-shared/src/extension/runtime-messages'
+
+export type SerializedStorageProvider =
+  StorageProvider | ExtensionStorageProviderPayload
 
 export enum ProviderCredentialStagingKind {
   InvalidInput = 'invalid-input',
@@ -75,8 +79,8 @@ export async function runWithProviderCredentialCleanup<Result>(
 }
 
 export type StageProviderCredentialsArgs = {
-  providers: object[]
-  decode: (providers: object) => Promise<StorageProvider[]>
+  providers: SerializedStorageProvider[]
+  decode: (providers: SerializedStorageProvider[]) => Promise<StorageProvider[]>
 }
 
 export async function stageProviderCredentials(
