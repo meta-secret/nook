@@ -154,6 +154,7 @@ async function commitStagedEnrollment({
     confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
     confirmDelivery.response.kind ===
       AuthenticatorEnrollmentConfirmResponseKind.Rejected &&
+    'reason' in confirmDelivery.response &&
     confirmDelivery.response.reason === 'authenticator-locked'
   ) {
     const nookTypedArgs0_3: Parameters<typeof setHostDescription>[0] = {
@@ -288,7 +289,10 @@ async function beginEnrollmentCeremony({
     return
   }
   const { response: stageResponse } = stageDelivery
-  if (stageResponse.kind !== AuthenticatorEnrollmentStageResponseKind.Staged) {
+  if (
+    stageResponse.kind !== AuthenticatorEnrollmentStageResponseKind.Staged ||
+    !('stageId' in stageResponse)
+  ) {
     stopPendingEnrollmentWatch()
     const nookTypedArgs0_12: Parameters<typeof setHostDescription>[0] = {
       host,
@@ -452,7 +456,11 @@ async function showQrPreview({
       return
     }
 
-    if (response.kind !== AuthenticatorPreviewResponseKind.Ready) {
+    if (
+      response.kind !== AuthenticatorPreviewResponseKind.Ready ||
+      !('preview' in response) ||
+      !('vaultStoreId' in response)
+    ) {
       throw new Error('Rust returned an unexpected authenticator preview.')
     }
 

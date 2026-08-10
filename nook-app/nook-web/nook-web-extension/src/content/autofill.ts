@@ -125,7 +125,10 @@ async function scanAndRender(): Promise<void> {
     return
   }
   const { response } = delivery
-  if (response.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched) {
+  if (
+    response.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
+    !('snapshot' in response)
+  ) {
     removeScannedWidget()
     return
   }

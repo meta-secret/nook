@@ -1,13 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  WebsiteLoginSaveActionResponseKind,
-  WebsiteLoginSaveOfferResponseKind,
-  isWebsiteLoginSaveActionResponse,
   isWebsiteLoginSaveCommitMessage,
   isWebsiteLoginSaveDismissMessage,
   isWebsiteLoginSaveOfferMessage,
   isWebsiteLoginSavePendingMessage,
-  isWebsiteLoginSaveOfferResponse,
 } from '../src/lib/login-save-messages'
 
 describe('website login save runtime messages', () => {
@@ -72,24 +68,6 @@ describe('website login save runtime messages', () => {
       isWebsiteLoginSaveCommitMessage({
         type: 'nook:website-login-save-commit',
         payload: { origin: 'https://login.example.com', offerId: 'offer_1' },
-      }),
-    ).toBe(false)
-  })
-
-  test('requires response variants to own their domain data', () => {
-    expect(
-      isWebsiteLoginSaveOfferResponse({
-        kind: WebsiteLoginSaveOfferResponseKind.NotRequired,
-      }),
-    ).toBe(true)
-    expect(
-      isWebsiteLoginSaveOfferResponse({
-        kind: WebsiteLoginSaveOfferResponseKind.OfferAvailable,
-      }),
-    ).toBe(false)
-    expect(
-      isWebsiteLoginSaveActionResponse({
-        kind: WebsiteLoginSaveActionResponseKind.Rejected,
       }),
     ).toBe(false)
   })

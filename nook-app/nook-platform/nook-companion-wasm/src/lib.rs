@@ -26,6 +26,30 @@ pub fn decode_website_login_options(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
+#[wasm_bindgen(js_name = decodeWebsiteLoginSaveOfferResponse)]
+pub fn decode_website_login_save_offer_response(
+    response: nook_companion_core::WebsiteLoginSaveOfferResponse,
+) -> Result<nook_companion_core::WebsiteLoginSaveOfferResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_website_login_save_offer_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen(js_name = decodeWebsiteLoginSavePendingResponse)]
+pub fn decode_website_login_save_pending_response(
+    response: nook_companion_core::WebsiteLoginSavePendingResponse,
+) -> Result<nook_companion_core::WebsiteLoginSavePendingResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_website_login_save_pending_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen(js_name = decodeWebsiteLoginSaveActionResponse)]
+pub fn decode_website_login_save_action_response(
+    response: nook_companion_core::WebsiteLoginSaveActionResponse,
+) -> Result<nook_companion_core::WebsiteLoginSaveActionResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_website_login_save_action_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
 #[wasm_bindgen(js_name = decodeLoginPickerOpenResponse)]
 pub fn decode_login_picker_open_response(
     response: nook_companion_core::LoginPickerOpenResponseWire,

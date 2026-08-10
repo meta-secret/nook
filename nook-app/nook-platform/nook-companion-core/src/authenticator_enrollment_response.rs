@@ -43,7 +43,7 @@ impl Serialize for AuthenticatorEnrollmentStageResponseKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
-#[serde(untagged, rename_all = "camelCase")]
+#[serde(untagged, rename_all_fields = "camelCase")]
 #[tsify(into_wasm_abi)]
 pub enum AuthenticatorEnrollmentStageResponse {
     Staged {
@@ -88,7 +88,7 @@ impl Serialize for AuthenticatorEnrollmentConfirmResponseKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
-#[serde(untagged, rename_all = "camelCase")]
+#[serde(untagged, rename_all_fields = "camelCase")]
 #[tsify(into_wasm_abi)]
 pub enum AuthenticatorEnrollmentConfirmResponse {
     Completed {

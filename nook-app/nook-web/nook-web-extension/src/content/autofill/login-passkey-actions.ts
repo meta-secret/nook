@@ -45,6 +45,9 @@ export {
   sendAuthenticatorOptionsRuntimeMessage,
   sendAuthenticatorPreviewRuntimeMessage,
   sendDecodedRuntimeMessage,
+  sendLoginSaveOfferRuntimeMessage,
+  sendLoginSavePendingRuntimeMessage,
+  sendLoginSaveActionRuntimeMessage,
   sendRuntimeMessageWithoutResponse,
 } from './runtime-message-adapter'
 export type {
@@ -288,6 +291,7 @@ async function openLoginPicker({
     setStatus(nookTypedArgs0_15)
     return
   }
+  if (!('expiresAt' in response) || !('requestId' in response)) return
   if (response.expiresAt <= Date.now()) {
     const nookTypedArgs0_16: Parameters<typeof setFlightProgress>[0] = {
       step,
@@ -435,7 +439,10 @@ export async function generatePasswordWithNook({
       return
     }
     const { response } = delivery
-    if (response.kind !== GeneratedPasswordResponseKind.Generated) {
+    if (
+      response.kind !== GeneratedPasswordResponseKind.Generated ||
+      !('password' in response)
+    ) {
       const nookTypedArgs0_24: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
@@ -653,6 +660,8 @@ export async function continueWithNook({
       setStatus(nookTypedArgs0_38)
       return
     }
+
+    if (!('accounts' in response)) return
 
     const accounts = response.accounts
     if (accounts.length === 0) {

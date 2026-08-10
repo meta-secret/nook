@@ -185,7 +185,8 @@ export async function fillStagedEnrollmentCode({
   const delivery = await host.sendAuthenticatorCodeRuntimeMessage(message)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    delivery.response.kind !== AuthenticatorCodeResponseKind.Ready
+    delivery.response.kind !== AuthenticatorCodeResponseKind.Ready ||
+    !('code' in delivery.response)
   ) {
     return false
   }

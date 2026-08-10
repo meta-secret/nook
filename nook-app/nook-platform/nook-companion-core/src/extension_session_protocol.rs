@@ -130,15 +130,7 @@ where
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-pub struct VaultGrant {
-    vault_store_id: String,
-    device_id: String,
-    device_public_key: String,
-    device_signing_public_key: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields)]
 pub struct SerializedStorageProvider {
     id: String,
     #[serde(rename = "type")]
@@ -156,12 +148,13 @@ pub enum SerializedStorageProviderType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields)]
 pub struct ExtensionVaultEventPayload {
     schema_version: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ExtensionEventLogRecord {
     event_id: String,
     path: String,
@@ -169,12 +162,13 @@ pub struct ExtensionEventLogRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields)]
 pub struct EmptyPayload {
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct FinishPasskeySetupPayload {
     credential_id: SessionSecretBytes,
     user_handle: SessionSecretBytes,
@@ -185,7 +179,7 @@ pub struct FinishPasskeySetupPayload {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct RecoverPasskeyPayload {
     credential_id: SessionSecretBytes,
     user_handle: SessionSecretBytes,
@@ -194,20 +188,21 @@ pub struct RecoverPasskeyPayload {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct UnlockPasskeyPayload {
     prf_output: SessionSecretBytes,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields)]
 pub struct PinPayload {
     pin: SessionSecretText,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct IdentityHandoffPayload {
     recipient_public_key: String,
     nonce: String,
@@ -218,91 +213,111 @@ pub struct IdentityHandoffPayload {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ImportVaultPayload {
-    #[serde(flatten)]
-    grant: VaultGrant,
+    vault_store_id: String,
+    device_id: String,
+    device_public_key: String,
+    device_signing_public_key: String,
     providers: Vec<SerializedStorageProvider>,
     event_log_records: Vec<ExtensionEventLogRecord>,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct UpdateVaultPayload {
-    #[serde(flatten)]
-    grant: VaultGrant,
+    vault_store_id: String,
+    device_id: String,
+    device_public_key: String,
+    device_signing_public_key: String,
     event_log_records: Vec<ExtensionEventLogRecord>,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PasskeyLookupPayload {
-    #[serde(flatten)]
-    grant: VaultGrant,
+    vault_store_id: String,
+    device_id: String,
+    device_public_key: String,
+    device_signing_public_key: String,
     rp_id: String,
     origin: String,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct OriginGrantPayload {
-    #[serde(flatten)]
-    grant: VaultGrant,
+    vault_store_id: String,
+    device_id: String,
+    device_public_key: String,
+    device_signing_public_key: String,
     origin: String,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SecretGrantPayload {
-    #[serde(flatten)]
-    grant: VaultGrant,
+    vault_store_id: String,
+    device_id: String,
+    device_public_key: String,
+    device_signing_public_key: String,
     origin: String,
     secret_id: String,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct QueryGrantPayload {
-    #[serde(flatten)]
-    grant: VaultGrant,
+    vault_store_id: String,
+    device_id: String,
+    device_public_key: String,
+    device_signing_public_key: String,
     query: String,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SecretIdGrantPayload {
-    #[serde(flatten)]
-    grant: VaultGrant,
+    vault_store_id: String,
+    device_id: String,
+    device_public_key: String,
+    device_signing_public_key: String,
     secret_id: String,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct OtpauthPayload {
     otpauth_uri: SessionSecretText,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct OtpauthGrantPayload {
-    #[serde(flatten)]
-    grant: VaultGrant,
+    vault_store_id: String,
+    device_id: String,
+    device_public_key: String,
+    device_signing_public_key: String,
     otpauth_uri: SessionSecretText,
     origin: String,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct BackupAttachPayload {
-    #[serde(flatten)]
-    grant: VaultGrant,
+    vault_store_id: String,
+    device_id: String,
+    device_public_key: String,
+    device_signing_public_key: String,
     secret_id: String,
     codes: Vec<SessionSecretText>,
     #[tsify(type = "'replace' | 'merge'")]
@@ -311,9 +326,12 @@ pub struct BackupAttachPayload {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct LoginSavePlanPayload {
-    #[serde(flatten)]
-    grant: VaultGrant,
+    vault_store_id: String,
+    device_id: String,
+    device_public_key: String,
+    device_signing_public_key: String,
     origin: String,
     username: SessionSecretText,
     password: SessionSecretText,
@@ -321,13 +339,14 @@ pub struct LoginSavePlanPayload {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields)]
 pub struct OriginPayload {
     origin: String,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct LoginSaveActionPayload {
     origin: String,
     offer_id: String,
@@ -335,24 +354,26 @@ pub struct LoginSaveActionPayload {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GrantedLoginSaveActionPayload {
-    #[serde(flatten)]
-    grant: VaultGrant,
+    vault_store_id: String,
+    device_id: String,
+    device_public_key: String,
+    device_signing_public_key: String,
     origin: String,
     offer_id: String,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct RequestPayload {
     request_id: String,
     queue: QueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct DirectLoginSaveActionPayload {
     origin: String,
     offer_id: String,
@@ -360,24 +381,26 @@ pub struct DirectLoginSaveActionPayload {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct DirectRequestPayload {
     request_id: String,
     queue: MessageDefaultQueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PasskeyCeremonyPayload {
-    #[serde(flatten)]
-    grant: VaultGrant,
+    vault_store_id: String,
+    device_id: String,
+    device_public_key: String,
+    device_signing_public_key: String,
     request_id: String,
     request_json: SessionSecretText,
     queue: PasskeyCeremonyQueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(tag = "type", content = "payload")]
+#[serde(deny_unknown_fields, tag = "type", content = "payload")]
 pub enum ExtensionSessionRequest {
     #[serde(rename = "nook:extension-session-reset")]
     Reset(EmptyPayload),
@@ -835,6 +858,20 @@ mod tests {
             ),
             ExtensionSessionRequestValidation::Rejected
         );
+    }
+
+    #[test]
+    fn every_session_request_rejects_fields_outside_its_variant() {
+        for request in [
+            r#"{"type":"nook:extension-session-plan-login-save","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","origin":"https://example.com","username":"alice","password":"password","otpauthUri":"otpauth://totp/foreign","queue":{"kind":"message-default"}}}"#,
+            r#"{"type":"nook:extension-session-status","payload":{"queue":{"kind":"message-default"},"requestJson":"{}"}}"#,
+            r#"{"type":"nook:extension-session-status","payload":{"queue":{"kind":"message-default"}},"codes":["foreign"]}"#,
+        ] {
+            assert_eq!(
+                validate_extension_session_request_json(request),
+                ExtensionSessionRequestValidation::Rejected
+            );
+        }
     }
 
     #[test]

@@ -25,6 +25,7 @@ import {
   sendDecodedRuntimeMessage,
   sendLoginOptionsRuntimeMessage,
   sendLoginPickerOpenRuntimeMessage,
+  sendLoginSaveOfferRuntimeMessage,
   sendGeneratePasswordRuntimeMessage,
 } from '../src/content/autofill/runtime-message-adapter'
 
@@ -96,6 +97,24 @@ describe('runtime message adapters', () => {
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
     const delivery = await sendLoginOptionsRuntimeMessage(message)
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
+  })
+
+  test('rejects contradictory login-save offers in Rust', async () => {
+    const response = {
+      kind: 'offer-available',
+      offer: {
+        offerId: 'offer-1',
+        decision: 0,
+        vaultStoreId: 'vault-1',
+        vaultName: 'Personal',
+      },
+      reason: 'login-save-plan-failed',
+    }
+    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+
+    const delivery = await sendLoginSaveOfferRuntimeMessage(message)
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })

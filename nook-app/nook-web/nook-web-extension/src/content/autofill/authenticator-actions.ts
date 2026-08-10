@@ -64,7 +64,10 @@ export async function fillAuthenticatorCode({
     return false
   }
   const { response } = delivery
-  if (response.kind !== AuthenticatorCodeResponseKind.Ready) {
+  if (
+    response.kind !== AuthenticatorCodeResponseKind.Ready ||
+    !('code' in response)
+  ) {
     const nookTypedArgs0_2: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,

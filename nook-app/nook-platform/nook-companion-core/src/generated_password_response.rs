@@ -3,12 +3,36 @@
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
+use zeroize::Zeroize;
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[derive(Debug, Deserialize, Serialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "string")]
+pub struct GeneratedPasswordSecret(String);
+
+impl GeneratedPasswordSecret {
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl Zeroize for GeneratedPasswordSecret {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+impl Drop for GeneratedPasswordSecret {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+#[derive(Debug, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct GeneratedPasswordWire {
     ok: bool,
-    password: String,
+    password: GeneratedPasswordSecret,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
@@ -18,7 +42,7 @@ pub struct GeneratedPasswordRejectedWire {
     reason: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[derive(Debug, Deserialize, Tsify)]
 #[serde(untagged)]
 #[tsify(from_wasm_abi)]
 pub enum GeneratedPasswordResponseWire {
@@ -42,13 +66,13 @@ impl Serialize for GeneratedPasswordResponseKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Debug, Serialize, Tsify)]
 #[serde(untagged)]
 #[tsify(into_wasm_abi)]
 pub enum GeneratedPasswordResponse {
     Generated {
         kind: GeneratedPasswordResponseKind,
-        password: String,
+        password: GeneratedPasswordSecret,
     },
     Rejected {
         kind: GeneratedPasswordResponseKind,

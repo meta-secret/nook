@@ -12,13 +12,7 @@ import {
   WebsiteLoginSaveActionResponseKind,
   WebsiteLoginSaveOfferResponseKind,
   WebsiteLoginSavePendingState,
-  isWebsiteLoginSaveActionResponse,
-  isWebsiteLoginSaveOfferResponse,
-  isWebsiteLoginSavePendingResponse,
-  type WebsiteLoginSaveActionResponse,
   type WebsiteLoginSaveOfferView,
-  type WebsiteLoginSaveOfferResponse,
-  type WebsiteLoginSavePendingResponse,
 } from '../../lib/login-save-messages'
 import type {
   AuthenticationOutcomeObservationView,
@@ -26,9 +20,10 @@ import type {
 } from '../../lib/outcome-evidence-messages'
 import {
   RuntimeMessageDeliveryKind,
-  type DecodedRuntimeMessageArgs,
   sendAuthenticationOutcomeRuntimeMessage,
-  sendDecodedRuntimeMessage,
+  sendLoginSaveActionRuntimeMessage,
+  sendLoginSaveOfferRuntimeMessage,
+  sendLoginSavePendingRuntimeMessage,
   sendRuntimeMessageWithoutResponse,
 } from './login-passkey-actions'
 import {
@@ -120,13 +115,14 @@ function collectOutcomeObservation({
 async function classifyOutcomeEvidence(
   observation: AuthenticationOutcomeObservationView,
 ): Promise<AuthenticationOutcomeRead> {
-  const message = {
-    type: 'nook:authentication-outcome-classify',
-    payload: {
-      observation,
-      timeoutMs: OUTCOME_EVIDENCE_TIMEOUT_MS,
-    },
-  }
+  const message: Parameters<typeof sendAuthenticationOutcomeRuntimeMessage>[0] =
+    {
+      type: 'nook:authentication-outcome-classify',
+      payload: {
+        observation,
+        timeoutMs: OUTCOME_EVIDENCE_TIMEOUT_MS,
+      },
+    }
   const sendMessage: Parameters<
     typeof sendAuthenticationOutcomeRuntimeMessage
   >[0] = message
@@ -216,7 +212,7 @@ export function beginPendingSaveWatch(offer: WebsiteLoginSaveOfferView): void {
 async function stageSaveForCredentials(
   credentials: LoginCredentials,
 ): Promise<void> {
-  const message = {
+  const message: Parameters<typeof sendLoginSaveOfferRuntimeMessage>[0] = {
     type: 'nook:website-login-save-offer',
     payload: {
       origin: location.origin,
@@ -224,12 +220,7 @@ async function stageSaveForCredentials(
       password: credentials.password,
     },
   }
-  const sendArgs: DecodedRuntimeMessageArgs<WebsiteLoginSaveOfferResponse> = {
-    message,
-    decode: isWebsiteLoginSaveOfferResponse,
-  }
-  const delivery =
-    await sendDecodedRuntimeMessage<WebsiteLoginSaveOfferResponse>(sendArgs)
+  const delivery = await sendLoginSaveOfferRuntimeMessage(message)
   credentials.password = ''
   credentials.username = ''
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -271,20 +262,17 @@ export type PendingSaveOfferLoad =
   | { kind: PendingSaveOfferLoadKind.Loaded; offer: WebsiteLoginSaveOfferView }
 
 export async function loadPendingSaveOffer(): Promise<PendingSaveOfferLoad> {
-  const message = {
+  const message: Parameters<typeof sendLoginSavePendingRuntimeMessage>[0] = {
     type: 'nook:website-login-save-pending',
     payload: { origin: location.origin },
   }
-  const sendArgs: DecodedRuntimeMessageArgs<WebsiteLoginSavePendingResponse> = {
-    message,
-    decode: isWebsiteLoginSavePendingResponse,
-  }
-  const delivery =
-    await sendDecodedRuntimeMessage<WebsiteLoginSavePendingResponse>(sendArgs)
+  const delivery = await sendLoginSavePendingRuntimeMessage(message)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok ||
-    delivery.response.state !== WebsiteLoginSavePendingState.Available
+    !('state' in delivery.response) ||
+    delivery.response.state !== WebsiteLoginSavePendingState.Available ||
+    !('offer' in delivery.response)
   )
     return { kind: PendingSaveOfferLoadKind.Absent }
   const { response } = delivery
@@ -407,7 +395,7 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
       ),
     )
     evidence.elapsedMs = 0
-    const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
+    const message: Parameters<typeof sendLoginSaveActionRuntimeMessage>[0] = {
       type: 'nook:website-login-save-commit',
       payload: {
         origin: location.origin,
@@ -415,12 +403,7 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
         evidence,
       },
     }
-    const sendArgs: DecodedRuntimeMessageArgs<WebsiteLoginSaveActionResponse> =
-      {
-        message,
-        decode: isWebsiteLoginSaveActionResponse,
-      }
-    void sendDecodedRuntimeMessage<WebsiteLoginSaveActionResponse>(sendArgs)
+    void sendLoginSaveActionRuntimeMessage(message)
       .then((delivery) => {
         if (
           delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||

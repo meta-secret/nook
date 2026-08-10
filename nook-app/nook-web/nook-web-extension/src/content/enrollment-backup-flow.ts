@@ -150,6 +150,7 @@ function showBackupModeChooser({
           delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
           delivery.response.kind ===
             AuthenticatorBackupAttachResponseKind.Rejected &&
+          'reason' in delivery.response &&
           delivery.response.reason === 'authenticator-locked'
         ) {
           const nookTypedArgs0_48: Parameters<typeof setHostDescription>[0] = {
@@ -340,7 +341,10 @@ async function continueBackupWithAuthenticatorOptions({
       return
     }
 
-    if (response.kind !== AuthenticatorOptionsResponseKind.Ready) {
+    if (
+      response.kind !== AuthenticatorOptionsResponseKind.Ready ||
+      !('accounts' in response)
+    ) {
       const nookTypedArgs0_66: Parameters<typeof setHostDescription>[0] = {
         host,
         text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupFailed),
