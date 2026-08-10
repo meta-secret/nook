@@ -9,13 +9,23 @@ use crate::typescript_discriminants::{
 };
 
 mod language_dispatch;
+mod literal_nodes;
 mod source_files;
+mod svelte_fragments;
 mod svelte_raw_discriminants;
 use language_dispatch::{
     generic_optional_state_lines, mutable_void_state_lines, null_token_lines,
     raw_string_discriminant_lines, undefined_token_lines,
 };
+use literal_nodes::{
+    is_string_literal_type, is_type_utility_key_union, string_literal_value,
+    union_contains_direct_string_literal,
+};
 use source_files::collect_authored_source_files;
+use svelte_fragments::{
+    svelte_generic_optional_state_lines, svelte_mutable_void_state_lines,
+    svelte_null_token_lines, svelte_undefined_token_lines,
+};
 use svelte_raw_discriminants::svelte_raw_string_discriminant_lines;
 
 /// Finds every authored JavaScript, TypeScript, and Svelte use of `undefined`
@@ -385,84 +395,6 @@ fn collect_enum_string_values(
     }
 }
 
-fn string_literal_value<'a>(node: tree_sitter::Node<'_>, source: &'a str) -> Option<&'a str> {
-    if !is_string_literal_expression(node) {
-        return None;
-    }
-    node.utf8_text(source.as_bytes())
-        .ok()
-        .and_then(|text| text.get(1..text.len().saturating_sub(1)))
-}
-
-fn is_string_literal_expression(node: tree_sitter::Node<'_>) -> bool {
-    node.kind() == "string"
-        || (node.kind() == "template_string" && !contains_template_substitution(node))
-}
-
-fn contains_template_substitution(node: tree_sitter::Node<'_>) -> bool {
-    if node.kind() == "template_substitution" {
-        return true;
-    }
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor)
-        .any(contains_template_substitution)
-}
-
-fn union_contains_direct_string_literal(node: tree_sitter::Node<'_>, source: &str) -> bool {
-    if is_string_literal_type(node, source) {
-        return true;
-    }
-    if !matches!(node.kind(), "union_type" | "parenthesized_type") {
-        return false;
-    }
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor)
-        .any(|child| union_contains_direct_string_literal(child, source))
-}
-
-fn is_type_utility_key_union(node: tree_sitter::Node<'_>, source: &str) -> bool {
-    let mut ancestor = node;
-    let type_arguments = loop {
-        let Some(parent) = ancestor.parent() else {
-            return false;
-        };
-        if parent.kind() == "type_arguments" {
-            break parent;
-        }
-        if !matches!(parent.kind(), "union_type" | "parenthesized_type") {
-            return false;
-        }
-        ancestor = parent;
-    };
-    let Some(generic_type) = type_arguments.parent() else {
-        return false;
-    };
-    if generic_type.kind() != "generic_type" {
-        return false;
-    }
-    let utility_name = generic_type
-        .child_by_field_name("name")
-        .or_else(|| generic_type.named_child(0))
-        .and_then(|name| name.utf8_text(source.as_bytes()).ok());
-    utility_name.is_some_and(|name| {
-        matches!(
-            name.trim(),
-            "Exclude" | "Extract" | "Omit" | "Pick" | "Record"
-        )
-    })
-}
-
-fn is_string_literal_type(node: tree_sitter::Node<'_>, source: &str) -> bool {
-    if node.kind() == "literal_type" {
-        return node
-            .utf8_text(source.as_bytes())
-            .is_ok_and(|text| matches!(text.trim().chars().next(), Some('\'' | '"' | '`')));
-    }
-    matches!(node.kind(), "type_annotation" | "parenthesized_type")
-        && node
-            .named_child(0)
-            .is_some_and(|child| is_string_literal_type(child, source))
-}
 
 fn typescript_code_generic_optional_state_lines(
     source: &str,
@@ -641,178 +573,6 @@ fn is_undefined_string(node: tree_sitter::Node<'_>, source: &str) -> bool {
         && node.utf8_text(source.as_bytes()).is_ok_and(|text| {
             matches!(text.trim(), "'undefined'" | "\"undefined\"" | "`undefined`")
         })
-}
-
-fn svelte_undefined_token_lines(source: &str) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
-    let Some(tree) = parser.parse(source, None) else {
-        return Ok(Vec::new());
-    };
-    let mut lines = Vec::new();
-    collect_svelte_script_fragments(tree.root_node(), source, &mut lines)?;
-    lines.sort_unstable();
-    lines.dedup();
-    Ok(lines)
-}
-
-fn svelte_null_token_lines(source: &str) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
-    let Some(tree) = parser.parse(source, None) else {
-        return Ok(Vec::new());
-    };
-    let mut lines = Vec::new();
-    collect_svelte_script_fragments_with(
-        tree.root_node(),
-        source,
-        &mut lines,
-        typescript_code_null_token_lines,
-    )?;
-    collect_svelte_null_fragments(tree.root_node(), source, &mut lines)?;
-    lines.sort_unstable();
-    lines.dedup();
-    Ok(lines)
-}
-
-fn svelte_mutable_void_state_lines(source: &str) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
-    let Some(tree) = parser.parse(source, None) else {
-        return Ok(Vec::new());
-    };
-    let mut lines = Vec::new();
-    collect_svelte_mutable_void_fragments(tree.root_node(), source, &mut lines)?;
-    lines.sort_unstable();
-    lines.dedup();
-    Ok(lines)
-}
-
-fn svelte_generic_optional_state_lines(
-    source: &str,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
-    let Some(tree) = parser.parse(source, None) else {
-        return Ok(Vec::new());
-    };
-    let mut lines = Vec::new();
-    collect_svelte_script_fragments_with(
-        tree.root_node(),
-        source,
-        &mut lines,
-        typescript_code_generic_optional_state_lines,
-    )?;
-    lines.sort_unstable();
-    lines.dedup();
-    Ok(lines)
-}
-
-fn collect_svelte_script_fragments_with(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    lines: &mut Vec<usize>,
-    scan: fn(&str, usize) -> Result<Vec<usize>, tree_sitter::LanguageError>,
-) -> Result<(), tree_sitter::LanguageError> {
-    if node.kind() == "raw_text"
-        && node
-            .parent()
-            .is_some_and(|parent| parent.kind() == "script_element")
-    {
-        if let Ok(fragment) = node.utf8_text(source.as_bytes()) {
-            lines.extend(scan(fragment, node.start_position().row + 1)?);
-        }
-        return Ok(());
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_svelte_script_fragments_with(child, source, lines, scan)?;
-    }
-    Ok(())
-}
-
-fn collect_svelte_mutable_void_fragments(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    lines: &mut Vec<usize>,
-) -> Result<(), tree_sitter::LanguageError> {
-    if node.kind() == "raw_text"
-        && node
-            .parent()
-            .is_some_and(|parent| parent.kind() == "script_element")
-    {
-        if let Ok(fragment) = node.utf8_text(source.as_bytes()) {
-            lines.extend(typescript_code_mutable_void_state_lines(
-                fragment,
-                node.start_position().row + 1,
-            )?);
-        }
-        return Ok(());
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_svelte_mutable_void_fragments(child, source, lines)?;
-    }
-    Ok(())
-}
-
-fn collect_svelte_null_fragments(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    lines: &mut Vec<usize>,
-) -> Result<(), tree_sitter::LanguageError> {
-    if (node.kind() == "raw_text"
-        && node
-            .parent()
-            .is_some_and(|parent| parent.kind() == "script_element"))
-        || node.kind() == "svelte_raw_text"
-    {
-        if let Ok(fragment) = node.utf8_text(source.as_bytes()) {
-            lines.extend(typescript_code_null_token_lines(
-                fragment,
-                node.start_position().row + 1,
-            )?);
-        }
-        return Ok(());
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_svelte_null_fragments(child, source, lines)?;
-    }
-    Ok(())
-}
-
-fn collect_svelte_script_fragments(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    lines: &mut Vec<usize>,
-) -> Result<(), tree_sitter::LanguageError> {
-    if node.kind() == "raw_text"
-        && node
-            .parent()
-            .is_some_and(|parent| parent.kind() == "script_element")
-    {
-        if let Ok(fragment) = node.utf8_text(source.as_bytes()) {
-            lines.extend(typescript_code_undefined_token_lines(
-                fragment,
-                node.start_position().row + 1,
-            )?);
-        }
-        return Ok(());
-    }
-    if node.child_count() == 0
-        && node
-            .utf8_text(source.as_bytes())
-            .is_ok_and(|text| text == "undefined")
-    {
-        lines.push(node.start_position().row + 1);
-        return Ok(());
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_svelte_script_fragments(child, source, lines)?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]

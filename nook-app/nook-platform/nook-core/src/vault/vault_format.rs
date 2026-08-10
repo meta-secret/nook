@@ -2,54 +2,13 @@ use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml as VaultYamlBlob};
 use crate::{PasswordUnlockEntry, StoredSecretRecord, VaultArchitecture, VaultUnlock};
 
+mod model;
 mod vault_yaml;
+
+pub use model::*;
 use vault_yaml::{
     StoredVaultYaml, auth_to_stored_record, members_to_stored_record, partition_yaml_records,
 };
-
-/// On-disk vault serialization format.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultFormat {
-    Yaml,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum VaultStoreIdentity {
-    Unassigned,
-    Assigned(String),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultStoreIdentityRef<'a> {
-    Unassigned,
-    Assigned(&'a str),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum VaultName {
-    Unnamed,
-    Named(String),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultNameRef<'a> {
-    Unnamed,
-    Named(&'a str),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultVersionWrite {
-    Initial,
-    Version(u64),
-}
-
-impl VaultFormat {
-    #[must_use]
-    pub fn from_path(path: &str) -> Self {
-        let _ = path;
-        Self::Yaml
-    }
-}
 
 /// Detect stored vault format from file contents.
 pub fn detect_stored_format(stored: &str) -> VaultFormatResult<VaultFormat> {
