@@ -689,21 +689,23 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
     assert_eq!(
         warmup
             .matches(
-                "cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass",
+                "cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass",
             )
             .count(),
         1,
         "coverage dependencies must be warmed in one instrumented build"
     );
     assert!(warmup.contains(
-        "cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass"
+        "cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass"
     ));
     assert!(
         source_dockerfile
             .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common")
     );
     assert!(
-        source_dockerfile.contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2")
+        source_dockerfile.contains(
+            "cargo llvm-cov nextest --no-clean --profile ci -p nook-authenticator-domain -p nook-auth2"
+        )
     );
     assert!(
         source_dockerfile
@@ -730,6 +732,7 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
         "\"nook-companion-core/Cargo.toml\" \"nook-companion-core/src\"",
         "\"nook-app-common/Cargo.toml\" \"nook-app-common/src\" \"nook-app-common/locales\"",
         "\"nook-core/Cargo.toml\" \"nook-core/src\"",
+        "\"nook-authenticator-domain/Cargo.toml\" \"nook-authenticator-domain/src\"",
         "\"nook-auth2/Cargo.toml\" \"nook-auth2/src\"",
         "\"nook-replication/Cargo.toml\" \"nook-replication/src\"",
         "\"nook-event-log/Cargo.toml\" \"nook-event-log/src\"",
