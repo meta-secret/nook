@@ -20,6 +20,11 @@ description: >-
 
 Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting. Follow the steps in the cortex doc — fetch, publish the Workbench task plan before implementation, branch, implement, **always `task loom:pre-push`**, commit and push, use `task remote` for focused hosted execution, run `task loom:pr-land` / `task pr:validate` when the head is ready, address and resolve every actionable comment already present, fix loop until exact-head checks are green, squash merge, publish the Workbench issue update/linked worklog/statistics, and report duration. Never request or wait for external reviews/checks. Never run heavy product work locally.
 
+Before any mutation, apply
+[agent-feature-ownership](../agent-feature-ownership/SKILL.md). Work only on the
+current task's assigned feature and focused issues. Treat every other active
+task as read-only unless an explicit handoff transfers ownership.
+
 Before implementation, estimate authored changed lines and identify the owning
 module or layer. Target no more than 5,000 authored changed lines per PR. Split
 larger features into ordered Workbench issues and independently mergeable PRs.

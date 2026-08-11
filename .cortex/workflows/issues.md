@@ -199,6 +199,8 @@ dependencies, related PRs, and recent worklogs.
 Agents must not:
 
 - claim or reassign another active owner's `in_progress` work;
+- mutate branches, pull requests, reviews, checks, or merge state owned by
+  another active task;
 - mark acceptance criteria done without validation evidence;
 - delete prior findings, failed approaches, blockers, or decisions;
 - switch `automation: agent` or `status: ready` merely to organize a draft;
@@ -206,8 +208,16 @@ Agents must not:
 - store credentials, secrets, vault data, private user information, environment
   values, or raw logs in any record.
 
-When overlap is uncertain, append the finding to the likely issue and leave it
-`proposed` rather than creating a competing execution record.
+When overlap involves another active owner, report the finding without changing
+their record.
+
+When no active owner exists, add the finding to the likely issue. Leave a new
+record `proposed` rather than creating competing execution state.
+
+Related scope does not transfer ownership. An explicit user, owner, or
+orchestrator handoff is required before another agent may mutate the feature or
+its focused issues. See
+[agent-feature-ownership.md](../dynamic-skills/agent-feature-ownership.md).
 
 ## Task-start plan requirement
 

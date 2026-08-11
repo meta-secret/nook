@@ -132,7 +132,15 @@ retained local state. See [remote-execution.md](remote-execution.md).
 
 Default agent flow:
 
-1. **Record the interpreted task first** — fetch `origin/main`, then publish `plans/<feature>/<timestamp>-<task>.md` before implementation edits. Capture synthesized requirements, constraints, initial steps, and completion evidence; raw prompts and transcripts are forbidden.
+1. **Confirm ownership and record the interpreted task.**
+   - Identify the assigned feature and focused issue set.
+   - Treat every other active task as read-only.
+   - Fetch `origin/main`.
+   - Publish `plans/<feature>/<timestamp>-<task>.md` before implementation
+     edits.
+   - Capture synthesized requirements, constraints, initial steps, and
+     completion evidence.
+   - Do not copy raw prompts or transcripts.
 2. **Prepare the PR path** — branch from `origin/main` and plan the PR title/scope.
 3. **Implement** — use the focused hosted catalog when build/test feedback is useful.
 4. **Pre-push hygiene** — always `task loom:pre-push`.
@@ -163,7 +171,9 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
 ## How it works
 
 0. **Interpret the request** — Identify the important requirements without copying the raw prompt or chat.
-1. **Fetch and publish the task plan:**
+1. **Confirm ownership, fetch, and publish the task plan:**
+   - Identify the assigned feature and focused issues.
+   - Leave every other active task unchanged.
    - Sync with remote.
    - Estimate authored changed lines.
    - Identify module and interface boundaries.
@@ -211,6 +221,13 @@ Finish only when the full feature acceptance criteria are complete.
 
 See
 [pull-requests.md § Pull request size and modularity](pull-requests.md#pull-request-size-and-modularity).
+
+All branch, PR, review, check, and merge actions in this flow apply only to the
+current task's owned feature and focused issue set.
+
+Do not take over a related task merely because it has open comments or failing
+checks. Require an explicit handoff first. See
+[agent-feature-ownership.md](../dynamic-skills/agent-feature-ownership.md).
 
 ```mermaid
 flowchart TD

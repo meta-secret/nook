@@ -99,6 +99,56 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
 }
 
 #[test]
+fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> {
+    let agent_map = read(".cortex/AGENTS.md");
+    let coding_workflow = read(".cortex/workflows/coding-bro.md");
+    let issue_workflow = read(".cortex/workflows/issues.md");
+    let pull_request_workflow = read(".cortex/workflows/pull-requests.md");
+    let ownership_skill = read(".cortex/dynamic-skills/agent-feature-ownership.md");
+
+    for required in [
+        "agents mutate only their owned feature",
+        "Another active agent's work is read-only",
+        "wait for an explicit user, owner, or orchestrator handoff",
+    ] {
+        assert!(
+            agent_map.contains(required),
+            "agent map is missing ownership guard: {required}"
+        );
+    }
+
+    for required in [
+        "Treat every other active task as read-only",
+        "current task's owned feature and focused issue set",
+        "Require an explicit handoff first",
+    ] {
+        assert!(
+            coding_workflow.contains(required),
+            "coding workflow is missing ownership guard: {required}"
+        );
+    }
+
+    assert!(
+        issue_workflow.contains("Related scope does not transfer ownership")
+            && issue_workflow.contains("mutate branches, pull requests, reviews, checks"),
+        "Workbench issue guidance must protect active task ownership"
+    );
+    assert!(
+        pull_request_workflow
+            .contains("Another active task's branch and pull request are read-only")
+            && pull_request_workflow.contains("without an explicit handoff"),
+        "pull-request workflow must reject foreign task mutation"
+    );
+    assert!(
+        ownership_skill.contains("reply to or resolve its review threads")
+            && ownership_skill.contains("close, reopen, or merge its pull request")
+            && ownership_skill.contains("Recheck ownership before every remote mutation"),
+        "agent feature ownership skill must cover PR and review mutations"
+    );
+    Ok(())
+}
+
+#[test]
 fn statistics_leave_the_product_repository() -> anyhow::Result<()> {
     let collector = read(".github/workflows/main-build-stats.yml");
     let publisher = read(".github/scripts/workbench-publish.cjs");

@@ -343,6 +343,31 @@ and procedural-macro entrypoints. Full contract:
 
 **All pull requests merged into `main` MUST be squash-merged** (GitHub: **Squash and merge**; CLI: `gh pr merge --squash`). One PR = one commit on `main`. Merge commits and rebase merges are **forbidden**. Full policy: [rules.md §6](rules.md#6-git--pull-request-workflow).
 
+## ⛔ Non-negotiable: agents mutate only their owned feature
+
+Every agent must stay inside its assigned feature and focused issue set.
+
+Another active agent's work is read-only.
+
+Without an explicit handoff, an agent must not:
+
+- edit or push to another task's branch;
+- change another task's Workbench records;
+- reply to or resolve another task's review threads;
+- change another task's PR labels, checks, open state, or merge state;
+- close, reopen, or merge another task's pull request.
+
+Related subject matter is not ownership.
+
+Before every remote mutation, verify that the target belongs to the current
+task's feature and issue set.
+
+If ownership is missing or ambiguous, stop mutating that target. Report the
+overlap and wait for an explicit user, owner, or orchestrator handoff.
+
+Full policy:
+[dynamic-skills/agent-feature-ownership.md](dynamic-skills/agent-feature-ownership.md).
+
 ## ⛔ Non-negotiable: implementation agents land their PRs
 
 Every task-owning implementation agent with GitHub write access must:
@@ -383,7 +408,11 @@ The bounded `agent-implement.yml` worker is not a continuing task owner.
 
 Its harness owns git/push/PR creation and exits after opening the PR.
 
-A continuing agent must take ownership of that PR and carry this lifecycle through merge.
+A continuing agent may accept that PR only when it is explicitly assigned the
+same feature and issue set.
+
+That handoff makes the continuing agent the task owner. It must carry the PR
+through merge.
 
 Full policy: [workflows/coding-bro.md](workflows/coding-bro.md).
 
