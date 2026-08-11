@@ -171,7 +171,17 @@ describe('extension pairing approved message', () => {
     {
       eventId: 'event-1',
       path: 'events/event-1.yaml',
-      event: { schema_version: 1 },
+      event: {
+        schema_version: 2,
+        store_id: 'store-1',
+        actor_id: `key_${'0'.repeat(64)}`,
+        actor_signing_public_key: '0'.repeat(64),
+        parents: [],
+        created_at: '2026-07-07T00:00:00.000Z',
+        key_epoch: 'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
+        operations: [{ type: 'vault-cleared' as const }],
+        signature: `ed25519:${'0'.repeat(128)}`,
+      },
     },
   ]
 
