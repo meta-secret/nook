@@ -95,10 +95,20 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       'device_signing_public_key',
     )
     const initialHandoffNonce = connectUrl.searchParams.get('nonce')
-    expect(extensionDeviceId).toBeTruthy()
-    expect(extensionDevicePublicKey).toBeTruthy()
-    expect(extensionDeviceSigningPublicKey).toBeTruthy()
-    expect(initialHandoffNonce).toBeTruthy()
+    if (extensionDeviceId === null) {
+      throw new Error('Extension connection URL omitted the device ID.')
+    }
+    if (extensionDevicePublicKey === null) {
+      throw new Error('Extension connection URL omitted the device public key.')
+    }
+    if (extensionDeviceSigningPublicKey === null) {
+      throw new Error(
+        'Extension connection URL omitted the device signing public key.',
+      )
+    }
+    if (initialHandoffNonce === null) {
+      throw new Error('Extension connection URL omitted the handoff nonce.')
+    }
 
     await advanceCreateVaultWizardToFinalStep(simplePage)
     await simplePage
@@ -298,12 +308,16 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect
       .poll(async () => {
         const entries = await readPersistedAppLogs(reopenedVaultPage)
-        return (entries ?? []).filter(
-          (entry) =>
-            entry.scope === 'vault-lifecycle' &&
-            entry.message === 'extension identity adopted' &&
-            entry.data?.includes(extensionDeviceId ?? '') === true,
-        ).length
+        return entries.filter((entry) => {
+          if (
+            entry.scope !== 'vault-lifecycle' ||
+            entry.message !== 'extension identity adopted' ||
+            typeof entry.data !== 'string'
+          ) {
+            return false
+          }
+          return entry.data.includes(extensionDeviceId)
+        }).length
       })
       .toBe(2)
 
@@ -489,12 +503,16 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect
       .poll(async () => {
         const entries = await readPersistedAppLogs(reopenedVaultPage)
-        return (entries ?? []).filter(
-          (entry) =>
-            entry.scope === 'vault-lifecycle' &&
-            entry.message === 'extension identity adopted' &&
-            entry.data?.includes(extensionDeviceId ?? '') === true,
-        ).length
+        return entries.filter((entry) => {
+          if (
+            entry.scope !== 'vault-lifecycle' ||
+            entry.message !== 'extension identity adopted' ||
+            typeof entry.data !== 'string'
+          ) {
+            return false
+          }
+          return entry.data.includes(extensionDeviceId)
+        }).length
       })
       .toBe(3)
     if (
