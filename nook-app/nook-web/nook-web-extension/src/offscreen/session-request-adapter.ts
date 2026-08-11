@@ -319,8 +319,7 @@ export async function parseExtensionSessionRequest(
     return { kind: ExtensionSessionRequestParseKind.Invalid }
   }
   const request = ingressStage.request
-  const defaultExpiresAt =
-    Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS
+  const defaultExpiresAt = Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS
   const queue = request.payload.queue
   const expiresAt =
     queue.kind === ExtensionSessionQueueKind.Deadline
@@ -332,10 +331,13 @@ export async function parseExtensionSessionRequest(
   }
   let readinessTimer: ReturnType<typeof setTimeout> | undefined
   const expiry = new Promise<CompanionWasmReadinessKind>((resolve) => {
-    readinessTimer = setTimeout(() => {
-      clearExtensionSessionIngressRequest(request)
-      resolve(CompanionWasmReadinessKind.Expired)
-    }, Math.max(0, expiresAt - Date.now()))
+    readinessTimer = setTimeout(
+      () => {
+        clearExtensionSessionIngressRequest(request)
+        resolve(CompanionWasmReadinessKind.Expired)
+      },
+      Math.max(0, expiresAt - Date.now()),
+    )
   })
   try {
     const readiness = await Promise.race([

@@ -13,5 +13,5 @@ nook-web/nook-web-app/.env
 nook-web/nook-web-app/.env.local
 nook-web/nook-web-app/.env.*.local
 
-nook-web/nook-web-extension/node_modules/
+nook-web/nook-web-extension/node_modules
 nook-web/nook-web-extension/dist/

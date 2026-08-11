@@ -407,8 +407,7 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
       .then((delivery) => {
         if (
           delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-          delivery.response.kind !==
-            'completed'
+          delivery.response.kind !== 'completed'
         ) {
           description.textContent = translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed,
