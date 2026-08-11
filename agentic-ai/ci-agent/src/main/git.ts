@@ -30,29 +30,101 @@ export type AuthoredBudgetArgs = {
   maximumLines: number;
 };
 
-function renameDestinationPath(rawPath: string): string {
-  const compactRename = rawPath.replace(/\{[^{}]* => ([^{}]*)\}/g, "$1");
-  const fullRenameSeparator = compactRename.lastIndexOf(" => ");
-  return fullRenameSeparator === -1
-    ? compactRename
-    : compactRename.slice(fullRenameSeparator + " => ".length);
+enum NumstatRecordParseKind {
+  End = "end",
+  Malformed = "malformed",
+  Valid = "valid",
+}
+
+type NumstatRecordParseResult =
+  | { kind: NumstatRecordParseKind.End }
+  | { kind: NumstatRecordParseKind.Malformed; nextIndex: number }
+  | {
+      kind: NumstatRecordParseKind.Valid;
+      nextIndex: number;
+      added: string;
+      deleted: string;
+      destinationPath: string;
+    };
+
+type ParseNumstatRecordArgs = {
+  records: string[];
+  index: number;
+};
+
+function parseNumstatRecord(
+  args: ParseNumstatRecordArgs,
+): NumstatRecordParseResult {
+  const record = args.records.at(args.index);
+  if (typeof record !== "string" || record.length === 0) {
+    return { kind: NumstatRecordParseKind.End };
+  }
+  const firstTab = record.indexOf("\t");
+  const secondTab = record.indexOf("\t", firstTab + 1);
+  if (firstTab < 0 || secondTab < 0) {
+    return {
+      kind: NumstatRecordParseKind.Malformed,
+      nextIndex: args.index + 1,
+    };
+  }
+  const added = record.slice(0, firstTab);
+  const deleted = record.slice(firstTab + 1, secondTab);
+  const inlinePath = record.slice(secondTab + 1);
+  if (inlinePath.length > 0) {
+    return {
+      kind: NumstatRecordParseKind.Valid,
+      nextIndex: args.index + 1,
+      added,
+      deleted,
+      destinationPath: inlinePath,
+    };
+  }
+  const sourcePath = args.records.at(args.index + 1);
+  const destinationPath = args.records.at(args.index + 2);
+  if (
+    typeof sourcePath !== "string" ||
+    sourcePath.length === 0 ||
+    typeof destinationPath !== "string" ||
+    destinationPath.length === 0
+  ) {
+    return {
+      kind: NumstatRecordParseKind.Malformed,
+      nextIndex: args.records.length,
+    };
+  }
+  return {
+    kind: NumstatRecordParseKind.Valid,
+    nextIndex: args.index + 3,
+    added,
+    deleted,
+    destinationPath,
+  };
 }
 
 export function countAuthoredNumstat(numstat: string): number {
   let total = 0;
-  for (const line of numstat.split("\n")) {
-    const [added, deleted, rawPath = ""] = line.split("\t");
-    const destinationPath = renameDestinationPath(rawPath);
-    const normalizedPath = `/${destinationPath.replaceAll("\\", "/")}`;
-    const filename = normalizedPath.split("/").at(-1) || "";
+  const records = numstat.split("\0");
+  let index = 0;
+  while (index < records.length) {
+    const parseArgs: ParseNumstatRecordArgs = { records, index };
+    const parsed = parseNumstatRecord(parseArgs);
+    if (parsed.kind === NumstatRecordParseKind.End) break;
+    index = parsed.nextIndex;
+    if (parsed.kind === NumstatRecordParseKind.Malformed) continue;
+    const normalizedPath = `/${parsed.destinationPath.replaceAll("\\", "/")}`;
+    const filename = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1);
     const reportedOnly =
       REPORTED_ONLY_FILENAMES.has(filename) ||
       normalizedPath.endsWith(".snap") ||
       REPORTED_ONLY_PATH_PARTS.some((part) => normalizedPath.includes(part));
-    if (reportedOnly || !/^\d+$/.test(added) || !/^\d+$/.test(deleted)) {
+    if (
+      reportedOnly ||
+      !/^\d+$/.test(parsed.added) ||
+      !/^\d+$/.test(parsed.deleted)
+    ) {
       continue;
     }
-    total += Number(added) + Number(deleted);
+    total += Number(parsed.added) + Number(parsed.deleted);
   }
   return total;
 }
@@ -67,6 +139,7 @@ export async function assertAuthoredChangeBudget(
     "diff",
     "--cached",
     "--numstat",
+    "-z",
     "--find-renames",
     args.baseRef,
   ]);

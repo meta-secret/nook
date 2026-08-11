@@ -197,8 +197,9 @@ flowchart TD
   R -->|blocked| H
   R -->|ready| M[Squash merge PR]
   M --> S[Publish Workbench issue + worklog + stats]
-  S --> J
-  J --> K[Done]
+  S --> J{Feature acceptance complete?}
+  J -->|no, next issue ready| Z
+  J -->|yes| K[Done]
 ```
 
 ### 0. Fetch and branch

@@ -52,6 +52,22 @@ test('rejects transcript-shaped task plans', () => {
   assert.match(validateAgentRecord(transcript, 'plan'), /resembles a transcript/)
 })
 
+test('rejects punctuation-wrapped slice placeholders', () => {
+  const invalid = validPlan
+    .replace(
+      'Validator change; Acceptance evidence: Contract tests pass',
+      '**TBD.**; Acceptance evidence: Contract tests pass',
+    )
+    .replace(
+      'Validator change; Acceptance evidence: Contract tests pass',
+      '**TBD.**; Acceptance evidence: Contract tests pass',
+    )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /missing or empty plan field: Current PR slice and acceptance evidence/,
+  )
+})
+
 test('rejects an unlabeled verbatim excerpt from the source task', () => {
   const sourceTask =
     'Please preserve all important requirements by publishing this exact ordinary prose before the implementation phase begins.'

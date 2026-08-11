@@ -53,6 +53,14 @@ const planBudgetFields = [
 const placeholderPattern =
   /^(?:None|N\/A|Not applicable|TBD|Unknown|Unspecified|Pending|To be determined)$/i
 
+function isPlaceholder(value) {
+  const normalized = value
+    .trim()
+    .replace(/^[\s`*_~"'([{<]+/, '')
+    .replace(/[\s`*_~"'.,;:!?)}\]>]+$/, '')
+  return placeholderPattern.test(normalized)
+}
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -80,9 +88,7 @@ function parseSliceContract(value, numbered) {
   const scope = contractMatch[1].trim()
   const evidence = contractMatch[2].trim()
   return {
-    valid:
-      !placeholderPattern.test(scope) &&
-      !placeholderPattern.test(evidence),
+    valid: !isPlaceholder(scope) && !isPlaceholder(evidence),
     number,
     scope,
     evidence,
@@ -211,7 +217,7 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     const owningBoundary = budgetSection
       .match(/^- Owning modules, packages, or layers:\s*(.+)$/im)[1]
       .trim()
-    if (placeholderPattern.test(owningBoundary)) {
+    if (isPlaceholder(owningBoundary)) {
       return 'missing or empty plan field: Owning modules, packages, or layers'
     }
 
