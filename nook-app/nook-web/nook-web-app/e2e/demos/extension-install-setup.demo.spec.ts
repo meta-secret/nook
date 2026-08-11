@@ -184,9 +184,9 @@ test('offer browser extension install on vault home and in Devices', async ({
       .getAttribute('data-demo-extension-message-types')) ?? '[]',
   ) as string[]
   expect(routedTypesAfterSettings).toEqual([
-    'nook:extension-paired-vault-identity-discovery',
-    'nook:open-companion-launcher',
-    'nook:extension-paired-vault-identity-discovery',
+    extensionInstallDemoMessageTypes.pairedVaultIdentityDiscovery,
+    extensionInstallDemoMessageTypes.openCompanionLauncher,
+    extensionInstallDemoMessageTypes.pairedVaultIdentityDiscovery,
   ])
   await demoBeat(page)
 })
