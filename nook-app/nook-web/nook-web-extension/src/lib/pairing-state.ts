@@ -21,7 +21,7 @@ export type ExtensionSetupLoad =
   | { kind: ExtensionSetupLoadKind.Unavailable }
 
 export function isExtensionPairingStateQueryMessage(
-  message: object,
+  message: unknown,
 ): message is ExtensionPairingStateQueryMessage {
   return (
     !!message &&
@@ -38,7 +38,7 @@ export async function loadExtensionSetupState(): Promise<ExtensionSetupLoad> {
     const queryMessage: ExtensionPairingStateQueryMessage = {
       type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
     }
-    chrome.runtime.sendMessage(queryMessage, (runtimeResponse: object) => {
+    chrome.runtime.sendMessage(queryMessage, (runtimeResponse: unknown) => {
       const response = runtimeResponse as Partial<{
         ok: true
         setup: ExtensionReadySetupState

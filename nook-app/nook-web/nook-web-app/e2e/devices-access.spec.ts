@@ -12,6 +12,12 @@ enum PreviewTextKind {
   Present = 'present',
 }
 
+type DeviceAccessSnapshotFixture = {
+  passkeyName: NookDeviceAccessTextKind
+  providerLabel: NookDeviceAccessTextKind
+  protection: DeviceAccessProtectionKind
+}
+
 test.describe('devices and access dashboard', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
@@ -421,7 +427,7 @@ test.describe('devices and access dashboard', () => {
       const original = manager.deviceAccessSnapshotRequest
       manager.deviceAccessSnapshotRequest = () => {
         const request = original.call(manager) as {
-          resolve: () => Promise<object>
+          resolve: () => Promise<DeviceAccessSnapshotFixture>
         }
         const resolve = request.resolve.bind(request)
         request.resolve = async () => {
@@ -472,7 +478,7 @@ test.describe('devices and access dashboard', () => {
       const original = manager.deviceAccessSnapshotRequest
       manager.deviceAccessSnapshotRequest = () => {
         const request = original.call(manager) as {
-          resolve: () => Promise<object>
+          resolve: () => Promise<DeviceAccessSnapshotFixture>
         }
         const resolve = request.resolve.bind(request)
         request.resolve = async () => {

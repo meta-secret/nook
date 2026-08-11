@@ -92,7 +92,7 @@ Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/
   ([prefer-popular-libraries.md](../../.cortex/dynamic-skills/prefer-popular-libraries.md))
 - at most one function/method parameter; multi-value inputs use a typed object
   ([typescript-single-parameter.md](../../.cortex/dynamic-skills/typescript-single-parameter.md))
-- no authored `unknown` and no generic domain values; the only narrow
+- no authored `unknown`, `object`, or generic domain values; the only narrow
   exception is `UntrustedYamlNode` / `UntrustedYamlMap` inside YAML, JSON, or
   host-response adapters, where it must be decoded immediately into a domain
   value

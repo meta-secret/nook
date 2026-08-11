@@ -4,7 +4,7 @@ export type OriginRuntimeMessage = {
 }
 
 export function hasOriginPayload(
-  message: object,
+  message: unknown,
 ): message is OriginRuntimeMessage {
   return Boolean(
     message &&

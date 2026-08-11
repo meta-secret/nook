@@ -1,4 +1,5 @@
 import {
+  GeneratePasswordRequestType,
   isBeginExtensionPairingMessage,
   isExtensionIdentityHandoffRequestMessage,
   isExtensionLocalEventLogUpdatedMessage,
@@ -122,7 +123,7 @@ import {
 // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
 chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
-  const message = runtimeMessage as object
+  const message = runtimeMessage
   if (isExtensionPairingStateQueryMessage(message)) {
     const queryContext: Parameters<typeof handlePairingStateQuery>[0] = {
       sender,
@@ -345,7 +346,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:website-generate-password' &&
+    message.type === GeneratePasswordRequestType.NookWebsiteGeneratePassword &&
     'payload' in message &&
     typeof message.payload === 'object' &&
     message.payload &&
@@ -873,7 +874,7 @@ chrome.runtime.onMessageExternal.addListener(
   // eslint-disable-next-line max-params -- Chrome owns the external listener callback signature.
   (runtimeMessage, sender, sendResponse) => {
     if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
-    const message = runtimeMessage as object
+    const message = runtimeMessage
     if (isOpenCompanionLauncherMessage(message)) {
       if (!isNokeySender(sender)) {
         const nookTypedArgs0_18: Parameters<typeof sendResponse>[0] = {

@@ -5,6 +5,7 @@ import globals from 'globals'
 import ts from 'typescript-eslint'
 import { typedApiRules } from './typed-api-rules.js'
 import {
+  concreteObjectTypeRules,
   typedApiSourceFiles,
   untrustedInputAdapterFiles,
   untrustedInputAdapterRules,
@@ -105,6 +106,10 @@ export default [
         tsconfigRootDir: import.meta.dirname,
       },
     },
+  },
+  {
+    files: ['**/*.{ts,svelte}'],
+    rules: concreteObjectTypeRules,
   },
   {
     files: typedApiSourceFiles,

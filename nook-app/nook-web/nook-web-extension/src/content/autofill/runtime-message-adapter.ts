@@ -1,4 +1,34 @@
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
+import type { GeneratePasswordRequest } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import type { AuthenticationWorkflowSnapshotMessage } from '../../lib/auth-workflow-messages'
+import type {
+  AuthenticatorPickerCancelMessage,
+  WebsiteAuthenticatorPickerOpenMessage,
+} from '../../lib/authenticator-picker-messages'
+import type {
+  WebsiteAuthenticatorBackupAttachMessage,
+  WebsiteAuthenticatorEnrollCodeMessage,
+  WebsiteAuthenticatorEnrollConfirmMessage,
+  WebsiteAuthenticatorEnrollDismissMessage,
+  WebsiteAuthenticatorEnrollPreviewMessage,
+  WebsiteAuthenticatorEnrollStageMessage,
+} from '../../lib/enrollment-messages'
+import type {
+  WebsiteAuthenticatorFillMessage,
+  WebsiteAuthenticatorOptionsMessage,
+  WebsiteLoginOptionsMessage,
+} from '../../lib/login-fill-messages'
+import type {
+  LoginPickerCancelMessage,
+  WebsiteLoginPickerOpenMessage,
+} from '../../lib/login-picker-messages'
+import type {
+  WebsiteLoginSaveCommitMessage,
+  WebsiteLoginSaveDismissMessage,
+  WebsiteLoginSaveOfferMessage,
+  WebsiteLoginSavePendingMessage,
+} from '../../lib/login-save-messages'
+import type { AuthenticationOutcomeClassifyMessage } from '../../lib/outcome-evidence-messages'
 import {
   decodeLoginPickerOpenResponse,
   decodeAuthenticatorPickerOpenResponse,
@@ -53,6 +83,28 @@ export type RuntimeMessageDelivery<Response> =
   | { kind: RuntimeMessageDeliveryKind.Delivered; response: Response }
   | { kind: RuntimeMessageDeliveryKind.Unavailable }
 
+export type ExtensionRuntimeRequest =
+  | AuthenticationOutcomeClassifyMessage
+  | AuthenticationWorkflowSnapshotMessage
+  | AuthenticatorPickerCancelMessage
+  | GeneratePasswordRequest
+  | WebsiteAuthenticatorBackupAttachMessage
+  | WebsiteAuthenticatorEnrollCodeMessage
+  | WebsiteAuthenticatorEnrollConfirmMessage
+  | WebsiteAuthenticatorEnrollDismissMessage
+  | WebsiteAuthenticatorEnrollPreviewMessage
+  | WebsiteAuthenticatorEnrollStageMessage
+  | WebsiteAuthenticatorPickerOpenMessage
+  | WebsiteAuthenticatorFillMessage
+  | WebsiteAuthenticatorOptionsMessage
+  | WebsiteLoginOptionsMessage
+  | LoginPickerCancelMessage
+  | WebsiteLoginPickerOpenMessage
+  | WebsiteLoginSaveCommitMessage
+  | WebsiteLoginSaveDismissMessage
+  | WebsiteLoginSaveOfferMessage
+  | WebsiteLoginSavePendingMessage
+
 export type {
   AuthenticationWorkflowSnapshotResponse,
   AuthenticatorBackupAttachResponse,
@@ -72,7 +124,7 @@ export type {
 }
 
 function sendRuntimeMessage(
-  message: unknown,
+  message: ExtensionRuntimeRequest,
 ): Promise<RuntimeMessageDelivery<unknown>> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(message, (response: unknown) => {
@@ -92,16 +144,16 @@ function sendRuntimeMessage(
   })
 }
 
-export type RuntimeMessageResponseDecoder<Response extends object> = (
-  response: object,
+export type RuntimeMessageResponseDecoder<Response> = (
+  response: unknown,
 ) => response is Response
 
-export type DecodedRuntimeMessageArgs<Response extends object> = {
-  message: unknown
+export type DecodedRuntimeMessageArgs<Response> = {
+  message: ExtensionRuntimeRequest
   decode: RuntimeMessageResponseDecoder<Response>
 }
 
-export async function sendDecodedRuntimeMessage<Response extends object>({
+export async function sendDecodedRuntimeMessage<Response>({
   message,
   decode,
 }: DecodedRuntimeMessageArgs<Response>): Promise<
@@ -128,7 +180,7 @@ function unavailable<Response>(): RuntimeMessageDelivery<Response> {
 }
 
 export async function sendLoginOptionsRuntimeMessage(
-  message: object,
+  message: WebsiteLoginOptionsMessage,
 ): Promise<RuntimeMessageDelivery<WebsiteLoginOptions>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -147,7 +199,7 @@ export async function sendLoginOptionsRuntimeMessage(
 }
 
 export async function sendLoginSaveOfferRuntimeMessage(
-  message: object,
+  message: WebsiteLoginSaveOfferMessage,
 ): Promise<RuntimeMessageDelivery<WebsiteLoginSaveOfferResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -166,7 +218,7 @@ export async function sendLoginSaveOfferRuntimeMessage(
 }
 
 export async function sendLoginSavePendingRuntimeMessage(
-  message: object,
+  message: WebsiteLoginSavePendingMessage,
 ): Promise<RuntimeMessageDelivery<WebsiteLoginSavePendingResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -185,7 +237,7 @@ export async function sendLoginSavePendingRuntimeMessage(
 }
 
 export async function sendLoginSaveActionRuntimeMessage(
-  message: object,
+  message: WebsiteLoginSaveCommitMessage | WebsiteLoginSaveDismissMessage,
 ): Promise<RuntimeMessageDelivery<WebsiteLoginSaveActionResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -204,7 +256,7 @@ export async function sendLoginSaveActionRuntimeMessage(
 }
 
 export async function sendLoginPickerOpenRuntimeMessage(
-  message: object,
+  message: WebsiteLoginPickerOpenMessage,
 ): Promise<RuntimeMessageDelivery<LoginPickerOpenResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -223,7 +275,7 @@ export async function sendLoginPickerOpenRuntimeMessage(
 }
 
 export async function sendAuthenticatorPickerOpenRuntimeMessage(
-  message: object,
+  message: WebsiteAuthenticatorPickerOpenMessage,
 ): Promise<RuntimeMessageDelivery<AuthenticatorPickerOpenResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -243,7 +295,7 @@ export async function sendAuthenticatorPickerOpenRuntimeMessage(
 }
 
 export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
-  message: object,
+  message: AuthenticationWorkflowSnapshotMessage,
 ): Promise<RuntimeMessageDelivery<AuthenticationWorkflowSnapshotResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -263,7 +315,7 @@ export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
 }
 
 export async function sendAuthenticatorPreviewRuntimeMessage(
-  message: object,
+  message: WebsiteAuthenticatorEnrollPreviewMessage,
 ): Promise<RuntimeMessageDelivery<AuthenticatorPreviewResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -282,7 +334,7 @@ export async function sendAuthenticatorPreviewRuntimeMessage(
 }
 
 export async function sendAuthenticatorBackupAttachRuntimeMessage(
-  message: object,
+  message: WebsiteAuthenticatorBackupAttachMessage,
 ): Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -302,7 +354,8 @@ export async function sendAuthenticatorBackupAttachRuntimeMessage(
 }
 
 export async function sendAuthenticatorCodeRuntimeMessage(
-  message: object,
+  message:
+    WebsiteAuthenticatorEnrollCodeMessage | WebsiteAuthenticatorFillMessage,
 ): Promise<RuntimeMessageDelivery<AuthenticatorCodeResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -321,7 +374,7 @@ export async function sendAuthenticatorCodeRuntimeMessage(
 }
 
 export async function sendAuthenticatorOptionsRuntimeMessage(
-  message: object,
+  message: WebsiteAuthenticatorOptionsMessage,
 ): Promise<RuntimeMessageDelivery<AuthenticatorOptionsResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -340,7 +393,7 @@ export async function sendAuthenticatorOptionsRuntimeMessage(
 }
 
 export async function sendAuthenticatorEnrollmentStageRuntimeMessage(
-  message: object,
+  message: WebsiteAuthenticatorEnrollStageMessage,
 ): Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentStageResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -360,7 +413,7 @@ export async function sendAuthenticatorEnrollmentStageRuntimeMessage(
 }
 
 export async function sendAuthenticatorEnrollmentConfirmRuntimeMessage(
-  message: object,
+  message: WebsiteAuthenticatorEnrollConfirmMessage,
 ): Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentConfirmResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -380,7 +433,7 @@ export async function sendAuthenticatorEnrollmentConfirmRuntimeMessage(
 }
 
 export async function sendAuthenticationOutcomeRuntimeMessage(
-  message: object,
+  message: AuthenticationOutcomeClassifyMessage,
 ): Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -399,7 +452,7 @@ export async function sendAuthenticationOutcomeRuntimeMessage(
 }
 
 export async function sendGeneratePasswordRuntimeMessage(
-  message: object,
+  message: GeneratePasswordRequest,
 ): Promise<RuntimeMessageDelivery<GeneratedPasswordResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -417,6 +470,8 @@ export async function sendGeneratePasswordRuntimeMessage(
   }
 }
 
-export function sendRuntimeMessageWithoutResponse(message: object): void {
+export function sendRuntimeMessageWithoutResponse(
+  message: ExtensionRuntimeRequest,
+): void {
   void sendRuntimeMessage(message)
 }

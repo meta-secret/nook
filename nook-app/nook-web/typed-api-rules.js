@@ -12,6 +12,20 @@ export const untrustedInputAdapterFiles = [
   "nook-web-extension/src/content/simple-vault-bridge.ts",
   "nook-web-extension/src/content/webauthn-content.ts",
   "nook-web-extension/src/content/webauthn-page.ts",
+  // Chrome runtime message guards narrow untyped browser IPC immediately.
+  "nook-web-extension/src/lib/auth-workflow-messages.ts",
+  "nook-web-extension/src/lib/authenticator-picker-messages.ts",
+  "nook-web-extension/src/lib/enrollment-messages.ts",
+  "nook-web-extension/src/lib/login-detection-messages.ts",
+  "nook-web-extension/src/lib/login-fill-messages.ts",
+  "nook-web-extension/src/lib/login-picker-messages.ts",
+  "nook-web-extension/src/lib/login-save-messages.ts",
+  "nook-web-extension/src/lib/origin-runtime-message.ts",
+  "nook-web-extension/src/lib/outcome-evidence-messages.ts",
+  "nook-web-extension/src/lib/pairing-state.ts",
+  "nook-web-extension/src/lib/passkey-ceremony-error.ts",
+  "nook-web-extension/src/lib/provider-credential-staging.ts",
+  "nook-web-extension/src/lib/webauthn-messages.ts",
   // Rust/WASM and Chrome persistence boundaries narrow serialized state.
   "nook-web-extension/src/background/pairing-grants.ts",
   "nook-web-extension/src/background/vault-runtime.ts",
@@ -20,6 +34,7 @@ export const untrustedInputAdapterFiles = [
   "nook-web-extension/src/background/service-worker/authenticator-session-adapter.ts",
   "nook-web-extension/src/background/service-worker/login-session-response-adapter.ts",
   "nook-web-extension/src/background/service-worker/pairing-identity.ts",
+  "nook-web-extension/src/background/service-worker/pairing-import.ts",
   "nook-web-extension/src/background/service-worker/passkey-session-adapter.ts",
   "nook-web-extension/src/background/service-worker/session-lifecycle.ts",
   "nook-web-extension/src/content/autofill/runtime-message-adapter.ts",
@@ -46,6 +61,30 @@ export const untrustedInputAdapterFiles = [
   "nook-web-shared/src/vault-app/lib/extension/install.ts",
 ];
 
+export const concreteObjectTypeRules = {
+  "@typescript-eslint/no-restricted-types": [
+    "error",
+    {
+      types: {
+        object: {
+          message:
+            "Nook web forbids the generic object type. Model a concrete domain value or discriminated union.",
+        },
+        Object: {
+          message:
+            "Nook web forbids the Object type. Model a concrete domain value or discriminated union.",
+        },
+        "{}": {
+          message:
+            "Nook web forbids the empty object type. Model every valid branch explicitly.",
+        },
+      },
+    },
+  ],
+  "@typescript-eslint/no-explicit-any": "error",
+  "@typescript-eslint/no-empty-object-type": "error",
+};
+
 export const typedApiRules = {
   "max-params": ["error", { max: 1 }],
   "@typescript-eslint/no-restricted-types": [
@@ -55,6 +94,18 @@ export const typedApiRules = {
         unknown: {
           message:
             "Nook web forbids unknown. Model a concrete domain type. A generic transport value is allowed only inside a dedicated untrusted-input adapter and must be narrowed immediately.",
+        },
+        object: {
+          message:
+            "Nook web forbids the generic object type. Model a concrete domain value or discriminated union.",
+        },
+        Object: {
+          message:
+            "Nook web forbids the Object type. Model a concrete domain value or discriminated union.",
+        },
+        "{}": {
+          message:
+            "Nook web forbids the empty object type. Model every valid branch explicitly.",
         },
         ExternalValue: { message: "Use a concrete Nook domain value." },
         ExternalObject: { message: "Use a concrete Nook domain object." },
@@ -71,6 +122,18 @@ export const untrustedInputAdapterRules = {
     "error",
     {
       types: {
+        object: {
+          message:
+            "Nook web forbids the generic object type, including at transport boundaries. Use unknown only while decoding unavoidable untyped input.",
+        },
+        Object: {
+          message:
+            "Nook web forbids the Object type, including at transport boundaries.",
+        },
+        "{}": {
+          message:
+            "Nook web forbids the empty object type. Model every valid branch explicitly.",
+        },
         ExternalValue: { message: "Use a concrete Nook domain value." },
         ExternalObject: { message: "Use a concrete Nook domain object." },
         JsonValue: { message: "Use a concrete Nook domain value." },

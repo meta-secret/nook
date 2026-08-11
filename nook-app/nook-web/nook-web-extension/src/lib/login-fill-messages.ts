@@ -14,8 +14,9 @@ export type WebsiteLoginFillResponse =
   | { ok: false; reason: string }
 
 export function isWebsiteLoginFillResponse(
-  response: object,
+  response: unknown,
 ): response is WebsiteLoginFillResponse {
+  if (!response || typeof response !== 'object') return false
   if (!('ok' in response) || typeof response.ok !== 'boolean') return false
   if (!response.ok) {
     return 'reason' in response && typeof response.reason === 'string'
@@ -91,7 +92,7 @@ export type WebsiteAuthenticatorFillMessage = {
 }
 
 export function isWebsiteLoginOptionsMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteLoginOptionsMessage {
   if (
     !message ||
@@ -110,7 +111,7 @@ export function isWebsiteLoginOptionsMessage(
 }
 
 export function isWebsiteAuthenticatorOptionsMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteAuthenticatorOptionsMessage {
   return (
     hasOriginPayload(message) &&
@@ -120,7 +121,7 @@ export function isWebsiteAuthenticatorOptionsMessage(
 }
 
 export function isWebsiteAuthenticatorFillMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteAuthenticatorFillMessage {
   if (
     !hasOriginPayload(message) ||
@@ -140,7 +141,7 @@ export function isWebsiteAuthenticatorFillMessage(
 }
 
 export function isWebsiteLoginRevealMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteLoginRevealMessage {
   if (
     !message ||

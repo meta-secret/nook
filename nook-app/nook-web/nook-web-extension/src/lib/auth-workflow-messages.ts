@@ -43,7 +43,7 @@ function isBoundedCount(value: number): value is number {
 }
 
 export function isAuthenticationWorkflowSnapshotMessage(
-  message: object,
+  message: unknown,
 ): message is AuthenticationWorkflowSnapshotMessage {
   if (
     !message ||

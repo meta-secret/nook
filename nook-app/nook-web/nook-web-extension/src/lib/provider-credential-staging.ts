@@ -37,9 +37,7 @@ type ProviderCredentialCandidate = {
   }
 }
 
-function isSerializedProviderField(
-  value: object | string | number | boolean,
-): boolean {
+function isSerializedProviderField(value: unknown): boolean {
   if (typeof value === 'string' || typeof value === 'boolean') return true
   if (typeof value === 'number') return Number.isFinite(value)
   if (Array.isArray(value)) return value.every(isSerializedProviderField)
@@ -47,7 +45,9 @@ function isSerializedProviderField(
   return Object.values(value).every(isSerializedProviderField)
 }
 
-export function scrubProviderCredentials(providers: object[]): void {
+export function scrubProviderCredentials(
+  providers: SerializedStorageProvider[],
+): void {
   const candidates = providers as ProviderCredentialCandidate[]
   for (const provider of candidates) {
     if (!provider || typeof provider !== 'object') continue

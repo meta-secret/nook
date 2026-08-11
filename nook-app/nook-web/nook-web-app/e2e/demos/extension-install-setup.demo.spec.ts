@@ -1,6 +1,27 @@
 import { expect, test } from '../fixtures'
 import { connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
-import { isExtensionPairedVaultIdentityDiscoveryMessage } from '../../../nook-web-shared/src/extension/runtime-messages'
+import {
+  ExtensionPairedVaultIdentityDiscoveryMessageType,
+  isExtensionPairedVaultIdentityDiscoveryMessage,
+  OpenCompanionLauncherMessageType,
+  type ExtensionPairedVaultIdentityDiscoveryMessage,
+  type OpenCompanionLauncherMessage,
+} from '../../../nook-web-shared/src/extension/runtime-messages'
+
+type ExtensionInstallDemoMessage =
+  ExtensionPairedVaultIdentityDiscoveryMessage | OpenCompanionLauncherMessage
+
+type ExtensionInstallDemoMessageTypes = {
+  openCompanionLauncher: OpenCompanionLauncherMessageType
+  pairedVaultIdentityDiscovery: ExtensionPairedVaultIdentityDiscoveryMessageType
+}
+
+const extensionInstallDemoMessageTypes: ExtensionInstallDemoMessageTypes = {
+  openCompanionLauncher:
+    OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+  pairedVaultIdentityDiscovery:
+    ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
+}
 
 // The repository-wide typed API contract covers the shared Svelte workspace
 // used by this flow. Keep this demo as the visible proof that extension install
@@ -25,13 +46,13 @@ test('offer browser extension install on vault home and in Devices', async ({
   await expect(page.getByTestId('extension-install-setup-cta')).toBeEnabled()
   await demoBeat(page)
 
-  await page.evaluate(() => {
+  await page.evaluate((messageTypes) => {
     const browserGlobal = globalThis as typeof globalThis & {
       chrome?: {
         runtime?: {
           sendMessage?: (
             extensionId: string,
-            message: unknown,
+            message: ExtensionInstallDemoMessage,
             callback: (response?: unknown) => void,
           ) => void
         }
@@ -44,7 +65,7 @@ test('offer browser extension install on vault home and in Devices', async ({
             'data-demo-extension-message',
             JSON.stringify(message),
           )
-          const type = (message as { type?: string }).type
+          const type = message.type
           const routedTypes = JSON.parse(
             document.documentElement.getAttribute(
               'data-demo-extension-message-types',
@@ -58,22 +79,14 @@ test('offer browser extension install on vault home and in Devices', async ({
             )
           }
           callback(
-            type === 'nook:open-companion-launcher'
+            type === messageTypes.openCompanionLauncher
               ? { ok: true }
-              : type === 'nook:extension-paired-vault-identity-discovery'
+              : type === messageTypes.pairedVaultIdentityDiscovery
                 ? {
                     type: 'nook:extension-paired-vault-identity-status',
                     payload: {
-                      requestId: (
-                        message as {
-                          payload: { requestId: string }
-                        }
-                      ).payload.requestId,
-                      vaultStoreId: (
-                        message as {
-                          payload: { vaultStoreId: string }
-                        }
-                      ).payload.vaultStoreId,
+                      requestId: message.payload.requestId,
+                      vaultStoreId: message.payload.vaultStoreId,
                       status: 'different-vault',
                       connectedVaultStoreId: 'store_previous_9a4f',
                       connectedVaultName: 'Previous vault',
@@ -88,7 +101,7 @@ test('offer browser extension install on vault home and in Devices', async ({
       'data-nook-extension-runtime-id',
       'demo-extension-id',
     )
-  })
+  }, extensionInstallDemoMessageTypes)
   await expect(setupCard).toHaveAttribute('data-status', 'paired_elsewhere')
   await expect(page.getByTestId('extension-connected-vault')).toContainText(
     'Previous vault',

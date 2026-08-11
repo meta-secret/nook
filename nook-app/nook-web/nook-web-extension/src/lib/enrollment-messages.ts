@@ -109,7 +109,7 @@ function isOtpauthTotpUri(value: string): value is string {
 }
 
 export function isWebsiteAuthenticatorEnrollPreviewMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteAuthenticatorEnrollPreviewMessage {
   if (
     !hasOriginPayload(message) ||
@@ -125,7 +125,7 @@ export function isWebsiteAuthenticatorEnrollPreviewMessage(
 }
 
 export function isWebsiteAuthenticatorEnrollStageMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteAuthenticatorEnrollStageMessage {
   if (
     !hasOriginPayload(message) ||
@@ -145,7 +145,7 @@ export function isWebsiteAuthenticatorEnrollStageMessage(
 }
 
 export function isWebsiteAuthenticatorEnrollCodeMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteAuthenticatorEnrollCodeMessage {
   if (
     !hasOriginPayload(message) ||
@@ -161,7 +161,7 @@ export function isWebsiteAuthenticatorEnrollCodeMessage(
 }
 
 export function isWebsiteAuthenticatorEnrollConfirmMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteAuthenticatorEnrollConfirmMessage {
   if (
     !hasOriginPayload(message) ||
@@ -182,7 +182,7 @@ export function isWebsiteAuthenticatorEnrollConfirmMessage(
 }
 
 export function isWebsiteAuthenticatorEnrollDismissMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteAuthenticatorEnrollDismissMessage {
   if (
     !hasOriginPayload(message) ||
@@ -198,7 +198,7 @@ export function isWebsiteAuthenticatorEnrollDismissMessage(
 }
 
 export function isWebsiteAuthenticatorEnrollPendingMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteAuthenticatorEnrollPendingMessage {
   return (
     hasOriginPayload(message) &&
@@ -208,7 +208,7 @@ export function isWebsiteAuthenticatorEnrollPendingMessage(
 }
 
 export function isWebsiteAuthenticatorBackupAttachMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteAuthenticatorBackupAttachMessage {
   if (
     !hasOriginPayload(message) ||

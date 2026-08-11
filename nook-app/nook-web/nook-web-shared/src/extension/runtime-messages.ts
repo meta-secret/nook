@@ -16,6 +16,15 @@ export enum OpenSimpleVaultMessageType {
   NookOpenSimpleVault = "nook:open-simple-vault",
 }
 
+export enum GeneratePasswordRequestType {
+  NookWebsiteGeneratePassword = "nook:website-generate-password",
+}
+
+export type GeneratePasswordRequest = {
+  type: GeneratePasswordRequestType.NookWebsiteGeneratePassword;
+  payload: { origin: string };
+};
+
 export type OpenSimpleVaultMessage = {
   type: OpenSimpleVaultMessageType.NookOpenSimpleVault;
 };

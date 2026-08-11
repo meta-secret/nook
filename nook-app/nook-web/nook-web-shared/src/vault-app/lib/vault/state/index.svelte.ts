@@ -6,13 +6,22 @@ import { VaultSessionState } from "./session.svelte";
 import { VaultSyncState } from "./sync.svelte";
 import { VaultUiState } from "./ui.svelte";
 
-type DelegateStateArgs<State extends object> = {
-  readonly target: object;
+type VaultStateSlice =
+  | VaultRuntimeState
+  | VaultUiState
+  | VaultProviderState
+  | VaultSessionState
+  | VaultSecretsState
+  | VaultSentinelState
+  | VaultSyncState;
+
+type DelegateStateArgs<State extends VaultStateSlice> = {
+  readonly target: VaultStateSlicesBase;
   readonly state: State;
   readonly keys: readonly (keyof State)[];
 };
 
-function delegateState<State extends object>({
+function delegateState<State extends VaultStateSlice>({
   target,
   state,
   keys,

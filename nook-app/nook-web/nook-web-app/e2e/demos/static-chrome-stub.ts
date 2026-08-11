@@ -17,6 +17,7 @@ import {
   WebsiteAuthenticatorResponseStatus,
 } from '../../../nook-web-extension/src/lib/login-fill-messages'
 import { WebsiteAuthenticatorBackupAttachMessageType } from '../../../nook-web-extension/src/lib/enrollment-messages'
+import { GeneratePasswordRequestType } from '../../../nook-web-shared/src/extension/runtime-messages'
 
 type DemoLoginSaveResponses = {
   offerAvailable: WebsiteLoginSaveOfferResponse['kind']
@@ -31,6 +32,8 @@ export const demoSufficientAuthenticationOutcome =
 export const demoInsufficientAuthenticationOutcome =
   AuthenticationOutcomeVerdict.Insufficient
 export const demoDomainEnumArgs = {
+  generatePasswordMessageType:
+    GeneratePasswordRequestType.NookWebsiteGeneratePassword,
   loginSaveCreateDecision: demoLoginSaveCreateDecision,
   sufficientAuthenticationOutcome: demoSufficientAuthenticationOutcome,
   insufficientAuthenticationOutcome: demoInsufficientAuthenticationOutcome,
@@ -67,6 +70,7 @@ export type DemoChromeStubArgs = {
   loginSaveCreateDecision: NookWebsiteLoginSaveDecision
   sufficientAuthenticationOutcome: AuthenticationOutcomeVerdict
   insufficientAuthenticationOutcome: AuthenticationOutcomeVerdict
+  generatePasswordMessageType: GeneratePasswordRequestType
   authenticationWorkflow: {
     loginKind: AuthenticationWorkflowKind.Login
     signupKind: AuthenticationWorkflowKind.Signup
@@ -122,6 +126,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     loginSaveCreateDecision,
     sufficientAuthenticationOutcome,
     insufficientAuthenticationOutcome,
+    generatePasswordMessageType,
     authenticationWorkflow,
     authenticatorProtocol,
     loginSaveResponses,
@@ -337,7 +342,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               observationIndex: 0,
             },
           }
-        case 'nook:website-generate-password':
+        case generatePasswordMessageType:
           return {
             ok: true,
             password: 'DemoGeneratedPassword!234567',

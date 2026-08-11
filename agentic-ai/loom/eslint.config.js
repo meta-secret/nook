@@ -171,7 +171,7 @@ const noRawObjectArguments = {
 /**
  * Loom-only static rules:
  * - max one function/method parameter
- * - ban authored `unknown`; require domain values after boundary decoding
+ * - ban authored `unknown` and `object`; require concrete domain values
  * - ban raw object-literal call arguments (name a typed value first)
  */
 export default tseslint.config(
@@ -206,6 +206,18 @@ export default tseslint.config(
               message:
                 'Loom forbids unknown. Model a concrete domain type. A generic transport value is allowed only inside a dedicated untrusted-input codec and must be narrowed immediately.',
             },
+            object: {
+              message:
+                'Loom forbids the generic object type. Model a concrete domain value or discriminated union.',
+            },
+            Object: {
+              message:
+                'Loom forbids the Object type. Model a concrete domain value or discriminated union.',
+            },
+            '{}': {
+              message:
+                'Loom forbids the empty object type. Model every valid branch explicitly.',
+            },
             ExternalValue: {
               message: 'Loom forbids generic external values. Model a concrete domain value.',
             },
@@ -221,6 +233,8 @@ export default tseslint.config(
           },
         },
       ],
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-empty-object-type': 'error',
       'loom/no-raw-object-arguments': 'error',
       'no-unused-vars': 'off',
       'no-undef': 'off',
