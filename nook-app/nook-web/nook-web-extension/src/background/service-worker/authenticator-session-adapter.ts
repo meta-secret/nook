@@ -140,17 +140,22 @@ export async function attachAuthenticatorBackupCodes({
   codes: string[]
   mode: WebsiteAuthenticatorBackupAttachMessageMode
 }): Promise<AuthenticatorSecretSessionResponse> {
+  const transportCodes = [...codes]
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-backup-attach',
     payload: {
       ...extensionSessionGrantIdentity(grant),
       secretId,
-      codes,
+      codes: transportCodes,
       mode,
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
-  return authenticatorSecretResponse(await sendSessionMessage(message))
+  try {
+    return authenticatorSecretResponse(await sendSessionMessage(message))
+  } finally {
+    transportCodes.fill('')
+  }
 }
 
 function authenticatorSecretResponse(

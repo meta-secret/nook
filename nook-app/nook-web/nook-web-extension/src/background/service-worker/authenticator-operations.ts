@@ -588,7 +588,7 @@ export async function websiteAuthenticatorBackupAttach({
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<AuthenticatorSecretResponse> {
+}): Promise<AuthenticatorFailureResponse | AuthenticatorSuccessResponse> {
   const codes = [...message.payload.codes]
   message.payload.codes.fill('')
   message.payload.codes = []
@@ -616,7 +616,9 @@ export async function websiteAuthenticatorBackupAttach({
     }
     const pending = attachAuthenticatorBackupCodes(attachArgs)
     codes.fill('')
-    return await pending
+    const response = await pending
+    if (!response.ok) return response
+    return { ok: true }
   } finally {
     codes.fill('')
   }
