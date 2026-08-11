@@ -39,6 +39,79 @@ type WebsitePageState =
   | { kind: WebsitePageStateKind.Skipped }
   | { kind: WebsitePageStateKind.Opened; page: Page }
 
+enum ExtensionConnectionParameter {
+  DeviceId = 'device_id',
+  DevicePublicKey = 'device_public_key',
+  DeviceSigningPublicKey = 'device_signing_public_key',
+  HandoffNonce = 'nonce',
+}
+
+enum ExtensionConnectionParametersParseKind {
+  Valid = 'valid',
+  Invalid = 'invalid',
+}
+
+type ExtensionConnectionParametersParseResult =
+  | {
+      kind: ExtensionConnectionParametersParseKind.Valid
+      deviceId: string
+      devicePublicKey: string
+      deviceSigningPublicKey: string
+      handoffNonce: string
+    }
+  | {
+      kind: ExtensionConnectionParametersParseKind.Invalid
+      missingParameter: ExtensionConnectionParameter
+    }
+
+function parseExtensionConnectionParameters(
+  connectionUrl: URL,
+): ExtensionConnectionParametersParseResult {
+  const deviceId = connectionUrl.searchParams.get(
+    ExtensionConnectionParameter.DeviceId,
+  )
+  if (typeof deviceId !== 'string') {
+    return {
+      kind: ExtensionConnectionParametersParseKind.Invalid,
+      missingParameter: ExtensionConnectionParameter.DeviceId,
+    }
+  }
+  const devicePublicKey = connectionUrl.searchParams.get(
+    ExtensionConnectionParameter.DevicePublicKey,
+  )
+  if (typeof devicePublicKey !== 'string') {
+    return {
+      kind: ExtensionConnectionParametersParseKind.Invalid,
+      missingParameter: ExtensionConnectionParameter.DevicePublicKey,
+    }
+  }
+  const deviceSigningPublicKey = connectionUrl.searchParams.get(
+    ExtensionConnectionParameter.DeviceSigningPublicKey,
+  )
+  if (typeof deviceSigningPublicKey !== 'string') {
+    return {
+      kind: ExtensionConnectionParametersParseKind.Invalid,
+      missingParameter: ExtensionConnectionParameter.DeviceSigningPublicKey,
+    }
+  }
+  const handoffNonce = connectionUrl.searchParams.get(
+    ExtensionConnectionParameter.HandoffNonce,
+  )
+  if (typeof handoffNonce !== 'string') {
+    return {
+      kind: ExtensionConnectionParametersParseKind.Invalid,
+      missingParameter: ExtensionConnectionParameter.HandoffNonce,
+    }
+  }
+  return {
+    kind: ExtensionConnectionParametersParseKind.Valid,
+    deviceId,
+    devicePublicKey,
+    deviceSigningPublicKey,
+    handoffNonce,
+  }
+}
+
 test('creates a passkey from browser-native WASM options after extension messaging', async ({
   browserName,
 }, testInfo) => {
@@ -88,27 +161,20 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const extensionId = new URL(popupPage.url()).host
     const simplePage = await openSimpleVaultConnection(context, popupPage)
     const connectUrl = new URL(simplePage.url())
-    const extensionDeviceId = connectUrl.searchParams.get('device_id')
-    const extensionDevicePublicKey =
-      connectUrl.searchParams.get('device_public_key')
-    const extensionDeviceSigningPublicKey = connectUrl.searchParams.get(
-      'device_signing_public_key',
-    )
-    const initialHandoffNonce = connectUrl.searchParams.get('nonce')
-    if (extensionDeviceId === null) {
-      throw new Error('Extension connection URL omitted the device ID.')
-    }
-    if (extensionDevicePublicKey === null) {
-      throw new Error('Extension connection URL omitted the device public key.')
-    }
-    if (extensionDeviceSigningPublicKey === null) {
+    const connectionParameters = parseExtensionConnectionParameters(connectUrl)
+    if (
+      connectionParameters.kind ===
+      ExtensionConnectionParametersParseKind.Invalid
+    ) {
       throw new Error(
-        'Extension connection URL omitted the device signing public key.',
+        `Extension connection URL omitted ${connectionParameters.missingParameter}.`,
       )
     }
-    if (initialHandoffNonce === null) {
-      throw new Error('Extension connection URL omitted the handoff nonce.')
-    }
+    const extensionDeviceId = connectionParameters.deviceId
+    const extensionDevicePublicKey = connectionParameters.devicePublicKey
+    const extensionDeviceSigningPublicKey =
+      connectionParameters.deviceSigningPublicKey
+    const initialHandoffNonce = connectionParameters.handoffNonce
 
     await advanceCreateVaultWizardToFinalStep(simplePage)
     await simplePage
