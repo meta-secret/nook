@@ -4,20 +4,20 @@
 //! their local encrypted share inside Rust and return a signed response that is
 //! session-bound and encrypted to the requester.
 
+mod genesis_finalization;
+
 use super::verified_access::VerifiedVaultAccessFlow;
-use super::{CeremonyState, NookVaultManager, VaultCryptoState, VaultNameState};
+use super::{CeremonyState, NookVaultManager, VaultCryptoState};
 use crate::NookError;
 use crate::conversion::{LoadedVault, load_stored_vault};
 use crate::storage::auth_providers::save_auth_providers;
 use crate::storage::indexed_db::{
-    clear_sentinel_genesis_finalization_pending, list_sentinel_genesis_share_deliveries,
-    load_sentinel_genesis_finalization_pending, load_sentinel_genesis_share_delivery,
-    save_sentinel_genesis_finalization_pending, save_sentinel_genesis_share_delivery,
-    save_to_indexed_db,
+    list_sentinel_genesis_share_deliveries, load_sentinel_genesis_finalization_pending,
+    load_sentinel_genesis_share_delivery, save_sentinel_genesis_share_delivery,
 };
 use crate::{
-    NookSecretRecord, NookSentinelGenesisFinalizeResult, NookSentinelGenesisStatus,
-    NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus,
+    NookSecretRecord, NookSentinelGenesisStatus, NookSentinelStoredDeliverySummary,
+    NookSentinelUnlockSessionStatus,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsError;
@@ -28,18 +28,6 @@ use wasm_bindgen::prelude::wasm_bindgen;
 struct StoredSentinelGenesisDelivery {
     request: nook_core::SentinelGenesisRequest,
     delivery: nook_core::SentinelGenesisShareDelivery,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PendingSentinelGenesisFinalization {
-    store_id: String,
-    vault_name: VaultNameState,
-    architecture: nook_core::VaultArchitecture,
-    yaml: String,
-    request: nook_core::SentinelGenesisRequest,
-    participants: Vec<nook_core::SentinelGenesisParticipant>,
-    deliveries: Vec<nook_core::SentinelGenesisShareDelivery>,
 }
 
 #[wasm_bindgen]
@@ -280,25 +268,6 @@ impl NookVaultManager {
         Ok(self.sentinel_genesis_phase)
     }
 
-    #[wasm_bindgen(js_name = hasPendingSentinelGenesisFinalization)]
-    pub async fn has_pending_sentinel_genesis_finalization(&self) -> Result<bool, JsError> {
-        Ok(load_sentinel_genesis_finalization_pending()
-            .await?
-            .is_some())
-    }
-
-    #[wasm_bindgen(js_name = resumePendingSentinelGenesisFinalization)]
-    pub async fn resume_pending_sentinel_genesis_finalization(
-        &mut self,
-    ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {
-        let pending_json = load_sentinel_genesis_finalization_pending()
-            .await?
-            .ok_or_else(|| JsError::new("No Sentinel finalization is pending."))?;
-        let pending: PendingSentinelGenesisFinalization = serde_json::from_str(&pending_json)
-            .map_err(|error| NookError::Serialization(error.to_string()))?;
-        self.complete_sentinel_genesis_finalization(pending).await
-    }
-
     /// Start a signed, session-bound quorum unlock request. No opened share is
     /// returned to JavaScript.
     #[wasm_bindgen(js_name = startSentinelUnlock)]
@@ -458,59 +427,6 @@ impl NookVaultManager {
         Ok(records)
     }
 
-    /// Atomically create the complete encrypted Sentinel projection. No vault key
-    /// is installed in the browser session; opening still requires quorum.
-    #[wasm_bindgen(js_name = finalizeSentinelGenesis)]
-    pub async fn finalize_sentinel_genesis(
-        &mut self,
-    ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {
-        if let Some(pending_json) = load_sentinel_genesis_finalization_pending().await? {
-            let pending: PendingSentinelGenesisFinalization =
-                serde_json::from_str(&pending_json)
-                    .map_err(|error| NookError::Serialization(error.to_string()))?;
-            return self.complete_sentinel_genesis_finalization(pending).await;
-        }
-
-        let signing = self.ensure_signing_identity().await?;
-        let session = self
-            .sentinel_genesis
-            .get("No Sentinel genesis ceremony is active.")?
-            .clone();
-        let genesis_request = session.request.clone();
-        let participants = session.participants().to_vec();
-        let output = nook_core::finalize_sentinel_genesis(session, &signing)?;
-        let store_id = output.store_id.as_str().to_owned();
-        let vault_name = self.vault.vault_name.clone();
-        let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
-            &output.stored_records,
-            &nook_core::VaultUnlock::Keys,
-            &[],
-            nook_core::VaultStoreIdentityRef::Assigned(&store_id),
-            match &vault_name {
-                VaultNameState::Unnamed => nook_core::VaultNameRef::Unnamed,
-                VaultNameState::Named(name) => nook_core::VaultNameRef::Named(name),
-            },
-            nook_core::VaultVersionWrite::Initial,
-            &output.architecture,
-        )?;
-        let pending = PendingSentinelGenesisFinalization {
-            store_id,
-            vault_name,
-            architecture: output.architecture,
-            yaml: yaml.into_inner(),
-            request: genesis_request,
-            participants,
-            deliveries: output.participant_deliveries,
-        };
-        let pending_json = serde_json::to_string(&pending)
-            .map_err(|error| NookError::Serialization(error.to_string()))?;
-        // This public/encrypted plan is the commit marker. Every subsequent
-        // write is idempotent and a retry resumes this exact store/root.
-        save_sentinel_genesis_finalization_pending(&pending_json).await?;
-        self.sentinel_genesis = CeremonyState::Inactive;
-        self.complete_sentinel_genesis_finalization(pending).await
-    }
-
     /// Verify this participant's returned share against the exact request it
     /// answered, then persist the encrypted delivery without a sync provider.
     #[wasm_bindgen(js_name = acceptSentinelGenesisShareDelivery)]
@@ -567,61 +483,6 @@ impl NookVaultManager {
 }
 
 impl NookVaultManager {
-    async fn complete_sentinel_genesis_finalization(
-        &mut self,
-        pending: PendingSentinelGenesisFinalization,
-    ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {
-        let format = nook_core::detect_stored_format(&pending.yaml)?;
-        let records = nook_core::deserialize_stored(&pending.yaml, format)?;
-        pending.architecture.validate_records(&records)?;
-
-        save_to_indexed_db(&pending.yaml).await?;
-        self.vault.reset();
-        self.vault.store_id.clone_from(&pending.store_id);
-        self.vault.vault_name.clone_from(&pending.vault_name);
-        self.vault.architecture = pending.architecture.clone();
-        self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
-        self.vault.last_synced_content.clone_from(&pending.yaml);
-        self.event_log.reset();
-        self.ensure_sentinel_genesis_event(&pending.participants, &pending.deliveries)
-            .await?;
-
-        let identity = self.device_identity()?;
-        let own_delivery = pending
-            .deliveries
-            .iter()
-            .find(|delivery| delivery.device_id == *identity.device_id())
-            .ok_or_else(|| {
-                JsError::new("Sentinel genesis did not issue the initiator's encrypted share.")
-            })?;
-        let _ = nook_core::accept_sentinel_genesis_share_delivery(
-            own_delivery,
-            &pending.request,
-            &identity,
-        )?;
-        let stored_json = serde_json::to_string(&StoredSentinelGenesisDelivery {
-            request: pending.request.clone(),
-            delivery: own_delivery.clone(),
-        })
-        .map_err(|error| NookError::Serialization(error.to_string()))?;
-        save_sentinel_genesis_share_delivery(
-            &pending.store_id,
-            identity.device_id().as_str(),
-            &stored_json,
-        )
-        .await?;
-        clear_sentinel_genesis_finalization_pending().await?;
-        self.sentinel_genesis = CeremonyState::Inactive;
-        self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::DeliveringShares;
-
-        Ok(NookSentinelGenesisFinalizeResult::from_core(
-            pending.store_id,
-            pending.architecture,
-            &pending.participants,
-            &pending.deliveries,
-        )?)
-    }
-
     fn install_accepted_sentinel_delivery(
         &mut self,
         delivery: &nook_core::SentinelGenesisShareDelivery,
