@@ -2,6 +2,8 @@ import { describe, expect, test, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
+  GITHUB_PROVIDER_TYPE,
+  LOCAL_FOLDER_PROVIDER_TYPE,
   providerPersistenceDefaults,
   scopedProviderVault,
   storedGithubPat,
@@ -66,7 +68,7 @@ function githubProvider(): StorageProvider {
   return {
     ...providerPersistenceDefaults(),
     id: 'github-existing',
-    type: 'github',
+    type: GITHUB_PROVIDER_TYPE,
     label: 'GitHub · owner/repo',
     githubPat: storedGithubPat('pat'),
     githubRepo: storedGithubRepository('owner/repo'),
@@ -77,7 +79,7 @@ function githubProvider(): StorageProvider {
 
 describe('provider save web adapter', () => {
   test('maps an explicit duplicate to translated state without persistence', async () => {
-    const state = providerState('github')
+    const state = providerState(GITHUB_PROVIDER_TYPE)
     state.providers = [githubProvider()]
 
     const saved = await ensureProviderSaved(state)
@@ -88,7 +90,7 @@ describe('provider save web adapter', () => {
   })
 
   test('maps a missing local folder to translated state', async () => {
-    const state = providerState('local-folder')
+    const state = providerState(LOCAL_FOLDER_PROVIDER_TYPE)
 
     const saved = await ensureProviderSaved(state)
 
@@ -98,13 +100,13 @@ describe('provider save web adapter', () => {
   })
 
   test('applies and persists a successful provider snapshot', async () => {
-    const state = providerState('github')
+    const state = providerState(GITHUB_PROVIDER_TYPE)
 
     const saved = await ensureProviderSaved(state)
 
     expect(saved).toBe(true)
     expect(state.providers).toHaveLength(1)
-    expect(state.providers[0]?.type).toBe('github')
+    expect(state.providers[0]?.type).toBe(GITHUB_PROVIDER_TYPE)
     expect(state.clearLoginSetup).toHaveBeenCalledOnce()
     expect(state.applyActiveProviderCredentials).toHaveBeenCalledOnce()
     expect(state.persistProviders).toHaveBeenCalledOnce()

@@ -405,6 +405,31 @@ mod tests {
     }
 
     #[test]
+    fn provider_save_scopes_duplicates_to_the_active_vault() -> Result<(), &'static str> {
+        let mut request = request(StorageProviderType::Github);
+        let mut other_vault_provider = StorageProviderData::github(
+            "other-vault-provider",
+            "GitHub · owner/repo",
+            "pat",
+            "owner/repo",
+            "earlier",
+        );
+        other_vault_provider.store_id = ProviderVaultScope::StoreId("vault-2".to_owned());
+        request
+            .snapshot
+            .providers
+            .push(other_vault_provider.clone());
+
+        let snapshot = saved(apply_provider_save_policy(&request))?;
+
+        assert_eq!(snapshot.providers[0], other_vault_provider);
+        assert_eq!(snapshot.providers.len(), 2);
+        assert_eq!(snapshot.providers[1].id, "provider-new");
+        assert_eq!(snapshot.providers[1].store_id.as_deref(), Some("vault-1"));
+        Ok(())
+    }
+
+    #[test]
     fn requires_a_selected_local_folder() {
         let request = request(StorageProviderType::LocalFolder);
         assert_eq!(
