@@ -51,10 +51,13 @@ import {
   draft_local_storage_args,
   draft_oauth_storage_args,
   ensure_local_provider_row,
+  existing_provider_save_setup,
   has_github_credentials,
   has_local_vault,
   has_local_folder_credentials,
   has_oauth_credentials,
+  new_provider_save_setup,
+  NookProviderSaveOutcomeState,
   NookOAuthRemoteConfigurationUpdateState,
   NookStagedStorageArgsState,
   provider_wasm_args,
@@ -696,11 +699,8 @@ export async function ensureProviderSaved(
         : "google-drive";
   const setup =
     state.loginSetup.kind === LoginSetupKind.Active
-      ? {
-          state: "new" as const,
-          providerType: state.loginSetup.providerType,
-        }
-      : { state: "existing" as const };
+      ? new_provider_save_setup(state.loginSetup.providerType)
+      : existing_provider_save_setup();
   const request: ProviderSaveRequest = {
     snapshot: {
       providers: $state.snapshot(state.providers),
@@ -724,24 +724,28 @@ export async function ensureProviderSaved(
     createdAt: isoTimestamp(),
   };
   const outcome = apply_provider_save_policy(request);
-  if (outcome.state === "duplicate") {
-    state.errorMsg = state.t(I18N_KEYS.AuthStorageDuplicateSyncProvider);
-    return false;
-  }
-  if (outcome.state === "localFolderRequired") {
-    state.errorMsg = state.t(I18N_KEYS.AuthStorageLocalFolderChooseErr);
-    return false;
-  }
-  state.providers = outcome.snapshot.providers;
-  if (isConfiguredOAuthFile(outcome.oauth_file)) {
-    state.configureOauthFile(outcome.oauth_file.config);
-  }
+  try {
+    if (outcome.state === NookProviderSaveOutcomeState.Duplicate) {
+      state.errorMsg = state.t(I18N_KEYS.AuthStorageDuplicateSyncProvider);
+      return false;
+    }
+    if (outcome.state === NookProviderSaveOutcomeState.LocalFolderRequired) {
+      state.errorMsg = state.t(I18N_KEYS.AuthStorageLocalFolderChooseErr);
+      return false;
+    }
+    state.providers = outcome.snapshot.providers;
+    if (isConfiguredOAuthFile(outcome.oauth_file)) {
+      state.configureOauthFile(outcome.oauth_file.config);
+    }
 
-  state.clearLoginSetup();
-  state.loginRequiresExistingVault = false;
-  state.addProviderOpen = false;
-  state.applyActiveProviderCredentials();
-  await state.persistProviders();
-  log.info("sync provider saved");
-  return true;
+    state.clearLoginSetup();
+    state.loginRequiresExistingVault = false;
+    state.addProviderOpen = false;
+    state.applyActiveProviderCredentials();
+    await state.persistProviders();
+    log.info("sync provider saved");
+    return true;
+  } finally {
+    outcome.free();
+  }
 }

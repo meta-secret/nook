@@ -1,5 +1,67 @@
 use super::{NookError, NookSecretRecord, NookVaultManager, application, wasm_bindgen};
 
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookProviderSaveOutcomeState {
+    Saved,
+    Duplicate,
+    LocalFolderRequired,
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn existing_provider_save_setup() -> nook_core::ProviderSaveSetup {
+    nook_core::ProviderSaveSetup::Existing
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn new_provider_save_setup(
+    provider_type: nook_core::StorageProviderType,
+) -> nook_core::ProviderSaveSetup {
+    nook_core::ProviderSaveSetup::New(provider_type)
+}
+
+#[wasm_bindgen]
+pub struct NookProviderSaveOutcome(nook_core::ProviderSaveOutcome);
+
+#[wasm_bindgen]
+impl NookProviderSaveOutcome {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn state(&self) -> NookProviderSaveOutcomeState {
+        match self.0 {
+            nook_core::ProviderSaveOutcome::Saved { .. } => NookProviderSaveOutcomeState::Saved,
+            nook_core::ProviderSaveOutcome::Duplicate => NookProviderSaveOutcomeState::Duplicate,
+            nook_core::ProviderSaveOutcome::LocalFolderRequired => {
+                NookProviderSaveOutcomeState::LocalFolderRequired
+            }
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn snapshot(&self) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
+        match &self.0 {
+            nook_core::ProviderSaveOutcome::Saved { snapshot, .. } => Ok(snapshot.clone()),
+            _ => Err(wasm_bindgen::JsError::new(
+                "provider save outcome does not contain a snapshot",
+            )),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = oauthFile)]
+    pub fn oauth_file(
+        &self,
+    ) -> Result<nook_core::StoredOAuthFileConfiguration, wasm_bindgen::JsError> {
+        match &self.0 {
+            nook_core::ProviderSaveOutcome::Saved { oauth_file, .. } => Ok((**oauth_file).clone()),
+            _ => Err(wasm_bindgen::JsError::new(
+                "provider save outcome does not contain an OAuth configuration",
+            )),
+        }
+    }
+}
+
 /// Apply the portable provider-save transition. Browser storage and reactive
 /// state updates remain in the web adapter.
 #[wasm_bindgen]
@@ -7,8 +69,8 @@ use super::{NookError, NookSecretRecord, NookVaultManager, application, wasm_bin
 #[allow(clippy::needless_pass_by_value)]
 pub fn apply_provider_save_policy(
     request: nook_core::ProviderSaveRequest,
-) -> nook_core::ProviderSaveOutcome {
-    nook_core::apply_provider_save_policy(&request)
+) -> NookProviderSaveOutcome {
+    NookProviderSaveOutcome(nook_core::apply_provider_save_policy(&request))
 }
 
 #[wasm_bindgen]

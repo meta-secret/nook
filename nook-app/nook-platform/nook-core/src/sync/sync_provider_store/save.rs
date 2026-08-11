@@ -2,10 +2,10 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 use crate::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, OauthFilePreset,
-    ProviderSyncCheckpoint, ProviderVaultScope, StorageProviderType, StoredGithubPat,
-    StoredGithubRepository, StoredGoogleDriveFolder, StoredLocalFolderConfiguration,
-    StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, OAuthAccessTokenRef,
+    OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope, StorageProviderType,
+    StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
+    StoredLocalFolderConfiguration, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
     StoredOAuthRemoteFileName, StoredOAuthTokenExpiry, sync_provider_default_label,
 };
 
@@ -66,6 +66,10 @@ pub enum ProviderSaveOutcome {
     LocalFolderRequired,
 }
 
+enum ProviderConstructionError {
+    LocalFolderRequired,
+}
+
 fn non_empty(value: &str) -> Option<&str> {
     let value = value.trim();
     (!value.is_empty()).then_some(value)
@@ -112,9 +116,9 @@ fn configured_drive_file(request: &ProviderSaveRequest) -> String {
 fn new_provider(
     request: &ProviderSaveRequest,
     provider_type: StorageProviderType,
-) -> Option<StorageProviderData> {
+) -> Result<StorageProviderData, ProviderConstructionError> {
     match provider_type {
-        StorageProviderType::Local => Some(provider_defaults(
+        StorageProviderType::Local => Ok(provider_defaults(
             request,
             provider_type,
             sync_provider_default_label(provider_type, None, None),
@@ -128,7 +132,7 @@ fn new_provider(
             );
             provider.github_pat = StoredGithubPat::Token(request.github_pat.trim().to_owned());
             provider.github_repo = StoredGithubRepository::Repository(repo.to_owned());
-            Some(provider)
+            Ok(provider)
         }
         StorageProviderType::OauthFile => {
             let drive_file = configured_drive_file(request);
@@ -154,10 +158,13 @@ fn new_provider(
                 ),
             );
             provider.oauth_file = StoredOAuthFileConfiguration::Configured(oauth);
-            Some(provider)
+            Ok(provider)
         }
         StorageProviderType::LocalFolder => {
-            let folder = request.local_folder.as_ref()?;
+            let folder = request
+                .local_folder
+                .as_ref()
+                .ok_or(ProviderConstructionError::LocalFolderRequired)?;
             let detail = folder.directory_name.as_deref().and_then(non_empty);
             let mut provider = provider_defaults(
                 request,
@@ -165,7 +172,7 @@ fn new_provider(
                 sync_provider_default_label(provider_type, detail, None),
             );
             provider.local_folder = request.local_folder.clone();
-            Some(provider)
+            Ok(provider)
         }
     }
 }
@@ -177,9 +184,9 @@ fn merge_active_oauth(
 ) -> OAuthFileConfigData {
     OAuthFileConfigData {
         preset: active.preset,
-        access_token: match active.access_token {
-            StoredOAuthAccessCredential::AccessToken(_) => active.access_token.clone(),
-            StoredOAuthAccessCredential::SignedOut => persisted.access_token.clone(),
+        access_token: match active.usable_access_token() {
+            OAuthAccessTokenRef::Available(_) => active.access_token.clone(),
+            OAuthAccessTokenRef::Missing => persisted.access_token.clone(),
         },
         refresh_token: persisted.refresh_token.clone(),
         expires_at: match persisted.expires_at {
@@ -243,8 +250,11 @@ pub fn apply_provider_save_policy(request: &ProviderSaveRequest) -> ProviderSave
     let mut oauth_update_id = None;
 
     if request.setup.is_new() && provider_type != StorageProviderType::Local {
-        let Some(provider) = new_provider(request, provider_type) else {
-            return ProviderSaveOutcome::LocalFolderRequired;
+        let provider = match new_provider(request, provider_type) {
+            Ok(provider) => provider,
+            Err(ProviderConstructionError::LocalFolderRequired) => {
+                return ProviderSaveOutcome::LocalFolderRequired;
+            }
         };
         let duplicate = find_duplicate_sync_provider(&active_providers, &provider, None);
         if duplicate.is_some() && request.explicit_add {
@@ -330,6 +340,7 @@ mod tests {
 
     use super::{
         ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup, apply_provider_save_policy,
+        merge_active_oauth,
     };
     use crate::{AuthProvidersSnapshotData, OAuthFileConfigData, StorageProviderData};
 
@@ -455,5 +466,22 @@ mod tests {
             StoredOAuthRefreshCredential::NotIssued
         );
         assert_eq!(oauth_file.as_ref().as_ref(), Some(persisted));
+    }
+
+    #[test]
+    fn oauth_merge_preserves_a_valid_persisted_token_when_active_token_is_blank() {
+        let persisted_oauth = OAuthFileConfigData {
+            access_token: StoredOAuthAccessCredential::AccessToken("persisted-token".to_owned()),
+            file_id: StoredOAuthRemoteFileId::FileId("remote-file".to_owned()),
+            ..OAuthFileConfigData::default()
+        };
+        let active_oauth = OAuthFileConfigData {
+            access_token: StoredOAuthAccessCredential::AccessToken("   ".to_owned()),
+            file_id: StoredOAuthRemoteFileId::FileId("remote-file".to_owned()),
+            ..OAuthFileConfigData::default()
+        };
+
+        let merged = merge_active_oauth(&persisted_oauth, &active_oauth, "nook.yaml");
+        assert_eq!(merged.access_token.as_deref(), Some("persisted-token"));
     }
 }
