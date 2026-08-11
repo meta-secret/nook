@@ -42,7 +42,8 @@ const planBudgetFields = [
   },
   {
     label: 'Current PR slice and acceptance evidence',
-    pattern: /^- Current PR slice and acceptance evidence:\s*\S.+$/m,
+    pattern:
+      /^- Current PR slice and acceptance evidence:\s*(?!(?:None|N\/A|Not applicable)\s*$)\S.+;\s*Acceptance evidence:\s*(?!(?:None|N\/A|Not applicable)\s*$)\S.+$/im,
   },
   {
     label: 'PR slices and acceptance evidence',
@@ -171,11 +172,19 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
       .split(/^- PR slices and acceptance evidence:\s*/m)[1]
       .split(/^## Initial plan$/m)[0]
     if (deliveryShape === 'Multiple PRs') {
-      const sliceCount = [...sequenceBody.matchAll(/^\d+\.\s+\S/gm)].length
+      const sliceCount = [
+        ...sequenceBody.matchAll(
+          /^\d+\.\s+(?!(?:None|N\/A|Not applicable)\s*$)\S.+;\s*Acceptance evidence:\s*(?!(?:None|N\/A|Not applicable)\s*$)\S.+$/gim,
+        ),
+      ].length
       if (sliceCount < 2) {
-        return 'multi-PR plan requires at least two ordered slices'
+        return 'multi-PR plan requires at least two ordered slices with acceptance evidence'
       }
-    } else if (!sequenceBody.trim()) {
+    } else if (
+      !/^(?!(?:None|N\/A|Not applicable)\s*$)\S.+;\s*Acceptance evidence:\s*(?!(?:None|N\/A|Not applicable)\s*$)\S.+$/im.test(
+        sequenceBody.trim(),
+      )
+    ) {
       return 'one-PR plan requires slice acceptance evidence'
     }
   }
