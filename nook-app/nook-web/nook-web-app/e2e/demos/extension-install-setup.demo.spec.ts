@@ -9,8 +9,7 @@ import {
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 
 type ExtensionInstallDemoMessage =
-  | ExtensionPairedVaultIdentityDiscoveryMessage
-  | OpenCompanionLauncherMessage
+  ExtensionPairedVaultIdentityDiscoveryMessage | OpenCompanionLauncherMessage
 
 // The repository-wide typed API contract covers the shared Svelte workspace
 // used by this flow. Keep this demo as the visible proof that extension install
