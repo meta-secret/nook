@@ -415,8 +415,12 @@ Issue-backed runs use the Workbench issue owner.
 
 Prompt-backed runs require the `continuing_owner` dispatch input.
 
-That handoff makes the continuing agent the task owner. It must carry the PR
-through merge.
+The owner must be a Nook GitHub collaborator with write access.
+
+Before the worker exits, it assigns the PR to that collaborator and posts a
+direct mention. That notification is the explicit handoff.
+
+The continuing owner must carry the PR through merge.
 
 Full policy: [workflows/coding-bro.md](workflows/coding-bro.md).
 
@@ -630,9 +634,9 @@ publishes a concise task plan containing its own public-safe interpretation of
 the user's requirements, constraints, intended steps, and completion evidence;
 raw prompts and chat transcripts are forbidden. At completion or blockage, the
 agent publishes a worklog linked to that plan with progress, problems,
-decisions, validation, and remaining work. Only a Workbench issue explicitly
-marked `status: ready` and `automation: agent` may trigger the scheduled
-implementation worker. Full policy:
+decisions, validation, and remaining work. A Workbench issue may trigger the
+scheduled implementation worker only when it has `status: ready`, `automation:
+agent`, and an assignable Nook GitHub collaborator as its owner. Full policy:
 [workflows/issues.md](workflows/issues.md).
 
 ## ⛔ Non-negotiable: record and analyze AI-agent PR statistics

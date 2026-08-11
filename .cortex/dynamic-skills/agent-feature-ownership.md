@@ -69,8 +69,8 @@ Does not apply to:
 
 - read-only inspection used to avoid overlap;
 - an explicit user, owner, or orchestrator handoff;
-- a bounded worker handing its own PR to the continuing owner named in the PR's
-  `## Ownership` section;
+- a bounded worker assigning its own PR to the continuing owner and posting a
+  direct mention;
 - repository automation acting within its documented machine-owned scope.
 
 For a bounded worker:
@@ -78,14 +78,20 @@ For a bounded worker:
 - an issue-backed run takes the continuing owner from the claimed Workbench
   issue;
 - a prompt-backed run requires the `continuing_owner` workflow input;
+- the continuing owner must be a Nook GitHub collaborator with write access;
+- the workflow assigns the PR to that owner;
+- the workflow posts a direct mention before it exits;
 - the generated PR records that owner and the exact owned scope.
 
 ## Examples
 
-- Before: an agent finds a related PR, pushes fixes to it, resolves its threads,
-  and prepares to merge it without owning its issue.
-- After: the agent records the overlap, leaves the PR untouched, and continues
-  only its assigned feature.
+- Before: an agent finds a related PR that it does not own.
+- It pushes fixes to that PR.
+- It resolves the PR's review threads.
+- It prepares the PR for merge.
+- After: the agent records the overlap.
+- It leaves the PR untouched.
+- It continues only its assigned feature.
 - Before: an agent closes another task's PR because it interprets a new request
   as cancellation.
 - After: only the owning agent changes that PR after the user explicitly

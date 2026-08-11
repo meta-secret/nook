@@ -2,7 +2,8 @@
 # meta-secret/nook-workbench (or accept a manual prompt), implement it, and open
 # a Nook PR. The bounded worker publishes its interpreted task plan before
 # implementation, records its worklog afterward, and exits; a continuing
-# task-owning agent owns validation and merge.
+# task-owning GitHub collaborator is assigned and notified to own validation
+# and merge.
 
 name: Agent implement
 
@@ -20,7 +21,7 @@ on:
         required: false
         type: string
       continuing_owner:
-        description: Required continuing agent identity for a prompt-backed run
+        description: Required GitHub login for the prompt-backed continuing owner
         required: false
         type: string
 
@@ -70,7 +71,7 @@ jobs:
             exit 1
           fi
           if [ -n "$CONTINUING_OWNER" ] && ! printf '%s' "$CONTINUING_OWNER" | grep -Eq '^[a-z0-9][a-z0-9._-]*$'; then
-            echo "::error::continuing_owner must be a lowercase agent identity."
+            echo "::error::continuing_owner must be a lowercase GitHub login."
             exit 1
           fi
 
@@ -133,8 +134,32 @@ jobs:
               const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
               const continuingOwner = String(value(body, 'owner')).trim()
               if (!/^[a-z0-9][a-z0-9._-]*$/.test(continuingOwner) || continuingOwner === 'unassigned') {
-                core.setFailed(`${path} must name a continuing agent in owner before automation can claim it`)
-                return
+                if (requestedPath) {
+                  core.setFailed(`${path} must name a continuing GitHub owner before automation can claim it`)
+                  return
+                }
+                core.info(`Skipping ${path}: owner must name a continuing GitHub collaborator.`)
+                continue
+              }
+              let permission = 'none'
+              try {
+                const response = await github.rest.repos.getCollaboratorPermissionLevel({
+                  ...context.repo,
+                  username: continuingOwner,
+                })
+                permission = response.data.permission
+              } catch (error) {
+                if (requestedPath) throw error
+                core.info(`Skipping ${path}: ${continuingOwner} is not an assignable Nook collaborator.`)
+                continue
+              }
+              if (!['admin', 'maintain', 'write'].includes(permission)) {
+                if (requestedPath) {
+                  core.setFailed(`${path} owner ${continuingOwner} must have write access to Nook`)
+                  return
+                }
+                core.info(`Skipping ${path}: ${continuingOwner} does not have Nook write access.`)
+                continue
               }
               const claimed = body
                 .replace(/^status:\s*ready$/m, 'status: in_progress')
@@ -232,6 +257,24 @@ jobs:
             echo "${delim}"
           } >> "$GITHUB_ENV"
           echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Validate continuing GitHub owner
+        if: steps.task.outputs.ready == 'true'
+        uses: actions/github-script@v9
+        env:
+          CONTINUING_AGENT_OWNER: ${{ env.CONTINUING_AGENT_OWNER }}
+        with:
+          github-token: ${{ secrets.NOOK_GITHUB_PAT }}
+          retries: 3
+          script: |
+            const username = process.env.CONTINUING_AGENT_OWNER
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              ...context.repo,
+              username,
+            })
+            if (!['admin', 'maintain', 'write'].includes(data.permission)) {
+              core.setFailed(`${username} must be an assignable Nook collaborator with write access`)
+            }
 
       - name: Docker setup
         if: steps.task.outputs.ready == 'true'
@@ -372,6 +415,30 @@ jobs:
             const pull = pulls.data[0]
             const success = process.env.IMPLEMENT_OUTCOME === 'success' && Boolean(pull)
             const multiPrPlan = process.env.MULTI_PR_PLAN === 'true'
+            if (success) {
+              const continuingOwner = process.env.CONTINUING_AGENT_OWNER
+              await github.rest.issues.addAssignees({
+                ...context.repo,
+                issue_number: pull.number,
+                assignees: [continuingOwner],
+              })
+              const { data: assignedPull } = await github.rest.issues.get({
+                ...context.repo,
+                issue_number: pull.number,
+              })
+              const ownerWasAssigned = assignedPull.assignees?.some(
+                ({ login }) => login.toLowerCase() === continuingOwner.toLowerCase(),
+              ) ?? false
+              if (!ownerWasAssigned) {
+                core.setFailed(`Failed to assign PR #${pull.number} to ${continuingOwner}`)
+                return
+              }
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: pull.number,
+                body: `@${continuingOwner} this workflow assigned you PR #${pull.number}. Continue only this PR's recorded scope through review, exact-head validation, and squash merge.`,
+              })
+            }
             const summaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
             const fallbackSummary = [
                   '# Automated agent work summary',
@@ -398,7 +465,7 @@ jobs:
                   '',
                   '## Remaining work',
                   '',
-                  success ? `- Continuing agent \`${process.env.CONTINUING_AGENT_OWNER}\` owns validation and merge for the Nook PR.` : multiPrPlan ? '- Materialize the feature and ordered focused issues from the published plan, then dispatch the first bounded issue.' : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
+                  success ? `- GitHub assigned and notified continuing owner \`${process.env.CONTINUING_AGENT_OWNER}\` for validation and merge of the Nook PR.` : multiPrPlan ? '- Materialize the feature and ordered focused issues from the published plan, then dispatch the first bounded issue.' : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
                 ].join('\n')
             let summary = fallbackSummary
             if (fs.existsSync(summaryPath)) {

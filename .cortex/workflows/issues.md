@@ -132,15 +132,24 @@ Valid statuses are `proposed`, `ready`, `in_progress`, `blocked`, `done`, and
 reserved for trusted Main-failure incidents consumed by the isolated k0s Hive
 dispatcher; the scheduled implementation workflow must not claim those records.
 
-Only this exact combination authorizes the scheduled Nook implementation worker:
+This combination makes a record a candidate for the scheduled Nook
+implementation worker:
 
 ```yaml
 status: ready
 automation: agent
+owner: <nook-github-collaborator>
 ```
 
-Creating or editing any other record must not start implementation. The worker
-claims a ready record by committing `status: in_progress` before it runs.
+The owner must be an assignable Nook GitHub collaborator with write access.
+
+The scheduled scan skips candidate records with a missing or unassigned owner.
+An explicitly requested ownerless record fails without implementation.
+
+Creating or editing any other record must not start implementation.
+
+The worker claims an eligible record by committing `status: in_progress`
+before it runs.
 
 Main-failure handoff records instead use `status: ready` with `automation:
 hive`.

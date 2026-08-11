@@ -34,7 +34,7 @@ to generate bookkeeping.
   or merge state.
 - Require an explicit handoff before ownership changes.
 - Never erase prior findings, decisions, blockers, or validation evidence.
-- Only `status: ready` plus `automation: agent` authorizes automation.
+- Automation also requires an assigned Nook GitHub collaborator as owner.
 - Never store prompts, chats, secrets, credentials, vault data, private user
   information, environment values, or raw logs.
 

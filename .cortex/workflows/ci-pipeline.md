@@ -116,8 +116,10 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 **`agent-implement.yml`**
 
-- Atomically claims one `status: ready`, `automation: agent` Markdown issue.
-- Cursor SDK implement → PR opened → Workbench progress/worklog published → workflow exits.
+- Atomically claims one ready agent issue with an assigned Nook GitHub
+  collaborator.
+- Cursor SDK implement → PR opened → owner assigned and mentioned → Workbench
+  progress/worklog published → workflow exits.
 
 **`e2e-pr.yml`**
 
@@ -960,20 +962,25 @@ Smoke coverage: [`.github/workflows/ci-agent-smoke.yml`](../../.github/workflows
 
 | Trigger | When it runs |
 | --- | --- |
-| `schedule` | Twice hourly; claims the first Workbench file with `status: ready` and `automation: agent` |
+| `schedule` | Twice hourly; claims the first ready agent record with an assigned Nook GitHub collaborator |
 | `workflow_dispatch.issue_path` | Claims that exact eligible Workbench issue |
 | `workflow_dispatch.prompt` | Runs the explicit prompt without claiming an issue |
 
-The workflow serializes claims, commits `status: in_progress` before setup, and
-publishes a Workbench progress update and worklog whether implementation opens a
-PR or blocks. Drafts, manually owned issues, and historical imports cannot
-trigger it.
+The workflow serializes claims. Eligibility requires `status: ready`,
+`automation: agent`, and an owner who is a Nook GitHub collaborator with write
+access. Scheduled scans skip ownerless records. The worker commits `status:
+in_progress` before setup.
+
+The workflow publishes a Workbench progress update and worklog whether
+implementation opens a PR or blocks. Drafts, manually owned issues, and
+historical imports cannot trigger it.
 
 Loop: claim Workbench record → `task setup` → **`task ci-agent:implement`**
 (nook-ci-agent container + docker.sock) → push branch → open a Nook PR →
-publish Workbench progress/worklog → exit. The PR then follows the standard
-agent-owned failure/comment/conflict loop, exact-head readiness audit, squash
-merge, and final Workbench completion update. Agent secrets:
+assign and directly mention the continuing owner → publish Workbench
+progress/worklog → exit. The assigned owner then follows the standard
+failure/comment/conflict loop, exact-head readiness audit, squash merge, and
+final Workbench completion update. Agent secrets:
 `CURSOR_API_KEY`, `NOOK_GITHUB_PAT`. Prompt:
 [`.github/prompts/agent-implement.md`](../../.github/prompts/agent-implement.md).
 
