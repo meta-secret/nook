@@ -132,15 +132,24 @@ Valid statuses are `proposed`, `ready`, `in_progress`, `blocked`, `done`, and
 reserved for trusted Main-failure incidents consumed by the isolated k0s Hive
 dispatcher; the scheduled implementation workflow must not claim those records.
 
-Only this exact combination authorizes the scheduled Nook implementation worker:
+This combination makes a record a candidate for the scheduled Nook
+implementation worker:
 
 ```yaml
 status: ready
 automation: agent
+owner: <nook-github-collaborator>
 ```
 
-Creating or editing any other record must not start implementation. The worker
-claims a ready record by committing `status: in_progress` before it runs.
+The owner must be an assignable Nook GitHub collaborator with write access.
+
+The scheduled scan skips candidate records with a missing or unassigned owner.
+An explicitly requested ownerless record fails without implementation.
+
+Creating or editing any other record must not start implementation.
+
+The worker claims an eligible record by committing `status: in_progress`
+before it runs.
 
 Main-failure handoff records instead use `status: ready` with `automation:
 hive`.
@@ -199,6 +208,11 @@ dependencies, related PRs, and recent worklogs.
 Agents must not:
 
 - claim or reassign another active owner's `in_progress` work;
+- mutate another active task's branch;
+- mutate another active task's pull request;
+- reply to or resolve another active task's reviews;
+- trigger another active task's checks;
+- change another active task's merge state;
 - mark acceptance criteria done without validation evidence;
 - delete prior findings, failed approaches, blockers, or decisions;
 - switch `automation: agent` or `status: ready` merely to organize a draft;
@@ -206,8 +220,16 @@ Agents must not:
 - store credentials, secrets, vault data, private user information, environment
   values, or raw logs in any record.
 
-When overlap is uncertain, append the finding to the likely issue and leave it
-`proposed` rather than creating a competing execution record.
+When overlap involves another active owner, report the finding without changing
+their record.
+
+When no active owner exists, add the finding to the likely issue. Leave a new
+record `proposed` rather than creating competing execution state.
+
+Related scope does not transfer ownership. An explicit user, owner, or
+orchestrator handoff is required before another agent may mutate the feature or
+its focused issues. See
+[agent-feature-ownership.md](../dynamic-skills/agent-feature-ownership.md).
 
 ## Task-start plan requirement
 

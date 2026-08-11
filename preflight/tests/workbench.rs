@@ -40,6 +40,18 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "status: ready",
         "automation: agent",
         "status: in_progress",
+        "continuing_owner:",
+        "A prompt-backed run requires continuing_owner.",
+        "continuing_owner must be a lowercase GitHub login.",
+        "must name a continuing GitHub owner before automation can claim it",
+        "## Ownership",
+        "CONTINUING_AGENT_OWNER",
+        "Validate continuing GitHub owner",
+        "getCollaboratorPermissionLevel",
+        "addAssignees",
+        "issues.createComment",
+        "Skipping ${path}: owner must name a continuing GitHub collaborator.",
+        "Skipping ${path}: ${continuingOwner} does not have Nook write access.",
         "Supply either issue_path or prompt, not both",
         "Claim ready Workbench issue",
         "Run task-planning agent",
@@ -94,6 +106,59 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         workflow.find("Validate and publish Workbench task plan")
             < workflow.find("Run ci-agent implement"),
         "the workflow must publish the interpreted task plan before implementation"
+    );
+    Ok(())
+}
+
+#[test]
+fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> {
+    let agent_map = read(".cortex/AGENTS.md");
+    let coding_workflow = read(".cortex/workflows/coding-bro.md");
+    let issue_workflow = read(".cortex/workflows/issues.md");
+    let pull_request_workflow = read(".cortex/workflows/pull-requests.md");
+    let ownership_skill = read(".cortex/dynamic-skills/agent-feature-ownership.md");
+
+    for required in [
+        "agents mutate only their owned feature",
+        "Another active agent's work is read-only",
+        "wait for an explicit user, owner, or orchestrator handoff",
+    ] {
+        assert!(
+            agent_map.contains(required),
+            "agent map is missing ownership guard: {required}"
+        );
+    }
+
+    for required in [
+        "Treat every other active task as read-only",
+        "current task's owned feature and focused issue set",
+        "Require an explicit handoff first",
+    ] {
+        assert!(
+            coding_workflow.contains(required),
+            "coding workflow is missing ownership guard: {required}"
+        );
+    }
+
+    assert!(
+        issue_workflow.contains("Related scope does not transfer ownership")
+            && issue_workflow.contains("mutate another active task's branch")
+            && issue_workflow.contains("trigger another active task's checks")
+            && issue_workflow.contains("change another active task's merge state"),
+        "Workbench issue guidance must protect active task ownership"
+    );
+    assert!(
+        pull_request_workflow
+            .contains("Another active task's branch and pull request are read-only")
+            && pull_request_workflow.contains("explicit handoff."),
+        "pull-request workflow must reject foreign task mutation"
+    );
+    assert!(
+        ownership_skill.contains("replying to or resolving its review threads")
+            && ownership_skill.contains("closing, reopening, or merging its pull request")
+            && ownership_skill.contains("Recheck ownership before every remote mutation")
+            && ownership_skill.contains("prompt-backed run requires the `continuing_owner`"),
+        "agent feature ownership skill must cover PR and review mutations"
     );
     Ok(())
 }

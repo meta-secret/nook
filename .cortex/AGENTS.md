@@ -343,6 +343,31 @@ and procedural-macro entrypoints. Full contract:
 
 **All pull requests merged into `main` MUST be squash-merged** (GitHub: **Squash and merge**; CLI: `gh pr merge --squash`). One PR = one commit on `main`. Merge commits and rebase merges are **forbidden**. Full policy: [rules.md §6](rules.md#6-git--pull-request-workflow).
 
+## ⛔ Non-negotiable: agents mutate only their owned feature
+
+Every agent must stay inside its assigned feature and focused issue set.
+
+Another active agent's work is read-only.
+
+Without an explicit handoff, an agent must not:
+
+- edit or push to another task's branch;
+- change another task's Workbench records;
+- reply to or resolve another task's review threads;
+- change another task's PR labels, checks, open state, or merge state;
+- close, reopen, or merge another task's pull request.
+
+Related subject matter is not ownership.
+
+Before every remote mutation, verify that the target belongs to the current
+task's feature and issue set.
+
+If ownership is missing or ambiguous, stop mutating that target. Report the
+overlap and wait for an explicit user, owner, or orchestrator handoff.
+
+Full policy:
+[dynamic-skills/agent-feature-ownership.md](dynamic-skills/agent-feature-ownership.md).
+
 ## ⛔ Non-negotiable: implementation agents land their PRs
 
 Every task-owning implementation agent with GitHub write access must:
@@ -383,7 +408,19 @@ The bounded `agent-implement.yml` worker is not a continuing task owner.
 
 Its harness owns git/push/PR creation and exits after opening the PR.
 
-A continuing agent must take ownership of that PR and carry this lifecycle through merge.
+A continuing agent may accept that PR only when the workflow names it in the
+PR's `## Ownership` section.
+
+Issue-backed runs use the Workbench issue owner.
+
+Prompt-backed runs require the `continuing_owner` dispatch input.
+
+The owner must be a Nook GitHub collaborator with write access.
+
+Before the worker exits, it assigns the PR to that collaborator and posts a
+direct mention. That notification is the explicit handoff.
+
+The continuing owner must carry the PR through merge.
 
 Full policy: [workflows/coding-bro.md](workflows/coding-bro.md).
 
@@ -597,9 +634,9 @@ publishes a concise task plan containing its own public-safe interpretation of
 the user's requirements, constraints, intended steps, and completion evidence;
 raw prompts and chat transcripts are forbidden. At completion or blockage, the
 agent publishes a worklog linked to that plan with progress, problems,
-decisions, validation, and remaining work. Only a Workbench issue explicitly
-marked `status: ready` and `automation: agent` may trigger the scheduled
-implementation worker. Full policy:
+decisions, validation, and remaining work. A Workbench issue may trigger the
+scheduled implementation worker only when it has `status: ready`, `automation:
+agent`, and an assignable Nook GitHub collaborator as its owner. Full policy:
 [workflows/issues.md](workflows/issues.md).
 
 ## ⛔ Non-negotiable: record and analyze AI-agent PR statistics

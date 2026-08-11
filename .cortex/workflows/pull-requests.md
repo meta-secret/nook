@@ -2,12 +2,31 @@
 
 Use this checklist for every change that lands on `main`. **AI agents must follow [coding-bro.md](coding-bro.md)** — the default implement-to-merge pipeline — and the detailed [agent pipeline](#agent-pipeline) below. Do not stop at push.
 
+This workflow applies only to the current task's owned feature and focused
+issues.
+
+Another active task's branch and pull request are read-only.
+
+Without an explicit handoff, do not:
+
+- push to it;
+- reply to its reviews;
+- resolve its reviews;
+- close or reopen it;
+- change its labels;
+- trigger its checks;
+- merge it.
+
+Full ownership policy:
+[agent-feature-ownership.md](../dynamic-skills/agent-feature-ownership.md).
+
 ## PR-first agent contract
 
 For implementation tasks, the agent's default job is not "make local edits".
 It is "land a PR with Nook's applicable GitHub Actions PR test checks green."
 
-Start by establishing the PR path, then keep ownership until merge or a concrete blocked handoff:
+Start by confirming feature ownership and establishing the PR path. Keep that
+ownership until merge or a concrete blocked handoff:
 
 1. **Prepare the PR path first:**
    - Fetch `origin/main`.

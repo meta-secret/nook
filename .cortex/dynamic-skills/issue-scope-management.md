@@ -30,8 +30,14 @@ to generate bookkeeping.
 ## Safety
 
 - Never claim another owner's `in_progress` record.
+- Never mutate another active task's branch.
+- Never mutate another active task's pull request.
+- Never reply to or resolve another active task's reviews.
+- Never trigger another active task's checks.
+- Never change another active task's merge state.
+- Require an explicit handoff before ownership changes.
 - Never erase prior findings, decisions, blockers, or validation evidence.
-- Only `status: ready` plus `automation: agent` authorizes automation.
+- Automation also requires an assigned Nook GitHub collaborator as owner.
 - Never store prompts, chats, secrets, credentials, vault data, private user
   information, environment values, or raw logs.
 
@@ -39,6 +45,7 @@ to generate bookkeeping.
 
 - [ ] Search Workbench issues and worklogs with user and code vocabulary.
 - [ ] Inspect likely feature summaries, dependencies, owners, status, and PRs.
+- [ ] Treat every other active task as read-only.
 - [ ] Update the existing record or create a focused non-duplicate.
 - [ ] Record the ordered issue and PR sequence for a feature above 5,000
       authored changed lines.

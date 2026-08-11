@@ -2,7 +2,8 @@
 # meta-secret/nook-workbench (or accept a manual prompt), implement it, and open
 # a Nook PR. The bounded worker publishes its interpreted task plan before
 # implementation, records its worklog afterward, and exits; a continuing
-# task-owning agent owns validation and merge.
+# task-owning GitHub collaborator is assigned and notified to own validation
+# and merge.
 
 name: Agent implement
 
@@ -17,6 +18,10 @@ on:
         type: string
       prompt:
         description: Optional free-text implementation prompt
+        required: false
+        type: string
+      continuing_owner:
+        description: Required GitHub login for the prompt-backed continuing owner
         required: false
         type: string
 
@@ -52,10 +57,23 @@ jobs:
           token: ${{ secrets.NOOK_GITHUB_PAT }}
 
       - name: Validate dispatch inputs
-        if: inputs.prompt != '' && inputs.issue_path != ''
+        env:
+          CONTINUING_OWNER: ${{ inputs.continuing_owner }}
+          ISSUE_PATH: ${{ inputs.issue_path }}
+          PROMPT: ${{ inputs.prompt }}
         run: |
-          echo "::error::Supply either issue_path or prompt, not both; an issue-backed run must claim its Workbench record."
-          exit 1
+          if [ -n "$PROMPT" ] && [ -n "$ISSUE_PATH" ]; then
+            echo "::error::Supply either issue_path or prompt, not both; an issue-backed run must claim its Workbench record."
+            exit 1
+          fi
+          if [ -n "$PROMPT" ] && [ -z "$CONTINUING_OWNER" ]; then
+            echo "::error::A prompt-backed run requires continuing_owner."
+            exit 1
+          fi
+          if [ -n "$CONTINUING_OWNER" ] && ! printf '%s' "$CONTINUING_OWNER" | grep -Eq '^[a-z0-9][a-z0-9._-]*$'; then
+            echo "::error::continuing_owner must be a lowercase GitHub login."
+            exit 1
+          fi
 
       - name: Claim ready Workbench issue
         id: workbench
@@ -114,6 +132,35 @@ jobs:
               }
 
               const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+              const continuingOwner = String(value(body, 'owner')).trim()
+              if (!/^[a-z0-9][a-z0-9._-]*$/.test(continuingOwner) || continuingOwner === 'unassigned') {
+                if (requestedPath) {
+                  core.setFailed(`${path} must name a continuing GitHub owner before automation can claim it`)
+                  return
+                }
+                core.info(`Skipping ${path}: owner must name a continuing GitHub collaborator.`)
+                continue
+              }
+              let permission = 'none'
+              try {
+                const response = await github.rest.repos.getCollaboratorPermissionLevel({
+                  ...context.repo,
+                  username: continuingOwner,
+                })
+                permission = response.data.permission
+              } catch (error) {
+                if (requestedPath) throw error
+                core.info(`Skipping ${path}: ${continuingOwner} is not an assignable Nook collaborator.`)
+                continue
+              }
+              if (!['admin', 'maintain', 'write'].includes(permission)) {
+                if (requestedPath) {
+                  core.setFailed(`${path} owner ${continuingOwner} must have write access to Nook`)
+                  return
+                }
+                core.info(`Skipping ${path}: ${continuingOwner} does not have Nook write access.`)
+                continue
+              }
               const claimed = body
                 .replace(/^status:\s*ready$/m, 'status: in_progress')
                 .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
@@ -133,6 +180,7 @@ jobs:
               core.setOutput('body', body)
               core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${path}`)
               core.setOutput('slug', path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-'))
+              core.setOutput('continuing_owner', continuingOwner)
               return
             }
 
@@ -148,6 +196,8 @@ jobs:
           ISSUE_PATH: ${{ steps.workbench.outputs.path }}
           ISSUE_TITLE: ${{ steps.workbench.outputs.title }}
           ISSUE_URL: ${{ steps.workbench.outputs.url }}
+          ISSUE_CONTINUING_OWNER: ${{ steps.workbench.outputs.continuing_owner }}
+          MANUAL_CONTINUING_OWNER: ${{ inputs.continuing_owner }}
           RUN_ID: ${{ github.run_id }}
           WORKBENCH_SLUG: ${{ steps.workbench.outputs.slug }}
         run: |
@@ -157,10 +207,12 @@ jobs:
             branch="agent/prompt-${RUN_ID}"
             title="Agent implement (run ${RUN_ID})"
             task="$DISPATCH_PROMPT"
+            continuing_owner="$MANUAL_CONTINUING_OWNER"
           else
             branch="agent/workbench-${WORKBENCH_SLUG}-${RUN_ID}"
             title="Implement ${ISSUE_TITLE}"
             task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
+            continuing_owner="$ISSUE_CONTINUING_OWNER"
           fi
           feature="${ISSUE_PATH:-issues/unplanned/task.md}"
           feature="$(printf '%s' "$feature" | cut -d/ -f2)"
@@ -183,6 +235,7 @@ jobs:
             echo "TASK_PLAN_PATH=$plan_path"
             echo "TASK_PLAN_STARTED_AT=$plan_started_at"
             echo "TASK_TITLE=$title"
+            echo "CONTINUING_AGENT_OWNER=$continuing_owner"
             echo "AGENT_PR_BODY<<${delim}"
             printf '%s\n' "## Summary"
             if [ -n "$ISSUE_URL" ]; then
@@ -191,11 +244,37 @@ jobs:
               printf '%s\n' "Agent implementation from a manual workflow prompt."
             fi
             printf '%s\n' ""
+            printf '%s\n' "## Ownership"
+            printf '%s\n' "Continuing agent: \`${continuing_owner}\`"
+            if [ -n "$ISSUE_URL" ]; then
+              printf '%s\n' "Owned scope: \`${ISSUE_PATH}\`"
+            else
+              printf '%s\n' "Owned scope: manual prompt run \`${RUN_ID}\`"
+            fi
+            printf '%s\n' ""
             printf '%s\n' "## Test plan"
             printf '%s\n' "- [ ] CI green on this PR"
             echo "${delim}"
           } >> "$GITHUB_ENV"
           echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Validate continuing GitHub owner
+        if: steps.task.outputs.ready == 'true'
+        uses: actions/github-script@v9
+        env:
+          CONTINUING_AGENT_OWNER: ${{ env.CONTINUING_AGENT_OWNER }}
+        with:
+          github-token: ${{ secrets.NOOK_GITHUB_PAT }}
+          retries: 3
+          script: |
+            const username = process.env.CONTINUING_AGENT_OWNER
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              ...context.repo,
+              username,
+            })
+            if (!['admin', 'maintain', 'write'].includes(data.permission)) {
+              core.setFailed(`${username} must be an assignable Nook collaborator with write access`)
+            }
 
       - name: Docker setup
         if: steps.task.outputs.ready == 'true'
@@ -311,6 +390,7 @@ jobs:
           WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
           CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
           NOOK_SECRET: ${{ secrets.NOOK_GITHUB_PAT }}
+          CONTINUING_AGENT_OWNER: ${{ env.CONTINUING_AGENT_OWNER }}
         with:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
@@ -335,6 +415,30 @@ jobs:
             const pull = pulls.data[0]
             const success = process.env.IMPLEMENT_OUTCOME === 'success' && Boolean(pull)
             const multiPrPlan = process.env.MULTI_PR_PLAN === 'true'
+            if (success) {
+              const continuingOwner = process.env.CONTINUING_AGENT_OWNER
+              await github.rest.issues.addAssignees({
+                ...context.repo,
+                issue_number: pull.number,
+                assignees: [continuingOwner],
+              })
+              const { data: assignedPull } = await github.rest.issues.get({
+                ...context.repo,
+                issue_number: pull.number,
+              })
+              const ownerWasAssigned = assignedPull.assignees?.some(
+                ({ login }) => login.toLowerCase() === continuingOwner.toLowerCase(),
+              ) ?? false
+              if (!ownerWasAssigned) {
+                core.setFailed(`Failed to assign PR #${pull.number} to ${continuingOwner}`)
+                return
+              }
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: pull.number,
+                body: `@${continuingOwner} this workflow assigned you PR #${pull.number}. Continue only this PR's recorded scope through review, exact-head validation, and squash merge.`,
+              })
+            }
             const summaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
             const fallbackSummary = [
                   '# Automated agent work summary',
@@ -361,7 +465,7 @@ jobs:
                   '',
                   '## Remaining work',
                   '',
-                  success ? '- A continuing task-owning agent must validate and merge the Nook PR.' : multiPrPlan ? '- Materialize the feature and ordered focused issues from the published plan, then dispatch the first bounded issue.' : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
+                  success ? `- GitHub assigned and notified continuing owner \`${process.env.CONTINUING_AGENT_OWNER}\` for validation and merge of the Nook PR.` : multiPrPlan ? '- Materialize the feature and ordered focused issues from the published plan, then dispatch the first bounded issue.' : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
                 ].join('\n')
             let summary = fallbackSummary
             if (fs.existsSync(summaryPath)) {
