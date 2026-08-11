@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
+import type { Mock } from 'vitest'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
   providerPersistenceDefaults,
@@ -20,10 +21,13 @@ import {
   OAuthSetupPresetKind,
 } from '$lib/vault/state/provider.svelte'
 
-type AdapterState = ProviderSaveContext & {
-  persistProviders: ReturnType<typeof vi.fn>
-  clearLoginSetup: ReturnType<typeof vi.fn>
-  applyActiveProviderCredentials: ReturnType<typeof vi.fn>
+type AdapterState = Omit<
+  ProviderSaveContext,
+  'persistProviders' | 'clearLoginSetup' | 'applyActiveProviderCredentials'
+> & {
+  persistProviders: Mock<() => Promise<void>>
+  clearLoginSetup: Mock<() => void>
+  applyActiveProviderCredentials: Mock<() => void>
 }
 
 function providerState(providerType: StorageProviderType): AdapterState {
