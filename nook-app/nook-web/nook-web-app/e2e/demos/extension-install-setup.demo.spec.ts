@@ -99,6 +99,14 @@ test('offer browser extension install on vault home and in Devices', async ({
     'data-demo-extension-message-types',
     /nook:extension-paired-vault-identity-discovery/,
   )
+  const discoveryMessage = JSON.parse(
+    (await page.locator('html').getAttribute('data-demo-extension-message')) ??
+      '{}',
+  ) as { payload?: Record<string, string> }
+  expect(Object.keys(discoveryMessage.payload ?? {}).sort()).toEqual([
+    'requestId',
+    'vaultStoreId',
+  ])
   await page.getByTestId('extension-install-setup-connect').click()
   // Concrete companion request and response domains must preserve the exact
   // message envelope while the browser boundary rejects unnamed value bags.
