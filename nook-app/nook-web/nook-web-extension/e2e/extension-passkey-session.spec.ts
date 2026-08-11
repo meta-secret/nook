@@ -70,7 +70,7 @@ function parseExtensionConnectionParameters(
   const deviceId = connectionUrl.searchParams.get(
     ExtensionConnectionParameter.DeviceId,
   )
-  if (typeof deviceId !== 'string') {
+  if (typeof deviceId !== 'string' || deviceId.trim().length === 0) {
     return {
       kind: ExtensionConnectionParametersParseKind.Invalid,
       missingParameter: ExtensionConnectionParameter.DeviceId,
@@ -79,7 +79,10 @@ function parseExtensionConnectionParameters(
   const devicePublicKey = connectionUrl.searchParams.get(
     ExtensionConnectionParameter.DevicePublicKey,
   )
-  if (typeof devicePublicKey !== 'string') {
+  if (
+    typeof devicePublicKey !== 'string' ||
+    devicePublicKey.trim().length === 0
+  ) {
     return {
       kind: ExtensionConnectionParametersParseKind.Invalid,
       missingParameter: ExtensionConnectionParameter.DevicePublicKey,
@@ -88,7 +91,10 @@ function parseExtensionConnectionParameters(
   const deviceSigningPublicKey = connectionUrl.searchParams.get(
     ExtensionConnectionParameter.DeviceSigningPublicKey,
   )
-  if (typeof deviceSigningPublicKey !== 'string') {
+  if (
+    typeof deviceSigningPublicKey !== 'string' ||
+    deviceSigningPublicKey.trim().length === 0
+  ) {
     return {
       kind: ExtensionConnectionParametersParseKind.Invalid,
       missingParameter: ExtensionConnectionParameter.DeviceSigningPublicKey,
@@ -97,7 +103,7 @@ function parseExtensionConnectionParameters(
   const handoffNonce = connectionUrl.searchParams.get(
     ExtensionConnectionParameter.HandoffNonce,
   )
-  if (typeof handoffNonce !== 'string') {
+  if (typeof handoffNonce !== 'string' || handoffNonce.trim().length === 0) {
     return {
       kind: ExtensionConnectionParametersParseKind.Invalid,
       missingParameter: ExtensionConnectionParameter.HandoffNonce,
