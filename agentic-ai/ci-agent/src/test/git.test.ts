@@ -23,6 +23,7 @@ describe("countAuthoredNumstat", () => {
       "tests/olé-new.snap",
       "15\t4\tvendor/library.ts",
       "10\t0\tgenerated/client.ts",
+      "14\t2\tnook-app/nook-web/nook-web-app/src/landing/generated-message-keys.ts",
       "-\t-\tassets/demo.png",
       "0\t0\t",
       "src/old.ts",
@@ -32,17 +33,25 @@ describe("countAuthoredNumstat", () => {
     assert.equal(countAuthoredNumstat(numstat), 9);
     const expectedReportedOnly = {
       binaryFiles: 1,
-      generatedLines: 10,
+      generatedLines: 26,
       lockfileLines: 60,
       malformedRecords: 0,
       pureRenameFiles: 1,
       snapshotLines: 55,
+      unmeasurableAuthoredFiles: 0,
       vendoredLines: 19,
     };
     assert.deepEqual(
       summarizeAuthoredNumstat(numstat).reportedOnly,
       expectedReportedOnly,
     );
+  });
+
+  it("does not treat source hidden by binary attributes as an excludable binary", () => {
+    const numstat = "-\t-\tsrc/domain.ts\0";
+    const summary = summarizeAuthoredNumstat(numstat);
+    assert.equal(summary.reportedOnly.binaryFiles, 0);
+    assert.equal(summary.reportedOnly.unmeasurableAuthoredFiles, 1);
   });
 
   it("skips malformed NUL-delimited records explicitly", () => {

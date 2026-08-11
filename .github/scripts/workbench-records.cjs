@@ -53,6 +53,8 @@ const planBudgetFields = [
 
 const placeholderPattern =
   /^(?:None|N\/A|Not applicable|TBD|Unknown|Unspecified|Pending|To be determined)$/i
+const unresolvedPlaceholderPattern =
+  /^(?:TBD|Unknown|Unspecified|Pending|To be determined)$/i
 
 function isPlaceholder(value) {
   const normalized = value
@@ -60,6 +62,14 @@ function isPlaceholder(value) {
     .replace(/^[\s`*_~"'([{<]+/, '')
     .replace(/[\s`*_~"'.,;:!?)}\]>]+$/, '')
   return placeholderPattern.test(normalized)
+}
+
+function isUnresolvedPlaceholder(value) {
+  const normalized = value
+    .trim()
+    .replace(/^[\s`*_~"'([{<]+/, '')
+    .replace(/[\s`*_~"'.,;:!?)}\]>]+$/, '')
+  return unresolvedPlaceholderPattern.test(normalized)
 }
 
 function escapeRegExp(value) {
@@ -80,7 +90,7 @@ function parseBudgetFieldValue(budgetSection, label) {
   )
   const match = fieldPattern.exec(budgetSection)
   if (!match || typeof match[1] !== 'string') {
-    return { kind: 'invalid', value: '' }
+    return { kind: 'invalid' }
   }
   return { kind: 'valid', value: match[1].trim() }
 }
@@ -99,6 +109,10 @@ function parseBudgetFields(budgetSection) {
     'Current PR estimated authored changed lines',
   )
   const deliveryShape = parseBudgetFieldValue(budgetSection, 'Delivery shape')
+  const publicInterfaces = parseBudgetFieldValue(
+    budgetSection,
+    'Public or cross-module interfaces',
+  )
   const currentSlice = parseBudgetFieldValue(
     budgetSection,
     'Current PR slice and acceptance evidence',
@@ -110,6 +124,7 @@ function parseBudgetFields(budgetSection) {
     estimate.kind === 'invalid' ||
     currentPrEstimate.kind === 'invalid' ||
     deliveryShape.kind === 'invalid' ||
+    publicInterfaces.kind === 'invalid' ||
     currentSlice.kind === 'invalid' ||
     sequenceStart < 0
   ) {
@@ -121,6 +136,7 @@ function parseBudgetFields(budgetSection) {
     estimate: Number(estimate.value.replaceAll(',', '')),
     currentPrEstimate: Number(currentPrEstimate.value.replaceAll(',', '')),
     deliveryShape: deliveryShape.value,
+    publicInterfaces: publicInterfaces.value,
     currentSlice: currentSlice.value,
     sequenceBody: budgetSection.slice(sequenceStart + sequenceMarker.length),
   }
@@ -207,7 +223,7 @@ function containsSourceTaskExcerpt(candidate, sourceTask) {
 
   const sourceWords = normalizedWords(sourceTask)
   const candidateWords = normalizedWords(candidate)
-  const excerptLength = Math.min(8, sourceWords.length)
+  const excerptLength = Math.min(5, sourceWords.length)
   if (excerptLength === 0 || candidateWords.length < excerptLength) return false
 
   const sourceExcerpts = new Set()
@@ -280,6 +296,9 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     }
     if (isPlaceholder(budgetFields.owningBoundary)) {
       return 'missing or empty plan field: Owning modules, packages, or layers'
+    }
+    if (isUnresolvedPlaceholder(budgetFields.publicInterfaces)) {
+      return 'missing or empty plan field: Public or cross-module interfaces'
     }
 
     const estimate = budgetFields.estimate

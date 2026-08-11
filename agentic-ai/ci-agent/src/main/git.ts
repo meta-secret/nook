@@ -23,6 +23,37 @@ const REPORTED_ONLY_FILENAMES = new Set([
   "yarn.lock",
 ]);
 
+const REPOSITORY_GENERATED_PATHS = new Set([
+  "/nook-app/nook-web/nook-web-app/src/landing/generated-message-keys.ts",
+]);
+
+const AUTHORED_TEXT_EXTENSIONS = new Set([
+  ".bash",
+  ".cjs",
+  ".css",
+  ".graphql",
+  ".html",
+  ".js",
+  ".json",
+  ".jsx",
+  ".md",
+  ".mjs",
+  ".proto",
+  ".py",
+  ".rb",
+  ".rs",
+  ".scss",
+  ".sh",
+  ".sql",
+  ".svelte",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".yaml",
+  ".yml",
+  ".zsh",
+]);
+
 export type AuthoredBudgetArgs = {
   repoRoot: string;
   baseRef: string;
@@ -110,6 +141,7 @@ export type ReportedOnlyNumstat = {
   malformedRecords: number;
   pureRenameFiles: number;
   snapshotLines: number;
+  unmeasurableAuthoredFiles: number;
   vendoredLines: number;
 };
 
@@ -126,6 +158,7 @@ function emptyReportedOnlyNumstat(): ReportedOnlyNumstat {
     malformedRecords: 0,
     pureRenameFiles: 0,
     snapshotLines: 0,
+    unmeasurableAuthoredFiles: 0,
     vendoredLines: 0,
   };
 }
@@ -149,7 +182,13 @@ export function summarizeAuthoredNumstat(
     const normalizedPath = `/${parsed.destinationPath.replaceAll("\\", "/")}`;
     const filename = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1);
     if (!/^\d+$/.test(parsed.added) || !/^\d+$/.test(parsed.deleted)) {
-      reportedOnly.binaryFiles += 1;
+      const extensionStart = filename.lastIndexOf(".");
+      const extension = extensionStart >= 0 ? filename.slice(extensionStart) : "";
+      if (AUTHORED_TEXT_EXTENSIONS.has(extension)) {
+        reportedOnly.unmeasurableAuthoredFiles += 1;
+      } else {
+        reportedOnly.binaryFiles += 1;
+      }
       continue;
     }
     const changedLines = Number(parsed.added) + Number(parsed.deleted);
@@ -157,7 +196,10 @@ export function summarizeAuthoredNumstat(
       reportedOnly.lockfileLines += changedLines;
     } else if (normalizedPath.endsWith(".snap")) {
       reportedOnly.snapshotLines += changedLines;
-    } else if (normalizedPath.includes("/generated/")) {
+    } else if (
+      normalizedPath.includes("/generated/") ||
+      REPOSITORY_GENERATED_PATHS.has(normalizedPath)
+    ) {
       reportedOnly.generatedLines += changedLines;
     } else if (normalizedPath.includes("/vendor/")) {
       reportedOnly.vendoredLines += changedLines;
@@ -196,6 +238,11 @@ export async function assertAuthoredChangeBudget(
     `Implemented diff contains ${summary.authoredLines} authored changed lines against ${args.baseRef}`,
   );
   log.info(`Reported-only diff rows: ${JSON.stringify(summary.reportedOnly)}`);
+  if (summary.reportedOnly.unmeasurableAuthoredFiles > 0) {
+    throw new Error(
+      `Implemented diff contains ${summary.reportedOnly.unmeasurableAuthoredFiles} authored source file(s) whose line counts are hidden by binary attributes`,
+    );
+  }
   if (summary.authoredLines > args.maximumLines) {
     throw new Error(
       `Implemented diff exceeds the ${args.maximumLines} authored changed-line budget: ${summary.authoredLines}`,

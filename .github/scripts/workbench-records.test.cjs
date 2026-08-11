@@ -107,10 +107,42 @@ test('rejects a shorter copied sentence from a long source task', () => {
   )
 })
 
+test('rejects a copied seven-word fragment from a long source task', () => {
+  const copiedFragment = 'publish internal customer codename before starting implementation'
+  const sourceTask = `Please ${copiedFragment} and then prepare the independently mergeable delivery slices.`
+  const copied = validPlan.replace(
+    'Deliver a durable two-phase agent context record.',
+    copiedFragment,
+  )
+  assert.match(
+    validateAgentRecord(copied, 'plan', [], sourceTask),
+    /verbatim source-task excerpt/,
+  )
+})
+
 test('accepts an independently synthesized representation of the source task', () => {
   const sourceTask =
     'Please preserve all important requirements by publishing this exact ordinary prose before the implementation phase begins.'
   assert.equal(validateAgentRecord(validPlan, 'plan', [], sourceTask), '')
+})
+
+test('rejects an unresolved public-interface placeholder', () => {
+  const invalid = validPlan.replace(
+    'Public or cross-module interfaces: Plan validation contract',
+    'Public or cross-module interfaces: **TBD.**',
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /missing or empty plan field: Public or cross-module interfaces/,
+  )
+})
+
+test('accepts a plan with no public interface changes', () => {
+  const noInterfaces = validPlan.replace(
+    'Public or cross-module interfaces: Plan validation contract',
+    'Public or cross-module interfaces: None',
+  )
+  assert.equal(validateAgentRecord(noInterfaces, 'plan'), '')
 })
 
 test('rejects empty required sections', () => {
