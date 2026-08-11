@@ -14,10 +14,24 @@ type ExtensionPairingSessionGrant = {
   deviceSigningPublicKey: string
 }
 
+enum ExtensionPairingSessionGrantParseKind {
+  Invalid = 'invalid',
+  Valid = 'valid',
+}
+
+type ExtensionPairingSessionGrantParse =
+  | { kind: ExtensionPairingSessionGrantParseKind.Invalid }
+  | {
+      kind: ExtensionPairingSessionGrantParseKind.Valid
+      grant: ExtensionPairingSessionGrant
+    }
+
 function extensionPairingSessionGrant(
   value: unknown,
-): ExtensionPairingSessionGrant | undefined {
-  if (!value || typeof value !== 'object') return undefined
+): ExtensionPairingSessionGrantParse {
+  if (!value || typeof value !== 'object') {
+    return { kind: ExtensionPairingSessionGrantParseKind.Invalid }
+  }
   if (
     !('vaultStoreId' in value) ||
     typeof value.vaultStoreId !== 'string' ||
@@ -31,14 +45,31 @@ function extensionPairingSessionGrant(
     !Array.isArray(value.scopes) ||
     !value.scopes.includes(ExtensionConnectScope.PasswordFilling)
   ) {
-    return undefined
+    return { kind: ExtensionPairingSessionGrantParseKind.Invalid }
   }
   return {
-    vaultStoreId: value.vaultStoreId,
-    deviceId: value.deviceId,
-    devicePublicKey: value.devicePublicKey,
-    deviceSigningPublicKey: value.deviceSigningPublicKey,
+    kind: ExtensionPairingSessionGrantParseKind.Valid,
+    grant: {
+      vaultStoreId: value.vaultStoreId,
+      deviceId: value.deviceId,
+      devicePublicKey: value.devicePublicKey,
+      deviceSigningPublicKey: value.deviceSigningPublicKey,
+    },
   }
+}
+
+function parsedExtensionPairingSessionGrants(
+  entries: [string, unknown][],
+): ExtensionPairingSessionGrant[] {
+  const grants: ExtensionPairingSessionGrant[] = []
+  for (const [key, value] of entries) {
+    if (!key.startsWith('nook:extension-pairing-grant:')) continue
+    const parsed = extensionPairingSessionGrant(value)
+    if (parsed.kind === ExtensionPairingSessionGrantParseKind.Valid) {
+      grants.push(parsed.grant)
+    }
+  }
+  return grants
 }
 
 async function listExtensionAuthenticators(
@@ -48,10 +79,9 @@ async function listExtensionAuthenticators(
     context.serviceWorkers()[0] ??
     (await context.waitForEvent('serviceworker', { timeout: 45_000 }))
   const pairingState = await readExtensionPairingStorage(worker)
-  const grants = Object.entries(pairingState)
-    .filter(([key]) => key.startsWith('nook:extension-pairing-grant:'))
-    .map(([, value]) => extensionPairingSessionGrant(value))
-    .filter((value) => value !== undefined)
+  const grants = parsedExtensionPairingSessionGrants(
+    Object.entries(pairingState),
+  )
   return worker.evaluate(async (pairedGrants) => {
     await new Promise<unknown>((resolve) => {
       globalThis.chrome.runtime.sendMessage(
@@ -108,10 +138,9 @@ async function attemptMalformedBackupCodeReplace(
     args.context.serviceWorkers()[0] ??
     (await args.context.waitForEvent('serviceworker', { timeout: 45_000 }))
   const pairingState = await readExtensionPairingStorage(worker)
-  const grants = Object.entries(pairingState)
-    .filter(([key]) => key.startsWith('nook:extension-pairing-grant:'))
-    .map(([, value]) => extensionPairingSessionGrant(value))
-    .filter((value) => value !== undefined)
+  const grants = parsedExtensionPairingSessionGrants(
+    Object.entries(pairingState),
+  )
   const evaluateArgs = {
     grants,
     account: args.account,
