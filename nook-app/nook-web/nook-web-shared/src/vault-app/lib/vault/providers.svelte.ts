@@ -108,15 +108,6 @@ export {
   connectStagedProvider,
   discoverStagedVaultStoreId,
 } from "$lib/vault/provider-connection";
-enum ProviderSaveStoreIdKind {
-  Unavailable = "unavailable",
-  Available = "available",
-}
-
-type ProviderSaveStoreId =
-  | { kind: ProviderSaveStoreIdKind.Unavailable }
-  | { kind: ProviderSaveStoreIdKind.Available; storeId: string };
-
 export { VAULT_ASSESS_TIMEOUT_ERROR_NAME };
 
 const log = createLogger("vault-providers");
@@ -355,27 +346,21 @@ export async function handleRemoteVaultAssessStatus({
 /** Store id for persisting a sync provider row before or after wasm connect. */
 async function vaultStoreIdForProviderSave(
   state: ProviderSaveContext,
-): Promise<ProviderSaveStoreId> {
+): Promise<string | undefined> {
   const fromManager = state.hasManager
     ? (
         await state.enqueueStorage(() => state.requireManager().vaultStoreId)
       ).trim()
     : "";
   if (fromManager) {
-    return { kind: ProviderSaveStoreIdKind.Available, storeId: fromManager };
+    return fromManager;
   }
   if (state.activeVault.kind === ActiveVaultKind.Open) {
-    return {
-      kind: ProviderSaveStoreIdKind.Available,
-      storeId: state.activeVault.storeId,
-    };
+    return state.activeVault.storeId;
   }
   return state.selectedLoginVault.kind === LoginVaultSelectionKind.Selected
-    ? {
-        kind: ProviderSaveStoreIdKind.Available,
-        storeId: state.selectedLoginVault.storeId,
-      }
-    : { kind: ProviderSaveStoreIdKind.Unavailable };
+    ? state.selectedLoginVault.storeId
+    : undefined;
 }
 
 function resetICloudSignInState(state: ProviderActionsContext) {
@@ -682,10 +667,9 @@ export async function ensureProviderSaved(
   state: ProviderSaveContext,
 ): Promise<boolean> {
   const vaultStoreId = await vaultStoreIdForProviderSave(state);
-  const providerStoreId =
-    vaultStoreId.kind === ProviderSaveStoreIdKind.Available
-      ? scopedProviderVault(vaultStoreId.storeId)
-      : unscopedProviderVault();
+  const providerStoreId = vaultStoreId
+    ? scopedProviderVault(vaultStoreId)
+    : unscopedProviderVault();
   const oauthFile =
     state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? configuredOAuthFile($state.snapshot(state.oauthFileDraft.config))
