@@ -67,7 +67,11 @@ test('walk the access chain from passkey to app key to vaults', async ({
   await expect(panel).toContainText('Backed up or synced')
   await page.waitForTimeout(BEAT_MS)
 
-  await page.getByTestId('devices-access-node-device-key').click()
+  const unlockTab = page.getByTestId('devices-access-node-unlock')
+  const deviceKeyTab = page.getByTestId('devices-access-node-device-key')
+  await unlockTab.focus()
+  await unlockTab.press('ArrowRight')
+  await expect(deviceKeyTab).toHaveAttribute('aria-selected', 'true')
   await expect(panel).toContainText('App key')
   await expect(panel).toContainText('A backup password is different')
   await page.waitForTimeout(BEAT_MS)
