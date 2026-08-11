@@ -246,14 +246,26 @@ function isExtensionSessionMessageType(
   return Object.prototype.hasOwnProperty.call(sensitiveSessionFields, value)
 }
 
+type ExtensionSessionQueueEnvelope = {
+  kind: string
+}
+
+function isExtensionSessionQueueEnvelope(
+  value: unknown,
+): value is ExtensionSessionQueueEnvelope {
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    'kind' in value &&
+    typeof value.kind === 'string'
+  )
+}
+
 function hasExtensionSessionQueue(payload: unknown): boolean {
   if (!payload || typeof payload !== 'object') return false
   return (
     'queue' in payload &&
-    payload.queue !== null &&
-    typeof payload.queue === 'object' &&
-    'kind' in payload.queue &&
-    typeof payload.queue.kind === 'string'
+    isExtensionSessionQueueEnvelope(payload.queue)
   )
 }
 
