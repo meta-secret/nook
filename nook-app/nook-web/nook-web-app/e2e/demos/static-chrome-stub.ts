@@ -12,6 +12,11 @@ import type {
   WebsiteLoginSaveOfferResponse,
   WebsiteLoginSavePendingAvailable,
 } from '../../../nook-web-extension/src/lib/login-save-messages'
+import {
+  WebsiteAuthenticatorOptionsMessageType,
+  WebsiteAuthenticatorResponseStatus,
+} from '../../../nook-web-extension/src/lib/login-fill-messages'
+import { WebsiteAuthenticatorBackupAttachMessageType } from '../../../nook-web-extension/src/lib/enrollment-messages'
 
 type DemoLoginSaveResponses = {
   offerAvailable: WebsiteLoginSaveOfferResponse['kind']
@@ -40,6 +45,13 @@ export const demoDomainEnumArgs = {
     fillTotpAction: AuthenticationWorkflowAction.FillTotp,
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey,
   },
+  authenticatorProtocol: {
+    optionsMessageType:
+      WebsiteAuthenticatorOptionsMessageType.NookWebsiteAuthenticatorOptions,
+    backupAttachMessageType:
+      WebsiteAuthenticatorBackupAttachMessageType.NookWebsiteAuthenticatorBackupAttach,
+    readyStatus: WebsiteAuthenticatorResponseStatus.Ready,
+  },
   loginSaveResponses: {
     offerAvailable: 'offer-available',
     pendingAvailable: 'available',
@@ -65,6 +77,11 @@ export type DemoChromeStubArgs = {
     generatePasswordAction: AuthenticationWorkflowAction.GeneratePassword
     fillTotpAction: AuthenticationWorkflowAction.FillTotp
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey
+  }
+  authenticatorProtocol: {
+    optionsMessageType: WebsiteAuthenticatorOptionsMessageType
+    backupAttachMessageType: WebsiteAuthenticatorBackupAttachMessageType
+    readyStatus: WebsiteAuthenticatorResponseStatus
   }
   loginSaveResponses: DemoLoginSaveResponses
   /** Static replies keyed by runtime message type. */
@@ -106,6 +123,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     sufficientAuthenticationOutcome,
     insufficientAuthenticationOutcome,
     authenticationWorkflow,
+    authenticatorProtocol,
     loginSaveResponses,
     responsesByType = {},
     loginPilotFlow = false,
@@ -281,6 +299,22 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         case 'nook:website-authenticator-enroll-confirm':
           enrollStaged = false
           return { ok: true, secretId: 'demo-authenticator-1' }
+        case authenticatorProtocol.optionsMessageType:
+          return {
+            ok: true,
+            status: authenticatorProtocol.readyStatus,
+            accounts: [
+              {
+                vaultStoreId: 'demo-vault',
+                vaultName: 'Demo vault',
+                secretId: 'demo-authenticator-1',
+                issuer: 'Demo Service',
+                account: 'demo.user@example.test',
+              },
+            ],
+          }
+        case authenticatorProtocol.backupAttachMessageType:
+          return { ok: true }
         case 'nook:website-authenticator-enroll-dismiss':
           enrollStaged = false
           return { ok: true }

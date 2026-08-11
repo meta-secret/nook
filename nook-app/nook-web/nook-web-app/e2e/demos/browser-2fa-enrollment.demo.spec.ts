@@ -171,7 +171,14 @@ test('uses the paired demo vault for authenticator enrollment', async ({
         success.id = 'success'
         success.dataset.nookAuthOutcome = 'success'
         success.dataset.testid = 'mock-auth-success'
-        success.textContent = 'Authentication complete'
+        success.innerHTML = `
+          <h1>Authentication complete</h1>
+          <p>Save your backup codes in a safe place.</p>
+          <ul>
+            <li>A1B2-C3D4-E5F6</li>
+            <li>G7H8-I9J0-K1L2</li>
+          </ul>
+        `
         document.body.append(success)
       })
   })
@@ -232,6 +239,20 @@ test('uses the paired demo vault for authenticator enrollment', async ({
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
     'Connected to Demo vault',
   )
+  await demoBeat(page)
+
+  await widget.getByRole('button', { name: 'Save backup codes' }).click()
+  await expect(widget.locator('textarea')).toBeVisible()
+  await demoBeat(page)
+
+  await widget.getByRole('button', { name: 'Save backup codes' }).click()
+  await expect(
+    widget.getByRole('button', { name: 'Replace existing codes' }),
+  ).toBeVisible()
+  await demoBeat(page)
+
+  await widget.getByRole('button', { name: 'Replace existing codes' }).click()
+  await expect(widget.getByText('Backup codes saved')).toBeVisible()
   await demoBeat(page)
   expect(bootstrapErrors).toEqual([])
 })
