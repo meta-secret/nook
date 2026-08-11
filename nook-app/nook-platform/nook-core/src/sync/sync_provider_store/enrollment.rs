@@ -4,9 +4,43 @@ use super::{StorageProviderData, validate_provider_row_replication};
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
     EnrollmentProvider, GoogleDriveMode, ICloudMode, OauthFilePreset, OnboardingType,
-    PersonalEnrollmentProvider, ReplicationType, SharedEnrollmentProvider, StorageProviderType,
-    VaultArchitecture, validate_github_pat, validate_github_repo_name, validate_oauth_access_token,
+    PersonalEnrollmentProvider, ReplicationType, SharedEnrollmentProvider,
+    SharedStorageTargetSelection, StorageProviderType, VaultArchitecture, validate_github_pat,
+    validate_github_repo_name, validate_oauth_access_token,
 };
+
+/// Select a saved OAuth provider that can authorize a shared enrollment
+/// target. A bound target may reuse only the credential persisted for that
+/// exact Drive folder or iCloud share.
+#[must_use]
+pub fn shared_grant_provider_id(
+    providers: &[StorageProviderData],
+    preset: OauthFilePreset,
+    target: &SharedStorageTargetSelection,
+) -> Option<String> {
+    providers.iter().find_map(|provider| {
+        if provider.provider_type != StorageProviderType::OauthFile {
+            return None;
+        }
+        let oauth = provider.oauth_file.as_ref()?;
+        if oauth.preset != preset
+            || !matches!(
+                oauth.usable_access_token(),
+                crate::OAuthAccessTokenRef::Available(_)
+            )
+        {
+            return None;
+        }
+        let target_matches = match target {
+            SharedStorageTargetSelection::Create => true,
+            SharedStorageTargetSelection::Existing(target_id) => {
+                oauth.folder_id.as_deref() == Some(target_id.as_str())
+                    || oauth.icloud_share_target.as_deref() == Some(target_id.as_str())
+            }
+        };
+        target_matches.then(|| provider.id.clone())
+    })
+}
 
 /// Resolve the enrollment handoff from both vault policy and the concrete
 /// provider target. A shared Google Drive folder always uses a target-only
@@ -324,6 +358,65 @@ mod tests {
         assert!(!serialized.contains("access_token"));
         assert!(!serialized.contains("refresh_token"));
         assert!(!serialized.contains("pat"));
+        Ok(())
+    }
+
+    #[test]
+    fn shared_grant_provider_selection_is_target_and_credential_scoped() -> anyhow::Result<()> {
+        let private = oauth_provider(
+            "private",
+            OauthFilePreset::GoogleDrive,
+            Some("private-file"),
+            "nook.yaml",
+        );
+        let mut other = oauth_provider(
+            "other",
+            OauthFilePreset::GoogleDrive,
+            Some("other-file"),
+            "nook.yaml",
+        );
+        other
+            .oauth_file
+            .as_mut()
+            .ok_or_else(|| std::io::Error::other("configured provider required"))?
+            .folder_id = crate::StoredGoogleDriveFolder::FolderId("folder-other".to_owned());
+        let mut matching = oauth_provider(
+            "matching",
+            OauthFilePreset::GoogleDrive,
+            Some("matching-file"),
+            "nook.yaml",
+        );
+        matching
+            .oauth_file
+            .as_mut()
+            .ok_or_else(|| std::io::Error::other("configured provider required"))?
+            .folder_id = crate::StoredGoogleDriveFolder::FolderId("folder-required".to_owned());
+        let providers = vec![private, other, matching];
+
+        assert_eq!(
+            shared_grant_provider_id(
+                &providers,
+                OauthFilePreset::GoogleDrive,
+                &SharedStorageTargetSelection::Existing("folder-required".to_owned()),
+            ),
+            Some("matching".to_owned())
+        );
+        assert_eq!(
+            shared_grant_provider_id(
+                &providers,
+                OauthFilePreset::GoogleDrive,
+                &SharedStorageTargetSelection::Existing("missing".to_owned()),
+            ),
+            None
+        );
+        assert_eq!(
+            shared_grant_provider_id(
+                &providers,
+                OauthFilePreset::GoogleDrive,
+                &SharedStorageTargetSelection::Create,
+            ),
+            Some("private".to_owned())
+        );
         Ok(())
     }
 }

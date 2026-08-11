@@ -291,9 +291,9 @@ pub use sync_provider_store::{
     provider_replication_capability_for_row, provider_storage_detail,
     provider_supports_replication, provider_target_key, providers_visible_while_device_locked,
     replace_active_vault_provider_grants, set_google_drive_provider_mode, set_icloud_provider_mode,
-    staged_remote_storage_args, storage_args_for_provider, sync_providers_for_active_vault,
-    update_oauth_remote_ref, update_provider_sync_metadata, validate_provider_row_replication,
-    vault_storage_args,
+    shared_grant_provider_id, staged_remote_storage_args, storage_args_for_provider,
+    sync_providers_for_active_vault, update_oauth_remote_ref, update_provider_sync_metadata,
+    validate_provider_row_replication, vault_storage_args,
 };
 pub use validation::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_SHARED_FOLDER_REF_PREFIX,
@@ -326,7 +326,8 @@ pub use vault_architecture::{
     SharedStorageGrantRequest, SharedStorageGrantTarget, SharedStorageTargetHint,
     SharedStorageTargetSelection, VaultApplication, VaultArchitecture, VaultConnectIntent,
     VaultType, prepare_shared_storage_grant, provider_replication_capability,
-    validate_architecture_for_provider, validate_provider_replication,
+    should_flush_shared_storage_grant, validate_architecture_for_provider,
+    validate_provider_replication,
 };
 pub use vault_client_policy::{
     ActiveVaultStore, DeviceProtectionStatus, JoinEnrollmentState, RemoteVaultAssessDecision,

@@ -32,7 +32,7 @@ pub use catalog::{
 };
 pub use enrollment::{
     enrollment_provider_for_architecture, enrollment_provider_for_architecture_with_storage_target,
-    enrollment_provider_onboarding_type, provider_onboarding_type,
+    enrollment_provider_onboarding_type, provider_onboarding_type, shared_grant_provider_id,
 };
 pub use legacy_storage::auth_snapshot_legacy_storage_value;
 pub use oauth::{
