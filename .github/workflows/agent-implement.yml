@@ -279,6 +279,7 @@ jobs:
             core.setOutput('path', planPath)
             core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${planPath}`)
             if (/^- Delivery shape:\s*Multiple PRs\s*$/m.test(candidate)) {
+              core.setOutput('multi_pr', 'true')
               core.setFailed('Published multi-PR feature plan requires materialized Workbench feature and focused issue records before implementation.')
               return
             }
@@ -302,6 +303,7 @@ jobs:
         env:
           AGENT_BRANCH: ${{ env.AGENT_BRANCH }}
           IMPLEMENT_OUTCOME: ${{ steps.implement.outcome }}
+          MULTI_PR_PLAN: ${{ steps.plan.outputs.multi_pr }}
           ISSUE_PATH: ${{ steps.workbench.outputs.path }}
           ISSUE_TITLE: ${{ steps.workbench.outputs.title }}
           PLAN_PATH: ${{ steps.plan.outputs.path }}
@@ -332,6 +334,7 @@ jobs:
             })
             const pull = pulls.data[0]
             const success = process.env.IMPLEMENT_OUTCOME === 'success' && Boolean(pull)
+            const multiPrPlan = process.env.MULTI_PR_PLAN === 'true'
             const summaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
             const fallbackSummary = [
                   '# Automated agent work summary',
@@ -346,7 +349,7 @@ jobs:
                   '',
                   '## Implementation problems',
                   '',
-                  success ? '- No problem summary was emitted by the bounded worker.' : '- The workflow or agent stopped before a pull request was opened.',
+                  success ? '- No problem summary was emitted by the bounded worker.' : multiPrPlan ? '- The feature exceeds one bounded PR and requires focused Workbench issue records.' : '- The workflow or agent stopped before a pull request was opened.',
                   '',
                   '## Decisions',
                   '',
@@ -358,7 +361,7 @@ jobs:
                   '',
                   '## Remaining work',
                   '',
-                  success ? '- A continuing task-owning agent must validate and merge the Nook PR.' : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
+                  success ? '- A continuing task-owning agent must validate and merge the Nook PR.' : multiPrPlan ? '- Materialize the feature and ordered focused issues from the published plan, then dispatch the first bounded issue.' : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
                 ].join('\n')
             let summary = fallbackSummary
             if (fs.existsSync(summaryPath)) {
@@ -417,7 +420,12 @@ jobs:
                 },
               )
             }
-            const progress = `- ${now}: [Agent run ${context.runId}](${runUrl}) ${success ? `opened [Nook PR #${pull.number}](${pull.html_url})` : 'stopped before opening a PR'}; [worklog](/${owner}/${repo}/blob/main/${worklogPath}).`
+            const progressOutcome = success
+              ? `opened [Nook PR #${pull.number}](${pull.html_url})`
+              : multiPrPlan
+                ? 'published a multi-PR plan that requires materialized focused issues before the first bounded issue is dispatched'
+                : 'stopped before opening a PR'
+            const progress = `- ${now}: [Agent run ${context.runId}](${runUrl}) ${progressOutcome}; [worklog](/${owner}/${repo}/blob/main/${worklogPath}).`
             body = body.replace(/^## Progress\s*$/m, `## Progress\n\n${progress}`)
             await github.rest.repos.createOrUpdateFileContents({
               owner,

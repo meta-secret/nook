@@ -25,7 +25,8 @@ const planBudgetFields = [
   },
   {
     label: 'Owning modules, packages, or layers',
-    pattern: /^- Owning modules, packages, or layers:\s*\S.+$/m,
+    pattern:
+      /^- Owning modules, packages, or layers:\s*(?!(?:None|N\/A|Not applicable)\s*$)\S.+$/im,
   },
   {
     label: 'Public or cross-module interfaces',
@@ -78,13 +79,8 @@ function containsSourceTaskExcerpt(candidate, sourceTask) {
 
   const sourceWords = normalizedWords(sourceTask)
   const candidateWords = normalizedWords(candidate)
-  const excerptLength = 12
-  if (
-    sourceWords.length < excerptLength ||
-    candidateWords.length < excerptLength
-  ) {
-    return false
-  }
+  const excerptLength = Math.min(12, sourceWords.length)
+  if (excerptLength === 0 || candidateWords.length < excerptLength) return false
 
   const sourceExcerpts = new Set()
   for (
@@ -172,12 +168,17 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
       .split(/^- PR slices and acceptance evidence:\s*/m)[1]
       .split(/^## Initial plan$/m)[0]
     if (deliveryShape === 'Multiple PRs') {
-      const sliceCount = [
-        ...sequenceBody.matchAll(
-          /^\d+\.\s+(?!(?:None|N\/A|Not applicable)\s*$)\S.+;\s*Acceptance evidence:\s*(?!(?:None|N\/A|Not applicable)\s*$)\S.+$/gim,
-        ),
-      ].length
-      if (sliceCount < 2) {
+      const slicePattern =
+        /^(\d+)\.\s+(?!(?:None|N\/A|Not applicable)\s*$)\S.+;\s*Acceptance evidence:\s*(?!(?:None|N\/A|Not applicable)\s*$)\S.+$/i
+      const sliceLines = sequenceBody
+        .trim()
+        .split('\n')
+        .filter((line) => line.trim())
+      const orderedSlices = sliceLines.map((line) => line.match(slicePattern))
+      const hasExactSequence = orderedSlices.every(
+        (slice, index) => slice && Number(slice[1]) === index + 1,
+      )
+      if (sliceLines.length < 2 || !hasExactSequence) {
         return 'multi-PR plan requires at least two ordered slices with acceptance evidence'
       }
     } else if (

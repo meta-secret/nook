@@ -45,6 +45,8 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "task ci-agent:plan",
         "Validate and publish Workbench task plan",
         "Publish Workbench result",
+        "MULTI_PR_PLAN: ${{ steps.plan.outputs.multi_pr }}",
+        "Materialize the feature and ordered focused issues",
         "steps.workbench.outputs.found == 'true'",
         "validateAgentRecord",
         "if: steps.plan.outcome == 'success'",
@@ -213,6 +215,10 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     assert!(
         publish_position < block_position,
         "scheduled automation must publish a multi-PR plan before blocking implementation"
+    );
+    assert!(
+        workflow.find("core.setOutput('multi_pr', 'true')") < block_position,
+        "scheduled automation must identify the materialization action before blocking"
     );
     Ok(())
 }

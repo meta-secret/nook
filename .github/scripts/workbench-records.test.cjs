@@ -65,6 +65,18 @@ test('rejects an unlabeled verbatim excerpt from the source task', () => {
   )
 })
 
+test('rejects a complete short source task copied verbatim', () => {
+  const sourceTask = 'Keep pull requests module local'
+  const copied = validPlan.replace(
+    'Deliver a durable two-phase agent context record.',
+    sourceTask,
+  )
+  assert.match(
+    validateAgentRecord(copied, 'plan', [], sourceTask),
+    /verbatim source-task excerpt/,
+  )
+})
+
 test('accepts an independently synthesized representation of the source task', () => {
   const sourceTask =
     'Please preserve all important requirements by publishing this exact ordinary prose before the implementation phase begins.'
@@ -188,7 +200,36 @@ test('rejects multi-PR slices without acceptance evidence', () => {
   )
 })
 
+for (const sequence of [
+  '1. Storage; Acceptance evidence: Contract tests pass.\n1. UI; Acceptance evidence: Integration checks pass.',
+  '1. Storage; Acceptance evidence: Contract tests pass.\n3. UI; Acceptance evidence: Integration checks pass.',
+]) {
+  test(`rejects nonconsecutive multi-PR sequence: ${sequence.split('\n')[1]}`, () => {
+    const invalid = validPlan
+      .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+      .replace(
+        'One validator slice; Acceptance evidence: Contract tests pass',
+        `\n${sequence}`,
+      )
+    assert.match(
+      validateAgentRecord(invalid, 'plan'),
+      /multi-PR plan requires at least two ordered slices with acceptance evidence/,
+    )
+  })
+}
+
 for (const placeholder of ['None', 'N/A']) {
+  test(`rejects ${placeholder} as the owning boundary`, () => {
+    const invalid = validPlan.replace(
+      'Owning modules, packages, or layers: Workbench agent records',
+      `Owning modules, packages, or layers: ${placeholder}`,
+    )
+    assert.match(
+      validateAgentRecord(invalid, 'plan'),
+      /missing or empty plan field: Owning modules, packages, or layers/,
+    )
+  })
+
   test(`rejects ${placeholder} as the current PR slice`, () => {
     const invalid = validPlan.replace(
       'Current PR slice and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
