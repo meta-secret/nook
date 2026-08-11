@@ -2,7 +2,7 @@
 
 const { execFileSync } = require('node:child_process')
 const { readFileSync, realpathSync } = require('node:fs')
-const { isAbsolute, relative, resolve } = require('node:path')
+const { isAbsolute, relative, resolve, sep } = require('node:path')
 const { validateAgentRecord } = require('./workbench-records.cjs')
 
 const WorkbenchRemoteFileKind = Object.freeze({
@@ -48,10 +48,13 @@ if (remotePath.startsWith('plans/')) {
   )
   const sourceTaskPath = realpathSync(resolve(sourceTaskFile))
   const sourceTaskRelativePath = relative(checkoutRoot, sourceTaskPath)
+  const sourceTaskEscapesCheckout =
+    sourceTaskRelativePath === '..' ||
+    sourceTaskRelativePath.startsWith(`..${sep}`) ||
+    isAbsolute(sourceTaskRelativePath)
   if (
     sourceTaskRelativePath === '' ||
-    (!sourceTaskRelativePath.startsWith('..') &&
-      !isAbsolute(sourceTaskRelativePath))
+    !sourceTaskEscapesCheckout
   ) {
     console.error(
       'Refusing source-task file inside the public Nook checkout',
