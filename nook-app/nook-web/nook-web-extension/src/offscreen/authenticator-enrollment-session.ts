@@ -3,6 +3,7 @@ import {
   previewOtpauthUri,
   type NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type initNookWasm from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ExtensionSessionMessageType } from './session-message-dispatch'
 import type { ExtensionSessionRequest } from './session-request-adapter'
 import {
@@ -23,7 +24,7 @@ type AuthenticatorEnrollmentMessage = Extract<
 >
 
 type AuthenticatorEnrollmentSessionDependencies = {
-  ensureWasm: () => Promise<void>
+  ensureWasm: () => ReturnType<typeof initNookWasm>
   getManager: () => Promise<NookVaultManager>
   extensionVaultGrant: (payload: {
     vaultStoreId: string
