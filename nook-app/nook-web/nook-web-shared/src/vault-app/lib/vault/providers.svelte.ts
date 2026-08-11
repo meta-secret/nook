@@ -8,7 +8,6 @@ import {
   activeVaultScope,
   configuredLocalFolder,
   configuredOAuthFile,
-  defaultOAuthFileConfig,
   GITHUB_PROVIDER_TYPE,
   githubPatValue,
   githubRepositoryValue,
@@ -39,7 +38,6 @@ import {
   unknownOAuthAccountIdentity,
   unknownOAuthTokenExpiry,
   unresolvedOAuthRemoteFileId,
-  type AuthProvidersSnapshot,
   type LocalFolderHandle,
   type OAuthFileName,
   type ProviderSetupRequest,
@@ -79,7 +77,6 @@ import { createLogger } from "$lib/runtime/log";
 import {
   ActiveVaultKind,
   LocalFolderDraftKind,
-  LocalProviderLookupKind,
   LoginVaultSelectionKind,
   LoginSetupKind,
   OAuthFileDraftKind,
@@ -736,8 +733,8 @@ export async function ensureProviderSaved(
     return false;
   }
   state.providers = outcome.snapshot.providers;
-  if (isConfiguredOAuthFile(outcome.oauthFile)) {
-    state.configureOauthFile(outcome.oauthFile.config);
+  if (isConfiguredOAuthFile(outcome.oauth_file)) {
+    state.configureOauthFile(outcome.oauth_file.config);
   }
 
   state.clearLoginSetup();
