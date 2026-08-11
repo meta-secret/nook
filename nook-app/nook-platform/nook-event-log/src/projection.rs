@@ -244,13 +244,13 @@ pub fn assert_projection_permutation_invariant(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::PasswordEnvelope;
     use crate::event::{
         EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
         VaultEventSchemaVersion, VaultOperation, build_genesis_import_event,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key as key, store};
     use crate::{EventResult, SecretFingerprint};
-    use crate::{PasswordEnvelope, PasswordUnlockEntry};
     use ed25519_dalek::SigningKey;
     use nook_auth2::SecretType;
     use nook_auth2::{
@@ -393,35 +393,6 @@ mod tests {
     }
 
     #[test]
-    fn causal_delete_hides_secret() -> anyhow::Result<()> {
-        let signing_key = key();
-        let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key)?;
-        let created = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key)?;
-        let created_id = created.id()?;
-        graph.insert(created, STORE)?;
-
-        let delete_body = VaultEventBody {
-            schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store()?,
-            actor_id: actor(&signing_key)?,
-            actor_signing_public_key: public_key(&signing_key),
-            parents: vec![created_id],
-            created_at: ts("2026-06-28T00:00:00Z"),
-            key_epoch: epoch()?,
-            operations: vec![VaultOperation::SecretDeleted {
-                secret_id: sid("secret_aaaaaaaaaaa"),
-            }],
-        };
-        let deleted = VaultEvent::sign(delete_body, &signing_key)?;
-        graph.insert(deleted, STORE)?;
-
-        let projection = project_vault(&graph, STORE)?;
-        assert!(projection.live_secrets(&graph).is_empty());
-        Ok(())
-    }
-
-    #[test]
     fn concurrent_replacements_create_conflict_group() -> anyhow::Result<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
@@ -463,92 +434,6 @@ mod tests {
     }
 
     #[test]
-    fn genesis_import_materializes_password_entries() -> EventResult<()> {
-        let signing_key = key();
-        let imported_entry = PasswordUnlockEntry {
-            id: "pwdentry001".to_owned(),
-            label: "Travel recovery".to_owned(),
-            created_at: "2026-06-28T00:00:00Z".to_owned(),
-            envelope: password_envelope("imported"),
-        };
-        let event = build_genesis_import_event(
-            &store()?,
-            &actor(&signing_key)?,
-            &epoch()?,
-            GenesisImportPayload {
-                source_content_hash: genesis_source_hash(),
-                secrets: vec![],
-                password_entries: vec![imported_entry.clone()],
-            },
-            &ts("2026-06-28T00:00:00Z"),
-            &signing_key,
-        )?;
-        let mut graph = EventGraph::new();
-        graph.insert(event, STORE)?;
-
-        let projection = project_vault(&graph, STORE)?;
-        assert_eq!(projection.password_entries, vec![imported_entry]);
-        Ok(())
-    }
-
-    #[test]
-    fn password_entry_events_add_rotate_and_remove() -> EventResult<()> {
-        let signing_key = key();
-        let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key)?;
-
-        let add = signed_operation(
-            &signing_key,
-            vec![genesis_id],
-            VaultOperation::PasswordAdded {
-                entry_id: PasswordEntryId::parse("pwdentry001")?,
-                label: "Primary recovery".to_owned(),
-                created_at: ts("2026-06-28T00:00:01Z"),
-                envelope: password_envelope_fixture("initial"),
-            },
-        )?;
-        let add_id = add.id()?;
-        graph.insert(add, STORE)?;
-        let projection = project_vault(&graph, STORE)?;
-        assert_eq!(projection.password_entries.len(), 1);
-        assert_eq!(projection.password_entries[0].label, "Primary recovery");
-        assert_eq!(
-            projection.password_entries[0].envelope.ciphertext,
-            "initial"
-        );
-
-        let rotate = signed_operation(
-            &signing_key,
-            vec![add_id],
-            VaultOperation::PasswordRotated {
-                entry_id: PasswordEntryId::parse("pwdentry001")?,
-                envelope: password_envelope_fixture("rotated"),
-            },
-        )?;
-        let rotate_id = rotate.id()?;
-        graph.insert(rotate, STORE)?;
-        let projection = project_vault(&graph, STORE)?;
-        assert_eq!(projection.password_entries.len(), 1);
-        assert_eq!(projection.password_entries[0].label, "Primary recovery");
-        assert_eq!(
-            projection.password_entries[0].envelope.ciphertext,
-            "rotated"
-        );
-
-        let remove = signed_operation(
-            &signing_key,
-            vec![rotate_id],
-            VaultOperation::PasswordRemoved {
-                entry_id: PasswordEntryId::parse("pwdentry001")?,
-            },
-        )?;
-        graph.insert(remove, STORE)?;
-        let projection = project_vault(&graph, STORE)?;
-        assert!(projection.password_entries.is_empty());
-        Ok(())
-    }
-
-    #[test]
     fn secret_conflict_resolved_picks_winner() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
@@ -584,38 +469,6 @@ mod tests {
         let live = projection.live_secrets(&graph);
         assert!(live.contains_key("secret_newaaaaaaa"));
         assert!(!live.contains_key("secret_newbbbbbbb"));
-        Ok(())
-    }
-
-    #[test]
-    fn vault_cleared_empties_projection() -> EventResult<()> {
-        let signing_key = key();
-        let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key)?;
-        graph.insert(
-            secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key)?,
-            STORE,
-        )?;
-        assert_eq!(project_vault(&graph, STORE)?.live_secrets(&graph).len(), 1);
-
-        let clear_body = VaultEventBody {
-            schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store()?,
-            actor_id: actor(&signing_key)?,
-            actor_signing_public_key: public_key(&signing_key),
-            parents: graph.heads(),
-            created_at: ts("2026-06-28T00:00:01Z"),
-            key_epoch: epoch()?,
-            operations: vec![VaultOperation::VaultCleared],
-        };
-        let cleared = VaultEvent::sign(clear_body, &signing_key)?;
-        graph.insert(cleared, STORE)?;
-
-        assert!(
-            project_vault(&graph, STORE)?
-                .live_secrets(&graph)
-                .is_empty()
-        );
         Ok(())
     }
 

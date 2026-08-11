@@ -152,3 +152,180 @@ fn upsert_password_entry(projection: &mut VaultProjection, entry: PasswordUnlock
     }
     projection.password_entries.push(entry);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{PasswordEnvelope, SecretFingerprint};
+    use nook_auth2::{IsoTimestamp, OpaqueCiphertext, PasswordEntryId, SecretType, Sha256Hex};
+
+    fn event_id() -> crate::EventResult<EventId> {
+        EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")
+    }
+
+    fn secret_id(value: &str) -> SecretId {
+        SecretId::from_vault_record(value)
+    }
+
+    fn secret(value: &str) -> EncryptedSecretPayload {
+        EncryptedSecretPayload {
+            id: secret_id(value),
+            secret_type: SecretType::ApiKey,
+            ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{value}")),
+            identity_fingerprint: SecretFingerprint::from_trusted(format!("identity-{value}")),
+            fingerprint: SecretFingerprint::from_trusted(format!("version-{value}")),
+        }
+    }
+
+    fn password_envelope(ciphertext: &str) -> PasswordEnvelope {
+        PasswordEnvelope {
+            version: 1,
+            kdf: "scrypt".to_owned(),
+            work_factor: 10,
+            ciphertext: ciphertext.to_owned(),
+        }
+    }
+
+    #[test]
+    fn secret_lifecycle_operations_update_records_and_replacement_history() -> anyhow::Result<()> {
+        let mut projection = VaultProjection::default();
+        let mut replacements = BTreeMap::new();
+        let creator = event_id()?;
+        let original_id = secret_id("secret_original1");
+
+        apply_operation(
+            &mut projection,
+            &creator,
+            &VaultOperation::SecretCreated {
+                secret: secret("secret_original1"),
+            },
+            &mut replacements,
+        );
+        assert!(matches!(
+            projection.secrets[&original_id].lifecycle,
+            ProjectedSecretLifecycle::Live
+        ));
+
+        let replacement_id = secret_id("secret_replaced1");
+        apply_operation(
+            &mut projection,
+            &creator,
+            &VaultOperation::SecretReplaced {
+                old_id: original_id.clone(),
+                new_secret: secret("secret_replaced1"),
+            },
+            &mut replacements,
+        );
+        assert!(matches!(
+            projection.secrets[&original_id].lifecycle,
+            ProjectedSecretLifecycle::Deleted { .. }
+        ));
+        assert_eq!(
+            projection.secrets[&replacement_id].origin,
+            ProjectedSecretOrigin::Replacement {
+                from: original_id.clone()
+            }
+        );
+        assert_eq!(replacements[&original_id][0].1, replacement_id);
+
+        apply_operation(
+            &mut projection,
+            &creator,
+            &VaultOperation::SecretDeleted {
+                secret_id: secret_id("secret_replaced1"),
+            },
+            &mut replacements,
+        );
+        assert!(matches!(
+            projection.secrets[&secret_id("secret_replaced1")].lifecycle,
+            ProjectedSecretLifecycle::Deleted { .. }
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn import_materializes_state_and_clear_removes_it() -> anyhow::Result<()> {
+        let mut projection = VaultProjection::default();
+        let mut replacements = BTreeMap::new();
+        let importer = event_id()?;
+        let imported_entry = PasswordUnlockEntry {
+            id: "pwdentry001".to_owned(),
+            label: "Travel recovery".to_owned(),
+            created_at: "2026-06-28T00:00:00Z".to_owned(),
+            envelope: password_envelope("imported"),
+        };
+
+        apply_operation(
+            &mut projection,
+            &importer,
+            &VaultOperation::VaultImported {
+                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: vec![secret("secret_imported1")],
+                password_entries: vec![imported_entry.clone()],
+            },
+            &mut replacements,
+        );
+        assert!(
+            projection
+                .secrets
+                .contains_key(&secret_id("secret_imported1"))
+        );
+        assert_eq!(projection.password_entries, vec![imported_entry]);
+
+        apply_operation(
+            &mut projection,
+            &importer,
+            &VaultOperation::VaultCleared,
+            &mut replacements,
+        );
+        assert!(projection.cleared);
+        assert!(projection.secrets.is_empty());
+        assert!(projection.password_entries.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn password_operations_add_rotate_and_remove() -> anyhow::Result<()> {
+        let mut projection = VaultProjection::default();
+        let mut replacements = BTreeMap::new();
+        let entry_id = PasswordEntryId::parse("pwdentry001")?;
+        let actor = event_id()?;
+
+        apply_operation(
+            &mut projection,
+            &actor,
+            &VaultOperation::PasswordAdded {
+                entry_id: entry_id.clone(),
+                label: "Primary recovery".to_owned(),
+                created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:01Z".to_owned()),
+                envelope: password_envelope("initial"),
+            },
+            &mut replacements,
+        );
+        assert_eq!(projection.password_entries.len(), 1);
+        assert_eq!(projection.password_entries[0].label, "Primary recovery");
+
+        apply_operation(
+            &mut projection,
+            &actor,
+            &VaultOperation::PasswordRotated {
+                entry_id: entry_id.clone(),
+                envelope: password_envelope("rotated"),
+            },
+            &mut replacements,
+        );
+        assert_eq!(
+            projection.password_entries[0].envelope.ciphertext,
+            "rotated"
+        );
+
+        apply_operation(
+            &mut projection,
+            &actor,
+            &VaultOperation::PasswordRemoved { entry_id },
+            &mut replacements,
+        );
+        assert!(projection.password_entries.is_empty());
+        Ok(())
+    }
+}
