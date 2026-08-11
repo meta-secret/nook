@@ -212,12 +212,15 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     let block_position = workflow
         .find("Published multi-PR feature plan requires materialized Workbench feature")
         .expect("scheduled automation must block an unmaterialized multi-PR plan");
+    let materialization_position = workflow
+        .find("core.setOutput('multi_pr', 'true')")
+        .expect("scheduled automation must identify a multi-PR materialization action");
     assert!(
         publish_position < block_position,
         "scheduled automation must publish a multi-PR plan before blocking implementation"
     );
     assert!(
-        workflow.find("core.setOutput('multi_pr', 'true')") < block_position,
+        materialization_position < block_position,
         "scheduled automation must identify the materialization action before blocking"
     );
     Ok(())
