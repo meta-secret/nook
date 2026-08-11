@@ -19,8 +19,10 @@ type ImportManagerState = {
   rejectImport: boolean
   importedRecords: boolean
   statusFreed: boolean
-  replacedSnapshot?: AuthProvidersSnapshot
-  savedSnapshot?: AuthProvidersSnapshot
+  replaced: boolean
+  saved: boolean
+  replacedSnapshot: AuthProvidersSnapshot
+  savedSnapshot: AuthProvidersSnapshot
 }
 
 function githubProvider(): StorageProvider {
@@ -37,7 +39,9 @@ function githubProvider(): StorageProvider {
   } as StorageProvider
 }
 
-function importRequest(provider: StorageProvider): ImportExtensionVaultArgs['message'] {
+function importRequest(
+  provider: StorageProvider,
+): ImportExtensionVaultArgs['message'] {
   return {
     type: ExtensionSessionMessageType.ImportVault,
     payload: {
@@ -76,20 +80,30 @@ function importManager(state: ImportManagerState): NookVaultManager {
     },
     deviceProtectionStatus: async () => state.protection,
     replaceAuthProvidersForVault: async (snapshot) => {
+      state.replaced = true
       state.replacedSnapshot = snapshot
     },
     savePresealedAuthProviders: async (snapshot: AuthProvidersSnapshot) => {
+      state.saved = true
       state.savedSnapshot = snapshot
     },
   } as NookVaultManager
 }
 
 function importState(protection: DeviceProtectionStatus): ImportManagerState {
+  const emptySnapshot: AuthProvidersSnapshot = {
+    providers: [],
+    activeVaultStoreId: { state: 'unselected' },
+  }
   return {
     protection,
     rejectImport: false,
     importedRecords: false,
     statusFreed: false,
+    replaced: false,
+    saved: false,
+    replacedSnapshot: structuredClone(emptySnapshot),
+    savedSnapshot: structuredClone(emptySnapshot),
   }
 }
 
@@ -109,11 +123,12 @@ describe('extension vault import operations', () => {
     })
     expect(state.importedRecords).toBe(true)
     expect(state.statusFreed).toBe(true)
-    expect(state.replacedSnapshot?.activeVaultStoreId).toEqual({
+    expect(state.replaced).toBe(true)
+    expect(state.replacedSnapshot.activeVaultStoreId).toEqual({
       state: 'storeId',
       value: 'vault',
     })
-    expect(state.savedSnapshot).toBeUndefined()
+    expect(state.saved).toBe(false)
     expect(provider).not.toHaveProperty('githubPat')
   })
 
@@ -130,8 +145,9 @@ describe('extension vault import operations', () => {
       ok: true,
       status: { imported: true },
     })
-    expect(state.replacedSnapshot).toBeUndefined()
-    expect(state.savedSnapshot?.activeVaultStoreId).toEqual({
+    expect(state.replaced).toBe(false)
+    expect(state.saved).toBe(true)
+    expect(state.savedSnapshot.activeVaultStoreId).toEqual({
       state: 'storeId',
       value: 'vault',
     })
@@ -149,8 +165,8 @@ describe('extension vault import operations', () => {
     }
 
     await expect(importExtensionVault(args)).rejects.toThrow('import failed')
-    expect(state.replacedSnapshot).toBeUndefined()
-    expect(state.savedSnapshot).toBeUndefined()
+    expect(state.replaced).toBe(false)
+    expect(state.saved).toBe(false)
     expect(provider).not.toHaveProperty('githubPat')
   })
 })
