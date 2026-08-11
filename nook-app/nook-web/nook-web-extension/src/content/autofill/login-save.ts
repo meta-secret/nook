@@ -5,7 +5,10 @@ import {
   readLoginCredentials,
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { AuthenticationOutcomeVerdict } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  AuthenticationOutcomeResponseKind,
+  AuthenticationOutcomeVerdict,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import {
   NookWebsiteLoginSaveDecision,
@@ -129,8 +132,8 @@ async function classifyOutcomeEvidence(
   const delivery = await sendAuthenticationOutcomeRuntimeMessage(sendMessage)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    !delivery.response?.ok ||
-    !delivery.response.verdict
+    delivery.response.kind !== AuthenticationOutcomeResponseKind.Completed ||
+    !('verdict' in delivery.response)
   ) {
     return { kind: AuthenticationOutcomeReadKind.Unavailable }
   }

@@ -1,10 +1,12 @@
 import { fillOneTimeCode } from '../../../nook-web-shared/src/extension/password-forms'
 import {
+  AuthenticationOutcomeResponseKind,
   AuthenticationOutcomeVerdict,
   AuthenticatorCodeResponseKind,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type {
   AuthenticationOutcomeObservationView,
+  AuthenticationOutcomeResponse,
   AuthenticationOutcomeVerdictView,
 } from '../lib/outcome-evidence-messages'
 import {
@@ -21,12 +23,9 @@ type EnrollmentOutcomeHost = {
   sendAuthenticatorCodeRuntimeMessage: (
     message: object,
   ) => Promise<RuntimeMessageDelivery<AuthenticatorCodeResponse>>
-  sendAuthenticationOutcomeRuntimeMessage: (message: object) => Promise<
-    RuntimeMessageDelivery<{
-      ok: true
-      verdict: AuthenticationOutcomeVerdictView
-    }>
-  >
+  sendAuthenticationOutcomeRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>>
 }
 
 type EnrollmentEvidenceCallbacks = {
@@ -158,8 +157,8 @@ async function classifyEnrollmentOutcome({
     await host.sendAuthenticationOutcomeRuntimeMessage(sendMessage)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    !delivery.response?.ok ||
-    !delivery.response.verdict
+    delivery.response.kind !== AuthenticationOutcomeResponseKind.Completed ||
+    !('verdict' in delivery.response)
   ) {
     return { kind: EnrollmentOutcomeClassificationKind.Unavailable }
   }

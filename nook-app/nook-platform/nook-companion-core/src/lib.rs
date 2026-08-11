@@ -9,17 +9,20 @@
     clippy::uninlined_format_args
 )]
 
+mod authentication_outcome_response;
 mod authentication_workflow;
 mod authentication_workflow_response;
 mod authenticator_backup_attach_response;
 mod authenticator_code_response;
 mod authenticator_enrollment_response;
 mod authenticator_options_response;
+mod authenticator_picker_open_response;
 mod authenticator_preview_response;
 mod backup_code_candidates;
 mod extension_pairing_state;
 mod extension_persistence;
 mod extension_session_protocol;
+mod extension_vault_event;
 mod generated_password_response;
 mod oauth_origin_policy;
 mod outcome_evidence;
@@ -29,6 +32,11 @@ mod website_login_options_response;
 mod website_login_save_offer_response;
 mod website_passkey_proposal;
 
+pub use authentication_outcome_response::{
+    AuthenticationOutcomeResponse, AuthenticationOutcomeResponseDecodeError,
+    AuthenticationOutcomeResponseKind, AuthenticationOutcomeResponseWire,
+    decode_authentication_outcome_response,
+};
 pub use authentication_workflow::{
     AuthenticationPageObservation, AuthenticationPageObservations, AuthenticationWorkflowAction,
     AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowNotDetected,
@@ -61,6 +69,11 @@ pub use authenticator_options_response::{
     AuthenticatorOptionsResponseKind, AuthenticatorOptionsResponseWire, WebsiteAuthenticatorOption,
     decode_authenticator_options_response,
 };
+pub use authenticator_picker_open_response::{
+    AuthenticatorPickerOpenResponse, AuthenticatorPickerOpenResponseDecodeError,
+    AuthenticatorPickerOpenResponseKind, AuthenticatorPickerOpenResponseWire,
+    decode_authenticator_picker_open_response,
+};
 pub use authenticator_preview_response::{
     AuthenticatorEnrollmentPreview, AuthenticatorPreviewResponse,
     AuthenticatorPreviewResponseDecodeError, AuthenticatorPreviewResponseKind,
@@ -87,6 +100,7 @@ pub use extension_session_protocol::{
     LoginPickerOpenResponseDecodeError, LoginPickerOpenResponseWire,
     decode_login_picker_open_response, validate_extension_session_request_json,
 };
+pub use extension_vault_event::{EXTENSION_VAULT_EVENT_TYPESCRIPT, ExtensionVaultEventPayload};
 pub use generated_password_response::{
     GeneratedPasswordResponse, GeneratedPasswordResponseDecodeError, GeneratedPasswordResponseKind,
     GeneratedPasswordResponseWire, decode_generated_password_response,

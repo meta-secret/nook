@@ -1,12 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import {
   AuthenticationOutcomeVerdict,
+  AuthenticationOutcomeResponseKind,
   AuthenticationWorkflowSnapshotResponseKind,
   AuthenticatorBackupAttachResponseKind,
   AuthenticatorCodeResponseKind,
   AuthenticatorEnrollmentConfirmResponseKind,
   AuthenticatorEnrollmentStageResponseKind,
   AuthenticatorOptionsResponseKind,
+  AuthenticatorPickerOpenResponseKind,
   AuthenticatorPreviewResponseKind,
   GeneratedPasswordResponseKind,
   LoginPickerOpenResponseKind,
@@ -19,6 +21,7 @@ import {
   sendAuthenticatorEnrollmentConfirmRuntimeMessage,
   sendAuthenticatorEnrollmentStageRuntimeMessage,
   sendAuthenticatorOptionsRuntimeMessage,
+  sendAuthenticatorPickerOpenRuntimeMessage,
   sendAuthenticatorPreviewRuntimeMessage,
   sendAuthenticationWorkflowSnapshotRuntimeMessage,
   sendAuthenticationOutcomeRuntimeMessage,
@@ -161,6 +164,40 @@ describe('runtime message adapters', () => {
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
     const delivery = await sendLoginPickerOpenRuntimeMessage(message)
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
+  })
+
+  test('decodes a valid authenticator picker response in Rust', async () => {
+    const response = {
+      ok: true,
+      status: 'ready',
+      requestId: 'authenticator-request',
+      expiresAt: 42,
+    }
+    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+
+    const delivery = await sendAuthenticatorPickerOpenRuntimeMessage(message)
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
+      expect(delivery.response.kind).toBe(
+        AuthenticatorPickerOpenResponseKind.Ready,
+      )
+    }
+  })
+
+  test('rejects contradictory authenticator picker fields in Rust', async () => {
+    const response = {
+      ok: true,
+      status: 'ready',
+      requestId: 'authenticator-request',
+      expiresAt: 42,
+      reason: 'picker-failed',
+    }
+    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+
+    const delivery = await sendAuthenticatorPickerOpenRuntimeMessage(message)
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
@@ -495,5 +532,26 @@ describe('runtime message adapters', () => {
     const delivery = await sendAuthenticationOutcomeRuntimeMessage(message)
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
+      expect(delivery.response.kind).toBe(
+        AuthenticationOutcomeResponseKind.Completed,
+      )
+    }
+  })
+
+  test('rejects contradictory outer outcome fields in Rust', async () => {
+    const response = {
+      ok: true,
+      verdict: {
+        verdict: AuthenticationOutcomeVerdict.Sufficient,
+        allowsCredentialCommit: true,
+      },
+      reason: 'outcome-classify-failed',
+    }
+    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+
+    const delivery = await sendAuthenticationOutcomeRuntimeMessage(message)
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
 })

@@ -1,4 +1,9 @@
-import type { AuthenticationOutcomeDecision } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  AuthenticationOutcomeDecision,
+  AuthenticationOutcomeResponse,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+
+export type { AuthenticationOutcomeResponse }
 
 export type AuthenticationOutcomeObservationView = {
   navigatedAwayFromAuthPath: boolean
@@ -11,11 +16,6 @@ export type AuthenticationOutcomeObservationView = {
 }
 
 export type AuthenticationOutcomeVerdictView = AuthenticationOutcomeDecision
-
-export type AuthenticationOutcomeResponse = {
-  ok: true
-  verdict: AuthenticationOutcomeVerdictView
-}
 
 export enum AuthenticationOutcomeClassifyMessageType {
   NookAuthenticationOutcomeClassify = 'nook:authentication-outcome-classify',

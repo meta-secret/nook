@@ -9,6 +9,10 @@
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
+#[wasm_bindgen(typescript_custom_section)]
+const EXTENSION_VAULT_EVENT_TYPESCRIPT: &str =
+    nook_companion_core::EXTENSION_VAULT_EVENT_TYPESCRIPT;
+
 #[wasm_bindgen(js_name = validateExtensionSessionRequest)]
 #[must_use]
 pub fn validate_extension_session_request(
@@ -55,6 +59,22 @@ pub fn decode_login_picker_open_response(
     response: nook_companion_core::LoginPickerOpenResponseWire,
 ) -> Result<nook_companion_core::LoginPickerOpenResponse, wasm_bindgen::JsError> {
     nook_companion_core::decode_login_picker_open_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen(js_name = decodeAuthenticatorPickerOpenResponse)]
+pub fn decode_authenticator_picker_open_response(
+    response: nook_companion_core::AuthenticatorPickerOpenResponseWire,
+) -> Result<nook_companion_core::AuthenticatorPickerOpenResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_authenticator_picker_open_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen(js_name = decodeAuthenticationOutcomeResponse)]
+pub fn decode_authentication_outcome_response(
+    response: nook_companion_core::AuthenticationOutcomeResponseWire,
+) -> Result<nook_companion_core::AuthenticationOutcomeResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_authentication_outcome_response(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 

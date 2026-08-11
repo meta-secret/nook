@@ -116,47 +116,6 @@ export function setFlightProgress({
   }
 }
 
-export enum AuthenticatorOptionsResponseStatus {
-  Ready = 'ready',
-  Locked = 'locked',
-  Unavailable = 'unavailable',
-}
-
-export type AuthenticatorOptionsResponse =
-  | { ok: false }
-  | {
-      ok: true
-      status: AuthenticatorOptionsResponseStatus.Ready
-      requestId: string
-      expiresAt: number
-    }
-  | { ok: true; status: AuthenticatorOptionsResponseStatus.Locked }
-  | { ok: true; status: AuthenticatorOptionsResponseStatus.Unavailable }
-
-export function isAuthenticatorOptionsResponse(
-  response: object,
-): response is AuthenticatorOptionsResponse {
-  if (!('ok' in response) || typeof response.ok !== 'boolean') return false
-  if (response.ok === false) return !('status' in response)
-  if (!('status' in response)) return false
-  if (response.status === AuthenticatorOptionsResponseStatus.Ready) {
-    return (
-      'requestId' in response &&
-      typeof response.requestId === 'string' &&
-      response.requestId.length > 0 &&
-      'expiresAt' in response &&
-      typeof response.expiresAt === 'number' &&
-      Number.isFinite(response.expiresAt)
-    )
-  }
-  return (
-    (response.status === AuthenticatorOptionsResponseStatus.Locked ||
-      response.status === AuthenticatorOptionsResponseStatus.Unavailable) &&
-    !('requestId' in response) &&
-    !('expiresAt' in response)
-  )
-}
-
 export function translatedMessage(key: BrowserMessageKey): string {
   return chrome.i18n.getMessage(key) || 'Nook'
 }

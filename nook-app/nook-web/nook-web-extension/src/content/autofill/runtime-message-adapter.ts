@@ -1,6 +1,8 @@
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import {
   decodeLoginPickerOpenResponse,
+  decodeAuthenticatorPickerOpenResponse,
+  decodeAuthenticationOutcomeResponse,
   decodeAuthenticationWorkflowSnapshotResponse,
   decodeAuthenticatorBackupAttachResponse,
   decodeAuthenticatorCodeResponse,
@@ -25,6 +27,8 @@ import {
   type AuthenticatorEnrollmentStageResponseWire,
   type AuthenticatorOptionsResponse,
   type AuthenticatorOptionsResponseWire,
+  type AuthenticatorPickerOpenResponse,
+  type AuthenticatorPickerOpenResponseWire,
   type AuthenticatorPreviewResponse,
   type AuthenticatorPreviewResponseWire,
   type GeneratedPasswordResponse,
@@ -36,10 +40,9 @@ import {
   type WebsiteLoginSaveOfferResponse,
   type WebsiteLoginSaveActionResponse,
   type WebsiteLoginSavePendingResponse,
-  type AuthenticationOutcomeDecision,
-  validateCompanionAuthenticationOutcomeDecision,
+  type AuthenticationOutcomeResponse,
+  type AuthenticationOutcomeResponseWire,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import type { AuthenticationOutcomeResponse } from '../../lib/outcome-evidence-messages'
 
 export enum RuntimeMessageDeliveryKind {
   Delivered = 'delivered',
@@ -57,6 +60,7 @@ export type {
   AuthenticatorEnrollmentConfirmResponse,
   AuthenticatorEnrollmentStageResponse,
   AuthenticatorOptionsResponse,
+  AuthenticatorPickerOpenResponse,
   AuthenticatorPreviewResponse,
   GeneratedPasswordResponse,
   LoginPickerOpenResponse,
@@ -64,6 +68,7 @@ export type {
   WebsiteLoginSaveActionResponse,
   WebsiteLoginSaveOfferResponse,
   WebsiteLoginSavePendingResponse,
+  AuthenticationOutcomeResponse,
 }
 
 function sendRuntimeMessage(
@@ -217,6 +222,26 @@ export async function sendLoginPickerOpenRuntimeMessage(
   }
 }
 
+export async function sendAuthenticatorPickerOpenRuntimeMessage(
+  message: object,
+): Promise<RuntimeMessageDelivery<AuthenticatorPickerOpenResponse>> {
+  const delivery = await sendRuntimeMessage(message)
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+    return unavailable()
+  }
+  try {
+    await companionWasmReady
+    const responseWire =
+      delivery.response as AuthenticatorPickerOpenResponseWire
+    return {
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: decodeAuthenticatorPickerOpenResponse(responseWire),
+    }
+  } catch {
+    return unavailable()
+  }
+}
+
 export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
   message: object,
 ): Promise<RuntimeMessageDelivery<AuthenticationWorkflowSnapshotResponse>> {
@@ -361,26 +386,12 @@ export async function sendAuthenticationOutcomeRuntimeMessage(
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     return unavailable()
   }
-  const { response } = delivery
-  if (
-    !response ||
-    typeof response !== 'object' ||
-    !('ok' in response) ||
-    response.ok !== true ||
-    !('verdict' in response) ||
-    !response.verdict ||
-    typeof response.verdict !== 'object'
-  ) {
-    return unavailable()
-  }
   try {
     await companionWasmReady
-    const verdict = validateCompanionAuthenticationOutcomeDecision(
-      response.verdict as AuthenticationOutcomeDecision,
-    )
+    const responseWire = delivery.response as AuthenticationOutcomeResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: { ok: true, verdict },
+      response: decodeAuthenticationOutcomeResponse(responseWire),
     }
   } catch {
     return unavailable()
