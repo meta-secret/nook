@@ -159,6 +159,14 @@
   let syncStepOpen = $state(false)
   let generateStepOpen = $state(false)
 
+  function onSelectPasswordEntry(entryId: PasswordEntryId): void {
+    passwordEntry = {
+      kind: PasswordEntrySelectionKind.Selected,
+      entryId,
+    }
+    passwordInput = ''
+  }
+
   const effectiveProviderId = $derived.by(() => {
     const firstCompatibleProviderArgs: Parameters<typeof firstCompatibleProvider>[0] = { providers: syncProviders, replicationType: vault.vaultArchitecture.replication_type, preference: selectedProviderIdState };
     const selection = firstCompatibleProvider(
@@ -385,9 +393,8 @@
         {isGenerating}
         {passwordError}
         bind:open={passwordStepOpen}
-        bind:passwordEntry
-        bind:passwordInput
         {onAddPassword}
+        {onSelectPasswordEntry}
       />
 
       <SetupWizardStep

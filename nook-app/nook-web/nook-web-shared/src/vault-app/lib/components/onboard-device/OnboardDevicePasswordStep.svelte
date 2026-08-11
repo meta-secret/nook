@@ -4,15 +4,11 @@
   import {
     isVaultPasswordLongEnough,
     type NookPasswordEntrySummary,
+    type PasswordEntryId,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
-  import {
-    PasswordEntrySelectionKind,
-    type PasswordEntrySelection,
-  } from '../onboard-device-state'
-
   let {
     vault,
     passwordEntries,
@@ -22,11 +18,8 @@
     isGenerating,
     passwordError,
     open = $bindable(false),
-    passwordEntry = $bindable({
-      kind: PasswordEntrySelectionKind.NotSelected,
-    }),
-    passwordInput = $bindable(''),
     onAddPassword,
+    onSelectPasswordEntry,
   }: {
     vault: VaultState
     passwordEntries: NookPasswordEntrySummary[]
@@ -36,12 +29,11 @@
     isGenerating: boolean
     passwordError: string
     open: boolean
-    passwordEntry: PasswordEntrySelection
-    passwordInput: string
     onAddPassword: (args: {
       readonly label: string
       readonly password: string
     }) => void | Promise<void>
+    onSelectPasswordEntry: (entryId: PasswordEntryId) => void
   } = $props()
 
   let passwordLabelInput = $state('')
@@ -108,13 +100,7 @@
               : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
             data-testid="onboard-password-entry-{entry.id}"
             disabled={isBusy || isGenerating}
-            onclick={() => {
-              passwordEntry = {
-                kind: PasswordEntrySelectionKind.Selected,
-                entryId: entry.id,
-              }
-              passwordInput = ''
-            }}
+            onclick={() => onSelectPasswordEntry(entry.id)}
           >
             <span
               class="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 {selected
