@@ -206,6 +206,18 @@ function clearSensitiveFieldValue(value: unknown): void {
   if (Array.isArray(value)) value.fill(0)
 }
 
+type ExtensionSessionSensitiveValue = string | number[] | string[]
+
+function copyExtensionSessionSensitiveValue(
+  value: unknown,
+): ExtensionSessionSensitiveValue {
+  if (typeof value === 'string') return value
+  if (!Array.isArray(value)) return []
+  if (value.every((entry) => typeof entry === 'number')) return [...value]
+  if (value.every((entry) => typeof entry === 'string')) return [...value]
+  return []
+}
+
 export function clearExtensionSessionSensitiveRequest(
   request: ExtensionSessionNonImportRequest,
 ): void {
@@ -226,14 +238,20 @@ export function stageExtensionSessionSensitiveRequest(
   const stagedPayload = { ...request.payload } as typeof request.payload
   for (const field of fields) {
     const value = Reflect.get(request.payload, field)
-    Reflect.set(stagedPayload, field, Array.isArray(value) ? [...value] : value)
+    const stagedValue: ExtensionSessionSensitiveValue =
+      copyExtensionSessionSensitiveValue(value)
+    Reflect.set(stagedPayload, field, stagedValue)
     clearSensitiveFieldValue(value)
-    Reflect.set(request.payload, field, typeof value === 'string' ? '' : [])
+    const clearedValue: ExtensionSessionSensitiveValue =
+      typeof value === 'string' ? '' : []
+    Reflect.set(request.payload, field, clearedValue)
   }
-  const replacementArgs = {
+  const replacementArgs: ReplaceExtensionSessionRequestPayloadArgs<
+    typeof request
+  > = {
     request,
     payload: stagedPayload,
-  } satisfies ReplaceExtensionSessionRequestPayloadArgs<typeof request>
+  }
   return {
     kind: ExtensionSessionSensitiveStageKind.Staged,
     request: replaceExtensionSessionRequestPayload(replacementArgs),
