@@ -111,6 +111,7 @@ test('offer browser extension install on vault home and in Devices', async ({
     throw new Error('Paired-vault discovery message was malformed.')
   }
   expect(Object.keys(discoveryMessage.payload).sort()).toEqual([
+    'expiresAt',
     'requestId',
     'vaultStoreId',
   ])
