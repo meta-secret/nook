@@ -47,6 +47,7 @@ import {
   type LoginOperationFailure,
   type LoginOperationSuccess,
 } from './login-session-response-adapter'
+import { websiteLoginRevealSessionRequest } from './session-request-projections'
 
 enum LoginPickerOpenStatus {
   Ready = 'ready',
@@ -611,15 +612,15 @@ export async function websiteLoginFill({
   }
   const access = await authorizedWebsiteGrant(nookTypedArgs0_2)
   if ('response' in access) return access.response
-  const nookTypedArgs0_17: Parameters<typeof sendSessionMessage>[0] = {
-    type: 'nook:extension-session-reveal-login',
-    payload: {
-      ...access.grant,
-      origin: message.payload.origin,
-      secretId: message.payload.secretId,
-      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-    },
+  const nookTypedArgs0_17: Parameters<
+    typeof websiteLoginRevealSessionRequest
+  >[0] = {
+    grant: access.grant,
+    origin: message.payload.origin,
+    secretId: message.payload.secretId,
   }
-  const response = await sendSessionMessage(nookTypedArgs0_17)
+  const response = await sendSessionMessage(
+    websiteLoginRevealSessionRequest(nookTypedArgs0_17),
+  )
   return decodeWebsiteLoginFillResponse(response)
 }

@@ -5,7 +5,7 @@ use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct WebsiteLoginAccountWire {
     vault_store_id: String,
     vault_name: String,
@@ -194,6 +194,7 @@ mod tests {
             r#"{"ok":false,"status":"unavailable"}"#,
             r#"{"ok":true,"reason":"vault-locked"}"#,
             r#"{"ok":false,"reason":" "}"#,
+            r#"{"ok":true,"status":"ready","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com","password":"foreign"}]}"#,
         ] {
             assert!(decode_website_login_options_json(malformed).is_err());
         }
