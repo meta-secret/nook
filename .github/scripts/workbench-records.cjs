@@ -25,8 +25,7 @@ const planBudgetFields = [
   },
   {
     label: 'Owning modules, packages, or layers',
-    pattern:
-      /^- Owning modules, packages, or layers:\s*(?!(?:None|N\/A|Not applicable)\s*$)\S.+$/im,
+    pattern: /^- Owning modules, packages, or layers:\s*\S.+$/im,
   },
   {
     label: 'Public or cross-module interfaces',
@@ -51,7 +50,8 @@ const planBudgetFields = [
   },
 ]
 
-const placeholderPattern = /^(?:None|N\/A|Not applicable)$/i
+const placeholderPattern =
+  /^(?:None|N\/A|Not applicable|TBD|Unknown|Unspecified|Pending|To be determined)$/i
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -91,6 +91,27 @@ function parseSliceContract(value, numbered) {
 
 function normalizedContractValue(value) {
   return value.toLocaleLowerCase('en-US')
+}
+
+function validateBudgetFieldStructure(candidate, budgetSection) {
+  for (const { label, pattern } of planBudgetFields) {
+    const fieldPattern = new RegExp(`^- ${escapeRegExp(label)}:`, 'gm')
+    const allMatches = candidate.match(fieldPattern) ?? []
+    const budgetMatches = budgetSection.match(fieldPattern) ?? []
+    if (allMatches.length === 0) {
+      return { kind: 'invalid', message: `missing or empty plan field: ${label}` }
+    }
+    if (allMatches.length !== 1 || budgetMatches.length !== 1) {
+      return {
+        kind: 'invalid',
+        message: `missing, duplicated, or misplaced plan field: ${label}`,
+      }
+    }
+    if (!pattern.test(budgetSection)) {
+      return { kind: 'invalid', message: `missing or empty plan field: ${label}` }
+    }
+  }
+  return { kind: 'valid', message: '' }
 }
 
 const commonForbiddenPatterns = [
@@ -181,30 +202,17 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     const budgetEnd = candidate.indexOf('## Initial plan')
     const budgetSection = candidate.slice(budgetStart, budgetEnd)
 
-    const missingField = planBudgetFields.find(({ label }) => {
-      const fieldPattern = new RegExp(`^- ${escapeRegExp(label)}:`, 'gm')
-      const allMatches = candidate.match(fieldPattern) ?? []
-      return allMatches.length === 0
-    })
-    if (missingField) {
-      return `missing or empty plan field: ${missingField.label}`
-    }
-
-    const duplicatedOrMisplacedField = planBudgetFields.find(({ label }) => {
-      const fieldPattern = new RegExp(`^- ${escapeRegExp(label)}:`, 'gm')
-      const allMatches = candidate.match(fieldPattern) ?? []
-      const budgetMatches = budgetSection.match(fieldPattern) ?? []
-      return allMatches.length !== 1 || budgetMatches.length !== 1
-    })
-    if (duplicatedOrMisplacedField) {
-      return `missing, duplicated, or misplaced plan field: ${duplicatedOrMisplacedField.label}`
-    }
-
-    const missingBudgetField = planBudgetFields.find(
-      ({ pattern }) => !pattern.test(budgetSection),
+    const budgetFieldState = validateBudgetFieldStructure(
+      candidate,
+      budgetSection,
     )
-    if (missingBudgetField) {
-      return `missing or empty plan field: ${missingBudgetField.label}`
+    if (budgetFieldState.kind === 'invalid') return budgetFieldState.message
+
+    const owningBoundary = budgetSection
+      .match(/^- Owning modules, packages, or layers:\s*(.+)$/im)[1]
+      .trim()
+    if (placeholderPattern.test(owningBoundary)) {
+      return 'missing or empty plan field: Owning modules, packages, or layers'
     }
 
     const estimate = Number(

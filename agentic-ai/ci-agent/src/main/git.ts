@@ -15,6 +15,63 @@ const ACTIONS_BOT = {
   name: "github-actions[bot]",
 } as const;
 
+const REPORTED_ONLY_PATH_PARTS = ["/dist/", "/generated/", "/vendor/"];
+const REPORTED_ONLY_FILENAMES = new Set([
+  "Cargo.lock",
+  "bun.lock",
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+]);
+
+export type AuthoredBudgetArgs = {
+  repoRoot: string;
+  baseRef: string;
+  maximumLines: number;
+};
+
+export function countAuthoredNumstat(numstat: string): number {
+  let total = 0;
+  for (const line of numstat.split("\n")) {
+    const [added, deleted, rawPath = ""] = line.split("\t");
+    const normalizedPath = `/${rawPath.replaceAll("\\", "/")}`;
+    const filename = normalizedPath.split("/").at(-1) || "";
+    const reportedOnly =
+      REPORTED_ONLY_FILENAMES.has(filename) ||
+      normalizedPath.endsWith(".snap") ||
+      REPORTED_ONLY_PATH_PARTS.some((part) => normalizedPath.includes(part));
+    if (reportedOnly || !/^\d+$/.test(added) || !/^\d+$/.test(deleted)) {
+      continue;
+    }
+    total += Number(added) + Number(deleted);
+  }
+  return total;
+}
+
+export async function assertAuthoredChangeBudget(
+  args: AuthoredBudgetArgs,
+): Promise<void> {
+  await execFileAsync("git", ["-C", args.repoRoot, "add", "-A"]);
+  const { stdout } = await execFileAsync("git", [
+    "-C",
+    args.repoRoot,
+    "diff",
+    "--cached",
+    "--numstat",
+    "--find-renames",
+    args.baseRef,
+  ]);
+  const authoredLines = countAuthoredNumstat(stdout);
+  log.info(
+    `Implemented diff contains ${authoredLines} authored changed lines against ${args.baseRef}`,
+  );
+  if (authoredLines > args.maximumLines) {
+    throw new Error(
+      `Implemented diff exceeds the ${args.maximumLines} authored changed-line budget: ${authoredLines}`,
+    );
+  }
+}
+
 async function markSafeDirectory(repoRoot: string): Promise<void> {
   // Must run before any other git command: bind-mounted Actions checkouts are
   // owned by the runner user while the agent container often runs as root.

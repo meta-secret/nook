@@ -207,7 +207,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         );
     }
     let publish_position = workflow
-        .find("createOrUpdateFileContents")
+        .find("path: planPath")
         .expect("scheduled automation must publish the validated plan");
     let block_position = workflow
         .find("Published multi-PR feature plan requires materialized Workbench feature")
@@ -222,6 +222,17 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     assert!(
         materialization_position < block_position,
         "scheduled automation must identify the materialization action before blocking"
+    );
+    let implement = read("agentic-ai/ci-agent/src/main/implement.ts");
+    let budget_position = implement
+        .find("assertAuthoredChangeBudget(budgetArgs)")
+        .expect("scheduled implementation must enforce the authored diff budget");
+    let push_position = implement
+        .find("pushFixBranch(repoRoot, agentBranch, runId)")
+        .expect("scheduled implementation must push its bounded branch");
+    assert!(
+        budget_position < push_position,
+        "scheduled implementation must enforce the authored diff budget before push"
     );
     Ok(())
 }

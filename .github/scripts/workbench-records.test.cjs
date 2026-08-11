@@ -218,7 +218,7 @@ for (const sequence of [
   })
 }
 
-for (const placeholder of ['None', 'N/A']) {
+for (const placeholder of ['None', 'N/A', 'TBD', 'Unknown']) {
   test(`rejects ${placeholder} as the owning boundary`, () => {
     const invalid = validPlan.replace(
       'Owning modules, packages, or layers: Workbench agent records',

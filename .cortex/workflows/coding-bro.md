@@ -227,7 +227,9 @@ flowchart TD
   FIX --> PUSH[Push completed fix]
   PUSH --> PR
   M --> S[11 Publish Workbench issue + linked worklog + stats]
-  S --> W{Actionable regression or waste?}
+  S --> N{Another ready feature slice?}
+  N -->|yes| F
+  N -->|no| W{Actionable regression or waste?}
   W -->|yes| BP[Open normal build-performance PR]
   W -->|no| D[12 Duration report]
   BP --> D
