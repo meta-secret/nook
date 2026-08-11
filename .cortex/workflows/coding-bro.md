@@ -163,10 +163,12 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
 ## How it works
 
 0. **Interpret the request** — Identify the important requirements without copying the raw prompt or chat.
-1. **Fetch and publish the task plan** — Sync with remote. Estimate authored
-   changed lines. Identify module and interface boundaries. Publish the
-   public-safe structured interpretation and execution plan to Workbench before
-   implementation begins.
+1. **Fetch and publish the task plan:**
+   - Sync with remote.
+   - Estimate authored changed lines.
+   - Identify module and interface boundaries.
+   - Publish the public-safe structured interpretation and execution plan to
+     Workbench before implementation begins.
 2. **Branch from `origin/main` and prepare the PR** — Never commit on `main`.
    Split work above the size boundary into an ordered Workbench issue sequence.
    Create a feature branch for the first slice. Keep its PR title, body, and

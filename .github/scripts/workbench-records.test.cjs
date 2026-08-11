@@ -264,6 +264,57 @@ test('rejects an ambiguous delivery shape', () => {
   )
 })
 
+test('accepts a normalized delivery shape with trailing spaces', () => {
+  const plan = validPlan.replace('Delivery shape: One PR', 'Delivery shape: One PR   ')
+  assert.equal(validateAgentRecord(plan, 'plan'), '')
+})
+
+test('rejects a placeholder current slice with concrete evidence', () => {
+  const invalid = validPlan.replace(
+    'Current PR slice and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
+    'Current PR slice and acceptance evidence: None; Acceptance evidence: Contract tests pass',
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /missing or empty plan field: Current PR slice and acceptance evidence/,
+  )
+})
+
+test('rejects multiple slices declared as one PR', () => {
+  const invalid = validPlan.replace(
+    'One validator slice; Acceptance evidence: Contract tests pass',
+    '\n1. Validator schema; Acceptance evidence: Contract tests pass.\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /one-PR plan requires exactly one slice with acceptance evidence/,
+  )
+})
+
+test('rejects budget fields duplicated outside their owning section', () => {
+  const invalid = validPlan.replace(
+    '- Publish the synthesized plan before implementation.',
+    '- Publish the synthesized plan before implementation.\n- Delivery shape: One PR',
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /missing, duplicated, or misplaced plan field: Delivery shape/,
+  )
+})
+
+test('does not use a valid field outside the budget section', () => {
+  const invalid = validPlan
+    .replace(
+      '- Publish the synthesized plan before implementation.',
+      '- Publish the synthesized plan before implementation.\n- Delivery shape: One PR',
+    )
+    .replace('- Delivery shape: One PR\n- Current PR', '- Delivery shape: undecided\n- Current PR')
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /missing, duplicated, or misplaced plan field: Delivery shape/,
+  )
+})
+
 test('rejects concrete workflow credentials', () => {
   const leaked = validPlan.replace(
     'Deliver a durable two-phase agent context record.',

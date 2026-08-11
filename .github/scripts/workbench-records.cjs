@@ -43,14 +43,19 @@ const planBudgetFields = [
   },
   {
     label: 'Current PR slice and acceptance evidence',
-    pattern:
-      /^- Current PR slice and acceptance evidence:\s*(?!(?:None|N\/A|Not applicable)\s*$)\S.+;\s*Acceptance evidence:\s*(?!(?:None|N\/A|Not applicable)\s*$)\S.+$/im,
+    pattern: /^- Current PR slice and acceptance evidence:\s*\S.+$/im,
   },
   {
     label: 'PR slices and acceptance evidence',
     pattern: /^- PR slices and acceptance evidence:\s*(?:\S.*)?$/m,
   },
 ]
+
+const placeholderPattern = /^(?:None|N\/A|Not applicable)$/i
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 const commonForbiddenPatterns = [
   /```/,
@@ -134,28 +139,64 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
   }
 
   if (kind === 'plan') {
+    const budgetStart =
+      candidate.indexOf('## Change budget and PR sequence') +
+      '## Change budget and PR sequence'.length
+    const budgetEnd = candidate.indexOf('## Initial plan')
+    const budgetSection = candidate.slice(budgetStart, budgetEnd)
+
+    const missingField = planBudgetFields.find(({ label }) => {
+      const fieldPattern = new RegExp(`^- ${escapeRegExp(label)}:`, 'gm')
+      const allMatches = candidate.match(fieldPattern) ?? []
+      return allMatches.length === 0
+    })
+    if (missingField) {
+      return `missing or empty plan field: ${missingField.label}`
+    }
+
+    const duplicatedOrMisplacedField = planBudgetFields.find(({ label }) => {
+      const fieldPattern = new RegExp(`^- ${escapeRegExp(label)}:`, 'gm')
+      const allMatches = candidate.match(fieldPattern) ?? []
+      const budgetMatches = budgetSection.match(fieldPattern) ?? []
+      return allMatches.length !== 1 || budgetMatches.length !== 1
+    })
+    if (duplicatedOrMisplacedField) {
+      return `missing, duplicated, or misplaced plan field: ${duplicatedOrMisplacedField.label}`
+    }
+
     const missingBudgetField = planBudgetFields.find(
-      ({ pattern }) => !pattern.test(candidate),
+      ({ pattern }) => !pattern.test(budgetSection),
     )
     if (missingBudgetField) {
       return `missing or empty plan field: ${missingBudgetField.label}`
     }
 
     const estimate = Number(
-      candidate
+      budgetSection
         .match(/^- Estimated authored changed lines:\s*([\d,]+)\s*$/m)[1]
         .replaceAll(',', ''),
     )
     const currentPrEstimate = Number(
-      candidate
+      budgetSection
         .match(
           /^- Current PR estimated authored changed lines:\s*([\d,]+)\s*$/m,
         )[1]
         .replaceAll(',', ''),
     )
-    const deliveryShape = candidate.match(
-      /^- Delivery shape:\s*(.+)$/im,
-    )[1]
+    const deliveryShape = budgetSection
+      .match(/^- Delivery shape:\s*(One PR|Multiple PRs)\s*$/im)[1]
+      .trim()
+
+    const currentSliceMatch = budgetSection.match(
+      /^- Current PR slice and acceptance evidence:\s*(.+?)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/im,
+    )
+    if (
+      !currentSliceMatch ||
+      placeholderPattern.test(currentSliceMatch[1].trim()) ||
+      placeholderPattern.test(currentSliceMatch[2].trim())
+    ) {
+      return 'missing or empty plan field: Current PR slice and acceptance evidence'
+    }
 
     if (currentPrEstimate > 5_000) {
       return 'current PR estimate exceeds 5,000 authored changed lines'
@@ -164,9 +205,8 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
       return 'one-PR plan exceeds 5,000 authored changed lines'
     }
 
-    const sequenceBody = candidate
+    const sequenceBody = budgetSection
       .split(/^- PR slices and acceptance evidence:\s*/m)[1]
-      .split(/^## Initial plan$/m)[0]
     if (deliveryShape === 'Multiple PRs') {
       const slicePattern =
         /^(\d+)\.\s+(?!(?:None|N\/A|Not applicable)\s*$)\S.+;\s*Acceptance evidence:\s*(?!(?:None|N\/A|Not applicable)\s*$)\S.+$/i
@@ -181,12 +221,22 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
       if (sliceLines.length < 2 || !hasExactSequence) {
         return 'multi-PR plan requires at least two ordered slices with acceptance evidence'
       }
-    } else if (
-      !/^(?!(?:None|N\/A|Not applicable)\s*$)\S.+;\s*Acceptance evidence:\s*(?!(?:None|N\/A|Not applicable)\s*$)\S.+$/im.test(
-        sequenceBody.trim(),
+    } else {
+      const sliceLines = sequenceBody
+        .trim()
+        .split('\n')
+        .filter((line) => line.trim())
+      const sliceMatch = sliceLines[0]?.match(
+        /^(?:1\.\s+)?(.+?)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
       )
-    ) {
-      return 'one-PR plan requires slice acceptance evidence'
+      if (
+        sliceLines.length !== 1 ||
+        !sliceMatch ||
+        placeholderPattern.test(sliceMatch[1].trim()) ||
+        placeholderPattern.test(sliceMatch[2].trim())
+      ) {
+        return 'one-PR plan requires exactly one slice with acceptance evidence'
+      }
     }
   }
 
