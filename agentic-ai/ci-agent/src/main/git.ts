@@ -15,6 +15,241 @@ const ACTIONS_BOT = {
   name: "github-actions[bot]",
 } as const;
 
+const REPORTED_ONLY_FILENAMES = new Set([
+  "Cargo.lock",
+  "bun.lock",
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+]);
+
+const REPOSITORY_GENERATED_PATHS = new Set([
+  "/nook-app/nook-web/nook-web-app/src/landing/generated-message-keys.ts",
+]);
+
+const AUTHORED_TEXT_EXTENSIONS = new Set([
+  ".bash",
+  ".cjs",
+  ".css",
+  ".graphql",
+  ".html",
+  ".js",
+  ".json",
+  ".jsx",
+  ".md",
+  ".mjs",
+  ".proto",
+  ".py",
+  ".rb",
+  ".rs",
+  ".scss",
+  ".sh",
+  ".sql",
+  ".svelte",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".yaml",
+  ".yml",
+  ".zsh",
+]);
+
+export type AuthoredBudgetArgs = {
+  repoRoot: string;
+  baseRef: string;
+  maximumLines: number;
+};
+
+enum NumstatRecordParseKind {
+  End = "end",
+  Malformed = "malformed",
+  Valid = "valid",
+}
+
+type NumstatRecordParseResult =
+  | { kind: NumstatRecordParseKind.End }
+  | { kind: NumstatRecordParseKind.Malformed; nextIndex: number }
+  | {
+      kind: NumstatRecordParseKind.Valid;
+      nextIndex: number;
+      added: string;
+      deleted: string;
+      destinationPath: string;
+      renamed: boolean;
+    };
+
+type ParseNumstatRecordArgs = {
+  records: string[];
+  index: number;
+};
+
+function parseNumstatRecord(
+  args: ParseNumstatRecordArgs,
+): NumstatRecordParseResult {
+  const record = args.records.at(args.index);
+  if (typeof record !== "string" || record.length === 0) {
+    return { kind: NumstatRecordParseKind.End };
+  }
+  const firstTab = record.indexOf("\t");
+  const secondTab = record.indexOf("\t", firstTab + 1);
+  if (firstTab < 0 || secondTab < 0) {
+    return {
+      kind: NumstatRecordParseKind.Malformed,
+      nextIndex: args.index + 1,
+    };
+  }
+  const added = record.slice(0, firstTab);
+  const deleted = record.slice(firstTab + 1, secondTab);
+  const inlinePath = record.slice(secondTab + 1);
+  if (inlinePath.length > 0) {
+    return {
+      kind: NumstatRecordParseKind.Valid,
+      nextIndex: args.index + 1,
+      added,
+      deleted,
+      destinationPath: inlinePath,
+      renamed: false,
+    };
+  }
+  const sourcePath = args.records.at(args.index + 1);
+  const destinationPath = args.records.at(args.index + 2);
+  if (
+    typeof sourcePath !== "string" ||
+    sourcePath.length === 0 ||
+    typeof destinationPath !== "string" ||
+    destinationPath.length === 0
+  ) {
+    return {
+      kind: NumstatRecordParseKind.Malformed,
+      nextIndex: args.records.length,
+    };
+  }
+  return {
+    kind: NumstatRecordParseKind.Valid,
+    nextIndex: args.index + 3,
+    added,
+    deleted,
+    destinationPath,
+    renamed: true,
+  };
+}
+
+export type ReportedOnlyNumstat = {
+  binaryFiles: number;
+  generatedLines: number;
+  lockfileLines: number;
+  malformedRecords: number;
+  pureRenameFiles: number;
+  snapshotLines: number;
+  unmeasurableAuthoredFiles: number;
+  vendoredLines: number;
+};
+
+export type AuthoredNumstatSummary = {
+  authoredLines: number;
+  reportedOnly: ReportedOnlyNumstat;
+};
+
+function emptyReportedOnlyNumstat(): ReportedOnlyNumstat {
+  return {
+    binaryFiles: 0,
+    generatedLines: 0,
+    lockfileLines: 0,
+    malformedRecords: 0,
+    pureRenameFiles: 0,
+    snapshotLines: 0,
+    unmeasurableAuthoredFiles: 0,
+    vendoredLines: 0,
+  };
+}
+
+export function summarizeAuthoredNumstat(
+  numstat: string,
+): AuthoredNumstatSummary {
+  let authoredLines = 0;
+  const reportedOnly = emptyReportedOnlyNumstat();
+  const records = numstat.split("\0");
+  let index = 0;
+  while (index < records.length) {
+    const parseArgs: ParseNumstatRecordArgs = { records, index };
+    const parsed = parseNumstatRecord(parseArgs);
+    if (parsed.kind === NumstatRecordParseKind.End) break;
+    index = parsed.nextIndex;
+    if (parsed.kind === NumstatRecordParseKind.Malformed) {
+      reportedOnly.malformedRecords += 1;
+      continue;
+    }
+    const normalizedPath = `/${parsed.destinationPath.replaceAll("\\", "/")}`;
+    const filename = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1);
+    if (!/^\d+$/.test(parsed.added) || !/^\d+$/.test(parsed.deleted)) {
+      const extensionStart = filename.lastIndexOf(".");
+      const extension = extensionStart >= 0 ? filename.slice(extensionStart) : "";
+      if (AUTHORED_TEXT_EXTENSIONS.has(extension)) {
+        reportedOnly.unmeasurableAuthoredFiles += 1;
+      } else {
+        reportedOnly.binaryFiles += 1;
+      }
+      continue;
+    }
+    const changedLines = Number(parsed.added) + Number(parsed.deleted);
+    if (REPORTED_ONLY_FILENAMES.has(filename)) {
+      reportedOnly.lockfileLines += changedLines;
+    } else if (normalizedPath.endsWith(".snap")) {
+      reportedOnly.snapshotLines += changedLines;
+    } else if (
+      normalizedPath.includes("/generated/") ||
+      REPOSITORY_GENERATED_PATHS.has(normalizedPath)
+    ) {
+      reportedOnly.generatedLines += changedLines;
+    } else if (normalizedPath.includes("/vendor/")) {
+      reportedOnly.vendoredLines += changedLines;
+    } else if (normalizedPath.includes("/dist/")) {
+      reportedOnly.generatedLines += changedLines;
+    } else if (parsed.renamed && changedLines === 0) {
+      reportedOnly.pureRenameFiles += 1;
+    } else {
+      authoredLines += changedLines;
+    }
+  }
+  return { authoredLines, reportedOnly };
+}
+
+export function countAuthoredNumstat(numstat: string): number {
+  return summarizeAuthoredNumstat(numstat).authoredLines;
+}
+
+export async function assertAuthoredChangeBudget(
+  args: AuthoredBudgetArgs,
+): Promise<void> {
+  await execFileAsync("git", ["-C", args.repoRoot, "add", "-A"]);
+  const { stdout } = await execFileAsync("git", [
+    "-C",
+    args.repoRoot,
+    "diff",
+    "--cached",
+    "--numstat",
+    "-z",
+    "--find-renames",
+    "-l0",
+    args.baseRef,
+  ]);
+  const summary = summarizeAuthoredNumstat(stdout);
+  log.info(
+    `Implemented diff contains ${summary.authoredLines} authored changed lines against ${args.baseRef}`,
+  );
+  log.info(`Reported-only diff rows: ${JSON.stringify(summary.reportedOnly)}`);
+  if (summary.reportedOnly.unmeasurableAuthoredFiles > 0) {
+    throw new Error(
+      `Implemented diff contains ${summary.reportedOnly.unmeasurableAuthoredFiles} authored source file(s) whose line counts are hidden by binary attributes`,
+    );
+  }
+  if (summary.authoredLines > args.maximumLines) {
+    throw new Error(
+      `Implemented diff exceeds the ${args.maximumLines} authored changed-line budget: ${summary.authoredLines}`,
+    );
+  }
+}
+
 async function markSafeDirectory(repoRoot: string): Promise<void> {
   // Must run before any other git command: bind-mounted Actions checkouts are
   // owned by the runner user while the agent container often runs as root.

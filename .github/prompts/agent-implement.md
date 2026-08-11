@@ -29,8 +29,10 @@ them with hand-written `docker run` commands.
 
 ## Steps
 
-1. Read `.nook-workbench-plan.md` first and implement that synthesized scope.
-   Prefer the Workbench issue scope; do not expand into unrelated refactors.
+1. Read `.nook-workbench-plan.md` first. Implement only its `Current PR slice
+   and acceptance evidence` scope. Treat the remaining PR sequence as feature
+   context, not as authorization to implement later slices. Prefer the
+   Workbench issue scope. Do not expand into unrelated refactors.
 2. Implement the change end-to-end in the working tree. Match existing conventions and package boundaries in `.cortex/ARCHITECTURE.md` / `.cortex/rules.md`.
 3. **Always run `task format`** (host-applied) before finishing so the harness
    commits a formatted tree. When UI-facing paths change, pass the UI demo

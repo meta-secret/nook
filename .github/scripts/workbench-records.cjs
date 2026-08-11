@@ -3,6 +3,7 @@ const recordSections = {
     '## Interpreted request',
     '## Requirements',
     '## Constraints and exclusions',
+    '## Change budget and PR sequence',
     '## Initial plan',
     '## Completion evidence',
     '## Safety review',
@@ -15,6 +16,184 @@ const recordSections = {
     '## Validation',
     '## Remaining work',
   ],
+}
+
+const planBudgetFields = [
+  {
+    label: 'Estimated authored changed lines',
+    pattern:
+      /^- Estimated authored changed lines:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
+  },
+  {
+    label: 'Owning modules, packages, or layers',
+    pattern: /^- Owning modules, packages, or layers:\s*\S.+$/im,
+  },
+  {
+    label: 'Public or cross-module interfaces',
+    pattern: /^- Public or cross-module interfaces:\s*\S.+$/m,
+  },
+  {
+    label: 'Delivery shape',
+    pattern: /^- Delivery shape:\s*(?:One PR|Multiple PRs)\s*$/m,
+  },
+  {
+    label: 'Current PR estimated authored changed lines',
+    pattern:
+      /^- Current PR estimated authored changed lines:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
+  },
+  {
+    label: 'Current PR slice and acceptance evidence',
+    pattern: /^- Current PR slice and acceptance evidence:\s*\S.+$/im,
+  },
+  {
+    label: 'PR slices and acceptance evidence',
+    pattern: /^- PR slices and acceptance evidence:\s*(?:\S.*)?$/m,
+  },
+]
+
+const placeholderPattern =
+  /^(?:None|N\/A|Not applicable|TBD|Unknown|Unspecified|Pending|To be determined)$/i
+const unresolvedPlaceholderPattern =
+  /^(?:TBD|Unknown|Unspecified|Pending|To be determined)$/i
+
+function isPlaceholder(value) {
+  const normalized = value
+    .trim()
+    .replace(/^[\s`*_~"'([{<]+/, '')
+    .replace(/[\s`*_~"'.,;:!?)}\]>]+$/, '')
+  return placeholderPattern.test(normalized)
+}
+
+function isUnresolvedPlaceholder(value) {
+  const normalized = value
+    .trim()
+    .replace(/^[\s`*_~"'([{<]+/, '')
+    .replace(/[\s`*_~"'.,;:!?)}\]>]+$/, '')
+  return unresolvedPlaceholderPattern.test(normalized)
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function countBudgetFieldLabels(candidate, label) {
+  const fieldPattern = new RegExp(`^- ${escapeRegExp(label)}:`, 'gim')
+  let count = 0
+  for (const _match of candidate.matchAll(fieldPattern)) count += 1
+  return count
+}
+
+function parseBudgetFieldValue(budgetSection, label) {
+  const fieldPattern = new RegExp(
+    `^- ${escapeRegExp(label)}:\\s*(.+?)\\s*$`,
+    'im',
+  )
+  const match = fieldPattern.exec(budgetSection)
+  if (!match || typeof match[1] !== 'string') {
+    return { kind: 'invalid' }
+  }
+  return { kind: 'valid', value: match[1].trim() }
+}
+
+function parseBudgetFields(budgetSection) {
+  const owningBoundary = parseBudgetFieldValue(
+    budgetSection,
+    'Owning modules, packages, or layers',
+  )
+  const estimate = parseBudgetFieldValue(
+    budgetSection,
+    'Estimated authored changed lines',
+  )
+  const currentPrEstimate = parseBudgetFieldValue(
+    budgetSection,
+    'Current PR estimated authored changed lines',
+  )
+  const deliveryShape = parseBudgetFieldValue(budgetSection, 'Delivery shape')
+  const publicInterfaces = parseBudgetFieldValue(
+    budgetSection,
+    'Public or cross-module interfaces',
+  )
+  const currentSlice = parseBudgetFieldValue(
+    budgetSection,
+    'Current PR slice and acceptance evidence',
+  )
+  const sequenceMarker = '- PR slices and acceptance evidence:'
+  const sequenceStart = budgetSection.indexOf(sequenceMarker)
+  if (
+    owningBoundary.kind === 'invalid' ||
+    estimate.kind === 'invalid' ||
+    currentPrEstimate.kind === 'invalid' ||
+    deliveryShape.kind === 'invalid' ||
+    publicInterfaces.kind === 'invalid' ||
+    currentSlice.kind === 'invalid' ||
+    sequenceStart < 0
+  ) {
+    return { kind: 'invalid' }
+  }
+  return {
+    kind: 'valid',
+    owningBoundary: owningBoundary.value,
+    estimate: Number(estimate.value.replaceAll(',', '')),
+    currentPrEstimate: Number(currentPrEstimate.value.replaceAll(',', '')),
+    deliveryShape: deliveryShape.value,
+    publicInterfaces: publicInterfaces.value,
+    currentSlice: currentSlice.value,
+    sequenceBody: budgetSection.slice(sequenceStart + sequenceMarker.length),
+  }
+}
+
+function parseSliceContract(value, numbered) {
+  const emptyContract = { valid: false, number: 0, scope: '', evidence: '' }
+  let contractText = value.trim()
+  let number = 0
+
+  if (numbered) {
+    const numberedMatch = contractText.match(/^(\d+)\.\s+(.+)$/)
+    if (!numberedMatch) return emptyContract
+    number = Number(numberedMatch[1])
+    contractText = numberedMatch[2]
+  } else {
+    const optionalNumberMatch = contractText.match(/^1\.\s+(.+)$/)
+    if (optionalNumberMatch) contractText = optionalNumberMatch[1]
+  }
+
+  const contractMatch = contractText.match(
+    /^(.+?)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
+  )
+  if (!contractMatch) return emptyContract
+
+  const scope = contractMatch[1].trim()
+  const evidence = contractMatch[2].trim()
+  return {
+    valid: !isPlaceholder(scope) && !isPlaceholder(evidence),
+    number,
+    scope,
+    evidence,
+  }
+}
+
+function normalizedContractValue(value) {
+  return value.toLocaleLowerCase('en-US')
+}
+
+function validateBudgetFieldStructure(candidate, budgetSection) {
+  for (const { label, pattern } of planBudgetFields) {
+    const allMatchCount = countBudgetFieldLabels(candidate, label)
+    const budgetMatchCount = countBudgetFieldLabels(budgetSection, label)
+    if (allMatchCount === 0) {
+      return { kind: 'invalid', message: `missing or empty plan field: ${label}` }
+    }
+    if (allMatchCount !== 1 || budgetMatchCount !== 1) {
+      return {
+        kind: 'invalid',
+        message: `missing, duplicated, or misplaced plan field: ${label}`,
+      }
+    }
+    if (!pattern.test(budgetSection)) {
+      return { kind: 'invalid', message: `missing or empty plan field: ${label}` }
+    }
+  }
+  return { kind: 'valid', message: '' }
 }
 
 const commonForbiddenPatterns = [
@@ -44,13 +223,8 @@ function containsSourceTaskExcerpt(candidate, sourceTask) {
 
   const sourceWords = normalizedWords(sourceTask)
   const candidateWords = normalizedWords(candidate)
-  const excerptLength = 12
-  if (
-    sourceWords.length < excerptLength ||
-    candidateWords.length < excerptLength
-  ) {
-    return false
-  }
+  const excerptLength = Math.min(5, sourceWords.length)
+  if (excerptLength === 0 || candidateWords.length < excerptLength) return false
 
   const sourceExcerpts = new Set()
   for (
@@ -100,6 +274,105 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
         : candidate.length
     if (!candidate.slice(start, end).trim()) {
       return `section is empty: ${required[index]}`
+    }
+  }
+
+  if (kind === 'plan') {
+    const budgetStart =
+      candidate.indexOf('## Change budget and PR sequence') +
+      '## Change budget and PR sequence'.length
+    const budgetEnd = candidate.indexOf('## Initial plan')
+    const budgetSection = candidate.slice(budgetStart, budgetEnd)
+
+    const budgetFieldState = validateBudgetFieldStructure(
+      candidate,
+      budgetSection,
+    )
+    if (budgetFieldState.kind === 'invalid') return budgetFieldState.message
+
+    const budgetFields = parseBudgetFields(budgetSection)
+    if (budgetFields.kind === 'invalid') {
+      return 'plan budget fields could not be parsed'
+    }
+    if (isPlaceholder(budgetFields.owningBoundary)) {
+      return 'missing or empty plan field: Owning modules, packages, or layers'
+    }
+    if (isUnresolvedPlaceholder(budgetFields.publicInterfaces)) {
+      return 'missing or empty plan field: Public or cross-module interfaces'
+    }
+
+    const estimate = budgetFields.estimate
+    const currentPrEstimate = budgetFields.currentPrEstimate
+    const deliveryShape = budgetFields.deliveryShape
+    const currentSlice = parseSliceContract(budgetFields.currentSlice, false)
+    if (!currentSlice.valid) {
+      return 'missing or empty plan field: Current PR slice and acceptance evidence'
+    }
+
+    if (estimate < 1 || currentPrEstimate < 1) {
+      return 'authored changed-line estimates must be positive integers'
+    }
+    if (currentPrEstimate > 5_000) {
+      return 'current PR estimate exceeds 5,000 authored changed lines'
+    }
+    if (estimate < currentPrEstimate) {
+      return 'feature estimate must be at least the current PR estimate'
+    }
+    if (deliveryShape === 'One PR' && estimate > 5_000) {
+      return 'one-PR plan exceeds 5,000 authored changed lines'
+    }
+    if (deliveryShape === 'One PR' && estimate !== currentPrEstimate) {
+      return 'one-PR feature and current PR estimates must match'
+    }
+
+    const sequenceBody = budgetFields.sequenceBody
+    if (deliveryShape === 'Multiple PRs') {
+      const sliceLines = sequenceBody
+        .trim()
+        .split('\n')
+        .filter((line) => line.trim())
+      const orderedSlices = sliceLines.map((line) =>
+        parseSliceContract(line, true),
+      )
+      const hasExactSequence = orderedSlices.every(
+        (slice, index) => slice.valid && slice.number === index + 1,
+      )
+      if (sliceLines.length < 2 || !hasExactSequence) {
+        return 'multi-PR plan requires at least two ordered slices with acceptance evidence'
+      }
+      const firstSlice = orderedSlices[0]
+      if (
+        normalizedContractValue(firstSlice.scope) !==
+          normalizedContractValue(currentSlice.scope) ||
+        normalizedContractValue(firstSlice.evidence) !==
+          normalizedContractValue(currentSlice.evidence)
+      ) {
+        return 'multi-PR plan requires its first slice to match the current PR contract'
+      }
+    } else {
+      const sliceLines = sequenceBody
+        .trim()
+        .split('\n')
+        .filter((line) => line.trim())
+      let sequenceSlice = {
+        valid: false,
+        number: 0,
+        scope: '',
+        evidence: '',
+      }
+      if (sliceLines.length === 1) {
+        sequenceSlice = parseSliceContract(sliceLines[0], false)
+      }
+      if (
+        sliceLines.length !== 1 ||
+        !sequenceSlice.valid ||
+        normalizedContractValue(sequenceSlice.scope) !==
+          normalizedContractValue(currentSlice.scope) ||
+        normalizedContractValue(sequenceSlice.evidence) !==
+          normalizedContractValue(currentSlice.evidence)
+      ) {
+        return 'one-PR plan requires one slice matching the current PR contract'
+      }
     }
   }
 

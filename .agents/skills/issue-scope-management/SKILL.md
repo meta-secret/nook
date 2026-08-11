@@ -17,3 +17,7 @@ existing records in `meta-secret/nook-workbench`, inspect likely matches, update
 or create the feature summary and focused issue files, preserve progress,
 owners, findings, decisions, dependencies, and PR links, publish a worklog,
 validate Workbench `main`, and link the records in the handoff.
+
+When a feature exceeds one bounded PR, create an ordered issue sequence.
+Prefer one cohesive module, package, layer, or responsibility per issue and PR.
+Continue the sequence until the complete feature is delivered.

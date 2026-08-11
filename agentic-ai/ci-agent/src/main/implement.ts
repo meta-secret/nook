@@ -10,6 +10,7 @@ import {
   parseRepository,
 } from "./github.js";
 import {
+  assertAuthoredChangeBudget,
   configureGitForCi,
   hasWorkingTreeChanges,
   pushFixBranch,
@@ -73,6 +74,13 @@ export async function runCiImplement(): Promise<void> {
       );
       return;
     }
+
+    const budgetArgs = {
+      repoRoot,
+      baseRef: "origin/main",
+      maximumLines: 5_000,
+    };
+    await assertAuthoredChangeBudget(budgetArgs);
 
     await pushFixBranch(repoRoot, agentBranch, runId);
 

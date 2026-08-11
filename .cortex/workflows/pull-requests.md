@@ -9,7 +9,13 @@ It is "land a PR with Nook's applicable GitHub Actions PR test checks green."
 
 Start by establishing the PR path, then keep ownership until merge or a concrete blocked handoff:
 
-1. **Prepare the PR path first** — fetch `origin/main`, create a feature branch, and define the PR title/body/scope before coding.
+1. **Prepare the PR path first:**
+   - Fetch `origin/main`.
+   - Estimate the authored changed lines.
+   - Define the module boundary.
+   - Split larger features into an ordered PR sequence.
+   - Create the first feature branch.
+   - Define the first PR's title, body, and scope.
 2. **Implement functionality** — make the requested code/docs/tests changes on the feature branch. Focused build/test feedback runs on GitHub-hosted workers.
 3. **Push and create/update the PR** — run `task loom:pre-push`, push a coherent commit, and open the PR; later fixes update that same PR.
 4. **Iterate and validate on GitHub Actions:**
@@ -20,6 +26,140 @@ Start by establishing the PR path, then keep ownership until merge or a concrete
 5. **Fix Nook's failed PR workflow** — inspect failed logs, consult app logs for web/e2e failures, fix, `task loom:pre-push`, and push the completed fix; the agent explicitly triggers complete validation for the replacement head.
 6. **Settle existing review feedback** — inspect current comments and reviews, reply to every actionable human or automated finding, and resolve each thread. Do not request or wait for optional reviewers.
 7. **Merge automatically when ready** — after the branch is current with `origin/main`, Nook's applicable repository-owned PR test checks are green, all actionable comments are resolved, and `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` / `task pr:ready` succeeds, squash-merge immediately without requesting separate permission.
+
+## Pull request size and modularity
+
+### Size boundary
+
+An implementation pull request must target no more than **5,000 authored
+changed lines**.
+
+This is a planning ceiling.
+
+It exists because review, validation, conflict resolution, and repair cost
+rise sharply once a change becomes too large to reason about as one unit.
+
+Estimate the size before implementation.
+
+Re-estimate when the design changes or the diff grows unexpectedly.
+
+Count additions and deletions against the intended base for:
+
+- authored source;
+- tests;
+- documentation;
+- configuration;
+- scripts and workflow code.
+
+During implementation, use `git diff --numstat <base>` for tracked working-tree
+changes.
+
+Count untracked authored files separately.
+
+After every change is committed, use `git diff --numstat <base>...HEAD`.
+
+Report these separately because they do not represent authored functionality:
+
+- generated files;
+- lockfiles;
+- snapshots;
+- vendored sources;
+- binary artifacts;
+- pure renames with no content change.
+
+Do not exclude tests or delete-heavy refactors from the authored estimate.
+
+Do not pad, compress, or mechanically reorganize code to fit the number.
+
+If the estimate approaches the ceiling, reduce scope before implementation.
+
+If implementation crosses the ceiling, stop expanding that PR.
+
+Remove or defer enough authored changes to return the current PR to 5,000 lines
+or fewer.
+
+Preserve a coherent bounded portion.
+
+Record a superseding plan for every deferred deliverable in the remaining PR
+sequence.
+
+### Required plan
+
+The Workbench task plan must state:
+
+- the estimated authored changed lines;
+- the files, packages, modules, or layers expected to change;
+- the public or cross-module interfaces involved;
+- whether one PR can deliver the complete feature;
+- the current PR slice and its authored changed-line estimate;
+- the ordered PR slices when more than one PR is needed;
+- the acceptance evidence for each slice;
+- a superseding immutable plan when scope or the estimate materially changes.
+
+An estimate is a design tool.
+
+It is not a promise of exact line count.
+
+### Module-focused slices
+
+Prefer one cohesive module, package, layer, or architectural responsibility per
+pull request.
+
+Apply SOLID principles as concrete review questions:
+
+- Does the slice have one clear reason to change?
+- Does new behavior extend a focused abstraction instead of adding conditionals
+  across unrelated modules?
+- Can a narrower interface replace a broad dependency?
+- Do higher-level policies depend on stable abstractions?
+- Are internal details hidden behind the owning module?
+
+Public interfaces should change less often than internal implementations.
+
+Design the narrow boundary before dependent slices begin.
+
+Do not expose speculative APIs for work that has no planned consumer.
+
+Each slice must be:
+
+- coherent on its own;
+- safe to merge;
+- covered at the owning boundary;
+- compatible with the previous merged slice;
+- small enough for focused review and repair.
+
+A slice may prepare an interface or migrate one module before the complete user
+flow is available.
+
+Its acceptance criteria must still be independently observable.
+
+### Multi-PR feature delivery
+
+A feature may require many issues and pull requests.
+
+Use one Workbench feature summary for the full outcome.
+
+Create one focused issue for each independently mergeable slice.
+
+Record dependencies and order in the feature index.
+
+Then repeat this loop:
+
+1. Implement the first ready issue.
+2. Validate and squash-merge its pull request.
+3. Update the feature and issue records.
+4. Fetch current `origin/main`.
+5. Start the next ready issue on a new branch.
+6. Continue until the feature acceptance criteria are complete.
+
+Remaining slices are required delivery work.
+
+Do not label them optional follow-up work merely because the first pull request
+merged.
+
+Do not keep one long-lived branch for the full sequence.
+
+See [issues.md](issues.md#multi-pr-feature-sequences) for Workbench ownership.
 
 ## ⛔ SQUASH MERGE ONLY
 
@@ -57,8 +197,9 @@ flowchart TD
   R -->|blocked| H
   R -->|ready| M[Squash merge PR]
   M --> S[Publish Workbench issue + worklog + stats]
-  S --> J
-  J --> K[Done]
+  S --> J{Feature acceptance complete?}
+  J -->|no, next issue ready| Z
+  J -->|yes| K[Done]
 ```
 
 ### 0. Fetch and branch
@@ -74,7 +215,13 @@ Never commit directly on `main`.
 
 ### 1. Prepare the PR path
 
-Before editing, decide the branch name and PR scope/title/body. The PR may be opened after the first coherent commit, but the work should already be organized around getting that PR green and merged.
+Before editing, complete the size and modularity plan above.
+
+Decide the branch name and the first PR's scope, title, and body.
+
+The PR may be opened after the first coherent commit.
+
+The work must already be organized around getting that slice green and merged.
 
 ### 2. Implement
 

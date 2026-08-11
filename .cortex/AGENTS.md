@@ -50,6 +50,33 @@ Do not leave conflicting guidance as if it were active policy.
 Full contract:
 [dynamic-skills/cortex-consistency.md](dynamic-skills/cortex-consistency.md).
 
+## ⛔ Non-negotiable: plan small, module-focused pull requests
+
+An implementation pull request must target no more than **5,000 authored
+changed lines**.
+
+Agents must estimate the change before implementation.
+
+If the complete feature is larger, split it into an ordered series of pull
+requests before editing.
+
+Each pull request must:
+
+- own one cohesive module, package, layer, or architectural responsibility;
+- remain independently testable and mergeable;
+- expose narrow interfaces to later slices;
+- avoid unrelated cleanup and cross-module churn.
+
+The agent still owns the complete requested feature.
+
+It must land the first slice, start the next slice from current `origin/main`,
+and continue until every planned Workbench issue is complete.
+
+Do not use the limit for mechanical file splitting or incomplete handoffs.
+
+Full contract:
+[workflows/pull-requests.md](workflows/pull-requests.md#pull-request-size-and-modularity).
+
 ## ⛔ P1 — most critical code-structure rule: oversized source is prohibited
 
 Every authored source file, including Rust, MUST stay at or below **1,000 lines**.
@@ -743,9 +770,20 @@ Do not request or wait for external reviewers or services.
 See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
 
 ### Deferred or out-of-scope functionality
-* If an agent truly believes part of a requested feature is too large, too risky, blocked, or out of
-  scope for the current PR, the agent must not silently drop it. First inspect
-  Nook Workbench issues and worklogs, then update the existing feature/focused
-  Markdown record or create the missing hierarchy and publish the task worklog.
-  See [workflows/issues.md](workflows/issues.md) and
-  [dynamic-skills/issue-scope-management.md](dynamic-skills/issue-scope-management.md).
+
+If a requested feature is too large for one pull request, create an ordered
+Workbench issue sequence before implementation.
+
+Land each required slice and continue until the feature is complete.
+
+If work is risky, externally blocked, or outside the authorized task, do not
+silently drop it.
+
+Inspect Workbench issues and worklogs first.
+
+Update the owning feature and focused issue, or create the missing hierarchy.
+
+Publish the task worklog.
+
+See [workflows/issues.md](workflows/issues.md) and
+[dynamic-skills/issue-scope-management.md](dynamic-skills/issue-scope-management.md).
