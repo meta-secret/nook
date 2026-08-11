@@ -1,12 +1,20 @@
 pub mod coverage;
 mod dockerfile_cache;
+mod javascript_literals;
 mod rust_macros;
 mod rust_tsify_state;
 mod rust_typed_json;
+mod rust_wasm_names;
 pub mod source_size;
 mod typescript_discriminants;
 mod typescript_domain_boundary;
 mod typescript_state;
+mod wasm_direct_aliases;
+mod wasm_dynamic_aliases;
+mod wasm_inventory;
+mod wasm_local_reexports;
+mod wasm_module_sources;
+mod wasm_svelte_sources;
 
 pub use dockerfile_cache::dockerfile_cache_mounts;
 use dockerfile_cache::is_generated_directory;
@@ -15,6 +23,7 @@ pub use typescript_domain_boundary::*;
 pub use rust_macros::authored_rust_macro_definitions;
 pub use rust_tsify_state::rust_tsify_implicit_absence_overrides;
 pub use rust_typed_json::rust_test_untyped_json_assertions;
+pub use rust_wasm_names::rust_wasm_callable_name_overrides;
 pub use typescript_state::{
     typescript_generic_optional_state, typescript_implicit_application_state,
     typescript_mutable_void_state, typescript_null_absence_sentinels,

@@ -49,11 +49,11 @@ Does not apply to:
 - [ ] Remove aliases from generated-WASM imports and re-exports.
 - [ ] Check direct bindings and imports through local facade modules.
 - [ ] Keep behavior unchanged and preserve typed Rust/WASM boundaries.
-- [ ] Search authored Rust and web sources for callable overrides and aliases.
+- [ ] Require the syntax-aware preflight inventory to be empty.
 
 ## Validation
 
-- Run the focused Rust/WASM and web checks for the changed call sites.
+- Run the preflight core-ownership tests.
 - Run WASM build and Node tests for generated binding coherence.
 - Run web checks and tests for all consumers.
 - Trigger complete exact-head PR validation.

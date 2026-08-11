@@ -214,7 +214,7 @@ functions by that same authored name. Do not restore a second name with an
 import or re-export alias. This includes imports through local facade modules.
 Direct Rust-to-TypeScript navigation is more important than TypeScript naming
 conventions. Property accessors, generated types, and imported JavaScript APIs
-are outside this callable-name rule. See
+are outside this callable-name rule. The syntax-aware preflight enforces it. See
 [dynamic-skills/rust-wasm-name-coherence.md](dynamic-skills/rust-wasm-name-coherence.md).
 
 Rust-owned `Tsify`/WASM domain contracts must not override a field type with
