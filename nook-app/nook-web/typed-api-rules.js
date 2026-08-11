@@ -23,6 +23,7 @@ export const untrustedInputAdapterFiles = [
   "nook-web-extension/src/lib/origin-runtime-message.ts",
   "nook-web-extension/src/lib/outcome-evidence-messages.ts",
   "nook-web-extension/src/lib/pairing-state.ts",
+  "nook-web-extension/src/lib/passkey-ceremony-error.ts",
   "nook-web-extension/src/lib/provider-credential-staging.ts",
   "nook-web-extension/src/lib/webauthn-messages.ts",
   // Rust/WASM and Chrome persistence boundaries narrow serialized state.

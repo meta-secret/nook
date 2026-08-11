@@ -11,6 +11,18 @@ import {
 type ExtensionInstallDemoMessage =
   ExtensionPairedVaultIdentityDiscoveryMessage | OpenCompanionLauncherMessage
 
+type ExtensionInstallDemoMessageTypes = {
+  openCompanionLauncher: OpenCompanionLauncherMessageType
+  pairedVaultIdentityDiscovery: ExtensionPairedVaultIdentityDiscoveryMessageType
+}
+
+const extensionInstallDemoMessageTypes: ExtensionInstallDemoMessageTypes = {
+  openCompanionLauncher:
+    OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+  pairedVaultIdentityDiscovery:
+    ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
+}
+
 // The repository-wide typed API contract covers the shared Svelte workspace
 // used by this flow. Keep this demo as the visible proof that extension install
 // discovery still crosses that typed boundary successfully.
@@ -34,7 +46,7 @@ test('offer browser extension install on vault home and in Devices', async ({
   await expect(page.getByTestId('extension-install-setup-cta')).toBeEnabled()
   await demoBeat(page)
 
-  await page.evaluate(() => {
+  await page.evaluate((messageTypes) => {
     const browserGlobal = globalThis as typeof globalThis & {
       chrome?: {
         runtime?: {
@@ -67,10 +79,9 @@ test('offer browser extension install on vault home and in Devices', async ({
             )
           }
           callback(
-            type === OpenCompanionLauncherMessageType.NookOpenCompanionLauncher
+            type === messageTypes.openCompanionLauncher
               ? { ok: true }
-              : type ===
-                  ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery
+              : type === messageTypes.pairedVaultIdentityDiscovery
                 ? {
                     type: 'nook:extension-paired-vault-identity-status',
                     payload: {
@@ -90,7 +101,7 @@ test('offer browser extension install on vault home and in Devices', async ({
       'data-nook-extension-runtime-id',
       'demo-extension-id',
     )
-  })
+  }, extensionInstallDemoMessageTypes)
   await expect(setupCard).toHaveAttribute('data-status', 'paired_elsewhere')
   await expect(page.getByTestId('extension-connected-vault')).toContainText(
     'Previous vault',

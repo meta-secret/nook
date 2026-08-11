@@ -16,6 +16,7 @@ export type WebsiteLoginFillResponse =
 export function isWebsiteLoginFillResponse(
   response: unknown,
 ): response is WebsiteLoginFillResponse {
+  if (!response || typeof response !== 'object') return false
   if (!('ok' in response) || typeof response.ok !== 'boolean') return false
   if (!response.ok) {
     return 'reason' in response && typeof response.reason === 'string'

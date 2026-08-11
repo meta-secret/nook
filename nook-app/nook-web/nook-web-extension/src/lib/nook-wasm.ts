@@ -28,6 +28,10 @@ import {
   type ExtensionSessionQueue,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
 } from '../offscreen/session-request-adapter'
+import {
+  PasskeyOperation,
+  passkeyCeremonyError,
+} from './passkey-ceremony-error'
 
 enum ExtensionWasmStartupKind {
   NotStarted = 'not-started',
@@ -183,6 +187,10 @@ type ExtensionRuntimeResponse =
   | { ok: false; reason: string }
   | { ok: false; error: string }
 
+type ExtensionSessionRuntimeResponse<Request extends ExtensionSessionRequest> =
+  | ({ ok: true } & ExtensionSessionResponseByType[Request['type']])
+  | { ok: false; error: string }
+
 type PublicKeyCredentialWithPrf = PublicKeyCredential & {
   getClientExtensionResults(): AuthenticationExtensionsClientOutputs & {
     prf?: { enabled?: boolean; results?: { first?: ArrayBuffer } }
@@ -216,6 +224,14 @@ function runtimeMessage(
   })
 }
 
+function extensionSessionRuntimeMessage<
+  Request extends ExtensionSessionRequest,
+>(message: Request): Promise<ExtensionSessionRuntimeResponse<Request>> {
+  return runtimeMessage(message) as Promise<
+    ExtensionSessionRuntimeResponse<Request>
+  >
+}
+
 async function sessionResponse<Request extends ExtensionSessionRequest>(
   message: Request,
 ): Promise<ExtensionSessionResponseByType[Request['type']]> {
@@ -230,7 +246,7 @@ async function sessionResponse<Request extends ExtensionSessionRequest>(
         : 'Extension session runtime could not start.',
     )
   }
-  const response = await runtimeMessage(message)
+  const response = await extensionSessionRuntimeMessage(message)
   if (!('ok' in response) || response.ok !== true) {
     throw new Error(
       'error' in response && typeof response.error === 'string'
@@ -238,7 +254,7 @@ async function sessionResponse<Request extends ExtensionSessionRequest>(
         : 'Extension session operation failed.',
     )
   }
-  return response as ExtensionSessionResponseByType[Request['type']]
+  return response
 }
 
 function deviceProtectionStatus(value: number): DeviceProtectionStatus {
@@ -318,28 +334,6 @@ function prfOutput(credential: PublicKeyCredential): number[] {
   return bytes(prf.results.first)
 }
 
-enum PasskeyOperation {
-  Create = 'create',
-  Get = 'get',
-}
-
-type PasskeyErrorArgs = {
-  error: Error | DOMException
-  action: PasskeyOperation
-}
-
-function passkeyError(args: PasskeyErrorArgs): Error {
-  const { error, action } = args
-  if (error instanceof DOMException && error.name === 'NotAllowedError') {
-    return new Error(
-      `PASSKEY_CEREMONY_NOT_ALLOWED: Passkey ${action} request did not finish.`,
-    )
-  }
-  return error instanceof Error
-    ? error
-    : new Error(`Passkey ${action} ceremony failed.`)
-}
-
 async function getPasskey(
   options: CredentialRequestOptions,
 ): Promise<PublicKeyCredentialWithPrf> {
@@ -359,13 +353,11 @@ async function getPasskey(
     }
     return credential as PublicKeyCredentialWithPrf
   } catch (error) {
-    const capturedError =
-      error instanceof Object ? error : new Error('Passkey get failed.')
-    const args: PasskeyErrorArgs = {
-      error: capturedError,
+    const args: Parameters<typeof passkeyCeremonyError>[0] = {
+      error,
       action: PasskeyOperation.Get,
     }
-    throw passkeyError(args)
+    throw passkeyCeremonyError(args)
   }
 }
 
@@ -388,13 +380,11 @@ async function createPasskey(
     }
     return credential as PublicKeyCredentialWithPrf
   } catch (error) {
-    const capturedError =
-      error instanceof Object ? error : new Error('Passkey create failed.')
-    const args: PasskeyErrorArgs = {
-      error: capturedError,
+    const args: Parameters<typeof passkeyCeremonyError>[0] = {
+      error,
       action: PasskeyOperation.Create,
     }
-    throw passkeyError(args)
+    throw passkeyCeremonyError(args)
   }
 }
 

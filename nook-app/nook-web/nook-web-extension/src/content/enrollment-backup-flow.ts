@@ -18,7 +18,10 @@ import {
 } from '../lib/auth-widget-policy'
 import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
 import { WebsiteAuthenticatorOptionsMessageType } from '../lib/login-fill-messages'
-import { WebsiteAuthenticatorBackupAttachMessageType } from '../lib/enrollment-messages'
+import {
+  WebsiteAuthenticatorBackupAttachMessageMode,
+  WebsiteAuthenticatorBackupAttachMessageType,
+} from '../lib/enrollment-messages'
 import {
   RuntimeMessageDeliveryKind,
   type AuthenticatorBackupAttachResponse,
@@ -64,11 +67,6 @@ export interface BackupEnrollmentHost extends EnrollmentFlowViewHost {
     substitution: string
   }) => string
   returnToActions: () => void
-}
-
-enum BackupAttachMode {
-  Replace = 'replace',
-  Merge = 'merge',
 }
 
 function detectEnrollmentHints(): EnrollmentPageHints {
@@ -121,7 +119,7 @@ function showBackupModeChooser({
   }
   setHostDescription(nookTypedArgs0_45)
 
-  const attach = (mode: BackupAttachMode) => {
+  const attach = (mode: WebsiteAuthenticatorBackupAttachMessageMode) => {
     if (host.isBusy()) return
     host.setBusy(true)
     const nookTypedArgs0_46: Parameters<typeof setHostDescription>[0] = {
@@ -190,7 +188,7 @@ function showBackupModeChooser({
     labelKey: BROWSER_MESSAGE_KEYS.WidgetBackupModeReplace,
     onClick: (event) => {
       if (!isTrustedAuthAction(event.isTrusted)) return
-      attach(BackupAttachMode.Replace)
+      attach(WebsiteAuthenticatorBackupAttachMessageMode.Replace)
     },
   }
   const replaceButton = createSecondaryButton(nookTypedArgs0_51)
@@ -199,7 +197,7 @@ function showBackupModeChooser({
     labelKey: BROWSER_MESSAGE_KEYS.WidgetBackupModeMerge,
     onClick: (event) => {
       if (!isTrustedAuthAction(event.isTrusted)) return
-      attach(BackupAttachMode.Merge)
+      attach(WebsiteAuthenticatorBackupAttachMessageMode.Merge)
     },
   }
   const mergeButton = createSecondaryButton(nookTypedArgs0_52)

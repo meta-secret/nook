@@ -209,10 +209,10 @@ function clearSensitiveFieldValue(value: unknown): void {
 export function clearExtensionSessionSensitiveRequest(
   request: ExtensionSessionNonImportRequest,
 ): void {
-  const payload = request.payload as Record<string, unknown>
   for (const field of sensitiveSessionFields[request.type]) {
-    clearSensitiveFieldValue(payload[field])
-    payload[field] = typeof payload[field] === 'string' ? '' : []
+    const value = Reflect.get(request.payload, field)
+    clearSensitiveFieldValue(value)
+    Reflect.set(request.payload, field, typeof value === 'string' ? '' : [])
   }
 }
 
@@ -223,20 +223,17 @@ export function stageExtensionSessionSensitiveRequest(
   if (fields.length === 0) {
     return { kind: ExtensionSessionSensitiveStageKind.NotRequired }
   }
-  const sourcePayload = request.payload as Record<string, unknown>
-  const stagedPayload = { ...sourcePayload }
+  const stagedPayload = { ...request.payload } as typeof request.payload
   for (const field of fields) {
-    const value = sourcePayload[field]
-    stagedPayload[field] = Array.isArray(value) ? [...value] : value
+    const value = Reflect.get(request.payload, field)
+    Reflect.set(stagedPayload, field, Array.isArray(value) ? [...value] : value)
     clearSensitiveFieldValue(value)
-    sourcePayload[field] = typeof value === 'string' ? '' : []
+    Reflect.set(request.payload, field, typeof value === 'string' ? '' : [])
   }
-  const replacementArgs: Parameters<
-    typeof replaceExtensionSessionRequestPayload
-  >[0] = {
+  const replacementArgs = {
     request,
     payload: stagedPayload,
-  }
+  } satisfies ReplaceExtensionSessionRequestPayloadArgs<typeof request>
   return {
     kind: ExtensionSessionSensitiveStageKind.Staged,
     request: replaceExtensionSessionRequestPayload(replacementArgs),
@@ -253,7 +250,8 @@ function hasExtensionSessionQueue(payload: unknown): boolean {
   if (!payload || typeof payload !== 'object') return false
   return (
     'queue' in payload &&
-    payload.queue instanceof Object &&
+    payload.queue !== null &&
+    typeof payload.queue === 'object' &&
     'kind' in payload.queue &&
     typeof payload.queue.kind === 'string'
   )
@@ -400,12 +398,18 @@ export async function parseExtensionSessionRequest(
   }
 }
 
-export function replaceExtensionSessionRequestPayload({
+type ReplaceExtensionSessionRequestPayloadArgs<
+  Request extends ExtensionSessionNonImportRequest,
+> = {
+  request: Request
+  payload: Request['payload']
+}
+
+export function replaceExtensionSessionRequestPayload<
+  Request extends ExtensionSessionNonImportRequest,
+>({
   request,
   payload,
-}: {
-  request: ExtensionSessionNonImportRequest
-  payload: ExtensionSessionNonImportRequest['payload']
-}): ExtensionSessionNonImportRequest {
-  return { ...request, payload } as ExtensionSessionNonImportRequest
+}: ReplaceExtensionSessionRequestPayloadArgs<Request>): Request {
+  return { ...request, payload } as Request
 }
