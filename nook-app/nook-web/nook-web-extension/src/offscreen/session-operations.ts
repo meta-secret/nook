@@ -7,6 +7,7 @@ import {
   NookVaultManager,
   previewOtpauthUri,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type initNookWasm from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { AuthProvidersSnapshot } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { scrubProviderCredentials } from '../lib/provider-credential-staging'
 import { ExtensionSessionMessageType } from './session-message-dispatch'
@@ -27,6 +28,7 @@ import {
   clearWebsitePasskeyRequests,
   handleWebsitePasskeyOperation,
   type WebsitePasskeyOperationArgs,
+  type WebsitePasskeyOperationResponse,
 } from './session-website-passkey-operations'
 
 const SESSION_LOCKED_ERROR = 'EXTENSION_SESSION_LOCKED'
@@ -48,7 +50,7 @@ type PasskeyUnlockMaterial = {
 }
 
 export type SessionOperationContext = {
-  ensureWasm: () => Promise<unknown>
+  ensureWasm: () => ReturnType<typeof initNookWasm>
   getManager: () => Promise<NookVaultManager>
   activateSession: () => Promise<DeviceResult>
   deviceResult: (activeManager: NookVaultManager) => Promise<DeviceResult>
@@ -65,7 +67,7 @@ export type HandleSessionMessageArgs = {
 export async function handleSessionMessage({
   message,
   context,
-}: HandleSessionMessageArgs): Promise<object> {
+}: HandleSessionMessageArgs) {
   const {
     ensureWasm,
     getManager,
@@ -730,8 +732,12 @@ export async function handleSessionMessage({
       const operationArgs: WebsitePasskeyOperationArgs = {
         message,
         getManager,
+        openVault: openPasskeyVault,
+        flushEvent: flushPasskeyEventToProviders,
       }
-      return handleWebsitePasskeyOperation(operationArgs)
+      const response: WebsitePasskeyOperationResponse =
+        await handleWebsitePasskeyOperation(operationArgs)
+      return response
     }
     case ExtensionSessionMessageType.Lock:
       return { ok: true }

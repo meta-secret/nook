@@ -30,7 +30,10 @@ enum WasmStartupKind {
 
 type WasmStartup =
   | { kind: WasmStartupKind.NotStarted }
-  | { kind: WasmStartupKind.Initializing; operation: Promise<unknown> }
+  | {
+      kind: WasmStartupKind.Initializing
+      operation: ReturnType<typeof initNookWasm>
+    }
 
 enum VaultManagerAvailabilityKind {
   Locked = 'locked',
@@ -63,7 +66,7 @@ let sessionExpirySchedule: SessionExpirySchedule = {
 let sessionGeneration = 0
 let sessionDeadlineAt = 0
 
-function ensureWasm(): Promise<unknown> {
+function ensureWasm(): ReturnType<typeof initNookWasm> {
   if (wasmStartup.kind === WasmStartupKind.Initializing) {
     return wasmStartup.operation
   }
@@ -161,9 +164,11 @@ const operationContext: SessionOperationContext = {
   resetOperations: (error) => sessionMessageDispatcher.replaceOperations(error),
 }
 
+type SessionOperationResponse = Awaited<ReturnType<typeof handleSessionMessage>>
+
 async function handleMessage(
   message: ExtensionSessionRequest,
-): Promise<object> {
+): Promise<SessionOperationResponse> {
   const args: HandleSessionMessageArgs = { message, context: operationContext }
   return handleSessionMessage(args)
 }

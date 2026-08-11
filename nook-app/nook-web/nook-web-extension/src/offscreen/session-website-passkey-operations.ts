@@ -4,33 +4,38 @@ import {
   type ExtensionSessionRequest,
   ExtensionSessionQueueKind,
 } from './session-request-adapter'
-import {
+import type {
   flushPasskeyEventToProviders,
   openPasskeyVault,
 } from './session-vault-operations'
 import { extensionVaultGrant } from './session-vault-grant'
 
-type CancelPasskeyRequest = Extract<
+export type CancelPasskeyRequest = Extract<
   ExtensionSessionRequest,
   { type: ExtensionSessionMessageType.CancelPasskey }
 >
-type RegisterPasskeyRequest = Extract<
+export type RegisterPasskeyRequest = Extract<
   ExtensionSessionRequest,
   { type: ExtensionSessionMessageType.RegisterPasskey }
 >
-type AssertPasskeyRequest = Extract<
+export type AssertPasskeyRequest = Extract<
   ExtensionSessionRequest,
   { type: ExtensionSessionMessageType.AssertPasskey }
 >
 
 type WebsitePasskeyRequest =
-  | CancelPasskeyRequest
-  | RegisterPasskeyRequest
-  | AssertPasskeyRequest
+  CancelPasskeyRequest | RegisterPasskeyRequest | AssertPasskeyRequest
 
 export type WebsitePasskeyOperationArgs = {
   message: WebsitePasskeyRequest
   getManager: () => Promise<NookVaultManager>
+  openVault: typeof openPasskeyVault
+  flushEvent: typeof flushPasskeyEventToProviders
+}
+
+export type WebsitePasskeyRequestActivityArgs = {
+  requestId: string
+  expiresAt: number
 }
 
 const canceledWebsitePasskeyRequests = new Set<string>()
@@ -39,10 +44,21 @@ export function clearWebsitePasskeyRequests(): void {
   canceledWebsitePasskeyRequests.clear()
 }
 
+export function websitePasskeyRequestIsActive({
+  requestId,
+  expiresAt,
+}: WebsitePasskeyRequestActivityArgs): boolean {
+  return (
+    Date.now() < expiresAt && !canceledWebsitePasskeyRequests.has(requestId)
+  )
+}
+
 export async function handleWebsitePasskeyOperation({
   message,
   getManager,
-}: WebsitePasskeyOperationArgs): Promise<object> {
+  openVault,
+  flushEvent,
+}: WebsitePasskeyOperationArgs) {
   switch (message.type) {
     case ExtensionSessionMessageType.CancelPasskey: {
       const payload = message.payload
@@ -66,26 +82,28 @@ export async function handleWebsitePasskeyOperation({
       }
       const queueExpiresAt = payload.queue.expiresAt
       const activeManager = await getManager()
-      const openArgs: Parameters<typeof openPasskeyVault>[0] = {
+      const openArgs: Parameters<typeof openVault>[0] = {
         activeManager,
         grant,
       }
-      await openPasskeyVault(openArgs)
+      await openVault(openArgs)
       try {
         const registration = await activeManager.registerWebsitePasskey(
           payload.requestJson,
-          () =>
-            Date.now() < queueExpiresAt &&
-            !canceledWebsitePasskeyRequests.has(payload.requestId as string),
+          () => {
+            const activityArgs: WebsitePasskeyRequestActivityArgs = {
+              requestId: payload.requestId as string,
+              expiresAt: queueExpiresAt,
+            }
+            return websitePasskeyRequestIsActive(activityArgs)
+          },
         )
         try {
-          const flushArgs: Parameters<
-            typeof flushPasskeyEventToProviders
-          >[0] = {
+          const flushArgs: Parameters<typeof flushEvent>[0] = {
             activeManager,
             vaultStoreId: grant.vaultStoreId,
           }
-          await flushPasskeyEventToProviders(flushArgs)
+          await flushEvent(flushArgs)
           return {
             ok: true,
             credentialId: registration.credentialId,
@@ -112,26 +130,28 @@ export async function handleWebsitePasskeyOperation({
       }
       const queueExpiresAt = payload.queue.expiresAt
       const activeManager = await getManager()
-      const openArgs: Parameters<typeof openPasskeyVault>[0] = {
+      const openArgs: Parameters<typeof openVault>[0] = {
         activeManager,
         grant,
       }
-      await openPasskeyVault(openArgs)
+      await openVault(openArgs)
       try {
         const assertion = await activeManager.assertWebsitePasskey(
           payload.requestJson,
-          () =>
-            Date.now() < queueExpiresAt &&
-            !canceledWebsitePasskeyRequests.has(payload.requestId as string),
+          () => {
+            const activityArgs: WebsitePasskeyRequestActivityArgs = {
+              requestId: payload.requestId as string,
+              expiresAt: queueExpiresAt,
+            }
+            return websitePasskeyRequestIsActive(activityArgs)
+          },
         )
         try {
-          const flushArgs: Parameters<
-            typeof flushPasskeyEventToProviders
-          >[0] = {
+          const flushArgs: Parameters<typeof flushEvent>[0] = {
             activeManager,
             vaultStoreId: grant.vaultStoreId,
           }
-          await flushPasskeyEventToProviders(flushArgs)
+          await flushEvent(flushArgs)
           return {
             ok: true,
             credentialId: assertion.credentialId,
@@ -148,4 +168,9 @@ export async function handleWebsitePasskeyOperation({
       }
     }
   }
+  throw new Error('Extension session received an unsupported passkey request.')
 }
+
+export type WebsitePasskeyOperationResponse = Awaited<
+  ReturnType<typeof handleWebsitePasskeyOperation>
+>
