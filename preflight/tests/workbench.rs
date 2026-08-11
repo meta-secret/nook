@@ -142,7 +142,9 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 
     assert!(
         issue_workflow.contains("Related scope does not transfer ownership")
-            && issue_workflow.contains("mutate branches, pull requests, reviews, checks"),
+            && issue_workflow.contains("mutate another active task's branch")
+            && issue_workflow.contains("trigger another active task's checks")
+            && issue_workflow.contains("change another active task's merge state"),
         "Workbench issue guidance must protect active task ownership"
     );
     assert!(

@@ -208,8 +208,11 @@ dependencies, related PRs, and recent worklogs.
 Agents must not:
 
 - claim or reassign another active owner's `in_progress` work;
-- mutate branches, pull requests, reviews, checks, or merge state owned by
-  another active task;
+- mutate another active task's branch;
+- mutate another active task's pull request;
+- reply to or resolve another active task's reviews;
+- trigger another active task's checks;
+- change another active task's merge state;
 - mark acceptance criteria done without validation evidence;
 - delete prior findings, failed approaches, blockers, or decisions;
 - switch `automation: agent` or `status: ready` merely to organize a draft;

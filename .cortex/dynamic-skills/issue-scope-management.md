@@ -30,8 +30,11 @@ to generate bookkeeping.
 ## Safety
 
 - Never claim another owner's `in_progress` record.
-- Never mutate another active task's branch, pull request, review state, checks,
-  or merge state.
+- Never mutate another active task's branch.
+- Never mutate another active task's pull request.
+- Never reply to or resolve another active task's reviews.
+- Never trigger another active task's checks.
+- Never change another active task's merge state.
 - Require an explicit handoff before ownership changes.
 - Never erase prior findings, decisions, blockers, or validation evidence.
 - Automation also requires an assigned Nook GitHub collaborator as owner.
