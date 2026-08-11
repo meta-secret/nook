@@ -94,7 +94,7 @@ and the load pipeline live in wasm; the web shim is adapters + i18n only.
 
 | Concern                                                                                                                                             | Home                                                                                               |
 | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Snapshot model + pure transforms (`normalize`, `migrate_provider_fields`, `ensure_local_provider_row`, `find_duplicate_sync_provider`, legacy-seed) | `nook-app/nook-platform/nook-core/src/sync/sync_provider_store.rs`                                |
+| Snapshot model + pure transforms (`normalize`, `migrate_provider_fields`, `ensure_local_provider_row`, `find_duplicate_sync_provider`, legacy-seed) | `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/`                                  |
 | Provider-save policy                                                                                                                                | `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/save.rs`                           |
 | Seal/open credential fields with device identity                                                                                                    | `nook-app/nook-platform/nook-core/src/sync/sync_provider_credentials.rs`                          |
 | `nook_auth` IndexedDB I/O (rexie), load pipeline, legacy `localStorage` read/clear                                                                  | `nook-app/nook-platform/nook-wasm/src/storage/auth_providers.rs`                                  |
@@ -108,10 +108,19 @@ and the load pipeline live in wasm; the web shim is adapters + i18n only.
 | Type re-exports, i18n presentation, wasm wrappers                                                                                                   | [`auth/providers.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/providers.ts) |
 | Browser persistence and Svelte state                                                                                                                | `vault/providers.svelte.ts` under `nook-web-shared`                                                |
 
-The provider-save policy owns provider construction, duplicate handling, vault
-scoping, local-provider row seeding, and OAuth configuration merging. TypeScript
-supplies platform inputs such as generated IDs and timestamps, maps typed failures
-to translated messages, and persists the resulting snapshot.
+The provider-save policy owns:
+
+- provider construction;
+- duplicate handling;
+- vault scoping;
+- local-provider row seeding; and
+- OAuth configuration merging.
+
+TypeScript owns browser integration:
+
+- supplying generated IDs and timestamps;
+- mapping typed failures to translated messages; and
+- persisting the resulting snapshot.
 
 **Credentials are sealed at rest with the device key.** Secret fields —
 `githubPat`, `oauthFile.accessToken`, `oauthFile.refreshToken` — are sealed
