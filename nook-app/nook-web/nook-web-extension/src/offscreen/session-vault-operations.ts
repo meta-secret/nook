@@ -29,11 +29,25 @@ type ImportVaultRequest = Extract<
 export type ImportExtensionVaultArgs = {
   activeManager: NookVaultManager
   message: ImportVaultRequest
+  dependencies?: ImportExtensionVaultDependencies
+}
+
+export type ImportExtensionVaultDependencies = {
+  decodeProviders: (snapshot: AuthProvidersSnapshot) => StorageProvider[]
+  createRecords: (
+    records: ImportVaultRequest['payload']['eventLogRecords'],
+  ) => NookExternalEventLogRecords
+}
+
+const importExtensionVaultDependencies: ImportExtensionVaultDependencies = {
+  decodeProviders: (snapshot) => decodeStorageProviders(snapshot).providers,
+  createRecords: (records) => NookExternalEventLogRecords.fromArray(records),
 }
 
 export async function importExtensionVault({
   activeManager,
   message,
+  dependencies = importExtensionVaultDependencies,
 }: ImportExtensionVaultArgs) {
   const payload = message.payload
   const grant = extensionVaultGrant(payload)
@@ -46,9 +60,9 @@ export async function importExtensionVault({
     providers: providers as StorageProvider[],
     activeVaultStoreId: { state: 'unselected' },
   }
-  const grantedProviders = decodeStorageProviders(providerSnapshot).providers
+  const grantedProviders = dependencies.decodeProviders(providerSnapshot)
   try {
-    const recordValues = NookExternalEventLogRecords.fromArray(records)
+    const recordValues = dependencies.createRecords(records)
     const statusValue = await activeManager.importExtensionEventLogRecords(
       grant.vaultStoreId,
       grant.deviceId,
