@@ -1,6 +1,9 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 /** Provider actions that snapshot reactive Svelte state at WASM boundaries. */
-import type { ProviderActionsContext } from "$lib/vault/action-contexts";
+import type {
+  ProviderActionsContext,
+  ProviderSaveContext,
+} from "$lib/vault/action-contexts";
 import { generate_id, isoTimestamp, type VaultAccessStatus } from "$lib/nook";
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
@@ -351,7 +354,7 @@ export async function handleRemoteVaultAssessStatus({
 
 /** Store id for persisting a sync provider row before or after wasm connect. */
 async function vaultStoreIdForProviderSave(
-  state: ProviderActionsContext,
+  state: ProviderSaveContext,
 ): Promise<ProviderSaveStoreId> {
   const fromManager = state.hasManager
     ? (
@@ -676,7 +679,7 @@ export async function removeProvider({
 }
 
 export async function ensureProviderSaved(
-  state: ProviderActionsContext,
+  state: ProviderSaveContext,
 ): Promise<boolean> {
   const vaultStoreId = await vaultStoreIdForProviderSave(state);
   const providerStoreId =

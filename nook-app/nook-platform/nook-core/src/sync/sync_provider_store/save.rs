@@ -204,10 +204,12 @@ fn merge_active_oauth(
             crate::StoredICloudShareTarget::SharedTarget(_) => active.icloud_share_target.clone(),
             crate::StoredICloudShareTarget::Personal => persisted.icloud_share_target.clone(),
         },
-        file_name: match (&persisted.file_name, &active.file_name) {
-            (StoredOAuthRemoteFileName::FileName(_), _) => persisted.file_name.clone(),
-            (_, StoredOAuthRemoteFileName::FileName(_)) => active.file_name.clone(),
-            _ => StoredOAuthRemoteFileName::FileName(drive_file.to_owned()),
+        file_name: if persisted.file_name.as_deref().and_then(non_empty).is_some() {
+            persisted.file_name.clone()
+        } else if active.file_name.as_deref().and_then(non_empty).is_some() {
+            active.file_name.clone()
+        } else {
+            StoredOAuthRemoteFileName::FileName(drive_file.to_owned())
         },
         account_email: match persisted.account_email {
             StoredOAuthAccountIdentity::Email(_) => persisted.account_email.clone(),
@@ -364,24 +366,25 @@ mod tests {
         }
     }
 
-    fn saved(outcome: ProviderSaveOutcome) -> AuthProvidersSnapshotData {
+    fn saved(outcome: ProviderSaveOutcome) -> Result<AuthProvidersSnapshotData, &'static str> {
         match outcome {
-            ProviderSaveOutcome::Saved { snapshot, .. } => snapshot,
-            other => panic!("expected saved outcome, got {other:?}"),
+            ProviderSaveOutcome::Saved { snapshot, .. } => Ok(snapshot),
+            _ => Err("expected saved provider outcome"),
         }
     }
 
     #[test]
-    fn creates_scoped_github_provider_from_trimmed_inputs() {
+    fn creates_scoped_github_provider_from_trimmed_inputs() -> Result<(), &'static str> {
         let snapshot = saved(apply_provider_save_policy(&request(
             StorageProviderType::Github,
-        )));
+        )))?;
         let provider = &snapshot.providers[0];
         assert_eq!(provider.id, "provider-new");
         assert_eq!(provider.label, "GitHub · owner/repo");
         assert_eq!(provider.github_pat.as_deref(), Some("pat"));
         assert_eq!(provider.github_repo.as_deref(), Some("owner/repo"));
         assert_eq!(provider.store_id.as_deref(), Some("vault-1"));
+        Ok(())
     }
 
     #[test]
@@ -411,31 +414,33 @@ mod tests {
     }
 
     #[test]
-    fn creates_a_local_folder_provider_with_its_directory_label() {
+    fn creates_a_local_folder_provider_with_its_directory_label() -> Result<(), &'static str> {
         let mut request = request(StorageProviderType::LocalFolder);
         request.local_folder = StoredLocalFolderConfiguration::Configured(LocalFolderConfigData {
             directory_name: StoredLocalFolderDirectory::DirectoryName("Backups".to_owned()),
             handle_id: StoredLocalFolderHandle::HandleId("handle-1".to_owned()),
         });
-        let snapshot = saved(apply_provider_save_policy(&request));
+        let snapshot = saved(apply_provider_save_policy(&request))?;
         assert_eq!(snapshot.providers[0].label, "Local backup · Backups");
+        Ok(())
     }
 
     #[test]
-    fn existing_flow_seeds_the_local_row_for_a_known_vault() {
+    fn existing_flow_seeds_the_local_row_for_a_known_vault() -> Result<(), &'static str> {
         let mut request = request(StorageProviderType::Github);
         request.setup = ProviderSaveSetup::Existing;
-        let snapshot = saved(apply_provider_save_policy(&request));
+        let snapshot = saved(apply_provider_save_policy(&request))?;
         assert_eq!(snapshot.providers.len(), 1);
         assert_eq!(
             snapshot.providers[0].provider_type,
             StorageProviderType::Local
         );
         assert_eq!(snapshot.providers[0].store_id.as_deref(), Some("vault-1"));
+        Ok(())
     }
 
     #[test]
-    fn oauth_merge_preserves_refresh_state_and_adopts_active_remote_identity() {
+    fn oauth_provider_creation_adopts_active_remote_identity() -> Result<(), &'static str> {
         let mut request = request(StorageProviderType::OauthFile);
         let active = OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
@@ -447,17 +452,17 @@ mod tests {
             ..OAuthFileConfigData::default()
         };
         request.oauth_file = StoredOAuthFileConfiguration::Configured(active);
-        let outcome = apply_provider_save_policy(&request);
         let ProviderSaveOutcome::Saved {
             snapshot,
             oauth_file,
-        } = outcome
+        } = apply_provider_save_policy(&request)
         else {
-            panic!("expected saved OAuth provider");
+            return Err("expected saved OAuth provider outcome");
         };
-        let Some(persisted) = snapshot.providers[0].oauth_file.as_ref() else {
-            panic!("expected persisted OAuth config");
-        };
+        let persisted = snapshot.providers[0]
+            .oauth_file
+            .as_ref()
+            .ok_or("expected persisted OAuth config")?;
         assert_eq!(persisted.access_token.as_deref(), Some("fresh-access"));
         assert_eq!(persisted.file_id.as_deref(), Some("remote-file"));
         assert_eq!(persisted.folder_id.as_deref(), Some("folder"));
@@ -466,6 +471,7 @@ mod tests {
             StoredOAuthRefreshCredential::NotIssued
         );
         assert_eq!(oauth_file.as_ref().as_ref(), Some(persisted));
+        Ok(())
     }
 
     #[test]
@@ -483,5 +489,46 @@ mod tests {
 
         let merged = merge_active_oauth(&persisted_oauth, &active_oauth, "nook.yaml");
         assert_eq!(merged.access_token.as_deref(), Some("persisted-token"));
+    }
+
+    #[test]
+    fn oauth_merge_preserves_the_persisted_refresh_token() {
+        let persisted_oauth = OAuthFileConfigData {
+            refresh_token: StoredOAuthRefreshCredential::Token("persisted-refresh".to_owned()),
+            ..OAuthFileConfigData::default()
+        };
+        let active_oauth = OAuthFileConfigData {
+            refresh_token: StoredOAuthRefreshCredential::Token("active-refresh".to_owned()),
+            ..OAuthFileConfigData::default()
+        };
+
+        let merged = merge_active_oauth(&persisted_oauth, &active_oauth, "nook.yaml");
+        assert_eq!(merged.refresh_token.as_deref(), Some("persisted-refresh"));
+    }
+
+    #[test]
+    fn oauth_merge_resolves_blank_file_names_semantically() {
+        let persisted_oauth = OAuthFileConfigData {
+            file_name: StoredOAuthRemoteFileName::FileName("  ".to_owned()),
+            ..OAuthFileConfigData::default()
+        };
+        let active_oauth = OAuthFileConfigData {
+            file_name: StoredOAuthRemoteFileName::FileName("discovered.yaml".to_owned()),
+            ..OAuthFileConfigData::default()
+        };
+
+        let merged = merge_active_oauth(&persisted_oauth, &active_oauth, "fallback.yaml");
+        assert_eq!(merged.file_name.as_deref(), Some("discovered.yaml"));
+
+        let blank_active = OAuthFileConfigData {
+            file_name: StoredOAuthRemoteFileName::FileName("\t".to_owned()),
+            ..OAuthFileConfigData::default()
+        };
+        let fallback = merge_active_oauth(
+            &OAuthFileConfigData::default(),
+            &blank_active,
+            "fallback.yaml",
+        );
+        assert_eq!(fallback.file_name.as_deref(), Some("fallback.yaml"));
     }
 }

@@ -8,7 +8,7 @@ import {
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth/providers'
-import type { ProviderActionsContext } from '$lib/vault/action-contexts'
+import type { ProviderSaveContext } from '$lib/vault/action-contexts'
 import { ensureProviderSaved } from '$lib/vault/providers.svelte'
 import type { TranslationRequest } from '$lib/vault/translation'
 import {
@@ -20,7 +20,7 @@ import {
   OAuthSetupPresetKind,
 } from '$lib/vault/state/provider.svelte'
 
-type AdapterState = ProviderActionsContext & {
+type AdapterState = ProviderSaveContext & {
   persistProviders: ReturnType<typeof vi.fn>
   clearLoginSetup: ReturnType<typeof vi.fn>
   applyActiveProviderCredentials: ReturnType<typeof vi.fn>
@@ -52,7 +52,7 @@ function providerState(providerType: StorageProviderType): AdapterState {
     clearLoginSetup: vi.fn(),
     applyActiveProviderCredentials: vi.fn(),
     persistProviders: vi.fn(async () => {}),
-  } as unknown as AdapterState
+  }
 }
 
 function githubProvider(): StorageProvider {

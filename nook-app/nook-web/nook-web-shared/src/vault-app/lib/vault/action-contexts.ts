@@ -129,6 +129,34 @@ export type ProviderActionsContext = ProviderStateFields &
   ProviderActionPorts &
   Pick<VaultSyncState, "localFolderHealth">;
 
+export type ProviderSaveContext = Pick<
+  ProviderActionsContext,
+  | "activeVault"
+  | "addProviderOpen"
+  | "applyActiveProviderCredentials"
+  | "clearLoginSetup"
+  | "configureOauthFile"
+  | "enqueueStorage"
+  | "errorMsg"
+  | "githubPat"
+  | "githubRepo"
+  | "hasActiveVaultStore"
+  | "hasManager"
+  | "isAuthenticated"
+  | "localFolderDraft"
+  | "loginRequiresExistingVault"
+  | "loginSetup"
+  | "oauthFileDraft"
+  | "oauthSetupSelection"
+  | "persistProviders"
+  | "providers"
+  | "requireActiveVaultStoreId"
+  | "requireManager"
+  | "selectedLoginVault"
+  | "storageMode"
+  | "t"
+>;
+
 type SyncProviderFields = Pick<
   VaultProviderState,
   | "activeVault"
