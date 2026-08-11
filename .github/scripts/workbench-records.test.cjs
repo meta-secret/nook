@@ -166,6 +166,33 @@ test('rejects a one-PR shape for an over-budget feature', () => {
   )
 })
 
+test('rejects a feature estimate below its current PR estimate', () => {
+  const invalid = validPlan
+    .replace(
+      'Estimated authored changed lines: 240',
+      'Estimated authored changed lines: 1',
+    )
+    .replace(
+      'Current PR estimated authored changed lines: 240',
+      'Current PR estimated authored changed lines: 4,999',
+    )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /feature estimate must be at least the current PR estimate/,
+  )
+})
+
+test('rejects different feature and current PR estimates for one PR', () => {
+  const invalid = validPlan.replace(
+    'Estimated authored changed lines: 240',
+    'Estimated authored changed lines: 300',
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /one-PR feature and current PR estimates must match/,
+  )
+})
+
 test('accepts a bounded current slice for a multi-PR feature', () => {
   const multiPr = validPlan
     .replace(
@@ -361,6 +388,17 @@ test('rejects budget fields duplicated outside their owning section', () => {
   const invalid = validPlan.replace(
     '- Publish the synthesized plan before implementation.',
     '- Publish the synthesized plan before implementation.\n- Delivery shape: One PR',
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /missing, duplicated, or misplaced plan field: Delivery shape/,
+  )
+})
+
+test('rejects case-variant budget fields outside their owning section', () => {
+  const invalid = validPlan.replace(
+    '- Publish the synthesized plan before implementation.',
+    '- Publish the synthesized plan before implementation.\n- delivery shape: Multiple PRs',
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),

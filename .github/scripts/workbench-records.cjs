@@ -65,6 +65,13 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+function countBudgetFieldLabels(candidate, label) {
+  const fieldPattern = new RegExp(`^- ${escapeRegExp(label)}:`, 'gim')
+  let count = 0
+  for (const _match of candidate.matchAll(fieldPattern)) count += 1
+  return count
+}
+
 function parseSliceContract(value, numbered) {
   const emptyContract = { valid: false, number: 0, scope: '', evidence: '' }
   let contractText = value.trim()
@@ -101,13 +108,12 @@ function normalizedContractValue(value) {
 
 function validateBudgetFieldStructure(candidate, budgetSection) {
   for (const { label, pattern } of planBudgetFields) {
-    const fieldPattern = new RegExp(`^- ${escapeRegExp(label)}:`, 'gm')
-    const allMatches = candidate.match(fieldPattern) ?? []
-    const budgetMatches = budgetSection.match(fieldPattern) ?? []
-    if (allMatches.length === 0) {
+    const allMatchCount = countBudgetFieldLabels(candidate, label)
+    const budgetMatchCount = countBudgetFieldLabels(budgetSection, label)
+    if (allMatchCount === 0) {
       return { kind: 'invalid', message: `missing or empty plan field: ${label}` }
     }
-    if (allMatches.length !== 1 || budgetMatches.length !== 1) {
+    if (allMatchCount !== 1 || budgetMatchCount !== 1) {
       return {
         kind: 'invalid',
         message: `missing, duplicated, or misplaced plan field: ${label}`,
@@ -251,8 +257,14 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     if (currentPrEstimate > 5_000) {
       return 'current PR estimate exceeds 5,000 authored changed lines'
     }
+    if (estimate < currentPrEstimate) {
+      return 'feature estimate must be at least the current PR estimate'
+    }
     if (deliveryShape === 'One PR' && estimate > 5_000) {
       return 'one-PR plan exceeds 5,000 authored changed lines'
+    }
+    if (deliveryShape === 'One PR' && estimate !== currentPrEstimate) {
+      return 'one-PR feature and current PR estimates must match'
     }
 
     const sequenceBody = budgetSection

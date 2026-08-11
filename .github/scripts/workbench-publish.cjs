@@ -10,12 +10,21 @@ const WorkbenchRemoteFileKind = Object.freeze({
   Present: 'present',
 })
 
+const SourceTaskFileKind = Object.freeze({
+  Missing: 'missing',
+  Present: 'present',
+})
+
 const repository =
   process.env.NOOK_WORKBENCH_REPOSITORY || 'meta-secret/nook-workbench'
 const expectedSha = process.env.NOOK_WORKBENCH_EXPECTED_SHA?.trim()
-const sourceTaskFile = (
-  process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE || ''
-).trim()
+let sourceTaskFile = { kind: SourceTaskFileKind.Missing }
+if (typeof process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE === 'string') {
+  const path = process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE.trim()
+  if (path.length > 0) {
+    sourceTaskFile = { kind: SourceTaskFileKind.Present, path }
+  }
+}
 const [localPath, remotePath, ...messageParts] = process.argv.slice(2)
 const message = messageParts.join(' ').trim()
 
@@ -35,7 +44,7 @@ if (
 
 const localContent = readFileSync(localPath, 'utf8')
 if (remotePath.startsWith('plans/')) {
-  if (!sourceTaskFile) {
+  if (sourceTaskFile.kind === SourceTaskFileKind.Missing) {
     console.error(
       'Refusing Workbench plan without NOOK_WORKBENCH_SOURCE_TASK_FILE',
     )
@@ -46,7 +55,7 @@ if (remotePath.startsWith('plans/')) {
       encoding: 'utf8',
     }).trim(),
   )
-  const sourceTaskPath = realpathSync(resolve(sourceTaskFile))
+  const sourceTaskPath = realpathSync(resolve(sourceTaskFile.path))
   const sourceTaskRelativePath = relative(checkoutRoot, sourceTaskPath)
   const sourceTaskEscapesCheckout =
     sourceTaskRelativePath === '..' ||
