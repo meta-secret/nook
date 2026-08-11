@@ -147,6 +147,16 @@ mod tests {
             }
         );
 
+        let contradictory_matched = serde_json::from_str::<
+            AuthenticationWorkflowSnapshotResponseWire,
+        >(
+            r#"{"ok":false,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"requiresHumanApproval":true,"observationIndex":0}}"#,
+        )?;
+        assert_eq!(
+            decode_authentication_workflow_snapshot_response(contradictory_matched),
+            Err(AuthenticationWorkflowSnapshotResponseDecodeError)
+        );
+
         for malformed in [
             AuthenticationWorkflowSnapshotResponseWire::NoMatch(
                 AuthenticationWorkflowNoMatchResponseWire { ok: false },

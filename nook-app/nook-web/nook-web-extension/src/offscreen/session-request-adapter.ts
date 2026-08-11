@@ -15,6 +15,8 @@ import {
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 
+export const EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS = 5_000
+
 type EnumeratedExtensionSessionRequest<Request> = Request extends {
   type: infer RequestType extends string
 }
@@ -142,6 +144,11 @@ export type ExtensionSessionSensitiveStage =
 enum ExtensionSessionIngressStageKind {
   Invalid = 'invalid',
   Staged = 'staged',
+}
+
+enum CompanionWasmReadinessKind {
+  Ready = 'ready',
+  Expired = 'expired',
 }
 
 type ExtensionSessionIngressStage =
@@ -312,8 +319,32 @@ export async function parseExtensionSessionRequest(
     return { kind: ExtensionSessionRequestParseKind.Invalid }
   }
   const request = ingressStage.request
+  const defaultExpiresAt =
+    Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS
+  const queue = request.payload.queue
+  const expiresAt =
+    queue.kind === ExtensionSessionQueueKind.Deadline
+      ? Math.min(queue.expiresAt, defaultExpiresAt)
+      : defaultExpiresAt
+  if (expiresAt <= Date.now()) {
+    clearExtensionSessionIngressRequest(request)
+    return { kind: ExtensionSessionRequestParseKind.Invalid }
+  }
+  let readinessTimer: ReturnType<typeof setTimeout> | undefined
+  const expiry = new Promise<CompanionWasmReadinessKind>((resolve) => {
+    readinessTimer = setTimeout(() => {
+      clearExtensionSessionIngressRequest(request)
+      resolve(CompanionWasmReadinessKind.Expired)
+    }, Math.max(0, expiresAt - Date.now()))
+  })
   try {
-    await companionWasmReady
+    const readiness = await Promise.race([
+      companionWasmReady.then(() => CompanionWasmReadinessKind.Ready),
+      expiry,
+    ])
+    if (readiness === CompanionWasmReadinessKind.Expired) {
+      return { kind: ExtensionSessionRequestParseKind.Invalid }
+    }
     const validationRequest =
       request.type === ExtensionSessionMessageType.ImportVault
         ? {
@@ -338,6 +369,8 @@ export async function parseExtensionSessionRequest(
   } catch {
     clearExtensionSessionIngressRequest(request)
     return { kind: ExtensionSessionRequestParseKind.Invalid }
+  } finally {
+    if (readinessTimer !== undefined) clearTimeout(readinessTimer)
   }
   return {
     kind: ExtensionSessionRequestParseKind.Parsed,

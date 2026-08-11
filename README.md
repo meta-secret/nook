@@ -234,7 +234,8 @@ nook-vault-simple / nook-vault-sentinel / nook-web-extension
   │    │    │    └─> nook-replication
   │    │    └─> nook-app-common
   │    └─> nook-companion-core
-  │         └─> nook-authenticator-domain
+  │         ├─> nook-authenticator-domain
+  │         └─> nook-event-log
   └─> nook-companion-wasm   size-sensitive extension policy bridge
        └─> nook-companion-core
 

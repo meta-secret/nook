@@ -1,8 +1,5 @@
 import {
   NookWebsiteLoginSaveDecision,
-  WebsiteLoginSaveActionResponseKind,
-  WebsiteLoginSaveOfferResponseKind,
-  WebsiteLoginSavePendingState,
   type WebsiteLoginSaveActionResponse,
   type WebsiteLoginSaveOfferView,
   type WebsiteLoginSaveOfferResponse,
@@ -292,14 +289,14 @@ export async function websiteLoginSaveOffer({
   if (!isAuthorizedWebsiteSender(nookTypedArgs0_5)) {
     pendingPassword.value = ''
     return {
-      kind: WebsiteLoginSaveOfferResponseKind.Rejected,
+      kind: 'rejected',
       reason: 'login-save-forbidden-origin',
     }
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
     pendingPassword.value = ''
-    return { kind: WebsiteLoginSaveOfferResponseKind.Unavailable }
+    return { kind: 'unavailable' }
   }
   await ensureExtensionSessionDocument()
   const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
@@ -315,7 +312,7 @@ export async function websiteLoginSaveOffer({
   ) {
     pendingPassword.value = ''
     openCompanionLauncherBestEffort()
-    return { kind: WebsiteLoginSaveOfferResponseKind.Locked }
+    return { kind: 'locked' }
   }
 
   // Prefer the selected/ready vault, then the first password-filling grant.
@@ -341,12 +338,12 @@ export async function websiteLoginSaveOffer({
     typeof response.decision !== 'number'
   ) {
     return {
-      kind: WebsiteLoginSaveOfferResponseKind.Rejected,
+      kind: 'rejected',
       reason: 'login-save-plan-failed',
     }
   }
   if (response.decision === NookWebsiteLoginSaveDecision.AlreadySaved) {
-    return { kind: WebsiteLoginSaveOfferResponseKind.NotRequired }
+    return { kind: 'not-required' }
   }
   if (
     (response.decision !== NookWebsiteLoginSaveDecision.Create &&
@@ -355,7 +352,7 @@ export async function websiteLoginSaveOffer({
     typeof response.offerId !== 'string'
   ) {
     return {
-      kind: WebsiteLoginSaveOfferResponseKind.Rejected,
+      kind: 'rejected',
       reason: 'login-save-plan-failed',
     }
   }
@@ -366,7 +363,7 @@ export async function websiteLoginSaveOffer({
     vaultName: grant.vaultName,
   }
   return {
-    kind: WebsiteLoginSaveOfferResponseKind.OfferAvailable,
+    kind: 'offer-available',
     offer,
   }
 }
@@ -387,7 +384,7 @@ export async function websiteLoginSavePending({
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
-    return { ok: true, state: WebsiteLoginSavePendingState.Unavailable }
+    return { ok: true, state: 'unavailable' }
   }
   await ensureExtensionSessionDocument()
   const nookTypedArgs0_9: Parameters<typeof sendSessionMessage>[0] = {
@@ -408,11 +405,11 @@ export async function websiteLoginSavePending({
   }
   if (
     !('state' in response) ||
-    response.state !== WebsiteLoginSavePendingState.Available ||
+    response.state !== 'available' ||
     !('offer' in response) ||
     typeof response.offer !== 'object'
   ) {
-    return { ok: true, state: WebsiteLoginSavePendingState.Unavailable }
+    return { ok: true, state: 'unavailable' }
   }
   const staged = response.offer as {
     offerId?: string
@@ -428,7 +425,7 @@ export async function websiteLoginSavePending({
     (staged.decision !== NookWebsiteLoginSaveDecision.Create &&
       staged.decision !== NookWebsiteLoginSaveDecision.Update)
   ) {
-    return { ok: true, state: WebsiteLoginSavePendingState.Unavailable }
+    return { ok: true, state: 'unavailable' }
   }
   const offer: WebsiteLoginSaveOfferView = {
     offerId: staged.offerId,
@@ -436,7 +433,7 @@ export async function websiteLoginSavePending({
     vaultStoreId: grant.vaultStoreId,
     vaultName: grant.vaultName,
   }
-  return { ok: true, state: WebsiteLoginSavePendingState.Available, offer }
+  return { ok: true, state: 'available', offer }
 }
 
 export async function websiteLoginSaveCommit({
@@ -466,7 +463,7 @@ export async function websiteLoginSaveCommit({
   }
   if (!isAuthorizedWebsiteSender(nookTypedArgs0_10)) {
     return {
-      kind: WebsiteLoginSaveActionResponseKind.Rejected,
+      kind: 'rejected',
       reason: 'login-save-forbidden-origin',
     }
   }
@@ -475,14 +472,14 @@ export async function websiteLoginSaveCommit({
   )
   if (!verdict.allowsCredentialCommit) {
     return {
-      kind: WebsiteLoginSaveActionResponseKind.Rejected,
+      kind: 'rejected',
       reason: 'login-save-evidence-insufficient',
     }
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
     return {
-      kind: WebsiteLoginSaveActionResponseKind.Rejected,
+      kind: 'rejected',
       reason: 'login-save-unavailable',
     }
   }
@@ -500,7 +497,7 @@ export async function websiteLoginSaveCommit({
     pending &&
     typeof pending === 'object' &&
     'state' in pending &&
-    pending.state === WebsiteLoginSavePendingState.Available &&
+    pending.state === 'available' &&
     'offer' in pending &&
     pending.offer &&
     typeof pending.offer === 'object' &&
@@ -525,7 +522,7 @@ export async function websiteLoginSaveCommit({
   ) {
     openCompanionLauncherBestEffort()
     return {
-      kind: WebsiteLoginSaveActionResponseKind.Rejected,
+      kind: 'rejected',
       reason: 'login-save-locked',
     }
   }
@@ -542,9 +539,9 @@ export async function websiteLoginSaveCommit({
     await sendSessionMessage(nookTypedArgs0_13),
   )
   return action.ok
-    ? { kind: WebsiteLoginSaveActionResponseKind.Completed }
+    ? { kind: 'completed' }
     : {
-        kind: WebsiteLoginSaveActionResponseKind.Rejected,
+        kind: 'rejected',
         reason: action.reason,
       }
 }
@@ -562,7 +559,7 @@ export async function websiteLoginSaveDismiss({
   }
   if (!isAuthorizedWebsiteSender(nookTypedArgs0_14)) {
     return {
-      kind: WebsiteLoginSaveActionResponseKind.Rejected,
+      kind: 'rejected',
       reason: 'login-save-forbidden-origin',
     }
   }
@@ -579,9 +576,9 @@ export async function websiteLoginSaveDismiss({
     await sendSessionMessage(nookTypedArgs0_15),
   )
   return action.ok
-    ? { kind: WebsiteLoginSaveActionResponseKind.Completed }
+    ? { kind: 'completed' }
     : {
-        kind: WebsiteLoginSaveActionResponseKind.Rejected,
+        kind: 'rejected',
         reason: action.reason,
       }
 }

@@ -12,9 +12,6 @@ import {
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import {
   NookWebsiteLoginSaveDecision,
-  WebsiteLoginSaveActionResponseKind,
-  WebsiteLoginSaveOfferResponseKind,
-  WebsiteLoginSavePendingState,
   type WebsiteLoginSaveOfferView,
 } from '../../lib/login-save-messages'
 import type {
@@ -230,7 +227,7 @@ async function stageSaveForCredentials(
     return
   }
   const { response } = delivery
-  if (response.kind !== WebsiteLoginSaveOfferResponseKind.OfferAvailable) return
+  if (response.kind !== 'offer-available') return
   const { offer } = response
   if (saveOfferState.dismissedOfferIds.has(offer.offerId)) return
   beginPendingSaveWatch(offer)
@@ -274,7 +271,7 @@ export async function loadPendingSaveOffer(): Promise<PendingSaveOfferLoad> {
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok ||
     !('state' in delivery.response) ||
-    delivery.response.state !== WebsiteLoginSavePendingState.Available ||
+    delivery.response.state !== 'available' ||
     !('offer' in delivery.response)
   )
     return { kind: PendingSaveOfferLoadKind.Absent }
@@ -411,7 +408,7 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
         if (
           delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
           delivery.response.kind !==
-            WebsiteLoginSaveActionResponseKind.Completed
+            'completed'
         ) {
           description.textContent = translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed,

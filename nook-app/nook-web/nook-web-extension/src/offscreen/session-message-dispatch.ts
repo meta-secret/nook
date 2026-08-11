@@ -15,6 +15,7 @@ import {
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import {
   clearExtensionSessionSensitiveRequest,
+  EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
   ExtensionSessionQueueKind,
   ExtensionSessionQueuePriority,
   type ExtensionSessionNonImportRequest,
@@ -27,8 +28,6 @@ import {
 } from './session-request-adapter'
 
 export { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
-
-const INTERACTIVE_QUEUE_TIMEOUT_MS = 5_000
 
 enum SensitivePayloadResidencyKind {
   Resident = 'resident',
@@ -117,7 +116,7 @@ function requestedQueueExpiry(
     kind: RequestedQueueExpiryKind.Requested,
     expiresAt: Math.min(
       queue.expiresAt,
-      Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+      Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
     ),
   }
 }
@@ -329,7 +328,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
         expiresAt:
           requestedExpiry.kind === RequestedQueueExpiryKind.Requested
             ? requestedExpiry.expiresAt
-            : Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+            : Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
       }
       return this.enqueueSensitiveMessage(nookNamedArgs0_4)
     }
@@ -347,7 +346,8 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
             : priority === SessionOperationPriority.Interactive
               ? {
                   kind: SessionOperationExpiryKind.Deadline,
-                  expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+                  expiresAt:
+                    Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
                 }
               : { kind: SessionOperationExpiryKind.None },
         cleanup: { kind: SessionOperationCleanupKind.None },

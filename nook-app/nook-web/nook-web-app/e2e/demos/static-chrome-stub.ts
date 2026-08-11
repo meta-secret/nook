@@ -7,10 +7,10 @@ import {
   AuthenticationWorkflowKind,
   AuthenticationWorkflowStage,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
-import {
-  WebsiteLoginSaveActionResponseKind,
-  WebsiteLoginSaveOfferResponseKind,
-  WebsiteLoginSavePendingState,
+import type {
+  WebsiteLoginSaveActionResponse,
+  WebsiteLoginSaveOfferResponse,
+  WebsiteLoginSavePendingResponse,
 } from '../../../nook-web-extension/src/lib/login-save-messages'
 
 export const demoLoginSaveCreateDecision = NookWebsiteLoginSaveDecision.Create
@@ -34,10 +34,10 @@ export const demoDomainEnumArgs = {
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey,
   },
   loginSaveResponses: {
-    offerAvailable: WebsiteLoginSaveOfferResponseKind.OfferAvailable,
-    pendingAvailable: WebsiteLoginSavePendingState.Available,
-    pendingUnavailable: WebsiteLoginSavePendingState.Unavailable,
-    completed: WebsiteLoginSaveActionResponseKind.Completed,
+    offerAvailable: 'offer-available',
+    pendingAvailable: 'available',
+    pendingUnavailable: 'unavailable',
+    completed: 'completed',
   },
 }
 
@@ -60,10 +60,22 @@ export type DemoChromeStubArgs = {
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey
   }
   loginSaveResponses: {
-    offerAvailable: WebsiteLoginSaveOfferResponseKind.OfferAvailable
-    pendingAvailable: WebsiteLoginSavePendingState.Available
-    pendingUnavailable: WebsiteLoginSavePendingState.Unavailable
-    completed: WebsiteLoginSaveActionResponseKind.Completed
+    offerAvailable: Extract<
+      WebsiteLoginSaveOfferResponse,
+      { kind: 'offer-available' }
+    >['kind']
+    pendingAvailable: Extract<
+      WebsiteLoginSavePendingResponse,
+      { state: 'available' }
+    >['state']
+    pendingUnavailable: Extract<
+      WebsiteLoginSavePendingResponse,
+      { state: 'unavailable' }
+    >['state']
+    completed: Extract<
+      WebsiteLoginSaveActionResponse,
+      { kind: 'completed' }
+    >['kind']
   }
   /** Static replies keyed by runtime message type. */
   responsesByType?: Record<string, unknown>

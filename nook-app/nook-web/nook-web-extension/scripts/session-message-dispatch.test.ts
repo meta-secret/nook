@@ -210,7 +210,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
         requestJson: '{"challenge":"browser-owned-secret"}',
         queue: {
           kind: 'deadline' as const,
-          expiresAt: 42,
+          expiresAt: Date.now() + 5_000,
           priority: 'interactive' as const,
         },
       }
@@ -225,6 +225,33 @@ describe('ExtensionSessionMessageDispatcher', () => {
         )
       }
     }
+  })
+
+  test('rejects an expired request before WASM validation and clears secrets', async () => {
+    const payload = {
+      vaultStoreId: 'vault',
+      deviceId: 'device',
+      devicePublicKey: 'public',
+      deviceSigningPublicKey: 'signing',
+      origin: 'https://example.com',
+      username: 'alice',
+      password: 'password',
+      queue: {
+        kind: 'deadline' as const,
+        expiresAt: Date.now() - 1,
+        priority: 'interactive' as const,
+      },
+    }
+
+    const request = {
+      type: ExtensionSessionMessageType.PlanLoginSave,
+      payload,
+    }
+    const parsed = await parseExtensionSessionRequest(request)
+
+    expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
+    expect(payload.username).toBe('')
+    expect(payload.password).toBe('')
   })
 
   test('preserves a staged passkey ceremony deadline while queued', async () => {

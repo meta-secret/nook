@@ -17,24 +17,6 @@ export type {
   WebsiteLoginSavePendingResponse,
 }
 
-export enum WebsiteLoginSavePendingState {
-  Unavailable = 'unavailable',
-  Available = 'available',
-}
-
-export enum WebsiteLoginSaveOfferResponseKind {
-  OfferAvailable = 'offer-available',
-  NotRequired = 'not-required',
-  Locked = 'locked',
-  Unavailable = 'unavailable',
-  Rejected = 'rejected',
-}
-
-export enum WebsiteLoginSaveActionResponseKind {
-  Completed = 'completed',
-  Rejected = 'rejected',
-}
-
 export enum WebsiteLoginSaveOfferMessageType {
   NookWebsiteLoginSaveOffer = 'nook:website-login-save-offer',
 }
