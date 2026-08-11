@@ -640,6 +640,20 @@ pub fn first_compatible_provider_id_preferred(
     ))
 }
 
+#[wasm_bindgen(js_name = sharedGrantProviderId)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn shared_grant_provider_id(
+    snapshot: nook_core::AuthProvidersSnapshotData,
+    preset: nook_core::OauthFilePreset,
+    target: nook_core::SharedStorageTargetSelection,
+) -> NookProviderSelection {
+    NookProviderSelection(nook_core::shared_grant_provider_id(
+        &snapshot.providers,
+        preset,
+        &target,
+    ))
+}
+
 #[wasm_bindgen(js_name = enrollmentProviderForArchitecture)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn enrollment_provider_for_architecture(

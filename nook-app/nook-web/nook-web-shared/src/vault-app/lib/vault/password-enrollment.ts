@@ -3,19 +3,22 @@ import {
   NookOAuthRefreshCredentialState,
   NookOAuthRemoteFileState,
   NookOAuthTokenExpiryState,
+  NookProviderSelectionState,
+  sharedGrantProviderId as wasmSharedGrantProviderId,
+  shouldFlushSharedStorageGrant as wasmShouldFlushSharedStorageGrant,
   type NookEnrollmentProvider,
+  type SharedStorageGrantCredential,
 } from "$app-wasm";
 import {
   oauthAccessToken,
   OAuthAccessTokenKind,
-  isConfiguredOAuthFile,
   oauthRefreshCredentialNotIssued,
-  OAUTH_FILE_PROVIDER_TYPE,
   storedOAuthAccountEmail,
   storedOAuthRefreshCredential,
   storedOAuthRemoteFileId,
   storedOAuthRemoteFileName,
   storedOAuthTokenExpiry,
+  unselectedVaultScope,
   unknownOAuthAccountIdentity,
   unknownOAuthTokenExpiry,
   unresolvedOAuthRemoteFileId,
@@ -53,38 +56,28 @@ export function findSharedGrantProvider({
   readonly preset: OAuthFilePreset;
   readonly target: SharedStorageTarget;
 }): SharedGrantProvider {
-  const withToken = providers.filter((provider) => {
-    const configuration = provider.oauthFile;
-    return (
-      provider.type === OAUTH_FILE_PROVIDER_TYPE &&
-      isConfiguredOAuthFile(configuration) &&
-      configuration.config.preset === preset &&
-      oauthAccessToken(configuration.config).kind ===
-        OAuthAccessTokenKind.Available
+  const snapshot: Parameters<typeof wasmSharedGrantProviderId>[0] = {
+    providers,
+    activeVaultStoreId: unselectedVaultScope(),
+  };
+  const storageTarget: Parameters<typeof wasmSharedGrantProviderId>[2] =
+    target.kind === SharedStorageTargetKind.Bound
+      ? { state: "existing", storageTargetId: target.storageTargetId }
+      : { state: "create" };
+  const selection = wasmSharedGrantProviderId(snapshot, preset, storageTarget);
+  try {
+    if (selection.state !== NookProviderSelectionState.Selected) {
+      return { kind: SharedGrantProviderKind.AuthorizationRequired };
+    }
+    const provider = providers.find(
+      (candidate) => candidate.id === selection.providerId,
     );
-  });
-  if (target.kind === SharedStorageTargetKind.Bound) {
-    const provider = withToken.find((candidate) => {
-      const configuration = candidate.oauthFile;
-      if (!isConfiguredOAuthFile(configuration)) {
-        return false;
-      }
-      const { folderId, iCloudShareTarget } = configuration.config;
-      return (
-        (folderId.state === "folderId" &&
-          folderId.value === target.storageTargetId) ||
-        (iCloudShareTarget.state === "sharedTarget" &&
-          iCloudShareTarget.value === target.storageTargetId)
-      );
-    });
     return provider
       ? { kind: SharedGrantProviderKind.Existing, provider }
       : { kind: SharedGrantProviderKind.AuthorizationRequired };
+  } finally {
+    selection.free();
   }
-  const provider = withToken[0];
-  return provider
-    ? { kind: SharedGrantProviderKind.Existing, provider }
-    : { kind: SharedGrantProviderKind.AuthorizationRequired };
 }
 
 export function shouldFlushSharedDriveGrant({
@@ -94,10 +87,11 @@ export function shouldFlushSharedDriveGrant({
   readonly grant: SharedStorageGrantOutcome;
   readonly accessCredential: ReturnType<typeof oauthAccessToken>;
 }): boolean {
-  return (
-    grant.kind !== "unsupported" &&
+  const credential: SharedStorageGrantCredential =
     accessCredential.kind === OAuthAccessTokenKind.Available
-  );
+      ? { state: "accessToken", accessToken: accessCredential.token }
+      : { state: "unavailable" };
+  return wasmShouldFlushSharedStorageGrant(grant, credential);
 }
 
 export function enrollmentOauthState(

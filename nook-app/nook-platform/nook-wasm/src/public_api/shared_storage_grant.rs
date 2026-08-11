@@ -154,6 +154,16 @@ pub async fn prepare_shared_storage_grant(
     Ok(outcome)
 }
 
+#[wasm_bindgen(js_name = shouldFlushSharedStorageGrant)]
+#[allow(clippy::needless_pass_by_value)]
+#[must_use]
+pub fn should_flush_shared_storage_grant(
+    outcome: nook_core::SharedStorageGrantOutcome,
+    credential: nook_core::SharedStorageGrantCredential,
+) -> bool {
+    nook_core::should_flush_shared_storage_grant(&outcome, &credential)
+}
+
 /// Resolve a shared Drive folder id/URL and verify write access for the current
 /// account before persisting the provider row.
 #[wasm_bindgen(js_name = verifySharedGoogleDriveFolder)]

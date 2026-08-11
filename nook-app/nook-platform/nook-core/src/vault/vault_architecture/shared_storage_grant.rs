@@ -139,6 +139,21 @@ pub enum SharedStorageGrantOutcome {
     },
 }
 
+/// A created or existing shared target needs the current event log before the
+/// enrollment code is issued. Unsupported ceremonies and missing owner
+/// credentials cannot flush that target.
+#[must_use]
+pub fn should_flush_shared_storage_grant(
+    outcome: &SharedStorageGrantOutcome,
+    credential: &SharedStorageGrantCredential,
+) -> bool {
+    !matches!(outcome, SharedStorageGrantOutcome::Unsupported { .. })
+        && matches!(
+            credential,
+            SharedStorageGrantCredential::AccessToken(token) if !token.trim().is_empty()
+        )
+}
+
 /// Validate a shared-grant request and return the grant ceremony outcome.
 ///
 /// Capability lookup is ceremony-agnostic: providers that cannot share return
@@ -277,5 +292,34 @@ mod tests {
         let roundtrip: SharedStorageGrantOutcome = serde_json::from_slice(&encoded)?;
         assert_eq!(roundtrip, manual);
         Ok(())
+    }
+
+    #[test]
+    fn shared_grant_flush_requires_supported_outcome_and_owner_credential() {
+        let granted = SharedStorageGrantOutcome::Granted {
+            note: "ready".to_owned(),
+            target: SharedStorageGrantTarget::Identified {
+                storage_target_id: "folder".to_owned(),
+            },
+        };
+        let manual = SharedStorageGrantOutcome::ManualGrantRequired {
+            instructions_key: "instructions".to_owned(),
+            joiner_identity: "joiner@example.com".to_owned(),
+            target: SharedStorageGrantTarget::Identified {
+                storage_target_id: "folder".to_owned(),
+            },
+        };
+        let unsupported = SharedStorageGrantOutcome::Unsupported {
+            reason_key: "unsupported".to_owned(),
+        };
+        let available = SharedStorageGrantCredential::AccessToken(" token ".to_owned());
+
+        assert!(should_flush_shared_storage_grant(&granted, &available));
+        assert!(should_flush_shared_storage_grant(&manual, &available));
+        assert!(!should_flush_shared_storage_grant(
+            &manual,
+            &SharedStorageGrantCredential::Unavailable,
+        ));
+        assert!(!should_flush_shared_storage_grant(&unsupported, &available,));
     }
 }
