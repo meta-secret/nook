@@ -1,4 +1,5 @@
 import {
+  GeneratePasswordRequestType,
   isBeginExtensionPairingMessage,
   isExtensionIdentityHandoffRequestMessage,
   isExtensionLocalEventLogUpdatedMessage,
@@ -345,7 +346,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:website-generate-password' &&
+    message.type === GeneratePasswordRequestType.NookWebsiteGeneratePassword &&
     'payload' in message &&
     typeof message.payload === 'object' &&
     message.payload &&

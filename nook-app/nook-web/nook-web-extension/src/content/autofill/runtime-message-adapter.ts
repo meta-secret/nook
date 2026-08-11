@@ -1,4 +1,5 @@
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
+import type { GeneratePasswordRequest } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import type { AuthenticationWorkflowSnapshotMessage } from '../../lib/auth-workflow-messages'
 import type {
   AuthenticatorPickerCancelMessage,
@@ -81,15 +82,6 @@ export enum RuntimeMessageDeliveryKind {
 export type RuntimeMessageDelivery<Response> =
   | { kind: RuntimeMessageDeliveryKind.Delivered; response: Response }
   | { kind: RuntimeMessageDeliveryKind.Unavailable }
-
-export enum GeneratePasswordRequestType {
-  NookWebsiteGeneratePassword = 'nook:website-generate-password',
-}
-
-export type GeneratePasswordRequest = {
-  type: GeneratePasswordRequestType.NookWebsiteGeneratePassword
-  payload: { origin: string }
-}
 
 export type ExtensionRuntimeRequest =
   | AuthenticationOutcomeClassifyMessage

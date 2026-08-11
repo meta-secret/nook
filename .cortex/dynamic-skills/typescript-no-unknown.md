@@ -2,8 +2,10 @@
 
 ## Purpose
 
-Do not author the `unknown` or `object` type in linted TypeScript or Svelte
-code.
+Do not author the `object` type in linted TypeScript or Svelte code.
+
+Do not author the `unknown` type except at an unavoidable untyped transport
+boundary that narrows it immediately.
 
 Do not replace it with another generic value in domain or application code.
 
@@ -127,7 +129,8 @@ bun run --cwd agentic-ai/loom lint
 
 ## Application Checklist
 
-- [ ] Replace `unknown` parameters and fields with concrete domain types.
+- [ ] Replace `unknown` parameters and fields outside immediate transport
+      decoders with concrete domain types.
 - [ ] Replace `object` annotations, constraints, assertions, and returns.
 - [ ] Reject `Object`, `{}`, `any`, and generic records used as substitutes.
 - [ ] Remove generic recursive values from state, results, and service APIs.

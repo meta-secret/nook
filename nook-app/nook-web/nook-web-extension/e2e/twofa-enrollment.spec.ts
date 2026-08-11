@@ -3,6 +3,43 @@ import { readExtensionPairingStorage } from './helpers/extension-pairing-storage
 import { launchPairedPinExtension } from './helpers/paired-pin-extension'
 import { startMockAuthServer } from './mock-auth'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
+import { WebsiteAuthenticatorBackupAttachMessageMode } from '../src/lib/enrollment-messages'
+import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
+import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
+
+type ExtensionPairingSessionGrant = {
+  vaultStoreId: string
+  deviceId: string
+  devicePublicKey: string
+  deviceSigningPublicKey: string
+}
+
+function extensionPairingSessionGrant(
+  value: unknown,
+): ExtensionPairingSessionGrant | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  if (
+    !('vaultStoreId' in value) ||
+    typeof value.vaultStoreId !== 'string' ||
+    !('deviceId' in value) ||
+    typeof value.deviceId !== 'string' ||
+    !('devicePublicKey' in value) ||
+    typeof value.devicePublicKey !== 'string' ||
+    !('deviceSigningPublicKey' in value) ||
+    typeof value.deviceSigningPublicKey !== 'string' ||
+    !('scopes' in value) ||
+    !Array.isArray(value.scopes) ||
+    !value.scopes.includes(ExtensionConnectScope.PasswordFilling)
+  ) {
+    return undefined
+  }
+  return {
+    vaultStoreId: value.vaultStoreId,
+    deviceId: value.deviceId,
+    devicePublicKey: value.devicePublicKey,
+    deviceSigningPublicKey: value.deviceSigningPublicKey,
+  }
+}
 
 async function listExtensionAuthenticators(
   context: Awaited<ReturnType<typeof launchPairedPinExtension>>['context'],
@@ -13,22 +50,8 @@ async function listExtensionAuthenticators(
   const pairingState = await readExtensionPairingStorage(worker)
   const grants = Object.entries(pairingState)
     .filter(([key]) => key.startsWith('nook:extension-pairing-grant:'))
-    .map(([, value]) => value as Record<string, unknown>)
-    .filter(
-      (value) =>
-        typeof value.vaultStoreId === 'string' &&
-        typeof value.deviceId === 'string' &&
-        typeof value.devicePublicKey === 'string' &&
-        typeof value.deviceSigningPublicKey === 'string' &&
-        Array.isArray(value.scopes) &&
-        value.scopes.includes(ExtensionConnectScope.PasswordFilling),
-    )
-    .map((value) => ({
-      vaultStoreId: value.vaultStoreId as string,
-      deviceId: value.deviceId as string,
-      devicePublicKey: value.devicePublicKey as string,
-      deviceSigningPublicKey: value.deviceSigningPublicKey as string,
-    }))
+    .map(([, value]) => extensionPairingSessionGrant(value))
+    .filter((value) => value !== undefined)
   return worker.evaluate(async (pairedGrants) => {
     await new Promise<unknown>((resolve) => {
       globalThis.chrome.runtime.sendMessage(
@@ -66,6 +89,77 @@ async function listExtensionAuthenticators(
     }
     return accounts
   }, grants)
+}
+
+type MalformedBackupCodeReplaceAttemptArgs = {
+  context: Awaited<ReturnType<typeof launchPairedPinExtension>>['context']
+  account: string
+}
+
+type MalformedBackupCodeReplaceResponse = {
+  ok: false
+  error: string
+}
+
+async function attemptMalformedBackupCodeReplace(
+  args: MalformedBackupCodeReplaceAttemptArgs,
+): Promise<MalformedBackupCodeReplaceResponse> {
+  const worker =
+    args.context.serviceWorkers()[0] ??
+    (await args.context.waitForEvent('serviceworker', { timeout: 45_000 }))
+  const pairingState = await readExtensionPairingStorage(worker)
+  const grants = Object.entries(pairingState)
+    .filter(([key]) => key.startsWith('nook:extension-pairing-grant:'))
+    .map(([, value]) => extensionPairingSessionGrant(value))
+    .filter((value) => value !== undefined)
+  const evaluateArgs = {
+    grants,
+    account: args.account,
+    listType: ExtensionSessionMessageType.ListAuthenticators,
+    attachType: ExtensionSessionMessageType.AuthenticatorBackupAttach,
+    replaceMode: WebsiteAuthenticatorBackupAttachMessageMode.Replace,
+    queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+  }
+  return worker.evaluate(async (input) => {
+    type AuthenticatorAccount = {
+      secretId: string
+      account: string
+    }
+    type AuthenticatorListResponse = {
+      ok?: boolean
+      accounts?: AuthenticatorAccount[]
+    }
+    const sendMessage = <Response>(message: unknown) =>
+      new Promise<Response>((resolve) => {
+        globalThis.chrome.runtime.sendMessage(message, resolve)
+      })
+
+    for (const grant of input.grants) {
+      const listRequest = {
+        type: input.listType,
+        payload: { ...grant, query: '', queue: input.queue },
+      }
+      const listed = await sendMessage<AuthenticatorListResponse>(listRequest)
+      const authenticator = listed.accounts?.find(
+        (candidate) => candidate.account === input.account,
+      )
+      if (!authenticator) continue
+      const malformedReplaceRequest = {
+        type: input.attachType,
+        payload: {
+          ...grant,
+          secretId: authenticator.secretId,
+          codes: { malformed: true },
+          mode: input.replaceMode,
+          queue: input.queue,
+        },
+      }
+      return sendMessage<MalformedBackupCodeReplaceResponse>(
+        malformedReplaceRequest,
+      )
+    }
+    throw new Error('Expected the enrolled authenticator in the paired vault.')
+  }, evaluateArgs)
 }
 
 test.describe('Browser 2FA enrollment', () => {
@@ -277,6 +371,32 @@ test.describe('Browser 2FA enrollment', () => {
       await expect(
         widget.getByText(/backup codes saved|резервные коды сохранены/i),
       ).toBeVisible({ timeout: 20_000 })
+
+      const malformedReplaceArgs: MalformedBackupCodeReplaceAttemptArgs = {
+        context: paired.context,
+        account: 'alice-2fa@nook.test',
+      }
+      await expect(
+        attemptMalformedBackupCodeReplace(malformedReplaceArgs),
+      ).resolves.toEqual({
+        ok: false,
+        error: 'Invalid extension session request.',
+      })
+
+      await paired.vaultPage.reload()
+      await expect(
+        paired.vaultPage.getByTestId('authenticated-shell'),
+      ).toBeVisible({ timeout: 20_000 })
+      const authenticatorRow = paired.vaultPage
+        .getByTestId('vault-group-authenticator')
+        .getByTestId('secret-row')
+        .filter({ hasText: 'alice-2fa@nook.test' })
+      await expect(authenticatorRow).toBeVisible({ timeout: 20_000 })
+      await authenticatorRow.getByTestId('secret-row-toggle').click()
+      await authenticatorRow.getByTestId('reveal-secret-btn').click()
+      await expect(
+        authenticatorRow.getByTestId('authenticator-backup-codes'),
+      ).toContainText('A1B2-C3D4-E5F6')
     } finally {
       await paired.context.close()
       await mockAuth.close()

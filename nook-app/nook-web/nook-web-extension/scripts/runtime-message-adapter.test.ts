@@ -15,7 +15,6 @@ import {
   WebsiteLoginOptionsKind,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  GeneratePasswordRequestType,
   RuntimeMessageDeliveryKind,
   sendAuthenticatorBackupAttachRuntimeMessage,
   sendAuthenticatorCodeRuntimeMessage,
@@ -32,6 +31,7 @@ import {
   sendLoginSaveOfferRuntimeMessage,
   sendGeneratePasswordRuntimeMessage,
 } from '../src/content/autofill/runtime-message-adapter'
+import { GeneratePasswordRequestType } from '../../nook-web-shared/src/extension/runtime-messages'
 import { AuthenticationWorkflowSnapshotMessageType } from '../src/lib/auth-workflow-messages'
 import { WebsiteAuthenticatorPickerOpenMessageType } from '../src/lib/authenticator-picker-messages'
 import {

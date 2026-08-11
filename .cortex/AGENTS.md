@@ -504,8 +504,9 @@ bags. The `object` type has no exception. An unavoidable untyped transport may
 use `unknown` only inside a dedicated adapter that narrows immediately.
 Existing generic APIs are staged migration debt. They are not compliant
 examples or exceptions. Do not expand or copy them. ESLint mechanically bans
-`unknown` and `object`. Review enforces generic-value containment until the
-existing debt is migrated. Full contract:
+`object` everywhere and `unknown` outside allowlisted transport adapters.
+Review enforces generic-value containment until the existing debt is migrated.
+Full contract:
 [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md).
 
 Loom and migrated Nook web TypeScript must not pass raw object literals into

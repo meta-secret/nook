@@ -32,13 +32,13 @@ import {
   sendLoginFillMessage,
 } from './login-fill-runtime-adapter'
 import {
-  GeneratePasswordRequestType,
   RuntimeMessageDeliveryKind,
   sendGeneratePasswordRuntimeMessage,
   sendLoginOptionsRuntimeMessage,
   sendLoginPickerOpenRuntimeMessage,
   sendRuntimeMessageWithoutResponse,
 } from './runtime-message-adapter'
+import { GeneratePasswordRequestType } from '../../../../nook-web-shared/src/extension/runtime-messages'
 
 export {
   RuntimeMessageDeliveryKind,

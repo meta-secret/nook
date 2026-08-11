@@ -331,12 +331,8 @@ type ExtensionSessionQueueEnvelope = {
 function isExtensionSessionQueueEnvelope(
   value: unknown,
 ): value is ExtensionSessionQueueEnvelope {
-  return (
-    Boolean(value) &&
-    typeof value === 'object' &&
-    'kind' in value &&
-    typeof value.kind === 'string'
-  )
+  if (!value || typeof value !== 'object') return false
+  return 'kind' in value && typeof value.kind === 'string'
 }
 
 function hasExtensionSessionQueue(payload: unknown): boolean {
