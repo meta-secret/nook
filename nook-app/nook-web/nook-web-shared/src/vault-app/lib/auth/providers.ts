@@ -8,28 +8,28 @@ import {
   OAUTH_FILE_PROVIDER_TYPE,
 } from "./provider-types";
 import {
-  bindGoogleDriveSharedFolder,
-  deleteAuthProvidersDb,
+  bind_google_drive_shared_folder,
+  delete_auth_providers_db,
   default as initNookWasm,
-  defaultDriveBackupName,
-  defaultGithubRepo,
-  findDuplicateSyncProvider as findDuplicateSyncProviderWasm,
-  findDuplicateSyncProviderExcluding as findDuplicateSyncProviderExcludingWasm,
-  formatDriveStorageRef as formatDriveStorageRefCore,
-  formatNewDriveStorageRef,
-  maskGithubPatHint as maskGithubPatHintCore,
-  oauthAccessToken as oauthAccessTokenWasm,
-  localizeProviderLabel as localizeProviderLabelCore,
-  providerDefaultLabel as providerDefaultLabelCore,
-  providerDefaultLabelWithoutDetail,
-  providerStorageDetail as providerStorageDetailCore,
-  sealAuthProvidersForDevicePublicKey,
-  setGoogleDriveProviderMode,
-  setICloudProviderMode,
-  wasmStorageModeForProvider,
+  default_drive_backup_name,
+  default_github_repo,
+  find_duplicate_sync_provider,
+  find_duplicate_sync_provider_excluding,
+  format_drive_storage_ref,
+  format_new_drive_storage_ref,
+  mask_github_pat_hint,
+  oauth_access_token,
+  localize_provider_label,
+  provider_default_label,
+  provider_default_label_without_detail,
+  provider_storage_detail,
+  seal_auth_providers_for_device_public_key,
+  set_google_drive_provider_mode,
+  set_icloud_provider_mode,
+  wasm_storage_mode_for_provider,
   NookDuplicateSyncProviderState,
   NookStoredOAuthFileConfigurationState,
-  storedOAuthFileConfigurationState,
+  stored_oauth_file_configuration_state,
   NookOAuthAccessTokenKind as OAuthAccessTokenKind,
   type AuthProvidersSnapshot,
   type ActiveVaultScope,
@@ -88,12 +88,12 @@ export type {
 } from "$app-wasm";
 
 export {
-  bindGoogleDriveSharedFolder,
-  deleteAuthProvidersDb,
-  sealAuthProvidersForDevicePublicKey,
-  setGoogleDriveProviderMode,
-  setICloudProviderMode,
-  wasmStorageModeForProvider,
+  bind_google_drive_shared_folder,
+  delete_auth_providers_db,
+  seal_auth_providers_for_device_public_key,
+  set_google_drive_provider_mode,
+  set_icloud_provider_mode,
+  wasm_storage_mode_for_provider,
   OAuthAccessTokenKind,
 };
 
@@ -117,7 +117,7 @@ function copyOAuthAccessToken(
 }
 
 export function oauthAccessToken(config: OAuthFileConfig): OAuthAccessToken {
-  return copyOAuthAccessToken(oauthAccessTokenWasm(config));
+  return copyOAuthAccessToken(oauth_access_token(config));
 }
 
 export function missingOAuthAccessToken(): OAuthAccessToken {
@@ -141,8 +141,8 @@ export function formatDriveStorageRef({
   readonly fileName: string;
 }): string {
   return identity.kind === DriveFileIdentityKind.Existing
-    ? formatDriveStorageRefCore(identity.fileId, fileName)
-    : formatNewDriveStorageRef(fileName);
+    ? format_drive_storage_ref(identity.fileId, fileName)
+    : format_new_drive_storage_ref(fileName);
 }
 
 export {
@@ -166,8 +166,8 @@ export type ProviderSetupRequest =
         | typeof GITHUB_PROVIDER_TYPE;
     };
 
-export const DEFAULT_GITHUB_REPO = defaultGithubRepo();
-export const DEFAULT_DRIVE_BACKUP_NAME = defaultDriveBackupName();
+export const DEFAULT_GITHUB_REPO = default_github_repo();
+export const DEFAULT_DRIVE_BACKUP_NAME = default_drive_backup_name();
 
 export function unselectedVaultScope(): ActiveVaultScope {
   return { state: "unselected" };
@@ -445,7 +445,7 @@ export function isConfiguredOAuthFile(
   { config: OAuthFileConfig }
 > {
   return (
-    storedOAuthFileConfigurationState(configuration) ===
+    stored_oauth_file_configuration_state(configuration) ===
     NookStoredOAuthFileConfigurationState.Configured
   );
 }
@@ -496,9 +496,9 @@ export function findDuplicateSyncProvider({
   readonly candidate: StorageProvider;
 }): DuplicateSyncProvider {
   const findDuplicateSyncProviderWasmArgs: Parameters<
-    typeof findDuplicateSyncProviderWasm
+    typeof find_duplicate_sync_provider
   >[0] = { providers, activeVaultStoreId: unselectedVaultScope() };
-  const result = findDuplicateSyncProviderWasm(
+  const result = find_duplicate_sync_provider(
     findDuplicateSyncProviderWasmArgs,
     candidate,
   );
@@ -526,9 +526,9 @@ export function findDuplicateSyncProviderExcluding({
   readonly excludeId: string;
 }): DuplicateSyncProvider {
   const findDuplicateSyncProviderExcludingWasmArgs: Parameters<
-    typeof findDuplicateSyncProviderExcludingWasm
+    typeof find_duplicate_sync_provider_excluding
   >[0] = { providers, activeVaultStoreId: unselectedVaultScope() };
-  const result = findDuplicateSyncProviderExcludingWasm(
+  const result = find_duplicate_sync_provider_excluding(
     findDuplicateSyncProviderExcludingWasmArgs,
     candidate,
     excludeId,
@@ -554,7 +554,7 @@ export async function saveAuthProviders({
   readonly manager: NookVaultManager;
   readonly snapshot: AuthProvidersSnapshot;
 }): Promise<void> {
-  await manager.saveAuthProviders(snapshot);
+  await manager.save_auth_providers_snapshot(snapshot);
 }
 
 export function providerDefaultLabel({
@@ -569,8 +569,8 @@ export function providerDefaultLabel({
 }): string {
   const oauthPreset = options.oauthPreset ?? "google-drive";
   return typeof options.detail === "string"
-    ? providerDefaultLabelCore(type, options.detail, oauthPreset)
-    : providerDefaultLabelWithoutDetail(type, oauthPreset);
+    ? provider_default_label(type, options.detail, oauthPreset)
+    : provider_default_label_without_detail(type, oauthPreset);
 }
 
 export function localizeProviderLabel({
@@ -580,7 +580,7 @@ export function localizeProviderLabel({
   readonly label: string;
   readonly t: (key: string) => string;
 }): string {
-  return localizeProviderLabelCore(
+  return localize_provider_label(
     label,
     t(I18N_KEYS.ProviderPickerThisDevice),
     t(I18N_KEYS.ProviderPickerGithub),
@@ -607,7 +607,7 @@ export function maskGithubPat({
   readonly state: GithubPatDisplay;
   readonly t?: (key: string) => string;
 }): string {
-  const hint = maskGithubPatHintCore(
+  const hint = mask_github_pat_hint(
     state.kind === GithubPatDisplayKind.Stored
       ? storedGithubPat(state.pat)
       : missingGithubPat(),
@@ -630,7 +630,7 @@ export function providerStorageDetail({
   readonly provider: StorageProvider;
   readonly t?: (key: string) => string;
 }): string {
-  return providerStorageDetailCore(
+  return provider_storage_detail(
     provider,
     t
       ? t(I18N_KEYS.ProviderPickerThisDeviceDesc)

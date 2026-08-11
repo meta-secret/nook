@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import initNookWasm, {
-  configureVaultApplication,
+  configure_vault_application,
   VaultApplication,
 } from '$app-wasm'
 
@@ -37,7 +37,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 }
 
 await initNookWasm()
-configureVaultApplication(VaultApplication.UnifiedDevelopment)
+configure_vault_application(VaultApplication.UnifiedDevelopment)
 
 const { companionWasmReady } =
   await import('../../../nook-web-shared/src/extension/companion-ready')

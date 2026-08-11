@@ -12,7 +12,9 @@ Gradual UI migration from **provider-as-vault** to **local-first unified vault**
 1. **One page at a time** — ship, test, merge each slice before moving on.
 2. **Keep the app usable** — feature-flag or parallel paths during transition if needed.
 3. **E2E after every slice** — update Playwright specs in the same PR as UI changes.
-4. **Rust-first sync logic** — UI calls WASM (`reconcileVaultBlobs`, `compareVaultSync`); apply rules live in `nook-core`.
+4. **Rust-first sync logic** — UI calls the authored WASM API
+   (`compare_vault_sync`); apply rules live in `nook-core`. Whole-blob
+   reconciliation was superseded by event-log replication.
 5. **Single merge PR** — epic ships as [#79](https://github.com/meta-secret/nook/pull/79) (`feat/unified-vault` → `main`); phase PRs #61–#78 were consolidated and closed.
 
 ---
@@ -31,7 +33,7 @@ Gradual UI migration from **provider-as-vault** to **local-first unified vault**
 |-------------|----------|
 | `vault_version` in vault YAML | `nook-app/nook-platform/nook-core/src/vault_format.rs` |
 | `compare_vault_sync` | `nook-app/nook-platform/nook-core/src/vault_sync.rs` |
-| WASM `compareVaultSync` export | `nook-app/nook-platform/nook-wasm/src/lib.rs` |
+| WASM `compare_vault_sync` export | `nook-app/nook-platform/nook-wasm/src/vault_api.rs` |
 | Architecture docs | `.cortex/design-docs/unified-vault.md` |
 | This rollout plan | `.cortex/exec-plans/unified-vault-ui-rollout.md` |
 
@@ -63,7 +65,7 @@ No user-visible UI changes yet.
 | 2.2 | Local vault canonical; no active switch | `VaultState`, `AuthStorage` |
 | 2.3 | Connect + reconcile flow | `connectAndSyncStagedProvider`, `sync_io.rs` |
 | 2.4 | Per-provider sync status | `AuthStorage` |
-| 2.5 | Manual sync via `compareVaultSync` | `syncProviderById`, `manualSync` |
+| 2.5 | Manual sync via `compare_vault_sync` | `syncProviderById`, `manualSync` |
 
 **E2E:** `e2e/sync-provider-connect.spec.ts`, updated `connect.spec.ts`
 
@@ -99,7 +101,7 @@ No user-visible UI changes yet.
 | # | Change |
 |---|--------|
 | 5.1 | Enrollment QR embeds **sync provider** credentials (GitHub), not local vault |
-| 5.2 | Joining device: fetch remote → write local cache → unlock via `connectWithPassword('local')` |
+| 5.2 | Joining device: fetch remote → write local cache → unlock via `connect_with_password('local')` |
 | 5.3 | Onboard picker shows `syncProviders` only; `ensureProviderSaved` preserves sync rows |
 | 5.4 | Updated copy in locales + `EnrollmentQrOnboardCard` |
 

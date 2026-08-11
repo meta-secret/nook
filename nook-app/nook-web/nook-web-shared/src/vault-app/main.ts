@@ -1,6 +1,6 @@
 import { mount } from "svelte";
 import "./app.css";
-import { configuredVaultApplication, type VaultApplication } from "$app-wasm";
+import { configured_vault_application, type VaultApplication } from "$app-wasm";
 import { ensureAppWasm } from "$lib/runtime/wasm-bootstrap";
 import { companionWasmReady } from "$web-shared/extension/companion-ready";
 
@@ -9,7 +9,7 @@ export async function mountVaultApp(
 ): Promise<void> {
   await ensureAppWasm(expectedKind);
   await companionWasmReady;
-  const configuredKind = configuredVaultApplication();
+  const configuredKind = configured_vault_application();
   if (configuredKind !== expectedKind) {
     throw new Error(
       `Expected ${expectedKind} vault build, received ${configuredKind}.`,

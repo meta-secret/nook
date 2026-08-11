@@ -18,7 +18,7 @@ function secretPage(label: string, offset = 0, total = 1) {
   return {
     record,
     page: {
-      takeItems: () => [record],
+      take_items: () => [record],
       total,
       offset,
       free: vi.fn(),
@@ -34,7 +34,7 @@ describe('loadSecretPage', () => {
     const newPage = secretPage('newer result')
     const previousRecord: PageRecord = { label: 'previous', free: vi.fn() }
     const manager = {
-      queryPreparedSecretPage: vi.fn((query: string) =>
+      query_prepared_secret_page_js: vi.fn((query: string) =>
         query === 'older' ? older.promise : newer.promise,
       ),
     }
@@ -79,7 +79,7 @@ describe('loadSecretPage', () => {
     const paginatedPage = secretPage('interactive page', 25, 50)
     const refreshedPage = secretPage('refreshed page', 25, 50)
     const manager = {
-      queryPreparedSecretPage: vi
+      query_prepared_secret_page_js: vi
         .fn()
         .mockReturnValueOnce(pagination.promise)
         .mockReturnValueOnce(maintenance.promise),
@@ -111,10 +111,12 @@ describe('loadSecretPage', () => {
     pagination.resolve(paginatedPage.page)
     await paginationRequest
 
-    expect(manager.queryPreparedSecretPage.mock.calls[1]?.[0]).toBe('vault')
-    expect(manager.queryPreparedSecretPage.mock.calls[1]?.slice(2)).toEqual([
-      25, 25,
-    ])
+    expect(manager.query_prepared_secret_page_js.mock.calls[1]?.[0]).toBe(
+      'vault',
+    )
+    expect(
+      manager.query_prepared_secret_page_js.mock.calls[1]?.slice(2),
+    ).toEqual([25, 25])
     expect(state.secrets).toEqual([refreshedPage.record])
     expect(state.secretPageOffset).toBe(25)
     expect(paginatedPage.record.free).toHaveBeenCalledOnce()

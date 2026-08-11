@@ -1,5 +1,5 @@
 import initNookWasm, {
-  configureVaultApplication,
+  configure_vault_application,
   type VaultApplication,
 } from "$app-wasm";
 
@@ -20,7 +20,7 @@ export function ensureAppWasm(application: VaultApplication): Promise<void> {
     return appWasmStartup.completion;
   }
   const promise = initNookWasm().then(() => {
-    configureVaultApplication(application);
+    configure_vault_application(application);
   });
   appWasmStartup = {
     kind: AppWasmStartupKind.Initializing,

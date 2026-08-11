@@ -1,15 +1,15 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
-  createExtensionPairingState,
-  extensionPairingGrantStorageKey,
-  extensionSetupAfterPairingGrantRemoval,
-  firstExtensionPairingGrant,
-  isExtensionReadySetupJson,
-  isStoredExtensionPairingGrantJson,
-  migrateLegacyExtensionPairingStateJson,
-  orderedExtensionPairingGrants,
-  refreshExtensionPairingGrant,
-  selectedExtensionPairingGrant,
+  create_extension_pairing_state,
+  extension_pairing_grant_storage_key,
+  extension_setup_after_pairing_grant_removal,
+  first_extension_pairing_grant,
+  is_extension_ready_setup_json,
+  is_stored_extension_pairing_grant_json,
+  migrate_legacy_extension_pairing_state_json,
+  ordered_extension_pairing_grants,
+  refresh_extension_pairing_grant,
+  selected_extension_pairing_grant,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type {
   CreateExtensionPairingStateInput,
@@ -87,7 +87,7 @@ function transportJson(value: unknown): TransportJsonResult {
 }
 
 function pairingGrantStorageKey(vaultStoreId: string): string {
-  return extensionPairingGrantStorageKey(vaultStoreId)
+  return extension_pairing_grant_storage_key(vaultStoreId)
 }
 
 function isStoredExtensionPairingGrant(
@@ -96,7 +96,7 @@ function isStoredExtensionPairingGrant(
   const result = transportJson(value)
   return (
     result.kind === TransportJsonResultKind.Serialized &&
-    isStoredExtensionPairingGrantJson(result.json)
+    is_stored_extension_pairing_grant_json(result.json)
   )
 }
 
@@ -106,7 +106,7 @@ function isExtensionReadySetupState(
   const result = transportJson(value)
   return (
     result.kind === TransportJsonResultKind.Serialized &&
-    isExtensionReadySetupJson(result.json)
+    is_extension_ready_setup_json(result.json)
   )
 }
 
@@ -123,7 +123,7 @@ function extensionPairingGrantStorageItems(
     imported: args.imported,
     observedAt: new Date().toISOString(),
   }
-  return itemsFromState(createExtensionPairingState(input))
+  return itemsFromState(create_extension_pairing_state(input))
 }
 
 type ExtensionStoredPairingGrantStorageItemsArgs = {
@@ -139,7 +139,7 @@ function extensionStoredPairingGrantStorageItems(
     ...args,
     observedAt: new Date().toISOString(),
   }
-  return itemsFromState(refreshExtensionPairingGrant(input))
+  return itemsFromState(refresh_extension_pairing_grant(input))
 }
 
 type SetupAfterPairingGrantRemovalArgs = {
@@ -154,25 +154,25 @@ function setupAfterPairingGrantRemoval(
     state: stateFromItems(args.stored),
     removedVaultStoreId: args.removedVaultStoreId,
   }
-  return extensionSetupAfterPairingGrantRemoval(input)
+  return extension_setup_after_pairing_grant_removal(input)
 }
 
 function selectedPairingGrantFirst(
   stored: ExtensionPairingItems,
 ): StoredExtensionPairingGrant[] {
-  return orderedExtensionPairingGrants(stateFromItems(stored))
+  return ordered_extension_pairing_grants(stateFromItems(stored))
 }
 
 function selectedPairingGrant(
   stored: ExtensionPairingItems,
 ): SelectedPairingGrant {
-  return selectedExtensionPairingGrant(stateFromItems(stored))
+  return selected_extension_pairing_grant(stateFromItems(stored))
 }
 
 function firstStoredPairingGrant(
   stored: ExtensionPairingItems,
 ): SelectedPairingGrant {
-  return firstExtensionPairingGrant(stateFromItems(stored))
+  return first_extension_pairing_grant(stateFromItems(stored))
 }
 
 function migratedLegacyPairingStorageItems(
@@ -181,7 +181,9 @@ function migratedLegacyPairingStorageItems(
   const result = transportJson(legacy)
   if (result.kind === TransportJsonResultKind.SerializationFailed) return {}
   try {
-    return itemsFromState(migrateLegacyExtensionPairingStateJson(result.json))
+    return itemsFromState(
+      migrate_legacy_extension_pairing_state_json(result.json),
+    )
   } catch {
     return {}
   }

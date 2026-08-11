@@ -1,6 +1,6 @@
 import {
-  currentCodeFromOtpauthUri,
-  previewOtpauthUri,
+  current_code_from_otpauth_uri,
+  preview_otpauth_uri,
   type NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type initNookWasm from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -48,7 +48,7 @@ export async function handleAuthenticatorEnrollmentMessage({
         throw new Error('Extension session received an invalid otpauth URI.')
       }
       await dependencies.ensureWasm()
-      const preview = previewOtpauthUri(payload.otpauthUri)
+      const preview = preview_otpauth_uri(payload.otpauthUri)
       try {
         return {
           ok: true,
@@ -71,7 +71,7 @@ export async function handleAuthenticatorEnrollmentMessage({
         throw new Error('Extension session received an invalid otpauth URI.')
       }
       await dependencies.ensureWasm()
-      const code = currentCodeFromOtpauthUri(payload.otpauthUri)
+      const code = current_code_from_otpauth_uri(payload.otpauthUri)
       try {
         return { ok: true, code: code.code }
       } finally {
@@ -93,7 +93,7 @@ export async function handleAuthenticatorEnrollmentMessage({
         grant,
       }
       await openPasskeyVault(openArgs)
-      const secretId = await activeManager.addAuthenticatorFromOtpauth(
+      const secretId = await activeManager.add_authenticator_from_otpauth_js(
         payload.otpauthUri,
         payload.origin,
       )
@@ -123,11 +123,12 @@ export async function handleAuthenticatorEnrollmentMessage({
         grant,
       }
       await openPasskeyVault(openArgs)
-      const attachResult = await activeManager.attachAuthenticatorBackupCodes(
-        payload.secretId,
-        payload.codes,
-        payload.mode,
-      )
+      const attachResult =
+        await activeManager.attach_authenticator_backup_codes_js(
+          payload.secretId,
+          payload.codes,
+          payload.mode,
+        )
       try {
         if (!attachResult.backupCodesVerified) {
           throw new Error(

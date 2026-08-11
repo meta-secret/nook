@@ -11,7 +11,7 @@ use zeroize::{Zeroize, Zeroizing};
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Require passkey authorization again before any device-key operation.
-    #[wasm_bindgen(js_name = lockDeviceIdentity)]
+    #[wasm_bindgen]
     pub fn lock_device_identity(&mut self) {
         self.device.identity_private_key.zeroize();
         self.device.extension_handoff_private_key.zeroize();
@@ -19,7 +19,7 @@ impl NookVaultManager {
 
     /// Create a one-time age recipient for an extension identity handoff.
     /// The matching private key remains inside this manager's Rust state.
-    #[wasm_bindgen(js_name = beginExtensionIdentityHandoff)]
+    #[wasm_bindgen]
     pub fn begin_extension_identity_handoff(&mut self) -> Result<String, JsError> {
         self.device.extension_handoff_private_key.zeroize();
         let recipient = nook_core::DeviceIdentity::generate()?;
@@ -29,7 +29,7 @@ impl NookVaultManager {
 
     /// Seal the currently unlocked extension identity to a one-time website
     /// recipient. Plaintext private material never crosses the WASM boundary.
-    #[wasm_bindgen(js_name = sealExtensionIdentityHandoff)]
+    #[wasm_bindgen]
     pub async fn seal_extension_identity_handoff(
         &mut self,
         recipient_public_key: &str,
@@ -49,7 +49,7 @@ impl NookVaultManager {
 
     /// Open and validate an extension identity handoff, then adopt both the age
     /// identity and its matching event-signing seed for this in-memory session.
-    #[wasm_bindgen(js_name = finishExtensionIdentityHandoff)]
+    #[wasm_bindgen]
     pub async fn finish_extension_identity_handoff(
         &mut self,
         envelope: &str,
@@ -112,13 +112,13 @@ impl NookVaultManager {
 
     /// Clear every secret installed by a failed external identity
     /// authorization, including the event-log signing seed.
-    #[wasm_bindgen(js_name = rollbackExtensionIdentityHandoff)]
+    #[wasm_bindgen]
     pub fn rollback_extension_identity_handoff(&mut self) {
         self.lock_device_identity();
         self.reset_vault_session();
     }
 
-    #[wasm_bindgen(js_name = deviceProtectionStatus)]
+    #[wasm_bindgen]
     pub async fn device_protection_status(
         &self,
     ) -> Result<nook_core::DeviceProtectionStatus, JsError> {
@@ -131,7 +131,7 @@ impl NookVaultManager {
     /// Project Devices & access from the live Rust session. Caller-owned web
     /// state is not authoritative because a failed handoff may have populated
     /// it before this manager rolls the identity back.
-    #[wasm_bindgen(js_name = deviceAccessSnapshotRequest)]
+    #[wasm_bindgen]
     pub fn device_access_snapshot_request(
         &self,
     ) -> Result<crate::NookDeviceAccessSnapshotRequest, JsError> {
@@ -146,14 +146,14 @@ impl NookVaultManager {
     }
 
     /// Return the product device-protection mode persisted during device setup.
-    #[wasm_bindgen(js_name = deviceProtectionDeviceMode)]
+    #[wasm_bindgen]
     pub async fn device_protection_device_mode(
         &self,
     ) -> Result<crate::DeviceProtectionDeviceModeState, JsError> {
         Ok(indexed_db::device_identity_device_mode().await?)
     }
 
-    #[wasm_bindgen(js_name = beginDeviceProtection)]
+    #[wasm_bindgen]
     pub async fn begin_device_protection(&mut self) -> Result<NookPasskeySetup, JsError> {
         if self.device.identity_private_key.is_empty()
             && matches!(
@@ -171,7 +171,7 @@ impl NookVaultManager {
         Ok(NookPasskeySetup::from_core(&setup))
     }
 
-    #[wasm_bindgen(js_name = setupDeviceProtectionWithPasskey)]
+    #[wasm_bindgen]
     pub async fn setup_device_protection_with_passkey(
         &mut self,
         rp_id: &str,
@@ -187,7 +187,7 @@ impl NookVaultManager {
         .await
     }
 
-    #[wasm_bindgen(js_name = setupDeviceProtectionWithPasskeyMode)]
+    #[wasm_bindgen]
     pub async fn setup_device_protection_with_passkey_mode(
         &mut self,
         rp_id: &str,
@@ -263,7 +263,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    #[wasm_bindgen(js_name = finishDeviceProtection)]
+    #[wasm_bindgen]
     pub async fn finish_device_protection(
         &mut self,
         credential_id: Vec<u8>,
@@ -281,7 +281,7 @@ impl NookVaultManager {
         .await
     }
 
-    #[wasm_bindgen(js_name = finishDeviceProtectionWithMode)]
+    #[wasm_bindgen]
     pub async fn finish_device_protection_with_mode(
         &mut self,
         credential_id: Vec<u8>,
@@ -306,7 +306,7 @@ impl NookVaultManager {
         result.map(|_| ()).map_err(Into::into)
     }
 
-    #[wasm_bindgen(js_name = recoverDeviceProtectionWithPasskey)]
+    #[wasm_bindgen]
     pub async fn recover_device_protection_with_passkey(
         &mut self,
         rp_id: &str,
@@ -328,7 +328,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    #[wasm_bindgen(js_name = recoverDeviceProtectionWithPasskeyMaterial)]
+    #[wasm_bindgen]
     pub async fn recover_device_protection_with_passkey_material(
         &mut self,
         credential_id: Vec<u8>,
@@ -348,7 +348,7 @@ impl NookVaultManager {
         result.map(|_| ()).map_err(Into::into)
     }
 
-    #[wasm_bindgen(js_name = finishPinDeviceProtection)]
+    #[wasm_bindgen]
     pub async fn finish_pin_device_protection(&mut self, pin: String) -> Result<(), JsError> {
         let pin = Zeroizing::new(pin);
         let result = async {
@@ -376,7 +376,7 @@ impl NookVaultManager {
         result.map_err(Into::into)
     }
 
-    #[wasm_bindgen(js_name = passkeyUnlockOptions)]
+    #[wasm_bindgen]
     pub async fn passkey_unlock_options(&self) -> Result<NookPasskeyUnlockOptions, JsError> {
         let (_, record) = indexed_db::load_wrapped_device_identity()
             .await?
@@ -386,7 +386,7 @@ impl NookVaultManager {
         Ok(NookPasskeyUnlockOptions::from_core(&record)?)
     }
 
-    #[wasm_bindgen(js_name = unlockDeviceProtectionWithPasskey)]
+    #[wasm_bindgen]
     pub async fn unlock_device_protection_with_passkey(
         &mut self,
         rp_id: &str,
@@ -403,7 +403,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    #[wasm_bindgen(js_name = unlockDeviceIdentity)]
+    #[wasm_bindgen]
     pub async fn unlock_device_identity(&mut self, mut prf_output: Vec<u8>) -> Result<(), JsError> {
         let result: Result<(), NookError> = async {
             let (stored_device_id, record) = indexed_db::load_wrapped_device_identity()
@@ -422,7 +422,7 @@ impl NookVaultManager {
         result.map_err(Into::into)
     }
 
-    #[wasm_bindgen(js_name = unlockPinDeviceIdentity)]
+    #[wasm_bindgen]
     pub async fn unlock_pin_device_identity(&mut self, pin: String) -> Result<(), JsError> {
         let pin = Zeroizing::new(pin);
         let result = async {
@@ -448,7 +448,7 @@ impl NookVaultManager {
 
     /// Destructive local recovery: forget the inaccessible identity and its
     /// identity-sealed provider credentials, preserving local encrypted vaults.
-    #[wasm_bindgen(js_name = resetDeviceProtectionForRecovery)]
+    #[wasm_bindgen]
     pub async fn reset_device_protection_for_recovery(&mut self) -> Result<(), JsError> {
         self.reset_vault_session();
         self.device.identity_private_key.zeroize();

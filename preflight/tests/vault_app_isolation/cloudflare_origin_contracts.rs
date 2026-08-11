@@ -26,7 +26,7 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
     }
     assert!(
         vault_target.contains("nook-companion-wasm")
-            && vault_target.contains("defaultSimpleVaultUrl"),
+            && vault_target.contains("default_simple_vault_url"),
         "extension vault targeting must call companion WASM host policy"
     );
     let vault_host_policy = read(

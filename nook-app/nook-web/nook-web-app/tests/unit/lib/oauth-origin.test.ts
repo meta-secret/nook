@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
   BrowserOAuthProvider,
-  isCloudflarePrPreviewHost,
+  is_cloudflare_pr_preview_host,
   OAuthOriginUnsupportedReason,
   resolveOAuthOriginSupport,
 } from '$lib/auth/oauth-origin'
@@ -131,12 +131,16 @@ describe('oauth origin support', () => {
       'pr-191.nokey-simple.pages.dev',
       'pr-191.nokey-sentinel.pages.dev',
     ]) {
-      expect(isCloudflarePrPreviewHost(hostname)).toBe(true)
+      expect(is_cloudflare_pr_preview_host(hostname)).toBe(true)
     }
-    expect(isCloudflarePrPreviewHost('preview.nook-1n8.pages.dev')).toBe(false)
-    expect(isCloudflarePrPreviewHost('pr-191-site.nokey-sh.pages.dev')).toBe(
+    expect(is_cloudflare_pr_preview_host('preview.nook-1n8.pages.dev')).toBe(
       false,
     )
-    expect(isCloudflarePrPreviewHost('pr-191.example.pages.dev')).toBe(false)
+    expect(
+      is_cloudflare_pr_preview_host('pr-191-site.nokey-sh.pages.dev'),
+    ).toBe(false)
+    expect(is_cloudflare_pr_preview_host('pr-191.example.pages.dev')).toBe(
+      false,
+    )
   })
 })

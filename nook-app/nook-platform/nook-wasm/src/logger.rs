@@ -126,7 +126,7 @@ pub struct NookLogEntries(Vec<LogEntry>);
 
 #[wasm_bindgen]
 impl NookLogEntries {
-    #[wasm_bindgen(js_name = toArray)]
+    #[wasm_bindgen]
     pub fn to_array(&self) -> Result<js_sys::Array, wasm_bindgen::JsError> {
         Ok(serde_wasm_bindgen::to_value(&self.0)?.unchecked_into())
     }
@@ -348,7 +348,7 @@ async fn dump_entries(
 /// Install the global `tracing` subscriber (once). Wires a reloadable level
 /// filter -> [`IndexedDbLayer`] -> `tracing-web` performance timeline layer,
 /// and stashes a setter so [`log_set_level`] can move the filter at runtime.
-#[wasm_bindgen(js_name = nookLogInit)]
+#[wasm_bindgen]
 pub fn log_init() {
     if INIT_DONE.with(Cell::get) {
         return;
@@ -379,7 +379,7 @@ pub fn log_init() {
 /// Set the active log level (`error` | `warn` | `info` | `debug` | `trace`).
 /// Moves the global `tracing` filter and the level used by the web-layer gate.
 /// Entries below this level are neither echoed nor persisted.
-#[wasm_bindgen(js_name = nookLogSetLevel)]
+#[wasm_bindgen]
 pub fn log_set_level(level: &str) {
     if let Some(level) = LogLevel::parse(level) {
         LOGGER.with(|logger| {
@@ -393,7 +393,7 @@ pub fn log_set_level(level: &str) {
 }
 
 /// Return the active log level as a lowercase string.
-#[wasm_bindgen(js_name = nookLogGetLevel)]
+#[wasm_bindgen]
 #[must_use]
 pub fn log_get_level() -> String {
     LOGGER.with(|logger| logger.borrow().level.as_str().to_owned())
@@ -402,12 +402,12 @@ pub fn log_get_level() -> String {
 /// Record one log entry from the web layer (persist-only). Dropped when below
 /// the active level; the web layer owns console echo, so nothing is printed
 /// here. Otherwise queued for the next [`log_flush`].
-#[wasm_bindgen(js_name = nookLog)]
+#[wasm_bindgen]
 pub fn log_record(level: &str, scope: &str, message: &str) {
     log_record_entry(level, scope, message, None);
 }
 
-#[wasm_bindgen(js_name = nookLogWithData)]
+#[wasm_bindgen]
 pub fn log_record_with_data(level: &str, scope: &str, message: &str, data: String) {
     log_record_entry(level, scope, message, Some(data));
 }
@@ -429,7 +429,7 @@ fn log_record_entry(level: &str, scope: &str, message: &str, data: Option<String
 
 /// Flush the in-memory queue to `IndexedDB`. Called on an interval by the web
 /// layer; safe to call concurrently (each call drains the current batch).
-#[wasm_bindgen(js_name = nookLogFlush)]
+#[wasm_bindgen]
 pub async fn log_flush() -> Result<(), wasm_bindgen::JsError> {
     flush_pending().await?;
     Ok(())
@@ -438,13 +438,13 @@ pub async fn log_flush() -> Result<(), wasm_bindgen::JsError> {
 /// Read persisted entries (oldest first), filtered by minimum level and
 /// paginated from the newest end. Returns an array of
 /// `{ ts, level, scope, message, data? }`.
-#[wasm_bindgen(js_name = nookLogDump)]
+#[wasm_bindgen]
 pub async fn log_dump() -> Result<NookLogEntries, wasm_bindgen::JsError> {
     let entries = dump_entries(None, None, None).await?;
     Ok(NookLogEntries(entries))
 }
 
-#[wasm_bindgen(js_name = nookLogDumpPage)]
+#[wasm_bindgen]
 pub async fn log_dump_page(
     min_level: String,
     limit: u32,
@@ -455,7 +455,7 @@ pub async fn log_dump_page(
 }
 
 /// Total number of persisted log entries (after flushing the queue).
-#[wasm_bindgen(js_name = nookLogCount)]
+#[wasm_bindgen]
 pub async fn log_count() -> Result<u32, wasm_bindgen::JsError> {
     flush_pending().await?;
     let db = logs_db().await?;
@@ -477,7 +477,7 @@ pub async fn log_count() -> Result<u32, wasm_bindgen::JsError> {
 }
 
 /// Drop the in-memory queue and clear the persisted log store.
-#[wasm_bindgen(js_name = nookLogClear)]
+#[wasm_bindgen]
 pub async fn log_clear() -> Result<(), wasm_bindgen::JsError> {
     LOGGER.with(|logger| logger.borrow_mut().pending.clear());
     let db = logs_db().await?;

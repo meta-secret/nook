@@ -63,8 +63,8 @@
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import {
-    peekEnrollmentEntryId,
-    peekEnrollmentEntryLabel,
+    peek_enrollment_entry_id,
+    peek_enrollment_entry_label,
     NookEnrollmentEntryLabelState,
     SentinelGenesisPhase,
     type VaultApplication,
@@ -249,7 +249,7 @@
 
   const prefillEnrollmentEntryLabel = $derived.by(() => {
     if (!prefillEnrollmentCode) return ''
-    const label = peekEnrollmentEntryLabel(prefillEnrollmentCode)
+    const label = peek_enrollment_entry_label(prefillEnrollmentCode)
     try {
       return label.state === NookEnrollmentEntryLabelState.Labeled
         ? label.value
@@ -468,7 +468,7 @@
     <EnrollmentQrOnboardCard
       {vault}
       code={prefillEnrollmentCode}
-      passwordEntryId={peekEnrollmentEntryId(prefillEnrollmentCode)}
+      passwordEntryId={peek_enrollment_entry_id(prefillEnrollmentCode)}
       passwordEntryLabel={prefillEnrollmentEntryLabel}
       {isVerifying}
       onSubmit={(password) => {
@@ -669,14 +669,14 @@
               idPrefix="login"
               {isVerifying}
               {isInitializing}
-              connectDisabled={vault.clientPolicy.remoteRecoveryPromptVisible(
+              connectDisabled={vault.clientPolicy.remote_recovery_prompt_visible(
                 vault.remoteVaultRecoveryState,
               )}
               {onCancelSetup}
               onConnect={onUnlock}
             >
               {#snippet beforeConnect()}
-                {#if vault.clientPolicy.remoteRecoveryPromptVisible(vault.remoteVaultRecoveryState)}
+                {#if vault.clientPolicy.remote_recovery_prompt_visible(vault.remoteVaultRecoveryState)}
                   <RemoteVaultRecoveryPanel
                     {vault}
                     state={vault.remoteVaultRecoveryState}

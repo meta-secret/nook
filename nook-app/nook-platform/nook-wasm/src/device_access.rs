@@ -307,7 +307,7 @@ impl NookDeviceAccessSnapshot {
         self.attachment
     }
 
-    #[wasm_bindgen(js_name = transports)]
+    #[wasm_bindgen]
     pub fn transports(&self) -> Vec<NookPasskeyTransport> {
         self.transports.clone()
     }
@@ -335,7 +335,7 @@ impl NookDeviceAccessSnapshot {
         self.observed_platform
     }
 
-    #[wasm_bindgen(js_name = vaults)]
+    #[wasm_bindgen]
     pub fn vaults(&self) -> Vec<NookDeviceVaultAccess> {
         self.vaults.clone()
     }
@@ -437,7 +437,7 @@ pub(crate) async fn device_access_snapshot_for_session(
     })
 }
 
-#[wasm_bindgen(js_name = setDeviceAccessPasskeyProviderLabel)]
+#[wasm_bindgen]
 pub async fn set_device_access_passkey_provider_label(
     credential_fingerprint: String,
     label: String,

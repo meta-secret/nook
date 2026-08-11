@@ -21,9 +21,12 @@ const log = createLogger("vault-password");
 type E2ePasswordManager = {
   // Generated wasm-bindgen methods are positional host bindings.
   // eslint-disable-next-line max-params
-  addVaultPasswordForE2e?: (label: string, password: string) => Promise<void>;
+  add_vault_password_for_e2e?: (
+    label: string,
+    password: string,
+  ) => Promise<void>;
   // eslint-disable-next-line max-params
-  updateVaultPasswordEntryForE2e?: (
+  update_vault_password_entry_for_e2e?: (
     entryId: string,
     password: string,
   ) => Promise<void>;
@@ -56,11 +59,11 @@ export async function addVaultPassword({
       const e2eManager = manager as typeof manager & E2ePasswordManager;
       if (
         state.runtimeConfig.e2eExposeVault &&
-        e2eManager.addVaultPasswordForE2e
+        e2eManager.add_vault_password_for_e2e
       ) {
-        return e2eManager.addVaultPasswordForE2e(trimmedLabel, password);
+        return e2eManager.add_vault_password_for_e2e(trimmedLabel, password);
       }
-      return manager.addVaultPassword(trimmedLabel, password);
+      return manager.add_vault_password(trimmedLabel, password);
     });
     await state.refreshPasswordEntriesList();
     log.info("vault password added");
@@ -101,11 +104,14 @@ export async function updateVaultPasswordEntry({
       const e2eManager = manager as typeof manager & E2ePasswordManager;
       if (
         state.runtimeConfig.e2eExposeVault &&
-        e2eManager.updateVaultPasswordEntryForE2e
+        e2eManager.update_vault_password_entry_for_e2e
       ) {
-        return e2eManager.updateVaultPasswordEntryForE2e(entryId, password);
+        return e2eManager.update_vault_password_entry_for_e2e(
+          entryId,
+          password,
+        );
       }
-      return manager.updateVaultPasswordEntry(entryId, password);
+      return manager.update_vault_password_entry(entryId, password);
     });
     await state.refreshPasswordEntriesList();
     state.showSuccess(state.t(I18N_KEYS.ToastsPasswordUpdated));
@@ -131,7 +137,7 @@ export async function removeVaultPasswordEntry({
   state.isPasswordBusy = true;
   try {
     await state.enqueueStorage(() =>
-      state.requireManager().removeVaultPasswordEntry(entryId),
+      state.requireManager().remove_vault_password_entry(entryId),
     );
     await state.refreshPasswordEntriesList();
     if (
@@ -192,7 +198,7 @@ export async function unlockWithPassword({
     const page = await state.enqueueStorage(() =>
       state
         .requireManager()
-        .connectWithPassword(
+        .connect_with_password(
           ...state.wasmStorageArgs(),
           entryId,
           password,

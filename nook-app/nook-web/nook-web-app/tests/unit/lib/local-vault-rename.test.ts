@@ -11,7 +11,13 @@ const wasmMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('$app-wasm', () => ({
-  ...wasmMocks,
+  get_active_vault_selection: wasmMocks.getActiveVaultSelection,
+  has_active_local_vault: wasmMocks.hasActiveLocalVault,
+  list_local_vaults: wasmMocks.listLocalVaults,
+  prepare_new_local_vault_slot: wasmMocks.prepareNewLocalVaultSlot,
+  set_active_vault: wasmMocks.setActiveVault,
+  set_local_vault_label: wasmMocks.setLocalVaultLabel,
+  set_vault_session_locked: wasmMocks.setVaultSessionLocked,
   NookVaultSwitchState: { Switch: 'Switch' },
 }))
 
@@ -48,7 +54,7 @@ describe('renameLocalVaultLabel', () => {
         storeId: 'store-1',
       },
       localVaults: [{ storeId: 'store-1', label: 'Old name' }],
-      requireManager: () => ({ setVaultName }),
+      requireManager: () => ({ set_vault_name: setVaultName }),
       enqueueStorage: <T>(operation: () => T | Promise<T>) =>
         Promise.resolve(operation()),
       dismissSuccess: vi.fn(),

@@ -48,15 +48,15 @@
     if (conflict.conflictKind === VaultSyncConflictKind.StoreId) {
       return {
         kind: VaultSyncConflictKind.StoreId,
-        localStoreId: conflict.localStoreId(),
-        remoteStoreId: conflict.remoteStoreId(),
+        localStoreId: conflict.local_store_id(),
+        remoteStoreId: conflict.remote_store_id(),
         eventLogStoreMismatch: !conflict.remoteYaml.trim(),
       }
     }
     return {
       kind: VaultSyncConflictKind.Content,
-      localVersion: conflict.contentLocalVersion(),
-      remoteVersion: conflict.contentRemoteVersion(),
+      localVersion: conflict.content_local_version(),
+      remoteVersion: conflict.content_remote_version(),
     }
   })
   const isStoreIdConflict = $derived(

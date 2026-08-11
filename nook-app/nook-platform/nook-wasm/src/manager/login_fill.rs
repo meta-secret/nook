@@ -65,7 +65,7 @@ impl NookVaultManager {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    #[wasm_bindgen(js_name = listWebsiteLoginAccounts)]
+    #[wasm_bindgen]
     pub async fn list_website_login_accounts(
         &mut self,
         origin: &str,
@@ -76,7 +76,7 @@ impl NookVaultManager {
             .map_err(Into::into)
     }
 
-    #[wasm_bindgen(js_name = revealWebsiteLoginForFill)]
+    #[wasm_bindgen]
     pub async fn reveal_website_login_for_fill(
         &mut self,
         secret_id: &str,

@@ -1,13 +1,13 @@
 import {
   BrowserOAuthProvider,
   OAuthOriginUnsupportedReason,
-  resolveOAuthOriginSupport as wasmResolveOAuthOriginSupport,
+  resolve_oauth_origin_support,
 } from "$app-wasm";
 
 export {
   BrowserOAuthProvider,
   OAuthOriginUnsupportedReason,
-  isCloudflarePrPreviewHost,
+  is_cloudflare_pr_preview_host,
 } from "$app-wasm";
 
 export type OAuthOriginSupport =
@@ -30,17 +30,17 @@ export function resolveOAuthOriginSupport({
   readonly provider: BrowserOAuthProvider;
   readonly location: BrowserLocation;
 }): OAuthOriginSupport {
-  const resolved = wasmResolveOAuthOriginSupport(
+  const resolved = resolve_oauth_origin_support(
     provider,
     location.origin,
     location.hostname,
   );
   try {
-    if (resolved.isUnsupported()) {
+    if (resolved.is_unsupported()) {
       return {
         supported: false,
         origin: resolved.origin,
-        reason: resolved.unsupportedReason(),
+        reason: resolved.unsupported_reason(),
       };
     }
     return {

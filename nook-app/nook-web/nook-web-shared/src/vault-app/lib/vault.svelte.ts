@@ -7,7 +7,7 @@ import {
   type SecretType,
 } from "$lib/nook";
 import {
-  isVaultSessionLocked,
+  is_vault_session_locked,
   RemoteVaultRecoveryState,
   SentinelVaultUnlockState,
   type NookPendingSyncConflict,
@@ -122,8 +122,8 @@ export class VaultState extends VaultRuntimeState {
   }
 
   shouldAutoUnlock(): boolean {
-    return this.clientPolicy.shouldAutoUnlock(
-      isVaultSessionLocked(),
+    return this.clientPolicy.should_auto_unlock(
+      is_vault_session_locked(),
       this.localVaultPresent,
       this.passwordEntries.length,
       this.syncProviders.length,
@@ -811,7 +811,7 @@ export class VaultState extends VaultRuntimeState {
 
   /**
    * Joining-side: parse an enrollment code, restore provider credentials, and
-   * self-enrol via `connectWithPassword`. Skips approval entirely.
+   * self-enrol via `connect_with_password`. Skips approval entirely.
    */
   async connectWithEnrollmentCode({
     code,

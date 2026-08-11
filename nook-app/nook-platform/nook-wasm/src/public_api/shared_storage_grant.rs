@@ -96,7 +96,7 @@ pub(crate) fn is_google_drive_shared_grant_request(
             == nook_core::ProviderOauthPreset::Preset(nook_core::OauthFilePreset::GoogleDrive)
 }
 
-#[wasm_bindgen(js_name = prepareSharedStorageGrant)]
+#[wasm_bindgen]
 pub async fn prepare_shared_storage_grant(
     request: nook_core::SharedStorageGrantRequest,
 ) -> Result<nook_core::SharedStorageGrantOutcome, wasm_bindgen::JsError> {
@@ -154,7 +154,7 @@ pub async fn prepare_shared_storage_grant(
     Ok(outcome)
 }
 
-#[wasm_bindgen(js_name = shouldFlushSharedStorageGrant)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
 pub fn should_flush_shared_storage_grant(
@@ -166,7 +166,7 @@ pub fn should_flush_shared_storage_grant(
 
 /// Resolve a shared Drive folder id/URL and verify write access for the current
 /// account before persisting the provider row.
-#[wasm_bindgen(js_name = verifySharedGoogleDriveFolder)]
+#[wasm_bindgen]
 pub async fn verify_shared_google_drive_folder(
     access_token: &str,
     folder_ref: &str,

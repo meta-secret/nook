@@ -176,7 +176,7 @@ impl NookVaultManager {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    #[wasm_bindgen(js_name = openExtensionPasskeyVault)]
+    #[wasm_bindgen]
     pub async fn open_extension_passkey_vault_js(
         &mut self,
         expected_store_id: &str,
@@ -194,7 +194,7 @@ impl NookVaultManager {
         .map_err(Into::into)
     }
 
-    #[wasm_bindgen(js_name = listWebsitePasskeyAccounts)]
+    #[wasm_bindgen]
     pub async fn list_website_passkey_accounts(
         &mut self,
         rp_id: &str,
@@ -214,7 +214,7 @@ impl NookVaultManager {
         Ok(accounts)
     }
 
-    #[wasm_bindgen(js_name = registerWebsitePasskey)]
+    #[wasm_bindgen]
     pub async fn register_website_passkey(
         &mut self,
         request_json: &str,
@@ -251,7 +251,7 @@ impl NookVaultManager {
         Ok(response)
     }
 
-    #[wasm_bindgen(js_name = assertWebsitePasskey)]
+    #[wasm_bindgen]
     pub async fn assert_website_passkey(
         &mut self,
         request_json: &str,

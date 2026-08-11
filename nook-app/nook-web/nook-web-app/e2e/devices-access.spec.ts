@@ -419,13 +419,13 @@ test.describe('devices and access dashboard', () => {
       const vault = (
         window as Window & {
           __nookVault: {
-            requireManager(): { deviceAccessSnapshotRequest: () => unknown }
+            requireManager(): { device_access_snapshot_request: () => unknown }
           }
         }
       ).__nookVault
       const manager = vault.requireManager()
-      const original = manager.deviceAccessSnapshotRequest
-      manager.deviceAccessSnapshotRequest = () => {
+      const original = manager.device_access_snapshot_request
+      manager.device_access_snapshot_request = () => {
         const request = original.call(manager) as {
           resolve: () => Promise<DeviceAccessSnapshotFixture>
         }
@@ -470,13 +470,13 @@ test.describe('devices and access dashboard', () => {
       const vault = (
         window as Window & {
           __nookVault: {
-            requireManager(): { deviceAccessSnapshotRequest: () => unknown }
+            requireManager(): { device_access_snapshot_request: () => unknown }
           }
         }
       ).__nookVault
       const manager = vault.requireManager()
-      const original = manager.deviceAccessSnapshotRequest
-      manager.deviceAccessSnapshotRequest = () => {
+      const original = manager.device_access_snapshot_request
+      manager.device_access_snapshot_request = () => {
         const request = original.call(manager) as {
           resolve: () => Promise<DeviceAccessSnapshotFixture>
         }
@@ -687,14 +687,14 @@ test.describe('devices and access dashboard', () => {
       const manager = (
         window as Window & {
           __nookVault?: {
-            requireManager(): { deviceAccessSnapshotRequest: () => unknown }
+            requireManager(): { device_access_snapshot_request: () => unknown }
           }
         }
       ).__nookVault?.requireManager()
       if (!manager) throw new Error('Vault manager is not exposed')
-      const original = manager.deviceAccessSnapshotRequest
-      manager.deviceAccessSnapshotRequest = () => {
-        manager.deviceAccessSnapshotRequest = original
+      const original = manager.device_access_snapshot_request
+      manager.device_access_snapshot_request = () => {
+        manager.device_access_snapshot_request = original
         throw new Error('Forced dashboard reload failure')
       }
     })
@@ -710,16 +710,16 @@ test.describe('devices and access dashboard', () => {
     await page.evaluate(() => {
       const scope = window as Window & {
         __nookVault?: {
-          requireManager(): { deviceAccessSnapshotRequest: () => unknown }
+          requireManager(): { device_access_snapshot_request: () => unknown }
         }
         __nookReloadSettled?: boolean
       }
       const manager = scope.__nookVault?.requireManager()
       if (!manager) throw new Error('Vault manager is not exposed')
       scope.__nookReloadSettled = false
-      const original = manager.deviceAccessSnapshotRequest
-      manager.deviceAccessSnapshotRequest = () => {
-        manager.deviceAccessSnapshotRequest = original
+      const original = manager.device_access_snapshot_request
+      manager.device_access_snapshot_request = () => {
+        manager.device_access_snapshot_request = original
         const request = original.call(manager) as {
           resolve: () => Promise<unknown>
         }

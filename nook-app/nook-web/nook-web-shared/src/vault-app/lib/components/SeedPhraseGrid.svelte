@@ -9,14 +9,14 @@
     type FocusedWord,
   } from "./seed-phrase-grid-state";
   import {
-    inferBip39MnemonicLength,
-    isBip39WordSequenceValid,
-    isKnownBip39Word,
-    joinBip39Words,
+    infer_bip39_mnemonic_length,
+    is_bip39_word_sequence_valid,
+    is_known_bip39_word,
+    join_bip39_words,
     NookBip39MnemonicLength,
-    parseBip39Words,
-    suggestBip39Words,
-    validateBip39Mnemonic,
+    parse_bip39_words,
+    suggest_bip39_words,
+    validate_bip39_mnemonic,
   } from "$app-wasm";
 
   type MnemonicLength = 12 | 24;
@@ -49,7 +49,7 @@
 
   const gridCols = $derived(wordCount === 12 ? "grid-cols-3" : "grid-cols-4");
   const activeCells = $derived(cells.slice(0, wordCount));
-  const perWordValid = $derived(isBip39WordSequenceValid(value, wordCount));
+  const perWordValid = $derived(is_bip39_word_sequence_valid(value, wordCount));
   const allWordsFilled = $derived(
     activeCells.every((word) => word.trim().length > 0),
   );
@@ -62,16 +62,16 @@
     if (readonly || focusedIndex.kind !== FocusedWordKind.Focused) return [];
     const prefix = cells[focusedIndex.index]?.trim().toLowerCase() ?? "";
     if (!prefix || prefix.includes(" ")) return [];
-    if (isKnownBip39Word(prefix)) return [];
-    return suggestBip39Words(prefix, 8);
+    if (is_known_bip39_word(prefix)) return [];
+    return suggest_bip39_words(prefix, 8);
   });
 
   function applyValueToCells(seed: string) {
-    const inferred = inferBip39MnemonicLength(seed);
+    const inferred = infer_bip39_mnemonic_length(seed);
     if (inferred === NookBip39MnemonicLength.Words12) wordCount = 12;
     if (inferred === NookBip39MnemonicLength.Words24) wordCount = 24;
 
-    const words = parseBip39Words(seed);
+    const words = parse_bip39_words(seed);
     const fromArgs2: Parameters<typeof Array.from>[0] = { length: 24 };
     const next = Array.from(fromArgs2, () => "");
     for (let index = 0; index < words.length && index < 24; index += 1) {
@@ -82,14 +82,14 @@
 
   function syncValueFromCells() {
     syncingFromCells = true;
-    value = joinBip39Words(cells.slice(0, wordCount));
+    value = join_bip39_words(cells.slice(0, wordCount));
     queueMicrotask(() => {
       syncingFromCells = false;
     });
   }
 
   function applyPastedMnemonic({ text, startIndex }: { readonly text: string; readonly startIndex: number }) {
-    const words = parseBip39Words(text);
+    const words = parse_bip39_words(text);
     if (words.length === 0) return;
 
     if (words.length === 24) {
@@ -216,7 +216,7 @@
   function cellInvalid(index: number): boolean {
     const word = cells[index]?.trim();
     if (!word) return false;
-    return !isKnownBip39Word(word);
+    return !is_known_bip39_word(word);
   }
 
   $effect(() => {
@@ -232,7 +232,7 @@
     }
 
     const mnemonic = value;
-    const ok = validateBip39Mnemonic(mnemonic);
+    const ok = validate_bip39_mnemonic(mnemonic);
     checksumValid = { kind: ChecksumStatusKind.Checked, valid: ok };
     valid = ok;
   });

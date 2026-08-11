@@ -8,7 +8,7 @@ import {
   type RuntimeFailure,
 } from "$lib/runtime/log";
 import {
-  classifyVaultRecoveryError,
+  classify_vault_recovery_error,
   JoinEnrollmentState,
   NookSentinelUnlockSessionStatus,
   SentinelVaultUnlockState,
@@ -43,7 +43,7 @@ export function isSentinelCeremonyRequiredError(
   failure: RuntimeFailure,
 ): boolean {
   return (
-    classifyVaultRecoveryError(failure.message) ===
+    classify_vault_recovery_error(failure.message) ===
     VaultRecoveryErrorKind.SentinelCeremonyRequired
   );
 }
@@ -52,7 +52,7 @@ export function isSentinelPasswordUnlockForbiddenError(
   failure: RuntimeFailure,
 ): boolean {
   return (
-    classifyVaultRecoveryError(failure.message) ===
+    classify_vault_recovery_error(failure.message) ===
     VaultRecoveryErrorKind.SentinelPasswordUnlockForbidden
   );
 }
@@ -62,7 +62,7 @@ export function isSentinelVault(state: VaultState): boolean {
   if (!state.hasManager) return false;
   try {
     return (
-      state.requireManager().sentinelUnlockStatus() !==
+      state.requireManager().sentinel_unlock_status() !==
       SentinelVaultUnlockState.NotSentinel
     );
   } catch {
@@ -76,7 +76,7 @@ async function getSentinelUnlockStatus(
   if (!state.hasManager) return SentinelVaultUnlockState.NotSentinel;
   try {
     return await state.enqueueStorage(() =>
-      state.requireManager().sentinelUnlockStatus(),
+      state.requireManager().sentinel_unlock_status(),
     );
   } catch {
     return SentinelVaultUnlockState.NotSentinel;
@@ -160,7 +160,7 @@ export async function startSentinelUnlock(state: VaultState): Promise<void> {
   state.errorMsg = "";
   await ensureSentinelCeremonyHydrated(state);
   const status = await state.enqueueStorage(() =>
-    state.requireManager().startSentinelUnlock(),
+    state.requireManager().start_sentinel_unlock(),
   );
   const replaceUnlockSessionArgs: Parameters<typeof replaceUnlockSession>[0] = {
     state,
@@ -168,7 +168,7 @@ export async function startSentinelUnlock(state: VaultState): Promise<void> {
   };
   replaceUnlockSession(replaceUnlockSessionArgs);
   state.sentinelUnlockRequest = await state.enqueueStorage(() =>
-    state.requireManager().sentinelUnlockRequestJson(),
+    state.requireManager().sentinel_unlock_request_json(),
   );
 }
 
@@ -181,7 +181,7 @@ export async function addSentinelUnlockResponse({
 }): Promise<void> {
   if (!state.hasManager || !response.trim()) return;
   const status = await state.enqueueStorage(() =>
-    state.requireManager().addSentinelUnlockResponse(response.trim()),
+    state.requireManager().add_sentinel_unlock_response(response.trim()),
   );
   const replaceUnlockSessionArgs2: Parameters<typeof replaceUnlockSession>[0] =
     { state, status };
@@ -194,7 +194,7 @@ export async function listSentinelStoredDeliveries(
   if (!state.hasManager) return [];
   await state.initDeviceIdentity();
   const summaries = await state.enqueueStorage(() =>
-    state.requireManager().listSentinelGenesisShareDeliveries(),
+    state.requireManager().list_sentinel_genesis_share_deliveries(),
   );
   for (const previous of state.sentinelStoredDeliveries) previous.free();
   state.sentinelStoredDeliveries = summaries;
@@ -216,11 +216,11 @@ export async function createSentinelUnlockResponse({
   return state.enqueueStorage(async () => {
     await state
       .requireManager()
-      .loadSentinelGenesisShareDelivery(storeId.trim());
+      .load_sentinel_genesis_share_delivery(storeId.trim());
     state.refreshVaultArchitectureFromManager();
     return state
       .requireManager()
-      .respondToSentinelUnlockRequest(request.trim());
+      .respond_to_sentinel_unlock_request(request.trim());
   });
 }
 
@@ -237,7 +237,7 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
   state.isVerifying = true;
   try {
     const rawRecords = (await state.enqueueStorage(() =>
-      state.requireManager().finalizeSentinelUnlock(),
+      state.requireManager().finalize_sentinel_unlock(),
     )) as NookSecretRecord[];
     for (const record of rawRecords) record.free();
     const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {

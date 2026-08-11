@@ -17,7 +17,7 @@ impl NookVaultManager {
     ///
     /// This intentionally works before device authorization and never returns
     /// password envelopes, passkey credential ids, or encrypted secret payloads.
-    #[wasm_bindgen(js_name = vaultRecoveryOptions)]
+    #[wasm_bindgen]
     pub async fn vault_recovery_options(
         &mut self,
     ) -> Result<nook_core::VaultRecoverySummary, JsError> {
@@ -41,7 +41,7 @@ impl NookVaultManager {
         ))
     }
 
-    #[wasm_bindgen(js_name = vaultAccessDiagnostics)]
+    #[wasm_bindgen]
     pub async fn vault_access_diagnostics(&mut self) -> Result<NookVaultAccessReport, JsError> {
         let identity = self.ensure_device_identity()?;
         let records = self.stored_records_snapshot();

@@ -4,8 +4,8 @@ import {
   NookOAuthRemoteFileState,
   NookOAuthTokenExpiryState,
   NookProviderSelectionState,
-  sharedGrantProviderId as wasmSharedGrantProviderId,
-  shouldFlushSharedStorageGrant as wasmShouldFlushSharedStorageGrant,
+  shared_grant_provider_id,
+  should_flush_shared_storage_grant,
   type NookEnrollmentProvider,
   type SharedStorageGrantCredential,
 } from "$app-wasm";
@@ -56,15 +56,15 @@ export function findSharedGrantProvider({
   readonly preset: OAuthFilePreset;
   readonly target: SharedStorageTarget;
 }): SharedGrantProvider {
-  const snapshot: Parameters<typeof wasmSharedGrantProviderId>[0] = {
+  const snapshot: Parameters<typeof shared_grant_provider_id>[0] = {
     providers,
     activeVaultStoreId: unselectedVaultScope(),
   };
-  const storageTarget: Parameters<typeof wasmSharedGrantProviderId>[2] =
+  const storageTarget: Parameters<typeof shared_grant_provider_id>[2] =
     target.kind === SharedStorageTargetKind.Bound
       ? { state: "existing", storageTargetId: target.storageTargetId }
       : { state: "create" };
-  const selection = wasmSharedGrantProviderId(snapshot, preset, storageTarget);
+  const selection = shared_grant_provider_id(snapshot, preset, storageTarget);
   try {
     if (selection.state !== NookProviderSelectionState.Selected) {
       return { kind: SharedGrantProviderKind.AuthorizationRequired };
@@ -91,7 +91,7 @@ export function shouldFlushSharedDriveGrant({
     accessCredential.kind === OAuthAccessTokenKind.Available
       ? { state: "accessToken", accessToken: accessCredential.token }
       : { state: "unavailable" };
-  return wasmShouldFlushSharedStorageGrant(grant, credential);
+  return should_flush_shared_storage_grant(grant, credential);
 }
 
 export function enrollmentOauthState(

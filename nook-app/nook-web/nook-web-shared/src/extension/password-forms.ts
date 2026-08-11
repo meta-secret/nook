@@ -2,14 +2,14 @@ import { companionWasmReady } from "./companion-ready";
 import {
   NookLoginContextObservation,
   NookPageInputFieldObservation,
-  expandIdentityText as wasmExpandIdentityText,
-  hasLoginContext as wasmHasLoginContext,
-  looksLikeEmailVerificationBody as wasmLooksLikeEmailVerificationBody,
-  looksLikeManualCheckpointLabel as wasmLooksLikeManualCheckpointLabel,
-  looksLikeOneTimeCodeField as wasmLooksLikeOneTimeCodeField,
-  looksLikePasskeyControlLabel as wasmLooksLikePasskeyControlLabel,
-  looksLikeUsernameField as wasmLooksLikeUsernameField,
-  parsePageInputType,
+  expand_identity_text,
+  has_login_context,
+  looks_like_email_verification_body,
+  looks_like_manual_checkpoint_label,
+  looks_like_one_time_code_field,
+  looks_like_passkey_control_label,
+  looks_like_username_field,
+  parse_page_input_type,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 void companionWasmReady;
@@ -316,7 +316,7 @@ function hasLoginContext(field: HTMLInputElement): boolean {
     `${doc.defaultView?.location?.pathname ?? ""} ${doc.defaultView?.location?.hostname ?? ""}`,
   );
   try {
-    return wasmHasLoginContext(observation);
+    return has_login_context(observation);
   } finally {
     observation.free();
   }
@@ -330,7 +330,7 @@ function pageInputObservation({
   loginContext: boolean;
 }): NookPageInputFieldObservation {
   return new NookPageInputFieldObservation(
-    parsePageInputType(field.type),
+    parse_page_input_type(field.type),
     field.disabled,
     field.readOnly,
     autocompleteTokens(field),
@@ -347,7 +347,7 @@ function looksLikeUsernameField(field: HTMLInputElement): boolean {
   };
   const observation = pageInputObservation(nookTypedArgs0_3);
   try {
-    return wasmLooksLikeUsernameField(observation);
+    return looks_like_username_field(observation);
   } finally {
     observation.free();
   }
@@ -361,7 +361,7 @@ function looksLikeOneTimeCodeField(field: HTMLInputElement): boolean {
   };
   const observation = pageInputObservation(nookTypedArgs0_4);
   try {
-    return wasmLooksLikeOneTimeCodeField(observation);
+    return looks_like_one_time_code_field(observation);
   } finally {
     observation.free();
   }
@@ -436,7 +436,7 @@ export function findPasskeyControl(
       (control as HTMLInputElement).value ??
       ""
     ).trim();
-    if (labeled && wasmLooksLikePasskeyControlLabel(labeled)) {
+    if (labeled && looks_like_passkey_control_label(labeled)) {
       return { kind: PasskeyControlLookupKind.Found, control };
     }
   }
@@ -467,11 +467,11 @@ function pageHasManualCheckpoint(root: ParentNode): boolean {
       checkbox.id ??
       ""
     ).toLowerCase();
-    if (wasmLooksLikeManualCheckpointLabel(labeled)) {
+    if (looks_like_manual_checkpoint_label(labeled)) {
       return true;
     }
   }
-  return wasmLooksLikeEmailVerificationBody(root.textContent ?? "");
+  return looks_like_email_verification_body(root.textContent ?? "");
 }
 
 function summarizeRoot({
@@ -935,7 +935,7 @@ function clickAdvanceControl({
     if (control.disabled || control.getAttribute("aria-disabled") === "true") {
       continue;
     }
-    const label = wasmExpandIdentityText(
+    const label = expand_identity_text(
       [
         control.textContent ?? "",
         control.getAttribute("aria-label") ?? "",

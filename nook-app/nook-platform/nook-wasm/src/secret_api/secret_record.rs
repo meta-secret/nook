@@ -43,7 +43,7 @@ impl NookSecretRecord {
         self.record.summary()
     }
 
-    #[wasm_bindgen(js_name = matchesSearch)]
+    #[wasm_bindgen]
     pub fn matches_search(&self, query: &str) -> bool {
         self.record.matches_search(query)
     }

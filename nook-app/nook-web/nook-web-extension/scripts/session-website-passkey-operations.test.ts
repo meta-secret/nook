@@ -25,8 +25,8 @@ type MockManagerState = {
 
 function mockManager(state: MockManagerState): NookVaultManager {
   return {
-    registerWebsitePasskey: async (
-      ...args: Parameters<NookVaultManager['registerWebsitePasskey']>
+    register_website_passkey: async (
+      ...args: Parameters<NookVaultManager['register_website_passkey']>
     ) => {
       const [, shouldContinue] = args
       state.registrationContinuationObserved = shouldContinue()
@@ -40,8 +40,8 @@ function mockManager(state: MockManagerState): NookVaultManager {
         },
       }
     },
-    assertWebsitePasskey: async (
-      ...args: Parameters<NookVaultManager['assertWebsitePasskey']>
+    assert_website_passkey: async (
+      ...args: Parameters<NookVaultManager['assert_website_passkey']>
     ) => {
       const [, shouldContinue] = args
       state.assertionContinuationObserved = shouldContinue()

@@ -1,7 +1,4 @@
-import init, {
-  generateTotpCode as wasmGenerateTotpCode,
-  verifyTotpCode as wasmVerifyTotpCode,
-} from 'nook-wasm'
+import init, { generate_totp_code, verify_totp_code } from 'nook-wasm'
 enum WasmStartupKind {
   NotStarted = 'not-started',
   Initializing = 'initializing',
@@ -29,7 +26,7 @@ export async function generateTotpCode(
   nowMs = Date.now(),
 ): Promise<string> {
   await ensureWasm()
-  return wasmGenerateTotpCode(base32Secret, BigInt(Math.floor(nowMs / 1000)))
+  return generate_totp_code(base32Secret, BigInt(Math.floor(nowMs / 1000)))
 }
 
 export async function verifyTotpCode(
@@ -38,9 +35,5 @@ export async function verifyTotpCode(
   nowMs = Date.now(),
 ): Promise<boolean> {
   await ensureWasm()
-  return wasmVerifyTotpCode(
-    base32Secret,
-    code,
-    BigInt(Math.floor(nowMs / 1000)),
-  )
+  return verify_totp_code(base32Secret, code, BigInt(Math.floor(nowMs / 1000)))
 }

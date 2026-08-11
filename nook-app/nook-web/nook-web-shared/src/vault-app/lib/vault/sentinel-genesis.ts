@@ -1,6 +1,6 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
-  setActiveVault,
+  set_active_vault,
   type NookSentinelGenesisDelivery,
   type NookSentinelGenesisFinalizeResult,
   type NookSentinelGenesisParticipantStatus,
@@ -100,11 +100,11 @@ export async function start({
   try {
     await state.initDeviceIdentity();
     const status = await state.enqueueStorage(() =>
-      state.requireManager().startSentinelGenesis(args),
+      state.requireManager().start_sentinel_genesis(args),
     );
     state.sentinelGenesisRequest = state
       .requireManager()
-      .sentinelGenesisRequestJson();
+      .sentinel_genesis_request_json();
     const applyStatusArgs: Parameters<typeof applyStatus>[0] = {
       state,
       status,
@@ -139,7 +139,7 @@ export async function addParticipantResponse({
     const status = await state.enqueueStorage(() =>
       state
         .requireManager()
-        .addSentinelGenesisParticipantResponse(
+        .add_sentinel_genesis_participant_response(
           payload.trim(),
           participantLabel.trim(),
         ),
@@ -172,7 +172,7 @@ export async function createPublicKeyAnnouncement(
     return await state.enqueueStorage(() =>
       state
         .requireManager()
-        .createSentinelGenesisPublicKeyAnnouncement(
+        .create_sentinel_genesis_public_key_announcement(
           state.t(I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder),
         ),
     );
@@ -202,7 +202,7 @@ export async function rememberRequest({
     await state.enqueueStorage(() =>
       state
         .requireManager()
-        .rememberSentinelGenesisRequest(requestPayload.trim()),
+        .remember_sentinel_genesis_request(requestPayload.trim()),
     );
   } catch (error) {
     state.errorMsg =
@@ -231,7 +231,7 @@ export async function createParticipantResponse({
     return await state.enqueueStorage(() =>
       state
         .requireManager()
-        .respondToSentinelGenesisRequest(
+        .respond_to_sentinel_genesis_request(
           requestPayload.trim(),
           state.t(I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder),
         ),
@@ -254,7 +254,7 @@ export async function finalize(state: VaultState): Promise<void> {
   state.errorMsg = "";
   try {
     const result = await state.enqueueStorage(() =>
-      state.requireManager().finalizeSentinelGenesis(),
+      state.requireManager().finalize_sentinel_genesis(),
     );
     const applyFinalizeResultArgs: Parameters<typeof applyFinalizeResult>[0] = {
       state,
@@ -285,7 +285,9 @@ export async function acceptShareDelivery({
   state.errorMsg = "";
   try {
     await state.enqueueStorage(() =>
-      state.requireManager().acceptSentinelGenesisShareDelivery(payload.trim()),
+      state
+        .requireManager()
+        .accept_sentinel_genesis_share_delivery(payload.trim()),
     );
     await listSentinelStoredDeliveries(state);
     state.showSuccess(
@@ -312,14 +314,14 @@ export async function completeDelivery(state: VaultState): Promise<void> {
   const storeId = state.sentinelGenesisTarget.storeId;
   state.isVerifying = true;
   try {
-    await setActiveVault(storeId);
+    await set_active_vault(storeId);
     await state.refreshLocalVaultCatalog();
     state.selectLoginVault(storeId);
     state.localLoginPreparation = LocalLoginPreparationState.Idle;
     state.sentinelCeremonyPrompt = true;
     state.sentinelGenesisPhase = state
       .requireManager()
-      .completeSentinelGenesisDelivery();
+      .complete_sentinel_genesis_delivery();
   } finally {
     state.isVerifying = false;
   }
@@ -335,10 +337,10 @@ export async function acceptOnboardingPackage({
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   state.errorMsg = "";
   const storeId = await state.enqueueStorage(() =>
-    state.requireManager().acceptSentinelOnboardingPackage(packageJson),
+    state.requireManager().accept_sentinel_onboarding_package(packageJson),
   );
   state.openActiveVault(storeId);
-  await setActiveVault(storeId);
+  await set_active_vault(storeId);
   await state.loadProviders();
   state.applyActiveProviderCredentials();
   await state.loadDb();

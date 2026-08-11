@@ -2,7 +2,7 @@
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
-    isVaultPasswordLongEnough,
+    is_vault_password_long_enough,
     type NookPasswordEntrySummary,
     type PasswordEntryId,
   } from '$app-wasm'
@@ -47,7 +47,7 @@
       passwordFormError = vault.t(I18N_KEYS.VaultPasswordsEnterLabelError)
       return
     }
-    if (!isVaultPasswordLongEnough(newPasswordInput)) {
+    if (!is_vault_password_long_enough(newPasswordInput)) {
       passwordFormError = vault.t(I18N_KEYS.VaultPasswordsMinLengthError)
       return
     }

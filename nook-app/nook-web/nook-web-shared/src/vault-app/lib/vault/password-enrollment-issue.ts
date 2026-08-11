@@ -14,14 +14,14 @@ import {
   type NookEnrollmentProvider,
   NookVaultNameState,
   OnboardingType,
-  enrollmentICloudSharedProviderForArchitecture,
-  enrollmentProviderForArchitecture,
-  enrollmentSharedProviderForArchitecture,
-  encryptLabeledEnrollmentPayload,
-  encryptUnlabeledEnrollmentPayload,
+  enrollment_icloud_shared_provider_for_architecture,
+  enrollment_provider_for_architecture,
+  enrollment_shared_provider_for_architecture,
+  encrypt_labeled_enrollment_payload,
+  encrypt_unlabeled_enrollment_payload,
 } from "$app-wasm";
 import {
-  bindGoogleDriveSharedFolder,
+  bind_google_drive_shared_folder,
   configuredOAuthFile,
   githubPatValue,
   githubRepositoryValue,
@@ -33,11 +33,11 @@ import {
   type StorageProvider,
 } from "$lib/auth/providers";
 import {
-  prepareSharedStorageGrant,
+  prepare_shared_storage_grant,
   createSharedStorageTarget,
   existingSharedStorageTarget,
-  providerOnboardingType,
-  providerOauthPresetForProvider,
+  provider_onboarding_type,
+  provider_oauth_preset_for_provider,
   sharedStorageGrantAccessToken,
   suggestedSharedStorageTarget,
   unavailableSharedStorageGrantCredential,
@@ -107,14 +107,14 @@ export async function issueEnrollmentCode({
         );
       }
     }
-    // `verifyVaultPassword` returns false on a wrong password but can also
+    // `verify_vault_password` returns false on a wrong password but can also
     // throw if the underlying age decryptor rejects — treat both as "wrong
     // password" so the UI message stays predictable.
     let verified: boolean;
     try {
       verified = await state.enqueueStorage(async () => {
         await Promise.resolve();
-        return state.requireManager().verifyVaultPassword(entryId, password);
+        return state.requireManager().verify_vault_password(entryId, password);
       });
     } catch {
       verified = false;
@@ -142,7 +142,7 @@ export async function issueEnrollmentCode({
     const selectedOauth = selectedProvider.oauthFile;
     const sharedJoinerIdentity = state.sharedJoinerIdentity.trim();
     const usesSharedProviderGrant =
-      providerOnboardingType(selectedProvider, state.vaultArchitecture) ===
+      provider_onboarding_type(selectedProvider, state.vaultArchitecture) ===
       OnboardingType.SharedProviderGrant;
     const usesSharedICloud =
       usesSharedProviderGrant &&
@@ -193,10 +193,10 @@ export async function issueEnrollmentCode({
             : githubRepo;
         const folderId = selectedOauth.config.folderId;
         const prepareSharedStorageGrantArgs: Parameters<
-          typeof prepareSharedStorageGrant
+          typeof prepare_shared_storage_grant
         >[0] = {
           providerType: selectedProvider.type,
-          oauthPreset: providerOauthPresetForProvider(selectedProvider),
+          oauthPreset: provider_oauth_preset_for_provider(selectedProvider),
           joinerIdentityKind: "email",
           joinerIdentity: sharedJoinerIdentity,
           storageTargetHint: suggestedSharedStorageTarget(
@@ -211,7 +211,7 @@ export async function issueEnrollmentCode({
               ? sharedStorageGrantAccessToken(accessCredential.token)
               : unavailableSharedStorageGrantCredential(),
         };
-        const grant = await prepareSharedStorageGrant(
+        const grant = await prepare_shared_storage_grant(
           prepareSharedStorageGrantArgs,
         );
         log.info("shared enrollment grant prepared");
@@ -265,7 +265,7 @@ export async function issueEnrollmentCode({
           sharedStorageTarget.kind === SharedStorageTargetKind.Bound &&
           isConfiguredOAuthFile(selectedOauth)
         ) {
-          const updatedOauth = bindGoogleDriveSharedFolder(
+          const updatedOauth = bind_google_drive_shared_folder(
             selectedOauth.config,
             sharedStorageTarget.storageTargetId,
           );
@@ -295,7 +295,9 @@ export async function issueEnrollmentCode({
             const targetArgs: ReturnType<typeof state.providerWasmArgs> =
               state.providerWasmArgs(enrollmentProviderRow);
             await state.enqueueStorage(() =>
-              state.requireManager().flushEventOutboxForProvider(...targetArgs),
+              state
+                .requireManager()
+                .flush_event_outbox_for_provider(...targetArgs),
             );
           }
         }
@@ -304,7 +306,7 @@ export async function issueEnrollmentCode({
         const targetArgs: ReturnType<typeof state.providerWasmArgs> =
           state.providerWasmArgs(enrollmentProviderRow);
         await state.enqueueStorage(() =>
-          state.requireManager().flushEventOutboxForProvider(...targetArgs),
+          state.requireManager().flush_event_outbox_for_provider(...targetArgs),
         );
       }
     }
@@ -312,18 +314,18 @@ export async function issueEnrollmentCode({
       usesSharedProviderGrant &&
       sharedStorageTarget.kind === SharedStorageTargetKind.Bound
         ? usesSharedICloud
-          ? enrollmentICloudSharedProviderForArchitecture(
+          ? enrollment_icloud_shared_provider_for_architecture(
               enrollmentProviderRow,
               state.vaultArchitecture,
               sharedStorageTarget.storageTargetId,
             )
-          : enrollmentSharedProviderForArchitecture(
+          : enrollment_shared_provider_for_architecture(
               enrollmentProviderRow,
               state.vaultArchitecture,
               sharedJoinerIdentity,
               sharedStorageTarget.storageTargetId,
             )
-        : enrollmentProviderForArchitecture(
+        : enrollment_provider_for_architecture(
             enrollmentProviderRow,
             state.vaultArchitecture,
           );
@@ -369,12 +371,12 @@ export async function issueEnrollmentCode({
     );
     const code =
       selectedPassword && selectedPassword.label.trim()
-        ? encryptLabeledEnrollmentPayload(
+        ? encrypt_labeled_enrollment_payload(
             payload,
             password,
             selectedPassword.label,
           )
-        : encryptUnlabeledEnrollmentPayload(payload, password);
+        : encrypt_unlabeled_enrollment_payload(payload, password);
     state.enrollmentCode = code;
     state.beginEnrollmentEntry(entryId);
     log.info("enrollment code issued");

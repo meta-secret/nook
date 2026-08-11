@@ -11,7 +11,7 @@
     TriangleAlert,
     X,
   } from '@lucide/svelte'
-  import { configuredVaultApplicationSupportsExtension } from '$app-wasm'
+  import { configured_vault_application_supports_extension } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import { openInstalledExtension } from '$lib/extension/connect'
   import {
@@ -37,7 +37,7 @@
     type MemberRevocation,
   } from './vault-devices-card-state'
 
-  const SUPPORTS_EXTENSION = configuredVaultApplicationSupportsExtension()
+  const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
 
   let {
     vault,

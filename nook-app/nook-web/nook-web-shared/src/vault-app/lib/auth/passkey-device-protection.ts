@@ -98,7 +98,7 @@ export async function setupDeviceProtection({
   readonly passkeyLabel: string;
   readonly deviceMode: DeviceMode;
 }): Promise<void> {
-  await manager.setupDeviceProtectionWithPasskeyMode(
+  await manager.setup_device_protection_with_passkey_mode(
     location.hostname,
     "Nook",
     passkeyLabel,
@@ -109,11 +109,11 @@ export async function setupDeviceProtection({
 export async function unlockDeviceProtection(
   manager: NookVaultManager,
 ): Promise<void> {
-  await manager.unlockDeviceProtectionWithPasskey(location.hostname);
+  await manager.unlock_device_protection_with_passkey(location.hostname);
 }
 
 export async function recoverDeviceProtectionWithPasskey(
   manager: NookVaultManager,
 ): Promise<void> {
-  await manager.recoverDeviceProtectionWithPasskey(location.hostname);
+  await manager.recover_device_protection_with_passkey(location.hostname);
 }

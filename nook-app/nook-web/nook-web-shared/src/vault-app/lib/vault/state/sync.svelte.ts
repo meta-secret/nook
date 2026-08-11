@@ -12,7 +12,7 @@ import {
 } from "$app-wasm";
 
 export class VaultSyncState {
-  private lastSyncedState = $state(NookVaultLastSync.neverSynced());
+  private lastSyncedState = $state(NookVaultLastSync.never_synced());
   get lastSync(): NookVaultLastSync {
     return this.lastSyncedState;
   }
@@ -82,7 +82,7 @@ export class VaultSyncState {
   }): void {
     for (const conflict of this.securityConflictState) conflict.free();
     this.securityConflictState = [
-      NookSecurityConflict.fromDisplayParts(events, reasons),
+      NookSecurityConflict.from_display_parts(events, reasons),
     ];
   }
   /** E2E/dev boundary: construct the injected content conflict in Rust. */
@@ -96,7 +96,7 @@ export class VaultSyncState {
     readonly remoteVersion: number;
   }): void {
     this.stageSyncConflict(
-      NookPendingSyncConflict.forTestingContent(
+      NookPendingSyncConflict.for_testing_content(
         providerLabel,
         localVersion,
         remoteVersion,
@@ -114,7 +114,7 @@ export class VaultSyncState {
     readonly remoteStoreId: string;
   }): void {
     this.stageSyncConflict(
-      NookPendingSyncConflict.forTestingStoreId(
+      NookPendingSyncConflict.for_testing_store_id(
         providerLabel,
         localStoreId,
         remoteStoreId,
@@ -134,7 +134,7 @@ export class VaultSyncState {
   }
   stageSyncConflict(value: NookPendingSyncConflict): void {
     const previous = this.syncConflictState;
-    this.syncConflictState = NookSyncConflictReview.requiresDecision(value);
+    this.syncConflictState = NookSyncConflictReview.requires_decision(value);
     previous.free();
   }
   clearPendingSyncConflict(): void {

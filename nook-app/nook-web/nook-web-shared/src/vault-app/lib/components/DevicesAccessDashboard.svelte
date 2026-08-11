@@ -14,7 +14,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     NookDeviceAccessTextKind,
     NookDeviceVaultAccessState,
     NookPasskeyTimestampEvidenceKind,
-    setDeviceAccessPasskeyProviderLabel,
+    set_device_access_passkey_provider_label,
   } from '$app-wasm'
   import type {
     NookDeviceAccessText,
@@ -157,7 +157,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     try {
       const snapshotRequest = vault
         .requireManager()
-        .deviceAccessSnapshotRequest()
+        .device_access_snapshot_request()
       const snapshot = await snapshotRequest
         .resolve()
         .finally(() => snapshotRequest.free())
@@ -257,7 +257,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     const credentialFingerprint = loadState.view.credentialId.value
     providerSaveState = ProviderSaveKind.Saving
     try {
-      await setDeviceAccessPasskeyProviderLabel(
+      await set_device_access_passkey_provider_label(
         credentialFingerprint,
         providerDraft,
       )

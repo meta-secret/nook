@@ -2,9 +2,9 @@ import {
   DeviceProtectionStatus,
   NookManualProviderSyncState,
   VaultEditDecision,
-  providerLabelById,
-  resolveErrorMessage as wasmResolveErrorMessage,
-  translateWithReplacements,
+  provider_label_by_id,
+  resolve_error_message,
+  translate_with_replacements,
   type NookAppLocale,
 } from "$app-wasm";
 import {
@@ -73,7 +73,7 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   get editsBlocked(): boolean {
-    return this.clientPolicy.editsBlocked(
+    return this.clientPolicy.edits_blocked(
       this.securityConflicts.length,
       this.syncBlocked,
       this.architectureCanCreateSecret,
@@ -85,13 +85,13 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   get editRestriction(): VaultEditRestriction {
-    const decision = this.clientPolicy.editBlockReason(
+    const decision = this.clientPolicy.edit_block_reason(
       this.securityConflicts.length,
       this.syncBlocked,
       this.architectureCanCreateSecret,
     );
     if (decision === VaultEditDecision.Allowed) return { decision };
-    const reason = this.clientPolicy.editBlockMessage(
+    const reason = this.clientPolicy.edit_block_message(
       this.securityConflicts.length,
       this.syncBlocked,
       this.architectureCanCreateSecret,
@@ -122,7 +122,7 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     };
     return {
       kind: SyncProviderLabelKind.Active,
-      label: providerLabelById(
+      label: provider_label_by_id(
         $state.snapshot(snapshotArgs),
         this.manualProviderSync.providerId,
       ),
@@ -130,7 +130,7 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   get isSyncActivityVisible(): boolean {
-    return this.clientPolicy.isSyncActivityVisible(
+    return this.clientPolicy.is_sync_activity_visible(
       this.isFanOutSyncing,
       this.manualProviderSyncRunning,
       this.isSyncing,
@@ -300,12 +300,12 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   resolveErrorMessage(message: string): string {
-    return wasmResolveErrorMessage(this.translations, this.locale, message);
+    return resolve_error_message(this.translations, this.locale, message);
   }
 
   t = (request: TranslationRequest): string => {
     const entries = Object.entries(translationReplacements(request));
-    return translateWithReplacements(
+    return translate_with_replacements(
       this.translations,
       this.locale,
       translationKey(request),

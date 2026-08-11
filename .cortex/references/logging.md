@@ -55,11 +55,11 @@ See [Agent rule: use app logs](#agent-rule-use-app-logs-for-playwright-debug-and
 - **Storage:** IndexedDB database `nook_logs`, store `logs` (auto-increment ring
   buffer, newest ~5000 entries kept). Separate from the vault DB (`nook_db`).
 - **Entry shape:** `{ ts, level, scope, message, data? }`.
-- **Bindings:** `nookLog` (message-only persist), `nookLogWithData` (serialized
-  context persist), `nookLogInit`, `nookLogSetLevel`, `nookLogGetLevel`,
-  `nookLogDump`, `nookLogCount`, `nookLogFlush`, and `nookLogClear`. They are
-  exported from `nook-app/nook-platform/nook-wasm/src/logger.rs`. The web shim
-  wraps them. Do not call them directly from app code.
+- **Bindings:** `log_record` (message-only persist), `log_record_with_data`
+  (serialized context persist), `log_init`, `log_set_level`, `log_get_level`,
+  `log_dump`, `log_count`, `log_flush`, and `log_clear`. They are exported from
+  `nook-app/nook-platform/nook-wasm/src/logger.rs`. The web shim wraps them. Do
+  not call them directly from app code.
 
 ## Levels are persistence-gated
 

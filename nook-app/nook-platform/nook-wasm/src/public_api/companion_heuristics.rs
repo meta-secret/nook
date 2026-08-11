@@ -2,13 +2,13 @@
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
-#[wasm_bindgen(js_name = pageHasBackupCodeHint)]
+#[wasm_bindgen]
 #[must_use]
 pub fn page_has_backup_code_hint(text: &str) -> bool {
     nook_core::page_has_backup_code_hint(text)
 }
 
-#[wasm_bindgen(js_name = extractBackupCodeCandidates)]
+#[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
@@ -46,7 +46,7 @@ impl NookPageInputFieldObservation {
     }
 }
 
-#[wasm_bindgen(js_name = expandIdentityText)]
+#[wasm_bindgen]
 #[must_use]
 pub fn expand_identity_text(value: &str) -> String {
     nook_core::expand_identity_text(value)
@@ -79,49 +79,49 @@ impl NookLoginContextObservation {
     }
 }
 
-#[wasm_bindgen(js_name = hasLoginContext)]
+#[wasm_bindgen]
 #[must_use]
 pub fn has_login_context(observation: &NookLoginContextObservation) -> bool {
     nook_core::has_login_context(&observation.inner)
 }
 
-#[wasm_bindgen(js_name = looksLikeUsernameField)]
+#[wasm_bindgen]
 #[must_use]
 pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool {
     nook_core::looks_like_username_field(&field.inner)
 }
 
-#[wasm_bindgen(js_name = looksLikeOneTimeCodeField)]
+#[wasm_bindgen]
 #[must_use]
 pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
     nook_core::looks_like_one_time_code_field(&field.inner)
 }
 
-#[wasm_bindgen(js_name = looksLikePasskeyControlLabel)]
+#[wasm_bindgen]
 #[must_use]
 pub fn looks_like_passkey_control_label(label: &str) -> bool {
     nook_core::looks_like_passkey_control_label(label)
 }
 
-#[wasm_bindgen(js_name = looksLikeManualCheckpointLabel)]
+#[wasm_bindgen]
 #[must_use]
 pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
     nook_core::looks_like_manual_checkpoint_label(label)
 }
 
-#[wasm_bindgen(js_name = looksLikeEmailVerificationBody)]
+#[wasm_bindgen]
 #[must_use]
 pub fn looks_like_email_verification_body(body: &str) -> bool {
     nook_core::looks_like_email_verification_body(body)
 }
 
-#[wasm_bindgen(js_name = parsePageInputType)]
+#[wasm_bindgen]
 #[must_use]
 pub fn parse_page_input_type(value: &str) -> nook_core::PageInputType {
     nook_core::PageInputType::parse(value)
 }
 
-#[wasm_bindgen(js_name = isCloudflarePrPreviewHost)]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_cloudflare_pr_preview_host(hostname: &str) -> bool {
     nook_core::is_cloudflare_pr_preview_host(hostname)
@@ -135,7 +135,7 @@ pub struct NookOAuthOriginSupport {
 
 #[wasm_bindgen]
 impl NookOAuthOriginSupport {
-    #[wasm_bindgen(js_name = isSupported)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn is_supported(&self) -> bool {
         matches!(
@@ -155,7 +155,7 @@ impl NookOAuthOriginSupport {
         }
     }
 
-    #[wasm_bindgen(js_name = isUnsupported)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn is_unsupported(&self) -> bool {
         matches!(
@@ -165,7 +165,7 @@ impl NookOAuthOriginSupport {
     }
 
     /// Reason when [`Self::is_unsupported`] is true; otherwise `UnregisteredOrigin`.
-    #[wasm_bindgen(js_name = unsupportedReason)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn unsupported_reason(&self) -> nook_core::OAuthOriginUnsupportedReason {
         match self.inner {
@@ -175,7 +175,7 @@ impl NookOAuthOriginSupport {
     }
 }
 
-#[wasm_bindgen(js_name = resolveOAuthOriginSupport)]
+#[wasm_bindgen]
 #[must_use]
 pub fn resolve_oauth_origin_support(
     provider: nook_core::BrowserOAuthProvider,
@@ -192,51 +192,51 @@ pub fn resolve_oauth_origin_support(
     }
 }
 
-#[wasm_bindgen(js_name = defaultSimpleVaultUrl)]
+#[wasm_bindgen]
 #[must_use]
 pub fn default_simple_vault_url() -> String {
     nook_core::DEFAULT_SIMPLE_VAULT_URL.to_owned()
 }
 
-#[wasm_bindgen(js_name = normalizeSimpleVaultBaseUrl)]
+#[wasm_bindgen]
 pub fn normalize_simple_vault_base_url(value: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::normalize_simple_vault_base_url(value)?)
 }
 
-#[wasm_bindgen(js_name = simpleVaultUrl)]
+#[wasm_bindgen]
 pub fn simple_vault_url(base_url: &str, path: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::simple_vault_url(base_url, path)?)
 }
 
-#[wasm_bindgen(js_name = simpleVaultMatchPattern)]
+#[wasm_bindgen]
 pub fn simple_vault_match_pattern(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::simple_vault_match_pattern(base_url)?)
 }
 
 /// Matching Sentinel base URL for `base_url`, or an empty string when none matches.
-#[wasm_bindgen(js_name = matchingSentinelVaultBaseUrl)]
+#[wasm_bindgen]
 pub fn matching_sentinel_vault_base_url(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::matching_sentinel_vault_base_url(base_url)?.unwrap_or_default())
 }
 
-#[wasm_bindgen(js_name = sentinelVaultMatchPatterns)]
+#[wasm_bindgen]
 pub fn sentinel_vault_match_patterns(base_url: &str) -> Result<Vec<String>, wasm_bindgen::JsError> {
     Ok(nook_core::sentinel_vault_match_patterns(base_url)?)
 }
 
-#[wasm_bindgen(js_name = isSimpleVaultHostname)]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_simple_vault_hostname(hostname: &str) -> bool {
     nook_core::is_simple_vault_hostname(hostname)
 }
 
-#[wasm_bindgen(js_name = isSentinelVaultHostname)]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_sentinel_vault_hostname(hostname: &str) -> bool {
     nook_core::is_sentinel_vault_hostname(hostname)
 }
 
-#[wasm_bindgen(js_name = nookVaultAppExcludeMatchPatterns)]
+#[wasm_bindgen]
 pub fn nook_vault_app_exclude_match_patterns(
     base_url: &str,
 ) -> Result<Vec<String>, wasm_bindgen::JsError> {
@@ -244,7 +244,7 @@ pub fn nook_vault_app_exclude_match_patterns(
 }
 
 /// `base_url` may be empty when no configured vault base is available.
-#[wasm_bindgen(js_name = isNookVaultAppUrl)]
+#[wasm_bindgen]
 pub fn is_nook_vault_app_url(
     candidate_url: &str,
     base_url: &str,
@@ -257,7 +257,7 @@ pub fn is_nook_vault_app_url(
     Ok(nook_core::is_nook_vault_app_url(candidate_url, base_url)?)
 }
 
-#[wasm_bindgen(js_name = belongsToSimpleVault)]
+#[wasm_bindgen]
 pub fn belongs_to_simple_vault(
     base_url: &str,
     candidate_url: &str,
@@ -265,7 +265,7 @@ pub fn belongs_to_simple_vault(
     Ok(nook_core::belongs_to_simple_vault(base_url, candidate_url)?)
 }
 
-#[wasm_bindgen(js_name = belongsToSentinelVault)]
+#[wasm_bindgen]
 pub fn belongs_to_sentinel_vault(
     base_url: &str,
     candidate_url: &str,

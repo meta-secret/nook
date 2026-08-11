@@ -16,14 +16,15 @@ export async function publishExtensionEventLogUpdateForVault(
         ? state.activeVault.storeId
         : await state.enqueueStorage(() => state.requireManager().vaultStoreId);
     const eventLogRecords = await state.enqueueStorage(() =>
-      state.requireManager().exportEventLogRecords(),
+      state.requireManager().export_event_log_records_js(),
     );
     try {
       const publishExtensionEventLogUpdateArgs: Parameters<
         typeof publishExtensionEventLogUpdate
       >[0] = {
         vaultStoreId,
-        eventLogRecords: eventLogRecords.toArray() as ExtensionEventLogRecord[],
+        eventLogRecords:
+          eventLogRecords.to_array() as ExtensionEventLogRecord[],
       };
       publishExtensionEventLogUpdate(publishExtensionEventLogUpdateArgs);
     } finally {

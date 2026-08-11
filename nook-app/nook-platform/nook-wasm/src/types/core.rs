@@ -13,13 +13,13 @@ pub struct NookProviderSyncRevision(nook_core::ProviderSyncRevision);
 
 #[wasm_bindgen]
 impl NookProviderSyncRevision {
-    #[wasm_bindgen(js_name = untracked)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn untracked() -> Self {
         Self(nook_core::ProviderSyncRevision::Unknown)
     }
 
-    #[wasm_bindgen(js_name = tracked)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn tracked(revision: String) -> Self {
         Self(nook_core::ProviderSyncRevision::Revision(revision))
@@ -77,13 +77,13 @@ enum ManagerStoreScope {
 
 #[wasm_bindgen]
 impl NookManagerStoreScope {
-    #[wasm_bindgen(js_name = unscoped)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn unscoped() -> Self {
         Self(ManagerStoreScope::Unscoped)
     }
 
-    #[wasm_bindgen(js_name = scoped)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn scoped(store_id: String) -> Self {
         Self(ManagerStoreScope::Scoped(store_id))
@@ -124,7 +124,7 @@ pub struct NookVaultArchitecture(nook_core::VaultArchitecture);
 
 #[wasm_bindgen]
 impl NookVaultArchitecture {
-    #[wasm_bindgen(js_name = draft)]
+    #[wasm_bindgen]
     pub fn draft(
         device_mode: nook_core::DeviceMode,
         vault_type: nook_core::VaultType,
@@ -137,7 +137,7 @@ impl NookVaultArchitecture {
         )?))
     }
 
-    #[wasm_bindgen(js_name = simple)]
+    #[wasm_bindgen]
     #[allow(clippy::needless_pass_by_value)]
     pub fn simple(
         device_mode: nook_core::DeviceMode,
@@ -153,7 +153,7 @@ impl NookVaultArchitecture {
         Ok(Self(architecture))
     }
 
-    #[wasm_bindgen(js_name = sentinel)]
+    #[wasm_bindgen]
     #[allow(clippy::needless_pass_by_value)]
     pub fn sentinel(
         device_mode: nook_core::DeviceMode,

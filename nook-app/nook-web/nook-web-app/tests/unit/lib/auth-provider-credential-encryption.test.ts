@@ -105,9 +105,9 @@ describe.sequential(
     beforeAll(async () => {
       await initNookWasm()
       manager = new NookVaultManager()
-      const setup = await manager.beginDeviceProtection()
+      const setup = await manager.begin_device_protection()
       try {
-        await manager.finishDeviceProtection(
+        await manager.finish_device_protection(
           new Uint8Array(32).fill(7),
           setup.userHandle,
           setup.prfInput,
@@ -120,7 +120,7 @@ describe.sequential(
 
     test('saveAuthProviders seals GitHub PAT in IndexedDB', async () => {
       const pat = 'github_pat_11UNITtestSECRETtoken'
-      await manager.saveAuthProviders({
+      await manager.save_auth_providers_snapshot({
         providers: [githubProvider('gh-unit', pat)],
         activeVaultStoreId: unselectedVaultScope(),
       })
@@ -133,12 +133,12 @@ describe.sequential(
 
     test('loadAuthProviders decrypts sealed GitHub PAT', async () => {
       const pat = 'github_pat_22LOADdecryptTOKEN'
-      await manager.saveAuthProviders({
+      await manager.save_auth_providers_snapshot({
         providers: [githubProvider('gh-load', pat)],
         activeVaultStoreId: unselectedVaultScope(),
       })
 
-      const loaded = await manager.loadAuthProviders()
+      const loaded = await manager.load_auth_providers_snapshot()
       const provider = loaded.providers[0]
       if (!provider) throw new Error('expected a loaded GitHub provider')
       expect(githubPatValue(provider.githubPat)).toBe(pat)
@@ -184,7 +184,7 @@ describe.sequential(
         }
       })
 
-      await expect(manager.loadAuthProviders()).rejects.toThrow(
+      await expect(manager.load_auth_providers_snapshot()).rejects.toThrow(
         'Provider credential is not age-encrypted.',
       )
 
@@ -204,7 +204,7 @@ describe.sequential(
         refreshToken: storedOAuthRefreshCredential(refresh),
         accountEmail: storedOAuthAccountEmail('me@example.com'),
       }
-      await manager.saveAuthProviders({
+      await manager.save_auth_providers_snapshot({
         providers: [
           {
             ...providerPersistenceDefaults(),
@@ -226,7 +226,7 @@ describe.sequential(
       expect(oauth.accessToken).not.toContain(access)
       expect(oauth.refreshToken).not.toContain(refresh)
 
-      const loaded = await manager.loadAuthProviders()
+      const loaded = await manager.load_auth_providers_snapshot()
       const provider = loaded.providers[0]
       if (!provider) throw new Error('expected a loaded OAuth provider')
       const loadedOauth = provider.oauthFile

@@ -33,7 +33,7 @@
   />
   <span class="min-w-0 space-y-0.5">
     <span class="block text-sm font-semibold text-foreground">
-      {entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))}
+      {entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))}
     </span>
     <span class="block truncate font-mono text-xs text-muted-foreground">
       {entry.storeId}

@@ -7,7 +7,7 @@ import {
   type AuthProvidersSnapshot,
 } from "$lib/auth/providers";
 import { subscribeToLocalBrowserDataDeletion } from "$lib/runtime/browser-data";
-import { configuredVaultApplicationName } from "$app-wasm";
+import { configured_vault_application_name } from "$app-wasm";
 import { legalPageForId } from "$lib/content/legal";
 import type { VaultState } from "$lib/vault.svelte";
 
@@ -64,15 +64,15 @@ export function mountBrowserLifecycle({
   );
   void vault.init();
 
-  if (vault.runtimeConfig.exposeDebugHooks()) {
+  if (vault.runtimeConfig.expose_debug_hooks()) {
     const debugHooks: BrowserDebugHooks = {
       __nookVault: vault,
-      __nookConfiguredVaultApplication: configuredVaultApplicationName(),
+      __nookConfiguredVaultApplication: configured_vault_application_name(),
       __nookAuthProviders: {
         activeVaultScope,
         loadAuthProviders: () =>
           vault.enqueueStorage(() =>
-            vault.requireManager().loadAuthProviders(),
+            vault.requireManager().load_auth_providers_snapshot(),
           ),
         saveAuthProviders: (snapshot: AuthProvidersSnapshot) =>
           vault.enqueueStorage(() =>

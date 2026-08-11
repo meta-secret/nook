@@ -207,6 +207,16 @@ Do not create one-variant wrapper enums merely to avoid the spelling
 not to reject idiomatic Rust. Full contract and examples:
 [dynamic-skills/rust-coding.md](dynamic-skills/rust-coding.md).
 
+Exported Rust WASM functions and methods keep their authored Rust names in the
+generated JavaScript API. Do not use callable `wasm_bindgen(js_name = ...)`
+renames. TypeScript, JavaScript, and Svelte must import and call generated WASM
+functions by that same authored name. Do not restore a second name with an
+import or re-export alias. This includes imports through local facade modules.
+Direct Rust-to-TypeScript navigation is more important than TypeScript naming
+conventions. Property accessors, generated types, and imported JavaScript APIs
+are outside this callable-name rule. See
+[dynamic-skills/rust-wasm-name-coherence.md](dynamic-skills/rust-wasm-name-coherence.md).
+
 Rust-owned `Tsify`/WASM domain contracts must not override a field type with
 TypeScript `undefined`, `null`, or `void`. In particular, an `Option<T>` field
 plus `#[tsify(type = "... | undefined")]` is two representations of the same

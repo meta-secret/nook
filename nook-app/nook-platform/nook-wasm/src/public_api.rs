@@ -21,24 +21,24 @@ pub use companion_heuristics::*;
 mod shared_storage_grant;
 pub use shared_storage_grant::*;
 
-#[wasm_bindgen(js_name = isVaultSessionLocked)]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_vault_session_locked() -> bool {
     storage::session::is_vault_session_locked()
 }
 
-#[wasm_bindgen(js_name = setVaultSessionLocked)]
+#[wasm_bindgen]
 pub fn set_vault_session_locked(locked: bool) {
     storage::session::set_vault_session_locked(locked);
 }
 
-#[wasm_bindgen(js_name = isLocalFolderBackupSupported)]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_local_folder_backup_supported() -> bool {
     storage::local_folder::is_local_folder_backup_supported()
 }
 
-#[wasm_bindgen(js_name = chooseLocalFolderBackupDirectory)]
+#[wasm_bindgen]
 pub async fn choose_local_folder_backup_directory()
 -> Result<NookLocalFolderConfig, wasm_bindgen::JsError> {
     storage::local_folder::choose_local_folder_backup_directory()
@@ -46,19 +46,19 @@ pub async fn choose_local_folder_backup_directory()
         .map_err(Into::into)
 }
 
-#[wasm_bindgen(js_name = removeLocalFolderHandle)]
+#[wasm_bindgen]
 pub async fn remove_local_folder_handle(handle_id: String) -> Result<(), wasm_bindgen::JsError> {
     storage::local_folder::remove_local_folder_handle(Some(handle_id))
         .await
         .map_err(Into::into)
 }
 
-#[wasm_bindgen(js_name = generateId)]
+#[wasm_bindgen]
 pub fn generate_id() -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::generate_id()?.to_string())
 }
 
-#[wasm_bindgen(js_name = buildPasskeyPrfRequestOptions)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn build_passkey_prf_request_options(
     rp_id: &str,
@@ -68,7 +68,7 @@ pub fn build_passkey_prf_request_options(
     passkey_browser::request_options(rp_id, &credential_id, &prf_input)
 }
 
-#[wasm_bindgen(js_name = buildPasskeyCreationOptions)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn build_passkey_creation_options(
     rp_id: &str,
@@ -80,27 +80,27 @@ pub fn build_passkey_creation_options(
     passkey_browser::creation_options(rp_id, rp_name, passkey_label, &user_handle, &prf_input)
 }
 
-#[wasm_bindgen(js_name = buildPasskeyRecoveryRequestOptions)]
+#[wasm_bindgen]
 pub fn build_passkey_recovery_request_options(
     rp_id: &str,
 ) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
     passkey_browser::recovery_options(rp_id)
 }
 
-#[wasm_bindgen(js_name = generateSecretId)]
+#[wasm_bindgen]
 pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::generate_secret_id()?.to_string())
 }
 
 /// Cryptographically secure password generation — free function so the UI can
 /// call it while the vault manager is borrowed by an in-flight `&mut self` op.
-#[wasm_bindgen(js_name = defaultPasswordGenerationOptions)]
+#[wasm_bindgen]
 #[must_use]
 pub fn default_password_generation_options() -> nook_core::PasswordGenerationOptions {
     nook_core::PasswordGenerationOptions::default()
 }
 
-#[wasm_bindgen(js_name = generatePassword)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn generate_password(
     options: nook_core::PasswordGenerationOptions,
@@ -109,7 +109,7 @@ pub fn generate_password(
 }
 
 /// Generate an RFC 6238 TOTP code from a base32 secret via `nook-core`.
-#[wasm_bindgen(js_name = generateTotpCode)]
+#[wasm_bindgen]
 pub fn generate_totp_code(
     secret: &str,
     unix_seconds: u64,
@@ -121,7 +121,7 @@ pub fn generate_totp_code(
 }
 
 /// Verify a TOTP code against a base32 secret with a ±1-step window.
-#[wasm_bindgen(js_name = verifyTotpCode)]
+#[wasm_bindgen]
 pub fn verify_totp_code(
     secret: &str,
     code: &str,
@@ -165,31 +165,31 @@ fn authenticator_from_secret(
     })
 }
 
-#[wasm_bindgen(js_name = vaultPasswordMinLength)]
+#[wasm_bindgen]
 #[must_use]
 pub fn vault_password_min_length() -> u32 {
     u32::try_from(nook_core::vault_password_min_length()).unwrap_or(u32::MAX)
 }
 
-#[wasm_bindgen(js_name = vaultPasswordRecommendedMinLength)]
+#[wasm_bindgen]
 #[must_use]
 pub fn vault_password_recommended_min_length() -> u32 {
     u32::try_from(nook_core::vault_password_recommended_min_length()).unwrap_or(u32::MAX)
 }
 
-#[wasm_bindgen(js_name = isVaultPasswordLongEnough)]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_vault_password_long_enough(password: &str) -> bool {
     nook_core::is_vault_password_long_enough(password)
 }
 
-#[wasm_bindgen(js_name = isVaultPasswordRecommendedLength)]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_vault_password_recommended_length(password: &str) -> bool {
     nook_core::is_vault_password_recommended_length(password)
 }
 
-#[wasm_bindgen(js_name = hasGithubCredentials)]
+#[wasm_bindgen]
 #[must_use]
 pub fn has_github_credentials(pat: &str) -> bool {
     nook_core::has_provider_credentials(
@@ -200,7 +200,7 @@ pub fn has_github_credentials(pat: &str) -> bool {
     )
 }
 
-#[wasm_bindgen(js_name = hasOAuthCredentials)]
+#[wasm_bindgen]
 #[must_use]
 pub fn has_oauth_credentials(access_token: &str) -> bool {
     nook_core::has_provider_credentials(
@@ -211,7 +211,7 @@ pub fn has_oauth_credentials(access_token: &str) -> bool {
     )
 }
 
-#[wasm_bindgen(js_name = hasLocalFolderCredentials)]
+#[wasm_bindgen]
 #[must_use]
 pub fn has_local_folder_credentials(handle_id: &str) -> bool {
     nook_core::has_provider_credentials(
@@ -222,7 +222,7 @@ pub fn has_local_folder_credentials(handle_id: &str) -> bool {
     )
 }
 
-#[wasm_bindgen(js_name = providerStorageDetail)]
+#[wasm_bindgen]
 #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
 pub fn provider_storage_detail(
     provider: nook_core::StorageProviderData,
@@ -246,7 +246,7 @@ pub fn provider_storage_detail(
     Ok(nook_core::provider_storage_detail(&provider, &labels)?)
 }
 
-#[wasm_bindgen(js_name = localizeProviderLabel)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn localize_provider_label(
     label: &str,
@@ -266,7 +266,7 @@ pub fn localize_provider_label(
     nook_core::localize_provider_label(label, &labels)
 }
 
-#[wasm_bindgen(js_name = providerWasmArgs)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn provider_wasm_args(
     provider: nook_core::StorageProviderData,
@@ -274,7 +274,7 @@ pub fn provider_wasm_args(
     Ok(nook_core::storage_args_for_provider(&provider)?.into())
 }
 
-#[wasm_bindgen(js_name = activeVaultProviders)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn active_vault_providers(
     mut snapshot: nook_core::AuthProvidersSnapshotData,
@@ -288,7 +288,7 @@ pub fn active_vault_providers(
     Ok(snapshot)
 }
 
-#[wasm_bindgen(js_name = syncProvidersForActiveVault)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn sync_providers_for_active_vault(
     mut snapshot: nook_core::AuthProvidersSnapshotData,
@@ -303,7 +303,7 @@ pub fn sync_providers_for_active_vault(
     Ok(snapshot)
 }
 
-#[wasm_bindgen(js_name = localProviderForActiveVault)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn local_provider_for_active_vault(
     snapshot: nook_core::AuthProvidersSnapshotData,
@@ -319,7 +319,7 @@ pub fn local_provider_for_active_vault(
     ))
 }
 
-#[wasm_bindgen(js_name = providerLabelById)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn provider_label_by_id(
     snapshot: nook_core::AuthProvidersSnapshotData,
@@ -331,7 +331,7 @@ pub fn provider_label_by_id(
     ))
 }
 
-#[wasm_bindgen(js_name = providersVisibleWhileDeviceLocked)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn providers_visible_while_device_locked(
     mut snapshot: nook_core::AuthProvidersSnapshotData,
@@ -340,7 +340,7 @@ pub fn providers_visible_while_device_locked(
     snapshot
 }
 
-#[wasm_bindgen(js_name = oauthRemoteStorageRef)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn oauth_remote_storage_ref(
     config: nook_core::OAuthFileConfigData,
@@ -348,7 +348,7 @@ pub fn oauth_remote_storage_ref(
     NookOAuthRemoteStorageReference::new(nook_core::oauth_remote_storage_ref(&config))
 }
 
-#[wasm_bindgen(js_name = updateOauthRemoteRef)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn update_oauth_remote_ref(
     config: nook_core::OAuthFileConfigData,
@@ -357,7 +357,7 @@ pub fn update_oauth_remote_ref(
     NookOAuthRemoteConfigurationUpdate::new(nook_core::update_oauth_remote_ref(&config, remote_ref))
 }
 
-#[wasm_bindgen(js_name = stagedGithubRemoteStorageArgs)]
+#[wasm_bindgen]
 pub fn staged_github_remote_storage_args(
     github_pat: &str,
     github_repo: &str,
@@ -372,7 +372,7 @@ pub fn staged_github_remote_storage_args(
     ))
 }
 
-#[wasm_bindgen(js_name = stagedOauthRemoteStorageArgs)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn staged_oauth_remote_storage_args(
     oauth_file: nook_core::OAuthFileConfigData,
@@ -387,7 +387,7 @@ pub fn staged_oauth_remote_storage_args(
     ))
 }
 
-#[wasm_bindgen(js_name = stagedLocalRemoteStorageArgs)]
+#[wasm_bindgen]
 pub fn staged_local_remote_storage_args() -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
         nook_core::staged_remote_storage_args(
@@ -399,7 +399,7 @@ pub fn staged_local_remote_storage_args() -> Result<NookStagedStorageArgs, wasm_
     ))
 }
 
-#[wasm_bindgen(js_name = updateProviderSyncMetadata)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn update_provider_sync_metadata(
     mut snapshot: nook_core::AuthProvidersSnapshotData,
@@ -420,7 +420,7 @@ pub fn update_provider_sync_metadata(
     Ok(snapshot)
 }
 
-#[wasm_bindgen(js_name = setGoogleDriveProviderMode)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn set_google_drive_provider_mode(
     config: nook_core::OAuthFileConfigData,
@@ -429,7 +429,7 @@ pub fn set_google_drive_provider_mode(
     Ok(nook_core::set_google_drive_provider_mode(&config, mode))
 }
 
-#[wasm_bindgen(js_name = setICloudProviderMode)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn set_icloud_provider_mode(
     config: nook_core::OAuthFileConfigData,
@@ -438,7 +438,7 @@ pub fn set_icloud_provider_mode(
     Ok(nook_core::set_icloud_provider_mode(&config, mode))
 }
 
-#[wasm_bindgen(js_name = createICloudSharedStorageTarget)]
+#[wasm_bindgen]
 pub fn create_icloud_shared_storage_target(
     role: &str,
     zone_name: &str,
@@ -465,7 +465,7 @@ pub fn create_icloud_shared_storage_target(
     .to_storage_id()?)
 }
 
-#[wasm_bindgen(js_name = parseICloudSharedStorageTarget)]
+#[wasm_bindgen]
 pub fn parse_icloud_shared_storage_target(
     storage_target_id: &str,
 ) -> Result<nook_core::ICloudSharedTarget, wasm_bindgen::JsError> {
@@ -474,7 +474,7 @@ pub fn parse_icloud_shared_storage_target(
     )?)
 }
 
-#[wasm_bindgen(js_name = bindGoogleDriveSharedFolder)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn bind_google_drive_shared_folder(
     config: nook_core::OAuthFileConfigData,
@@ -485,7 +485,7 @@ pub fn bind_google_drive_shared_folder(
     )?)
 }
 
-#[wasm_bindgen(js_name = googleOAuthTokensToConfig)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn google_oauth_tokens_to_config(
     access_token: &str,
@@ -499,7 +499,7 @@ pub fn google_oauth_tokens_to_config(
     ))
 }
 
-#[wasm_bindgen(js_name = iCloudOAuthTokensToConfig)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn icloud_oauth_tokens_to_config(
     access_token: &str,
@@ -513,12 +513,12 @@ pub fn icloud_oauth_tokens_to_config(
     ))
 }
 
-#[wasm_bindgen(js_name = defaultVaultArchitecture)]
+#[wasm_bindgen]
 pub fn default_vault_architecture() -> NookVaultArchitecture {
     NookVaultArchitecture::from_core(nook_core::VaultArchitecture::default())
 }
 
-#[wasm_bindgen(js_name = validateVaultArchitecture)]
+#[wasm_bindgen]
 pub fn validate_vault_architecture(
     architecture: &NookVaultArchitecture,
 ) -> Result<NookVaultArchitecture, wasm_bindgen::JsError> {
@@ -527,7 +527,7 @@ pub fn validate_vault_architecture(
     Ok(NookVaultArchitecture::from_core(architecture))
 }
 
-#[wasm_bindgen(js_name = vaultArchitectureOnboardingType)]
+#[wasm_bindgen]
 pub fn vault_architecture_onboarding_type(
     architecture: &NookVaultArchitecture,
 ) -> Result<nook_core::OnboardingType, wasm_bindgen::JsError> {
@@ -536,7 +536,7 @@ pub fn vault_architecture_onboarding_type(
     Ok(architecture.onboarding_type())
 }
 
-#[wasm_bindgen(js_name = providerOnboardingType)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn provider_onboarding_type(
     provider: nook_core::StorageProviderData,
@@ -549,7 +549,7 @@ pub fn provider_onboarding_type(
     )?)
 }
 
-#[wasm_bindgen(js_name = vaultArchitectureCanCreateSecret)]
+#[wasm_bindgen]
 pub fn vault_architecture_can_create_secret(
     architecture: &NookVaultArchitecture,
 ) -> Result<bool, wasm_bindgen::JsError> {
@@ -558,7 +558,7 @@ pub fn vault_architecture_can_create_secret(
     Ok(architecture.can_create_secret())
 }
 
-#[wasm_bindgen(js_name = providerReplicationCapability)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn provider_replication_capability(
     provider: nook_core::StorageProviderData,
@@ -568,7 +568,7 @@ pub fn provider_replication_capability(
     ))
 }
 
-#[wasm_bindgen(js_name = providerOauthPresetForProvider)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
 pub fn provider_oauth_preset_for_provider(
@@ -581,7 +581,7 @@ pub fn provider_oauth_preset_for_provider(
         })
 }
 
-#[wasm_bindgen(js_name = providerOauthPresetForConfig)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
 pub fn provider_oauth_preset_for_config(
@@ -590,7 +590,7 @@ pub fn provider_oauth_preset_for_config(
     nook_core::ProviderOauthPreset::Preset(config.preset)
 }
 
-#[wasm_bindgen(js_name = validateProviderReplication)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn validate_provider_replication(
     provider: nook_core::StorageProviderData,
@@ -601,7 +601,7 @@ pub fn validate_provider_replication(
     ))
 }
 
-#[wasm_bindgen(js_name = providerSupportsReplication)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn provider_supports_replication(
     provider: nook_core::StorageProviderData,
@@ -613,7 +613,7 @@ pub fn provider_supports_replication(
     ))
 }
 
-#[wasm_bindgen(js_name = firstCompatibleProviderId)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn first_compatible_provider_id(
     snapshot: nook_core::AuthProvidersSnapshotData,
@@ -626,7 +626,7 @@ pub fn first_compatible_provider_id(
     ))
 }
 
-#[wasm_bindgen(js_name = firstCompatibleProviderIdPreferred)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn first_compatible_provider_id_preferred(
     snapshot: nook_core::AuthProvidersSnapshotData,
@@ -640,7 +640,7 @@ pub fn first_compatible_provider_id_preferred(
     ))
 }
 
-#[wasm_bindgen(js_name = sharedGrantProviderId)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn shared_grant_provider_id(
     snapshot: nook_core::AuthProvidersSnapshotData,
@@ -654,7 +654,7 @@ pub fn shared_grant_provider_id(
     ))
 }
 
-#[wasm_bindgen(js_name = enrollmentProviderForArchitecture)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn enrollment_provider_for_architecture(
     provider: nook_core::StorageProviderData,
@@ -671,7 +671,7 @@ pub fn enrollment_provider_for_architecture(
     ))
 }
 
-#[wasm_bindgen(js_name = enrollmentSharedProviderForArchitecture)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn enrollment_shared_provider_for_architecture(
     provider: nook_core::StorageProviderData,
@@ -690,7 +690,7 @@ pub fn enrollment_shared_provider_for_architecture(
     ))
 }
 
-#[wasm_bindgen(js_name = enrollmentICloudSharedProviderForArchitecture)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn enrollment_icloud_shared_provider_for_architecture(
     provider: nook_core::StorageProviderData,

@@ -57,8 +57,10 @@ export async function discoverStagedVaultStoreId(
             : { kind: LocalFolderHandleKind.Unselected };
         if (handle.kind !== LocalFolderHandleKind.Selected) return "";
         return await state.enqueueStorage(async () => {
-          state.requireManager().resetVaultSession();
-          await state.requireManager().syncLocalFolderProvider(handle.handleId);
+          state.requireManager().reset_vault_session();
+          await state
+            .requireManager()
+            .sync_local_folder_provider_js(handle.handleId);
           return state.requireManager().vaultStoreId.trim();
         });
       }
@@ -71,7 +73,11 @@ export async function discoverStagedVaultStoreId(
         await state.enqueueStorage(() =>
           state
             .requireManager()
-            .discoverRemoteVaultStoreId(storageMode, accessToken, remoteRef),
+            .discover_remote_vault_store_id(
+              storageMode,
+              accessToken,
+              remoteRef,
+            ),
         )
       ).trim();
     })();
@@ -86,7 +92,7 @@ export async function discoverStagedVaultStoreId(
         try {
           state.recordExistingVaultRecovery(
             await state.enqueueStorage(() =>
-              state.requireManager().vaultRecoveryOptions(),
+              state.requireManager().vault_recovery_options(),
             ),
           );
         } catch {

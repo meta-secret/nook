@@ -88,7 +88,7 @@ export async function handleWebsitePasskeyOperation({
       }
       await openVault(openArgs)
       try {
-        const registration = await activeManager.registerWebsitePasskey(
+        const registration = await activeManager.register_website_passkey(
           payload.requestJson,
           () => {
             const activityArgs: WebsitePasskeyRequestActivityArgs = {
@@ -136,7 +136,7 @@ export async function handleWebsitePasskeyOperation({
       }
       await openVault(openArgs)
       try {
-        const assertion = await activeManager.assertWebsitePasskey(
+        const assertion = await activeManager.assert_website_passkey(
           payload.requestJson,
           () => {
             const activityArgs: WebsitePasskeyRequestActivityArgs = {

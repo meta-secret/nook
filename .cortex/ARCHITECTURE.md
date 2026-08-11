@@ -410,7 +410,7 @@ this crate.
 
 ```
 [Svelte] → WASM-built passkey options → navigator.credentials.get()
-         → NookVaultManager.unlockDeviceIdentity(prf_output)
+         → NookVaultManager.unlock_device_identity(prf_output)
               → HKDF-SHA256 → AES-256-GCM unwrap of device identity
          → VaultState.loadDb()
          → NookVaultManager.connect(mode, pat)
@@ -435,7 +435,7 @@ this crate.
 ### Search
 
 ```text
-[Svelte] → prepareSecretSearch() on the first non-empty query
+[Svelte] → prepare_secret_search_js() on the first non-empty query
          → load + decrypt IndexedDB secret_search_v2:{store_id}:{bucket}
          → verify authenticated buckets and reconcile by ciphertext digest
            (decrypt new, changed, or invalid rows only)

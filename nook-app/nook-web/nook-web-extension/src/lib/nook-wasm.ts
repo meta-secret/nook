@@ -6,21 +6,21 @@ import {
 } from './passkey-session-response'
 import {
   default as initNookWasm,
-  buildPasskeyCreationOptions,
-  buildPasskeyPrfRequestOptions,
-  buildPasskeyRecoveryRequestOptions,
-  configureVaultApplication,
-  defaultPasswordGenerationOptions as wasmDefaultPasswordGenerationOptions,
-  defaultTranslationCatalog as wasmDefaultTranslationCatalog,
+  build_passkey_creation_options,
+  build_passkey_prf_request_options,
+  build_passkey_recovery_request_options,
+  configure_vault_application,
+  default_password_generation_options,
+  default_translation_catalog,
   DeviceMode,
   DeviceProtectionStatus,
-  generatePassword as wasmGeneratePassword,
-  get_translation_catalog as wasmGetTranslationCatalog,
+  generate_password,
+  get_translation_catalog,
   NookAppLocaleParse,
-  parseAppLocale as wasmParseAppLocale,
-  resolveAppLocaleFromTags as wasmResolveAppLocaleFromTags,
-  resolveTranslationCatalog as wasmResolveTranslationCatalog,
-  supportedAppLocaleCode,
+  parse_app_locale,
+  resolve_app_locale_from_tags,
+  resolve_translation_catalog,
+  supported_app_locale_code,
   VaultApplication,
   type NookAppLocale,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -75,7 +75,7 @@ export function ensureNookWasm() {
     return extensionWasmStartup.operation
   }
   const operation = initNookWasm().then((value) => {
-    configureVaultApplication(VaultApplication.Extension)
+    configure_vault_application(VaultApplication.Extension)
     return value
   })
   extensionWasmStartup = {
@@ -454,7 +454,7 @@ export async function createExtensionPasskey(
     payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
   const setup = decodePasskeySetupResponse(await sessionResponse(beginRequest))
-  const creationOptions = buildPasskeyCreationOptions(
+  const creationOptions = build_passkey_creation_options(
     '',
     'Nook Extension',
     passkeyLabel,
@@ -462,7 +462,7 @@ export async function createExtensionPasskey(
     new Uint8Array(setup.prfInput),
   )
   const created = await createPasskey(creationOptions)
-  const prfRequest = buildPasskeyPrfRequestOptions(
+  const prfRequest = build_passkey_prf_request_options(
     '',
     new Uint8Array(credentialId(created)),
     new Uint8Array(setup.prfInput),
@@ -485,7 +485,7 @@ export async function createExtensionPasskey(
 
 export async function recoverExtensionPasskey(): Promise<ExtensionDeviceProtectionResult> {
   await ensureNookWasm()
-  const options = buildPasskeyRecoveryRequestOptions('')
+  const options = build_passkey_recovery_request_options('')
   const credential = await getPasskey(options)
   const request: ExtensionRecoverPasskeyRequest = {
     type: ExtensionRuntimeRequestType.RecoverPasskey,
@@ -509,7 +509,7 @@ export async function unlockExtensionPasskey(): Promise<ExtensionDeviceProtectio
   const material = decodePasskeyUnlockResponse(
     await sessionResponse(optionsRequest),
   )
-  const options = buildPasskeyPrfRequestOptions(
+  const options = build_passkey_prf_request_options(
     '',
     new Uint8Array(material.credentialId),
     new Uint8Array(material.prfInput),
@@ -550,7 +550,7 @@ export async function unlockExtensionPin(
 
 export async function generateSuggestedPassword(): Promise<string> {
   await ensureNookWasm()
-  return wasmGeneratePassword(wasmDefaultPasswordGenerationOptions())
+  return generate_password(default_password_generation_options())
 }
 
 export async function parseStoredAppLocale(
@@ -560,12 +560,12 @@ export async function parseStoredAppLocale(
   if (input.kind === StoredAppLocaleInputKind.Missing) {
     return { kind: StoredAppLocaleParseKind.Unsupported }
   }
-  const parsed = wasmParseAppLocale(input.value)
+  const parsed = parse_app_locale(input.value)
   return parsed === NookAppLocaleParse.Unsupported
     ? { kind: StoredAppLocaleParseKind.Unsupported }
     : {
         kind: StoredAppLocaleParseKind.Supported,
-        locale: supportedAppLocaleCode(parsed) as NookAppLocale,
+        locale: supported_app_locale_code(parsed) as NookAppLocale,
       }
 }
 
@@ -573,7 +573,7 @@ export async function resolveAppLocaleFromTags(
   tags: string[],
 ): Promise<NookAppLocale> {
   await ensureNookWasm()
-  return wasmResolveAppLocaleFromTags(tags) as NookAppLocale
+  return resolve_app_locale_from_tags(tags) as NookAppLocale
 }
 
 export async function getResolvedTranslationCatalog(
@@ -582,8 +582,8 @@ export async function getResolvedTranslationCatalog(
   await ensureNookWasm()
   const catalog = readWasmCatalog(locale)
   return catalog.kind === WasmCatalogReadKind.Available
-    ? wasmResolveTranslationCatalog(locale, catalog.catalog)
-    : wasmDefaultTranslationCatalog(locale)
+    ? resolve_translation_catalog(locale, catalog.catalog)
+    : default_translation_catalog(locale)
 }
 
 enum WasmCatalogReadKind {
@@ -599,7 +599,7 @@ function readWasmCatalog(locale: NookAppLocale): WasmCatalogRead {
   try {
     return {
       kind: WasmCatalogReadKind.Available,
-      catalog: wasmGetTranslationCatalog(locale),
+      catalog: get_translation_catalog(locale),
     }
   } catch {
     return { kind: WasmCatalogReadKind.Unavailable }

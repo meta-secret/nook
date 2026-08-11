@@ -524,7 +524,7 @@ export async function adoptExtensionIdentity(
 ): Promise<void> {
   const { manager, request } = args;
   const nonce = request.nonce;
-  const recipientPublicKey = manager.beginExtensionIdentityHandoff();
+  const recipientPublicKey = manager.begin_extension_identity_handoff();
   const handoffPayload = {
     recipientPublicKey,
     nonce,
@@ -553,7 +553,7 @@ export async function adoptExtensionIdentity(
   const { envelope, nextNonce } = await requestIdentityEnvelope(
     requestIdentityEnvelopeArgs,
   );
-  await manager.finishExtensionIdentityHandoff(
+  await manager.finish_extension_identity_handoff(
     envelope,
     nonce,
     request.deviceId,

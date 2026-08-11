@@ -24,7 +24,7 @@ const TEST_SYNC_PROVIDER_ID: &str = "__test_provider__";
 #[wasm_bindgen]
 impl NookPendingSyncConflict {
     /// E2E/dev seam for rendering a Rust-owned content conflict without storage I/O.
-    #[wasm_bindgen(js_name = forTestingContent)]
+    #[wasm_bindgen]
     pub fn for_testing_content(
         provider_label: String,
         local_version: u32,
@@ -45,7 +45,7 @@ impl NookPendingSyncConflict {
     }
 
     /// E2E/dev seam for rendering a Rust-owned store-id conflict without storage I/O.
-    #[wasm_bindgen(js_name = forTestingStoreId)]
+    #[wasm_bindgen]
     pub fn for_testing_store_id(
         provider_label: String,
         local_store_id: String,
@@ -65,7 +65,7 @@ impl NookPendingSyncConflict {
         )
     }
 
-    #[wasm_bindgen(js_name = content)]
+    #[wasm_bindgen]
     #[allow(clippy::too_many_arguments)]
     pub fn content(
         provider_id: String,
@@ -95,7 +95,7 @@ impl NookPendingSyncConflict {
         }
     }
 
-    #[wasm_bindgen(js_name = contentFromVaults)]
+    #[wasm_bindgen]
     #[allow(clippy::too_many_arguments)]
     pub fn content_from_vaults(
         provider_id: String,
@@ -125,7 +125,7 @@ impl NookPendingSyncConflict {
         }
     }
 
-    #[wasm_bindgen(js_name = storeId)]
+    #[wasm_bindgen]
     #[allow(clippy::too_many_arguments)]
     pub fn store_id(
         provider_id: String,
@@ -160,7 +160,7 @@ impl NookPendingSyncConflict {
     /// Keep the pending-provider sentinel inside Rust so the web layer does not
     /// duplicate a value that controls whether provider setup resumes after the
     /// user chooses a recovery action.
-    #[wasm_bindgen(js_name = pendingStoreId)]
+    #[wasm_bindgen]
     #[allow(clippy::too_many_arguments)]
     pub fn pending_store_id(
         provider_label: String,
@@ -238,7 +238,7 @@ impl NookPendingSyncConflict {
         self.conflict.kind()
     }
 
-    #[wasm_bindgen(js_name = contentLocalVersion)]
+    #[wasm_bindgen]
     pub fn content_local_version(&self) -> Result<u32, wasm_bindgen::JsError> {
         let nook_core::VaultSyncConflict::Content(details) = &self.conflict else {
             return Err(wasm_bindgen::JsError::new(
@@ -250,7 +250,7 @@ impl NookPendingSyncConflict {
             .map_err(|_| wasm_bindgen::JsError::new("Local vault version exceeds the web limit."))
     }
 
-    #[wasm_bindgen(js_name = contentRemoteVersion)]
+    #[wasm_bindgen]
     pub fn content_remote_version(&self) -> Result<u32, wasm_bindgen::JsError> {
         let nook_core::VaultSyncConflict::Content(details) = &self.conflict else {
             return Err(wasm_bindgen::JsError::new(
@@ -262,7 +262,7 @@ impl NookPendingSyncConflict {
             .map_err(|_| wasm_bindgen::JsError::new("Remote vault version exceeds the web limit."))
     }
 
-    #[wasm_bindgen(js_name = localStoreId)]
+    #[wasm_bindgen]
     pub fn local_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.conflict {
             nook_core::VaultSyncConflict::StoreId(details) => Ok(details.local_store_id.clone()),
@@ -272,7 +272,7 @@ impl NookPendingSyncConflict {
         }
     }
 
-    #[wasm_bindgen(js_name = remoteStoreId)]
+    #[wasm_bindgen]
     pub fn remote_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.conflict {
             nook_core::VaultSyncConflict::StoreId(details) => Ok(details.remote_store_id.clone()),
@@ -409,7 +409,7 @@ pub struct NookSecurityConflict {
 
 #[wasm_bindgen]
 impl NookSecurityConflict {
-    #[wasm_bindgen(js_name = fromDisplayParts)]
+    #[wasm_bindgen]
     pub fn from_display_parts(events: Vec<String>, reasons: Vec<String>) -> Self {
         Self { events, reasons }
     }

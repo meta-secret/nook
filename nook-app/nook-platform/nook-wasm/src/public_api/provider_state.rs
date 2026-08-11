@@ -7,7 +7,7 @@ pub enum NookStoredOAuthFileConfigurationState {
     Configured,
 }
 
-#[wasm_bindgen(js_name = storedOAuthFileConfigurationState)]
+#[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn stored_oauth_file_configuration_state(
@@ -43,7 +43,7 @@ impl From<nook_core::ExistingVaultProviderReadiness> for NookExistingVaultProvid
     }
 }
 
-#[wasm_bindgen(js_name = existingVaultProviderReadiness)]
+#[wasm_bindgen]
 #[must_use]
 pub fn existing_vault_provider_readiness(
     provider_type: nook_core::StorageProviderType,
@@ -95,7 +95,7 @@ impl NookOAuthAccessToken {
     }
 }
 
-#[wasm_bindgen(js_name = oauthAccessToken)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
 pub fn oauth_access_token(config: nook_core::OAuthFileConfigData) -> NookOAuthAccessToken {
@@ -109,7 +109,7 @@ pub fn oauth_access_token(config: nook_core::OAuthFileConfigData) -> NookOAuthAc
     }
 }
 
-#[wasm_bindgen(js_name = missingOAuthAccessToken)]
+#[wasm_bindgen]
 #[must_use]
 pub fn missing_oauth_access_token() -> NookOAuthAccessToken {
     NookOAuthAccessToken(NookOAuthAccessTokenValue::Missing)
@@ -290,13 +290,13 @@ impl NookGithubPatHint {
     }
 }
 
-#[wasm_bindgen(js_name = localVaultStorageArgs)]
+#[wasm_bindgen]
 #[must_use]
 pub fn local_vault_storage_args() -> NookStorageConnectArgs {
     nook_core::StorageConnectArgs::local().into()
 }
 
-#[wasm_bindgen(js_name = authenticatedVaultStorageArgs)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn authenticated_vault_storage_args(
     provider: nook_core::StorageProviderData,
@@ -304,7 +304,7 @@ pub fn authenticated_vault_storage_args(
     Ok(nook_core::storage_args_for_provider(&provider)?.into())
 }
 
-#[wasm_bindgen(js_name = draftGithubStorageArgs)]
+#[wasm_bindgen]
 #[must_use]
 pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookStorageConnectArgs {
     nook_core::draft_storage_args(
@@ -319,7 +319,7 @@ pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookSto
     .into()
 }
 
-#[wasm_bindgen(js_name = draftOauthStorageArgs)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
 pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookStorageConnectArgs {
@@ -336,7 +336,7 @@ pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookS
     .into()
 }
 
-#[wasm_bindgen(js_name = draftLocalStorageArgs)]
+#[wasm_bindgen]
 #[must_use]
 pub fn draft_local_storage_args() -> NookStorageConnectArgs {
     nook_core::draft_storage_args(
@@ -352,7 +352,7 @@ pub fn draft_local_storage_args() -> NookStorageConnectArgs {
 }
 
 /// Return a masked GitHub PAT hint without exposing the full credential.
-#[wasm_bindgen(js_name = maskGithubPatHint)]
+#[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn mask_github_pat_hint(pat: nook_core::StoredGithubPat) -> NookGithubPatHint {

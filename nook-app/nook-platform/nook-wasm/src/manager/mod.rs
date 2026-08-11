@@ -7,7 +7,7 @@
 //! - [`connect`] — `connect` / `connect_fresh` / `assess_vault_connect` /
 //!   genesis initialisation.
 //! - [`sync`] — `sync_vault_from_storage` (periodic poll, mode-aware).
-//! - [`password`] — set / remove / verify / `connectWithPassword`.
+//! - [`password`] — set / remove / verify / `connect_with_password`.
 //! - [`multi_device`] — `init_device`, `list_pending_joins`,
 //!   `list_vault_members`, request/approve/enroll flows.
 //! - [`secrets`] — `add_secret` / `delete_secret`, search, password & id
@@ -61,7 +61,7 @@ use zeroize::Zeroize;
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    #[wasm_bindgen(js_name = takeEventLogSyncIssue)]
+    #[wasm_bindgen]
     pub fn take_event_log_sync_issue(&mut self) -> NookEventLogSyncIssueResult {
         NookEventLogSyncIssueResult(std::mem::replace(
             &mut self.event_log_sync_issue,
@@ -94,7 +94,7 @@ impl NookVaultManager {
         NookVaultArchitecture::from_core(self.vault.architecture.clone())
     }
 
-    #[wasm_bindgen(js_name = setVaultArchitecture)]
+    #[wasm_bindgen]
     pub fn set_vault_architecture(
         &mut self,
         architecture: &NookVaultArchitecture,
@@ -118,7 +118,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    #[wasm_bindgen(js_name = canCreateSecretForVaultArchitecture)]
+    #[wasm_bindgen]
     pub fn can_create_secret_for_vault_architecture(&self) -> bool {
         self.vault
             .architecture
@@ -141,7 +141,7 @@ impl NookVaultManager {
         }
     }
 
-    #[wasm_bindgen(js_name = setVaultName)]
+    #[wasm_bindgen]
     pub async fn set_vault_name(&mut self, name: &str) -> Result<(), JsError> {
         let previous_name = self.vault.vault_name.clone();
         let previous_projection = if self.vault.last_synced_content.trim().is_empty() {
@@ -200,7 +200,7 @@ impl NookVaultManager {
 
     /// Drop in-memory vault session state when switching storage providers.
     /// Device identity and configured storage credentials are preserved.
-    #[wasm_bindgen(js_name = "resetVaultSession")]
+    #[wasm_bindgen]
     pub fn reset_vault_session(&mut self) {
         self.vault.reset();
         self.storage.github_root_empty = false;
@@ -215,7 +215,7 @@ impl NookVaultManager {
 
     /// Zeroize the active session and clear every Nook-owned browser database.
     /// Remote sync replicas and platform authenticator credentials are not touched.
-    #[wasm_bindgen(js_name = "deleteLocalBrowserData")]
+    #[wasm_bindgen]
     pub async fn delete_local_browser_data(&mut self) -> Result<(), JsError> {
         self.reset_vault_session();
         self.storage.access_token.zeroize();

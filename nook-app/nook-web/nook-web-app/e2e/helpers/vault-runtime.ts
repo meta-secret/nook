@@ -26,7 +26,7 @@ export async function clearBrowserVault(page: Page) {
           waitForStorageChain(): Promise<void>
           enqueueStorage<T>(operation: () => Promise<T>): Promise<T>
           hasManager: boolean
-          requireManager(): { deleteLocalBrowserData(): Promise<void> }
+          requireManager(): { delete_local_browser_data(): Promise<void> }
         }
       }
     ).__nookVault
@@ -35,7 +35,7 @@ export async function clearBrowserVault(page: Page) {
     await vault.waitForStorageChain()
     if (!vault.hasManager) return false
     const manager = vault.requireManager()
-    await vault.enqueueStorage(() => manager.deleteLocalBrowserData())
+    await vault.enqueueStorage(() => manager.delete_local_browser_data())
     return true
   })
   await page.evaluate(

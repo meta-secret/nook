@@ -1,28 +1,28 @@
 use super::wasm_bindgen;
 
-#[wasm_bindgen(js_name = defaultGithubRepo)]
+#[wasm_bindgen]
 #[must_use]
 pub fn default_github_repo() -> String {
     nook_core::DEFAULT_GITHUB_REPO_NAME.to_owned()
 }
 
-#[wasm_bindgen(js_name = defaultDriveBackupName)]
+#[wasm_bindgen]
 #[must_use]
 pub fn default_drive_backup_name() -> String {
     nook_core::DEFAULT_DRIVE_BACKUP_NAME.to_owned()
 }
 
-#[wasm_bindgen(js_name = formatDriveStorageRef)]
+#[wasm_bindgen]
 pub fn format_drive_storage_ref(file_id: &str, file_name: &str) -> String {
     nook_core::format_drive_storage_ref_raw(file_id, file_name)
 }
 
-#[wasm_bindgen(js_name = formatNewDriveStorageRef)]
+#[wasm_bindgen]
 pub fn format_new_drive_storage_ref(file_name: &str) -> String {
     nook_core::format_drive_storage_ref_raw("", file_name)
 }
 
-#[wasm_bindgen(js_name = wasmStorageModeForProvider)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn wasm_storage_mode_for_provider(
     provider_type: nook_core::StorageProviderType,
@@ -35,7 +35,7 @@ pub fn wasm_storage_mode_for_provider(
     )
 }
 
-#[wasm_bindgen(js_name = providerDefaultLabel)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn provider_default_label(
     provider_type: nook_core::StorageProviderType,
@@ -49,7 +49,7 @@ pub fn provider_default_label(
     ))
 }
 
-#[wasm_bindgen(js_name = providerDefaultLabelWithoutDetail)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn provider_default_label_without_detail(
     provider_type: nook_core::StorageProviderType,
@@ -62,7 +62,7 @@ pub fn provider_default_label_without_detail(
     ))
 }
 
-#[wasm_bindgen(js_name = stagedLocalProviderLabel)]
+#[wasm_bindgen]
 pub fn staged_local_provider_label(
     provider_type: nook_core::StorageProviderType,
 ) -> Result<String, wasm_bindgen::JsError> {
@@ -73,7 +73,7 @@ pub fn staged_local_provider_label(
     ))
 }
 
-#[wasm_bindgen(js_name = stagedGithubProviderLabel)]
+#[wasm_bindgen]
 pub fn staged_github_provider_label(github_repo: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::sync_provider_default_label(
         nook_core::StorageProviderType::Github,
@@ -82,7 +82,7 @@ pub fn staged_github_provider_label(github_repo: &str) -> Result<String, wasm_bi
     ))
 }
 
-#[wasm_bindgen(js_name = stagedConfiguredOauthProviderLabel)]
+#[wasm_bindgen]
 pub fn staged_configured_oauth_provider_label(
     oauth_file_name: &str,
     oauth_preset: nook_core::OauthFilePreset,
@@ -94,7 +94,7 @@ pub fn staged_configured_oauth_provider_label(
     ))
 }
 
-#[wasm_bindgen(js_name = stagedUnconfiguredOauthProviderLabel)]
+#[wasm_bindgen]
 pub fn staged_unconfigured_oauth_provider_label() -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::sync_provider_default_label(
         nook_core::StorageProviderType::OauthFile,

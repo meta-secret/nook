@@ -15,8 +15,8 @@
   import { Button } from '$lib/components/ui/button'
   import { buildEnrollmentLink, getEnrollmentLinkBase } from '$lib/enrollment/code'
   import {
-    isVaultPasswordLongEnough,
-    peekEnrollmentIssuedAt,
+    is_vault_password_long_enough,
+    peek_enrollment_issued_at,
     type NookPasswordEntrySummary,
     type PasswordEntryId,
   } from '$app-wasm'
@@ -94,7 +94,7 @@
 
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return ''
-    return peekEnrollmentIssuedAt(enrollmentCode)
+    return peek_enrollment_issued_at(enrollmentCode)
   })
   const enrollmentLink = $derived.by(() => {
     if (!enrollmentCode) return ''
@@ -150,7 +150,7 @@
       localError = vault.t(I18N_KEYS.VaultPasswordsEnterLabelError)
       return
     }
-    if (!isVaultPasswordLongEnough(passwordInput)) {
+    if (!is_vault_password_long_enough(passwordInput)) {
       localError = vault.t(I18N_KEYS.VaultPasswordsMinLengthError)
       return
     }
@@ -170,7 +170,7 @@
   async function submitRotatePassword() {
     localError = ''
     if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
-    if (!isVaultPasswordLongEnough(passwordInput)) {
+    if (!is_vault_password_long_enough(passwordInput)) {
       localError = vault.t(I18N_KEYS.VaultPasswordsMinLengthError)
       return
     }

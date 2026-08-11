@@ -140,7 +140,9 @@ flowchart TD
 
 No automatic merge of secret records at this stage.
 
-WASM export: `compareVaultSync(local, remote)` for compare-only; `reconcileVaultBlobs(local, remote, revision)` returns post-reconcile blobs and action label.
+WASM export: `compare_vault_sync(local, remote)` for compare-only. Whole-blob
+reconciliation is retained only as historical context; current replication
+uses the event-log path.
 
 ---
 
@@ -200,11 +202,11 @@ Device-key multi-device flows (`auth:`, `joins:`, `members:`) continue alongside
 
 After any local vault save (secret CRUD, join approve/deny, device roster change — phased rollout), the web layer pushes to **all connected sync providers**:
 
-1. Read the local projection cache from `vault:{store_id}` (`readLocalVaultYaml`).
+1. Read the local projection cache from `vault:{store_id}` (`read_local_vault_yaml`).
 2. For each non-local provider in `nook_auth`: fan out via the live event-log path
    (`fanOutSyncToProviders` in `nook-web-shared` → core/wasm sync). Whole-blob
-   `reconcileVaultBlobs` is retained only as historical/local-projection context;
-   see [vault-event-log.md](vault-event-log.md).
+   reconciliation is retained only as historical/local-projection context; see
+   [vault-event-log.md](vault-event-log.md).
 3. Background fan-out is **quiet** (no per-provider toast spam); status bar shows `Syncing to {provider}…`.
 
 Background **pull** (sync timer, `PendingJoinsBanner` refresh) reconciles every sync provider into the local vault, then `hydrateMultiDeviceState()` reads pending `joins:` from the unlocked session.
@@ -224,8 +226,8 @@ Manual **Sync all** in the status bar runs the same sync loop with user-visible 
 | `vault_version` in YAML read/write | Done (#61) |
 | `compare_vault_sync` in `nook-core` | Done (#61) |
 | In-memory sync replication tests (`vault_sync_store`) | Done |
-| `compareVaultSync` WASM export | Done (#61) |
-| `reconcileVaultBlobs` WASM export (apply in core) | Done |
+| `compare_vault_sync` WASM export | Done (#61) |
+| Historical whole-blob reconciliation (apply in core) | Superseded by event-log replication |
 | Version increment on save | Done (#61) |
 | Local-first login gate | Done (#71, Phase 1) |
 | Sync providers in Settings | Done (#72, Phase 2) |

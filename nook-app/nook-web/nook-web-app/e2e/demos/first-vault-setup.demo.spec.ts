@@ -24,6 +24,7 @@ test('open a new local vault without an empty-device sync error', async ({
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  await expect(page.getByTestId('header-lock-vault-btn')).toBeEnabled()
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   await flushNookLogPersistQueue(page)

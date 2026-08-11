@@ -5,9 +5,9 @@ import initNookWasm, {
   OnboardingType,
   ReplicationType,
   VaultType,
-  enrollmentICloudSharedProviderForArchitecture,
-  enrollmentProviderForArchitecture,
-  enrollmentSharedProviderForArchitecture,
+  enrollment_icloud_shared_provider_for_architecture,
+  enrollment_provider_for_architecture,
+  enrollment_shared_provider_for_architecture,
 } from '$app-wasm'
 import {
   configuredOAuthFile,
@@ -25,18 +25,18 @@ import {
   type StorageProvider,
 } from '$lib/auth/providers'
 import {
-  canCreateSecret,
+  vault_architecture_can_create_secret,
   CompatibleProviderPreferenceKind,
   CompatibleProviderSelectionKind,
-  defaultVaultArchitecture,
+  default_vault_architecture,
   firstCompatibleProvider,
-  onboardingType,
+  vault_architecture_onboarding_type,
   providerCapabilityLabelKey,
   ProviderCapabilityLabelKey,
-  providerOnboardingType,
-  providerReplicationCapability,
-  providerSupportsReplication,
-  validateProviderReplication,
+  provider_onboarding_type,
+  provider_replication_capability,
+  provider_supports_replication,
+  validate_provider_replication,
   validateVaultArchitecture,
   type VaultArchitectureDraft,
 } from '$lib/vault/architecture-model'
@@ -118,7 +118,7 @@ function privateICloudProvider(): StorageProvider {
 
 describe('vault architecture adapter', () => {
   test('defaults select the simple personal standard vault', () => {
-    const architecture = defaultVaultArchitecture()
+    const architecture = default_vault_architecture()
     expect({
       device_mode: architecture.device_mode,
       vault_type: architecture.vault_type,
@@ -128,7 +128,7 @@ describe('vault architecture adapter', () => {
       vault_type: VaultType.Simple,
       replication_type: ReplicationType.Personal,
     })
-    expect(onboardingType(architecture)).toBe(
+    expect(vault_architecture_onboarding_type(architecture)).toBe(
       OnboardingType.PersonalCredentialTransfer,
     )
   })
@@ -159,9 +159,9 @@ describe('vault architecture adapter', () => {
   })
 
   test('private provider enrollment exposes the credential-transfer mode', () => {
-    const enrollmentProvider = enrollmentProviderForArchitecture(
+    const enrollmentProvider = enrollment_provider_for_architecture(
       googleDriveProvider(),
-      defaultVaultArchitecture(),
+      default_vault_architecture(),
     )
 
     expect(enrollmentProvider.onboardingType).toBe(
@@ -187,8 +187,8 @@ describe('vault architecture adapter', () => {
     expect(architecture.sentinel_threshold).toBe(2)
     expect(architecture.sentinel_required_participants).toBe(3)
     expect(architecture.sentinel_ready_participants).toBe(1)
-    expect(canCreateSecret(architecture)).toBe(false)
-    expect(onboardingType(architecture)).toBe(
+    expect(vault_architecture_can_create_secret(architecture)).toBe(false)
+    expect(vault_architecture_onboarding_type(architecture)).toBe(
       OnboardingType.SharedProviderGrant,
     )
   })
@@ -223,13 +223,15 @@ describe('vault architecture adapter', () => {
   })
 
   test('provider matrix allows shared Google Drive and rejects shared GitHub', () => {
-    const driveCapability = providerReplicationCapability(googleDriveProvider())
+    const driveCapability = provider_replication_capability(
+      googleDriveProvider(),
+    )
     expect(driveCapability.providerType).toBe('oauth-file')
     expect(driveCapability.oauthPreset).toBe('google-drive')
     expect(driveCapability.supportsPersonal).toBe(true)
     expect(driveCapability.supportsShared).toBe(true)
     expect(driveCapability.sharedJoinerIdentity).toBe('email')
-    const validatedCapability = validateProviderReplication(
+    const validatedCapability = validate_provider_replication(
       googleDriveProvider(),
       ReplicationType.Shared,
     )
@@ -240,7 +242,7 @@ describe('vault architecture adapter', () => {
     expect(validatedCapability.sharedJoinerIdentity).toBe('email')
 
     expect(() =>
-      validateProviderReplication(githubProvider(), ReplicationType.Shared),
+      validate_provider_replication(githubProvider(), ReplicationType.Shared),
     ).toThrow(
       /errors\.validation\.unsupported_provider_replication:github::shared/,
     )
@@ -257,10 +259,10 @@ describe('vault architecture adapter', () => {
     expect(providerCapabilityLabelKey(drive)).toBe(
       ProviderCapabilityLabelKey.PersonalShared,
     )
-    expect(providerSupportsReplication(github, ReplicationType.Shared)).toBe(
+    expect(provider_supports_replication(github, ReplicationType.Shared)).toBe(
       false,
     )
-    expect(providerSupportsReplication(drive, ReplicationType.Shared)).toBe(
+    expect(provider_supports_replication(drive, ReplicationType.Shared)).toBe(
       true,
     )
     expect(
@@ -306,13 +308,13 @@ describe('vault architecture adapter', () => {
     const sharedICloud = sharedICloudProvider()
 
     expect(
-      providerSupportsReplication(privateICloud, ReplicationType.Personal),
+      provider_supports_replication(privateICloud, ReplicationType.Personal),
     ).toBe(true)
     expect(
-      providerSupportsReplication(privateICloud, ReplicationType.Shared),
+      provider_supports_replication(privateICloud, ReplicationType.Shared),
     ).toBe(false)
     expect(
-      providerSupportsReplication(sharedICloud, ReplicationType.Shared),
+      provider_supports_replication(sharedICloud, ReplicationType.Shared),
     ).toBe(true)
     expect(
       firstCompatibleProvider({
@@ -338,7 +340,7 @@ describe('vault architecture adapter', () => {
     const provider = googleDriveProvider()
 
     expect(() =>
-      enrollmentSharedProviderForArchitecture(
+      enrollment_shared_provider_for_architecture(
         provider,
         architecture,
         'joiner@example.com',
@@ -346,7 +348,7 @@ describe('vault architecture adapter', () => {
       ),
     ).toThrow(/shared_storage_target_required/)
 
-    const enrollmentProvider = enrollmentSharedProviderForArchitecture(
+    const enrollmentProvider = enrollment_shared_provider_for_architecture(
       provider,
       architecture,
       'joiner@example.com',
@@ -360,7 +362,7 @@ describe('vault architecture adapter', () => {
   })
 
   test('shared Drive provider mode overrides personal credential transfer', () => {
-    const architecture = defaultVaultArchitecture()
+    const architecture = default_vault_architecture()
     const baseProvider = googleDriveProvider()
     const baseConfiguration = baseProvider.oauthFile
     if (!isConfiguredOAuthFile(baseConfiguration)) {
@@ -375,10 +377,10 @@ describe('vault architecture adapter', () => {
       }),
     }
 
-    expect(providerOnboardingType(provider, architecture)).toBe(
+    expect(provider_onboarding_type(provider, architecture)).toBe(
       OnboardingType.SharedProviderGrant,
     )
-    const enrollmentProvider = enrollmentSharedProviderForArchitecture(
+    const enrollmentProvider = enrollment_shared_provider_for_architecture(
       provider,
       architecture,
       'joiner@example.com',
@@ -397,20 +399,21 @@ describe('vault architecture adapter', () => {
 
   test('shared iCloud enrollment sends only the CloudKit target', () => {
     const provider = sharedICloudProvider()
-    const architecture = defaultVaultArchitecture()
-    const capability = providerReplicationCapability(provider)
+    const architecture = default_vault_architecture()
+    const capability = provider_replication_capability(provider)
     expect(capability.providerType).toBe('oauth-file')
     expect(capability.oauthPreset).toBe('icloud')
     expect(capability.supportsPersonal).toBe(true)
     expect(capability.supportsShared).toBe(true)
-    expect(providerOnboardingType(provider, architecture)).toBe(
+    expect(provider_onboarding_type(provider, architecture)).toBe(
       OnboardingType.SharedProviderGrant,
     )
-    const enrollmentProvider = enrollmentICloudSharedProviderForArchitecture(
-      provider,
-      architecture,
-      ICLOUD_SHARED_TARGET,
-    )
+    const enrollmentProvider =
+      enrollment_icloud_shared_provider_for_architecture(
+        provider,
+        architecture,
+        ICLOUD_SHARED_TARGET,
+      )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
     expect(enrollmentProvider.onboardingType).toBe(
       OnboardingType.SharedProviderGrant,

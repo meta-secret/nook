@@ -4,6 +4,10 @@
 - Use `wasm-bindgen = "0.2.127"` (see workspace
   `nook-app/nook-platform/Cargo.toml`).
 - Export functions with `#[wasm_bindgen]`. Domain logic stays in `nook-core`; WASM wraps I/O and session state.
+- Keep exported function and method names unchanged. Do not add callable
+  `js_name` overrides. Generated TypeScript calls the authored Rust name, even
+  when that means `snake_case`. Property accessors and imported JavaScript APIs
+  may still use `js_name` for the external property or API they represent.
 - Examples: `connect`, `add_secret`, `filter_secrets`, `generate_password`.
 
 ## 2. Compiling for the web
@@ -85,10 +89,10 @@ version is required — old Debian binaryen corrupts `externref` tables.
 - `meta.secrets` — per-key armored ciphertext for the unlocked vault; the
   manager does not retain a hydrated plaintext `Database`
 - `crypto` — `nook_core::VaultCrypto` (derived once per connect)
-- `querySecretPage` — briefly decrypts only the requested page (maximum 100
+- `query_secret_page_js` — briefly decrypts only the requested page (maximum 100
   records; the web app uses 50), zeroizes each full record, and returns a typed
   metadata-only `NookSecretPage`
-- `decryptSecret` — decrypts exactly one full `NookSecretRecord` for an explicit
+- `decrypt_secret_js` — decrypts exactly one full `NookSecretRecord` for an explicit
   reveal or secret-value copy
 - encrypted search catalog — decrypts authenticated ID-derived buckets once per
   unlocked session, then scans normalized metadata in WASM memory
@@ -129,10 +133,8 @@ distinguish wasm-bindgen's generated ABI code from authored code.
 | `NookPasswordEntrySummary` | Backup-password list entries |
 | `NookVaultSyncResult` | `sync_vault_from_storage` payload (`changed`, `accessStatus`, `secrets`, `pendingJoins`, `vaultMembers`) |
 | `NookVaultClientPolicy` | Portable login, lock, sync, join, remote-recovery, vault-switch, and pagination decisions |
-| `NookRemoteVaultFetch` | `fetchRemoteVaultYaml` |
-| `NookReconcileVaultBlobsResult` | `reconcileVaultBlobs` |
 | `NookResolveConflictKeepLocalResult` / `NookResolveConflictKeepRemoteResult` | conflict resolution |
-| `NookSecretFormFields` | `buildSecretYaml` input (flat constructor; unused fields empty) |
+| `NookSecretFormFields` | `build_secret_yaml` input (flat constructor; unused fields empty) |
 
 Provider list scoping, locked-device visibility, staged connect arguments,
 remote-reference normalization, and sync metadata updates cross the boundary as
@@ -154,7 +156,7 @@ free wrappers returned to JavaScript after their data has been copied out.
 
 ## 5. Vault secrets at the JS boundary
 
-**Canonical schema:** `nook-app/nook-platform/nook-core/src/secret_types.rs` (`SecretType`, payload structs, `SecretValue`, `SecretRecord`).
+**Canonical schema:** `nook-app/nook-platform/nook-core/src/secrets/secret_types.rs` (`SecretType`, payload structs, `SecretValue`, `SecretRecord`).
 
 **Typed domain strings:** Prefer newtypes over raw `String` / `u32` in `nook-core`.
 
@@ -209,23 +211,25 @@ ends.
 | Layer | Responsibility |
 |-------|----------------|
 | `nook-core` | Schema, validation, YAML parse/serialize, display/search helpers (`secret_view.rs`) |
-| `nook-wasm` | Typed boundary structs, `buildSecretYaml`, session CRUD |
+| `nook-wasm` | Typed boundary structs, `build_secret_yaml`, session CRUD |
 | `nook-web` | Svelte forms + rendering; `VaultItemType` string union for the type picker only |
 
 **Reads:** page queries convert decrypted records into
 `Vec<NookSecretListItem>` and zeroize the full records before returning.
-`decryptSecret(id)` is the only list-flow path that creates a full
+`decrypt_secret_js(id)` is the only list-flow path that creates a full
 `NookSecretRecord` in JavaScript.
 
-**Writes:** Forms construct `NookSecretFormFields`, call `buildSecretYaml(type, fields)` (Rust validation), then `add_secret` / `replace_secret`. New item ids use `NookVaultManager.generate_secret_id()`.
+**Writes:** Forms construct `NookSecretFormFields`, call `build_secret_yaml(fields)`
+(Rust validation), then `add_secret` / `replace_secret`. New item ids use
+`NookVaultManager.generate_secret_id()`.
 
 **Mobile / other hosts:** Link `nook-core` directly (UniFFI, JNI, etc.) and reuse the same `SecretRecord`, `SecretValue`, and `secret_view` helpers — no TS mirror required.
 
 ### Adding a new secret type
 
-1. **`nook-app/nook-platform/nook-core/src/secret_types.rs`** — new `SecretType` variant, payload struct, `SecretValue` arms in `from_yaml` / `to_yaml`.
-2. **`nook-app/nook-platform/nook-core/src/secret_view.rs`** — update `display_title`, `group_key`, `summary`, `matches_search`, and `build_secret_yaml` arms.
-3. **`nook-app/nook-platform/nook-wasm/src/lib.rs`** — add typed getters on `NookSecretRecord` for the new fields.
+1. **`nook-app/nook-platform/nook-core/src/secrets/secret_types.rs`** — new `SecretType` variant, payload struct, `SecretValue` arms in `from_yaml` / `to_yaml`.
+2. **`nook-app/nook-platform/nook-core/src/secrets/secret_view.rs`** — update `display_title`, `group_key`, `summary`, `matches_search`, and `build_secret_yaml` arms.
+3. **`nook-app/nook-platform/nook-wasm/src/secret_api/secret_record.rs`** — add typed getters on `NookSecretRecord` for the new fields.
 4. **`nook-app/nook-platform/nook-core` tests** — round-trip and validation tests (authority for payload behavior).
 5. **`nook-app/nook-web`** — add-secret form fields + `SecretDetailRow` rendering only. **No** new TS struct mirror or `parseVaultItem` arm.
 6. **Playwright** — e2e for the new form if user-visible.

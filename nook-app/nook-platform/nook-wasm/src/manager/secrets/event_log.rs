@@ -16,7 +16,7 @@ pub struct NookEventLogRecords(Vec<super::super::event_log::EventLogStorageRecor
 
 #[wasm_bindgen]
 impl NookEventLogRecords {
-    #[wasm_bindgen(js_name = toArray)]
+    #[wasm_bindgen]
     pub fn to_array(&self) -> Result<js_sys::Array, JsError> {
         serialize_js_array(&self.0).map_err(|error| JsError::new(&error.to_string()))
     }
@@ -27,7 +27,7 @@ pub struct NookExternalEventLogRecords(Vec<super::super::event_log::ExternalEven
 
 #[wasm_bindgen]
 impl NookExternalEventLogRecords {
-    #[wasm_bindgen(js_name = fromArray)]
+    #[wasm_bindgen]
     pub fn from_array(records: &js_sys::Array) -> Result<Self, JsError> {
         let records = records
             .iter()
@@ -44,7 +44,7 @@ pub struct NookExtensionEventLogImportStatus(
 
 #[wasm_bindgen]
 impl NookExtensionEventLogImportStatus {
-    #[wasm_bindgen(js_name = toObject)]
+    #[wasm_bindgen]
     pub fn to_object(&self) -> Result<js_sys::Object, JsError> {
         Ok(serde_wasm_bindgen::to_value(&self.0)?.unchecked_into())
     }
@@ -52,13 +52,13 @@ impl NookExtensionEventLogImportStatus {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    #[wasm_bindgen(js_name = exportEventLogRecords)]
+    #[wasm_bindgen]
     pub async fn export_event_log_records_js(&self) -> Result<NookEventLogRecords, JsError> {
         let records = self.export_event_log_records().await?;
         Ok(NookEventLogRecords(records))
     }
 
-    #[wasm_bindgen(js_name = parseEventLogStorageRecord)]
+    #[wasm_bindgen]
     pub fn parse_event_log_storage_record_js(
         &self,
         event_id: &str,
@@ -69,7 +69,7 @@ impl NookVaultManager {
         Ok(NookEventLogStorageRecord(record))
     }
 
-    #[wasm_bindgen(js_name = serializeEventLogStorageRecord)]
+    #[wasm_bindgen]
     pub fn serialize_event_log_storage_record_js(
         &self,
         record: &NookEventLogStorageRecord,
@@ -77,7 +77,7 @@ impl NookVaultManager {
         Ok(Self::serialize_event_log_storage_record(&record.0)?)
     }
 
-    #[wasm_bindgen(js_name = syncExternalEventLogRecords)]
+    #[wasm_bindgen]
     pub async fn sync_external_event_log_records_js(
         &mut self,
         records: NookExternalEventLogRecords,
@@ -86,7 +86,7 @@ impl NookVaultManager {
         Ok(NookEventLogRecords(merged))
     }
 
-    #[wasm_bindgen(js_name = importExtensionEventLogRecords)]
+    #[wasm_bindgen]
     pub async fn import_extension_event_log_records_js(
         &mut self,
         expected_store_id: &str,
@@ -107,12 +107,12 @@ impl NookVaultManager {
         Ok(NookExtensionEventLogImportStatus(status))
     }
 
-    #[wasm_bindgen(js_name = eventLogMode)]
+    #[wasm_bindgen]
     pub fn event_log_mode(&self) -> bool {
         self.event_log.enabled
     }
 
-    #[wasm_bindgen(js_name = listProjectionConflicts)]
+    #[wasm_bindgen]
     pub async fn list_projection_conflicts(
         &self,
     ) -> Result<Vec<crate::NookReplacementConflict>, JsError> {
@@ -121,7 +121,7 @@ impl NookVaultManager {
             .map_err(Into::into)
     }
 
-    #[wasm_bindgen(js_name = listProjectionSecurityConflicts)]
+    #[wasm_bindgen]
     pub async fn list_projection_security_conflicts(
         &self,
     ) -> Result<Vec<crate::NookSecurityConflict>, JsError> {

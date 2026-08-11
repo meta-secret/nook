@@ -20,9 +20,9 @@ export {
 import {
   JoinEnrollmentState,
   OnboardingType,
-  decryptEnrollmentPayload,
-  hasActiveLocalVault,
-  setLocalVaultLabel,
+  decrypt_enrollment_payload,
+  has_active_local_vault,
+  set_local_vault_label,
 } from "$app-wasm";
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
@@ -133,10 +133,11 @@ async function localVaultHasPasswordEntries(
   state: VaultState,
 ): Promise<boolean> {
   if (!state.hasManager) return false;
-  if (!state.localVaultPresent && !(await hasActiveLocalVault())) return false;
+  if (!state.localVaultPresent && !(await has_active_local_vault()))
+    return false;
   try {
     const entries = await state.enqueueStorage(() =>
-      state.requireManager().fetchVaultPasswordEntries("local", "", ""),
+      state.requireManager().fetch_vault_password_entries("local", "", ""),
     );
     return entries.length > 0;
   } catch {
@@ -162,7 +163,7 @@ export async function connectWithEnrollmentCode({
   state.isVerifying = true;
   state.isPasswordBusy = true;
   try {
-    const payload = decryptEnrollmentPayload(code, password);
+    const payload = decrypt_enrollment_payload(code, password);
     const enrollmentProvider = payload.provider;
     const entryId = payload.entryId.trim();
     const unlockPassword = password.trim();
@@ -408,7 +409,7 @@ export async function connectWithEnrollmentCode({
     const page = await state.enqueueStorage(() =>
       state
         .requireManager()
-        .connectWithPassword(
+        .connect_with_password(
           ...enrollmentStorageArgs,
           entryId,
           unlockPassword,
@@ -425,9 +426,9 @@ export async function connectWithEnrollmentCode({
     ).trim();
     if (vaultName && vaultStoreId) {
       await state.enqueueStorage(() =>
-        state.requireManager().setVaultName(vaultName),
+        state.requireManager().set_vault_name(vaultName),
       );
-      await setLocalVaultLabel(vaultStoreId, vaultName);
+      await set_local_vault_label(vaultStoreId, vaultName);
     }
     // Password enrollment downloads an existing vault into this browser. Make
     // that inherited store the active local catalog entry before saving the

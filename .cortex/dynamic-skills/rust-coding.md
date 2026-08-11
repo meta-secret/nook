@@ -222,13 +222,13 @@ impl NookRuntimeConfig {
         }
     }
 
-    #[wasm_bindgen(js_name = resolveVaultIdleTimeoutMs)]
+    #[wasm_bindgen]
     pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: &str) -> u32 {
         // Use immutable instance state directly.
         300_000
     }
 
-    #[wasm_bindgen(js_name = defaultVaultIdleTimeoutMs)]
+    #[wasm_bindgen]
     pub fn default_vault_idle_timeout_ms(&self) -> u32 {
         300_000
     }
@@ -245,8 +245,8 @@ class VaultState {
 
 const rawIdleTimeout = import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS
 const idleTimeout = rawIdleTimeout
-  ? vault.runtimeConfig.resolveVaultIdleTimeoutMs(rawIdleTimeout)
-  : vault.runtimeConfig.defaultVaultIdleTimeoutMs()
+  ? vault.runtimeConfig.resolve_vault_idle_timeout_ms(rawIdleTimeout)
+  : vault.runtimeConfig.default_vault_idle_timeout_ms()
 ```
 
 ## Scope

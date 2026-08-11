@@ -20,7 +20,7 @@ import type { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import {
   DeviceProtectionStatus,
-  providersVisibleWhileDeviceLocked,
+  providers_visible_while_device_locked,
 } from "$app-wasm";
 
 const log = createLogger("vault-device-protection");
@@ -37,7 +37,7 @@ export function lockDeviceProtection(state: VaultState): Promise<void> {
         ? activeVaultScope(state.activeVault.storeId)
         : unselectedVaultScope(),
   };
-  state.providers = providersVisibleWhileDeviceLocked(
+  state.providers = providers_visible_while_device_locked(
     $state.snapshot(snapshotArgs),
   ).providers;
   state.providersLoaded = state.providers.length > 0;
@@ -52,7 +52,7 @@ export function lockDeviceProtection(state: VaultState): Promise<void> {
   // would leave Devices & access reporting Identity unlocked until the queue
   // drained, including when lock keeps the /devices-access route open.
   try {
-    state.requireManager().lockDeviceIdentity();
+    state.requireManager().lock_device_identity();
   } catch {
     // Persisted identity remains wrapped even if the manager is tearing down.
   }
@@ -282,7 +282,7 @@ export async function setupPinDeviceProtection({
       throw new Error(state.t(I18N_KEYS.DeviceProtectionPinMismatch));
     }
     await state.enqueueStorage(() =>
-      state.requireManager().finishPinDeviceProtection(pin),
+      state.requireManager().finish_pin_device_protection(pin),
     );
     deviceIdentityUnlocked = true;
     const finishAuthorizedInitializationArgs3: Parameters<
@@ -362,7 +362,7 @@ export async function unlockPinDeviceProtection({
   let deviceIdentityUnlocked = false;
   try {
     await state.enqueueStorage(() =>
-      state.requireManager().unlockPinDeviceIdentity(pin),
+      state.requireManager().unlock_pin_device_identity(pin),
     );
     deviceIdentityUnlocked = true;
     const finishAuthorizedInitializationArgs5: Parameters<
@@ -391,7 +391,7 @@ export async function resetDeviceProtectionForRecovery(
   state.isVerifying = true;
   state.errorMsg = "";
   try {
-    await state.requireManager().resetDeviceProtectionForRecovery();
+    await state.requireManager().reset_device_protection_for_recovery();
     state.deviceProtectionStatus = DeviceProtectionStatus.Missing;
     state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey;
     state.deviceId = "";

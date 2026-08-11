@@ -1,9 +1,9 @@
 import {
-  decodeStorageProviders,
+  decode_storage_providers,
   DeviceProtectionStatus,
   NookExternalEventLogRecords,
   NookVaultManager,
-  providerWasmArgs,
+  provider_wasm_args,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   AuthProvidersSnapshot,
@@ -39,8 +39,8 @@ export type ImportExtensionVaultDependencies = {
 }
 
 const importExtensionVaultDependencies: ImportExtensionVaultDependencies = {
-  decodeProviders: (snapshot) => decodeStorageProviders(snapshot).providers,
-  createRecords: (records) => NookExternalEventLogRecords.fromArray(records),
+  decodeProviders: (snapshot) => decode_storage_providers(snapshot).providers,
+  createRecords: (records) => NookExternalEventLogRecords.from_array(records),
 }
 
 export type ImportExtensionVaultWithDependenciesArgs =
@@ -77,19 +77,20 @@ export async function importExtensionVaultWithDependencies({
   const grantedProviders = dependencies.decodeProviders(providerSnapshot)
   try {
     const recordValues = dependencies.createRecords(records)
-    const statusValue = await activeManager.importExtensionEventLogRecords(
-      grant.vaultStoreId,
-      grant.deviceId,
-      grant.devicePublicKey,
-      grant.deviceSigningPublicKey,
-      recordValues,
-    )
-    const status = statusValue.toObject()
+    const statusValue =
+      await activeManager.import_extension_event_log_records_js(
+        grant.vaultStoreId,
+        grant.deviceId,
+        grant.devicePublicKey,
+        grant.deviceSigningPublicKey,
+        recordValues,
+      )
+    const status = statusValue.to_object()
     statusValue.free()
-    const protection = await activeManager.deviceProtectionStatus()
+    const protection = await activeManager.device_protection_status()
     if (protection === DeviceProtectionStatus.Unlocked) {
       const replaceArgs: Parameters<
-        typeof activeManager.replaceAuthProvidersForVault
+        typeof activeManager.replace_auth_providers_for_vault
       >[0] = {
         providers: grantedProviders,
         activeVaultStoreId: {
@@ -97,18 +98,18 @@ export async function importExtensionVaultWithDependencies({
           value: grant.vaultStoreId,
         },
       }
-      await activeManager.replaceAuthProvidersForVault(replaceArgs)
+      await activeManager.replace_auth_providers_for_vault(replaceArgs)
     } else {
       // Pairing may race a closed/locked offscreen session. Website grants are
       // already sealed for this device public key, so replace this vault's
       // complete provider set without unlock, including an empty set.
       const lockedManager = activeManager as NookVaultManager & {
-        savePresealedAuthProviders: (
+        save_presealed_auth_providers_snapshot: (
           snapshot: AuthProvidersSnapshot,
         ) => Promise<void>
       }
       const saveArgs: Parameters<
-        typeof lockedManager.savePresealedAuthProviders
+        typeof lockedManager.save_presealed_auth_providers_snapshot
       >[0] = {
         providers: grantedProviders,
         activeVaultStoreId: {
@@ -116,7 +117,7 @@ export async function importExtensionVaultWithDependencies({
           value: grant.vaultStoreId,
         },
       }
-      await lockedManager.savePresealedAuthProviders(saveArgs)
+      await lockedManager.save_presealed_auth_providers_snapshot(saveArgs)
     }
     return { ok: true, status }
   } finally {
@@ -131,7 +132,7 @@ export async function openPasskeyVault({
   activeManager: NookVaultManager
   grant: ExtensionVaultGrant
 }): Promise<void> {
-  await activeManager.openExtensionPasskeyVault(
+  await activeManager.open_extension_passkey_vault_js(
     grant.vaultStoreId,
     grant.deviceId,
     grant.devicePublicKey,
@@ -146,7 +147,7 @@ export async function flushPasskeyEventToProviders({
   activeManager: NookVaultManager
   vaultStoreId: string
 }): Promise<void> {
-  const snapshot = await activeManager.loadAuthProviders()
+  const snapshot = await activeManager.load_auth_providers_snapshot()
   const providers = snapshot.providers.filter(
     (provider) =>
       provider.storeId.state === 'storeId' &&
@@ -156,9 +157,9 @@ export async function flushPasskeyEventToProviders({
   )
   await Promise.allSettled(
     providers.map(async (provider) => {
-      const args = providerWasmArgs(provider)
+      const args = provider_wasm_args(provider)
       try {
-        await activeManager.flushEventOutboxForProvider(
+        await activeManager.flush_event_outbox_for_provider(
           args.mode,
           args.pat,
           args.repo,

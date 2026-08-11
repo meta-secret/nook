@@ -1,6 +1,6 @@
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import { createLogger, type RuntimeFailure } from "$lib/runtime/log";
-import { isVaultSessionLocked } from "$app-wasm";
+import { is_vault_session_locked } from "$app-wasm";
 
 const log = createLogger("vault-sync");
 
@@ -17,12 +17,12 @@ export function scheduleAutoConnectAfterApproval(
   state: SyncActionsContext,
 ): void {
   if (
-    !state.clientPolicy.shouldAutoConnectAfterApproval(
+    !state.clientPolicy.should_auto_connect_after_approval(
       state.isAuthenticated,
       state.isVerifying,
       state.loginPasswordPrompt,
       state.sessionExpiredByIdle,
-      isVaultSessionLocked(),
+      is_vault_session_locked(),
     )
   ) {
     return;

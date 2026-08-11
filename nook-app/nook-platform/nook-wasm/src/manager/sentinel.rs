@@ -34,7 +34,7 @@ struct StoredSentinelGenesisDelivery {
 impl NookVaultManager {
     /// Build one member-addressed post-genesis package. Provider credentials
     /// are encrypted to the same device key that owns the Sentinel share.
-    #[wasm_bindgen(js_name = createSentinelOnboardingPackage)]
+    #[wasm_bindgen]
     #[allow(clippy::needless_pass_by_value)]
     pub fn create_sentinel_onboarding_package(
         &self,
@@ -53,7 +53,7 @@ impl NookVaultManager {
 
     /// Accept a member-addressed package, persist this device's encrypted
     /// share, and install the included sync provider credentials locally.
-    #[wasm_bindgen(js_name = acceptSentinelOnboardingPackage)]
+    #[wasm_bindgen]
     pub async fn accept_sentinel_onboarding_package(
         &mut self,
         package_json: String,
@@ -80,7 +80,7 @@ impl NookVaultManager {
     }
 
     /// List provider-free Sentinel shares accepted by this protected device.
-    #[wasm_bindgen(js_name = listSentinelGenesisShareDeliveries)]
+    #[wasm_bindgen]
     pub async fn list_sentinel_genesis_share_deliveries(
         &self,
     ) -> Result<Vec<NookSentinelStoredDeliverySummary>, JsError> {
@@ -104,7 +104,7 @@ impl NookVaultManager {
     }
 
     /// Select a previously accepted provider-free delivery after refresh.
-    #[wasm_bindgen(js_name = loadSentinelGenesisShareDelivery)]
+    #[wasm_bindgen]
     pub async fn load_sentinel_genesis_share_delivery(
         &mut self,
         store_id: String,
@@ -129,7 +129,7 @@ impl NookVaultManager {
     }
 
     /// Start a provider-independent, public-only Sentinel genesis ceremony.
-    #[wasm_bindgen(js_name = startSentinelGenesis)]
+    #[wasm_bindgen]
     pub async fn start_sentinel_genesis(
         &mut self,
         mut args: nook_core::StartSentinelGenesisArgs,
@@ -153,7 +153,7 @@ impl NookVaultManager {
     }
 
     /// Public pairing request rendered as QR/link/paste JSON by the web layer.
-    #[wasm_bindgen(js_name = sentinelGenesisRequestJson)]
+    #[wasm_bindgen]
     pub fn sentinel_genesis_request_json(&self) -> Result<String, JsError> {
         let session = self
             .sentinel_genesis
@@ -167,7 +167,7 @@ impl NookVaultManager {
     /// Create this device's signed public-key announcement for local initiator
     /// key-prep display. Remote enrollment rejects these payloads; participants
     /// must respond to an owner-issued invitation instead.
-    #[wasm_bindgen(js_name = createSentinelGenesisPublicKeyAnnouncement)]
+    #[wasm_bindgen]
     pub async fn create_sentinel_genesis_public_key_announcement(
         &mut self,
         participant_label: String,
@@ -185,7 +185,7 @@ impl NookVaultManager {
 
     /// Create this device's signed participant response. The exact request is
     /// retained in memory and later required to accept its returned share.
-    #[wasm_bindgen(js_name = respondToSentinelGenesisRequest)]
+    #[wasm_bindgen]
     pub async fn respond_to_sentinel_genesis_request(
         &mut self,
         request_json: String,
@@ -209,7 +209,7 @@ impl NookVaultManager {
     }
 
     /// Remember the initiator request so a later share delivery can be verified.
-    #[wasm_bindgen(js_name = rememberSentinelGenesisRequest)]
+    #[wasm_bindgen]
     pub fn remember_sentinel_genesis_request(&mut self, request_json: &str) -> Result<(), JsError> {
         let request_json = nook_core::normalize_sentinel_genesis_request(request_json)?;
         let request: nook_core::SentinelGenesisRequest = serde_json::from_str(&request_json)
@@ -220,7 +220,7 @@ impl NookVaultManager {
 
     /// Verify and add a participant's session-bound response to the active roster.
     /// Standalone public-key announcements are rejected.
-    #[wasm_bindgen(js_name = addSentinelGenesisParticipantResponse)]
+    #[wasm_bindgen]
     pub fn add_sentinel_genesis_participant_response(
         &mut self,
         response_json: &str,
@@ -240,7 +240,7 @@ impl NookVaultManager {
         Ok(self.sentinel_genesis_status())
     }
 
-    #[wasm_bindgen(js_name = sentinelGenesisStatus)]
+    #[wasm_bindgen]
     pub fn sentinel_genesis_status(&self) -> NookSentinelGenesisStatus {
         match &self.sentinel_genesis {
             CeremonyState::Active(session) => NookSentinelGenesisStatus::from_session(session),
@@ -257,7 +257,7 @@ impl NookVaultManager {
 
     /// Record browser delivery completion after the host has activated the new
     /// vault and refreshed its local catalog.
-    #[wasm_bindgen(js_name = completeSentinelGenesisDelivery)]
+    #[wasm_bindgen]
     pub fn complete_sentinel_genesis_delivery(
         &mut self,
     ) -> Result<nook_core::SentinelGenesisPhase, JsError> {
@@ -270,7 +270,7 @@ impl NookVaultManager {
 
     /// Start a signed, session-bound quorum unlock request. No opened share is
     /// returned to JavaScript.
-    #[wasm_bindgen(js_name = startSentinelUnlock)]
+    #[wasm_bindgen]
     pub async fn start_sentinel_unlock(
         &mut self,
     ) -> Result<NookSentinelUnlockSessionStatus, JsError> {
@@ -306,7 +306,7 @@ impl NookVaultManager {
         Ok(self.sentinel_unlock_session_status())
     }
 
-    #[wasm_bindgen(js_name = sentinelUnlockRequestJson)]
+    #[wasm_bindgen]
     pub fn sentinel_unlock_request_json(&self) -> Result<String, JsError> {
         let session = self
             .sentinel_unlock
@@ -319,7 +319,7 @@ impl NookVaultManager {
 
     /// Open this participant's local share only inside Rust and return an opaque
     /// response encrypted to the requester and bound to its signed challenge.
-    #[wasm_bindgen(js_name = respondToSentinelUnlockRequest)]
+    #[wasm_bindgen]
     pub async fn respond_to_sentinel_unlock_request(
         &mut self,
         request_json: String,
@@ -376,7 +376,7 @@ impl NookVaultManager {
             .map_err(|error| NookError::Serialization(error.to_string()))?)
     }
 
-    #[wasm_bindgen(js_name = addSentinelUnlockResponse)]
+    #[wasm_bindgen]
     pub fn add_sentinel_unlock_response(
         &mut self,
         response_json: &str,
@@ -390,7 +390,7 @@ impl NookVaultManager {
         Ok(self.sentinel_unlock_session_status())
     }
 
-    #[wasm_bindgen(js_name = sentinelUnlockSessionStatus)]
+    #[wasm_bindgen]
     pub fn sentinel_unlock_session_status(&self) -> NookSentinelUnlockSessionStatus {
         match &self.sentinel_unlock {
             CeremonyState::Active(session) => NookSentinelUnlockSessionStatus::from_status(
@@ -400,7 +400,7 @@ impl NookVaultManager {
         }
     }
 
-    #[wasm_bindgen(js_name = finalizeSentinelUnlock)]
+    #[wasm_bindgen]
     pub async fn finalize_sentinel_unlock(&mut self) -> Result<Vec<NookSecretRecord>, JsError> {
         let identity = self.ensure_device_identity()?;
         let session = self
@@ -429,7 +429,7 @@ impl NookVaultManager {
 
     /// Verify this participant's returned share against the exact request it
     /// answered, then persist the encrypted delivery without a sync provider.
-    #[wasm_bindgen(js_name = acceptSentinelGenesisShareDelivery)]
+    #[wasm_bindgen]
     pub async fn accept_sentinel_genesis_share_delivery(
         &mut self,
         delivery_json: String,
@@ -464,7 +464,7 @@ impl NookVaultManager {
     }
 
     /// Typed Sentinel unlock state for clients.
-    #[wasm_bindgen(js_name = sentinelUnlockStatus)]
+    #[wasm_bindgen]
     pub fn sentinel_unlock_status(&self) -> nook_core::SentinelVaultUnlockState {
         if !self.is_sentinel_session() {
             return nook_core::SentinelVaultUnlockState::NotSentinel;

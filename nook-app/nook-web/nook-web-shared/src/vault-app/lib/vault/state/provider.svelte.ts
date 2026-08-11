@@ -1,5 +1,5 @@
 import {
-  isLocalFolderBackupSupported,
+  is_local_folder_backup_supported,
   type NookLocalVaultEntry,
   type StoreId,
   type VaultRecoverySummary,
@@ -14,7 +14,7 @@ import {
   type StorageProviderType,
 } from "$lib/auth/providers";
 import {
-  defaultVaultArchitecture,
+  default_vault_architecture,
   DeviceMode,
   ReplicationType,
   VaultType,
@@ -257,9 +257,9 @@ export class VaultProviderState {
     this.localFolderState = { kind: LocalFolderDraftKind.NotConfigured };
   }
   localFolderBackupSupported = $state(
-    "window" in globalThis && isLocalFolderBackupSupported(),
+    "window" in globalThis && is_local_folder_backup_supported(),
   );
-  vaultArchitecture = $state<VaultArchitecture>(defaultVaultArchitecture());
+  vaultArchitecture = $state<VaultArchitecture>(default_vault_architecture());
   draftDeviceMode = $state<DeviceMode>(DeviceMode.Standard);
   draftVaultType = $state(VaultType.Simple);
   draftReplicationType = $state<ReplicationType>(ReplicationType.Personal);

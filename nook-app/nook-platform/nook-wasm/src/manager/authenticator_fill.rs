@@ -137,7 +137,7 @@ mod wasm_tests {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    #[wasm_bindgen(js_name = listAuthenticatorAccounts)]
+    #[wasm_bindgen]
     pub async fn list_authenticator_accounts_js(
         &mut self,
         query: &str,
@@ -147,7 +147,7 @@ impl NookVaultManager {
         self.list_authenticator_accounts(query).map_err(Into::into)
     }
 
-    #[wasm_bindgen(js_name = currentAuthenticatorCodeForFill)]
+    #[wasm_bindgen]
     pub async fn current_authenticator_code_for_fill(
         &mut self,
         secret_id: &str,

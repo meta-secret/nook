@@ -10,7 +10,7 @@ pub struct NookSentinelUnlockSessionStatus {
 
 #[wasm_bindgen]
 impl NookSentinelUnlockSessionStatus {
-    #[wasm_bindgen(js_name = inactive)]
+    #[wasm_bindgen]
     pub fn inactive() -> Self {
         Self {
             active: false,

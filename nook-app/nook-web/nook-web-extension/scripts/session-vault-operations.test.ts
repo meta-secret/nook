@@ -69,22 +69,24 @@ function importDependencies(
 
 function importManager(state: ImportManagerState): NookVaultManager {
   return {
-    importExtensionEventLogRecords: async () => {
+    import_extension_event_log_records_js: async () => {
       state.importedRecords = true
       if (state.rejectImport) throw new Error('import failed')
       return {
-        toObject: () => ({ imported: true }),
+        to_object: () => ({ imported: true }),
         free: () => {
           state.statusFreed = true
         },
       }
     },
-    deviceProtectionStatus: async () => state.protection,
-    replaceAuthProvidersForVault: async (snapshot) => {
+    device_protection_status: async () => state.protection,
+    replace_auth_providers_for_vault: async (snapshot) => {
       state.replaced = true
       state.replacedSnapshot = snapshot
     },
-    savePresealedAuthProviders: async (snapshot: AuthProvidersSnapshot) => {
+    save_presealed_auth_providers_snapshot: async (
+      snapshot: AuthProvidersSnapshot,
+    ) => {
       state.saved = true
       state.savedSnapshot = snapshot
     },

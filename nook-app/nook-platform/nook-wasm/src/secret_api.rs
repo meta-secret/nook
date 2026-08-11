@@ -44,7 +44,7 @@ impl NookSecretTypeFilter {
     }
 }
 
-#[wasm_bindgen(js_name = secretTypeName)]
+#[wasm_bindgen]
 #[must_use]
 pub fn secret_type_name(secret_type: nook_core::SecretType) -> String {
     secret_type.as_str().to_owned()
@@ -279,12 +279,12 @@ fn build_secret_yaml_inner(fields: &NookSecretFormFields) -> Result<String, Nook
         .to_owned())
 }
 
-#[wasm_bindgen(js_name = buildSecretYaml)]
+#[wasm_bindgen]
 pub fn build_secret_yaml(fields: &NookSecretFormFields) -> Result<String, wasm_bindgen::JsError> {
     build_secret_yaml_inner(fields).map_err(Into::into)
 }
 
-#[wasm_bindgen(js_name = authenticatorSetupKeyChanged)]
+#[wasm_bindgen]
 pub fn authenticator_setup_key_changed(
     stored_key: &str,
     candidate_key: &str,
@@ -294,7 +294,7 @@ pub fn authenticator_setup_key_changed(
         .map_err(Into::into)
 }
 
-#[wasm_bindgen(js_name = previewOtpauthUri)]
+#[wasm_bindgen]
 pub fn preview_otpauth_uri(uri: &str) -> Result<types::NookOtpauthPreview, wasm_bindgen::JsError> {
     nook_core::AuthenticatorSecret::preview_otpauth_uri(uri)
         .map(types::NookOtpauthPreview::from_core)
@@ -302,7 +302,7 @@ pub fn preview_otpauth_uri(uri: &str) -> Result<types::NookOtpauthPreview, wasm_
         .map_err(Into::into)
 }
 
-#[wasm_bindgen(js_name = currentCodeFromOtpauthUri)]
+#[wasm_bindgen]
 pub fn current_code_from_otpauth_uri(
     uri: &str,
 ) -> Result<types::NookTotpCode, wasm_bindgen::JsError> {
@@ -318,7 +318,7 @@ pub fn current_code_from_otpauth_uri(
         .map_err(Into::into)
 }
 
-#[wasm_bindgen(js_name = normalizeBackupCodes)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn normalize_backup_codes(codes: Vec<String>) -> Result<Vec<String>, wasm_bindgen::JsError> {
     // Owned `Vec<String>` is required by the wasm-bindgen JS array boundary.
@@ -327,7 +327,7 @@ pub fn normalize_backup_codes(codes: Vec<String>) -> Result<Vec<String>, wasm_bi
         .map_err(Into::into)
 }
 
-#[wasm_bindgen(js_name = applyBackupCodes)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn apply_backup_codes(
     existing: Vec<String>,

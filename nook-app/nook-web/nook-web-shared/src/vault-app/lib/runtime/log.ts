@@ -7,7 +7,7 @@
  * module makes the WASM logger the single console authority for the web app:
  * - captures the ORIGINAL `console.*` methods at load,
  * - patches `console.*` so every call still prints (via the originals) AND is
- *   persisted through the `nookLog` binding,
+ *   persisted through the `log_record` binding,
  * - exposes `window.__nookConsole.echo` so Rust `tracing` events (already
  *   persisted by the WASM layer) print through the same original methods,
  * - forwards `createLogger(scope).info(…)` calls: echo once via the originals,
@@ -24,15 +24,15 @@
  */
 
 import {
-  nookLog,
-  nookLogClear,
-  nookLogCount,
-  nookLogDumpPage,
-  nookLogFlush,
-  nookLogGetLevel,
-  nookLogInit,
-  nookLogSetLevel,
-  nookLogWithData,
+  log_record,
+  log_clear,
+  log_count,
+  log_dump_page,
+  log_flush,
+  log_get_level,
+  log_init,
+  log_set_level,
+  log_record_with_data,
 } from "$app-wasm";
 export enum LogLevel {
   Error = "error",
@@ -315,7 +315,7 @@ function persistMessage({
     return;
   }
   try {
-    nookLog(level, scope, message);
+    log_record(level, scope, message);
   } catch {
     // Logging must never break the app.
   }
@@ -347,7 +347,7 @@ function persistStructured({
     return;
   }
   try {
-    nookLogWithData(level, scope, message, serializedContext);
+    log_record_with_data(level, scope, message, serializedContext);
   } catch {
     // Logging must never break the app.
   }
@@ -592,13 +592,13 @@ export function setLogLevel(level: LogLevel) {
     // Storage may be unavailable (private mode); keep the WASM-side level.
   }
   if (wasmReady) {
-    nookLogSetLevel(level);
+    log_set_level(level);
   }
 }
 
 export function getLogLevel(): LogLevel {
   if (wasmReady) {
-    const parsed = parseLevel(nookLogGetLevel());
+    const parsed = parseLevel(log_get_level());
     return parsed.kind === LogLevelParseKind.Valid
       ? parsed.level
       : LogLevel.Info;
@@ -613,13 +613,13 @@ export async function dumpLogs(options: {
   offset: number;
 }): Promise<LogEntry[]> {
   if (!wasmReady) return [];
-  const entries = await nookLogDumpPage(
+  const entries = await log_dump_page(
     options.minLevel,
     options.limit,
     options.offset,
   );
   try {
-    return entries.toArray() as LogEntry[];
+    return entries.to_array() as LogEntry[];
   } finally {
     entries.free();
   }
@@ -628,18 +628,18 @@ export async function dumpLogs(options: {
 /** Total number of persisted log entries. */
 export async function logCount(): Promise<number> {
   if (!wasmReady) return 0;
-  return nookLogCount();
+  return log_count();
 }
 
 export async function clearLogs(): Promise<void> {
   if (!wasmReady) return;
-  await nookLogClear();
+  await log_clear();
 }
 
 /** Force the write-behind queue into IndexedDB (for `/logs`, e2e, post-mortem). */
 export async function flushLogs(): Promise<void> {
   if (!wasmReady) return;
-  await nookLogFlush();
+  await log_flush();
 }
 
 /** Stop all persistence before the destructive local-browser cleanup runs. */
@@ -725,8 +725,8 @@ export function initWasmLogging() {
   installDiagnosticsCapture();
   patchConsole();
 
-  nookLogInit();
-  nookLogSetLevel(initialLevel());
+  log_init();
+  log_set_level(initialLevel());
   wasmReady = true;
 
   if (preInitQueue.length > 0) {
@@ -734,14 +734,14 @@ export function initWasmLogging() {
     for (const entry of queued) {
       try {
         if (entry.kind === PendingRecordKind.Structured) {
-          nookLogWithData(
+          log_record_with_data(
             entry.level,
             entry.scope,
             entry.message,
             entry.serializedContext,
           );
         } else {
-          nookLog(entry.level, entry.scope, entry.message);
+          log_record(entry.level, entry.scope, entry.message);
         }
       } catch {
         // Ignore — a broken early log must not block startup.
@@ -755,7 +755,7 @@ export function initWasmLogging() {
       timer: setInterval(() => {
         if (flushing) return;
         flushing = true;
-        void nookLogFlush()
+        void log_flush()
           .catch(() => {
             // Drop the batch on storage errors; logging must never break the app.
           })
