@@ -1103,6 +1103,7 @@ dependencies = [
  "hex",
  "hkdf 0.13.0",
  "nook-app-common",
+ "nook-authenticator-domain",
  "pbkdf2 0.13.0",
  "percent-encoding",
  "serde",
@@ -1113,6 +1114,14 @@ dependencies = [
  "tracing",
  "wasm-bindgen",
  "zeroize",
+]
+
+[[package]]
+name = "nook-authenticator-domain"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

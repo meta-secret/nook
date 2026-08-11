@@ -61,11 +61,14 @@ Use this workflow for quality, CI, and deployment changes.
 6. Preserve these gates unless the task explicitly changes them:
    - `cd nook-app/nook-platform && cargo fmt --all -- --check`
    - `clippy::all` and `clippy::pedantic` are enabled in every Rust project's
-     manifest; `cd nook-app/nook-platform && cargo clippy -p nook-app-common -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets`,
-     `cd nook-app/nook-platform && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm`,
-     and the standalone `preflight` Clippy pass enforce them with `-D warnings`
-   - `task rust:coverage:check` — combined `nook-app-common`, `nook-core`,
-     `nook-auth2`, `nook-replication`, and `nook-event-log` coverage vs the **90%** line floor
+     manifest. Native lint covers `nook-app-common`,
+     `nook-authenticator-domain`, `nook-auth2`, `nook-replication`,
+     `nook-event-log`, `nook-companion-core`, and `nook-core`. WASM lint covers
+     `nook-companion-wasm` and `nook-wasm` for `wasm32-unknown-unknown`.
+     The standalone `preflight` Clippy pass is also enforced with `-D warnings`.
+   - `task rust:coverage:check` — combined `nook-app-common`,
+     `nook-authenticator-domain`, `nook-auth2`, `nook-replication`,
+     `nook-event-log`, `nook-companion-core`, and `nook-core` coverage vs the **90%** line floor
      (`nook-app/nook-platform/nook-core/coverage-floor.json`)
    - `svelte-check`
    - `eslint` — the web-family lint command uses a dedicated project that
@@ -428,7 +431,12 @@ Use this workflow for quality, CI, and deployment changes.
     - The workflow uploads both reports as `nook-core-coverage` and posts a sticky PR comment.
     - Human-readable coverage tables must not be scraped with shell.
     - The native Docker build remains the enforcement point for the 90% floor and the only place PR coverage tests run.
-20. **Coverage cache preservation:** Warm the `nook-auth2 + nook-replication + nook-event-log + nook-core` coverage dependency graph with one `cargo llvm-cov nextest --no-report` Docker invocation. Subsequent source-level coverage commands must use `--no-clean` so they reuse and extend that instrumented target.
+20. **Coverage cache preservation:** Warm the full portable coverage graph with
+    one `cargo llvm-cov nextest --no-report` Docker invocation. The graph
+    includes `nook-app-common`, `nook-authenticator-domain`, `nook-auth2`,
+    `nook-replication`, `nook-event-log`, `nook-companion-core`, and
+    `nook-core`. Subsequent source-level coverage commands must use `--no-clean`
+    so they reuse and extend that instrumented target.
 21. **Ecosystem tools before bespoke preflight:** use a maintained Rust ecosystem tool when it directly expresses the invariant.
     - Dependency advisories, licenses, crate bans/duplicates, and sources belong in `deny.toml`.
     - Lockfile vulnerability auditing belongs to RustSec.

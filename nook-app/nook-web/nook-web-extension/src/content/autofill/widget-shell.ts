@@ -6,7 +6,15 @@ import {
 import { cancelPendingAuthenticatorPickerRequest } from './authenticator-actions'
 import {
   cancelPendingLoginPickerRequest,
-  sendRuntimeMessage,
+  sendDecodedRuntimeMessage,
+  sendAuthenticationOutcomeRuntimeMessage,
+  sendAuthenticatorBackupAttachRuntimeMessage,
+  sendAuthenticatorCodeRuntimeMessage,
+  sendAuthenticatorEnrollmentConfirmRuntimeMessage,
+  sendAuthenticatorEnrollmentStageRuntimeMessage,
+  sendAuthenticatorOptionsRuntimeMessage,
+  sendAuthenticatorPreviewRuntimeMessage,
+  sendRuntimeMessageWithoutResponse,
 } from './login-passkey-actions'
 import {
   WidgetPlacementKind,
@@ -275,7 +283,15 @@ export function buildEnrollmentFlowHost({
       widgetState.busy = value
     },
     isBusy: () => widgetState.busy,
-    sendRuntimeMessage,
+    sendDecodedRuntimeMessage,
+    sendAuthenticationOutcomeRuntimeMessage,
+    sendAuthenticatorBackupAttachRuntimeMessage,
+    sendAuthenticatorCodeRuntimeMessage,
+    sendAuthenticatorEnrollmentConfirmRuntimeMessage,
+    sendAuthenticatorEnrollmentStageRuntimeMessage,
+    sendAuthenticatorOptionsRuntimeMessage,
+    sendAuthenticatorPreviewRuntimeMessage,
+    sendRuntimeMessageWithoutResponse,
     translatedMessage,
     translatedMessageWithSubstitution,
   }

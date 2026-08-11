@@ -27,7 +27,9 @@ impl NookVaultManager {
         codes: Vec<String>,
         mode: &str,
     ) -> Result<String, JsError> {
-        let mode = nook_core::BackupCodeAttachMode::parse(mode).map_err(NookError::from)?;
+        let mode = nook_core::BackupCodeAttachMode::parse(mode).map_err(|_| {
+            NookError::from(nook_core::ValidationError::AuthenticatorBackupCodesInvalid)
+        })?;
         let id = nook_core::SecretId::parse(secret_id).map_err(NookError::from)?;
         let crypto = self.vault.crypto.get()?;
         let mut record = nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)

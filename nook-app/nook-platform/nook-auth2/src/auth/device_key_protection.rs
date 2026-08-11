@@ -13,6 +13,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use bech32::{Bech32, Hrp};
 use getrandom::fill;
 use hkdf::Hkdf;
+use nook_authenticator_domain::PasskeyDeviceProtectionMode;
 use pbkdf2::{pbkdf2_hmac, sha2::Sha256 as Pbkdf2Sha256};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -195,22 +196,6 @@ impl PasskeyDeviceIdentityMaterial {
 pub enum PasskeyRegistrationResolution {
     Complete(Box<PasskeyDeviceIdentityMaterial>),
     NeedsAssertion(PasskeyAssertionRequest),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PasskeyDeviceProtectionMode {
-    Standard,
-    AntiHacker,
-}
-
-impl PasskeyDeviceProtectionMode {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Standard => "standard",
-            Self::AntiHacker => "anti-hacker",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,17 +1,19 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { fillOneTimeCode } from '../../../../nook-web-shared/src/extension/password-forms'
+import {
+  AuthenticatorCodeResponseKind,
+  AuthenticatorPickerOpenResponseKind,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { WebsiteAuthenticatorOption } from '../../lib/login-fill-messages'
 import {
   RuntimeMessageDeliveryKind,
-  sendRuntimeMessage,
+  sendAuthenticatorCodeRuntimeMessage,
+  sendAuthenticatorPickerOpenRuntimeMessage,
+  sendRuntimeMessageWithoutResponse,
   setStatus,
 } from './login-passkey-actions'
 import { AuthenticatorPickerKind, pickerState, widgetState } from './state'
-import type {
-  AuthenticatorFillResponse,
-  AuthenticatorOptionsResponse,
-} from './workflow-ui'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
 
 export async function fillAuthenticatorCode({
@@ -29,7 +31,7 @@ export async function fillAuthenticatorCode({
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
 }): Promise<boolean> {
-  const nookTypedArgs0_0: Parameters<typeof sendRuntimeMessage>[0] = {
+  const message: Parameters<typeof sendAuthenticatorCodeRuntimeMessage>[0] = {
     type: 'nook:website-authenticator-fill',
     payload: {
       origin: location.origin,
@@ -37,8 +39,7 @@ export async function fillAuthenticatorCode({
       secretId: account.secretId,
     },
   }
-  const delivery =
-    await sendRuntimeMessage<AuthenticatorFillResponse>(nookTypedArgs0_0)
+  const delivery = await sendAuthenticatorCodeRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     const nookTypedArgs0_0: Parameters<typeof setFlightProgress>[0] = {
       step,
@@ -60,11 +61,9 @@ export async function fillAuthenticatorCode({
     return false
   }
   const { response } = delivery
-  const codeValue = response.code
   if (
-    response.ok !== true ||
-    typeof codeValue !== 'string' ||
-    codeValue.length === 0
+    response.kind !== AuthenticatorCodeResponseKind.Ready ||
+    !('code' in response)
   ) {
     const nookTypedArgs0_2: Parameters<typeof setFlightProgress>[0] = {
       step,
@@ -85,6 +84,7 @@ export async function fillAuthenticatorCode({
     setStatus(nookTypedArgs0_3)
     return false
   }
+  const codeValue = response.code
   const code = { value: codeValue }
   response.code = ''
   const nookTypedArgs0_4: Parameters<typeof fillOneTimeCode>[0] = {
@@ -167,15 +167,16 @@ export async function continueWithAuthenticator({
   setStatus(nookTypedArgs0_9)
 
   try {
-    const nookTypedArgs0_1: Parameters<typeof sendRuntimeMessage>[0] = {
+    const message: Parameters<
+      typeof sendAuthenticatorPickerOpenRuntimeMessage
+    >[0] = {
       type: 'nook:website-authenticator-picker-open',
       payload: { origin: location.origin },
     }
-    const delivery =
-      await sendRuntimeMessage<AuthenticatorOptionsResponse>(nookTypedArgs0_1)
+    const delivery = await sendAuthenticatorPickerOpenRuntimeMessage(message)
     if (
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-      !delivery.response?.ok
+      delivery.response.kind === AuthenticatorPickerOpenResponseKind.Rejected
     ) {
       const nookTypedArgs0_10: Parameters<typeof setFlightProgress>[0] = {
         step,
@@ -197,7 +198,7 @@ export async function continueWithAuthenticator({
       return
     }
     const { response } = delivery
-    if (response.status === 'locked') {
+    if (response.kind === AuthenticatorPickerOpenResponseKind.Locked) {
       const nookTypedArgs0_12: Parameters<typeof setFlightProgress>[0] = {
         step,
         title,
@@ -216,7 +217,7 @@ export async function continueWithAuthenticator({
       return
     }
 
-    if (response.status === 'unavailable') {
+    if (response.kind === AuthenticatorPickerOpenResponseKind.Unavailable) {
       const nookTypedArgs0_14: Parameters<typeof setFlightProgress>[0] = {
         step,
         title,
@@ -236,8 +237,8 @@ export async function continueWithAuthenticator({
     }
 
     if (
-      !response.requestId ||
-      typeof response.expiresAt !== 'number' ||
+      response.kind !== AuthenticatorPickerOpenResponseKind.Ready ||
+      !('requestId' in response) ||
       response.expiresAt <= Date.now()
     ) {
       const nookTypedArgs0_16: Parameters<typeof setFlightProgress>[0] = {
@@ -334,11 +335,11 @@ export async function continueWithAuthenticator({
 }
 
 function cancelAuthenticatorPickerRequest(requestId: string): void {
-  const nookTypedArgs0_3: Parameters<typeof sendRuntimeMessage>[0] = {
+  const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
     type: 'nook:authenticator-picker-cancel',
     payload: { requestId },
   }
-  void sendRuntimeMessage(nookTypedArgs0_3)
+  sendRuntimeMessageWithoutResponse(message)
 }
 
 export function cancelPendingAuthenticatorPickerRequest(): void {

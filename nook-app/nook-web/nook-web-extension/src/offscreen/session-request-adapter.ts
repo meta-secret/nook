@@ -1,171 +1,121 @@
-import type {
-  DeviceMode,
-  StorageProvider,
-} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type { SerializedStorageProvider } from '../lib/provider-credential-staging'
+import {
+  extensionSessionProviderIdentities,
+  scrubProviderCredentials,
+} from '../lib/provider-credential-staging'
+import {
+  ExtensionSessionRequestValidation,
+  type ExtensionSessionRequest as GeneratedExtensionSessionRequest,
+  type ExtensionSessionRequestWire,
+  type PasskeyCeremonyQueueDisposition,
+  type QueueDisposition,
+  validateExtensionSessionRequest,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 
-type QueueMetadata = {
-  queueExpiresAt?: number
-  queuePriority?: 'interactive'
+export const EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS = 5_000
+
+type EnumeratedExtensionSessionRequest<Request> = Request extends {
+  type: infer RequestType extends string
+}
+  ? Omit<Request, 'type'> & {
+      type: Extract<ExtensionSessionMessageType, RequestType>
+    }
+  : never
+
+type TypedExtensionSessionRequest =
+  EnumeratedExtensionSessionRequest<GeneratedExtensionSessionRequest>
+
+export enum ExtensionSessionQueueKind {
+  MessageDefault = 'message-default',
+  Deadline = 'deadline',
 }
 
-type VaultGrant = {
-  vaultStoreId: string
-  deviceId: string
-  devicePublicKey: string
-  deviceSigningPublicKey: string
+export enum ExtensionSessionQueuePriority {
+  Probe = 'probe',
+  Interactive = 'interactive',
 }
 
-type EmptyPayload = QueueMetadata
-type FinishPasskeySetupPayload = QueueMetadata & {
-  credentialId: number[]
-  userHandle: number[]
-  prfInput: number[]
-  prfOutput: number[]
-  deviceMode: DeviceMode
+export type ExtensionSessionQueue = QueueDisposition
+
+const messageDefaultQueue: ExtensionSessionQueue = {
+  kind: ExtensionSessionQueueKind.MessageDefault,
 }
-type RecoverPasskeyPayload = QueueMetadata & {
-  credentialId: number[]
-  userHandle: number[]
-  prfOutput: number[]
-}
-type PinPayload = QueueMetadata & { pin: string }
-type UnlockPasskeyPayload = QueueMetadata & { prfOutput: number[] }
-type IdentityHandoffPayload = QueueMetadata & {
-  recipientPublicKey: string
-  nonce: string
-  expectedDeviceId: string
-  expectedDevicePublicKey: string
-  expectedDeviceSigningPublicKey: string
-}
-type ImportVaultPayload = QueueMetadata &
-  VaultGrant & {
-    providers: StorageProvider[]
-    eventLogRecords: object[]
+
+export const MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE =
+  Object.freeze(messageDefaultQueue)
+
+export function extensionSessionProbeDeadline(
+  expiresAt: number,
+): ExtensionSessionQueue {
+  return {
+    kind: ExtensionSessionQueueKind.Deadline,
+    expiresAt,
+    priority: ExtensionSessionQueuePriority.Probe,
   }
-type UpdateVaultPayload = QueueMetadata &
-  VaultGrant & { eventLogRecords: object[] }
-type PasskeyLookupPayload = QueueMetadata &
-  VaultGrant & { rpId: string; origin: string }
-type OriginGrantPayload = QueueMetadata & VaultGrant & { origin: string }
-type SecretGrantPayload = QueueMetadata &
-  VaultGrant & { origin: string; secretId: string }
-type QueryGrantPayload = QueueMetadata & VaultGrant & { query: string }
-type SecretIdGrantPayload = QueueMetadata & VaultGrant & { secretId: string }
-type OtpauthPayload = QueueMetadata & { otpauthUri: string }
-type OtpauthGrantPayload = QueueMetadata &
-  VaultGrant & { otpauthUri: string; origin: string }
-type BackupAttachPayload = QueueMetadata &
-  VaultGrant & { secretId: string; codes: string[]; mode: string }
-type LoginSavePlanPayload = QueueMetadata &
-  VaultGrant & { origin: string; username: string; password: string }
-type OriginPayload = QueueMetadata & { origin: string }
-type LoginSaveActionPayload = QueueMetadata &
-  Partial<VaultGrant> & { origin: string; offerId: string }
-type RequestPayload = QueueMetadata & { requestId: string }
-type PasskeyCeremonyPayload = QueueMetadata &
-  VaultGrant & { requestId: string; requestJson: string }
+}
 
+export function extensionSessionInteractiveDeadline(
+  expiresAt: number,
+): ExtensionSessionQueue {
+  return {
+    kind: ExtensionSessionQueueKind.Deadline,
+    expiresAt,
+    priority: ExtensionSessionQueuePriority.Interactive,
+  }
+}
+
+export function extensionSessionPasskeyCeremonyDeadline(
+  expiresAt: number,
+): PasskeyCeremonyQueueDisposition {
+  return {
+    kind: ExtensionSessionQueueKind.Deadline,
+    expiresAt,
+    priority: ExtensionSessionQueuePriority.Interactive,
+  }
+}
+
+type GeneratedExtensionSessionImportRequest = Extract<
+  GeneratedExtensionSessionRequest,
+  { type: `${ExtensionSessionMessageType.ImportVault}` }
+>
+type GeneratedExtensionSessionNonImportRequest = Exclude<
+  GeneratedExtensionSessionRequest,
+  GeneratedExtensionSessionImportRequest
+>
+type ExtensionSessionImportTransportRequest = {
+  type: GeneratedExtensionSessionImportRequest['type']
+  payload: Omit<
+    GeneratedExtensionSessionImportRequest['payload'],
+    'providers'
+  > & { providers: SerializedStorageProvider[] }
+}
+export type ExtensionSessionTransportRequest =
+  | GeneratedExtensionSessionNonImportRequest
+  | ExtensionSessionImportTransportRequest
+export type ParsedExtensionSessionTransportRequest =
+  EnumeratedExtensionSessionRequest<ExtensionSessionTransportRequest>
+type TypedExtensionSessionImportRequest = Extract<
+  TypedExtensionSessionRequest,
+  { type: ExtensionSessionMessageType.ImportVault }
+>
+export type ExtensionSessionNonImportRequest = Exclude<
+  TypedExtensionSessionRequest,
+  TypedExtensionSessionImportRequest
+>
+type ExtensionSessionImportRequest = {
+  type: TypedExtensionSessionImportRequest['type']
+  payload: Omit<
+    GeneratedExtensionSessionImportRequest['payload'],
+    'providers'
+  > & {
+    providers: StorageProvider[]
+  }
+}
 export type ExtensionSessionRequest =
-  | { type: ExtensionSessionMessageType.Reset; payload: EmptyPayload }
-  | {
-      type: ExtensionSessionMessageType.MigrateAuthProviders
-      payload: EmptyPayload
-    }
-  | { type: ExtensionSessionMessageType.Status; payload: EmptyPayload }
-  | {
-      type: ExtensionSessionMessageType.BeginPasskeySetup
-      payload: EmptyPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.FinishPasskeySetup
-      payload: FinishPasskeySetupPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.RecoverPasskey
-      payload: RecoverPasskeyPayload
-    }
-  | { type: ExtensionSessionMessageType.UnlockOptions; payload: EmptyPayload }
-  | {
-      type: ExtensionSessionMessageType.UnlockPasskey
-      payload: UnlockPasskeyPayload
-    }
-  | { type: ExtensionSessionMessageType.CreatePin; payload: PinPayload }
-  | { type: ExtensionSessionMessageType.UnlockPin; payload: PinPayload }
-  | {
-      type: ExtensionSessionMessageType.SealIdentityHandoff
-      payload: IdentityHandoffPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.ImportVault
-      payload: ImportVaultPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.UpdateVault
-      payload: UpdateVaultPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.ListPasskeys
-      payload: PasskeyLookupPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.ListLogins
-      payload: OriginGrantPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.RevealLogin
-      payload: SecretGrantPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.ListAuthenticators
-      payload: QueryGrantPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.AuthenticatorCode
-      payload: SecretIdGrantPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.AuthenticatorEnrollPreview
-      payload: OtpauthPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.AuthenticatorEnrollCode
-      payload: OtpauthPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.AuthenticatorEnrollConfirm
-      payload: OtpauthGrantPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.AuthenticatorBackupAttach
-      payload: BackupAttachPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.PlanLoginSave
-      payload: LoginSavePlanPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.PendingLoginSave
-      payload: OriginPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.CommitLoginSave
-      payload: LoginSaveActionPayload & VaultGrant
-    }
-  | {
-      type: ExtensionSessionMessageType.DismissLoginSave
-      payload: LoginSaveActionPayload
-    }
-  | { type: ExtensionSessionMessageType.CancelPasskey; payload: RequestPayload }
-  | {
-      type: ExtensionSessionMessageType.RegisterPasskey
-      payload: PasskeyCeremonyPayload
-    }
-  | {
-      type: ExtensionSessionMessageType.AssertPasskey
-      payload: PasskeyCeremonyPayload
-    }
-  | { type: ExtensionSessionMessageType.Lock; payload: EmptyPayload }
+  ExtensionSessionNonImportRequest | ExtensionSessionImportRequest
 
 export enum ExtensionSessionRequestParseKind {
   Invalid = 'invalid',
@@ -176,7 +126,7 @@ export type ExtensionSessionRequestParse =
   | { kind: ExtensionSessionRequestParseKind.Invalid }
   | {
       kind: ExtensionSessionRequestParseKind.Parsed
-      request: ExtensionSessionRequest
+      request: ParsedExtensionSessionTransportRequest
     }
 
 export enum ExtensionSessionSensitiveStageKind {
@@ -188,7 +138,24 @@ export type ExtensionSessionSensitiveStage =
   | { kind: ExtensionSessionSensitiveStageKind.NotRequired }
   | {
       kind: ExtensionSessionSensitiveStageKind.Staged
-      request: ExtensionSessionRequest
+      request: ExtensionSessionNonImportRequest
+    }
+
+enum ExtensionSessionIngressStageKind {
+  Invalid = 'invalid',
+  Staged = 'staged',
+}
+
+enum CompanionWasmReadinessKind {
+  Ready = 'ready',
+  Expired = 'expired',
+}
+
+type ExtensionSessionIngressStage =
+  | { kind: ExtensionSessionIngressStageKind.Invalid }
+  | {
+      kind: ExtensionSessionIngressStageKind.Staged
+      request: ParsedExtensionSessionTransportRequest
     }
 
 const sensitiveSessionFields: Readonly<
@@ -225,13 +192,13 @@ const sensitiveSessionFields: Readonly<
   [ExtensionSessionMessageType.AuthenticatorEnrollCode]: ['otpauthUri'],
   [ExtensionSessionMessageType.AuthenticatorEnrollConfirm]: ['otpauthUri'],
   [ExtensionSessionMessageType.AuthenticatorBackupAttach]: ['codes'],
-  [ExtensionSessionMessageType.PlanLoginSave]: ['password'],
+  [ExtensionSessionMessageType.PlanLoginSave]: ['username', 'password'],
   [ExtensionSessionMessageType.PendingLoginSave]: [],
   [ExtensionSessionMessageType.CommitLoginSave]: [],
   [ExtensionSessionMessageType.DismissLoginSave]: [],
   [ExtensionSessionMessageType.CancelPasskey]: [],
-  [ExtensionSessionMessageType.RegisterPasskey]: [],
-  [ExtensionSessionMessageType.AssertPasskey]: [],
+  [ExtensionSessionMessageType.RegisterPasskey]: ['requestJson'],
+  [ExtensionSessionMessageType.AssertPasskey]: ['requestJson'],
   [ExtensionSessionMessageType.Lock]: [],
 }
 
@@ -240,9 +207,9 @@ function clearSensitiveFieldValue(value: unknown): void {
 }
 
 export function clearExtensionSessionSensitiveRequest(
-  request: ExtensionSessionRequest,
+  request: ExtensionSessionNonImportRequest,
 ): void {
-  const payload = request.payload as Record<string, unknown>
+  const payload = request.payload as object as Record<string, unknown>
   for (const field of sensitiveSessionFields[request.type]) {
     clearSensitiveFieldValue(payload[field])
     payload[field] = typeof payload[field] === 'string' ? '' : []
@@ -250,13 +217,13 @@ export function clearExtensionSessionSensitiveRequest(
 }
 
 export function stageExtensionSessionSensitiveRequest(
-  request: ExtensionSessionRequest,
+  request: ExtensionSessionNonImportRequest,
 ): ExtensionSessionSensitiveStage {
   const fields = sensitiveSessionFields[request.type]
   if (fields.length === 0) {
     return { kind: ExtensionSessionSensitiveStageKind.NotRequired }
   }
-  const sourcePayload = request.payload as Record<string, unknown>
+  const sourcePayload = request.payload as object as Record<string, unknown>
   const stagedPayload = { ...sourcePayload }
   for (const field of fields) {
     const value = sourcePayload[field]
@@ -276,228 +243,159 @@ export function stageExtensionSessionSensitiveRequest(
   }
 }
 
-enum FieldKind {
-  String = 'string',
-  Number = 'number',
-  NumberArray = 'number-array',
-  StringArray = 'string-array',
-  Array = 'array',
+function isExtensionSessionMessageType(
+  value: string,
+): value is ExtensionSessionMessageType {
+  return Object.prototype.hasOwnProperty.call(sensitiveSessionFields, value)
 }
 
-type RequiredField = { name: string; kind: FieldKind }
-
-const stringField = (name: string): RequiredField => ({
-  name,
-  kind: FieldKind.String,
-})
-const numberField = (name: string): RequiredField => ({
-  name,
-  kind: FieldKind.Number,
-})
-const numberArrayField = (name: string): RequiredField => ({
-  name,
-  kind: FieldKind.NumberArray,
-})
-const stringArrayField = (name: string): RequiredField => ({
-  name,
-  kind: FieldKind.StringArray,
-})
-const arrayField = (name: string): RequiredField => ({
-  name,
-  kind: FieldKind.Array,
-})
-
-const grantFields = [
-  stringField('vaultStoreId'),
-  stringField('deviceId'),
-  stringField('devicePublicKey'),
-  stringField('deviceSigningPublicKey'),
-]
-
-const requestFields: Readonly<
-  Record<ExtensionSessionMessageType, readonly RequiredField[]>
-> = {
-  [ExtensionSessionMessageType.Reset]: [],
-  [ExtensionSessionMessageType.MigrateAuthProviders]: [],
-  [ExtensionSessionMessageType.Status]: [],
-  [ExtensionSessionMessageType.BeginPasskeySetup]: [],
-  [ExtensionSessionMessageType.FinishPasskeySetup]: [
-    numberArrayField('credentialId'),
-    numberArrayField('userHandle'),
-    numberArrayField('prfInput'),
-    numberArrayField('prfOutput'),
-    numberField('deviceMode'),
-  ],
-  [ExtensionSessionMessageType.RecoverPasskey]: [
-    numberArrayField('credentialId'),
-    numberArrayField('userHandle'),
-    numberArrayField('prfOutput'),
-  ],
-  [ExtensionSessionMessageType.UnlockOptions]: [],
-  [ExtensionSessionMessageType.UnlockPasskey]: [numberArrayField('prfOutput')],
-  [ExtensionSessionMessageType.CreatePin]: [stringField('pin')],
-  [ExtensionSessionMessageType.UnlockPin]: [stringField('pin')],
-  [ExtensionSessionMessageType.SealIdentityHandoff]: [
-    stringField('recipientPublicKey'),
-    stringField('nonce'),
-    stringField('expectedDeviceId'),
-    stringField('expectedDevicePublicKey'),
-    stringField('expectedDeviceSigningPublicKey'),
-  ],
-  [ExtensionSessionMessageType.ImportVault]: [
-    ...grantFields,
-    arrayField('providers'),
-    arrayField('eventLogRecords'),
-  ],
-  [ExtensionSessionMessageType.UpdateVault]: [
-    ...grantFields,
-    arrayField('eventLogRecords'),
-  ],
-  [ExtensionSessionMessageType.ListPasskeys]: [
-    ...grantFields,
-    stringField('rpId'),
-    stringField('origin'),
-  ],
-  [ExtensionSessionMessageType.ListLogins]: [
-    ...grantFields,
-    stringField('origin'),
-  ],
-  [ExtensionSessionMessageType.RevealLogin]: [
-    ...grantFields,
-    stringField('origin'),
-    stringField('secretId'),
-  ],
-  [ExtensionSessionMessageType.ListAuthenticators]: [
-    ...grantFields,
-    stringField('query'),
-  ],
-  [ExtensionSessionMessageType.AuthenticatorCode]: [
-    ...grantFields,
-    stringField('secretId'),
-  ],
-  [ExtensionSessionMessageType.AuthenticatorEnrollPreview]: [
-    stringField('otpauthUri'),
-  ],
-  [ExtensionSessionMessageType.AuthenticatorEnrollCode]: [
-    stringField('otpauthUri'),
-  ],
-  [ExtensionSessionMessageType.AuthenticatorEnrollConfirm]: [
-    ...grantFields,
-    stringField('otpauthUri'),
-    stringField('origin'),
-  ],
-  [ExtensionSessionMessageType.AuthenticatorBackupAttach]: [
-    ...grantFields,
-    stringField('secretId'),
-    stringArrayField('codes'),
-    stringField('mode'),
-  ],
-  [ExtensionSessionMessageType.PlanLoginSave]: [
-    ...grantFields,
-    stringField('origin'),
-    stringField('username'),
-    stringField('password'),
-  ],
-  [ExtensionSessionMessageType.PendingLoginSave]: [stringField('origin')],
-  [ExtensionSessionMessageType.CommitLoginSave]: [
-    ...grantFields,
-    stringField('origin'),
-    stringField('offerId'),
-  ],
-  [ExtensionSessionMessageType.DismissLoginSave]: [
-    stringField('origin'),
-    stringField('offerId'),
-  ],
-  [ExtensionSessionMessageType.CancelPasskey]: [stringField('requestId')],
-  [ExtensionSessionMessageType.RegisterPasskey]: [
-    ...grantFields,
-    stringField('requestId'),
-    stringField('requestJson'),
-    numberField('queueExpiresAt'),
-  ],
-  [ExtensionSessionMessageType.AssertPasskey]: [
-    ...grantFields,
-    stringField('requestId'),
-    stringField('requestJson'),
-    numberField('queueExpiresAt'),
-  ],
-  [ExtensionSessionMessageType.Lock]: [],
+function hasExtensionSessionQueue(payload: object): boolean {
+  return (
+    'queue' in payload &&
+    payload.queue instanceof Object &&
+    'kind' in payload.queue &&
+    typeof payload.queue.kind === 'string'
+  )
 }
 
-const sessionMessageTypes = new Set<string>(
-  Object.values(ExtensionSessionMessageType),
-)
-
-function validField({
-  payload,
-  field,
-}: {
-  payload: Record<string, unknown>
-  field: RequiredField
-}): boolean {
-  const value = payload[field.name]
-  switch (field.kind) {
-    case FieldKind.String:
-      return typeof value === 'string'
-    case FieldKind.Number:
-      return typeof value === 'number' && Number.isFinite(value)
-    case FieldKind.NumberArray:
-      return (
-        Array.isArray(value) &&
-        value.every((entry) => typeof entry === 'number')
-      )
-    case FieldKind.StringArray:
-      return (
-        Array.isArray(value) &&
-        value.every((entry) => typeof entry === 'string')
-      )
-    case FieldKind.Array:
-      return Array.isArray(value)
-  }
-}
-
-export function parseExtensionSessionRequest(
+function stageExtensionSessionIngressRequest(
   value: unknown,
-): ExtensionSessionRequestParse {
+): ExtensionSessionIngressStage {
   if (
     !value ||
     typeof value !== 'object' ||
     !('type' in value) ||
-    !('payload' in value)
-  ) {
-    return { kind: ExtensionSessionRequestParseKind.Invalid }
-  }
-  if (typeof value.type !== 'string' || !sessionMessageTypes.has(value.type)) {
-    return { kind: ExtensionSessionRequestParseKind.Invalid }
-  }
-  if (
+    typeof value.type !== 'string' ||
+    !isExtensionSessionMessageType(value.type) ||
+    !('payload' in value) ||
     !value.payload ||
-    typeof value.payload !== 'object' ||
-    Array.isArray(value.payload)
+    typeof value.payload !== 'object'
   ) {
+    return { kind: ExtensionSessionIngressStageKind.Invalid }
+  }
+
+  const request = value as ParsedExtensionSessionTransportRequest
+  if (!hasExtensionSessionQueue(request.payload)) {
+    clearExtensionSessionIngressRequest(request)
+    return { kind: ExtensionSessionIngressStageKind.Invalid }
+  }
+  if (request.type === ExtensionSessionMessageType.ImportVault) {
+    const providers = request.payload.providers
+    if (!Array.isArray(providers)) {
+      request.payload.providers = []
+      return { kind: ExtensionSessionIngressStageKind.Invalid }
+    }
+    try {
+      const stagedProviders = structuredClone(providers)
+      scrubProviderCredentials(providers)
+      request.payload.providers = []
+      return {
+        kind: ExtensionSessionIngressStageKind.Staged,
+        request: {
+          ...request,
+          payload: { ...request.payload, providers: stagedProviders },
+        },
+      }
+    } catch {
+      scrubProviderCredentials(providers)
+      request.payload.providers = []
+      return { kind: ExtensionSessionIngressStageKind.Invalid }
+    }
+  }
+
+  const sensitiveStage = stageExtensionSessionSensitiveRequest(request)
+  return {
+    kind: ExtensionSessionIngressStageKind.Staged,
+    request:
+      sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged
+        ? sensitiveStage.request
+        : request,
+  }
+}
+
+function clearExtensionSessionIngressRequest(
+  request: ParsedExtensionSessionTransportRequest,
+): void {
+  if (request.type === ExtensionSessionMessageType.ImportVault) {
+    scrubProviderCredentials(request.payload.providers)
+    request.payload.providers = []
+    return
+  }
+  clearExtensionSessionSensitiveRequest(request)
+}
+
+export async function parseExtensionSessionRequest(
+  value: unknown,
+): Promise<ExtensionSessionRequestParse> {
+  const ingressStage = stageExtensionSessionIngressRequest(value)
+  if (ingressStage.kind === ExtensionSessionIngressStageKind.Invalid) {
     return { kind: ExtensionSessionRequestParseKind.Invalid }
   }
-  const type = value.type as ExtensionSessionMessageType
-  const payload = value.payload as Record<string, unknown>
-  if (
-    !requestFields[type].every((field) => {
-      const args: Parameters<typeof validField>[0] = { payload, field }
-      return validField(args)
-    })
-  ) {
+  const request = ingressStage.request
+  const defaultExpiresAt = Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS
+  const queue = request.payload.queue
+  const expiresAt =
+    queue.kind === ExtensionSessionQueueKind.Deadline
+      ? Math.min(queue.expiresAt, defaultExpiresAt)
+      : defaultExpiresAt
+  if (expiresAt <= Date.now()) {
+    clearExtensionSessionIngressRequest(request)
     return { kind: ExtensionSessionRequestParseKind.Invalid }
   }
-  if (
-    ('queueExpiresAt' in payload &&
-      (typeof payload.queueExpiresAt !== 'number' ||
-        !Number.isFinite(payload.queueExpiresAt))) ||
-    ('queuePriority' in payload && payload.queuePriority !== 'interactive')
-  ) {
+  const readinessDeadline = new AbortController()
+  const expiry = new Promise<CompanionWasmReadinessKind>((resolve) => {
+    const readinessTimer = setTimeout(
+      () => {
+        clearExtensionSessionIngressRequest(request)
+        resolve(CompanionWasmReadinessKind.Expired)
+      },
+      Math.max(0, expiresAt - Date.now()),
+    )
+    const abortListenerOptions: AddEventListenerOptions = { once: true }
+    readinessDeadline.signal.addEventListener(
+      'abort',
+      () => clearTimeout(readinessTimer),
+      abortListenerOptions,
+    )
+  })
+  try {
+    const readiness = await Promise.race([
+      companionWasmReady.then(() => CompanionWasmReadinessKind.Ready),
+      expiry,
+    ])
+    if (readiness === CompanionWasmReadinessKind.Expired) {
+      return { kind: ExtensionSessionRequestParseKind.Invalid }
+    }
+    const validationRequest =
+      request.type === ExtensionSessionMessageType.ImportVault
+        ? {
+            ...request,
+            payload: {
+              ...request.payload,
+              providers: extensionSessionProviderIdentities(
+                request.payload.providers,
+              ),
+            },
+          }
+        : request
+    const requestWire: ExtensionSessionRequestWire =
+      validationRequest as ExtensionSessionRequestWire
+    if (
+      validateExtensionSessionRequest(requestWire) !==
+      ExtensionSessionRequestValidation.Accepted
+    ) {
+      clearExtensionSessionIngressRequest(request)
+      return { kind: ExtensionSessionRequestParseKind.Invalid }
+    }
+  } catch {
+    clearExtensionSessionIngressRequest(request)
     return { kind: ExtensionSessionRequestParseKind.Invalid }
+  } finally {
+    readinessDeadline.abort()
   }
   return {
     kind: ExtensionSessionRequestParseKind.Parsed,
-    request: value as ExtensionSessionRequest,
+    request,
   }
 }
 
@@ -505,8 +403,8 @@ export function replaceExtensionSessionRequestPayload({
   request,
   payload,
 }: {
-  request: ExtensionSessionRequest
+  request: ExtensionSessionNonImportRequest
   payload: object
-}): ExtensionSessionRequest {
-  return { ...request, payload } as ExtensionSessionRequest
+}): ExtensionSessionNonImportRequest {
+  return { ...request, payload } as ExtensionSessionNonImportRequest
 }

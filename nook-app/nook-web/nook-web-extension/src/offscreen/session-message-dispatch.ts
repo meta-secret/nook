@@ -15,7 +15,12 @@ import {
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import {
   clearExtensionSessionSensitiveRequest,
+  EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
+  ExtensionSessionQueueKind,
+  ExtensionSessionQueuePriority,
+  type ExtensionSessionNonImportRequest,
   type ExtensionSessionRequest,
+  type ParsedExtensionSessionTransportRequest,
   ExtensionSessionRequestParseKind,
   ExtensionSessionSensitiveStageKind,
   parseExtensionSessionRequest,
@@ -23,8 +28,6 @@ import {
 } from './session-request-adapter'
 
 export { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
-
-const INTERACTIVE_QUEUE_TIMEOUT_MS = 5_000
 
 enum SensitivePayloadResidencyKind {
   Resident = 'resident',
@@ -34,7 +37,7 @@ enum SensitivePayloadResidencyKind {
 type SensitivePayloadResidency =
   | {
       kind: SensitivePayloadResidencyKind.Resident
-      request: ExtensionSessionRequest
+      request: ExtensionSessionNonImportRequest
     }
   | { kind: SensitivePayloadResidencyKind.Cleared }
 
@@ -103,15 +106,18 @@ type RequestedQueueExpiry =
   | { kind: RequestedQueueExpiryKind.Requested; expiresAt: number }
 
 function requestedQueueExpiry(
-  request: ExtensionSessionRequest,
+  request: ParsedExtensionSessionTransportRequest,
 ): RequestedQueueExpiry {
-  const value = request.payload.queueExpiresAt
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+  const { queue } = request.payload
+  if (queue.kind === ExtensionSessionQueueKind.MessageDefault) {
     return { kind: RequestedQueueExpiryKind.NotRequested }
   }
   return {
     kind: RequestedQueueExpiryKind.Requested,
-    expiresAt: Math.min(value, Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS),
+    expiresAt: Math.min(
+      queue.expiresAt,
+      Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
+    ),
   }
 }
 
@@ -143,8 +149,12 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
 
   private enqueueSensitiveMessage({
     request,
+    priority,
+    expiresAt,
   }: {
-    request: ExtensionSessionRequest
+    request: ExtensionSessionNonImportRequest
+    priority: SessionOperationPriority
+    expiresAt: number
   }): Promise<SessionResponse> {
     let payloadResidency: SensitivePayloadResidency = {
       kind: SensitivePayloadResidencyKind.Resident,
@@ -170,10 +180,10 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
         }
       },
       options: {
-        priority: SessionOperationPriority.Interactive,
+        priority,
         expiry: {
           kind: SessionOperationExpiryKind.Deadline,
-          expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+          expiresAt,
         },
         cleanup: {
           kind: SessionOperationCleanupKind.OnExpire,
@@ -186,11 +196,15 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
 
   private async enqueueVaultImport({
     message,
+    priority,
+    requestedExpiry,
   }: {
     message: Extract<
-      ExtensionSessionRequest,
+      ParsedExtensionSessionTransportRequest,
       { type: ExtensionSessionMessageType.ImportVault }
     >
+    priority: SessionOperationPriority
+    requestedExpiry: RequestedQueueExpiry
   }): Promise<ExtensionSessionDispatchResponse<SessionResponse>> {
     const payload = message.payload
     const operationGeneration = this.operationGeneration
@@ -198,7 +212,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
       payload.providers = []
       return { ok: false, error: 'invalid-provider-payload' }
     }
-    const providerCandidate: StorageProvider[] = payload.providers
+    const providerCandidate: SerializedStorageProvider[] = payload.providers
     const stagingArgs: Parameters<typeof stageProviderCredentials>[0] = {
       providers: providerCandidate,
       decode: this.context.decodeProviders,
@@ -264,8 +278,14 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
         }
       },
       options: {
-        priority: SessionOperationPriority.Interactive,
-        expiry: { kind: SessionOperationExpiryKind.None },
+        priority,
+        expiry:
+          requestedExpiry.kind === RequestedQueueExpiryKind.Requested
+            ? {
+                kind: SessionOperationExpiryKind.Deadline,
+                expiresAt: requestedExpiry.expiresAt,
+              }
+            : { kind: SessionOperationExpiryKind.None },
         cleanup: {
           kind: SessionOperationCleanupKind.OnExpire,
           run: clearQueuedStaging,
@@ -276,28 +296,39 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
   }
 
   enqueue(
-    message: ExtensionSessionRequest,
+    message: ParsedExtensionSessionTransportRequest,
   ): Promise<ExtensionSessionDispatchResponse<SessionResponse>> {
     const type = message.type
-    if (type === ExtensionSessionMessageType.ImportVault) {
-      const nookNamedArgs0_3: Parameters<typeof this.enqueueVaultImport>[0] = {
-        message,
-      }
-      return this.enqueueVaultImport(nookNamedArgs0_3)
-    }
     const requestedExpiry = requestedQueueExpiry(message)
     const priority =
       requestedExpiry.kind === RequestedQueueExpiryKind.Requested
-        ? message.payload.queuePriority === 'interactive'
+        ? message.payload.queue.kind === ExtensionSessionQueueKind.Deadline &&
+          message.payload.queue.priority ===
+            ExtensionSessionQueuePriority.Interactive
           ? SessionOperationPriority.Interactive
           : SessionOperationPriority.Probe
-        : sessionMessagePriority(type)
+        : type === ExtensionSessionMessageType.ImportVault
+          ? SessionOperationPriority.Interactive
+          : sessionMessagePriority(type)
+    if (type === ExtensionSessionMessageType.ImportVault) {
+      const nookNamedArgs0_3: Parameters<typeof this.enqueueVaultImport>[0] = {
+        message,
+        priority,
+        requestedExpiry,
+      }
+      return this.enqueueVaultImport(nookNamedArgs0_3)
+    }
     const sensitiveStage = stageExtensionSessionSensitiveRequest(message)
     if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged) {
       const nookNamedArgs0_4: Parameters<
         typeof this.enqueueSensitiveMessage
       >[0] = {
         request: sensitiveStage.request,
+        priority,
+        expiresAt:
+          requestedExpiry.kind === RequestedQueueExpiryKind.Requested
+            ? requestedExpiry.expiresAt
+            : Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
       }
       return this.enqueueSensitiveMessage(nookNamedArgs0_4)
     }
@@ -315,7 +346,8 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
             : priority === SessionOperationPriority.Interactive
               ? {
                   kind: SessionOperationExpiryKind.Deadline,
-                  expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
+                  expiresAt:
+                    Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
                 }
               : { kind: SessionOperationExpiryKind.None },
         cleanup: { kind: SessionOperationCleanupKind.None },
@@ -327,43 +359,66 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
   registerRuntimeListener(): void {
     // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      const parsed = parseExtensionSessionRequest(message)
-      if (parsed.kind === ExtensionSessionRequestParseKind.Invalid) return false
-      const request = parsed.request
-      const type = request.type
-      if (type === ExtensionSessionMessageType.Lock) return false
-      const serviceWorkerOnly =
-        type === ExtensionSessionMessageType.SealIdentityHandoff ||
-        type === ExtensionSessionMessageType.CancelPasskey
-      const serviceWorkerSender =
-        !sender.tab &&
-        (!sender.url ||
-          sender.url === chrome.runtime.getURL('background/service-worker.js'))
+      if (sender.id !== chrome.runtime.id) return false
       if (
-        sender.id !== chrome.runtime.id ||
-        (serviceWorkerOnly && !serviceWorkerSender) ||
-        !type.startsWith('nook:extension-session-')
+        !message ||
+        typeof message !== 'object' ||
+        !('type' in message) ||
+        typeof message.type !== 'string' ||
+        !message.type.startsWith('nook:extension-session-') ||
+        message.type === ExtensionSessionMessageType.Lock
       ) {
         return false
       }
-      const direct =
-        type === ExtensionSessionMessageType.DismissLoginSave ||
-        type === ExtensionSessionMessageType.CancelPasskey
-      const response = direct
-        ? this.context.handleMessage(request)
-        : this.enqueue(request)
-      void response
-        .then((value) => sendResponse(value))
-        .catch((error) => {
-          const nookArrowArgs0: Parameters<typeof sendResponse>[0] = {
+      void parseExtensionSessionRequest(message).then((parsed) => {
+        if (parsed.kind === ExtensionSessionRequestParseKind.Invalid) {
+          const invalidResponse: Parameters<typeof sendResponse>[0] = {
             ok: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Extension session failed.',
+            error: 'Invalid extension session request.',
           }
-          return sendResponse(nookArrowArgs0)
-        })
+          sendResponse(invalidResponse)
+          return
+        }
+        const request = parsed.request
+        const type = request.type
+        const serviceWorkerOnly =
+          type === ExtensionSessionMessageType.SealIdentityHandoff ||
+          type === ExtensionSessionMessageType.CancelPasskey
+        const serviceWorkerSender =
+          !sender.tab &&
+          (!sender.url ||
+            sender.url ===
+              chrome.runtime.getURL('background/service-worker.js'))
+        if (
+          (serviceWorkerOnly && !serviceWorkerSender) ||
+          !type.startsWith('nook:extension-session-')
+        ) {
+          const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
+            ok: false,
+            error: 'Forbidden extension session request.',
+          }
+          sendResponse(forbiddenResponse)
+          return
+        }
+        const direct =
+          type === ExtensionSessionMessageType.DismissLoginSave ||
+          type === ExtensionSessionMessageType.CancelPasskey
+        const response = direct
+          ? this.context.handleMessage(request)
+          : this.enqueue(request)
+        void response
+          .then((value) => sendResponse(value))
+          .catch((error) => {
+            const nookArrowArgs0: Parameters<typeof sendResponse>[0] = {
+              ok: false,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : 'Extension session failed.',
+            }
+            return sendResponse(nookArrowArgs0)
+          })
+      })
       return true
     })
   }

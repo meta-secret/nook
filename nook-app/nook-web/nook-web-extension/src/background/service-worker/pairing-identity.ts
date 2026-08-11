@@ -18,6 +18,12 @@ import {
 } from '../../lib/simple-vault-runtime'
 import { WebsiteAuthenticatorResponseStatus } from '../../lib/login-fill-messages'
 import {
+  extensionSessionInteractiveDeadline,
+  extensionSessionProbeDeadline,
+  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+  type ExtensionSessionTransportRequest,
+} from '../../offscreen/session-request-adapter'
+import {
   parsedWebsitePasskeyRequest,
   WebsitePasskeyRequestParseKind,
   type WebsitePasskeyCeremony,
@@ -197,7 +203,9 @@ export function isNokeySender(sender: chrome.runtime.MessageSender): boolean {
   }
 }
 
-export function sendSessionMessage(message: unknown): Promise<unknown> {
+export function sendSessionMessage(
+  message: ExtensionSessionTransportRequest,
+): Promise<unknown> {
   // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {
@@ -271,7 +279,10 @@ export async function createIdentityHandoff(
     await ensureExtensionSessionDocument()
     const nookTypedArgs0_3: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-seal-identity-handoff',
-      payload: message.payload,
+      payload: {
+        ...message.payload,
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
     }
     const response = await sendSessionMessage(nookTypedArgs0_3)
     if (
@@ -420,7 +431,9 @@ export async function discoverPairedVaultIdentity(
     await ensureExtensionSessionDocument()
     const nookTypedArgs0_5: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-status',
-      payload: { queueExpiresAt: message.payload.expiresAt },
+      payload: {
+        queue: extensionSessionProbeDeadline(message.payload.expiresAt),
+      },
     }
     const statusResponse = (await sendSessionMessage(
       nookTypedArgs0_5,
@@ -497,7 +510,7 @@ export async function requestPairedVaultUnlock(
   const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
   const nookTypedArgs0_7: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
-    payload: { queueExpiresAt, queuePriority: 'interactive' },
+    payload: { queue: extensionSessionInteractiveDeadline(queueExpiresAt) },
   }
   const statusResponse = (await sendSessionMessage(
     nookTypedArgs0_7,
@@ -744,7 +757,6 @@ export async function availableWebsiteGrants({
             status:
               | WebsiteAuthenticatorResponseStatus.Unavailable
               | WebsiteAuthenticatorResponseStatus.Locked
-            accounts: []
           }
     }
 > {
@@ -761,7 +773,6 @@ export async function availableWebsiteGrants({
       response: {
         ok: true,
         status: WebsiteAuthenticatorResponseStatus.Unavailable,
-        accounts: [],
       },
     }
   }
@@ -769,7 +780,7 @@ export async function availableWebsiteGrants({
   const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
   const nookTypedArgs0_9: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
-    payload: { queueExpiresAt, queuePriority: 'interactive' },
+    payload: { queue: extensionSessionInteractiveDeadline(queueExpiresAt) },
   }
   const status = await sendSessionMessage(nookTypedArgs0_9)
   if (!isUnlockedSessionStatus(status)) {
@@ -778,7 +789,6 @@ export async function availableWebsiteGrants({
       response: {
         ok: true,
         status: WebsiteAuthenticatorResponseStatus.Locked,
-        accounts: [],
       },
     }
   }

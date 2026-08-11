@@ -20,7 +20,10 @@ import {
   ExtensionSessionMessageDispatcher,
   type SessionMessageDispatchContext,
 } from './session-message-dispatch'
-import type { ExtensionSessionRequest } from './session-request-adapter'
+import {
+  type ExtensionSessionRequest,
+  ExtensionSessionQueueKind,
+} from './session-request-adapter'
 import {
   LOGIN_SAVE_OFFER_TTL_MS,
   PendingLoginSaveLookupState,
@@ -868,10 +871,11 @@ async function handleMessage(
       if (
         typeof payload.requestId !== 'string' ||
         typeof payload.requestJson !== 'string' ||
-        typeof payload.queueExpiresAt !== 'number'
+        payload.queue.kind !== ExtensionSessionQueueKind.Deadline
       ) {
         throw new Error('Extension session received an invalid registration.')
       }
+      const queueExpiresAt = payload.queue.expiresAt
       const activeManager = await getManager()
       const nookTypedArgs0_12: Parameters<typeof openPasskeyVault>[0] = {
         activeManager,
@@ -882,7 +886,7 @@ async function handleMessage(
         const registration = await activeManager.registerWebsitePasskey(
           payload.requestJson,
           () =>
-            Date.now() < (payload.queueExpiresAt as number) &&
+            Date.now() < queueExpiresAt &&
             !canceledWebsitePasskeyRequests.has(payload.requestId as string),
         )
         try {
@@ -913,10 +917,11 @@ async function handleMessage(
       if (
         typeof payload.requestId !== 'string' ||
         typeof payload.requestJson !== 'string' ||
-        typeof payload.queueExpiresAt !== 'number'
+        payload.queue.kind !== ExtensionSessionQueueKind.Deadline
       ) {
         throw new Error('Extension session received an invalid assertion.')
       }
+      const queueExpiresAt = payload.queue.expiresAt
       const activeManager = await getManager()
       const nookTypedArgs0_14: Parameters<typeof openPasskeyVault>[0] = {
         activeManager,
@@ -927,7 +932,7 @@ async function handleMessage(
         const assertion = await activeManager.assertWebsitePasskey(
           payload.requestJson,
           () =>
-            Date.now() < (payload.queueExpiresAt as number) &&
+            Date.now() < queueExpiresAt &&
             !canceledWebsitePasskeyRequests.has(payload.requestId as string),
         )
         try {
@@ -955,6 +960,8 @@ async function handleMessage(
     }
     case ExtensionSessionMessageType.Lock:
       return { ok: true }
+    default:
+      throw new Error('Extension session received an unsupported request.')
   }
 }
 

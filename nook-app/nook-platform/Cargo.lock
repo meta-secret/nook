@@ -1880,6 +1880,7 @@ dependencies = [
  "hex",
  "hkdf 0.13.0",
  "nook-app-common",
+ "nook-authenticator-domain",
  "pbkdf2 0.13.0",
  "percent-encoding",
  "serde",
@@ -1893,22 +1894,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "nook-authenticator-domain"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "nook-companion-core"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "nook-authenticator-domain",
+ "nook-event-log",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
  "tsify",
  "url",
  "wasm-bindgen",
+ "zeroize",
 ]
 
 [[package]]
 name = "nook-companion-wasm"
 version = "1.0.0"
 dependencies = [
+ "getrandom 0.2.17",
  "nook-companion-core",
  "serde-wasm-bindgen",
  "wasm-bindgen",
@@ -1937,6 +1951,7 @@ dependencies = [
  "hmac 0.13.0",
  "nook-app-common",
  "nook-auth2",
+ "nook-authenticator-domain",
  "nook-companion-core",
  "nook-event-log",
  "p256 0.14.0",

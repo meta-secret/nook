@@ -141,6 +141,7 @@ COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/clippy.toml clippy.toml
 COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
 COPY nook-app/nook-platform/nook-app-common/Cargo.toml nook-app-common/Cargo.toml
+COPY nook-app/nook-platform/nook-authenticator-domain/Cargo.toml nook-authenticator-domain/Cargo.toml
 COPY nook-app/nook-platform/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
 COPY nook-app/nook-platform/nook-replication/Cargo.toml nook-replication/Cargo.toml
 COPY nook-app/nook-platform/nook-event-log/Cargo.toml nook-event-log/Cargo.toml
@@ -150,6 +151,7 @@ COPY nook-app/nook-platform/nook-companion-wasm/Cargo.toml nook-companion-wasm/C
 COPY nook-app/nook-platform/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 RUN mkdir -p \
       nook-app-common/src \
+      nook-authenticator-domain/src \
       nook-auth2/src \
       nook-replication/src \
       nook-event-log/src \
@@ -159,6 +161,7 @@ RUN mkdir -p \
       nook-wasm/src \
     && touch \
       nook-app-common/src/lib.rs \
+      nook-authenticator-domain/src/lib.rs \
       nook-auth2/src/lib.rs \
       nook-replication/src/lib.rs \
       nook-event-log/src/lib.rs \
@@ -197,7 +200,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-app-common-nextest-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo nextest run --no-run -p nook-auth2 --profile ci \
+    cargo nextest run --no-run -p nook-authenticator-domain -p nook-auth2 --profile ci \
     && nook-sccache-report native-auth-nextest-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
@@ -230,7 +233,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-app-common-clippy-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo clippy -p nook-auth2 --all-targets -- -D warnings \
+    cargo clippy -p nook-authenticator-domain -p nook-auth2 --all-targets -- -D warnings \
     && nook-sccache-report native-auth-clippy-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
@@ -250,7 +253,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-core-clippy-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass \
+    cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass \
     && nook-sccache-report native-coverage-dependencies
 
 # Source overlay for bulk native leaves. Keep this after cook so builder-*-deps stay
@@ -284,17 +287,18 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common \
     && nook-sccache-report native-app-common-coverage
 
+COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo clippy -p nook-auth2 --all-targets -- -D warnings \
+    cargo clippy -p nook-authenticator-domain -p nook-auth2 --all-targets -- -D warnings \
     && nook-sccache-report native-auth-clippy
 # --no-clean keeps the manifest-keyed instrumented dependencies warmed above. cargo-llvm-cov does
 # not allow --no-clean with --no-report, so this first source-level run emits its interim report;
 # the nook-core run below then extends the same coverage session and enforces the combined floor.
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2 \
+    cargo llvm-cov nextest --no-clean --profile ci -p nook-authenticator-domain -p nook-auth2 \
     && nook-sccache-report native-auth-coverage
 
 COPY nook-app/nook-platform/nook-replication nook-replication
@@ -333,7 +337,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo clippy -p nook-core --all-targets -- -D warnings \
     && nook-sccache-report native-core-clippy
 # Coverage runs HERE, in the image build (not at task runtime): cargo-llvm-cov first runs
-# nook-app-common, nook-auth2, nook-replication, nook-event-log, and nook-companion-core above,
+# nook-app-common, nook-authenticator-domain, nook-auth2, nook-replication,
+# nook-event-log, and nook-companion-core above,
 # then runs nook-core with --no-clean
 # so the final report combines all portable crates while preserving cacheable dependency coverage.
 # The same run also bakes the coverage artifacts that PR CI copies out later;
@@ -343,9 +348,9 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
     && mkdir -p /opt/nook/coverage/nook-core \
     && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only > /tmp/nook-core-coverage-summary.txt \
-    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only --fail-under-lines "$FLOOR" > /opt/nook/coverage/nook-core/summary.txt \
-    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
-    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
+    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only --fail-under-lines "$FLOOR" > /opt/nook/coverage/nook-core/summary.txt \
+    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
+    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
     && cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json \
     && nook-sccache-report native-core-coverage
 
@@ -378,10 +383,11 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cargo nextest run -p nook-app-common --profile ci --no-run \
     && nook-sccache-report focused-native-test-app-common
 
+COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo nextest run -p nook-auth2 --profile ci --no-run \
+    cargo nextest run -p nook-authenticator-domain -p nook-auth2 --profile ci --no-run \
     && nook-sccache-report focused-native-test-auth2
 
 COPY nook-app/nook-platform/nook-replication nook-replication
@@ -445,10 +451,11 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cargo clippy -p nook-app-common --all-targets -- -D warnings \
     && nook-sccache-report focused-rust-lint-app-common
 
+COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo clippy -p nook-auth2 --all-targets -- -D warnings \
+    cargo clippy -p nook-authenticator-domain -p nook-auth2 --all-targets -- -D warnings \
     && nook-sccache-report focused-rust-lint-auth2
 
 COPY nook-app/nook-platform/nook-replication nook-replication
@@ -520,10 +527,11 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common --summary-only \
     && nook-sccache-report focused-rust-coverage-app-common
 
+COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2 --summary-only \
+    cargo llvm-cov nextest --no-clean --profile ci -p nook-authenticator-domain -p nook-auth2 --summary-only \
     && nook-sccache-report focused-rust-coverage-auth2
 
 COPY nook-app/nook-platform/nook-replication nook-replication
@@ -585,6 +593,7 @@ COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
 COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/clippy.toml clippy.toml
 COPY nook-app/nook-platform/nook-app-common nook-app-common
+COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
 COPY nook-app/nook-platform/nook-replication nook-replication
 COPY nook-app/nook-platform/nook-event-log nook-event-log
@@ -633,6 +642,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
            nook-companion-core/Cargo.toml nook-companion-core/src \
            nook-app-common/Cargo.toml nook-app-common/src nook-app-common/locales \
            nook-core/Cargo.toml nook-core/src \
+           nook-authenticator-domain/Cargo.toml nook-authenticator-domain/src \
            nook-auth2/Cargo.toml nook-auth2/src \
            nook-replication/Cargo.toml nook-replication/src \
            nook-event-log/Cargo.toml nook-event-log/src \

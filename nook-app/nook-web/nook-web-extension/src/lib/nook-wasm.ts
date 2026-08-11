@@ -24,6 +24,10 @@ import {
   VaultApplication,
   type NookAppLocale,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import {
+  type ExtensionSessionQueue,
+  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+} from '../offscreen/session-request-adapter'
 
 enum ExtensionWasmStartupKind {
   NotStarted = 'not-started',
@@ -95,7 +99,7 @@ enum ExtensionRuntimeRequestType {
   UnlockPin = 'nook:extension-session-unlock-pin',
 }
 
-type ExtensionControlPayload = Readonly<Record<never, never>>
+type ExtensionControlPayload = { queue: ExtensionSessionQueue }
 type ExtensionStatusRequest = {
   type: ExtensionRuntimeRequestType.Status
   payload: ExtensionControlPayload
@@ -112,6 +116,7 @@ type ExtensionFinishPasskeySetupRequest = {
     prfInput: number[]
     prfOutput: number[]
     deviceMode: DeviceMode
+    queue: ExtensionSessionQueue
   }
 }
 type ExtensionRecoverPasskeyRequest = {
@@ -120,6 +125,7 @@ type ExtensionRecoverPasskeyRequest = {
     credentialId: number[]
     userHandle: number[]
     prfOutput: number[]
+    queue: ExtensionSessionQueue
   }
 }
 type ExtensionUnlockOptionsRequest = {
@@ -128,15 +134,15 @@ type ExtensionUnlockOptionsRequest = {
 }
 type ExtensionUnlockPasskeyRequest = {
   type: ExtensionRuntimeRequestType.UnlockPasskey
-  payload: { prfOutput: number[] }
+  payload: { prfOutput: number[]; queue: ExtensionSessionQueue }
 }
 type ExtensionCreatePinRequest = {
   type: ExtensionRuntimeRequestType.CreatePin
-  payload: { pin: string }
+  payload: { pin: string; queue: ExtensionSessionQueue }
 }
 type ExtensionUnlockPinRequest = {
   type: ExtensionRuntimeRequestType.UnlockPin
-  payload: { pin: string }
+  payload: { pin: string; queue: ExtensionSessionQueue }
 }
 
 type ExtensionSessionRequest =
@@ -378,7 +384,7 @@ async function createPasskey(
 export async function extensionDeviceProtectionStatus(): Promise<DeviceProtectionStatus> {
   const request: ExtensionStatusRequest = {
     type: ExtensionRuntimeRequestType.Status,
-    payload: {},
+    payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
   const response = await sessionResponse(request)
   const deviceStatus = deviceProtectionStatus(response.status)
@@ -413,7 +419,7 @@ export type ExtensionSessionDeviceState =
 export async function extensionSessionDevice(): Promise<ExtensionSessionDeviceState> {
   const request: ExtensionStatusRequest = {
     type: ExtensionRuntimeRequestType.Status,
-    payload: {},
+    payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
   const response = await sessionResponse(request)
   const status = deviceProtectionStatus(response.status)
@@ -438,7 +444,7 @@ export async function createExtensionPasskey(
   await ensureNookWasm()
   const beginRequest: ExtensionBeginPasskeySetupRequest = {
     type: ExtensionRuntimeRequestType.BeginPasskeySetup,
-    payload: {},
+    payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
   const setup = decodePasskeySetupResponse(await sessionResponse(beginRequest))
   const creationOptions = buildPasskeyCreationOptions(
@@ -463,6 +469,7 @@ export async function createExtensionPasskey(
       prfInput: setup.prfInput,
       prfOutput: prfOutput(asserted),
       deviceMode,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
   const finishResponse = await sessionResponse(finishRequest)
@@ -479,6 +486,7 @@ export async function recoverExtensionPasskey(): Promise<ExtensionDeviceProtecti
       credentialId: credentialId(credential),
       userHandle: assertionUserHandle(credential),
       prfOutput: prfOutput(credential),
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
   const response = await sessionResponse(request)
@@ -489,7 +497,7 @@ export async function unlockExtensionPasskey(): Promise<ExtensionDeviceProtectio
   await ensureNookWasm()
   const optionsRequest: ExtensionUnlockOptionsRequest = {
     type: ExtensionRuntimeRequestType.UnlockOptions,
-    payload: {},
+    payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
   const material = decodePasskeyUnlockResponse(
     await sessionResponse(optionsRequest),
@@ -502,7 +510,10 @@ export async function unlockExtensionPasskey(): Promise<ExtensionDeviceProtectio
   const credential = await getPasskey(options)
   const request: ExtensionUnlockPasskeyRequest = {
     type: ExtensionRuntimeRequestType.UnlockPasskey,
-    payload: { prfOutput: prfOutput(credential) },
+    payload: {
+      prfOutput: prfOutput(credential),
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    },
   }
   const response = await sessionResponse(request)
   return extensionDevice(response.device)
@@ -513,7 +524,7 @@ export async function createExtensionPin(
 ): Promise<ExtensionDeviceProtectionResult> {
   const request: ExtensionCreatePinRequest = {
     type: ExtensionRuntimeRequestType.CreatePin,
-    payload: { pin },
+    payload: { pin, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
   const response = await sessionResponse(request)
   return extensionDevice(response.device)
@@ -524,7 +535,7 @@ export async function unlockExtensionPin(
 ): Promise<ExtensionDeviceProtectionResult> {
   const request: ExtensionUnlockPinRequest = {
     type: ExtensionRuntimeRequestType.UnlockPin,
-    payload: { pin },
+    payload: { pin, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
   const response = await sessionResponse(request)
   return extensionDevice(response.device)

@@ -14,51 +14,59 @@ import {
   type WebsiteLoginAccountOption,
   WebsiteLoginRevealMessageType,
 } from '../../lib/login-fill-messages'
-import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  AuthenticationWorkflowAction,
+  GeneratedPasswordResponseKind,
+  LoginPickerOpenResponseKind,
+  WebsiteLoginOptionsKind,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { LoginPickerKind, pickerState, widgetState } from './state'
-import type {
-  LoginOptionsResponse,
-  LoginPickerOpenResponse,
-} from './workflow-ui'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
 import {
   LoginFillDeliveryKind,
   sendLoginFillMessage,
 } from './login-fill-runtime-adapter'
+import {
+  RuntimeMessageDeliveryKind,
+  sendGeneratePasswordRuntimeMessage,
+  sendLoginOptionsRuntimeMessage,
+  sendLoginPickerOpenRuntimeMessage,
+  sendRuntimeMessageWithoutResponse,
+} from './runtime-message-adapter'
+
+export {
+  RuntimeMessageDeliveryKind,
+  sendAuthenticationWorkflowSnapshotRuntimeMessage,
+  sendAuthenticationOutcomeRuntimeMessage,
+  sendAuthenticatorBackupAttachRuntimeMessage,
+  sendAuthenticatorCodeRuntimeMessage,
+  sendAuthenticatorEnrollmentConfirmRuntimeMessage,
+  sendAuthenticatorEnrollmentStageRuntimeMessage,
+  sendAuthenticatorOptionsRuntimeMessage,
+  sendAuthenticatorPickerOpenRuntimeMessage,
+  sendAuthenticatorPreviewRuntimeMessage,
+  sendDecodedRuntimeMessage,
+  sendLoginSaveOfferRuntimeMessage,
+  sendLoginSavePendingRuntimeMessage,
+  sendLoginSaveActionRuntimeMessage,
+  sendRuntimeMessageWithoutResponse,
+} from './runtime-message-adapter'
+export type {
+  AuthenticatorBackupAttachResponse,
+  AuthenticatorCodeResponse,
+  AuthenticatorEnrollmentConfirmResponse,
+  AuthenticatorEnrollmentStageResponse,
+  AuthenticatorOptionsResponse,
+  AuthenticatorPickerOpenResponse,
+  AuthenticatorPreviewResponse,
+  DecodedRuntimeMessageArgs,
+  RuntimeMessageDelivery,
+  RuntimeMessageResponseDecoder,
+} from './runtime-message-adapter'
 
 export type PasskeyWidgetAction =
   | AuthenticationWorkflowAction.UsePasskey
   | AuthenticationWorkflowAction.CreatePasskey
-
-export enum RuntimeMessageDeliveryKind {
-  Delivered = 'delivered',
-  Unavailable = 'unavailable',
-}
-
-export type RuntimeMessageDelivery<T> =
-  | { kind: RuntimeMessageDeliveryKind.Delivered; response: T }
-  | { kind: RuntimeMessageDeliveryKind.Unavailable }
-
-export function sendRuntimeMessage<T>(
-  message: unknown,
-): Promise<RuntimeMessageDelivery<T>> {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage(message, (response: unknown) => {
-      if (chrome.runtime.lastError) {
-        const nookTypedArgs0_0: Parameters<typeof resolve>[0] = {
-          kind: RuntimeMessageDeliveryKind.Unavailable,
-        }
-        resolve(nookTypedArgs0_0)
-        return
-      }
-      const nookTypedArgs0_1: Parameters<typeof resolve>[0] = {
-        kind: RuntimeMessageDeliveryKind.Delivered,
-        response: response as T,
-      }
-      resolve(nookTypedArgs0_1)
-    })
-  })
-}
 
 export function setStatus({
   description,
@@ -220,15 +228,16 @@ async function openLoginPicker({
   continueButton: HTMLButtonElement
 }): Promise<void> {
   if (pickerState.login.kind === LoginPickerKind.Open) return
-  const nookTypedArgs0_3: Parameters<typeof sendRuntimeMessage>[0] = {
+  const nookTypedArgs0_3: Parameters<
+    typeof sendLoginPickerOpenRuntimeMessage
+  >[0] = {
     type: 'nook:website-login-picker-open',
     payload: { origin: location.origin },
   }
-  const delivery =
-    await sendRuntimeMessage<LoginPickerOpenResponse>(nookTypedArgs0_3)
+  const delivery = await sendLoginPickerOpenRuntimeMessage(nookTypedArgs0_3)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    !delivery.response?.ok
+    delivery.response.kind === LoginPickerOpenResponseKind.Failed
   ) {
     const nookTypedArgs0_10: Parameters<typeof setFlightProgress>[0] = {
       step,
@@ -248,7 +257,7 @@ async function openLoginPicker({
     return
   }
   const { response } = delivery
-  if (response.status === 'locked') {
+  if (response.kind === LoginPickerOpenResponseKind.Locked) {
     const nookTypedArgs0_12: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,
@@ -266,7 +275,7 @@ async function openLoginPicker({
     setStatus(nookTypedArgs0_13)
     return
   }
-  if (response.status === 'unavailable') {
+  if (response.kind === LoginPickerOpenResponseKind.Unavailable) {
     const nookTypedArgs0_14: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,
@@ -284,11 +293,8 @@ async function openLoginPicker({
     setStatus(nookTypedArgs0_15)
     return
   }
-  if (
-    !response.requestId ||
-    typeof response.expiresAt !== 'number' ||
-    response.expiresAt <= Date.now()
-  ) {
+  if (!('expiresAt' in response) || !('requestId' in response)) return
+  if (response.expiresAt <= Date.now()) {
     const nookTypedArgs0_16: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,
@@ -365,11 +371,13 @@ async function openLoginPicker({
 }
 
 function cancelLoginPickerRequest(requestId: string): void {
-  const nookTypedArgs0_5: Parameters<typeof sendRuntimeMessage>[0] = {
+  const nookTypedArgs0_5: Parameters<
+    typeof sendRuntimeMessageWithoutResponse
+  >[0] = {
     type: 'nook:login-picker-cancel',
     payload: { requestId },
   }
-  void sendRuntimeMessage(nookTypedArgs0_5)
+  sendRuntimeMessageWithoutResponse(nookTypedArgs0_5)
 }
 
 export function cancelPendingLoginPickerRequest(): void {
@@ -413,15 +421,13 @@ export async function generatePasswordWithNook({
   }
   setStatus(nookTypedArgs0_22)
   try {
-    const nookTypedArgs0_6: Parameters<typeof sendRuntimeMessage>[0] = {
+    const nookTypedArgs0_6: Parameters<
+      typeof sendGeneratePasswordRuntimeMessage
+    >[0] = {
       type: 'nook:website-generate-password',
       payload: { origin: location.origin },
     }
-    const delivery = await sendRuntimeMessage<{
-      ok?: boolean
-      password?: string
-      reason?: string
-    }>(nookTypedArgs0_6)
+    const delivery = await sendGeneratePasswordRuntimeMessage(nookTypedArgs0_6)
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
       const nookTypedArgs0_23: Parameters<typeof setStatus>[0] = {
         description,
@@ -435,7 +441,10 @@ export async function generatePasswordWithNook({
       return
     }
     const { response } = delivery
-    if (response.ok !== true || typeof response.password !== 'string') {
+    if (
+      response.kind !== GeneratedPasswordResponseKind.Generated ||
+      !('password' in response)
+    ) {
       const nookTypedArgs0_24: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
@@ -585,16 +594,17 @@ export async function continueWithNook({
   setStatus(nookTypedArgs0_32)
 
   try {
-    const nookTypedArgs0_7: Parameters<typeof sendRuntimeMessage>[0] = {
+    const nookTypedArgs0_7: Parameters<
+      typeof sendLoginOptionsRuntimeMessage
+    >[0] = {
       type: 'nook:website-login-options',
       payload: { origin: location.origin },
     }
-    const delivery =
-      await sendRuntimeMessage<LoginOptionsResponse>(nookTypedArgs0_7)
+    const delivery = await sendLoginOptionsRuntimeMessage(nookTypedArgs0_7)
 
     if (
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-      !delivery.response?.ok
+      delivery.response.kind === WebsiteLoginOptionsKind.Rejected
     ) {
       const nookTypedArgs0_33: Parameters<typeof setFlightProgress>[0] = {
         step,
@@ -615,7 +625,7 @@ export async function continueWithNook({
     }
     const { response } = delivery
 
-    if (response.status === 'locked') {
+    if (response.kind === WebsiteLoginOptionsKind.Locked) {
       const nookTypedArgs0_35: Parameters<typeof setFlightProgress>[0] = {
         step,
         title,
@@ -634,7 +644,7 @@ export async function continueWithNook({
       return
     }
 
-    if (response.status === 'unavailable') {
+    if (response.kind === WebsiteLoginOptionsKind.Unavailable) {
       const nookTypedArgs0_37: Parameters<typeof setFlightProgress>[0] = {
         step,
         title,
@@ -653,7 +663,9 @@ export async function continueWithNook({
       return
     }
 
-    const accounts = response.accounts ?? []
+    if (!('accounts' in response)) return
+
+    const accounts = response.accounts
     if (accounts.length === 0) {
       const nookTypedArgs0_39: Parameters<typeof setFlightProgress>[0] = {
         step,

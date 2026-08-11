@@ -1,36 +1,10 @@
 use crate::ValidationError;
+use nook_authenticator_domain::BackupCodeAttachMode;
 
 /// Maximum recovery codes accepted on a single authenticator item.
 pub const MAX_AUTHENTICATOR_BACKUP_CODES: usize = 64;
 /// Maximum Unicode scalar count for one recovery code.
 pub const MAX_AUTHENTICATOR_BACKUP_CODE_LEN: usize = 64;
-
-/// How confirmed recovery codes attach to an existing authenticator.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BackupCodeAttachMode {
-    /// Replace every stored recovery code with the confirmed set.
-    Replace,
-    /// Append confirmed codes and re-normalize (trim, drop empties, dedupe).
-    Merge,
-}
-
-impl BackupCodeAttachMode {
-    pub fn parse(value: &str) -> Result<Self, ValidationError> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "replace" => Ok(Self::Replace),
-            "merge" => Ok(Self::Merge),
-            _ => Err(ValidationError::AuthenticatorBackupCodesInvalid),
-        }
-    }
-
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Replace => "replace",
-            Self::Merge => "merge",
-        }
-    }
-}
 
 /// Trim, drop empties, and dedupe recovery codes without enforcing enrollment bounds.
 pub(super) fn soft_normalize_backup_codes(codes: &[String]) -> Vec<String> {

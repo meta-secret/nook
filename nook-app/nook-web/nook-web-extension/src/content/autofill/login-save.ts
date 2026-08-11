@@ -5,13 +5,14 @@ import {
   readLoginCredentials,
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { AuthenticationOutcomeVerdict } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  AuthenticationOutcomeResponseKind,
+  AuthenticationOutcomeVerdict,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import {
   NookWebsiteLoginSaveDecision,
-  WebsiteLoginSavePendingState,
   type WebsiteLoginSaveOfferView,
-  type WebsiteLoginSavePendingResponse,
 } from '../../lib/login-save-messages'
 import type {
   AuthenticationOutcomeObservationView,
@@ -19,7 +20,11 @@ import type {
 } from '../../lib/outcome-evidence-messages'
 import {
   RuntimeMessageDeliveryKind,
-  sendRuntimeMessage,
+  sendAuthenticationOutcomeRuntimeMessage,
+  sendLoginSaveActionRuntimeMessage,
+  sendLoginSaveOfferRuntimeMessage,
+  sendLoginSavePendingRuntimeMessage,
+  sendRuntimeMessageWithoutResponse,
 } from './login-passkey-actions'
 import {
   SavePageWatchKind,
@@ -39,27 +44,6 @@ import {
   removeWidget,
   translatedMessage,
 } from './workflow-ui'
-
-enum LoginSaveOfferResponseStatus {
-  Ready = 'ready',
-  Locked = 'locked',
-  Unavailable = 'unavailable',
-}
-
-type LoginSaveOfferResponse = {
-  ok?: boolean
-  status?:
-    | LoginSaveOfferResponseStatus.Ready
-    | LoginSaveOfferResponseStatus.Locked
-    | LoginSaveOfferResponseStatus.Unavailable
-  decision?: NookWebsiteLoginSaveDecision
-  offer?: WebsiteLoginSaveOfferView
-}
-
-type LoginSaveActionResponse = {
-  ok?: boolean
-  reason?: string
-}
 
 enum AuthenticationOutcomeReadKind {
   Available = 'available',
@@ -131,21 +115,22 @@ function collectOutcomeObservation({
 async function classifyOutcomeEvidence(
   observation: AuthenticationOutcomeObservationView,
 ): Promise<AuthenticationOutcomeRead> {
-  const nookTypedArgs0_0: Parameters<typeof sendRuntimeMessage>[0] = {
-    type: 'nook:authentication-outcome-classify',
-    payload: {
-      observation,
-      timeoutMs: OUTCOME_EVIDENCE_TIMEOUT_MS,
-    },
-  }
-  const delivery = await sendRuntimeMessage<{
-    ok?: boolean
-    verdict?: AuthenticationOutcomeVerdictView
-  }>(nookTypedArgs0_0)
+  const message: Parameters<typeof sendAuthenticationOutcomeRuntimeMessage>[0] =
+    {
+      type: 'nook:authentication-outcome-classify',
+      payload: {
+        observation,
+        timeoutMs: OUTCOME_EVIDENCE_TIMEOUT_MS,
+      },
+    }
+  const sendMessage: Parameters<
+    typeof sendAuthenticationOutcomeRuntimeMessage
+  >[0] = message
+  const delivery = await sendAuthenticationOutcomeRuntimeMessage(sendMessage)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    !delivery.response?.ok ||
-    !delivery.response.verdict
+    delivery.response.kind !== AuthenticationOutcomeResponseKind.Completed ||
+    !('verdict' in delivery.response)
   ) {
     return { kind: AuthenticationOutcomeReadKind.Unavailable }
   }
@@ -188,11 +173,11 @@ export async function evaluatePendingSaveEvidence(): Promise<void> {
       observation.errorMarkerPresent)
   ) {
     stopPendingSaveWatch()
-    const nookTypedArgs0_1: Parameters<typeof sendRuntimeMessage>[0] = {
+    const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
       type: 'nook:website-login-save-dismiss',
       payload: { origin: location.origin, offerId: watch.offer.offerId },
     }
-    void sendRuntimeMessage(nookTypedArgs0_1)
+    sendRuntimeMessageWithoutResponse(message)
   }
 }
 
@@ -227,7 +212,7 @@ export function beginPendingSaveWatch(offer: WebsiteLoginSaveOfferView): void {
 async function stageSaveForCredentials(
   credentials: LoginCredentials,
 ): Promise<void> {
-  const nookTypedArgs0_3: Parameters<typeof sendRuntimeMessage>[0] = {
+  const message: Parameters<typeof sendLoginSaveOfferRuntimeMessage>[0] = {
     type: 'nook:website-login-save-offer',
     payload: {
       origin: location.origin,
@@ -235,16 +220,15 @@ async function stageSaveForCredentials(
       password: credentials.password,
     },
   }
-  const delivery =
-    await sendRuntimeMessage<LoginSaveOfferResponse>(nookTypedArgs0_3)
+  const delivery = await sendLoginSaveOfferRuntimeMessage(message)
   credentials.password = ''
   credentials.username = ''
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     return
   }
   const { response } = delivery
-  const offer = response.offer
-  if (response.ok !== true || !offer) return
+  if (response.kind !== 'offer-available') return
+  const { offer } = response
   if (saveOfferState.dismissedOfferIds.has(offer.offerId)) return
   beginPendingSaveWatch(offer)
 }
@@ -278,16 +262,17 @@ export type PendingSaveOfferLoad =
   | { kind: PendingSaveOfferLoadKind.Loaded; offer: WebsiteLoginSaveOfferView }
 
 export async function loadPendingSaveOffer(): Promise<PendingSaveOfferLoad> {
-  const nookTypedArgs0_4: Parameters<typeof sendRuntimeMessage>[0] = {
+  const message: Parameters<typeof sendLoginSavePendingRuntimeMessage>[0] = {
     type: 'nook:website-login-save-pending',
     payload: { origin: location.origin },
   }
-  const delivery =
-    await sendRuntimeMessage<WebsiteLoginSavePendingResponse>(nookTypedArgs0_4)
+  const delivery = await sendLoginSavePendingRuntimeMessage(message)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok ||
-    delivery.response.state !== WebsiteLoginSavePendingState.Available
+    !('state' in delivery.response) ||
+    delivery.response.state !== 'available' ||
+    !('offer' in delivery.response)
   )
     return { kind: PendingSaveOfferLoadKind.Absent }
   const { response } = delivery
@@ -340,11 +325,11 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   )
   dismissButton.addEventListener('click', () => {
     saveOfferState.dismissedOfferIds.add(offer.offerId)
-    const nookTypedArgs0_6: Parameters<typeof sendRuntimeMessage>[0] = {
+    const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
       type: 'nook:website-login-save-dismiss',
       payload: { origin: location.origin, offerId: offer.offerId },
     }
-    void sendRuntimeMessage(nookTypedArgs0_6)
+    sendRuntimeMessageWithoutResponse(message)
     widgetState.dismissed = true
     removeWidget()
   })
@@ -410,7 +395,7 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
       ),
     )
     evidence.elapsedMs = 0
-    const nookTypedArgs0_7: Parameters<typeof sendRuntimeMessage>[0] = {
+    const message: Parameters<typeof sendLoginSaveActionRuntimeMessage>[0] = {
       type: 'nook:website-login-save-commit',
       payload: {
         origin: location.origin,
@@ -418,11 +403,11 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
         evidence,
       },
     }
-    void sendRuntimeMessage<LoginSaveActionResponse>(nookTypedArgs0_7)
+    void sendLoginSaveActionRuntimeMessage(message)
       .then((delivery) => {
         if (
           delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-          !delivery.response?.ok
+          delivery.response.kind !== 'completed'
         ) {
           description.textContent = translatedMessage(
             BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed,
@@ -464,11 +449,11 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   notNowButton.addEventListener('click', (event) => {
     if (!isTrustedAuthAction(event.isTrusted)) return
     saveOfferState.dismissedOfferIds.add(offer.offerId)
-    const nookTypedArgs0_8: Parameters<typeof sendRuntimeMessage>[0] = {
+    const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
       type: 'nook:website-login-save-dismiss',
       payload: { origin: location.origin, offerId: offer.offerId },
     }
-    void sendRuntimeMessage(nookTypedArgs0_8)
+    sendRuntimeMessageWithoutResponse(message)
     widgetState.dismissed = true
     removeWidget()
   })

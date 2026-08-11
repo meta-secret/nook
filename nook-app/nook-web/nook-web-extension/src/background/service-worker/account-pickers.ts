@@ -2,7 +2,14 @@ import {
   type WebsiteAuthenticatorOption,
   type WebsiteLoginAccountOption,
 } from '../../lib/login-fill-messages'
-import type { StoredExtensionPairingGrant } from '../pairing-grants'
+import {
+  extensionSessionGrantIdentity,
+  type StoredExtensionPairingGrant,
+} from '../pairing-grants'
+import {
+  extensionSessionInteractiveDeadline,
+  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+} from '../../offscreen/session-request-adapter'
 import {
   availableWebsiteGrants,
   getSessionStorage,
@@ -165,7 +172,11 @@ export async function authenticatorAccounts({
   for (const grant of grants) {
     const nookTypedArgs0_1: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-list-authenticators',
-      payload: { ...grant, query },
+      payload: {
+        ...extensionSessionGrantIdentity(grant),
+        query,
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
     }
     const response = await sendSessionMessage(nookTypedArgs0_1)
     for (const account of sessionResponseAccounts(response)) {
@@ -223,7 +234,7 @@ export async function authorizedWebsiteGrant({
   const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
   const nookTypedArgs0_4: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
-    payload: { queueExpiresAt, queuePriority: 'interactive' },
+    payload: { queue: extensionSessionInteractiveDeadline(queueExpiresAt) },
   }
   const status = await sendSessionMessage(nookTypedArgs0_4)
   if (!isUnlockedSessionStatus(status)) {
@@ -247,7 +258,11 @@ export async function loginAccountsForOrigin({
   for (const grant of grants) {
     const nookTypedArgs0_5: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-list-logins',
-      payload: { ...grant, origin },
+      payload: {
+        ...extensionSessionGrantIdentity(grant),
+        origin,
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
     }
     const response = await sendSessionMessage(nookTypedArgs0_5)
     for (const account of sessionResponseAccounts(response)) {

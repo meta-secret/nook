@@ -635,7 +635,9 @@ pub fn apply_backup_codes(
     mode: &str,
 ) -> Result<Vec<String>, wasm_bindgen::JsError> {
     // Owned `Vec<String>` is required by the wasm-bindgen JS array boundary.
-    let mode = nook_core::BackupCodeAttachMode::parse(mode).map_err(NookError::from)?;
+    let mode = nook_core::BackupCodeAttachMode::parse(mode).map_err(|_| {
+        NookError::from(nook_core::ValidationError::AuthenticatorBackupCodesInvalid)
+    })?;
     nook_core::apply_backup_codes(&existing, &incoming, mode)
         .map_err(NookError::from)
         .map_err(Into::into)

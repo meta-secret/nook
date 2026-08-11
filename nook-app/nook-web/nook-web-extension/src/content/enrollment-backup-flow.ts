@@ -9,12 +9,19 @@ import {
 } from '../lib/backup-code-candidates'
 import { pageHasQrEnrollmentHint } from '../lib/page-qr-capture'
 import {
+  AuthenticatorBackupAttachResponseKind,
+  AuthenticatorOptionsResponseKind,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
   isTrustedAuthAction,
   safeSavedOptionNumber,
 } from '../lib/auth-widget-policy'
 import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
 import {
   RuntimeMessageDeliveryKind,
+  type AuthenticatorBackupAttachResponse,
+  type AuthenticatorOptionsResponse,
+  type DecodedRuntimeMessageArgs,
   type RuntimeMessageDelivery,
 } from './autofill/login-passkey-actions'
 import {
@@ -31,7 +38,16 @@ import {
 export interface BackupEnrollmentHost extends EnrollmentFlowViewHost {
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
-  sendRuntimeMessage: <T>(message: object) => Promise<RuntimeMessageDelivery<T>>
+  sendDecodedRuntimeMessage: <Response extends object>(
+    args: DecodedRuntimeMessageArgs<Response>,
+  ) => Promise<RuntimeMessageDelivery<Response>>
+  sendAuthenticatorBackupAttachRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>>
+  sendAuthenticatorOptionsRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorOptionsResponse>>
+  sendRuntimeMessageWithoutResponse: (message: object) => void
   translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (args: {
     key: BrowserMessageKey
@@ -40,26 +56,9 @@ export interface BackupEnrollmentHost extends EnrollmentFlowViewHost {
   returnToActions: () => void
 }
 
-enum AuthenticatorOptionsResponseStatus {
-  Ready = 'ready',
-  Locked = 'locked',
-  Unavailable = 'unavailable',
-}
-
-type AuthenticatorOptionsResponse = {
-  ok?: boolean
-  status?: AuthenticatorOptionsResponseStatus
-  accounts?: WebsiteAuthenticatorOption[]
-}
-
 enum BackupAttachMode {
   Replace = 'replace',
   Merge = 'merge',
-}
-
-type BackupAttachResponse = {
-  ok?: boolean
-  reason?: string
 }
 
 function detectEnrollmentHints(): EnrollmentPageHints {
@@ -120,7 +119,9 @@ function showBackupModeChooser({
       text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupWorking),
     }
     setHostDescription(nookTypedArgs0_46)
-    const nookTypedArgs0_5: Parameters<typeof host.sendRuntimeMessage>[0] = {
+    const message: Parameters<
+      typeof host.sendAuthenticatorBackupAttachRuntimeMessage
+    >[0] = {
       type: 'nook:website-authenticator-backup-attach',
       payload: {
         origin: location.origin,
@@ -131,11 +132,12 @@ function showBackupModeChooser({
       },
     }
     void host
-      .sendRuntimeMessage<BackupAttachResponse>(nookTypedArgs0_5)
+      .sendAuthenticatorBackupAttachRuntimeMessage(message)
       .then((delivery) => {
         if (
           delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
-          delivery.response?.ok
+          delivery.response.kind ===
+            AuthenticatorBackupAttachResponseKind.Completed
         ) {
           const nookTypedArgs0_47: Parameters<typeof setHostDescription>[0] = {
             host,
@@ -146,7 +148,10 @@ function showBackupModeChooser({
           setHostDescription(nookTypedArgs0_47)
         } else if (
           delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
-          delivery.response?.reason === 'authenticator-locked'
+          delivery.response.kind ===
+            AuthenticatorBackupAttachResponseKind.Rejected &&
+          'reason' in delivery.response &&
+          delivery.response.reason === 'authenticator-locked'
         ) {
           const nookTypedArgs0_48: Parameters<typeof setHostDescription>[0] = {
             host,
@@ -294,19 +299,15 @@ async function continueBackupWithAuthenticatorOptions({
   host.setBusy(true)
 
   try {
-    const nookTypedArgs0_6: Parameters<typeof host.sendRuntimeMessage>[0] = {
+    const message: Parameters<
+      typeof host.sendAuthenticatorOptionsRuntimeMessage
+    >[0] = {
       type: 'nook:website-authenticator-options',
       payload: { origin: location.origin },
     }
-    const delivery =
-      await host.sendRuntimeMessage<AuthenticatorOptionsResponse>(
-        nookTypedArgs0_6,
-      )
+    const delivery = await host.sendAuthenticatorOptionsRuntimeMessage(message)
 
-    if (
-      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-      !delivery.response?.ok
-    ) {
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
       const nookTypedArgs0_61: Parameters<typeof setHostDescription>[0] = {
         host,
         text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupFailed),
@@ -318,7 +319,7 @@ async function continueBackupWithAuthenticatorOptions({
     }
     const { response } = delivery
 
-    if (response.status === AuthenticatorOptionsResponseStatus.Locked) {
+    if (response.kind === AuthenticatorOptionsResponseKind.Locked) {
       const nookTypedArgs0_63: Parameters<typeof setHostDescription>[0] = {
         host,
         text: lockedBackupMessage(host),
@@ -329,7 +330,7 @@ async function continueBackupWithAuthenticatorOptions({
       return
     }
 
-    if (response.status === AuthenticatorOptionsResponseStatus.Unavailable) {
+    if (response.kind === AuthenticatorOptionsResponseKind.Unavailable) {
       const nookTypedArgs0_65: Parameters<typeof setHostDescription>[0] = {
         host,
         text: unavailableMessage(host),
@@ -340,7 +341,21 @@ async function continueBackupWithAuthenticatorOptions({
       return
     }
 
-    const accounts = response.accounts ?? []
+    if (
+      response.kind !== AuthenticatorOptionsResponseKind.Ready ||
+      !('accounts' in response)
+    ) {
+      const nookTypedArgs0_66: Parameters<typeof setHostDescription>[0] = {
+        host,
+        text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupFailed),
+      }
+      setHostDescription(nookTypedArgs0_66)
+      host.returnToActions()
+      clearBackupCodeCandidates(codes)
+      return
+    }
+
+    const accounts: WebsiteAuthenticatorOption[] = response.accounts
     if (accounts.length === 0) {
       const nookTypedArgs0_67: Parameters<typeof setHostDescription>[0] = {
         host,

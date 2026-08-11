@@ -44,12 +44,37 @@ pub struct AuthenticationOutcomeClassification {
     pub timeout_ms: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationOutcomeDecision {
     pub verdict: AuthenticationOutcomeVerdict,
     pub allows_credential_commit: bool,
+}
+
+impl<'de> Deserialize<'de> for AuthenticationOutcomeDecision {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct DecisionWire {
+            verdict: AuthenticationOutcomeVerdict,
+            allows_credential_commit: bool,
+        }
+
+        let wire = DecisionWire::deserialize(deserializer)?;
+        if wire.allows_credential_commit != wire.verdict.allows_credential_commit() {
+            return Err(serde::de::Error::custom(
+                "authentication outcome decision contradicts its verdict",
+            ));
+        }
+        Ok(Self {
+            verdict: wire.verdict,
+            allows_credential_commit: wire.allows_credential_commit,
+        })
+    }
 }
 
 impl AuthenticationOutcomeDecision {
@@ -188,6 +213,24 @@ mod tests {
                 value
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn decision_wire_rejects_a_commit_permission_that_contradicts_the_verdict() -> anyhow::Result<()>
+    {
+        let result = serde_json::from_str::<AuthenticationOutcomeDecision>(
+            r#"{"verdict":1,"allowsCredentialCommit":true}"#,
+        );
+        let Err(error) = result else {
+            anyhow::bail!("insufficient evidence must never permit a credential commit")
+        };
+
+        assert!(
+            error
+                .to_string()
+                .contains("authentication outcome decision contradicts its verdict")
+        );
         Ok(())
     }
 

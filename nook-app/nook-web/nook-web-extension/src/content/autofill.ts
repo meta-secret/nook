@@ -1,11 +1,12 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { summarizeAuthenticationWorkflowForms } from '../../../nook-web-shared/src/extension/password-forms'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 import { cancelPendingAuthenticatorPickerRequest } from './autofill/authenticator-actions'
 import {
   cancelPendingLoginPickerRequest,
   RuntimeMessageDeliveryKind,
-  sendRuntimeMessage,
+  sendAuthenticationWorkflowSnapshotRuntimeMessage,
 } from './autofill/login-passkey-actions'
 import {
   beginPendingSaveWatch,
@@ -29,7 +30,6 @@ import {
   renderEnrollmentWidget,
   renderWidget,
 } from './autofill/widget-rendering'
-import type { WorkflowSnapshotResponse } from './autofill/workflow-ui'
 import {
   MAX_WORKFLOW_OBSERVATIONS,
   loadPilotVaultConnection,
@@ -93,7 +93,9 @@ async function scanAndRender(): Promise<void> {
   }
 
   const boundedCount = (count: number) => Math.min(count, 100)
-  const nookTypedArgs0_0: Parameters<typeof sendRuntimeMessage>[0] = {
+  const message: Parameters<
+    typeof sendAuthenticationWorkflowSnapshotRuntimeMessage
+  >[0] = {
     type: 'nook:authentication-workflow-snapshot',
     payload: {
       origin: location.origin,
@@ -116,18 +118,21 @@ async function scanAndRender(): Promise<void> {
     },
   }
   const delivery =
-    await sendRuntimeMessage<WorkflowSnapshotResponse>(nookTypedArgs0_0)
+    await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
   if (sequence !== scanState.sequence) return
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     removeScannedWidget()
     return
   }
   const { response } = delivery
-  const snapshot = response.snapshot
-  if (response.ok !== true || !snapshot) {
+  if (
+    response.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
+    !('snapshot' in response)
+  ) {
     removeScannedWidget()
     return
   }
+  const { snapshot } = response
   const selected = workflowForms[snapshot.observationIndex]
   if (!selected) {
     removeScannedWidget()

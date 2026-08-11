@@ -2,6 +2,7 @@ import {
   isExtensionConnectScope,
   type ExtensionConnectScope,
 } from "./extension-connect-scope";
+import type { ExtensionVaultEventPayload } from "./nook-companion-wasm/nook_companion_wasm";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "./paired-vault-identity-status";
 
 export { ExtensionPairedVaultIdentityStatusMessageStatus };
@@ -67,10 +68,6 @@ export enum ExtensionStorageProviderType {
 export type ExtensionStorageProviderPayload = {
   id: string;
   type: `${ExtensionStorageProviderType}`;
-};
-
-export type ExtensionVaultEventPayload = {
-  schema_version: number;
 };
 
 export type ExtensionEventLogRecord = {

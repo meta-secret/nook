@@ -50,6 +50,7 @@ root/
     │   ├── .config/
     │   ├── docker/       (Rust Dockerfiles, rust/docker-bake.hcl Zot scopes, sccache, docker:* tasks)
     │   ├── nook-app-common/ (shared leaf primitives and localization)
+    │   ├── nook-authenticator-domain/ (shared authenticator values and closed vocabularies)
     │   ├── nook-auth2/
     │   ├── nook-replication/
     │   ├── nook-event-log/
@@ -535,7 +536,13 @@ members:  members_key-encrypted catalog entries
 | Package | Tests |
 | --- | --- |
 | `preflight` | `task preflight` |
-| `nook-core` / `nook-auth2` / `nook-replication` / `nook-event-log` | `task rust:coverage:check` or fast `task rust:test` |
+| `nook-app-common` | `task rust:coverage:check` |
+| `nook-authenticator-domain` | `task rust:coverage:check` |
+| `nook-auth2` | `task rust:coverage:check` |
+| `nook-replication` | `task rust:coverage:check` |
+| `nook-event-log` | `task rust:coverage:check` |
+| `nook-companion-core` | `task rust:coverage:check` |
+| `nook-core` | `task rust:coverage:check` |
 | `nook-web/nook-web-app` | Playwright e2e |
 | `nook-wasm` | Covered via `nook-core` + e2e |
 | `nook-web/nook-web-extension` | `task extension:check` + `task extension:test:e2e` |

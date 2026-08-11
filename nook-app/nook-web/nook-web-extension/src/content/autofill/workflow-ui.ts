@@ -3,11 +3,7 @@ import {
   type BrowserMessageKey,
 } from '../../lib/browser-message-keys'
 import { compactProgressState } from '../../lib/auth-widget-policy'
-import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
-import type {
-  WebsiteLoginAccountOption,
-  WebsiteLoginFillResponse,
-} from '../../lib/login-fill-messages'
+import type { WebsiteLoginFillResponse } from '../../lib/login-fill-messages'
 import { AuthenticationWorkflowKind } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   ExtensionSetupLoadKind,
@@ -30,29 +26,7 @@ export const OUTCOME_EVIDENCE_TIMEOUT_MS = 8_000
 
 export const OUTCOME_EVIDENCE_POLL_MS = 250
 
-export enum LoginOptionsResponseStatus {
-  Ready = 'ready',
-  Locked = 'locked',
-  Unavailable = 'unavailable',
-}
-
-export type LoginOptionsResponse = {
-  ok?: boolean
-  status?:
-    | LoginOptionsResponseStatus.Ready
-    | LoginOptionsResponseStatus.Locked
-    | LoginOptionsResponseStatus.Unavailable
-  accounts?: WebsiteLoginAccountOption[]
-  reason?: string
-}
-
 export type { WebsiteLoginFillResponse as LoginFillResponse }
-
-export type WorkflowSnapshotResponse = {
-  ok?: boolean
-  snapshot?: AuthenticationWorkflowSnapshotView
-  reason?: string
-}
 
 export type WorkflowCopy = {
   titleKey: BrowserMessageKey
@@ -140,43 +114,6 @@ export function setFlightProgress({
       )
     }
   }
-}
-
-export enum AuthenticatorOptionsResponseStatus {
-  Ready = 'ready',
-  Locked = 'locked',
-  Unavailable = 'unavailable',
-}
-
-export type AuthenticatorOptionsResponse = {
-  ok?: boolean
-  status?:
-    | AuthenticatorOptionsResponseStatus.Ready
-    | AuthenticatorOptionsResponseStatus.Locked
-    | AuthenticatorOptionsResponseStatus.Unavailable
-  requestId?: string
-  expiresAt?: number
-}
-
-export type AuthenticatorFillResponse = {
-  ok?: boolean
-  code?: string
-}
-
-export enum LoginPickerOpenResponseStatus {
-  Ready = 'ready',
-  Locked = 'locked',
-  Unavailable = 'unavailable',
-}
-
-export type LoginPickerOpenResponse = {
-  ok?: boolean
-  status?:
-    | LoginPickerOpenResponseStatus.Ready
-    | LoginPickerOpenResponseStatus.Locked
-    | LoginPickerOpenResponseStatus.Unavailable
-  requestId?: string
-  expiresAt?: number
 }
 
 export function translatedMessage(key: BrowserMessageKey): string {

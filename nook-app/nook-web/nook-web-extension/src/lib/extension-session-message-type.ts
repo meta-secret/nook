@@ -1,3 +1,5 @@
+import type { ExtensionSessionRequest } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+
 export enum ExtensionSessionMessageType {
   Reset = 'nook:extension-session-reset',
   MigrateAuthProviders = 'nook:extension-session-migrate-auth-providers',
@@ -30,3 +32,18 @@ export enum ExtensionSessionMessageType {
   AssertPasskey = 'nook:extension-session-assert-passkey',
   Lock = 'nook:extension-session-lock',
 }
+
+type MissingGeneratedSessionMessageType = Exclude<
+  ExtensionSessionRequest['type'],
+  `${ExtensionSessionMessageType}`
+>
+type ExtraSessionMessageType = Exclude<
+  `${ExtensionSessionMessageType}`,
+  ExtensionSessionRequest['type']
+>
+export const EXTENSION_SESSION_MESSAGE_TYPE_CONTRACT: [
+  MissingGeneratedSessionMessageType,
+  ExtraSessionMessageType,
+] extends [never, never]
+  ? true
+  : never = true

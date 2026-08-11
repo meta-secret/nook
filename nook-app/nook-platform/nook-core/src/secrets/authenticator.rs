@@ -12,9 +12,22 @@ use zeroize::{Zeroize, Zeroizing};
 mod backup_codes;
 
 pub use backup_codes::*;
+pub use nook_authenticator_domain::{BackupCodeAttachMode, TotpAlgorithm, TotpDigits, TotpPeriod};
 
 const DEFAULT_DIGITS: u32 = 6;
 const DEFAULT_PERIOD: u64 = 30;
+
+fn parse_totp_algorithm(value: &str) -> Result<TotpAlgorithm, ValidationError> {
+    TotpAlgorithm::parse(value).map_err(|_| ValidationError::AuthenticatorUriInvalid)
+}
+
+fn parse_totp_digits(value: u32) -> Result<TotpDigits, ValidationError> {
+    TotpDigits::parse(value).map_err(|_| ValidationError::AuthenticatorDigitsInvalid)
+}
+
+fn parse_totp_period(value: u64) -> Result<TotpPeriod, ValidationError> {
+    TotpPeriod::parse(value).map_err(|_| ValidationError::AuthenticatorPeriodInvalid)
+}
 const MIN_SECRET_BYTES: usize = 10;
 
 /// Non-secret metadata from a validated `otpauth://totp/...` URI.
@@ -26,85 +39,6 @@ pub struct OtpauthPreview {
     pub algorithm: TotpAlgorithm,
     pub digits: TotpDigits,
     pub period: TotpPeriod,
-}
-
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum TotpAlgorithm {
-    #[default]
-    Sha1,
-    Sha256,
-    Sha512,
-}
-
-impl TotpAlgorithm {
-    pub fn parse(value: &str) -> Result<Self, ValidationError> {
-        match value.trim().to_ascii_uppercase().as_str() {
-            "" | "SHA1" => Ok(Self::Sha1),
-            "SHA256" => Ok(Self::Sha256),
-            "SHA512" => Ok(Self::Sha512),
-            _ => Err(ValidationError::AuthenticatorUriInvalid),
-        }
-    }
-
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Sha1 => "SHA1",
-            Self::Sha256 => "SHA256",
-            Self::Sha512 => "SHA512",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(transparent)]
-pub struct TotpDigits(u32);
-
-impl Default for TotpDigits {
-    fn default() -> Self {
-        Self(DEFAULT_DIGITS)
-    }
-}
-
-impl TotpDigits {
-    pub fn parse(value: u32) -> Result<Self, ValidationError> {
-        if (6..=8).contains(&value) {
-            Ok(Self(value))
-        } else {
-            Err(ValidationError::AuthenticatorDigitsInvalid)
-        }
-    }
-
-    #[must_use]
-    pub const fn get(self) -> u32 {
-        self.0
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(transparent)]
-pub struct TotpPeriod(u64);
-
-impl Default for TotpPeriod {
-    fn default() -> Self {
-        Self(DEFAULT_PERIOD)
-    }
-}
-
-impl TotpPeriod {
-    pub fn parse(value: u64) -> Result<Self, ValidationError> {
-        if (15..=300).contains(&value) {
-            Ok(Self(value))
-        } else {
-            Err(ValidationError::AuthenticatorPeriodInvalid)
-        }
-    }
-
-    #[must_use]
-    pub const fn get(self) -> u64 {
-        self.0
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -173,8 +107,8 @@ impl AuthenticatorSecret {
             return Err(ValidationError::AuthenticatorIssuerRequired);
         }
         TotpSecret::parse(self.secret.as_str())?;
-        TotpDigits::parse(self.digits.get())?;
-        TotpPeriod::parse(self.period.get())?;
+        parse_totp_digits(self.digits.get())?;
+        parse_totp_period(self.period.get())?;
         Ok(())
     }
 
@@ -183,8 +117,8 @@ impl AuthenticatorSecret {
         self.account = self.account.trim().to_owned();
         self.website_url = self.website_url.trim().to_owned();
         self.secret = TotpSecret::parse(self.secret.as_str())?;
-        self.digits = TotpDigits::parse(self.digits.get())?;
-        self.period = TotpPeriod::parse(self.period.get())?;
+        self.digits = parse_totp_digits(self.digits.get())?;
+        self.period = parse_totp_period(self.period.get())?;
         let normalized_backup_codes = backup_codes::soft_normalize_backup_codes(&self.backup_codes);
         self.backup_codes.zeroize();
         self.backup_codes = normalized_backup_codes;
@@ -269,9 +203,9 @@ impl AuthenticatorSecret {
                 account: account.to_owned(),
                 website_url: website_url.to_owned(),
                 secret: TotpSecret::parse(secret_or_uri)?,
-                algorithm: TotpAlgorithm::parse(algorithm)?,
-                digits: TotpDigits::parse(parse_u32_or_default(digits, DEFAULT_DIGITS)?)?,
-                period: TotpPeriod::parse(parse_u64_or_default(period, DEFAULT_PERIOD)?)?,
+                algorithm: parse_totp_algorithm(algorithm)?,
+                digits: parse_totp_digits(parse_u32_or_default(digits, DEFAULT_DIGITS)?)?,
+                period: parse_totp_period(parse_u64_or_default(period, DEFAULT_PERIOD)?)?,
                 backup_codes: Vec::new(),
             }
         };
@@ -308,14 +242,14 @@ impl AuthenticatorSecret {
             .map_or(("", label.as_str()), |(issuer, account)| (issuer, account));
         let issuer = params.get("issuer").map_or(label_issuer, String::as_str);
         let algorithm =
-            TotpAlgorithm::parse(params.get("algorithm").map_or("SHA1", String::as_str))?;
-        let digits = TotpDigits::parse(
+            parse_totp_algorithm(params.get("algorithm").map_or("SHA1", String::as_str))?;
+        let digits = parse_totp_digits(
             params
                 .get("digits")
                 .map(String::as_str)
                 .map_or(Ok(DEFAULT_DIGITS), parse_u32)?,
         )?;
-        let period = TotpPeriod::parse(
+        let period = parse_totp_period(
             params
                 .get("period")
                 .map(String::as_str)

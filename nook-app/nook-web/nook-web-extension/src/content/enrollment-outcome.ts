@@ -1,11 +1,17 @@
 import { fillOneTimeCode } from '../../../nook-web-shared/src/extension/password-forms'
-import { AuthenticationOutcomeVerdict } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  AuthenticationOutcomeResponseKind,
+  AuthenticationOutcomeVerdict,
+  AuthenticatorCodeResponseKind,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type {
   AuthenticationOutcomeObservationView,
+  AuthenticationOutcomeResponse,
   AuthenticationOutcomeVerdictView,
 } from '../lib/outcome-evidence-messages'
 import {
   RuntimeMessageDeliveryKind,
+  type AuthenticatorCodeResponse,
   type RuntimeMessageDelivery,
 } from './autofill/login-passkey-actions'
 
@@ -14,20 +20,18 @@ const ENROLLMENT_EVIDENCE_TIMEOUT_MS = 30_000
 const ENROLLMENT_EVIDENCE_POLL_MS = 250
 
 type EnrollmentOutcomeHost = {
-  sendRuntimeMessage: <T>(
-    message: unknown,
-  ) => Promise<RuntimeMessageDelivery<T>>
+  sendAuthenticatorCodeRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorCodeResponse>>
+  sendAuthenticationOutcomeRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>>
 }
 
 type EnrollmentEvidenceCallbacks = {
   commit: () => Promise<void>
   reject: () => void
   timeout: () => void
-}
-
-type EnrollCodeResponse = {
-  ok?: boolean
-  code?: string
 }
 
 enum EnrollmentOutcomeClassificationKind {
@@ -137,21 +141,24 @@ async function classifyEnrollmentOutcome({
   host: EnrollmentOutcomeHost
   observation: AuthenticationOutcomeObservationView
 }): Promise<EnrollmentOutcomeClassification> {
-  const nookTypedArgs0_0: Parameters<typeof host.sendRuntimeMessage>[0] = {
+  const message: Parameters<
+    typeof host.sendAuthenticationOutcomeRuntimeMessage
+  >[0] = {
     type: 'nook:authentication-outcome-classify',
     payload: {
       observation,
       timeoutMs: ENROLLMENT_EVIDENCE_TIMEOUT_MS,
     },
   }
-  const delivery = await host.sendRuntimeMessage<{
-    ok?: boolean
-    verdict?: AuthenticationOutcomeVerdictView
-  }>(nookTypedArgs0_0)
+  const sendMessage: Parameters<
+    typeof host.sendAuthenticationOutcomeRuntimeMessage
+  >[0] = message
+  const delivery =
+    await host.sendAuthenticationOutcomeRuntimeMessage(sendMessage)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    !delivery.response?.ok ||
-    !delivery.response.verdict
+    delivery.response.kind !== AuthenticationOutcomeResponseKind.Completed ||
+    !('verdict' in delivery.response)
   ) {
     return { kind: EnrollmentOutcomeClassificationKind.Unavailable }
   }
@@ -168,16 +175,17 @@ export async function fillStagedEnrollmentCode({
   host: EnrollmentOutcomeHost
   stageId: string
 }): Promise<boolean> {
-  const nookTypedArgs0_1: Parameters<typeof host.sendRuntimeMessage>[0] = {
+  const message: Parameters<
+    typeof host.sendAuthenticatorCodeRuntimeMessage
+  >[0] = {
     type: 'nook:website-authenticator-enroll-code',
     payload: { origin: location.origin, stageId },
   }
-  const delivery =
-    await host.sendRuntimeMessage<EnrollCodeResponse>(nookTypedArgs0_1)
+  const delivery = await host.sendAuthenticatorCodeRuntimeMessage(message)
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    !delivery.response?.ok ||
-    typeof delivery.response.code !== 'string'
+    delivery.response.kind !== AuthenticatorCodeResponseKind.Ready ||
+    !('code' in delivery.response)
   ) {
     return false
   }

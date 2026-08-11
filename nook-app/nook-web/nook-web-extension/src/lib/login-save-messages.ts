@@ -1,30 +1,23 @@
 import type { AuthenticationOutcomeObservationView } from './outcome-evidence-messages'
 import { hasOriginPayload } from './origin-runtime-message'
 import { NookWebsiteLoginSaveDecision } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type {
+  WebsiteLoginSaveActionResponse,
+  WebsiteLoginSaveOffer,
+  WebsiteLoginSaveOfferResponse,
+  WebsiteLoginSavePendingAvailable,
+  WebsiteLoginSavePendingResponse,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export { NookWebsiteLoginSaveDecision }
 
-export type WebsiteLoginSaveOfferView = {
-  offerId: string
-  decision:
-    NookWebsiteLoginSaveDecision.Create | NookWebsiteLoginSaveDecision.Update
-  vaultStoreId: string
-  vaultName: string
+export type WebsiteLoginSaveOfferView = WebsiteLoginSaveOffer
+export type {
+  WebsiteLoginSaveActionResponse,
+  WebsiteLoginSaveOfferResponse,
+  WebsiteLoginSavePendingAvailable,
+  WebsiteLoginSavePendingResponse,
 }
-
-export enum WebsiteLoginSavePendingState {
-  Unavailable = 'unavailable',
-  Available = 'available',
-}
-
-export type WebsiteLoginSavePendingResponse =
-  | { ok: true; state: WebsiteLoginSavePendingState.Unavailable }
-  | {
-      ok: true
-      state: WebsiteLoginSavePendingState.Available
-      offer: WebsiteLoginSaveOfferView
-    }
-  | { ok: false; reason: string }
 
 export enum WebsiteLoginSaveOfferMessageType {
   NookWebsiteLoginSaveOffer = 'nook:website-login-save-offer',

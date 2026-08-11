@@ -22,8 +22,8 @@ mod wire;
 
 pub use auth::device_key_protection::{
     DeviceKeyProtectionSetup, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
-    PasskeyDeviceProtectionMode, PasskeyRecoveryRequest, PasskeyRegistrationPrfOutput,
-    PasskeyRegistrationResolution, WrappedDeviceIdentity, derive_device_identity_from_passkey_prf,
+    PasskeyRecoveryRequest, PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution,
+    WrappedDeviceIdentity, derive_device_identity_from_passkey_prf,
     deterministic_passkey_prf_input, finish_passkey_device_identity,
     finish_passkey_device_identity_for_mode, finish_passkey_wrapped_device_identity,
     parse_wrapped_device_identity, passkey_assertion_request,
@@ -53,6 +53,7 @@ pub use auth::mock_passkey::{
     MockPasskeyError, MockPasskeyRegistration, MockPasskeyRegistrationRequest, MockPasskeyResult,
     MockPasskeyUserAuthorization, StoredMockPasskey,
 };
+pub use nook_authenticator_domain::PasskeyDeviceProtectionMode;
 pub mod multi_device_api {
     pub use crate::auth::multi_device::{
         AppKey, AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest,

@@ -1,4 +1,9 @@
-import type { AuthenticationOutcomeVerdict } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  AuthenticationOutcomeDecision,
+  AuthenticationOutcomeResponse,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+
+export type { AuthenticationOutcomeResponse }
 
 export type AuthenticationOutcomeObservationView = {
   navigatedAwayFromAuthPath: boolean
@@ -10,10 +15,7 @@ export type AuthenticationOutcomeObservationView = {
   elapsedMs: number
 }
 
-export type AuthenticationOutcomeVerdictView = {
-  verdict: AuthenticationOutcomeVerdict
-  allowsCredentialCommit: boolean
-}
+export type AuthenticationOutcomeVerdictView = AuthenticationOutcomeDecision
 
 export enum AuthenticationOutcomeClassifyMessageType {
   NookAuthenticationOutcomeClassify = 'nook:authentication-outcome-classify',

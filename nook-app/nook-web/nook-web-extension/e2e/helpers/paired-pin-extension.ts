@@ -67,7 +67,10 @@ export async function exerciseConcurrentSessionStatus({
       () =>
         new Promise<void>((resolve, reject) => {
           globalThis.chrome.runtime.sendMessage(
-            { type: 'nook:extension-session-status', payload: {} },
+            {
+              type: 'nook:extension-session-status',
+              payload: { queue: { kind: 'message-default' } },
+            },
             (response) => {
               const error = globalThis.chrome.runtime.lastError?.message
               if (error) {
@@ -262,7 +265,10 @@ export async function lockExtensionSession(
         () =>
           new Promise<void>((resolve) => {
             globalThis.chrome.runtime.sendMessage(
-              { type: 'nook:extension-session-status' },
+              {
+                type: 'nook:extension-session-status',
+                payload: { queue: { kind: 'message-default' } },
+              },
               () => {
                 void globalThis.chrome.runtime.lastError
                 resolve()

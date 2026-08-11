@@ -7,6 +7,18 @@ import {
   AuthenticationWorkflowKind,
   AuthenticationWorkflowStage,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
+import type {
+  WebsiteLoginSaveActionResponse,
+  WebsiteLoginSaveOfferResponse,
+  WebsiteLoginSavePendingAvailable,
+} from '../../../nook-web-extension/src/lib/login-save-messages'
+
+type DemoLoginSaveResponses = {
+  offerAvailable: WebsiteLoginSaveOfferResponse['kind']
+  pendingAvailable: WebsiteLoginSavePendingAvailable['state']
+  pendingUnavailable: WebsiteLoginSavePendingAvailable['state']
+  completed: WebsiteLoginSaveActionResponse['kind']
+}
 
 export const demoLoginSaveCreateDecision = NookWebsiteLoginSaveDecision.Create
 export const demoSufficientAuthenticationOutcome =
@@ -28,6 +40,12 @@ export const demoDomainEnumArgs = {
     fillTotpAction: AuthenticationWorkflowAction.FillTotp,
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey,
   },
+  loginSaveResponses: {
+    offerAvailable: 'offer-available',
+    pendingAvailable: 'available',
+    pendingUnavailable: 'unavailable',
+    completed: 'completed',
+  } satisfies DemoLoginSaveResponses,
 }
 
 export type ChromeMessage = { message: string }
@@ -48,6 +66,7 @@ export type DemoChromeStubArgs = {
     fillTotpAction: AuthenticationWorkflowAction.FillTotp
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey
   }
+  loginSaveResponses: DemoLoginSaveResponses
   /** Static replies keyed by runtime message type. */
   responsesByType?: Record<string, unknown>
   /** Stateful login-pilot replies for Continue → unlock → chooser. */
@@ -87,6 +106,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     sufficientAuthenticationOutcome,
     insufficientAuthenticationOutcome,
     authenticationWorkflow,
+    loginSaveResponses,
     responsesByType = {},
     loginPilotFlow = false,
     savePilotFlow = false,
@@ -176,6 +196,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.createPasskeyAction,
               currentStep: 1,
               totalSteps: 3,
+              requiresHumanApproval: false,
               observationIndex: 0,
             },
           }
@@ -278,6 +299,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.generatePasswordAction,
               currentStep: 2,
               totalSteps: 5,
+              requiresHumanApproval: false,
               observationIndex: 0,
             },
           }
@@ -301,6 +323,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.continueAction,
               currentStep: 1,
               totalSteps: 3,
+              requiresHumanApproval: false,
               observationIndex: 0,
             },
           }
@@ -352,21 +375,26 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             },
           }
           return {
-            ok: true,
-            status: 'ready',
-            decision: loginSaveCreateDecision,
+            kind: loginSaveResponses.offerAvailable,
             offer: stagedOffer.offer,
           }
         case 'nook:website-login-save-pending':
           return stagedOffer.kind === StagedOfferKind.Present
-            ? { ok: true, offer: stagedOffer.offer }
-            : { ok: true }
+            ? {
+                ok: true,
+                state: loginSaveResponses.pendingAvailable,
+                offer: stagedOffer.offer,
+              }
+            : {
+                ok: true,
+                state: loginSaveResponses.pendingUnavailable,
+              }
         case 'nook:website-login-save-commit':
           stagedOffer = { kind: StagedOfferKind.Empty }
-          return { ok: true, decision: loginSaveCreateDecision }
+          return { kind: loginSaveResponses.completed }
         case 'nook:website-login-save-dismiss':
           stagedOffer = { kind: StagedOfferKind.Empty }
-          return { ok: true }
+          return { kind: loginSaveResponses.completed }
         default:
           return { ok: true }
       }
@@ -383,13 +411,14 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             action: authenticationWorkflow.continueAction,
             currentStep: 1,
             totalSteps: 3,
+            requiresHumanApproval: false,
             observationIndex: 0,
           },
         }
       case 'nook:website-login-options':
         loginOptionsCalls += 1
         if (loginOptionsCalls === 1) {
-          return { ok: true, status: 'locked', accounts: [] }
+          return { ok: true, status: 'locked' }
         }
         return {
           ok: true,

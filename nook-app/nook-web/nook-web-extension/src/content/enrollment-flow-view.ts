@@ -1,4 +1,4 @@
-import type { OtpauthEnrollmentPreview } from '../lib/enrollment-messages'
+import type { AuthenticatorEnrollmentPreview } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
@@ -152,7 +152,7 @@ export function renderPreviewDetails({
 }: {
   container: HTMLElement
   host: EnrollmentFlowViewHost
-  preview: OtpauthEnrollmentPreview
+  preview: AuthenticatorEnrollmentPreview
 }): void {
   const details = document.createElement('div')
   details.className = 'account-list'

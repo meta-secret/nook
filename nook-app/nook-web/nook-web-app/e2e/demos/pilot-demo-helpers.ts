@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -24,6 +24,13 @@ export async function loadPilotMessages(): Promise<
 }
 
 export async function injectPilotAutofill(page: Page): Promise<void> {
+  const companionWasmResponse: Parameters<Route['fulfill']>[0] = {
+    path: path.join(extensionDist, 'content/nook_companion_wasm_bg.wasm'),
+    contentType: 'application/wasm',
+  }
+  await page.route('**/content/nook_companion_wasm_bg.wasm', async (route) =>
+    route.fulfill(companionWasmResponse),
+  )
   await page.addScriptTag({
     path: path.join(extensionDist, 'content/autofill.js'),
     type: 'module',

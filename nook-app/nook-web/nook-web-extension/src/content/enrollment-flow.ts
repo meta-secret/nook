@@ -3,7 +3,11 @@ import {
   type BrowserMessageKey,
 } from '../lib/browser-message-keys'
 import { pageHasBackupCodeHint } from '../lib/backup-code-candidates'
-import type { OtpauthEnrollmentPreview } from '../lib/enrollment-messages'
+import {
+  AuthenticatorEnrollmentConfirmResponseKind,
+  AuthenticatorEnrollmentStageResponseKind,
+  AuthenticatorPreviewResponseKind,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   clearOtpauthCandidate,
   decodeVisibleOtpauthCandidates,
@@ -19,8 +23,16 @@ import {
 } from './enrollment-outcome'
 import {
   RuntimeMessageDeliveryKind,
+  type AuthenticatorBackupAttachResponse,
+  type AuthenticatorCodeResponse,
+  type AuthenticatorEnrollmentConfirmResponse,
+  type AuthenticatorEnrollmentStageResponse,
+  type AuthenticatorOptionsResponse,
+  type AuthenticatorPreviewResponse,
+  type DecodedRuntimeMessageArgs,
   type RuntimeMessageDelivery,
 } from './autofill/login-passkey-actions'
+import type { AuthenticationOutcomeResponse } from '../lib/outcome-evidence-messages'
 import {
   appendButtonRow,
   clearEnrollmentSection,
@@ -54,40 +66,36 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   openVaultButton: HTMLButtonElement
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
-  sendRuntimeMessage: <T>(
-    message: unknown,
-  ) => Promise<RuntimeMessageDelivery<T>>
+  sendDecodedRuntimeMessage: <Response extends object>(
+    args: DecodedRuntimeMessageArgs<Response>,
+  ) => Promise<RuntimeMessageDelivery<Response>>
+  sendAuthenticationOutcomeRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>>
+  sendAuthenticatorBackupAttachRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>>
+  sendAuthenticatorCodeRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorCodeResponse>>
+  sendAuthenticatorEnrollmentConfirmRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentConfirmResponse>>
+  sendAuthenticatorEnrollmentStageRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentStageResponse>>
+  sendAuthenticatorOptionsRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorOptionsResponse>>
+  sendAuthenticatorPreviewRuntimeMessage: (
+    message: object,
+  ) => Promise<RuntimeMessageDelivery<AuthenticatorPreviewResponse>>
+  sendRuntimeMessageWithoutResponse: (message: object) => void
   translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (args: {
     key: BrowserMessageKey
     substitution: string
   }) => string
-}
-
-enum EnrollPreviewResponseStatus {
-  Ready = 'ready',
-  Unavailable = 'unavailable',
-}
-
-type EnrollPreviewResponse = {
-  ok?: boolean
-  status?:
-    EnrollPreviewResponseStatus.Ready | EnrollPreviewResponseStatus.Unavailable
-  preview?: OtpauthEnrollmentPreview
-  vaultStoreId?: string
-  reason?: string
-}
-
-type EnrollStageResponse = {
-  ok?: boolean
-  stageId?: string
-  reason?: string
-}
-
-type EnrollConfirmResponse = {
-  ok?: boolean
-  secretId?: string
-  reason?: string
 }
 
 /** Keep the post-save enrollment widget from being rebuilt by scanAndRender. */
@@ -109,7 +117,9 @@ async function commitStagedEnrollment({
     text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollWorking),
   }
   setHostDescription(nookTypedArgs0_0)
-  const confirmMessage: Parameters<typeof host.sendRuntimeMessage>[0] = {
+  const confirmMessage: Parameters<
+    typeof host.sendAuthenticatorEnrollmentConfirmRuntimeMessage
+  >[0] = {
     type: 'nook:website-authenticator-enroll-confirm',
     payload: {
       origin: location.origin,
@@ -118,10 +128,11 @@ async function commitStagedEnrollment({
     },
   }
   const confirmDelivery =
-    await host.sendRuntimeMessage<EnrollConfirmResponse>(confirmMessage)
+    await host.sendAuthenticatorEnrollmentConfirmRuntimeMessage(confirmMessage)
   if (
     confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
-    confirmDelivery.response.ok
+    confirmDelivery.response.kind ===
+      AuthenticatorEnrollmentConfirmResponseKind.Completed
   ) {
     const nookTypedArgs0_1: Parameters<typeof setHostDescription>[0] = {
       host,
@@ -141,6 +152,9 @@ async function commitStagedEnrollment({
     holdEnrollmentWidgetAfterSave = true
   } else if (
     confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
+    confirmDelivery.response.kind ===
+      AuthenticatorEnrollmentConfirmResponseKind.Rejected &&
+    'reason' in confirmDelivery.response &&
     confirmDelivery.response.reason === 'authenticator-locked'
   ) {
     const nookTypedArgs0_3: Parameters<typeof setHostDescription>[0] = {
@@ -181,11 +195,13 @@ function enrollmentEvidenceCallbacks({
       return commitStagedEnrollment(nookArrowArgs0)
     },
     reject: () => {
-      const nookTypedArgs0_1: Parameters<typeof host.sendRuntimeMessage>[0] = {
+      const message: Parameters<
+        typeof host.sendRuntimeMessageWithoutResponse
+      >[0] = {
         type: 'nook:website-authenticator-enroll-dismiss',
         payload: { origin: location.origin, stageId },
       }
-      void host.sendRuntimeMessage(nookTypedArgs0_1)
+      host.sendRuntimeMessageWithoutResponse(message)
       const nookTypedArgs0_5: Parameters<typeof setHostDescription>[0] = {
         host,
         text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
@@ -243,7 +259,9 @@ async function beginEnrollmentCeremony({
     callbacks: enrollmentEvidenceCallbacks(nookTypedArgs0_9),
   }
   beginEnrollmentEvidenceWatch(nookTypedArgs1_0)
-  const nookTypedArgs0_2: Parameters<typeof host.sendRuntimeMessage>[0] = {
+  const message: Parameters<
+    typeof host.sendAuthenticatorEnrollmentStageRuntimeMessage
+  >[0] = {
     type: 'nook:website-authenticator-enroll-stage',
     payload: {
       origin: location.origin,
@@ -252,7 +270,7 @@ async function beginEnrollmentCeremony({
     },
   }
   const stageDelivery =
-    await host.sendRuntimeMessage<EnrollStageResponse>(nookTypedArgs0_2)
+    await host.sendAuthenticatorEnrollmentStageRuntimeMessage(message)
   clearOtpauthUri(otpauthUri)
   clearCandidate(candidate)
   if (stageDelivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
@@ -271,8 +289,10 @@ async function beginEnrollmentCeremony({
     return
   }
   const { response: stageResponse } = stageDelivery
-  const stageId = stageResponse.stageId
-  if (stageResponse.ok !== true || typeof stageId !== 'string') {
+  if (
+    stageResponse.kind !== AuthenticatorEnrollmentStageResponseKind.Staged ||
+    !('stageId' in stageResponse)
+  ) {
     stopPendingEnrollmentWatch()
     const nookTypedArgs0_12: Parameters<typeof setHostDescription>[0] = {
       host,
@@ -287,6 +307,7 @@ async function beginEnrollmentCeremony({
     renderEnrollmentActions(nookTypedArgs0_13)
     return
   }
+  const stageId = stageResponse.stageId
   // Replace the temporary pending watch with the real stage id.
   const nookTypedArgs0_14: Parameters<typeof enrollmentEvidenceCallbacks>[0] = {
     host,
@@ -322,14 +343,16 @@ async function beginEnrollmentCeremony({
     onClick: (event) => {
       if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
       stopPendingEnrollmentWatch()
-      const nookTypedArgs0_3: Parameters<typeof host.sendRuntimeMessage>[0] = {
+      const message: Parameters<
+        typeof host.sendRuntimeMessageWithoutResponse
+      >[0] = {
         type: 'nook:website-authenticator-enroll-dismiss',
         payload: {
           origin: location.origin,
           stageId: stageResponse.stageId,
         },
       }
-      void host.sendRuntimeMessage(nookTypedArgs0_3)
+      host.sendRuntimeMessageWithoutResponse(message)
       const nookTypedArgs0_17: Parameters<typeof resetEnrollmentHeadline>[0] = {
         host,
         hints: detectEnrollmentHints(),
@@ -386,19 +409,20 @@ async function showQrPreview({
   host.setBusy(true)
 
   try {
-    const nookTypedArgs0_4: Parameters<typeof host.sendRuntimeMessage>[0] = {
+    const message: Parameters<
+      typeof host.sendAuthenticatorPreviewRuntimeMessage
+    >[0] = {
       type: 'nook:website-authenticator-enroll-preview',
       payload: {
         origin: location.origin,
         otpauthUri: otpauthUri.value,
       },
     }
-    const delivery =
-      await host.sendRuntimeMessage<EnrollPreviewResponse>(nookTypedArgs0_4)
+    const delivery = await host.sendAuthenticatorPreviewRuntimeMessage(message)
 
     if (
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-      !delivery.response?.ok
+      delivery.response.kind === AuthenticatorPreviewResponseKind.Rejected
     ) {
       const nookTypedArgs0_20: Parameters<typeof setHostDescription>[0] = {
         host,
@@ -416,7 +440,7 @@ async function showQrPreview({
     }
     const { response } = delivery
 
-    if (response.status === EnrollPreviewResponseStatus.Unavailable) {
+    if (response.kind === AuthenticatorPreviewResponseKind.Unavailable) {
       const nookTypedArgs0_22: Parameters<typeof setHostDescription>[0] = {
         host,
         text: unavailableMessage(host),
@@ -432,23 +456,15 @@ async function showQrPreview({
       return
     }
 
-    const preview = response.preview
-    const vaultStoreId = response.vaultStoreId
-    if (!preview || !vaultStoreId) {
-      const nookTypedArgs0_24: Parameters<typeof setHostDescription>[0] = {
-        host,
-        text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
-      }
-      setHostDescription(nookTypedArgs0_24)
-      const nookTypedArgs0_25: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_25)
-      clearOtpauthUri(otpauthUri)
-      clearCandidate(candidate)
-      return
+    if (
+      response.kind !== AuthenticatorPreviewResponseKind.Ready ||
+      !('preview' in response) ||
+      !('vaultStoreId' in response)
+    ) {
+      throw new Error('Rust returned an unexpected authenticator preview.')
     }
+
+    const { preview, vaultStoreId } = response
 
     const nookTypedArgs0_26: Parameters<typeof setHostDescription>[0] = {
       host,
