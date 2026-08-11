@@ -38,6 +38,9 @@ function providerState(providerType: StorageProviderType): AdapterState {
     requireActiveVaultStoreId: () => 'vault-1',
     selectedLoginVault: { kind: LoginVaultSelectionKind.NotSelected },
     hasManager: false,
+    requireManager: () => {
+      throw new Error('provider save adapter fixture has no manager')
+    },
     enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),
     loginSetup: { kind: LoginSetupKind.Active, providerType },
     storageMode: providerType,
