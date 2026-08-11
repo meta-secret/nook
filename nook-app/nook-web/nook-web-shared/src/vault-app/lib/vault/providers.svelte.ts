@@ -53,7 +53,6 @@ import {
   draft_github_storage_args,
   draft_local_storage_args,
   draft_oauth_storage_args,
-  ensure_local_provider_row,
   existing_provider_save_setup,
   has_github_credentials,
   has_local_vault,
@@ -721,8 +720,8 @@ export async function ensureProviderSaved(
       return false;
     }
     state.providers = outcome.snapshot.providers;
-    if (isConfiguredOAuthFile(outcome.oauth_file)) {
-      state.configureOauthFile(outcome.oauth_file.config);
+    if (isConfiguredOAuthFile(outcome.oauthFile)) {
+      state.configureOauthFile(outcome.oauthFile.config);
     }
 
     state.clearLoginSetup();
