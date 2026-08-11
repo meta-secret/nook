@@ -10,7 +10,6 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
   import { tick, untrack } from 'svelte'
   import { ArrowLeft, RefreshCw } from '@lucide/svelte'
   import {
-    DeviceAccessIdentityState,
     DeviceAccessProtectionKind,
     NookDeviceAccessTextKind,
     NookDeviceVaultAccessState,
