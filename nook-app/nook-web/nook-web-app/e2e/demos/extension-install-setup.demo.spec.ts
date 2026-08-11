@@ -173,6 +173,7 @@ test('offer browser extension install on vault home and in Devices', async ({
   expect(routedTypesAfterSettings).toEqual([
     'nook:extension-paired-vault-identity-discovery',
     'nook:open-companion-launcher',
+    'nook:extension-paired-vault-identity-discovery',
   ])
   await demoBeat(page)
 })

@@ -1,5 +1,6 @@
 import {
   currentCodeFromOtpauthUri,
+  decodeStorageProviders,
   DeviceMode,
   DeviceProtectionStatus,
   NookExternalEventLogRecords,
@@ -8,7 +9,10 @@ import {
   previewOtpauthUri,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type initNookWasm from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { AuthProvidersSnapshot } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type {
+  AuthProvidersSnapshot,
+  StorageProvider,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { scrubProviderCredentials } from '../lib/provider-credential-staging'
 import { ExtensionSessionMessageType } from './session-message-dispatch'
 import { type ExtensionSessionRequest } from './session-request-adapter'
