@@ -125,7 +125,6 @@ mod wasm_tests {
         assert_eq!(matching.len(), 1);
         assert_eq!(matching[0].issuer(), "Alpha");
         assert_eq!(matching[0].account(), "alice@example.com");
-
         assert!(manager.list_authenticator_accounts("recovery")?.is_empty());
         assert!(
             manager

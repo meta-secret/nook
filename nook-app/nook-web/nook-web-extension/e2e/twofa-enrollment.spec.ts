@@ -131,9 +131,20 @@ type MalformedBackupCodeReplaceResponse = {
   error: string
 }
 
+type MalformedBackupCodeReplaceResult = {
+  response: MalformedBackupCodeReplaceResponse
+  beforeEventLog: EventLogSnapshot
+  afterEventLog: EventLogSnapshot
+}
+
+type EventLogSnapshot = {
+  digest: string
+  entryCount: number
+}
+
 async function attemptMalformedBackupCodeReplace(
   args: MalformedBackupCodeReplaceAttemptArgs,
-): Promise<MalformedBackupCodeReplaceResponse> {
+): Promise<MalformedBackupCodeReplaceResult> {
   const worker =
     args.context.serviceWorkers()[0] ??
     (await args.context.waitForEvent('serviceworker', { timeout: 45_000 }))
@@ -162,6 +173,100 @@ async function attemptMalformedBackupCodeReplace(
       new Promise<Response>((resolve) => {
         globalThis.chrome.runtime.sendMessage(message, resolve)
       })
+    enum DatabaseOpenResultKind {
+      Opened = 'opened',
+      Failed = 'failed',
+    }
+    type DatabaseOpenResult =
+      | { kind: DatabaseOpenResultKind.Opened; database: IDBDatabase }
+      | { kind: DatabaseOpenResultKind.Failed; message: string }
+    enum EventLogReadResultKind {
+      Read = 'read',
+      Failed = 'failed',
+    }
+    type EventLogReadResult =
+      | { kind: EventLogReadResultKind.Read; entries: string[] }
+      | { kind: EventLogReadResultKind.Failed; message: string }
+    const eventLogSnapshot = async (
+      vaultStoreId: string,
+    ): Promise<EventLogSnapshot> => {
+      const databaseRequest = globalThis.indexedDB.open('nook_db')
+      const databaseResult = await new Promise<DatabaseOpenResult>(
+        (resolve) => {
+          databaseRequest.onsuccess = () => {
+            resolve({
+              kind: DatabaseOpenResultKind.Opened,
+              database: databaseRequest.result,
+            })
+          }
+          databaseRequest.onerror = () => {
+            resolve({
+              kind: DatabaseOpenResultKind.Failed,
+              message:
+                databaseRequest.error?.message ??
+                'Failed to open extension event storage.',
+            })
+          }
+        },
+      )
+      if (databaseResult.kind === DatabaseOpenResultKind.Failed) {
+        throw new Error(databaseResult.message)
+      }
+      const database = databaseResult.database
+      const transaction = database.transaction('events', 'readonly')
+      const cursorRequest = transaction.objectStore('events').openCursor()
+      const eventPrefix = `event:${vaultStoreId}:`
+      const eventIndexKey = `event_index:${vaultStoreId}`
+      const readResult = await new Promise<EventLogReadResult>((resolve) => {
+        const entries: string[] = []
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result
+          if (!cursor) {
+            resolve({ kind: EventLogReadResultKind.Read, entries })
+            return
+          }
+          if (
+            typeof cursor.key !== 'string' ||
+            typeof cursor.value !== 'string'
+          ) {
+            resolve({
+              kind: EventLogReadResultKind.Failed,
+              message: 'Extension event storage contained an invalid row.',
+            })
+            return
+          }
+          if (
+            cursor.key.startsWith(eventPrefix) ||
+            cursor.key === eventIndexKey
+          ) {
+            entries.push(`${cursor.key}\u0000${cursor.value}`)
+          }
+          cursor.continue()
+        }
+        cursorRequest.onerror = () => {
+          resolve({
+            kind: EventLogReadResultKind.Failed,
+            message:
+              cursorRequest.error?.message ??
+              'Failed to read extension event storage.',
+          })
+        }
+      })
+      database.close()
+      if (readResult.kind === EventLogReadResultKind.Failed) {
+        throw new Error(readResult.message)
+      }
+      const encoded = new TextEncoder().encode(
+        readResult.entries.join('\u0000'),
+      )
+      const digest = await globalThis.crypto.subtle.digest('SHA-256', encoded)
+      return {
+        digest: Array.from(new Uint8Array(digest), (byte) =>
+          byte.toString(16).padStart(2, '0'),
+        ).join(''),
+        entryCount: readResult.entries.length,
+      }
+    }
 
     for (const grant of input.grants) {
       const listRequest = {
@@ -183,9 +288,16 @@ async function attemptMalformedBackupCodeReplace(
           queue: input.queue,
         },
       }
-      return sendMessage<MalformedBackupCodeReplaceResponse>(
+      const beforeEventLog = await eventLogSnapshot(grant.vaultStoreId)
+      const response = await sendMessage<MalformedBackupCodeReplaceResponse>(
         malformedReplaceRequest,
       )
+      const afterEventLog = await eventLogSnapshot(grant.vaultStoreId)
+      return {
+        response,
+        beforeEventLog,
+        afterEventLog,
+      }
     }
     throw new Error('Expected the enrolled authenticator in the paired vault.')
   }, evaluateArgs)
@@ -376,7 +488,13 @@ test.describe('Browser 2FA enrollment', () => {
 
       // CTA opens the review UI; the confirm control reuses the same label.
       await widget.getByRole('button', { name: 'Save backup codes' }).click()
-      await expect(widget.locator('textarea')).toBeVisible({ timeout: 15_000 })
+      const reviewedCodes = widget.locator('.account-list label span')
+      await expect(reviewedCodes).toHaveText([
+        'A1B2-C3D4-E5F6',
+        'G7H8-I9J0-K1L2',
+        'M3N4-O5P6-Q7R8',
+        'S9T0-U1V2-W3X4',
+      ])
       await widget.getByRole('button', { name: 'Save backup codes' }).click()
 
       const replaceButton = widget.getByRole('button', {
@@ -405,27 +523,21 @@ test.describe('Browser 2FA enrollment', () => {
         context: paired.context,
         account: 'alice-2fa@nook.test',
       }
-      await expect(
-        attemptMalformedBackupCodeReplace(malformedReplaceArgs),
-      ).resolves.toEqual({
+      const malformedReplaceResult =
+        await attemptMalformedBackupCodeReplace(malformedReplaceArgs)
+      expect(malformedReplaceResult.response).toEqual({
         ok: false,
         error: 'Invalid extension session request.',
       })
-
-      await paired.vaultPage.reload()
-      await expect(
-        paired.vaultPage.getByTestId('authenticated-shell'),
-      ).toBeVisible({ timeout: 20_000 })
-      const authenticatorRow = paired.vaultPage
-        .getByTestId('vault-group-authenticator')
-        .getByTestId('secret-row')
-        .filter({ hasText: 'alice-2fa@nook.test' })
-      await expect(authenticatorRow).toBeVisible({ timeout: 20_000 })
-      await authenticatorRow.getByTestId('secret-row-toggle').click()
-      await authenticatorRow.getByTestId('reveal-secret-btn').click()
-      await expect(
-        authenticatorRow.getByTestId('authenticator-backup-codes'),
-      ).toContainText('A1B2-C3D4-E5F6')
+      // The extension is intentionally not a vault-management UI and cannot
+      // reveal backup codes. Compare the immutable encrypted event source of
+      // truth instead: any replacement changes its exact digest.
+      expect(malformedReplaceResult.beforeEventLog.entryCount).toBeGreaterThan(
+        0,
+      )
+      expect(malformedReplaceResult.afterEventLog).toEqual(
+        malformedReplaceResult.beforeEventLog,
+      )
     } finally {
       await paired.context.close()
       await mockAuth.close()

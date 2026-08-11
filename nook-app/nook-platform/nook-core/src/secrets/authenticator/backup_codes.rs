@@ -49,6 +49,34 @@ pub fn apply_backup_codes(
     }
 }
 
+/// Verify that encrypted persistence retained both the intended result and the reviewed input.
+pub struct BackupCodePersistenceVerification<'a> {
+    pub persisted: &'a [String],
+    pub intended: &'a [String],
+    pub reviewed: &'a [String],
+    pub mode: BackupCodeAttachMode,
+}
+
+pub fn verify_persisted_backup_codes(
+    verification: &BackupCodePersistenceVerification<'_>,
+) -> Result<(), ValidationError> {
+    if verification.persisted != verification.intended {
+        return Err(ValidationError::AuthenticatorBackupCodesInvalid);
+    }
+    let reviewed_matches = match verification.mode {
+        BackupCodeAttachMode::Replace => verification.persisted == verification.reviewed,
+        BackupCodeAttachMode::Merge => verification
+            .reviewed
+            .iter()
+            .all(|code| verification.persisted.contains(code)),
+    };
+    if reviewed_matches {
+        Ok(())
+    } else {
+        Err(ValidationError::AuthenticatorBackupCodesInvalid)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -77,6 +105,26 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(normalize_backup_codes(&too_many).is_err());
         assert!(BackupCodeAttachMode::parse("append").is_err());
+
+        let persisted = vec!["old-code".to_owned(), "new-code".to_owned()];
+        assert!(
+            verify_persisted_backup_codes(&BackupCodePersistenceVerification {
+                persisted: &persisted,
+                intended: &persisted,
+                reviewed: &["new-code".to_owned()],
+                mode: BackupCodeAttachMode::Merge,
+            },)
+            .is_ok()
+        );
+        assert!(
+            verify_persisted_backup_codes(&BackupCodePersistenceVerification {
+                persisted: &persisted,
+                intended: &persisted,
+                reviewed: &["wrong-code".to_owned()],
+                mode: BackupCodeAttachMode::Merge,
+            },)
+            .is_err()
+        );
         Ok(())
     }
 }

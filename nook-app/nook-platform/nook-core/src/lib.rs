@@ -51,10 +51,10 @@ pub use apple_passwords_import::{
     plan_apple_passwords_import,
 };
 pub use authenticator::{
-    AuthenticatorSecret, BackupCodeAttachMode, MAX_AUTHENTICATOR_BACKUP_CODE_LEN,
-    MAX_AUTHENTICATOR_BACKUP_CODES, OtpauthPreview, TotpAlgorithm, TotpCode, TotpDigits,
-    TotpPeriod, TotpSecret, apply_backup_codes, authenticator_setup_key_changed,
-    normalize_backup_codes,
+    AuthenticatorSecret, BackupCodeAttachMode, BackupCodePersistenceVerification,
+    MAX_AUTHENTICATOR_BACKUP_CODE_LEN, MAX_AUTHENTICATOR_BACKUP_CODES, OtpauthPreview,
+    TotpAlgorithm, TotpCode, TotpDigits, TotpPeriod, TotpSecret, apply_backup_codes,
+    authenticator_setup_key_changed, normalize_backup_codes, verify_persisted_backup_codes,
 };
 pub use authenticator_issuer_hosts::{
     mapped_host_for_issuer, normalize_issuer_lookup_key, resolve_authenticator_website_host,
@@ -263,7 +263,10 @@ pub use password_envelope::{
     verify_password_entry,
 };
 pub use secrets::{filter_secrets, validate_secret_data};
-pub use session::{ReplaceSecretInput, replace_encrypted_secret, replace_secret};
+pub use session::{
+    ReplaceSecretInput, VerifiedAuthenticatorReplacementInput,
+    replace_encrypted_authenticator_verified, replace_encrypted_secret, replace_secret,
+};
 pub use sync_provider_credentials::{
     AGE_ARMOR_MARKER, is_sealed_credential, open_provider_credentials,
     provider_credentials_are_presealed, seal_provider_credentials,
