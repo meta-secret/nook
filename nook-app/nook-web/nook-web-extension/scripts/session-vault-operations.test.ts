@@ -59,7 +59,7 @@ function importRequest(
 function importDependencies(
   provider: StorageProvider,
 ): ImportExtensionVaultDependencies {
-  const records = {} as object as NookExternalEventLogRecords
+  const records = {} as NookExternalEventLogRecords
   return {
     decodeProviders: () => [provider],
     createRecords: () => records,
