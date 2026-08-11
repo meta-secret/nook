@@ -180,6 +180,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     )?.[1]
     expect(pairedGrant).toEqual(
       expect.objectContaining({
+        vaultName: extensionApprovalVaultName,
+        deviceLabel: expect.any(String),
+        approvedAt: expect.any(String),
         scopes: expect.arrayContaining([
           ExtensionConnectScope.PasskeyManagement,
           ExtensionConnectScope.PasswordFilling,
@@ -289,6 +292,20 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         ),
       ).toBe(extensionDeviceId)
     }
+    // Reopening a paired vault completes the paired-vault handoff through the
+    // strict Rust session payload. The stored grant above deliberately carries
+    // routing and display metadata that must not enter that payload.
+    await expect
+      .poll(async () => {
+        const entries = await readPersistedAppLogs(reopenedVaultPage)
+        return (entries ?? []).filter(
+          (entry) =>
+            entry.scope === 'vault-lifecycle' &&
+            entry.message === 'extension identity adopted' &&
+            entry.data?.includes(extensionDeviceId ?? '') === true,
+        ).length
+      })
+      .toBe(2)
 
     const emptyOtpPage = await context.newPage()
     await emptyOtpPage.goto(`${loginServer.origin}/otp`)
