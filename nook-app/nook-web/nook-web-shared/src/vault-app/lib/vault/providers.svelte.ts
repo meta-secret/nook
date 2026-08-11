@@ -343,23 +343,26 @@ export async function handleRemoteVaultAssessStatus({
 }
 
 /** Store id for persisting a sync provider row before or after wasm connect. */
-async function vaultStoreIdForProviderSave(
+async function providerStoreIdForSave(
   state: ProviderSaveContext,
-): Promise<string | undefined> {
+): Promise<
+  | ReturnType<typeof scopedProviderVault>
+  | ReturnType<typeof unscopedProviderVault>
+> {
   const fromManager = state.hasManager
     ? (
         await state.enqueueStorage(() => state.requireManager().vaultStoreId)
       ).trim()
     : "";
   if (fromManager) {
-    return fromManager;
+    return scopedProviderVault(fromManager);
   }
   if (state.activeVault.kind === ActiveVaultKind.Open) {
-    return state.activeVault.storeId;
+    return scopedProviderVault(state.activeVault.storeId);
   }
   return state.selectedLoginVault.kind === LoginVaultSelectionKind.Selected
-    ? state.selectedLoginVault.storeId
-    : undefined;
+    ? scopedProviderVault(state.selectedLoginVault.storeId)
+    : unscopedProviderVault();
 }
 
 function resetICloudSignInState(state: ProviderActionsContext) {
@@ -665,10 +668,7 @@ export async function removeProvider({
 export async function ensureProviderSaved(
   state: ProviderSaveContext,
 ): Promise<boolean> {
-  const vaultStoreId = await vaultStoreIdForProviderSave(state);
-  const providerStoreId = vaultStoreId
-    ? scopedProviderVault(vaultStoreId)
-    : unscopedProviderVault();
+  const providerStoreId = await providerStoreIdForSave(state);
   const oauthFile =
     state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? configuredOAuthFile($state.snapshot(state.oauthFileDraft.config))
