@@ -145,8 +145,8 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
         "pull-request workflow must reject foreign task mutation"
     );
     assert!(
-        ownership_skill.contains("reply to or resolve its review threads")
-            && ownership_skill.contains("close, reopen, or merge its pull request")
+        ownership_skill.contains("replying to or resolving its review threads")
+            && ownership_skill.contains("closing, reopening, or merging its pull request")
             && ownership_skill.contains("Recheck ownership before every remote mutation")
             && ownership_skill.contains("prompt-backed run requires the `continuing_owner`"),
         "agent feature ownership skill must cover PR and review mutations"
