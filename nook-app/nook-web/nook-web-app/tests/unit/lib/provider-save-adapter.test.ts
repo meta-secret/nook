@@ -10,6 +10,7 @@ import {
 } from '$lib/auth/providers'
 import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { ensureProviderSaved } from '$lib/vault/providers.svelte'
+import type { TranslationRequest } from '$lib/vault/translation'
 import {
   ActiveVaultKind,
   LocalFolderDraftKind,
@@ -45,7 +46,8 @@ function providerState(providerType: StorageProviderType): AdapterState {
     localFolderDraft: { kind: LocalFolderDraftKind.NotConfigured },
     errorMsg: '',
     loginRequiresExistingVault: true,
-    t: (request) => (typeof request === 'string' ? request : request.key),
+    t: (request: TranslationRequest) =>
+      typeof request === 'string' ? request : request.key,
     configureOauthFile: vi.fn(),
     clearLoginSetup: vi.fn(),
     applyActiveProviderCredentials: vi.fn(),
