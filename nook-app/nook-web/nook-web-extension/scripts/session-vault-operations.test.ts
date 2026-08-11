@@ -6,6 +6,7 @@ import {
   type NookVaultManager,
   type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { GITHUB_PROVIDER_TYPE } from '../../nook-web-shared/src/vault-app/lib/auth/providers'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
 import {
@@ -28,7 +29,7 @@ type ImportManagerState = {
 function githubProvider(): StorageProvider {
   return {
     id: 'github',
-    type: 'github',
+    type: GITHUB_PROVIDER_TYPE,
     label: 'Personal GitHub',
     githubPat: 'github_pat_session_secret',
     githubRepo: { state: 'defaultRepository' },
