@@ -19,8 +19,8 @@
   let {
     vault,
     view,
-    selectedStage = $bindable(),
-    providerDraft = $bindable(),
+    selectedStage = $bindable(AccessChainStage.Unlock),
+    providerDraft = $bindable(''),
     providerSaveState,
     onSaveProviderLabel,
     onProviderDraftInput,

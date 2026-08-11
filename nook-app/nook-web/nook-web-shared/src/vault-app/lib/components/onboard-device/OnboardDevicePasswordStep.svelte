@@ -21,9 +21,11 @@
     isBusy,
     isGenerating,
     passwordError,
-    open = $bindable(),
-    passwordEntry = $bindable(),
-    passwordInput = $bindable(),
+    open = $bindable(false),
+    passwordEntry = $bindable({
+      kind: PasswordEntrySelectionKind.NotSelected,
+    }),
+    passwordInput = $bindable(''),
     onAddPassword,
   }: {
     vault: VaultState
