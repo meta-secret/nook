@@ -17,6 +17,14 @@ Deliver a durable two-phase agent context record.
 
 - Do not preserve source conversation text.
 
+## Change budget and PR sequence
+
+- Estimated authored changed lines: 240
+- Owning modules, packages, or layers: Workbench agent records
+- Public or cross-module interfaces: Plan validation contract
+- Delivery shape: One PR completes the change
+- PR slices and acceptance evidence: One validator slice with contract tests
+
 ## Initial plan
 
 1. Add and validate the lifecycle.
@@ -67,6 +75,36 @@ test('rejects empty required sections', () => {
     '',
   )
   assert.match(validateAgentRecord(empty, 'plan'), /section is empty/)
+})
+
+for (const field of [
+  'Estimated authored changed lines',
+  'Owning modules, packages, or layers',
+  'Public or cross-module interfaces',
+  'Delivery shape',
+  'PR slices and acceptance evidence',
+]) {
+  test(`rejects a plan without ${field}`, () => {
+    const missing = validPlan.replace(
+      new RegExp(`^- ${field}:.*\\n`, 'm'),
+      '',
+    )
+    assert.match(
+      validateAgentRecord(missing, 'plan'),
+      new RegExp(`missing or empty plan field: ${field}`),
+    )
+  })
+}
+
+test('rejects a nonnumeric authored-line estimate', () => {
+  const invalid = validPlan.replace(
+    'Estimated authored changed lines: 240',
+    'Estimated authored changed lines: small',
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /missing or empty plan field: Estimated authored changed lines/,
+  )
 })
 
 test('rejects concrete workflow credentials', () => {

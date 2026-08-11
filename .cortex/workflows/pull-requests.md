@@ -9,10 +9,13 @@ It is "land a PR with Nook's applicable GitHub Actions PR test checks green."
 
 Start by establishing the PR path, then keep ownership until merge or a concrete blocked handoff:
 
-1. **Prepare the PR path first** — fetch `origin/main`, estimate the authored
-   changed lines, define the module boundary, and split larger features into an
-   ordered PR sequence before coding. Then create the first feature branch and
-   define its PR title, body, and scope.
+1. **Prepare the PR path first:**
+   - Fetch `origin/main`.
+   - Estimate the authored changed lines.
+   - Define the module boundary.
+   - Split larger features into an ordered PR sequence.
+   - Create the first feature branch.
+   - Define the first PR's title, body, and scope.
 2. **Implement functionality** — make the requested code/docs/tests changes on the feature branch. Focused build/test feedback runs on GitHub-hosted workers.
 3. **Push and create/update the PR** — run `task loom:pre-push`, push a coherent commit, and open the PR; later fixes update that same PR.
 4. **Iterate and validate on GitHub Actions:**
@@ -48,7 +51,12 @@ Count additions and deletions against the intended base for:
 - configuration;
 - scripts and workflow code.
 
-Use `git diff --numstat <base>...HEAD` as the implementation check.
+During implementation, use `git diff --numstat <base>` for tracked working-tree
+changes.
+
+Count untracked authored files separately.
+
+After every change is committed, use `git diff --numstat <base>...HEAD`.
 
 Report these separately because they do not represent authored functionality:
 

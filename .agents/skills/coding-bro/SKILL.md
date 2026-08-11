@@ -25,7 +25,7 @@ module or layer. Target no more than 5,000 authored changed lines per PR. Split
 larger features into ordered Workbench issues and independently mergeable PRs.
 Continue through every slice until the complete feature is delivered. Full
 contract:
-[`.cortex/workflows/pull-requests.md`](../../.cortex/workflows/pull-requests.md#pull-request-size-and-modularity).
+[`.cortex/workflows/pull-requests.md`](../../../.cortex/workflows/pull-requests.md#pull-request-size-and-modularity).
 
 ## Quick reference
 

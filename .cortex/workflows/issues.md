@@ -67,8 +67,12 @@ After a slice merges:
 
 1. Update its issue and the feature index.
 2. Publish the required worklog and statistics.
-3. Mark the next dependency-free issue ready.
-4. Start its branch from current Nook `origin/main`.
+3. Choose one owner for the next dependency-free issue.
+4. If the current agent continues, claim the issue as `in_progress` before
+   starting its branch from current Nook `origin/main`.
+5. If scheduled automation will continue, set `status: ready` and
+   `automation: agent`.
+6. In that case, the current agent must not also start the issue.
 
 The feature remains incomplete while any required issue remains incomplete.
 
@@ -221,11 +225,12 @@ The plan must contain:
 - material functional, workflow, security, and delivery requirements;
 - explicit constraints, assumptions, and exclusions;
 - a small ordered execution plan;
-- an estimate of authored changed lines;
-- the expected module, package, or layer boundary;
-- the public or cross-module interfaces involved;
-- a one-PR decision or an ordered multi-PR sequence;
-- acceptance evidence for every planned PR slice;
+- a `Change budget and PR sequence` section;
+- an `Estimated authored changed lines` value;
+- an `Owning modules, packages, or layers` value;
+- a `Public or cross-module interfaces` value;
+- a `Delivery shape` value;
+- a `PR slices and acceptance evidence` value;
 - expected completion evidence; and
 - a safety review confirming that no raw prompt, transcript, secret, private
   data, raw log, local path, or unnecessary infrastructure detail is present.

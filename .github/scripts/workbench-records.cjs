@@ -3,6 +3,7 @@ const recordSections = {
     '## Interpreted request',
     '## Requirements',
     '## Constraints and exclusions',
+    '## Change budget and PR sequence',
     '## Initial plan',
     '## Completion evidence',
     '## Safety review',
@@ -16,6 +17,29 @@ const recordSections = {
     '## Remaining work',
   ],
 }
+
+const planBudgetFields = [
+  {
+    label: 'Estimated authored changed lines',
+    pattern: /^- Estimated authored changed lines:\s*\d[\d,]*\s*$/m,
+  },
+  {
+    label: 'Owning modules, packages, or layers',
+    pattern: /^- Owning modules, packages, or layers:\s*\S.+$/m,
+  },
+  {
+    label: 'Public or cross-module interfaces',
+    pattern: /^- Public or cross-module interfaces:\s*\S.+$/m,
+  },
+  {
+    label: 'Delivery shape',
+    pattern: /^- Delivery shape:\s*\S.+$/m,
+  },
+  {
+    label: 'PR slices and acceptance evidence',
+    pattern: /^- PR slices and acceptance evidence:\s*\S.+$/m,
+  },
+]
 
 const commonForbiddenPatterns = [
   /```/,
@@ -100,6 +124,15 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
         : candidate.length
     if (!candidate.slice(start, end).trim()) {
       return `section is empty: ${required[index]}`
+    }
+  }
+
+  if (kind === 'plan') {
+    const missingBudgetField = planBudgetFields.find(
+      ({ pattern }) => !pattern.test(candidate),
+    )
+    if (missingBudgetField) {
+      return `missing or empty plan field: ${missingBudgetField.label}`
     }
   }
 
