@@ -2,6 +2,7 @@ use std::{fs, path::PathBuf, process::Command};
 
 use anyhow::Context;
 
+#[path = "infra/remote_platform_contracts.rs"]
 mod remote_platform_contracts;
 
 fn repository_root() -> PathBuf {

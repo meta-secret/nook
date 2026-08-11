@@ -1,5 +1,6 @@
 #![allow(clippy::unnecessary_wraps)]
 
+#[path = "sccache_s3/delivery_cache_contracts.rs"]
 mod delivery_cache_contracts;
 
 use std::{fs, path::PathBuf};
