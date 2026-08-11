@@ -5,6 +5,7 @@ import type {
   WebsiteLoginSaveActionResponse,
   WebsiteLoginSaveOffer,
   WebsiteLoginSaveOfferResponse,
+  WebsiteLoginSavePendingAvailable,
   WebsiteLoginSavePendingResponse,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
@@ -14,6 +15,7 @@ export type WebsiteLoginSaveOfferView = WebsiteLoginSaveOffer
 export type {
   WebsiteLoginSaveActionResponse,
   WebsiteLoginSaveOfferResponse,
+  WebsiteLoginSavePendingAvailable,
   WebsiteLoginSavePendingResponse,
 }
 

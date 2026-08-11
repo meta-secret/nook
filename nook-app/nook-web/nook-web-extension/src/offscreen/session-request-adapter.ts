@@ -249,6 +249,15 @@ function isExtensionSessionMessageType(
   return Object.prototype.hasOwnProperty.call(sensitiveSessionFields, value)
 }
 
+function hasExtensionSessionQueue(payload: object): boolean {
+  return (
+    'queue' in payload &&
+    payload.queue instanceof Object &&
+    'kind' in payload.queue &&
+    typeof payload.queue.kind === 'string'
+  )
+}
+
 function stageExtensionSessionIngressRequest(
   value: unknown,
 ): ExtensionSessionIngressStage {
@@ -266,6 +275,10 @@ function stageExtensionSessionIngressRequest(
   }
 
   const request = value as ParsedExtensionSessionTransportRequest
+  if (!hasExtensionSessionQueue(request.payload)) {
+    clearExtensionSessionIngressRequest(request)
+    return { kind: ExtensionSessionIngressStageKind.Invalid }
+  }
   if (request.type === ExtensionSessionMessageType.ImportVault) {
     const providers = request.payload.providers
     if (!Array.isArray(providers)) {
@@ -329,14 +342,20 @@ export async function parseExtensionSessionRequest(
     clearExtensionSessionIngressRequest(request)
     return { kind: ExtensionSessionRequestParseKind.Invalid }
   }
-  let readinessTimer: ReturnType<typeof setTimeout> | undefined
+  const readinessDeadline = new AbortController()
   const expiry = new Promise<CompanionWasmReadinessKind>((resolve) => {
-    readinessTimer = setTimeout(
+    const readinessTimer = setTimeout(
       () => {
         clearExtensionSessionIngressRequest(request)
         resolve(CompanionWasmReadinessKind.Expired)
       },
       Math.max(0, expiresAt - Date.now()),
+    )
+    const abortListenerOptions: AddEventListenerOptions = { once: true }
+    readinessDeadline.signal.addEventListener(
+      'abort',
+      () => clearTimeout(readinessTimer),
+      abortListenerOptions,
     )
   })
   try {
@@ -372,7 +391,7 @@ export async function parseExtensionSessionRequest(
     clearExtensionSessionIngressRequest(request)
     return { kind: ExtensionSessionRequestParseKind.Invalid }
   } finally {
-    if (readinessTimer !== undefined) clearTimeout(readinessTimer)
+    readinessDeadline.abort()
   }
   return {
     kind: ExtensionSessionRequestParseKind.Parsed,

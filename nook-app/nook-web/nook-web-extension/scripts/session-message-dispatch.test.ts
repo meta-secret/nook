@@ -196,6 +196,27 @@ describe('ExtensionSessionMessageDispatcher', () => {
     }
   })
 
+  test('rejects a missing queue before staging and clears browser-owned secrets', async () => {
+    const payload = {
+      vaultStoreId: 'vault',
+      deviceId: 'device',
+      devicePublicKey: 'public',
+      deviceSigningPublicKey: 'signing',
+      origin: 'https://example.com',
+      username: 'alice',
+      password: 'password',
+    }
+
+    const parsed = await parseExtensionSessionRequest({
+      type: ExtensionSessionMessageType.PlanLoginSave,
+      payload,
+    })
+
+    expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
+    expect(payload.username).toBe('')
+    expect(payload.password).toBe('')
+  })
+
   test('stages passkey request JSON before awaiting cold WASM', async () => {
     for (const type of [
       ExtensionSessionMessageType.RegisterPasskey,

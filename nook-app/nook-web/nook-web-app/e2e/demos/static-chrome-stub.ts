@@ -10,8 +10,15 @@ import {
 import type {
   WebsiteLoginSaveActionResponse,
   WebsiteLoginSaveOfferResponse,
-  WebsiteLoginSavePendingResponse,
+  WebsiteLoginSavePendingAvailable,
 } from '../../../nook-web-extension/src/lib/login-save-messages'
+
+type DemoLoginSaveResponses = {
+  offerAvailable: WebsiteLoginSaveOfferResponse['kind']
+  pendingAvailable: WebsiteLoginSavePendingAvailable['state']
+  pendingUnavailable: WebsiteLoginSavePendingAvailable['state']
+  completed: WebsiteLoginSaveActionResponse['kind']
+}
 
 export const demoLoginSaveCreateDecision = NookWebsiteLoginSaveDecision.Create
 export const demoSufficientAuthenticationOutcome =
@@ -38,7 +45,7 @@ export const demoDomainEnumArgs = {
     pendingAvailable: 'available',
     pendingUnavailable: 'unavailable',
     completed: 'completed',
-  },
+  } satisfies DemoLoginSaveResponses,
 }
 
 export type ChromeMessage = { message: string }
@@ -59,24 +66,7 @@ export type DemoChromeStubArgs = {
     fillTotpAction: AuthenticationWorkflowAction.FillTotp
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey
   }
-  loginSaveResponses: {
-    offerAvailable: Extract<
-      WebsiteLoginSaveOfferResponse,
-      { kind: 'offer-available' }
-    >['kind']
-    pendingAvailable: Extract<
-      WebsiteLoginSavePendingResponse,
-      { state: 'available' }
-    >['state']
-    pendingUnavailable: Extract<
-      WebsiteLoginSavePendingResponse,
-      { state: 'unavailable' }
-    >['state']
-    completed: Extract<
-      WebsiteLoginSaveActionResponse,
-      { kind: 'completed' }
-    >['kind']
-  }
+  loginSaveResponses: DemoLoginSaveResponses
   /** Static replies keyed by runtime message type. */
   responsesByType?: Record<string, unknown>
   /** Stateful login-pilot replies for Continue → unlock → chooser. */
