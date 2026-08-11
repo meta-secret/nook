@@ -130,11 +130,13 @@ export type ExtensionSessionRequestParse =
     }
 
 export enum ExtensionSessionSensitiveStageKind {
+  Invalid = 'invalid',
   NotRequired = 'not-required',
   Staged = 'staged',
 }
 
 export type ExtensionSessionSensitiveStage =
+  | { kind: ExtensionSessionSensitiveStageKind.Invalid }
   | { kind: ExtensionSessionSensitiveStageKind.NotRequired }
   | {
       kind: ExtensionSessionSensitiveStageKind.Staged
@@ -208,14 +210,52 @@ function clearSensitiveFieldValue(value: unknown): void {
 
 type ExtensionSessionSensitiveValue = string | number[] | string[]
 
+type SetExtensionSessionSensitiveValueArgs = {
+  payload: ExtensionSessionNonImportRequest['payload']
+  field: string
+  value: ExtensionSessionSensitiveValue
+}
+
+function setExtensionSessionSensitiveValue(
+  args: SetExtensionSessionSensitiveValueArgs,
+): void {
+  Reflect.set(args.payload, args.field, args.value)
+}
+
+enum ExtensionSessionSensitiveValueCopyKind {
+  Invalid = 'invalid',
+  Copied = 'copied',
+}
+
+type ExtensionSessionSensitiveValueCopy =
+  | { kind: ExtensionSessionSensitiveValueCopyKind.Invalid }
+  | {
+      kind: ExtensionSessionSensitiveValueCopyKind.Copied
+      value: ExtensionSessionSensitiveValue
+    }
+
 function copyExtensionSessionSensitiveValue(
   value: unknown,
-): ExtensionSessionSensitiveValue {
-  if (typeof value === 'string') return value
-  if (!Array.isArray(value)) return []
-  if (value.every((entry) => typeof entry === 'number')) return [...value]
-  if (value.every((entry) => typeof entry === 'string')) return [...value]
-  return []
+): ExtensionSessionSensitiveValueCopy {
+  if (typeof value === 'string') {
+    return { kind: ExtensionSessionSensitiveValueCopyKind.Copied, value }
+  }
+  if (!Array.isArray(value)) {
+    return { kind: ExtensionSessionSensitiveValueCopyKind.Invalid }
+  }
+  if (value.every((entry) => typeof entry === 'number')) {
+    return {
+      kind: ExtensionSessionSensitiveValueCopyKind.Copied,
+      value: [...value],
+    }
+  }
+  if (value.every((entry) => typeof entry === 'string')) {
+    return {
+      kind: ExtensionSessionSensitiveValueCopyKind.Copied,
+      value: [...value],
+    }
+  }
+  return { kind: ExtensionSessionSensitiveValueCopyKind.Invalid }
 }
 
 export function clearExtensionSessionSensitiveRequest(
@@ -238,13 +278,33 @@ export function stageExtensionSessionSensitiveRequest(
   const stagedPayload = { ...request.payload } as typeof request.payload
   for (const field of fields) {
     const value = Reflect.get(request.payload, field)
-    const stagedValue: ExtensionSessionSensitiveValue =
-      copyExtensionSessionSensitiveValue(value)
-    Reflect.set(stagedPayload, field, stagedValue)
+    const copiedValue = copyExtensionSessionSensitiveValue(value)
+    if (copiedValue.kind === ExtensionSessionSensitiveValueCopyKind.Invalid) {
+      clearExtensionSessionSensitiveRequest(request)
+      const stagedRequestArgs: ReplaceExtensionSessionRequestPayloadArgs<
+        typeof request
+      > = { request, payload: stagedPayload }
+      clearExtensionSessionSensitiveRequest(
+        replaceExtensionSessionRequestPayload(stagedRequestArgs),
+      )
+      return { kind: ExtensionSessionSensitiveStageKind.Invalid }
+    }
+    const stagedValue: ExtensionSessionSensitiveValue = copiedValue.value
+    const stagedValueArgs: SetExtensionSessionSensitiveValueArgs = {
+      payload: stagedPayload,
+      field,
+      value: stagedValue,
+    }
+    setExtensionSessionSensitiveValue(stagedValueArgs)
     clearSensitiveFieldValue(value)
     const clearedValue: ExtensionSessionSensitiveValue =
       typeof value === 'string' ? '' : []
-    Reflect.set(request.payload, field, clearedValue)
+    const clearedValueArgs: SetExtensionSessionSensitiveValueArgs = {
+      payload: request.payload,
+      field,
+      value: clearedValue,
+    }
+    setExtensionSessionSensitiveValue(clearedValueArgs)
   }
   const replacementArgs: ReplaceExtensionSessionRequestPayloadArgs<
     typeof request
@@ -330,6 +390,9 @@ function stageExtensionSessionIngressRequest(
   }
 
   const sensitiveStage = stageExtensionSessionSensitiveRequest(request)
+  if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Invalid) {
+    return { kind: ExtensionSessionIngressStageKind.Invalid }
+  }
   return {
     kind: ExtensionSessionIngressStageKind.Staged,
     request:

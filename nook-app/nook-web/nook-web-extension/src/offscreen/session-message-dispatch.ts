@@ -53,8 +53,15 @@ type InvalidProviderPayloadResponse = {
   error: 'invalid-provider-payload'
 }
 
+type InvalidSensitivePayloadResponse = {
+  ok: false
+  error: 'invalid-sensitive-payload'
+}
+
 type ExtensionSessionDispatchResponse<SessionResponse> =
-  SessionResponse | InvalidProviderPayloadResponse
+  | SessionResponse
+  | InvalidProviderPayloadResponse
+  | InvalidSensitivePayloadResponse
 
 function sessionMessagePriority(
   type: ExtensionSessionMessageType,
@@ -319,6 +326,13 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
       return this.enqueueVaultImport(nookNamedArgs0_3)
     }
     const sensitiveStage = stageExtensionSessionSensitiveRequest(message)
+    if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Invalid) {
+      const invalidSensitiveResponse: InvalidSensitivePayloadResponse = {
+        ok: false,
+        error: 'invalid-sensitive-payload',
+      }
+      return Promise.resolve(invalidSensitiveResponse)
+    }
     if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged) {
       const nookNamedArgs0_4: Parameters<
         typeof this.enqueueSensitiveMessage
