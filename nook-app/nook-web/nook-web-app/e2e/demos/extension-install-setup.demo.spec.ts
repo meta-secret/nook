@@ -176,6 +176,18 @@ test('offer browser extension install on vault home and in Devices', async ({
   await expect(page.getByTestId('extension-setup-settings-cta')).toHaveText(
     'Switch extension vault',
   )
+  // Moving between extension setup surfaces must not replay the session-owned
+  // launcher request. The browser lifecycle keeps one operation per click.
+  const routedTypesAfterSettings = JSON.parse(
+    (await page
+      .locator('html')
+      .getAttribute('data-demo-extension-message-types')) ?? '[]',
+  ) as string[]
+  expect(routedTypesAfterSettings).toEqual([
+    extensionInstallDemoMessageTypes.pairedVaultIdentityDiscovery,
+    extensionInstallDemoMessageTypes.openCompanionLauncher,
+    extensionInstallDemoMessageTypes.pairedVaultIdentityDiscovery,
+  ])
   await demoBeat(page)
 })
 
