@@ -5,9 +5,17 @@ Use this checklist for every change that lands on `main`. **AI agents must follo
 This workflow applies only to the current task's owned feature and focused
 issues.
 
-Another active task's branch and pull request are read-only. Do not push,
-review, resolve, close, reopen, label, validate, or merge them without an
-explicit handoff.
+Another active task's branch and pull request are read-only.
+
+Without an explicit handoff, do not:
+
+- push to it;
+- reply to its reviews;
+- resolve its reviews;
+- close or reopen it;
+- change its labels;
+- trigger its checks;
+- merge it.
 
 Full ownership policy:
 [agent-feature-ownership.md](../dynamic-skills/agent-feature-ownership.md).

@@ -229,6 +229,12 @@ Do not take over a related task merely because it has open comments or failing
 checks. Require an explicit handoff first. See
 [agent-feature-ownership.md](../dynamic-skills/agent-feature-ownership.md).
 
+For `agent-implement.yml` PRs, the `## Ownership` section is the handoff.
+
+- Issue-backed runs name the Workbench issue owner.
+- Prompt-backed runs name the required `continuing_owner` input.
+- Only that continuing agent may resume the monitor, fix, and merge loop.
+
 ```mermaid
 flowchart TD
   P[0 Interpret request] --> F[1 Fetch + publish Workbench task plan]

@@ -40,6 +40,11 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "status: ready",
         "automation: agent",
         "status: in_progress",
+        "continuing_owner:",
+        "A prompt-backed run requires continuing_owner.",
+        "must name a continuing agent in owner before automation can claim it",
+        "## Ownership",
+        "CONTINUING_AGENT_OWNER",
         "Supply either issue_path or prompt, not both",
         "Claim ready Workbench issue",
         "Run task-planning agent",
@@ -136,13 +141,14 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
     assert!(
         pull_request_workflow
             .contains("Another active task's branch and pull request are read-only")
-            && pull_request_workflow.contains("without an explicit handoff"),
+            && pull_request_workflow.contains("explicit handoff."),
         "pull-request workflow must reject foreign task mutation"
     );
     assert!(
         ownership_skill.contains("reply to or resolve its review threads")
             && ownership_skill.contains("close, reopen, or merge its pull request")
-            && ownership_skill.contains("Recheck ownership before every remote mutation"),
+            && ownership_skill.contains("Recheck ownership before every remote mutation")
+            && ownership_skill.contains("prompt-backed run requires the `continuing_owner`"),
         "agent feature ownership skill must cover PR and review mutations"
     );
     Ok(())

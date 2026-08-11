@@ -408,8 +408,12 @@ The bounded `agent-implement.yml` worker is not a continuing task owner.
 
 Its harness owns git/push/PR creation and exits after opening the PR.
 
-A continuing agent may accept that PR only when it is explicitly assigned the
-same feature and issue set.
+A continuing agent may accept that PR only when the workflow names it in the
+PR's `## Ownership` section.
+
+Issue-backed runs use the Workbench issue owner.
+
+Prompt-backed runs require the `continuing_owner` dispatch input.
 
 That handoff makes the continuing agent the task owner. It must carry the PR
 through merge.

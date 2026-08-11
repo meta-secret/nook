@@ -69,9 +69,16 @@ Does not apply to:
 
 - read-only inspection used to avoid overlap;
 - an explicit user, owner, or orchestrator handoff;
-- a bounded worker handing its own PR to the continuing owner named for the
-  same feature and issue set;
+- a bounded worker handing its own PR to the continuing owner named in the PR's
+  `## Ownership` section;
 - repository automation acting within its documented machine-owned scope.
+
+For a bounded worker:
+
+- an issue-backed run takes the continuing owner from the claimed Workbench
+  issue;
+- a prompt-backed run requires the `continuing_owner` workflow input;
+- the generated PR records that owner and the exact owned scope.
 
 ## Examples
 

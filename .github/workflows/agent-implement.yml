@@ -19,6 +19,10 @@ on:
         description: Optional free-text implementation prompt
         required: false
         type: string
+      continuing_owner:
+        description: Required continuing agent identity for a prompt-backed run
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -52,10 +56,23 @@ jobs:
           token: ${{ secrets.NOOK_GITHUB_PAT }}
 
       - name: Validate dispatch inputs
-        if: inputs.prompt != '' && inputs.issue_path != ''
+        env:
+          CONTINUING_OWNER: ${{ inputs.continuing_owner }}
+          ISSUE_PATH: ${{ inputs.issue_path }}
+          PROMPT: ${{ inputs.prompt }}
         run: |
-          echo "::error::Supply either issue_path or prompt, not both; an issue-backed run must claim its Workbench record."
-          exit 1
+          if [ -n "$PROMPT" ] && [ -n "$ISSUE_PATH" ]; then
+            echo "::error::Supply either issue_path or prompt, not both; an issue-backed run must claim its Workbench record."
+            exit 1
+          fi
+          if [ -n "$PROMPT" ] && [ -z "$CONTINUING_OWNER" ]; then
+            echo "::error::A prompt-backed run requires continuing_owner."
+            exit 1
+          fi
+          if [ -n "$CONTINUING_OWNER" ] && ! printf '%s' "$CONTINUING_OWNER" | grep -Eq '^[a-z0-9][a-z0-9._-]*$'; then
+            echo "::error::continuing_owner must be a lowercase agent identity."
+            exit 1
+          fi
 
       - name: Claim ready Workbench issue
         id: workbench
@@ -114,6 +131,11 @@ jobs:
               }
 
               const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+              const continuingOwner = String(value(body, 'owner')).trim()
+              if (!/^[a-z0-9][a-z0-9._-]*$/.test(continuingOwner) || continuingOwner === 'unassigned') {
+                core.setFailed(`${path} must name a continuing agent in owner before automation can claim it`)
+                return
+              }
               const claimed = body
                 .replace(/^status:\s*ready$/m, 'status: in_progress')
                 .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
@@ -133,6 +155,7 @@ jobs:
               core.setOutput('body', body)
               core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${path}`)
               core.setOutput('slug', path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-'))
+              core.setOutput('continuing_owner', continuingOwner)
               return
             }
 
@@ -148,6 +171,8 @@ jobs:
           ISSUE_PATH: ${{ steps.workbench.outputs.path }}
           ISSUE_TITLE: ${{ steps.workbench.outputs.title }}
           ISSUE_URL: ${{ steps.workbench.outputs.url }}
+          ISSUE_CONTINUING_OWNER: ${{ steps.workbench.outputs.continuing_owner }}
+          MANUAL_CONTINUING_OWNER: ${{ inputs.continuing_owner }}
           RUN_ID: ${{ github.run_id }}
           WORKBENCH_SLUG: ${{ steps.workbench.outputs.slug }}
         run: |
@@ -157,10 +182,12 @@ jobs:
             branch="agent/prompt-${RUN_ID}"
             title="Agent implement (run ${RUN_ID})"
             task="$DISPATCH_PROMPT"
+            continuing_owner="$MANUAL_CONTINUING_OWNER"
           else
             branch="agent/workbench-${WORKBENCH_SLUG}-${RUN_ID}"
             title="Implement ${ISSUE_TITLE}"
             task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
+            continuing_owner="$ISSUE_CONTINUING_OWNER"
           fi
           feature="${ISSUE_PATH:-issues/unplanned/task.md}"
           feature="$(printf '%s' "$feature" | cut -d/ -f2)"
@@ -183,12 +210,21 @@ jobs:
             echo "TASK_PLAN_PATH=$plan_path"
             echo "TASK_PLAN_STARTED_AT=$plan_started_at"
             echo "TASK_TITLE=$title"
+            echo "CONTINUING_AGENT_OWNER=$continuing_owner"
             echo "AGENT_PR_BODY<<${delim}"
             printf '%s\n' "## Summary"
             if [ -n "$ISSUE_URL" ]; then
               printf '%s\n' "Agent implementation for [\`${ISSUE_PATH}\`](${ISSUE_URL})."
             else
               printf '%s\n' "Agent implementation from a manual workflow prompt."
+            fi
+            printf '%s\n' ""
+            printf '%s\n' "## Ownership"
+            printf '%s\n' "Continuing agent: \`${continuing_owner}\`"
+            if [ -n "$ISSUE_URL" ]; then
+              printf '%s\n' "Owned scope: \`${ISSUE_PATH}\`"
+            else
+              printf '%s\n' "Owned scope: manual prompt run \`${RUN_ID}\`"
             fi
             printf '%s\n' ""
             printf '%s\n' "## Test plan"
@@ -311,6 +347,7 @@ jobs:
           WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
           CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
           NOOK_SECRET: ${{ secrets.NOOK_GITHUB_PAT }}
+          CONTINUING_AGENT_OWNER: ${{ env.CONTINUING_AGENT_OWNER }}
         with:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
@@ -361,7 +398,7 @@ jobs:
                   '',
                   '## Remaining work',
                   '',
-                  success ? '- A continuing task-owning agent must validate and merge the Nook PR.' : multiPrPlan ? '- Materialize the feature and ordered focused issues from the published plan, then dispatch the first bounded issue.' : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
+                  success ? `- Continuing agent \`${process.env.CONTINUING_AGENT_OWNER}\` owns validation and merge for the Nook PR.` : multiPrPlan ? '- Materialize the feature and ordered focused issues from the published plan, then dispatch the first bounded issue.' : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
                 ].join('\n')
             let summary = fallbackSummary
             if (fs.existsSync(summaryPath)) {
