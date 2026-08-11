@@ -25,37 +25,264 @@ const WASM_MODULE_PATHS: &[&str] = &[
 
 const MODULE_EXTENSIONS: &[&str] = &["ts", "tsx", "js", "jsx", "mts", "mjs", "cts", "cjs"];
 
-pub(super) fn is_wasm_callable_source(module: &str, source_path: &Path) -> bool {
-    let mut visited = HashSet::new();
-    module_reexports_wasm(module, source_path, &mut visited)
+#[derive(Clone)]
+enum ForwardedExport {
+    All {
+        module: String,
+    },
+    Named {
+        exported: String,
+        imported: String,
+        module: String,
+    },
 }
 
-fn module_reexports_wasm(module: &str, source_path: &Path, visited: &mut HashSet<PathBuf>) -> bool {
+pub(super) fn is_wasm_callable_source(module: &str, source_path: &Path) -> bool {
+    let mut visited = HashSet::new();
+    module_reexports_any_wasm(module, source_path, &mut visited)
+}
+
+pub(super) fn is_wasm_callable_export(
+    module: &str,
+    exported_name: &str,
+    source_path: &Path,
+) -> bool {
+    let mut visited = HashSet::new();
+    module_reexports_wasm_symbol(module, exported_name, source_path, &mut visited)
+}
+
+pub(super) fn wasm_factory_return_type(
+    module: &str,
+    exported_name: &str,
+    source_path: &Path,
+    wasm_type_names: &HashSet<String>,
+) -> Option<String> {
+    let mut visited = HashSet::new();
+    module_factory_return_type(
+        module,
+        exported_name,
+        source_path,
+        wasm_type_names,
+        &mut visited,
+    )
+}
+
+fn module_factory_return_type(
+    module: &str,
+    exported_name: &str,
+    source_path: &Path,
+    wasm_type_names: &HashSet<String>,
+    visited: &mut HashSet<(PathBuf, String)>,
+) -> Option<String> {
+    let resolved = resolve_module(module, source_path)?;
+    if !visited.insert((resolved.clone(), exported_name.to_owned())) {
+        return None;
+    }
+    if let Some(wasm_type) = local_factory_return_type(&resolved, exported_name, wasm_type_names) {
+        return Some(wasm_type);
+    }
+    for export in local_forwarded_exports(&resolved)? {
+        match export {
+            ForwardedExport::All { module } => {
+                if let Some(wasm_type) = module_factory_return_type(
+                    &module,
+                    exported_name,
+                    &resolved,
+                    wasm_type_names,
+                    visited,
+                ) {
+                    return Some(wasm_type);
+                }
+            }
+            ForwardedExport::Named {
+                exported,
+                imported,
+                module,
+            } if exported == exported_name => {
+                return module_factory_return_type(
+                    &module,
+                    &imported,
+                    &resolved,
+                    wasm_type_names,
+                    visited,
+                );
+            }
+            ForwardedExport::Named { .. } => {}
+        }
+    }
+    None
+}
+
+fn local_factory_return_type(
+    path: &Path,
+    exported_name: &str,
+    wasm_type_names: &HashSet<String>,
+) -> Option<String> {
+    let source = fs::read_to_string(path).ok()?;
+    let language = if path
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .is_some_and(|extension| matches!(extension, "tsx" | "jsx"))
+    {
+        tree_sitter_typescript::LANGUAGE_TSX.into()
+    } else {
+        tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
+    };
+    let mut parser = tree_sitter::Parser::new();
+    parser.set_language(&language).ok()?;
+    let tree = parser.parse(&source, None)?;
+    let mut imported_bindings = HashMap::new();
+    collect_imported_bindings(tree.root_node(), &source, &mut imported_bindings);
+    find_factory_return_type(
+        tree.root_node(),
+        &source,
+        exported_name,
+        wasm_type_names,
+        &imported_bindings,
+    )
+}
+
+fn find_factory_return_type(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    exported_name: &str,
+    wasm_type_names: &HashSet<String>,
+    imported_bindings: &HashMap<String, (String, String)>,
+) -> Option<String> {
+    if matches!(
+        node.kind(),
+        "function_declaration"
+            | "generator_function_declaration"
+            | "function_expression"
+            | "generator_function"
+            | "arrow_function"
+    ) && callable_name(node, source).is_some_and(|name| name == exported_name)
+        && let Some(return_type) = node.child_by_field_name("return_type")
+        && let Some(wasm_type) =
+            referenced_wasm_type(return_type, source, wasm_type_names, imported_bindings)
+    {
+        return Some(wasm_type);
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor).find_map(|child| {
+        find_factory_return_type(
+            child,
+            source,
+            exported_name,
+            wasm_type_names,
+            imported_bindings,
+        )
+    })
+}
+
+fn callable_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
+    node.child_by_field_name("name")
+        .and_then(|name| semantic_node_name(name, source))
+        .or_else(|| {
+            let declarator = node.parent()?;
+            (declarator.kind() == "variable_declarator")
+                .then(|| declarator.child_by_field_name("name"))
+                .flatten()
+                .and_then(|name| semantic_node_name(name, source))
+        })
+}
+
+fn referenced_wasm_type(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    wasm_type_names: &HashSet<String>,
+    imported_bindings: &HashMap<String, (String, String)>,
+) -> Option<String> {
+    if node.kind() == "type_identifier"
+        && let Some(local_name) = semantic_node_name(node, source)
+    {
+        if wasm_type_names.contains(&local_name) {
+            return Some(local_name);
+        }
+        if let Some((_, imported_name)) = imported_bindings.get(&local_name)
+            && wasm_type_names.contains(imported_name)
+        {
+            return Some(imported_name.clone());
+        }
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .find_map(|child| referenced_wasm_type(child, source, wasm_type_names, imported_bindings))
+}
+
+fn module_reexports_any_wasm(
+    module: &str,
+    source_path: &Path,
+    visited: &mut HashSet<PathBuf>,
+) -> bool {
     if WASM_MODULE_ALIASES.contains(&module) {
         return true;
     }
-    if !module.starts_with('.') {
-        return false;
-    }
-    let Some(parent) = source_path.parent() else {
+    let Some(resolved) = resolve_module(module, source_path) else {
         return false;
     };
-    let unresolved = normalize_local_module_path(&parent.join(module));
-    let stripped = strip_module_extension(unresolved.clone());
-    if is_known_wasm_path(&stripped) {
+    if is_known_wasm_path(&strip_module_extension(resolved.clone())) {
         return true;
     }
-    let Some(resolved) = resolve_local_module(&unresolved) else {
-        return false;
-    };
     if !visited.insert(resolved.clone()) {
         return false;
     }
-    local_module_sources(&resolved).is_some_and(|sources| {
-        sources
-            .iter()
-            .any(|source| module_reexports_wasm(source, &resolved, visited))
+    local_forwarded_exports(&resolved).is_some_and(|exports| {
+        exports.iter().any(|export| {
+            let module = match export {
+                ForwardedExport::All { module } | ForwardedExport::Named { module, .. } => module,
+            };
+            module_reexports_any_wasm(module, &resolved, visited)
+        })
     })
+}
+
+fn module_reexports_wasm_symbol(
+    module: &str,
+    exported_name: &str,
+    source_path: &Path,
+    visited: &mut HashSet<(PathBuf, String)>,
+) -> bool {
+    if WASM_MODULE_ALIASES.contains(&module) {
+        return true;
+    }
+    let Some(resolved) = resolve_module(module, source_path) else {
+        return false;
+    };
+    if is_known_wasm_path(&strip_module_extension(resolved.clone())) {
+        return true;
+    }
+    if !visited.insert((resolved.clone(), exported_name.to_owned())) {
+        return false;
+    }
+    local_forwarded_exports(&resolved).is_some_and(|exports| {
+        exports.iter().any(|export| match export {
+            ForwardedExport::All { module } => {
+                module_reexports_wasm_symbol(module, exported_name, &resolved, visited)
+            }
+            ForwardedExport::Named {
+                exported,
+                imported,
+                module,
+            } if exported == exported_name => {
+                module_reexports_wasm_symbol(module, imported, &resolved, visited)
+            }
+            ForwardedExport::Named { .. } => false,
+        })
+    })
+}
+
+fn resolve_module(module: &str, source_path: &Path) -> Option<PathBuf> {
+    if !module.starts_with('.') {
+        return None;
+    }
+    let parent = source_path.parent()?;
+    let unresolved = normalize_local_module_path(&parent.join(module));
+    let stripped = strip_module_extension(unresolved.clone());
+    if is_known_wasm_path(&stripped) {
+        return Some(unresolved);
+    }
+    resolve_local_module(&unresolved)
 }
 
 fn is_known_wasm_path(path: &Path) -> bool {
@@ -86,7 +313,7 @@ fn resolve_local_module(path: &Path) -> Option<PathBuf> {
     None
 }
 
-fn local_module_sources(path: &Path) -> Option<Vec<String>> {
+fn local_forwarded_exports(path: &Path) -> Option<Vec<ForwardedExport>> {
     let source = fs::read_to_string(path).ok()?;
     let language = if path
         .extension()
@@ -100,26 +327,26 @@ fn local_module_sources(path: &Path) -> Option<Vec<String>> {
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&language).ok()?;
     let tree = parser.parse(&source, None)?;
-    let mut sources = Vec::new();
     let mut imported_bindings = HashMap::new();
     collect_imported_bindings(tree.root_node(), &source, &mut imported_bindings);
-    collect_reexport_sources(tree.root_node(), &source, &imported_bindings, &mut sources);
-    Some(sources)
+    let mut exports = Vec::new();
+    collect_forwarded_exports(tree.root_node(), &source, &imported_bindings, &mut exports);
+    Some(exports)
 }
 
 fn collect_imported_bindings(
     node: tree_sitter::Node<'_>,
     source: &str,
-    bindings: &mut HashMap<String, String>,
+    bindings: &mut HashMap<String, (String, String)>,
 ) {
     if node.kind() == "import_statement" {
-        let Some(source_node) = node.child_by_field_name("source") else {
+        let Some(module) = node
+            .child_by_field_name("source")
+            .and_then(|source_node| static_javascript_string(source_node, source))
+        else {
             return;
         };
-        let Some(module) = static_javascript_string(source_node, source) else {
-            return;
-        };
-        collect_import_binding_names(node, source, &module, bindings);
+        collect_import_specifiers(node, source, &module, bindings);
         return;
     }
     let mut cursor = node.walk();
@@ -128,72 +355,132 @@ fn collect_imported_bindings(
     }
 }
 
-fn collect_import_binding_names(
+fn collect_import_specifiers(
     node: tree_sitter::Node<'_>,
     source: &str,
     module: &str,
-    bindings: &mut HashMap<String, String>,
+    bindings: &mut HashMap<String, (String, String)>,
 ) {
-    if matches!(node.kind(), "import_specifier" | "namespace_import") {
-        let binding = node
-            .child_by_field_name("alias")
-            .or_else(|| node.child_by_field_name("name"))
-            .or_else(|| {
-                let mut cursor = node.walk();
-                node.named_children(&mut cursor)
-                    .find(|child| child.kind() == "identifier")
-            });
-        if let Some(name) = binding.and_then(|binding| semantic_node_name(binding, source)) {
-            bindings.insert(name, module.to_owned());
+    if node.kind() == "import_specifier"
+        && let Some(imported_node) = node.child_by_field_name("name")
+        && let Some(imported) = semantic_node_name(imported_node, source)
+    {
+        let local_node = node.child_by_field_name("alias").unwrap_or(imported_node);
+        if let Some(local) = semantic_node_name(local_node, source) {
+            bindings.insert(local, (module.to_owned(), imported));
         }
         return;
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_import_binding_names(child, source, module, bindings);
+        collect_import_specifiers(child, source, module, bindings);
     }
 }
 
-fn collect_reexport_sources(
+fn collect_forwarded_exports(
     node: tree_sitter::Node<'_>,
     source: &str,
-    imported_bindings: &HashMap<String, String>,
-    sources: &mut Vec<String>,
+    imported_bindings: &HashMap<String, (String, String)>,
+    exports: &mut Vec<ForwardedExport>,
 ) {
     if node.kind() == "export_statement" {
-        if let Some(source_node) = node.child_by_field_name("source")
-            && let Some(module) = static_javascript_string(source_node, source)
-        {
-            sources.push(module);
-        } else {
-            collect_locally_reexported_imports(node, source, imported_bindings, sources);
-        }
+        collect_export_statement(node, source, imported_bindings, exports);
+        return;
+    }
+    if node.kind() == "assignment_expression" {
+        collect_commonjs_export(node, source, exports);
         return;
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_reexport_sources(child, source, imported_bindings, sources);
+        collect_forwarded_exports(child, source, imported_bindings, exports);
     }
 }
 
-fn collect_locally_reexported_imports(
+fn collect_export_statement(
     node: tree_sitter::Node<'_>,
     source: &str,
-    imported_bindings: &HashMap<String, String>,
-    sources: &mut Vec<String>,
+    imported_bindings: &HashMap<String, (String, String)>,
+    exports: &mut Vec<ForwardedExport>,
 ) {
-    if node.kind() == "export_specifier"
-        && let Some(local) = node.child_by_field_name("name")
-        && let Some(name) = semantic_node_name(local, source)
-        && let Some(module) = imported_bindings.get(&name)
-    {
-        sources.push(module.clone());
-        return;
-    }
+    let direct_module = node
+        .child_by_field_name("source")
+        .and_then(|source_node| static_javascript_string(source_node, source));
+    let mut saw_specifier = false;
     let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_locally_reexported_imports(child, source, imported_bindings, sources);
+    for child in node.named_children(&mut cursor) {
+        if child.kind() != "export_clause" {
+            continue;
+        }
+        let mut clause_cursor = child.walk();
+        for specifier in child.named_children(&mut clause_cursor) {
+            if specifier.kind() != "export_specifier" {
+                continue;
+            }
+            saw_specifier = true;
+            let Some(local_node) = specifier.child_by_field_name("name") else {
+                continue;
+            };
+            let Some(local) = semantic_node_name(local_node, source) else {
+                continue;
+            };
+            let exported = specifier
+                .child_by_field_name("alias")
+                .and_then(|alias| semantic_node_name(alias, source))
+                .unwrap_or_else(|| local.clone());
+            if let Some(module) = &direct_module {
+                exports.push(ForwardedExport::Named {
+                    exported,
+                    imported: local,
+                    module: module.clone(),
+                });
+            } else if let Some((module, imported)) = imported_bindings.get(&local) {
+                exports.push(ForwardedExport::Named {
+                    exported,
+                    imported: imported.clone(),
+                    module: module.clone(),
+                });
+            }
+        }
     }
+    if !saw_specifier && let Some(module) = direct_module {
+        exports.push(ForwardedExport::All { module });
+    }
+}
+
+fn collect_commonjs_export(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    exports: &mut Vec<ForwardedExport>,
+) {
+    let Some(left) = node.child_by_field_name("left") else {
+        return;
+    };
+    if left
+        .utf8_text(source.as_bytes())
+        .is_ok_and(|text| text.trim() == "module.exports")
+        && let Some(module) = node
+            .child_by_field_name("right")
+            .and_then(|right| required_module(right, source))
+    {
+        exports.push(ForwardedExport::All { module });
+    }
+}
+
+fn required_module(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
+    if node.kind() != "call_expression"
+        || !node
+            .child_by_field_name("function")?
+            .utf8_text(source.as_bytes())
+            .is_ok_and(|name| name == "require")
+    {
+        return None;
+    }
+    let arguments = node.child_by_field_name("arguments")?;
+    let mut cursor = arguments.walk();
+    arguments
+        .named_children(&mut cursor)
+        .find_map(|argument| static_javascript_string(argument, source))
 }
 
 fn semantic_node_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
@@ -234,11 +521,15 @@ fn normalize_local_module_path(path: &Path) -> PathBuf {
 mod tests {
     use std::fs;
 
-    use super::is_wasm_callable_source;
+    use super::{is_wasm_callable_export, is_wasm_callable_source};
+
+    fn temp_root(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("nook-{name}-{}", std::process::id()))
+    }
 
     #[test]
     fn follows_arbitrary_local_reexport_chains() -> Result<(), std::io::Error> {
-        let root = std::env::temp_dir().join(format!("nook-wasm-facade-{}", std::process::id()));
+        let root = temp_root("wasm-facade");
         fs::create_dir_all(&root)?;
         fs::write(root.join("bridge.ts"), "export * from '$app-wasm';")?;
         let consumer = root.join("consumer.ts");
@@ -250,18 +541,58 @@ mod tests {
 
     #[test]
     fn follows_import_then_export_facades() -> Result<(), std::io::Error> {
-        let root = std::env::temp_dir().join(format!(
-            "nook-wasm-import-export-facade-{}",
-            std::process::id()
-        ));
+        let root = temp_root("wasm-import-export-facade");
         fs::create_dir_all(&root)?;
         fs::write(
             root.join("bridge.ts"),
-            "import { generate_secret_id } from '$app-wasm'; export { generate_secret_id };",
+            "import { generate_secret_id as secret } from '$app-wasm'; export { secret as generate_secret_id };",
         )?;
         let consumer = root.join("consumer.ts");
         fs::write(&consumer, "")?;
-        assert!(is_wasm_callable_source("./bridge", &consumer));
+        assert!(is_wasm_callable_export(
+            "./bridge",
+            "generate_secret_id",
+            &consumer,
+        ));
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn follows_commonjs_facade_exports() -> Result<(), std::io::Error> {
+        let root = temp_root("wasm-commonjs-facade");
+        fs::create_dir_all(&root)?;
+        fs::write(
+            root.join("bridge.cjs"),
+            "module.exports = require('nook-wasm');",
+        )?;
+        let consumer = root.join("consumer.ts");
+        fs::write(&consumer, "")?;
+        assert!(is_wasm_callable_export(
+            "./bridge.cjs",
+            "generate_secret_id",
+            &consumer,
+        ));
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn preserves_provenance_per_exported_symbol() -> Result<(), std::io::Error> {
+        let root = temp_root("wasm-mixed-facade");
+        fs::create_dir_all(&root)?;
+        fs::write(
+            root.join("bridge.ts"),
+            "export { generate_secret_id } from '$app-wasm'; export { connect } from 'socket-lib';",
+        )?;
+        let consumer = root.join("consumer.ts");
+        fs::write(&consumer, "")?;
+        assert!(is_wasm_callable_export(
+            "./bridge",
+            "generate_secret_id",
+            &consumer,
+        ));
+        assert!(!is_wasm_callable_export("./bridge", "connect", &consumer));
         fs::remove_dir_all(root)?;
         Ok(())
     }

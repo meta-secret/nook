@@ -1,9 +1,11 @@
 pub mod coverage;
 mod dockerfile_cache;
 mod javascript_literals;
+mod javascript_scopes;
 mod rust_macros;
 mod rust_tsify_state;
 mod rust_typed_json;
+mod rust_wasm_attributes;
 mod rust_wasm_names;
 pub mod source_size;
 mod typescript_discriminants;
@@ -15,6 +17,7 @@ mod wasm_inventory;
 mod wasm_local_reexports;
 mod wasm_module_sources;
 mod wasm_svelte_sources;
+mod wasm_web_sources;
 
 pub use dockerfile_cache::dockerfile_cache_mounts;
 use dockerfile_cache::is_generated_directory;

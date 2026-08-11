@@ -16,6 +16,18 @@ pub(super) fn static_javascript_string(
     decode_javascript_escapes(&literal[1..literal.len() - 1])
 }
 
+pub(super) fn semantic_javascript_name(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+) -> Option<String> {
+    let text = node.utf8_text(source.as_bytes()).ok()?;
+    if node.kind() == "string" {
+        static_javascript_string(node, source)
+    } else {
+        Some(text.to_owned())
+    }
+}
+
 fn contains_template_substitution(node: tree_sitter::Node<'_>) -> bool {
     let mut cursor = node.walk();
     node.named_children(&mut cursor)
