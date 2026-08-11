@@ -4,6 +4,10 @@ Use this workflow for feature work that touches more than one package.
 
 0. Follow [coding-bro.md](coding-bro.md) — fetch `origin/main`, branch, never push to `main` (see [rules.md](../rules.md) §6).
 0b. **Merge with squash only.** When a PR is merged, use **Squash and merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See [rules.md](../rules.md) §6.
+0c. Estimate authored changed lines and map package ownership before editing.
+If the change approaches 5,000 lines, split it into ordered package- or
+layer-focused PRs. Follow
+[pull-requests.md](pull-requests.md#pull-request-size-and-modularity).
 1. Identify the lowest package that should own the behavior.
 2. Put portable logic and domain models in `nook-core`; keep browser I/O and JS-friendly conversion in `nook-wasm`.
 3. Expose typed core DTOs/enums through WASM when possible instead of recreating their tags in TypeScript.
@@ -15,6 +19,16 @@ Use this workflow for feature work that touches more than one package.
 9. Run `task format`, commit and push, then explicitly trigger and prove the exact head with green `pr.yml`.
    - Use a focused hosted task only when it shortens diagnosis of a known failure.
    - Do not run local `task check` for agent work.
+
+When multiple packages need separate PRs, introduce or stabilize the narrowest
+owning interface first.
+
+Merge that slice before changing its consumers.
+
+Start each consumer slice from current `origin/main`.
+
+Do not combine unrelated package changes merely because they belong to the same
+feature.
 
 Dependency direction must stay:
 

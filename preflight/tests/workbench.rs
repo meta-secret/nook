@@ -1,5 +1,6 @@
 #![allow(clippy::unnecessary_wraps)]
 
+use anyhow::Context as _;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -45,6 +46,8 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "task ci-agent:plan",
         "Validate and publish Workbench task plan",
         "Publish Workbench result",
+        "MULTI_PR_PLAN: ${{ steps.plan.outputs.multi_pr }}",
+        "Materialize the feature and ordered focused issues",
         "steps.workbench.outputs.found == 'true'",
         "validateAgentRecord",
         "if: steps.plan.outcome == 'success'",
@@ -142,6 +145,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     let prompt = read(".github/prompts/agent-implement.md");
     let plan_prompt = read(".github/prompts/agent-plan.md");
     let ignore = read(".gitignore");
+    let workflow = read(".github/workflows/agent-implement.yml");
 
     for required in [
         ".nook-workbench-worklog.md",
@@ -167,6 +171,14 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "## Interpreted request",
         "## Requirements",
         "## Constraints and exclusions",
+        "## Change budget and PR sequence",
+        "Estimated authored changed lines",
+        "Owning modules, packages, or layers",
+        "Public or cross-module interfaces",
+        "Delivery shape",
+        "Current PR estimated authored changed lines",
+        "Current PR slice and acceptance evidence",
+        "PR slices and acceptance evidence",
         "## Initial plan",
         "## Completion evidence",
         "## Safety review",
@@ -182,6 +194,47 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
             .lines()
             .any(|line| line == "/.nook-workbench-plan.md"),
         "the workflow-owned task plan must not be committed to the Nook PR"
+    );
+
+    for required in [
+        "validateAgentRecord",
+        "remotePath.startsWith('plans/')",
+        "NOOK_WORKBENCH_SOURCE_TASK_FILE",
+        "Refusing invalid Workbench plan",
+        "Refusing source-task file inside the public Nook checkout",
+    ] {
+        assert!(
+            read(".github/scripts/workbench-publish.cjs").contains(required),
+            "interactive Workbench publisher is missing plan validation: {required}"
+        );
+    }
+    let publish_position = workflow
+        .find("path: planPath")
+        .context("scheduled automation must publish the validated plan")?;
+    let block_position = workflow
+        .find("Published multi-PR feature plan requires materialized Workbench feature")
+        .context("scheduled automation must block an unmaterialized multi-PR plan")?;
+    let materialization_position = workflow
+        .find("core.setOutput('multi_pr', 'true')")
+        .context("scheduled automation must identify a multi-PR materialization action")?;
+    assert!(
+        publish_position < block_position,
+        "scheduled automation must publish a multi-PR plan before blocking implementation"
+    );
+    assert!(
+        materialization_position < block_position,
+        "scheduled automation must identify the materialization action before blocking"
+    );
+    let implement = read("agentic-ai/ci-agent/src/main/implement.ts");
+    let budget_position = implement
+        .find("assertAuthoredChangeBudget(budgetArgs)")
+        .context("scheduled implementation must enforce the authored diff budget")?;
+    let push_position = implement
+        .find("pushFixBranch(repoRoot, agentBranch, runId)")
+        .context("scheduled implementation must push its bounded branch")?;
+    assert!(
+        budget_position < push_position,
+        "scheduled implementation must enforce the authored diff budget before push"
     );
     Ok(())
 }

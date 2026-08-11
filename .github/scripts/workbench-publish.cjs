@@ -1,9 +1,16 @@
 #!/usr/bin/env node
 
 const { execFileSync } = require('node:child_process')
-const { readFileSync } = require('node:fs')
+const { readFileSync, realpathSync } = require('node:fs')
+const { isAbsolute, relative, resolve, sep } = require('node:path')
+const { validateAgentRecord } = require('./workbench-records.cjs')
 
 const WorkbenchRemoteFileKind = Object.freeze({
+  Missing: 'missing',
+  Present: 'present',
+})
+
+const SourceTaskFileKind = Object.freeze({
   Missing: 'missing',
   Present: 'present',
 })
@@ -11,6 +18,13 @@ const WorkbenchRemoteFileKind = Object.freeze({
 const repository =
   process.env.NOOK_WORKBENCH_REPOSITORY || 'meta-secret/nook-workbench'
 const expectedSha = process.env.NOOK_WORKBENCH_EXPECTED_SHA?.trim()
+let sourceTaskFile = { kind: SourceTaskFileKind.Missing }
+if (typeof process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE === 'string') {
+  const path = process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE.trim()
+  if (path.length > 0) {
+    sourceTaskFile = { kind: SourceTaskFileKind.Present, path }
+  }
+}
 const [localPath, remotePath, ...messageParts] = process.argv.slice(2)
 const message = messageParts.join(' ').trim()
 
@@ -28,7 +42,42 @@ if (
   process.exit(2)
 }
 
-const content = readFileSync(localPath).toString('base64')
+const localContent = readFileSync(localPath, 'utf8')
+if (remotePath.startsWith('plans/')) {
+  if (sourceTaskFile.kind === SourceTaskFileKind.Missing) {
+    console.error(
+      'Refusing Workbench plan without NOOK_WORKBENCH_SOURCE_TASK_FILE',
+    )
+    process.exit(6)
+  }
+  const checkoutRoot = realpathSync(
+    execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      encoding: 'utf8',
+    }).trim(),
+  )
+  const sourceTaskPath = realpathSync(resolve(sourceTaskFile.path))
+  const sourceTaskRelativePath = relative(checkoutRoot, sourceTaskPath)
+  const sourceTaskEscapesCheckout =
+    sourceTaskRelativePath === '..' ||
+    sourceTaskRelativePath.startsWith(`..${sep}`) ||
+    isAbsolute(sourceTaskRelativePath)
+  if (
+    sourceTaskRelativePath === '' ||
+    !sourceTaskEscapesCheckout
+  ) {
+    console.error(
+      'Refusing source-task file inside the public Nook checkout',
+    )
+    process.exit(8)
+  }
+  const sourceTask = readFileSync(sourceTaskPath, 'utf8')
+  const rejection = validateAgentRecord(localContent, 'plan', [], sourceTask)
+  if (rejection) {
+    console.error(`Refusing invalid Workbench plan: ${rejection}`)
+    process.exit(7)
+  }
+}
+const content = Buffer.from(localContent).toString('base64')
 let remoteFile = { kind: WorkbenchRemoteFileKind.Missing }
 try {
   remoteFile = {

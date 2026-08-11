@@ -34,6 +34,54 @@ A feature directory replaces a GitHub milestone and aggregate issue. Its
 `README.md` owns the overall goal, shared decisions, current status, and issue
 index. Focused Markdown files replace sub-issues.
 
+## Multi-PR feature sequences
+
+One feature may require many focused issues and pull requests.
+
+Create a sequence when the complete feature is expected to exceed 5,000
+authored changed lines.
+
+Also create a sequence when separate module ownership makes independent slices
+safer, even below that size.
+
+The feature `README.md` must record:
+
+- the complete user-visible or operational outcome;
+- the ordered issue index;
+- dependencies between slices;
+- stable public or cross-module interfaces;
+- feature-level acceptance criteria;
+- current completion status.
+
+Each focused issue must own one cohesive module, package, layer, or
+architectural responsibility.
+
+Each issue should normally map to one pull request.
+
+Every issue must be independently testable and mergeable.
+
+Later issues must consume stable interfaces from earlier slices instead of
+repeatedly rewriting them.
+
+After a slice merges:
+
+1. Update its issue and the feature index.
+2. Publish the required worklog and statistics.
+3. Choose one owner for the next dependency-free issue.
+4. If the current agent continues, claim the issue as `in_progress` before
+   starting its branch from current Nook `origin/main`.
+5. If scheduled automation will continue, set `status: ready` and
+   `automation: agent`.
+6. In that case, the current agent must not also start the issue.
+
+The feature remains incomplete while any required issue remains incomplete.
+
+Do not convert remaining requested functionality into an optional follow-up.
+
+See
+[pull-requests.md](pull-requests.md#pull-request-size-and-modularity) for the
+size measure and architectural rules.
+
 ## Trigger
 
 Before an agent says any of the following, it must apply this workflow:
@@ -177,24 +225,49 @@ The plan must contain:
 - material functional, workflow, security, and delivery requirements;
 - explicit constraints, assumptions, and exclusions;
 - a small ordered execution plan;
+- a `Change budget and PR sequence` section;
+- an `Estimated authored changed lines` value;
+- an `Owning modules, packages, or layers` value;
+- a `Public or cross-module interfaces` value;
+- a `Delivery shape` value;
+- a `Current PR estimated authored changed lines` value;
+- a `Current PR slice and acceptance evidence` value;
+- a `PR slices and acceptance evidence` value;
 - expected completion evidence; and
 - a safety review confirming that no raw prompt, transcript, secret, private
   data, raw log, local path, or unnecessary infrastructure detail is present.
 
-Plans are immutable start snapshots. If the request changes materially, publish
-a superseding plan rather than rewriting what the agent originally intended.
+Plans are immutable start snapshots.
+
+Publish a superseding plan when the request, design, scope, PR sequence, or
+estimate changes materially.
+
+Do not rewrite the earlier plan.
 Use the checked-in publisher for interactive work:
 
 ```bash
-node .github/scripts/workbench-publish.cjs \
+NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \
+  node .github/scripts/workbench-publish.cjs \
   /absolute/path/to/local-plan.md \
   plans/<feature>/<timestamp>-<task>.md \
   "plan: start <task>"
 ```
 
+The source-task file stays outside the checkout.
+
+It lets the publisher reject copied prompt text.
+
+Do not publish that file.
+
 The scheduled implementation worker uses a dedicated planning LLM turn,
 validates and publishes the plan, and only then begins its implementation turn.
 A missing or rejected plan blocks implementation.
+
+A valid multi-PR plan also blocks scheduled implementation.
+
+Materialize its Workbench feature summary and focused issues first.
+
+Then dispatch the first focused issue with a bounded one-PR plan.
 
 ## Worklog requirement
 
