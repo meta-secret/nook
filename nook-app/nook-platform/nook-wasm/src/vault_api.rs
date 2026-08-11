@@ -1,5 +1,16 @@
 use super::{NookError, NookSecretRecord, NookVaultManager, application, wasm_bindgen};
 
+/// Apply the portable provider-save transition. Browser storage and reactive
+/// state updates remain in the web adapter.
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn apply_provider_save_policy(
+    request: nook_core::ProviderSaveRequest,
+) -> nook_core::ProviderSaveOutcome {
+    nook_core::apply_provider_save_policy(&request)
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Load the persisted sync-provider snapshot from `nook_auth`, including

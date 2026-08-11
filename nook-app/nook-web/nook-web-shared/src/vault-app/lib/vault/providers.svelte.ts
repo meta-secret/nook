@@ -9,17 +9,16 @@ import {
   configuredLocalFolder,
   configuredOAuthFile,
   defaultOAuthFileConfig,
-  findDuplicateSyncProvider,
   GITHUB_PROVIDER_TYPE,
   githubPatValue,
   githubRepositoryValue,
   LOCAL_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
   localFolderHandle,
-  localFolderDirectoryValue,
   LocalFolderHandleKind,
   localFolderProviderConfiguration,
   LocalFolderProviderConfigurationKind,
+  localFolderConfigurationNotApplicable,
   isConfiguredOAuthFile,
   missingOAuthAccessToken,
   OAUTH_FILE_PROVIDER_TYPE,
@@ -29,14 +28,10 @@ import {
   oauthFileName,
   OAuthFileNameKind,
   oauthConfigurationNotApplicable,
-  providerDefaultLabel,
-  providerPersistenceDefaults,
   personalICloudShareTarget,
   rootGoogleDriveFolder,
   saveAuthProviders,
   signedOutOAuthCredential,
-  storedGithubPat,
-  storedGithubRepository,
   storedOAuthRemoteFileName,
   scopedProviderVault,
   unscopedProviderVault,
@@ -45,16 +40,14 @@ import {
   unknownOAuthTokenExpiry,
   unresolvedOAuthRemoteFileId,
   type AuthProvidersSnapshot,
-  type LocalFolderConfig,
   type LocalFolderHandle,
-  type OAuthFileConfig,
   type OAuthFileName,
   type ProviderSetupRequest,
   type StorageProvider,
   type StorageProviderType,
 } from "$lib/auth/providers";
-import { NookDuplicateSyncProviderState } from "$app-wasm";
 import {
+  apply_provider_save_policy,
   authenticated_vault_storage_args,
   draft_github_storage_args,
   draft_local_storage_args,
@@ -80,6 +73,7 @@ import {
   update_oauth_remote_ref,
   local_vault_storage_args,
   type NookStorageConnectArgs,
+  type ProviderSaveRequest,
 } from "$app-wasm";
 import { createLogger } from "$lib/runtime/log";
 import {
@@ -111,15 +105,6 @@ export {
   connectStagedProvider,
   discoverStagedVaultStoreId,
 } from "$lib/vault/provider-connection";
-enum OAuthProviderUpdateKind {
-  NotRequired = "not-required",
-  Required = "required",
-}
-
-type OAuthProviderUpdate =
-  | { kind: OAuthProviderUpdateKind.NotRequired }
-  | { kind: OAuthProviderUpdateKind.Required; providerId: string };
-
 enum ProviderSaveStoreIdKind {
   Unavailable = "unavailable",
   Available = "available",
@@ -693,274 +678,66 @@ export async function removeProvider({
 export async function ensureProviderSaved(
   state: ProviderActionsContext,
 ): Promise<boolean> {
-  const pat = state.githubPat.trim();
-  const repo = state.githubRepo.trim() || DEFAULT_GITHUB_REPO;
-  const oauthFileDraft = state.oauthFileDraft;
-  const sharedGoogleDrive =
-    oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-    oauthFileDraft.config.preset === "google-drive" &&
-    (oauthFileDraft.config.driveMode === "shared" ||
-      oauthFileDraft.config.folderId.state === "folderId");
-  const configuredRemoteFileName: OAuthFileName =
-    oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? oauthFileName(oauthFileDraft.config)
-      : { kind: OAuthFileNameKind.Unresolved };
-  const driveFile = sharedGoogleDrive
-    ? configuredRemoteFileName.kind === OAuthFileNameKind.Resolved
-      ? configuredRemoteFileName.fileName
-      : DEFAULT_DRIVE_BACKUP_NAME
-    : state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
-  const type = stagedProviderType(state);
-  const isNewSetup = state.loginSetup.kind === LoginSetupKind.Active;
-  let oauthProviderToUpdate: OAuthProviderUpdate = {
-    kind: OAuthProviderUpdateKind.NotRequired,
-  };
   const vaultStoreId = await vaultStoreIdForProviderSave(state);
   const providerStoreId =
     vaultStoreId.kind === ProviderSaveStoreIdKind.Available
       ? scopedProviderVault(vaultStoreId.storeId)
       : unscopedProviderVault();
+  const oauthFile =
+    state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? configuredOAuthFile($state.snapshot(state.oauthFileDraft.config))
+      : oauthConfigurationNotApplicable();
+  const localFolder =
+    state.localFolderDraft.kind === LocalFolderDraftKind.Configured
+      ? configuredLocalFolder($state.snapshot(state.localFolderDraft.config))
+      : localFolderConfigurationNotApplicable();
   const oauthPreset =
-    oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? oauthFileDraft.config.preset
+    state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? state.oauthFileDraft.config.preset
       : state.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
         ? state.oauthSetupSelection.preset
         : "google-drive";
-
-  const isExplicitAdd =
-    state.addProviderOpen ||
-    (state.isAuthenticated && state.loginSetup.kind === LoginSetupKind.Active);
-
-  if (isNewSetup && type !== "local") {
-    let provider: StorageProvider;
-    if (type === "github") {
-      const providerDefaultLabelArgs: Parameters<
-        typeof providerDefaultLabel
-      >[0] = {
-        type,
-        options: { detail: repo, oauthPreset },
-      };
-      provider = {
-        ...providerPersistenceDefaults(),
-        id: generate_id(),
-        type,
-        label: providerDefaultLabel(providerDefaultLabelArgs),
-        githubPat: storedGithubPat(pat),
-        githubRepo: storedGithubRepository(repo),
-        storeId: providerStoreId,
-        createdAt: isoTimestamp(),
-      };
-    } else if (type === "oauth-file") {
-      const oauthFile: OAuthFileConfig =
-        oauthFileDraft.kind === OAuthFileDraftKind.Configured
-          ? {
-              ...oauthFileDraft.config,
-              preset: oauthPreset,
-              fileName: storedOAuthRemoteFileName(driveFile),
-            }
-          : (() => {
-              const defaultConfigArgs: Parameters<
-                typeof defaultOAuthFileConfig
-              >[0] = { preset: oauthPreset, fileName: driveFile };
-              return defaultOAuthFileConfig(defaultConfigArgs);
-            })();
-      const providerDefaultLabelArgs2: Parameters<
-        typeof providerDefaultLabel
-      >[0] = {
-        type,
-        options: { detail: driveFile, oauthPreset },
-      };
-      provider = {
-        ...providerPersistenceDefaults(),
-        id: generate_id(),
-        type,
-        label: providerDefaultLabel(providerDefaultLabelArgs2),
-        oauthFile: configuredOAuthFile(oauthFile),
-        storeId: providerStoreId,
-        createdAt: isoTimestamp(),
-      };
-    } else {
-      if (state.localFolderDraft.kind !== LocalFolderDraftKind.Configured) {
-        state.errorMsg = state.t(I18N_KEYS.AuthStorageLocalFolderChooseErr);
-        return false;
-      }
-      const localFolder: LocalFolderConfig = state.localFolderDraft.config;
-      const providerDefaultLabelArgs3: Parameters<
-        typeof providerDefaultLabel
-      >[0] = {
-        type,
-        options: {
-          detail: localFolderDirectoryValue(localFolder.directoryName),
-          oauthPreset,
-        },
-      };
-      provider = {
-        ...providerPersistenceDefaults(),
-        id: generate_id(),
-        type,
-        label: providerDefaultLabel(providerDefaultLabelArgs3),
-        localFolder: configuredLocalFolder(localFolder),
-        storeId: providerStoreId,
-        createdAt: isoTimestamp(),
-      };
-    }
-    const findDuplicateSyncProviderArgs: Parameters<
-      typeof findDuplicateSyncProvider
-    >[0] = { providers: state.activeVaultProviders, candidate: provider };
-    const duplicateProvider = findDuplicateSyncProvider(
-      findDuplicateSyncProviderArgs,
-    );
-    if (duplicateProvider.state === NookDuplicateSyncProviderState.Duplicate) {
-      if (isExplicitAdd) {
-        state.errorMsg = state.t(I18N_KEYS.AuthStorageDuplicateSyncProvider);
-        return false;
-      }
-    } else {
-      state.providers = [...state.providers, provider];
-      if (provider.type === "oauth-file") {
-        oauthProviderToUpdate = {
-          kind: OAuthProviderUpdateKind.Required,
-          providerId: provider.id,
-        };
-      }
-    }
-  } else if (
-    isNewSetup &&
-    type === "local" &&
-    state.localProvider.kind === LocalProviderLookupKind.Missing
-  ) {
-    const provider: StorageProvider = {
-      ...providerPersistenceDefaults(),
-      id: generate_id(),
-      type: "local",
-      label: (() => {
-        const labelArgs: Parameters<typeof providerDefaultLabel>[0] = {
-          type: "local",
-          options: {},
-        };
-        return providerDefaultLabel(labelArgs);
-      })(),
-      storeId: providerStoreId,
-      createdAt: isoTimestamp(),
-    };
-    state.providers = [...state.providers, provider];
-  } else if (state.localProvider.kind === LocalProviderLookupKind.Found) {
-    const localProviderId = state.localProvider.provider.id;
-    state.providers = state.providers.map((provider) =>
-      provider.id === localProviderId
-        ? {
-            ...provider,
-            storeId: providerStoreId,
-          }
-        : provider,
-    );
-  } else if (vaultStoreId.kind === ProviderSaveStoreIdKind.Available) {
-    const ensureLocalProviderRowWasmArgs: Parameters<
-      typeof ensure_local_provider_row
-    >[0] = {
-      providers: state.providers,
-      activeVaultStoreId: activeVaultScope(vaultStoreId.storeId),
-    } as AuthProvidersSnapshot;
-    const snapshot = ensure_local_provider_row(
-      ensureLocalProviderRowWasmArgs,
-      vaultStoreId.storeId,
-    );
-    state.providers = snapshot.providers;
-  }
-
-  if (
-    state.storageMode === "oauth-file" &&
-    state.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-    state.oauthFileDraft.config.fileId.state === "fileId"
-  ) {
-    const activeOauthFile = state.oauthFileDraft.config;
-    const activePreset = activeOauthFile.preset;
-    if (oauthProviderToUpdate.kind === OAuthProviderUpdateKind.NotRequired) {
-      const findDuplicateSyncProviderArgs2: Parameters<
-        typeof findDuplicateSyncProvider
-      >[0] = {
-        providers: state.syncProviders,
-        candidate: {
-          ...providerPersistenceDefaults(),
-          id: "oauth-provider-update-target",
-          type: "oauth-file",
-          label: "",
-          oauthFile: configuredOAuthFile(activeOauthFile),
-          createdAt: "",
-        },
-      };
-      const duplicate = findDuplicateSyncProvider(
-        findDuplicateSyncProviderArgs2,
-      );
-      if (duplicate.state === NookDuplicateSyncProviderState.Duplicate) {
-        oauthProviderToUpdate = {
-          kind: OAuthProviderUpdateKind.Required,
-          providerId: duplicate.provider.id,
-        };
-      }
-    }
-    if (oauthProviderToUpdate.kind === OAuthProviderUpdateKind.Required) {
-      const oauthProviderToUpdateId = oauthProviderToUpdate.providerId;
-      state.providers = state.providers.map((provider) => {
-        const providerOAuthConfiguration = provider.oauthFile;
-        if (
-          provider.type !== "oauth-file" ||
-          !isConfiguredOAuthFile(providerOAuthConfiguration) ||
-          provider.id !== oauthProviderToUpdateId
-        ) {
-          return provider;
+  const setup =
+    state.loginSetup.kind === LoginSetupKind.Active
+      ? {
+          state: "new" as const,
+          providerType: state.loginSetup.providerType,
         }
-        const providerOauthFile = providerOAuthConfiguration.config;
-        const activeAccessToken = oauthAccessToken(activeOauthFile);
-        const providerFileName = oauthFileName(providerOauthFile);
-        const activeFileName = oauthFileName(activeOauthFile);
-        const merged: OAuthFileConfig = {
-          preset: activePreset,
-          accessToken:
-            activeAccessToken.kind === OAuthAccessTokenKind.Available
-              ? activeOauthFile.accessToken
-              : providerOauthFile.accessToken,
-          refreshToken: providerOauthFile.refreshToken,
-          expiresAt:
-            providerOauthFile.expiresAt.state === "expiresAt"
-              ? providerOauthFile.expiresAt
-              : activeOauthFile.expiresAt,
-          fileId: activeOauthFile.fileId,
-          folderId:
-            activeOauthFile.folderId.state === "folderId"
-              ? activeOauthFile.folderId
-              : providerOauthFile.folderId,
-          driveMode: activeOauthFile.driveMode,
-          iCloudMode: activeOauthFile.iCloudMode,
-          iCloudShareTarget:
-            activeOauthFile.iCloudShareTarget.state === "sharedTarget"
-              ? activeOauthFile.iCloudShareTarget
-              : providerOauthFile.iCloudShareTarget,
-          fileName:
-            providerFileName.kind === OAuthFileNameKind.Resolved
-              ? providerOauthFile.fileName
-              : activeFileName.kind === OAuthFileNameKind.Resolved
-                ? activeOauthFile.fileName
-                : storedOAuthRemoteFileName(driveFile),
-          accountEmail:
-            providerOauthFile.accountEmail.state === "email"
-              ? providerOauthFile.accountEmail
-              : activeOauthFile.accountEmail,
-        };
-        return { ...provider, oauthFile: configuredOAuthFile(merged) };
-      });
-      const updatedProvider = state.providers.find(
-        (provider) => provider.id === oauthProviderToUpdateId,
-      );
-      const updatedConfiguration = updatedProvider
-        ? updatedProvider.oauthFile
-        : oauthConfigurationNotApplicable();
-      state.configureOauthFile(
-        isConfiguredOAuthFile(updatedConfiguration)
-          ? updatedConfiguration.config
-          : activeOauthFile,
-      );
-    }
+      : { state: "existing" as const };
+  const request: ProviderSaveRequest = {
+    snapshot: {
+      providers: $state.snapshot(state.providers),
+      activeVaultStoreId: state.hasActiveVaultStore
+        ? activeVaultScope(state.requireActiveVaultStoreId())
+        : unselectedVaultScope(),
+    },
+    providerStoreId,
+    storageMode: state.storageMode,
+    setup,
+    explicitAdd:
+      state.addProviderOpen ||
+      (state.isAuthenticated &&
+        state.loginSetup.kind === LoginSetupKind.Active),
+    githubPat: state.githubPat,
+    githubRepo: state.githubRepo,
+    oauthFile,
+    oauthPreset,
+    localFolder,
+    newProviderId: generate_id(),
+    createdAt: isoTimestamp(),
+  };
+  const outcome = apply_provider_save_policy(request);
+  if (outcome.state === "duplicate") {
+    state.errorMsg = state.t(I18N_KEYS.AuthStorageDuplicateSyncProvider);
+    return false;
+  }
+  if (outcome.state === "localFolderRequired") {
+    state.errorMsg = state.t(I18N_KEYS.AuthStorageLocalFolderChooseErr);
+    return false;
+  }
+  state.providers = outcome.snapshot.providers;
+  if (isConfiguredOAuthFile(outcome.oauthFile)) {
+    state.configureOauthFile(outcome.oauthFile.config);
   }
 
   state.clearLoginSetup();
