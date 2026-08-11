@@ -13,6 +13,101 @@ pub use event_log::*;
 mod secret_import;
 use secret_import::SecretImportSource;
 
+pub(super) struct SecretReplacementInput {
+    pub old_id: String,
+    pub new_id: String,
+    pub secret_type: nook_core::SecretType,
+    pub data: String,
+    pub verification: SecretProjectionVerification,
+}
+
+pub(super) enum SecretProjectionVerification {
+    None,
+    AuthenticatorBackupCodes {
+        intended: zeroize::Zeroizing<Vec<String>>,
+        reviewed: zeroize::Zeroizing<Vec<String>>,
+        mode: nook_core::BackupCodeAttachMode,
+    },
+}
+
+impl NookVaultManager {
+    pub(super) async fn replace_secret_with_projection_verification(
+        &mut self,
+        input: SecretReplacementInput,
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
+        let _ = self.status.tx.send("REPLACE_SECRET_START".to_owned());
+        self.ensure_vault_crypto_from_cache().await?;
+        if !self
+            .vault
+            .architecture
+            .can_create_secret_with_records(&self.stored_records_snapshot())
+        {
+            return Err(NookError::Database(
+                "Sentinel vault is not ready for secret creation.".to_owned(),
+            )
+            .into());
+        }
+        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
+        let mut typed_value =
+            nook_core::SecretValue::from_yaml_str(input.secret_type, &input.data)?;
+        let identity_fingerprint =
+            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key)?;
+        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key)?;
+        typed_value.zeroize_plaintext();
+        let crypto = self.vault.crypto.get()?;
+        let replacement = nook_core::ReplaceSecretInput {
+            old_id: &input.old_id,
+            new_id: &input.new_id,
+            secret_type: input.secret_type,
+            data_yaml: &input.data,
+        };
+        match input.verification {
+            SecretProjectionVerification::None => {
+                nook_core::replace_encrypted_secret(&mut self.vault.meta, crypto, &replacement)?;
+            }
+            SecretProjectionVerification::AuthenticatorBackupCodes {
+                intended,
+                reviewed,
+                mode,
+            } => {
+                nook_core::replace_encrypted_authenticator_verified(
+                    &mut self.vault.meta,
+                    crypto,
+                    &nook_core::VerifiedAuthenticatorReplacementInput {
+                        replacement,
+                        intended_backup_codes: intended.as_slice(),
+                        reviewed_backup_codes: reviewed.as_slice(),
+                        mode,
+                    },
+                )?;
+            }
+        }
+        let validated_new = nook_core::validate_secret_id(&input.new_id)?;
+        self.vault.mark_search_catalog_dirty();
+        let validated_old = nook_core::validate_secret_id(&input.old_id)?;
+        let ciphertext = self
+            .vault
+            .meta
+            .secrets
+            .get(&validated_new)
+            .map(|(_, payload)| payload.as_str().to_owned())
+            .unwrap_or_default();
+        self.append_vault_operations(vec![nook_core::VaultOperation::SecretReplaced {
+            old_id: validated_old,
+            new_secret: nook_core::encrypted_secret_from_armored(
+                &validated_new,
+                input.secret_type,
+                &ciphertext,
+                identity_fingerprint,
+                fingerprint,
+            ),
+        }])
+        .await?;
+        let _ = self.status.tx.send("READY".to_owned());
+        Ok(self.get_records()?)
+    }
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     pub fn filter_secrets(&self, query: &str) -> Result<Vec<NookSecretRecord>, JsError> {
@@ -399,58 +494,14 @@ impl NookVaultManager {
         secret_type: nook_core::SecretType,
         data: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status.tx.send("REPLACE_SECRET_START".to_owned());
-        self.ensure_vault_crypto_from_cache().await?;
-        if !self
-            .vault
-            .architecture
-            .can_create_secret_with_records(&self.stored_records_snapshot())
-        {
-            return Err(NookError::Database(
-                "Sentinel vault is not ready for secret creation.".to_owned(),
-            )
-            .into());
-        }
-        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
-        let mut typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
-        let identity_fingerprint =
-            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key)?;
-        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key)?;
-        typed_value.zeroize_plaintext();
-        let crypto = self.vault.crypto.get()?;
-        nook_core::replace_encrypted_secret(
-            &mut self.vault.meta,
-            crypto,
-            &nook_core::ReplaceSecretInput {
-                old_id: &old_id,
-                new_id: &new_id,
-                secret_type,
-                data_yaml: &data,
-            },
-        )?;
-        self.vault.mark_search_catalog_dirty();
-        let validated_new = nook_core::validate_secret_id(&new_id)?;
-        let validated_old = nook_core::validate_secret_id(&old_id)?;
-        let ciphertext = self
-            .vault
-            .meta
-            .secrets
-            .get(&validated_new)
-            .map(|(_, payload)| payload.as_str().to_owned())
-            .unwrap_or_default();
-        self.append_vault_operations(vec![nook_core::VaultOperation::SecretReplaced {
-            old_id: validated_old,
-            new_secret: nook_core::encrypted_secret_from_armored(
-                &validated_new,
-                secret_type,
-                &ciphertext,
-                identity_fingerprint,
-                fingerprint,
-            ),
-        }])
-        .await?;
-        let _ = self.status.tx.send("READY".to_owned());
-        Ok(self.get_records()?)
+        self.replace_secret_with_projection_verification(SecretReplacementInput {
+            old_id,
+            new_id,
+            secret_type,
+            data,
+            verification: SecretProjectionVerification::None,
+        })
+        .await
     }
 
     #[wasm_bindgen(js_name = mergeRemoteJoinsFromProvider)]

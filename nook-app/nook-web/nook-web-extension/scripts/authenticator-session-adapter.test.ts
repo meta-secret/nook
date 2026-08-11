@@ -46,7 +46,12 @@ describe('authenticator session adapter', () => {
           ) {
             observedCodes.push([...message.payload.codes])
           }
-          callback({ ok: true, secretId: 'secret-1' })
+          callback({
+            ok: true,
+            secretId: 'secret-1',
+            backupCodesVerified: true,
+            reviewedInputPersisted: true,
+          })
         })
       },
     }
@@ -64,7 +69,39 @@ describe('authenticator session adapter', () => {
     const pending = attachAuthenticatorBackupCodes(args)
     codes.fill('')
 
-    await expect(pending).resolves.toEqual({ ok: true, secretId: 'secret-1' })
+    await expect(pending).resolves.toEqual({
+      ok: true,
+      secretId: 'secret-1',
+      backupCodesVerified: true,
+      reviewedInputPersisted: true,
+    })
     expect(observedCodes).toEqual([['A1B2-C3D4', 'E5F6-G7H8']])
+  })
+
+  test('rejects a backup-code response without Rust persistence proof', async () => {
+    const runtime = {
+      sendMessage: (
+        ...parameters: [
+          ExtensionSessionTransportRequest,
+          (response: unknown) => void,
+        ]
+      ) => {
+        const [, callback] = parameters
+        callback({ ok: true, secretId: 'secret-1' })
+      },
+    }
+    globalThis.chrome = { runtime } as typeof chrome
+    const { attachAuthenticatorBackupCodes } =
+      await import('../src/background/service-worker/authenticator-session-adapter')
+    const args: Parameters<typeof attachAuthenticatorBackupCodes>[0] = {
+      grant: pairingGrant(),
+      secretId: 'secret-1',
+      codes: ['A1B2-C3D4'],
+      mode: WebsiteAuthenticatorBackupAttachMessageMode.Replace,
+    }
+
+    await expect(attachAuthenticatorBackupCodes(args)).rejects.toThrow(
+      'Extension session did not verify persisted authenticator backup codes.',
+    )
   })
 })

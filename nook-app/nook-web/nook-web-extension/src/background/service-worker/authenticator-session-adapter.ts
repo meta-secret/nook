@@ -24,6 +24,13 @@ export type AuthenticatorSecretSessionResponse = {
   secretId: string
 }
 
+export type VerifiedAuthenticatorBackupAttachResponse = {
+  ok: true
+  secretId: string
+  backupCodesVerified: true
+  reviewedInputPersisted: true
+}
+
 function responseRecord(response: unknown): Record<string, unknown> {
   if (!response || typeof response !== 'object') {
     throw new Error('Extension session returned an invalid response.')
@@ -139,7 +146,7 @@ export async function attachAuthenticatorBackupCodes({
   secretId: string
   codes: string[]
   mode: WebsiteAuthenticatorBackupAttachMessageMode
-}): Promise<AuthenticatorSecretSessionResponse> {
+}): Promise<VerifiedAuthenticatorBackupAttachResponse> {
   const transportCodes = [...codes]
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-backup-attach',
@@ -152,7 +159,9 @@ export async function attachAuthenticatorBackupCodes({
     },
   }
   try {
-    return authenticatorSecretResponse(await sendSessionMessage(message))
+    return verifiedAuthenticatorBackupAttachResponse(
+      await sendSessionMessage(message),
+    )
   } finally {
     transportCodes.fill('')
   }
@@ -166,6 +175,28 @@ function authenticatorSecretResponse(
     throw new Error('Extension session returned an invalid secret response.')
   }
   return { ok: true, secretId: record.secretId }
+}
+
+function verifiedAuthenticatorBackupAttachResponse(
+  response: unknown,
+): VerifiedAuthenticatorBackupAttachResponse {
+  const record = responseRecord(response)
+  if (
+    record.ok !== true ||
+    typeof record.secretId !== 'string' ||
+    record.backupCodesVerified !== true ||
+    record.reviewedInputPersisted !== true
+  ) {
+    throw new Error(
+      'Extension session did not verify persisted authenticator backup codes.',
+    )
+  }
+  return {
+    ok: true,
+    secretId: record.secretId,
+    backupCodesVerified: true,
+    reviewedInputPersisted: true,
+  }
 }
 
 export async function selectedAuthenticatorPageAcknowledged({

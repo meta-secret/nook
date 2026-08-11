@@ -1,13 +1,11 @@
 import initNookWasm, {
   configureVaultApplication,
-  currentCodeFromOtpauthUri,
   DeviceMode,
   DeviceProtectionStatus,
   decodeStorageProviders,
   NookExternalEventLogRecords,
   NookWebsiteLoginSaveDecision,
   NookVaultManager,
-  previewOtpauthUri,
   VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
@@ -36,6 +34,7 @@ import {
   openPasskeyVault,
 } from './session-vault-operations'
 import { toBytes, toNumbers } from './session-key-material'
+import { handleAuthenticatorEnrollmentMessage } from './authenticator-enrollment-session'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
 const SESSION_LOCKED_ERROR = 'EXTENSION_SESSION_LOCKED'
@@ -63,7 +62,7 @@ enum WasmStartupKind {
 
 type WasmStartup =
   | { kind: WasmStartupKind.NotStarted }
-  | { kind: WasmStartupKind.Initializing; operation: Promise<unknown> }
+  | { kind: WasmStartupKind.Initializing; operation: Promise<void> }
 enum VaultManagerAvailabilityKind {
   Locked = 'locked',
   Active = 'active',
@@ -96,16 +95,15 @@ let sessionDeadlineAt = 0
 
 const canceledWebsitePasskeyRequests = new Set<string>()
 
-function ensureWasm(): Promise<unknown> {
+function ensureWasm(): Promise<void> {
   if (wasmStartup.kind === WasmStartupKind.Initializing) {
     return wasmStartup.operation
   }
   const nookTypedArgs0_0: Parameters<typeof initNookWasm>[0] = {
     module_or_path: chrome.runtime.getURL('offscreen/nook_wasm_bg.wasm'),
   }
-  const operation = initNookWasm(nookTypedArgs0_0).then((value) => {
+  const operation = initNookWasm(nookTypedArgs0_0).then(() => {
     configureVaultApplication(VaultApplication.Extension)
-    return value
   })
   wasmStartup = { kind: WasmStartupKind.Initializing, operation }
   return operation
@@ -596,102 +594,21 @@ async function handleMessage(message: ExtensionSessionRequest) {
         code.free()
       }
     }
-    case ExtensionSessionMessageType.AuthenticatorEnrollPreview: {
-      const payload = message.payload
-      if (typeof payload.otpauthUri !== 'string') {
-        throw new Error('Extension session received an invalid otpauth URI.')
-      }
-      await ensureWasm()
-      const preview = previewOtpauthUri(payload.otpauthUri)
-      try {
-        return {
-          ok: true,
-          preview: {
-            issuer: preview.issuer,
-            account: preview.account,
-            websiteUrl: preview.websiteUrl,
-            algorithm: preview.algorithm,
-            digits: preview.digits,
-            period: preview.period,
-          },
-        }
-      } finally {
-        preview.free()
-      }
-    }
-    case ExtensionSessionMessageType.AuthenticatorEnrollCode: {
-      const payload = message.payload
-      if (typeof payload.otpauthUri !== 'string') {
-        throw new Error('Extension session received an invalid otpauth URI.')
-      }
-      await ensureWasm()
-      const code = currentCodeFromOtpauthUri(payload.otpauthUri)
-      try {
-        return { ok: true, code: code.code }
-      } finally {
-        code.free()
-      }
-    }
-    case ExtensionSessionMessageType.AuthenticatorEnrollConfirm: {
-      const payload = message.payload
-      const grant = extensionVaultGrant(payload)
-      if (
-        typeof payload.otpauthUri !== 'string' ||
-        typeof payload.origin !== 'string'
-      ) {
-        throw new Error('Extension session received an invalid enrollment.')
-      }
-      const activeManager = await getManager()
-      const nookTypedArgs0_5: Parameters<typeof openPasskeyVault>[0] = {
-        activeManager,
-        grant,
-      }
-      await openPasskeyVault(nookTypedArgs0_5)
-      const secretId = await activeManager.addAuthenticatorFromOtpauth(
-        payload.otpauthUri,
-        payload.origin,
-      )
-      const nookTypedArgs0_6: Parameters<
-        typeof flushPasskeyEventToProviders
-      >[0] = {
-        activeManager,
-        vaultStoreId: grant.vaultStoreId,
-      }
-      await flushPasskeyEventToProviders(nookTypedArgs0_6)
-      return { ok: true, secretId }
-    }
+    case ExtensionSessionMessageType.AuthenticatorEnrollPreview:
+    case ExtensionSessionMessageType.AuthenticatorEnrollCode:
+    case ExtensionSessionMessageType.AuthenticatorEnrollConfirm:
     case ExtensionSessionMessageType.AuthenticatorBackupAttach: {
-      const payload = message.payload
-      const grant = extensionVaultGrant(payload)
-      if (
-        typeof payload.secretId !== 'string' ||
-        typeof payload.mode !== 'string' ||
-        !Array.isArray(payload.codes) ||
-        !payload.codes.every((code) => typeof code === 'string')
-      ) {
-        throw new Error(
-          'Extension session received an invalid backup-code attach.',
-        )
-      }
-      const activeManager = await getManager()
-      const nookTypedArgs0_7: Parameters<typeof openPasskeyVault>[0] = {
-        activeManager,
-        grant,
-      }
-      await openPasskeyVault(nookTypedArgs0_7)
-      const secretId = await activeManager.attachAuthenticatorBackupCodes(
-        payload.secretId,
-        payload.codes,
-        payload.mode,
-      )
-      const nookTypedArgs0_8: Parameters<
-        typeof flushPasskeyEventToProviders
+      const authenticatorArgs: Parameters<
+        typeof handleAuthenticatorEnrollmentMessage
       >[0] = {
-        activeManager,
-        vaultStoreId: grant.vaultStoreId,
+        message,
+        dependencies: {
+          ensureWasm,
+          getManager,
+          extensionVaultGrant,
+        },
       }
-      await flushPasskeyEventToProviders(nookTypedArgs0_8)
-      return { ok: true, secretId }
+      return handleAuthenticatorEnrollmentMessage(authenticatorArgs)
     }
     case ExtensionSessionMessageType.PlanLoginSave: {
       const payload = message.payload
