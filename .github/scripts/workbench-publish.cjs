@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 const { execFileSync } = require('node:child_process')
-const { readFileSync } = require('node:fs')
+const { readFileSync, realpathSync } = require('node:fs')
+const { isAbsolute, relative, resolve } = require('node:path')
 const { validateAgentRecord } = require('./workbench-records.cjs')
 
 const WorkbenchRemoteFileKind = Object.freeze({
@@ -40,7 +41,24 @@ if (remotePath.startsWith('plans/')) {
     )
     process.exit(6)
   }
-  const sourceTask = readFileSync(sourceTaskFile, 'utf8')
+  const checkoutRoot = realpathSync(
+    execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      encoding: 'utf8',
+    }).trim(),
+  )
+  const sourceTaskPath = realpathSync(resolve(sourceTaskFile))
+  const sourceTaskRelativePath = relative(checkoutRoot, sourceTaskPath)
+  if (
+    sourceTaskRelativePath === '' ||
+    (!sourceTaskRelativePath.startsWith('..') &&
+      !isAbsolute(sourceTaskRelativePath))
+  ) {
+    console.error(
+      'Refusing source-task file inside the public Nook checkout',
+    )
+    process.exit(8)
+  }
+  const sourceTask = readFileSync(sourceTaskPath, 'utf8')
   const rejection = validateAgentRecord(localContent, 'plan', [], sourceTask)
   if (rejection) {
     console.error(`Refusing invalid Workbench plan: ${rejection}`)

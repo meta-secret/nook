@@ -30,11 +30,20 @@ export type AuthoredBudgetArgs = {
   maximumLines: number;
 };
 
+function renameDestinationPath(rawPath: string): string {
+  const compactRename = rawPath.replace(/\{[^{}]* => ([^{}]*)\}/g, "$1");
+  const fullRenameSeparator = compactRename.lastIndexOf(" => ");
+  return fullRenameSeparator === -1
+    ? compactRename
+    : compactRename.slice(fullRenameSeparator + " => ".length);
+}
+
 export function countAuthoredNumstat(numstat: string): number {
   let total = 0;
   for (const line of numstat.split("\n")) {
     const [added, deleted, rawPath = ""] = line.split("\t");
-    const normalizedPath = `/${rawPath.replaceAll("\\", "/")}`;
+    const destinationPath = renameDestinationPath(rawPath);
+    const normalizedPath = `/${destinationPath.replaceAll("\\", "/")}`;
     const filename = normalizedPath.split("/").at(-1) || "";
     const reportedOnly =
       REPORTED_ONLY_FILENAMES.has(filename) ||

@@ -265,6 +265,15 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
       if (sliceLines.length < 2 || !hasExactSequence) {
         return 'multi-PR plan requires at least two ordered slices with acceptance evidence'
       }
+      const firstSlice = orderedSlices[0]
+      if (
+        normalizedContractValue(firstSlice.scope) !==
+          normalizedContractValue(currentSlice.scope) ||
+        normalizedContractValue(firstSlice.evidence) !==
+          normalizedContractValue(currentSlice.evidence)
+      ) {
+        return 'multi-PR plan requires its first slice to match the current PR contract'
+      }
     } else {
       const sliceLines = sequenceBody
         .trim()

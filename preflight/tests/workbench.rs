@@ -1,5 +1,6 @@
 #![allow(clippy::unnecessary_wraps)]
 
+use anyhow::Context as _;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -200,6 +201,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "remotePath.startsWith('plans/')",
         "NOOK_WORKBENCH_SOURCE_TASK_FILE",
         "Refusing invalid Workbench plan",
+        "Refusing source-task file inside the public Nook checkout",
     ] {
         assert!(
             read(".github/scripts/workbench-publish.cjs").contains(required),
@@ -208,13 +210,13 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     }
     let publish_position = workflow
         .find("path: planPath")
-        .expect("scheduled automation must publish the validated plan");
+        .context("scheduled automation must publish the validated plan")?;
     let block_position = workflow
         .find("Published multi-PR feature plan requires materialized Workbench feature")
-        .expect("scheduled automation must block an unmaterialized multi-PR plan");
+        .context("scheduled automation must block an unmaterialized multi-PR plan")?;
     let materialization_position = workflow
         .find("core.setOutput('multi_pr', 'true')")
-        .expect("scheduled automation must identify a multi-PR materialization action");
+        .context("scheduled automation must identify a multi-PR materialization action")?;
     assert!(
         publish_position < block_position,
         "scheduled automation must publish a multi-PR plan before blocking implementation"
@@ -226,10 +228,10 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     let implement = read("agentic-ai/ci-agent/src/main/implement.ts");
     let budget_position = implement
         .find("assertAuthoredChangeBudget(budgetArgs)")
-        .expect("scheduled implementation must enforce the authored diff budget");
+        .context("scheduled implementation must enforce the authored diff budget")?;
     let push_position = implement
         .find("pushFixBranch(repoRoot, agentBranch, runId)")
-        .expect("scheduled implementation must push its bounded branch");
+        .context("scheduled implementation must push its bounded branch")?;
     assert!(
         budget_position < push_position,
         "scheduled implementation must enforce the authored diff budget before push"

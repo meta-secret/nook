@@ -162,9 +162,22 @@ test('accepts a bounded current slice for a multi-PR feature', () => {
     )
     .replace(
       '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
-      '- PR slices and acceptance evidence:\n1. Validator schema; Acceptance evidence: Contract tests pass.\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
+      '- PR slices and acceptance evidence:\n1. Validator change; Acceptance evidence: Contract tests pass\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
     )
   assert.equal(validateAgentRecord(multiPr, 'plan'), '')
+})
+
+test('rejects a multi-PR current slice omitted from its ordered sequence', () => {
+  const invalid = validPlan
+    .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace(
+      '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
+      '- PR slices and acceptance evidence:\n1. Storage schema; Acceptance evidence: Domain tests pass.\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
+    )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /first slice to match the current PR contract/,
+  )
 })
 
 test('rejects a multi-PR plan without an ordered sequence', () => {

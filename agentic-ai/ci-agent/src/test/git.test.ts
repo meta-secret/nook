@@ -14,6 +14,8 @@ describe("countAuthoredNumstat", () => {
       "8\t1\tsrc/domain.ts",
       "40\t20\tbun.lock",
       "12\t0\ttests/domain.snap",
+      "31\t12\ttests/{old.snap => new.snap}",
+      "21\t7\ttests/old.snap => tests/new.snap",
       "15\t4\tvendor/library.ts",
       "10\t0\tgenerated/client.ts",
       "-\t-\tassets/demo.png",
