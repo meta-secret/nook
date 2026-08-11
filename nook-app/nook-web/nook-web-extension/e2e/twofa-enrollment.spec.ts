@@ -492,6 +492,8 @@ test.describe('Browser 2FA enrollment', () => {
       await expect(reviewedCodes).toHaveText([
         'A1B2-C3D4-E5F6',
         'G7H8-I9J0-K1L2',
+        'M3N4-O5P6-Q7R8',
+        'S9T0-U1V2-W3X4',
       ])
       await widget.getByRole('button', { name: 'Save backup codes' }).click()
 
