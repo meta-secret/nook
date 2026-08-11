@@ -6,6 +6,11 @@ import {
   AuthenticatorPickerOpenResponseKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { WebsiteAuthenticatorOption } from '../../lib/login-fill-messages'
+import { WebsiteAuthenticatorFillMessageType } from '../../lib/login-fill-messages'
+import {
+  AuthenticatorPickerCancelMessageType,
+  WebsiteAuthenticatorPickerOpenMessageType,
+} from '../../lib/authenticator-picker-messages'
 import {
   RuntimeMessageDeliveryKind,
   sendAuthenticatorCodeRuntimeMessage,
@@ -32,7 +37,7 @@ export async function fillAuthenticatorCode({
   continueButton: HTMLButtonElement
 }): Promise<boolean> {
   const message: Parameters<typeof sendAuthenticatorCodeRuntimeMessage>[0] = {
-    type: 'nook:website-authenticator-fill',
+    type: WebsiteAuthenticatorFillMessageType.NookWebsiteAuthenticatorFill,
     payload: {
       origin: location.origin,
       vaultStoreId: account.vaultStoreId,
@@ -170,7 +175,7 @@ export async function continueWithAuthenticator({
     const message: Parameters<
       typeof sendAuthenticatorPickerOpenRuntimeMessage
     >[0] = {
-      type: 'nook:website-authenticator-picker-open',
+      type: WebsiteAuthenticatorPickerOpenMessageType.NookWebsiteAuthenticatorPickerOpen,
       payload: { origin: location.origin },
     }
     const delivery = await sendAuthenticatorPickerOpenRuntimeMessage(message)
@@ -336,7 +341,7 @@ export async function continueWithAuthenticator({
 
 function cancelAuthenticatorPickerRequest(requestId: string): void {
   const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
-    type: 'nook:authenticator-picker-cancel',
+    type: AuthenticatorPickerCancelMessageType.NookAuthenticatorPickerCancel,
     payload: { requestId },
   }
   sendRuntimeMessageWithoutResponse(message)

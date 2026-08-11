@@ -88,7 +88,7 @@ export type WebsitePasskeyPerformResponse =
   | WebsitePasskeyRegistrationResponse
   | WebsitePasskeyAssertionResponse
 
-function validBase(message: object): message is {
+function validBase(message: unknown): message is {
   payload: WebsitePasskeyOptionsMessage['payload']
 } {
   if (!message || typeof message !== 'object' || !('payload' in message)) {
@@ -117,7 +117,7 @@ function validBase(message: object): message is {
 }
 
 export function isWebsitePasskeyOptionsMessage(
-  message: object,
+  message: unknown,
 ): message is WebsitePasskeyOptionsMessage {
   return (
     validBase(message) &&
@@ -127,7 +127,7 @@ export function isWebsitePasskeyOptionsMessage(
 }
 
 export function isWebsitePasskeyPerformMessage(
-  message: object,
+  message: unknown,
 ): message is WebsitePasskeyPerformMessage {
   return (
     validBase(message) &&
@@ -144,7 +144,7 @@ export function isWebsitePasskeyPerformMessage(
 }
 
 export function isWebsitePasskeyCancelMessage(
-  message: object,
+  message: unknown,
 ): message is WebsitePasskeyCancelMessage {
   return Boolean(
     message &&

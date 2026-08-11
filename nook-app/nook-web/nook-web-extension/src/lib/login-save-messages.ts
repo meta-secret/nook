@@ -69,7 +69,7 @@ export type WebsiteLoginSaveDismissMessage = {
 }
 
 function isOutcomeObservation(
-  value: object,
+  value: unknown,
 ): value is AuthenticationOutcomeObservationView {
   if (!value || typeof value !== 'object') return false
   const view = value as AuthenticationOutcomeObservationView
@@ -87,7 +87,7 @@ function isOutcomeObservation(
 }
 
 export function isWebsiteLoginSaveOfferMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteLoginSaveOfferMessage {
   if (
     !hasOriginPayload(message) ||
@@ -106,7 +106,7 @@ export function isWebsiteLoginSaveOfferMessage(
 }
 
 export function isWebsiteLoginSavePendingMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteLoginSavePendingMessage {
   return (
     hasOriginPayload(message) &&
@@ -116,7 +116,7 @@ export function isWebsiteLoginSavePendingMessage(
 }
 
 export function isWebsiteLoginSaveCommitMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteLoginSaveCommitMessage {
   if (
     !hasOriginPayload(message) ||
@@ -135,7 +135,7 @@ export function isWebsiteLoginSaveCommitMessage(
 }
 
 export function isWebsiteLoginSaveDismissMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteLoginSaveDismissMessage {
   if (
     !hasOriginPayload(message) ||

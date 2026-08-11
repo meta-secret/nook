@@ -130,11 +130,13 @@ export type ExtensionSessionRequestParse =
     }
 
 export enum ExtensionSessionSensitiveStageKind {
+  Invalid = 'invalid',
   NotRequired = 'not-required',
   Staged = 'staged',
 }
 
 export type ExtensionSessionSensitiveStage =
+  | { kind: ExtensionSessionSensitiveStageKind.Invalid }
   | { kind: ExtensionSessionSensitiveStageKind.NotRequired }
   | {
       kind: ExtensionSessionSensitiveStageKind.Staged
@@ -206,13 +208,63 @@ function clearSensitiveFieldValue(value: unknown): void {
   if (Array.isArray(value)) value.fill(0)
 }
 
+type ExtensionSessionSensitiveValue = string | number[] | string[]
+
+type SetExtensionSessionSensitiveValueArgs = {
+  payload: ExtensionSessionNonImportRequest['payload']
+  field: string
+  value: ExtensionSessionSensitiveValue
+}
+
+function setExtensionSessionSensitiveValue(
+  args: SetExtensionSessionSensitiveValueArgs,
+): void {
+  Reflect.set(args.payload, args.field, args.value)
+}
+
+enum ExtensionSessionSensitiveValueCopyKind {
+  Invalid = 'invalid',
+  Copied = 'copied',
+}
+
+type ExtensionSessionSensitiveValueCopy =
+  | { kind: ExtensionSessionSensitiveValueCopyKind.Invalid }
+  | {
+      kind: ExtensionSessionSensitiveValueCopyKind.Copied
+      value: ExtensionSessionSensitiveValue
+    }
+
+function copyExtensionSessionSensitiveValue(
+  value: unknown,
+): ExtensionSessionSensitiveValueCopy {
+  if (typeof value === 'string') {
+    return { kind: ExtensionSessionSensitiveValueCopyKind.Copied, value }
+  }
+  if (!Array.isArray(value)) {
+    return { kind: ExtensionSessionSensitiveValueCopyKind.Invalid }
+  }
+  if (value.every((entry) => typeof entry === 'number')) {
+    return {
+      kind: ExtensionSessionSensitiveValueCopyKind.Copied,
+      value: [...value],
+    }
+  }
+  if (value.every((entry) => typeof entry === 'string')) {
+    return {
+      kind: ExtensionSessionSensitiveValueCopyKind.Copied,
+      value: [...value],
+    }
+  }
+  return { kind: ExtensionSessionSensitiveValueCopyKind.Invalid }
+}
+
 export function clearExtensionSessionSensitiveRequest(
   request: ExtensionSessionNonImportRequest,
 ): void {
-  const payload = request.payload as object as Record<string, unknown>
   for (const field of sensitiveSessionFields[request.type]) {
-    clearSensitiveFieldValue(payload[field])
-    payload[field] = typeof payload[field] === 'string' ? '' : []
+    const value = Reflect.get(request.payload, field)
+    clearSensitiveFieldValue(value)
+    Reflect.set(request.payload, field, typeof value === 'string' ? '' : [])
   }
 }
 
@@ -223,17 +275,40 @@ export function stageExtensionSessionSensitiveRequest(
   if (fields.length === 0) {
     return { kind: ExtensionSessionSensitiveStageKind.NotRequired }
   }
-  const sourcePayload = request.payload as object as Record<string, unknown>
-  const stagedPayload = { ...sourcePayload }
+  const stagedPayload = { ...request.payload } as typeof request.payload
   for (const field of fields) {
-    const value = sourcePayload[field]
-    stagedPayload[field] = Array.isArray(value) ? [...value] : value
+    const value = Reflect.get(request.payload, field)
+    const copiedValue = copyExtensionSessionSensitiveValue(value)
+    if (copiedValue.kind === ExtensionSessionSensitiveValueCopyKind.Invalid) {
+      clearExtensionSessionSensitiveRequest(request)
+      const stagedRequestArgs: ReplaceExtensionSessionRequestPayloadArgs<
+        typeof request
+      > = { request, payload: stagedPayload }
+      clearExtensionSessionSensitiveRequest(
+        replaceExtensionSessionRequestPayload(stagedRequestArgs),
+      )
+      return { kind: ExtensionSessionSensitiveStageKind.Invalid }
+    }
+    const stagedValue: ExtensionSessionSensitiveValue = copiedValue.value
+    const stagedValueArgs: SetExtensionSessionSensitiveValueArgs = {
+      payload: stagedPayload,
+      field,
+      value: stagedValue,
+    }
+    setExtensionSessionSensitiveValue(stagedValueArgs)
     clearSensitiveFieldValue(value)
-    sourcePayload[field] = typeof value === 'string' ? '' : []
+    const clearedValue: ExtensionSessionSensitiveValue =
+      typeof value === 'string' ? '' : []
+    const clearedValueArgs: SetExtensionSessionSensitiveValueArgs = {
+      payload: request.payload,
+      field,
+      value: clearedValue,
+    }
+    setExtensionSessionSensitiveValue(clearedValueArgs)
   }
-  const replacementArgs: Parameters<
-    typeof replaceExtensionSessionRequestPayload
-  >[0] = {
+  const replacementArgs: ReplaceExtensionSessionRequestPayloadArgs<
+    typeof request
+  > = {
     request,
     payload: stagedPayload,
   }
@@ -249,13 +324,20 @@ function isExtensionSessionMessageType(
   return Object.prototype.hasOwnProperty.call(sensitiveSessionFields, value)
 }
 
-function hasExtensionSessionQueue(payload: object): boolean {
-  return (
-    'queue' in payload &&
-    payload.queue instanceof Object &&
-    'kind' in payload.queue &&
-    typeof payload.queue.kind === 'string'
-  )
+type ExtensionSessionQueueEnvelope = {
+  kind: string
+}
+
+function isExtensionSessionQueueEnvelope(
+  value: unknown,
+): value is ExtensionSessionQueueEnvelope {
+  if (!value || typeof value !== 'object') return false
+  return 'kind' in value && typeof value.kind === 'string'
+}
+
+function hasExtensionSessionQueue(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') return false
+  return 'queue' in payload && isExtensionSessionQueueEnvelope(payload.queue)
 }
 
 function stageExtensionSessionIngressRequest(
@@ -304,6 +386,9 @@ function stageExtensionSessionIngressRequest(
   }
 
   const sensitiveStage = stageExtensionSessionSensitiveRequest(request)
+  if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Invalid) {
+    return { kind: ExtensionSessionIngressStageKind.Invalid }
+  }
   return {
     kind: ExtensionSessionIngressStageKind.Staged,
     request:
@@ -399,12 +484,18 @@ export async function parseExtensionSessionRequest(
   }
 }
 
-export function replaceExtensionSessionRequestPayload({
+type ReplaceExtensionSessionRequestPayloadArgs<
+  Request extends ExtensionSessionNonImportRequest,
+> = {
+  request: Request
+  payload: Request['payload']
+}
+
+export function replaceExtensionSessionRequestPayload<
+  Request extends ExtensionSessionNonImportRequest,
+>({
   request,
   payload,
-}: {
-  request: ExtensionSessionNonImportRequest
-  payload: object
-}): ExtensionSessionNonImportRequest {
-  return { ...request, payload } as ExtensionSessionNonImportRequest
+}: ReplaceExtensionSessionRequestPayloadArgs<Request>): Request {
+  return { ...request, payload } as Request
 }

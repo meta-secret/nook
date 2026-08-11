@@ -100,7 +100,7 @@ async function readDatabaseSnapshot(
             request.onsuccess = () => resolve(request.result)
             request.onerror = () => reject(request.error)
           })
-          const values = await new Promise<object[]>((resolve, reject) => {
+          const values = await new Promise<unknown[]>((resolve, reject) => {
             const request = store.getAll()
             request.onsuccess = () => resolve(request.result)
             request.onerror = () => reject(request.error)

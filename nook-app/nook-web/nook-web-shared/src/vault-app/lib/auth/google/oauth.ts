@@ -369,22 +369,32 @@ export async function fetchGoogleAccountEmail(
     return { kind: GoogleAccountIdentityKind.Unavailable };
   }
   const payload: unknown = await response.json();
-  if (Object(payload) !== payload) {
+  if (!payload || typeof payload !== "object" || !("user" in payload)) {
     return { kind: GoogleAccountIdentityKind.Unavailable };
   }
-  const user: unknown = Reflect.get(payload as object, "user");
-  if (Object(user) !== user) {
+  const user = payload.user;
+  if (!user || typeof user !== "object") {
     return { kind: GoogleAccountIdentityKind.Unavailable };
   }
-  const emailAddress: unknown = Reflect.get(user as object, "emailAddress");
-  if (typeof emailAddress === "string" && emailAddress.trim()) {
+  if (
+    "emailAddress" in user &&
+    typeof user.emailAddress === "string" &&
+    user.emailAddress.trim()
+  ) {
     return {
       kind: GoogleAccountIdentityKind.Available,
-      label: emailAddress,
+      label: user.emailAddress,
     };
   }
-  const displayName: unknown = Reflect.get(user as object, "displayName");
-  return typeof displayName === "string" && displayName.trim()
-    ? { kind: GoogleAccountIdentityKind.Available, label: displayName }
-    : { kind: GoogleAccountIdentityKind.Unavailable };
+  if (
+    "displayName" in user &&
+    typeof user.displayName === "string" &&
+    user.displayName.trim()
+  ) {
+    return {
+      kind: GoogleAccountIdentityKind.Available,
+      label: user.displayName,
+    };
+  }
+  return { kind: GoogleAccountIdentityKind.Unavailable };
 }

@@ -35,13 +35,13 @@ import {
 } from './pairing-identity'
 import { ensureExtensionSessionDocument } from './session-lifecycle'
 
-export async function importPairingAfterCompanionReady(message: object) {
+export async function importPairingAfterCompanionReady(message: unknown) {
+  if (!isExtensionPairingApprovedMessage(message)) {
+    return { ok: false, reason: 'invalid-pairing-grant' }
+  }
   try {
     await companionWasmReady
   } catch {
-    return { ok: false, reason: 'invalid-pairing-grant' }
-  }
-  if (!isExtensionPairingApprovedMessage(message)) {
     return { ok: false, reason: 'invalid-pairing-grant' }
   }
   return importApprovedPairing(message)

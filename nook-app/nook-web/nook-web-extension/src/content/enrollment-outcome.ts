@@ -9,6 +9,8 @@ import type {
   AuthenticationOutcomeResponse,
   AuthenticationOutcomeVerdictView,
 } from '../lib/outcome-evidence-messages'
+import { AuthenticationOutcomeClassifyMessageType } from '../lib/outcome-evidence-messages'
+import { WebsiteAuthenticatorEnrollCodeMessageType } from '../lib/enrollment-messages'
 import {
   RuntimeMessageDeliveryKind,
   type AuthenticatorCodeResponse,
@@ -21,10 +23,14 @@ const ENROLLMENT_EVIDENCE_POLL_MS = 250
 
 type EnrollmentOutcomeHost = {
   sendAuthenticatorCodeRuntimeMessage: (
-    message: object,
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticatorCodeRuntimeMessage
+    >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorCodeResponse>>
   sendAuthenticationOutcomeRuntimeMessage: (
-    message: object,
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticationOutcomeRuntimeMessage
+    >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>>
 }
 
@@ -144,7 +150,7 @@ async function classifyEnrollmentOutcome({
   const message: Parameters<
     typeof host.sendAuthenticationOutcomeRuntimeMessage
   >[0] = {
-    type: 'nook:authentication-outcome-classify',
+    type: AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify,
     payload: {
       observation,
       timeoutMs: ENROLLMENT_EVIDENCE_TIMEOUT_MS,
@@ -178,7 +184,7 @@ export async function fillStagedEnrollmentCode({
   const message: Parameters<
     typeof host.sendAuthenticatorCodeRuntimeMessage
   >[0] = {
-    type: 'nook:website-authenticator-enroll-code',
+    type: WebsiteAuthenticatorEnrollCodeMessageType.NookWebsiteAuthenticatorEnrollCode,
     payload: { origin: location.origin, stageId },
   }
   const delivery = await host.sendAuthenticatorCodeRuntimeMessage(message)

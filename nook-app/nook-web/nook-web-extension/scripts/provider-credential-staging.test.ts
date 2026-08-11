@@ -5,15 +5,15 @@ import {
   runWithProviderCredentialCleanup,
   scrubProviderCredentials,
   stageProviderCredentials,
+  type SerializedStorageProvider,
 } from '../src/lib/provider-credential-staging'
 import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
-async function stageFixture(providers: object) {
-  const providerCandidates = providers as StorageProvider[]
+async function stageFixture(providers: SerializedStorageProvider[]) {
   const args: Parameters<typeof stageProviderCredentials>[0] = {
-    providers: providerCandidates,
-    decode: async (candidate: object) =>
-      structuredClone(candidate) as object as StorageProvider[],
+    providers,
+    decode: async (candidate) =>
+      structuredClone(candidate) as StorageProvider[],
   }
   return stageProviderCredentials(args)
 }
@@ -122,7 +122,7 @@ describe('provider credential staging', () => {
       { oauthFile: 'malformed' },
       { oauthFile: { config: 'malformed' } },
       { githubPat: 'github_pat_following_secret' },
-    ] as object as StorageProvider[]
+    ] as StorageProvider[]
 
     scrubProviderCredentials(providers)
 

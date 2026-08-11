@@ -17,6 +17,11 @@ import {
   safeSavedOptionNumber,
 } from '../lib/auth-widget-policy'
 import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
+import { WebsiteAuthenticatorOptionsMessageType } from '../lib/login-fill-messages'
+import {
+  WebsiteAuthenticatorBackupAttachMessageMode,
+  WebsiteAuthenticatorBackupAttachMessageType,
+} from '../lib/enrollment-messages'
 import {
   RuntimeMessageDeliveryKind,
   type AuthenticatorBackupAttachResponse,
@@ -38,27 +43,30 @@ import {
 export interface BackupEnrollmentHost extends EnrollmentFlowViewHost {
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
-  sendDecodedRuntimeMessage: <Response extends object>(
+  sendDecodedRuntimeMessage: <Response>(
     args: DecodedRuntimeMessageArgs<Response>,
   ) => Promise<RuntimeMessageDelivery<Response>>
   sendAuthenticatorBackupAttachRuntimeMessage: (
-    message: object,
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticatorBackupAttachRuntimeMessage
+    >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>>
   sendAuthenticatorOptionsRuntimeMessage: (
-    message: object,
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticatorOptionsRuntimeMessage
+    >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorOptionsResponse>>
-  sendRuntimeMessageWithoutResponse: (message: object) => void
+  sendRuntimeMessageWithoutResponse: (
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendRuntimeMessageWithoutResponse
+    >[0],
+  ) => void
   translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (args: {
     key: BrowserMessageKey
     substitution: string
   }) => string
   returnToActions: () => void
-}
-
-enum BackupAttachMode {
-  Replace = 'replace',
-  Merge = 'merge',
 }
 
 function detectEnrollmentHints(): EnrollmentPageHints {
@@ -111,7 +119,7 @@ function showBackupModeChooser({
   }
   setHostDescription(nookTypedArgs0_45)
 
-  const attach = (mode: BackupAttachMode) => {
+  const attach = (mode: WebsiteAuthenticatorBackupAttachMessageMode) => {
     if (host.isBusy()) return
     host.setBusy(true)
     const nookTypedArgs0_46: Parameters<typeof setHostDescription>[0] = {
@@ -122,7 +130,7 @@ function showBackupModeChooser({
     const message: Parameters<
       typeof host.sendAuthenticatorBackupAttachRuntimeMessage
     >[0] = {
-      type: 'nook:website-authenticator-backup-attach',
+      type: WebsiteAuthenticatorBackupAttachMessageType.NookWebsiteAuthenticatorBackupAttach,
       payload: {
         origin: location.origin,
         vaultStoreId: account.vaultStoreId,
@@ -180,7 +188,7 @@ function showBackupModeChooser({
     labelKey: BROWSER_MESSAGE_KEYS.WidgetBackupModeReplace,
     onClick: (event) => {
       if (!isTrustedAuthAction(event.isTrusted)) return
-      attach(BackupAttachMode.Replace)
+      attach(WebsiteAuthenticatorBackupAttachMessageMode.Replace)
     },
   }
   const replaceButton = createSecondaryButton(nookTypedArgs0_51)
@@ -189,7 +197,7 @@ function showBackupModeChooser({
     labelKey: BROWSER_MESSAGE_KEYS.WidgetBackupModeMerge,
     onClick: (event) => {
       if (!isTrustedAuthAction(event.isTrusted)) return
-      attach(BackupAttachMode.Merge)
+      attach(WebsiteAuthenticatorBackupAttachMessageMode.Merge)
     },
   }
   const mergeButton = createSecondaryButton(nookTypedArgs0_52)
@@ -302,7 +310,7 @@ async function continueBackupWithAuthenticatorOptions({
     const message: Parameters<
       typeof host.sendAuthenticatorOptionsRuntimeMessage
     >[0] = {
-      type: 'nook:website-authenticator-options',
+      type: WebsiteAuthenticatorOptionsMessageType.NookWebsiteAuthenticatorOptions,
       payload: { origin: location.origin },
     }
     const delivery = await host.sendAuthenticatorOptionsRuntimeMessage(message)

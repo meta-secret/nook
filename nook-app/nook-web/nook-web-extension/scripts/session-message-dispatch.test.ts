@@ -20,8 +20,8 @@ function messagePayload(message: unknown): Record<string, unknown> {
     : {}
 }
 
-async function decodeProviders(providers: object) {
-  return structuredClone(providers) as object as StorageProvider[]
+async function decodeProviders(providers: StorageProvider[]) {
+  return structuredClone(providers)
 }
 
 describe('ExtensionSessionMessageDispatcher', () => {
@@ -46,6 +46,24 @@ describe('ExtensionSessionMessageDispatcher', () => {
     }
     const parse = await parseExtensionSessionRequest(message)
     expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
+  })
+
+  test('rejects malformed backup codes without normalizing them into an empty replacement', async () => {
+    const payload = {
+      origin: 'https://example.com',
+      vaultStoreId: 'vault',
+      secretId: 'authenticator',
+      codes: { malformed: true },
+      mode: 'replace',
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    }
+    const parse = await parseExtensionSessionRequest({
+      type: ExtensionSessionMessageType.AuthenticatorBackupAttach,
+      payload,
+    })
+
+    expect(parse.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
+    expect(payload.codes).toEqual([])
   })
 
   test('rejects malformed provider and event-log elements at Rust ingress', async () => {
@@ -512,7 +530,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     const stagedProviders = [
       { githubPat: 'github_pat_canceled_staged_secret' },
-    ] as object as StorageProvider[]
+    ] as StorageProvider[]
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
@@ -560,7 +578,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     const stagedProviders = [
       { githubPat: 'github_pat_expired_queue_secret' },
-    ] as object as StorageProvider[]
+    ] as StorageProvider[]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders: async () => stagedProviders,
@@ -613,7 +631,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     const stagedProviders = [
       { githubPat: 'github_pat_expired_staged_secret' },
-    ] as object as StorageProvider[]
+    ] as StorageProvider[]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders: () => decodedProviders,

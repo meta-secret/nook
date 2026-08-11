@@ -41,7 +41,7 @@ type SensitivePayloadResidency =
     }
   | { kind: SensitivePayloadResidencyKind.Cleared }
 
-export type SessionMessageDispatchContext<SessionResponse extends object> = {
+export type SessionMessageDispatchContext<SessionResponse> = {
   handleMessage: (message: ExtensionSessionRequest) => Promise<SessionResponse>
   decodeProviders: (
     providers: SerializedStorageProvider[],
@@ -53,8 +53,15 @@ type InvalidProviderPayloadResponse = {
   error: 'invalid-provider-payload'
 }
 
-type ExtensionSessionDispatchResponse<SessionResponse extends object> =
-  SessionResponse | InvalidProviderPayloadResponse
+type InvalidSensitivePayloadResponse = {
+  ok: false
+  error: 'invalid-sensitive-payload'
+}
+
+type ExtensionSessionDispatchResponse<SessionResponse> =
+  | SessionResponse
+  | InvalidProviderPayloadResponse
+  | InvalidSensitivePayloadResponse
 
 function sessionMessagePriority(
   type: ExtensionSessionMessageType,
@@ -127,7 +134,7 @@ enum StagingOwnership {
   Cleared = 'cleared',
 }
 
-export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
+export class ExtensionSessionMessageDispatcher<SessionResponse> {
   private operations = new SessionOperationQueue()
   private operationGeneration = 0
 
@@ -319,6 +326,13 @@ export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
       return this.enqueueVaultImport(nookNamedArgs0_3)
     }
     const sensitiveStage = stageExtensionSessionSensitiveRequest(message)
+    if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Invalid) {
+      const invalidSensitiveResponse: InvalidSensitivePayloadResponse = {
+        ok: false,
+        error: 'invalid-sensitive-payload',
+      }
+      return Promise.resolve(invalidSensitiveResponse)
+    }
     if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged) {
       const nookNamedArgs0_4: Parameters<
         typeof this.enqueueSensitiveMessage

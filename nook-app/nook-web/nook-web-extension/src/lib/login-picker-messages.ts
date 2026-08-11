@@ -80,7 +80,7 @@ function isNonEmptyString(value: string): value is string {
 }
 
 export function isWebsiteLoginPickerOpenMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteLoginPickerOpenMessage {
   return (
     hasOriginPayload(message) &&
@@ -90,7 +90,7 @@ export function isWebsiteLoginPickerOpenMessage(
 }
 
 export function isLoginPickerQueryMessage(
-  message: object,
+  message: unknown,
 ): message is LoginPickerQueryMessage {
   if (
     !message ||
@@ -112,7 +112,7 @@ export function isLoginPickerQueryMessage(
 }
 
 export function isLoginPickerSelectMessage(
-  message: object,
+  message: unknown,
 ): message is LoginPickerSelectMessage {
   if (
     !message ||
@@ -135,7 +135,7 @@ export function isLoginPickerSelectMessage(
 }
 
 export function isLoginPickerCancelMessage(
-  message: object,
+  message: unknown,
 ): message is LoginPickerCancelMessage {
   if (
     !message ||
@@ -154,7 +154,7 @@ export function isLoginPickerCancelMessage(
 }
 
 export function isWebsiteLoginSelectedMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteLoginSelectedMessage {
   if (
     !message ||
@@ -186,7 +186,7 @@ export function isWebsiteLoginSelectedMessage(
 }
 
 export function isWebsiteLoginCanceledMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteLoginCanceledMessage {
   if (!hasOriginPayload(message)) return false
   const payload = message.payload as WebsiteLoginCanceledMessage['payload']
