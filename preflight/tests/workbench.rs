@@ -204,9 +204,15 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
             "interactive Workbench publisher is missing plan validation: {required}"
         );
     }
+    let publish_position = workflow
+        .find("createOrUpdateFileContents")
+        .expect("scheduled automation must publish the validated plan");
+    let block_position = workflow
+        .find("Published multi-PR feature plan requires materialized Workbench feature")
+        .expect("scheduled automation must block an unmaterialized multi-PR plan");
     assert!(
-        workflow.contains("Multi-PR feature plan requires materialized Workbench feature"),
-        "scheduled automation must stop before implementing an unmaterialized multi-PR plan"
+        publish_position < block_position,
+        "scheduled automation must publish a multi-PR plan before blocking implementation"
     );
     Ok(())
 }

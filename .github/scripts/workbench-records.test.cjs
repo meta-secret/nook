@@ -22,7 +22,7 @@ Deliver a durable two-phase agent context record.
 - Estimated authored changed lines: 240
 - Owning modules, packages, or layers: Workbench agent records
 - Public or cross-module interfaces: Plan validation contract
-- Delivery shape: One PR completes the change
+- Delivery shape: One PR
 - Current PR estimated authored changed lines: 240
 - Current PR slice and acceptance evidence: Validator change with contract tests
 - PR slices and acceptance evidence: One validator slice with contract tests
@@ -145,8 +145,8 @@ test('accepts a bounded current slice for a multi-PR feature', () => {
       'Estimated authored changed lines: 12,000',
     )
     .replace(
-      'Delivery shape: One PR completes the change',
-      'Delivery shape: Multiple PRs complete the feature',
+      'Delivery shape: One PR',
+      'Delivery shape: Multiple PRs',
     )
     .replace(
       '- PR slices and acceptance evidence: One validator slice with contract tests',
@@ -162,8 +162,8 @@ test('rejects a multi-PR plan without an ordered sequence', () => {
       'Estimated authored changed lines: 6,000',
     )
     .replace(
-      'Delivery shape: One PR completes the change',
-      'Delivery shape: Multiple PRs complete the feature',
+      'Delivery shape: One PR',
+      'Delivery shape: Multiple PRs',
     )
     .replace(
       'PR slices and acceptance evidence: One validator slice with contract tests',
@@ -172,6 +172,17 @@ test('rejects a multi-PR plan without an ordered sequence', () => {
   assert.match(
     validateAgentRecord(invalid, 'plan'),
     /multi-PR plan requires at least two ordered slices/,
+  )
+})
+
+test('rejects an ambiguous delivery shape', () => {
+  const invalid = validPlan.replace(
+    'Delivery shape: One PR',
+    'Delivery shape: One PR cannot complete the feature; Multiple PRs are required',
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /missing or empty plan field: Delivery shape/,
   )
 })
 

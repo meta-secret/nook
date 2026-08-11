@@ -33,7 +33,7 @@ const planBudgetFields = [
   },
   {
     label: 'Delivery shape',
-    pattern: /^- Delivery shape:\s*(?:One PR|Multiple PRs)\b.*$/im,
+    pattern: /^- Delivery shape:\s*(?:One PR|Multiple PRs)\s*$/m,
   },
   {
     label: 'Current PR estimated authored changed lines',
@@ -163,14 +163,14 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     if (currentPrEstimate > 5_000) {
       return 'current PR estimate exceeds 5,000 authored changed lines'
     }
-    if (/^one pr\b/i.test(deliveryShape) && estimate > 5_000) {
+    if (deliveryShape === 'One PR' && estimate > 5_000) {
       return 'one-PR plan exceeds 5,000 authored changed lines'
     }
 
     const sequenceBody = candidate
       .split(/^- PR slices and acceptance evidence:\s*/m)[1]
       .split(/^## Initial plan$/m)[0]
-    if (/^multiple prs\b/i.test(deliveryShape)) {
+    if (deliveryShape === 'Multiple PRs') {
       const sliceCount = [...sequenceBody.matchAll(/^\d+\.\s+\S/gm)].length
       if (sliceCount < 2) {
         return 'multi-PR plan requires at least two ordered slices'

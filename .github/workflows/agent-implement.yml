@@ -256,10 +256,6 @@ jobs:
               core.setFailed(`Rejected agent-authored Workbench task plan: ${rejection}.`)
               return
             }
-            if (/^- Delivery shape:\s*Multiple PRs\b/im.test(candidate)) {
-              core.setFailed('Multi-PR feature plan requires materialized Workbench feature and focused issue records before implementation.')
-              return
-            }
             const plan = [
               '---',
               `title: ${JSON.stringify(process.env.TASK_TITLE)}`,
@@ -282,6 +278,10 @@ jobs:
             })
             core.setOutput('path', planPath)
             core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${planPath}`)
+            if (/^- Delivery shape:\s*Multiple PRs\s*$/m.test(candidate)) {
+              core.setFailed('Published multi-PR feature plan requires materialized Workbench feature and focused issue records before implementation.')
+              return
+            }
 
       - name: Run ci-agent implement
         id: implement

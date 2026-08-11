@@ -44,7 +44,7 @@ ordered.
 Estimate additions and deletions for authored source, tests, documentation,
 configuration, scripts, and workflow code. Exclude generated files, lockfiles,
 snapshots, vendored sources, binary artifacts, and pure renames from the
-estimate. The delivery shape must say whether one PR can complete the feature.
+estimate. Set `Delivery shape` to exactly `One PR` or `Multiple PRs`.
 For a multi-PR feature, list each ordered, module-focused slice with its
 acceptance evidence. Identify the first or currently authorized slice
 separately. Its estimate must not exceed 5,000 authored changed lines. Use

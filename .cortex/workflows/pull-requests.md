@@ -75,8 +75,13 @@ If the estimate approaches the ceiling, reduce scope before implementation.
 
 If implementation crosses the ceiling, stop expanding that PR.
 
-Preserve the coherent portion and move the remaining deliverables into the
-planned sequence.
+Remove or defer enough authored changes to return the current PR to 5,000 lines
+or fewer.
+
+Preserve a coherent bounded portion.
+
+Record a superseding plan for every deferred deliverable in the remaining PR
+sequence.
 
 ### Required plan
 

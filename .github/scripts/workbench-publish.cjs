@@ -12,7 +12,9 @@ const WorkbenchRemoteFileKind = Object.freeze({
 const repository =
   process.env.NOOK_WORKBENCH_REPOSITORY || 'meta-secret/nook-workbench'
 const expectedSha = process.env.NOOK_WORKBENCH_EXPECTED_SHA?.trim()
-const sourceTaskFile = process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE?.trim()
+const sourceTaskFile = (
+  process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE || ''
+).trim()
 const [localPath, remotePath, ...messageParts] = process.argv.slice(2)
 const message = messageParts.join(' ').trim()
 
