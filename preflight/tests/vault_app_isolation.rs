@@ -64,6 +64,8 @@ fn taskfile_task_body<'a>(tasks: &'a str, name: &str) -> anyhow::Result<&'a str>
     Ok(rest[..end].trim())
 }
 
+#[path = "vault_app_isolation/agent_and_local_workflow_contracts.rs"]
+mod agent_and_local_workflow_contracts;
 #[path = "vault_app_isolation/bake_cache_proofs.rs"]
 mod bake_cache_proofs;
 #[path = "vault_app_isolation/build_contracts.rs"]
