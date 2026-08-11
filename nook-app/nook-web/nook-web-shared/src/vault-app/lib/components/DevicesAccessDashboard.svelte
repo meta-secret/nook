@@ -10,16 +10,10 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
   import { tick, untrack } from 'svelte'
   import { ArrowLeft, RefreshCw } from '@lucide/svelte'
   import {
-    DeviceAccessIdentityState,
     DeviceAccessProtectionKind,
     NookDeviceAccessTextKind,
     NookDeviceVaultAccessState,
-    type NookPasskeyAttachmentState,
-    type NookPasskeyBackupState,
     NookPasskeyTimestampEvidenceKind,
-    type PasskeyObservedBrowser,
-    type PasskeyObservedPlatform,
-    type PasskeyTransport,
     setDeviceAccessPasskeyProviderLabel,
   } from '$app-wasm'
   import type {
@@ -39,24 +33,20 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     DashboardTextKind,
     type DashboardTimestamp,
     DashboardTimestampKind,
+    type DashboardView,
     providerSaveFocus,
     ProviderSaveFocusKind,
     ProviderSaveKind,
   } from './devices-access-dashboard-state'
   import AccessStrengthPreview from './devices-access/AccessStrengthPreview.svelte'
-  import AccessDeviceKeyPanel from './devices-access/AccessDeviceKeyPanel.svelte'
-  import AccessUnlockPanel from './devices-access/AccessUnlockPanel.svelte'
-  import AccessVaultsPanel from './devices-access/AccessVaultsPanel.svelte'
+  import DevicesAccessDetailPanel from './devices-access/DevicesAccessDetailPanel.svelte'
   import {
     AccessChainStage,
     accessChainTab,
-    accessChainTabId,
     AccessChainTabKind,
     deviceKeyTitle,
     formatAccessDate,
     identityStateLabel,
-    panelDescription,
-    panelTitle,
     protectionLabel,
     textValue,
     type VaultAccessView,
@@ -82,28 +72,6 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     onManageVaultDevices: () => void
     onManageVaultPasswords: () => void
   } = $props()
-
-  type DashboardView = {
-    protection: DeviceAccessProtectionKind
-    identityState: DeviceAccessIdentityState
-    deviceId: DashboardText
-    credentialId: DashboardText
-    userHandleId: DashboardText
-    passkeyName: DashboardText
-    providerLabel: DashboardText
-    createdAt: DashboardTimestamp
-    lastUsedAt: DashboardTimestamp
-    attachment: NookPasskeyAttachmentState
-    transports: PasskeyTransport[]
-    backupState: NookPasskeyBackupState
-    aaguid: DashboardText
-    observedBrowser: PasskeyObservedBrowser
-    observedPlatform: PasskeyObservedPlatform
-    vaults: VaultAccessView[]
-  }
-
-  const PANEL_ID = 'devices-access-panel'
-  const PANEL_CONTENT_ID = 'devices-access-panel-content'
 
   let loadState = $state<DashboardLoadState<DashboardView>>({
     kind: DashboardLoadKind.Loading,
@@ -348,33 +316,6 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
       storeId,
     }
     selectedStage = AccessChainStage.Vaults
-  }
-
-  async function navigateDetailTabs(
-    { event, currentStage }: { readonly event: KeyboardEvent; readonly currentStage: AccessChainStage },
-  ): Promise<void> {
-    const stages = [
-      AccessChainStage.Unlock,
-      AccessChainStage.DeviceKey,
-      AccessChainStage.Vaults,
-    ] as const
-    let nextIndex = stages.indexOf(currentStage)
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-      nextIndex = (nextIndex + 1) % stages.length
-    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-      nextIndex = (nextIndex - 1 + stages.length) % stages.length
-    } else if (event.key === 'Home') {
-      nextIndex = 0
-    } else if (event.key === 'End') {
-      nextIndex = stages.length - 1
-    } else {
-      return
-    }
-    event.preventDefault()
-    selectedStage = stages[nextIndex]
-    await tick()
-    const tab = accessChainTab(selectedStage)
-    if (tab.kind === AccessChainTabKind.Mounted) tab.element.focus()
   }
 
   function selectedVaultLabel(view: DashboardView): string {
@@ -698,147 +639,18 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           </div>
         </div>
 
-        <div
-          id={PANEL_ID}
-          class="mt-10 border-t border-border/70 pt-6"
-          data-testid="devices-access-panel"
-        >
-          <div
-            class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
-          >
-            <div>
-              <p class="access-micro-label text-muted-foreground">
-                {vault.t(I18N_KEYS.DevicesAccessBridgeDetails)}
-              </p>
-              <h2 class="mt-1.5 text-base font-semibold text-foreground">
-                {(() => { const panelTitleArgs: Parameters<typeof panelTitle>[0] = { vault, stage: selectedStage, protection: view.protection }; return panelTitle(panelTitleArgs); })()}
-              </h2>
-              <p
-                class="mt-1 max-w-[70ch] text-sm leading-relaxed text-pretty text-muted-foreground"
-              >
-                {(() => { const panelDescriptionArgs: Parameters<typeof panelDescription>[0] = { vault, stage: selectedStage, protection: view.protection }; return panelDescription(panelDescriptionArgs); })()}
-              </p>
-            </div>
-            <div
-              class="grid w-full grid-cols-3 border border-border bg-card p-1 sm:w-auto"
-              role="tablist"
-              aria-label={vault.t(I18N_KEYS.DevicesAccessBridgeDetails)}
-            >
-              <button
-                type="button"
-                role="tab"
-                id={accessChainTabId(AccessChainStage.Unlock)}
-                aria-selected={selectedStage === AccessChainStage.Unlock}
-                aria-controls={PANEL_CONTENT_ID}
-                tabindex={selectedStage === AccessChainStage.Unlock ? 0 : -1}
-                class:active={selectedStage === AccessChainStage.Unlock}
-                class="detail-tab"
-                data-testid="devices-access-node-unlock"
-                onclick={() => (selectedStage = AccessChainStage.Unlock)}
-                onkeydown={(event) =>
-                  void (() => { const navigateDetailTabsArgs: Parameters<typeof navigateDetailTabs>[0] = { event, currentStage: AccessChainStage.Unlock }; return navigateDetailTabs(navigateDetailTabsArgs); })()}
-                >{vault.t(
-                  I18N_KEYS.DevicesAccessBridgeDetailProtection,
-                )}</button
-              >
-              <button
-                type="button"
-                role="tab"
-                id={accessChainTabId(AccessChainStage.DeviceKey)}
-                aria-selected={selectedStage === AccessChainStage.DeviceKey}
-                aria-controls={PANEL_CONTENT_ID}
-                tabindex={selectedStage === AccessChainStage.DeviceKey ? 0 : -1}
-                class:active={selectedStage === AccessChainStage.DeviceKey}
-                class="detail-tab"
-                data-testid="devices-access-node-device-key"
-                onclick={() => (selectedStage = AccessChainStage.DeviceKey)}
-                onkeydown={(event) =>
-                  void (() => { const navigateDetailTabsArgs2: Parameters<typeof navigateDetailTabs>[0] = { event, currentStage: AccessChainStage.DeviceKey }; return navigateDetailTabs(navigateDetailTabsArgs2); })()}
-                >{vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice)}</button
-              >
-              <button
-                type="button"
-                role="tab"
-                id={accessChainTabId(AccessChainStage.Vaults)}
-                aria-selected={selectedStage === AccessChainStage.Vaults}
-                aria-controls={PANEL_CONTENT_ID}
-                tabindex={selectedStage === AccessChainStage.Vaults ? 0 : -1}
-                class:active={selectedStage === AccessChainStage.Vaults}
-                class="detail-tab"
-                data-testid="devices-access-node-vaults"
-                onclick={() => (selectedStage = AccessChainStage.Vaults)}
-                onkeydown={(event) =>
-                  void (() => { const navigateDetailTabsArgs3: Parameters<typeof navigateDetailTabs>[0] = { event, currentStage: AccessChainStage.Vaults }; return navigateDetailTabs(navigateDetailTabsArgs3); })()}
-                >{vault.t(I18N_KEYS.DevicesAccessBridgeDetailVaults)}</button
-              >
-            </div>
-          </div>
-          <div
-            id={PANEL_CONTENT_ID}
-            class="mt-5"
-            role="tabpanel"
-            aria-labelledby={accessChainTabId(selectedStage)}
-          >
-            {#if selectedStage === AccessChainStage.Unlock}
-              <AccessUnlockPanel
-                {vault}
-                protection={view.protection}
-                passkeyName={view.passkeyName}
-                credentialId={view.credentialId}
-                userHandleId={view.userHandleId}
-                providerLabel={view.providerLabel}
-                createdAt={view.createdAt}
-                lastUsedAt={view.lastUsedAt}
-                attachment={view.attachment}
-                transports={view.transports}
-                backupState={view.backupState}
-                aaguid={view.aaguid}
-                observedBrowser={view.observedBrowser}
-                observedPlatform={view.observedPlatform}
-                bind:providerDraft
-                {providerSaveState}
-                onSaveProviderLabel={() => void saveProviderLabel()}
-                onProviderDraftInput={clearProviderSaveFailure}
-              />
-            {:else if selectedStage === AccessChainStage.DeviceKey}
-              <AccessDeviceKeyPanel
-                {vault}
-                protection={view.protection}
-                deviceId={view.deviceId}
-              />
-            {:else}
-              <AccessVaultsPanel
-                {vault}
-                vaults={view.vaults}
-                {onManageVaultDevices}
-                {onManageVaultPasswords}
-              />
-            {/if}
-          </div>
-        </div>
+        <DevicesAccessDetailPanel
+          {vault}
+          {view}
+          bind:selectedStage
+          bind:providerDraft
+          {providerSaveState}
+          onSaveProviderLabel={() => void saveProviderLabel()}
+          onProviderDraftInput={clearProviderSaveFailure}
+          {onManageVaultDevices}
+          {onManageVaultPasswords}
+        />
       {/if}
     </div>
   {/if}
 </section>
-
-<style>
-  .detail-tab {
-    min-width: 0;
-    min-height: 2.5rem;
-    flex: 1 1 0;
-    padding: 0.5rem 0.8rem;
-    color: var(--muted-foreground);
-    font-size: 0.75rem;
-    font-weight: 500;
-    line-height: 1.25;
-    overflow-wrap: anywhere;
-  }
-  .detail-tab.active {
-    background: var(--foreground);
-    color: var(--background);
-  }
-  .detail-tab:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
-  }
-</style>
