@@ -29,6 +29,25 @@ export type DashboardTimestamp =
   | { kind: typeof DashboardTimestampKind.NotYetObserved }
   | { kind: typeof DashboardTimestampKind.Known; value: string };
 
+export type DashboardView = {
+  protection: DeviceAccessProtectionKind;
+  identityState: DeviceAccessIdentityState;
+  deviceId: DashboardText;
+  credentialId: DashboardText;
+  userHandleId: DashboardText;
+  passkeyName: DashboardText;
+  providerLabel: DashboardText;
+  createdAt: DashboardTimestamp;
+  lastUsedAt: DashboardTimestamp;
+  attachment: NookPasskeyAttachmentState;
+  transports: PasskeyTransport[];
+  backupState: NookPasskeyBackupState;
+  aaguid: DashboardText;
+  observedBrowser: PasskeyObservedBrowser;
+  observedPlatform: PasskeyObservedPlatform;
+  vaults: VaultAccessView[];
+};
+
 export enum ProviderSaveKind {
   Idle = "idle",
   Saving = "saving",
@@ -158,3 +177,13 @@ export function parseDevicesAccessNudgePreference(
     ? DevicesAccessNudgePreference.Dismissed
     : DevicesAccessNudgePreference.Visible;
 }
+import type {
+  DeviceAccessIdentityState,
+  DeviceAccessProtectionKind,
+  NookPasskeyAttachmentState,
+  NookPasskeyBackupState,
+  PasskeyObservedBrowser,
+  PasskeyObservedPlatform,
+  PasskeyTransport,
+} from "$app-wasm";
+import type { VaultAccessView } from "./devices-access/access-chain";
