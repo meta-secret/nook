@@ -1,4 +1,5 @@
 use super::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ObserverCopy {
