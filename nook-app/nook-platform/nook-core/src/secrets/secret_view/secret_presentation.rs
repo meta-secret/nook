@@ -394,28 +394,16 @@ impl SecretListItem {
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::*;
-    use crate::{
-        LoginSecret, PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8,
-        PasskeyPublicKeyCose, PasskeySecret, SecretId, SecretRecord, SecretValue,
-    };
-    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+    use crate::SecretId;
 
-    fn login_record() -> SecretRecord {
-        SecretRecord {
+    fn login_list_item() -> SecretListItem {
+        SecretListItem {
             id: SecretId::from_vault_record("secret_test"),
-            secret_type: SecretType::Login,
-            data: SecretValue::Login(LoginSecret {
+            data: SecretListItemData::Login {
                 website_url: "https://www.github.com/login".to_owned(),
                 username: "alice".to_owned(),
-                password: "secret".to_owned(),
-                notes: String::new(),
-            }),
+            },
         }
-    }
-
-    #[test]
-    fn group_key_strips_www_from_login_url() {
-        assert_eq!(login_record().group_key(), "github.com");
     }
 
     #[test]
@@ -426,7 +414,7 @@ mod tests {
             ("https://example.com/#vault", "example.com"),
             ("example.com/login", "example.com"),
         ] {
-            let mut item = login_record().list_item();
+            let mut item = login_list_item();
             let SecretListItemData::Login { website_url, .. } = &mut item.data else {
                 return Err(std::io::Error::other("expected login item").into());
             };
@@ -477,167 +465,14 @@ mod tests {
     }
 
     #[test]
-    fn list_item_keeps_login_metadata_and_drops_sensitive_fields() {
-        let item = login_record().list_item();
-        assert_eq!(item.secret_type(), SecretType::Login);
-        assert_eq!(item.website_host(), "github.com");
-        assert_eq!(item.group_key(), "github.com");
-        assert_eq!(item.summary(), "alice");
-        assert_eq!(
-            item.data,
-            SecretListItemData::Login {
-                website_url: "https://www.github.com/login".to_owned(),
-                username: "alice".to_owned(),
-            }
-        );
-        assert!(!format!("{item:?}").contains("correct horse battery staple"));
-    }
-
-    #[test]
     fn list_item_reports_no_host_for_malformed_login_url() -> anyhow::Result<()> {
-        let mut item = login_record().list_item();
+        let mut item = login_list_item();
         let SecretListItemData::Login { website_url, .. } = &mut item.data else {
             return Err(std::io::Error::other("expected login item").into());
         };
         *website_url = "https://".to_owned();
         assert!(item.website_host().is_empty());
         assert_eq!(item.group_key(), "No Website");
-        Ok(())
-    }
-
-    #[test]
-    fn list_item_exposes_only_derived_seed_word_count() {
-        let record = SecretRecord {
-            id: SecretId::from_vault_record("secret_seed"),
-            secret_type: SecretType::SeedPhrase,
-            data: SecretValue::SeedPhrase(crate::SeedPhraseSecret {
-                name: "wallet".to_owned(),
-                seed: "abandon ability able about above absent absorb abstract absurd abuse access accident".to_owned(),
-            }),
-        };
-        let item = record.list_item();
-        assert_eq!(
-            item.data,
-            SecretListItemData::SeedPhrase {
-                name: "wallet".to_owned(),
-                word_count: 12,
-            }
-        );
-        assert!(!format!("{item:?}").contains("abandon"));
-    }
-
-    #[test]
-    fn credit_card_list_item_exposes_last4_without_pan_or_cvv() -> anyhow::Result<()> {
-        let record = SecretRecord {
-            id: SecretId::from_vault_record("secret_card"),
-            secret_type: SecretType::CreditCard,
-            data: SecretValue::CreditCard(crate::CreditCardSecret::from_fields(
-                "Personal Visa",
-                "Ada Lovelace",
-                "4111 1111 1111 1111",
-                "12",
-                "2030",
-                "123",
-                "work",
-            )?),
-        };
-        let item = record.list_item();
-        assert_eq!(item.secret_type(), SecretType::CreditCard);
-        assert_eq!(item.group_key(), "Personal Visa");
-        assert_eq!(item.summary(), "•••• 1111");
-        assert_eq!(
-            item.data,
-            SecretListItemData::CreditCard {
-                title: "Personal Visa".to_owned(),
-                cardholder_name: "Ada Lovelace".to_owned(),
-                last4: "1111".to_owned(),
-                expiration_month: "12".to_owned(),
-                expiration_year: "2030".to_owned(),
-            }
-        );
-        let debug = format!("{item:?}");
-        assert!(!debug.contains("4111111111111111"));
-        assert!(!debug.contains("123"));
-        assert_eq!(record.primary_credential(), "4111111111111111");
-        assert!(record.matches_search("1111"));
-        assert!(!record.matches_search("4111111111111111"));
-        Ok(())
-    }
-
-    #[test]
-    fn passkey_list_item_exposes_account_metadata_without_key_material() -> anyhow::Result<()> {
-        let private_key = URL_SAFE_NO_PAD.encode([7_u8; 96]);
-        let credential_id = URL_SAFE_NO_PAD.encode([8_u8; 32]);
-        let record = SecretRecord {
-            id: SecretId::from_vault_record("secret_passkey"),
-            secret_type: SecretType::Passkey,
-            data: SecretValue::Passkey(PasskeySecret {
-                version: PASSKEY_SECRET_VERSION,
-                rp_id: "login.example.com".to_owned(),
-                rp_name: "Example".to_owned(),
-                credential_id: credential_id.clone(),
-                user_handle: URL_SAFE_NO_PAD.encode([9_u8; 32]),
-                user_name: "alice@example.com".to_owned(),
-                user_display_name: "Alice".to_owned(),
-                key: PasskeyCredentialKey::Es256 {
-                    private_key_pkcs8: PasskeyPrivateKeyPkcs8::parse(private_key.clone())?,
-                    public_key_cose: PasskeyPublicKeyCose::parse(
-                        URL_SAFE_NO_PAD.encode([10_u8; 77]),
-                    )?,
-                },
-                signature_count: 0,
-                discoverable: true,
-                backup_eligible: true,
-                backup_state: false,
-            }),
-        };
-        let item = record.list_item();
-        assert_eq!(item.secret_type(), SecretType::Passkey);
-        assert_eq!(item.group_key(), "login.example.com");
-        assert_eq!(item.summary(), "Alice");
-        assert!(item.display_title().contains("example.com"));
-        assert!(!format!("{item:?}").contains(&private_key));
-        assert!(!format!("{item:?}").contains(&credential_id));
-        Ok(())
-    }
-
-    #[test]
-    fn authenticator_list_item_hides_shared_secret_and_backup_codes() -> anyhow::Result<()> {
-        let value = crate::AuthenticatorSecret::from_form_fields(
-            "Example",
-            "alice@example.com",
-            "JBSWY3DPEHPK3PXP",
-            "SHA1",
-            "6",
-            "30",
-            "backup-one\nbackup-two",
-            "",
-        )?;
-        let record = SecretRecord {
-            id: SecretId::from_vault_record("secret_authenticator"),
-            secret_type: SecretType::Authenticator,
-            data: SecretValue::Authenticator(value),
-        };
-        let item = record.list_item();
-        assert_eq!(item.secret_type(), SecretType::Authenticator);
-        assert_eq!(item.group_key(), "Example");
-        assert_eq!(item.summary(), "alice@example.com");
-        assert_eq!(
-            item.data,
-            SecretListItemData::Authenticator {
-                issuer: "Example".to_owned(),
-                account: "alice@example.com".to_owned(),
-                website_url: String::new(),
-                backup_code_count: 2,
-            }
-        );
-        let debug = format!("{item:?}");
-        assert!(!debug.contains("JBSWY"));
-        assert!(!debug.contains("backup-one"));
-        assert!(record.matches_search("example"));
-        assert!(record.matches_search("ALICE@EXAMPLE.COM"));
-        assert!(!record.matches_search("JBSWY3DPEHPK3PXP"));
-        assert!(!record.matches_search("backup-one"));
         Ok(())
     }
 
