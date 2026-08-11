@@ -256,6 +256,10 @@ jobs:
               core.setFailed(`Rejected agent-authored Workbench task plan: ${rejection}.`)
               return
             }
+            if (/^- Delivery shape:\s*Multiple PRs\b/im.test(candidate)) {
+              core.setFailed('Multi-PR feature plan requires materialized Workbench feature and focused issue records before implementation.')
+              return
+            }
             const plan = [
               '---',
               `title: ${JSON.stringify(process.env.TASK_TITLE)}`,

@@ -50,6 +50,12 @@ acceptance evidence. Identify the first or currently authorized slice
 separately. Its estimate must not exceed 5,000 authored changed lines. Use
 `None` when no public or cross-module interface changes.
 
+A multi-PR result does not authorize implementation.
+
+The feature summary and focused Workbench issues must be materialized first.
+The scheduled workflow will stop after publishing this plan until that
+hierarchy exists and a focused issue is dispatched.
+
 This repository is public. Do not quote, copy, or lightly reformat the source
 task. Do not include a raw prompt, transcript, conversational filler, secrets,
 credentials, vault or private user data, environment values, raw logs, local

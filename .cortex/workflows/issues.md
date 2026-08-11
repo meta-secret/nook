@@ -246,15 +246,28 @@ Do not rewrite the earlier plan.
 Use the checked-in publisher for interactive work:
 
 ```bash
-node .github/scripts/workbench-publish.cjs \
+NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \
+  node .github/scripts/workbench-publish.cjs \
   /absolute/path/to/local-plan.md \
   plans/<feature>/<timestamp>-<task>.md \
   "plan: start <task>"
 ```
 
+The source-task file stays outside the checkout.
+
+It lets the publisher reject copied prompt text.
+
+Do not publish that file.
+
 The scheduled implementation worker uses a dedicated planning LLM turn,
 validates and publishes the plan, and only then begins its implementation turn.
 A missing or rejected plan blocks implementation.
+
+A valid multi-PR plan also blocks scheduled implementation.
+
+Materialize its Workbench feature summary and focused issues first.
+
+Then dispatch the first focused issue with a bounded one-PR plan.
 
 ## Worklog requirement
 

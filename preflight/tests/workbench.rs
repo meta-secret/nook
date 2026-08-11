@@ -142,6 +142,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     let prompt = read(".github/prompts/agent-implement.md");
     let plan_prompt = read(".github/prompts/agent-plan.md");
     let ignore = read(".gitignore");
+    let workflow = read(".github/workflows/agent-implement.yml");
 
     for required in [
         ".nook-workbench-worklog.md",
@@ -195,6 +196,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     for required in [
         "validateAgentRecord",
         "remotePath.startsWith('plans/')",
+        "NOOK_WORKBENCH_SOURCE_TASK_FILE",
         "Refusing invalid Workbench plan",
     ] {
         assert!(
@@ -202,5 +204,9 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
             "interactive Workbench publisher is missing plan validation: {required}"
         );
     }
+    assert!(
+        workflow.contains("Multi-PR feature plan requires materialized Workbench feature"),
+        "scheduled automation must stop before implementing an unmaterialized multi-PR plan"
+    );
     Ok(())
 }

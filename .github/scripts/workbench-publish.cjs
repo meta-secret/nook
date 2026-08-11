@@ -12,6 +12,7 @@ const WorkbenchRemoteFileKind = Object.freeze({
 const repository =
   process.env.NOOK_WORKBENCH_REPOSITORY || 'meta-secret/nook-workbench'
 const expectedSha = process.env.NOOK_WORKBENCH_EXPECTED_SHA?.trim()
+const sourceTaskFile = process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE?.trim()
 const [localPath, remotePath, ...messageParts] = process.argv.slice(2)
 const message = messageParts.join(' ').trim()
 
@@ -31,10 +32,17 @@ if (
 
 const localContent = readFileSync(localPath, 'utf8')
 if (remotePath.startsWith('plans/')) {
-  const rejection = validateAgentRecord(localContent, 'plan')
+  if (!sourceTaskFile) {
+    console.error(
+      'Refusing Workbench plan without NOOK_WORKBENCH_SOURCE_TASK_FILE',
+    )
+    process.exit(6)
+  }
+  const sourceTask = readFileSync(sourceTaskFile, 'utf8')
+  const rejection = validateAgentRecord(localContent, 'plan', [], sourceTask)
   if (rejection) {
     console.error(`Refusing invalid Workbench plan: ${rejection}`)
-    process.exit(6)
+    process.exit(7)
   }
 }
 const content = Buffer.from(localContent).toString('base64')

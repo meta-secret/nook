@@ -46,7 +46,7 @@ const planBudgetFields = [
   },
   {
     label: 'PR slices and acceptance evidence',
-    pattern: /^- PR slices and acceptance evidence:\s*\S.+$/m,
+    pattern: /^- PR slices and acceptance evidence:\s*(?:\S.*)?$/m,
   },
 ]
 
@@ -165,6 +165,18 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     }
     if (/^one pr\b/i.test(deliveryShape) && estimate > 5_000) {
       return 'one-PR plan exceeds 5,000 authored changed lines'
+    }
+
+    const sequenceBody = candidate
+      .split(/^- PR slices and acceptance evidence:\s*/m)[1]
+      .split(/^## Initial plan$/m)[0]
+    if (/^multiple prs\b/i.test(deliveryShape)) {
+      const sliceCount = [...sequenceBody.matchAll(/^\d+\.\s+\S/gm)].length
+      if (sliceCount < 2) {
+        return 'multi-PR plan requires at least two ordered slices'
+      }
+    } else if (!sequenceBody.trim()) {
+      return 'one-PR plan requires slice acceptance evidence'
     }
   }
 

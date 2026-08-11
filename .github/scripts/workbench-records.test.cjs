@@ -148,7 +148,31 @@ test('accepts a bounded current slice for a multi-PR feature', () => {
       'Delivery shape: One PR completes the change',
       'Delivery shape: Multiple PRs complete the feature',
     )
+    .replace(
+      '- PR slices and acceptance evidence: One validator slice with contract tests',
+      '- PR slices and acceptance evidence:\n1. Validator schema with contract tests.\n2. Publisher adoption with integration evidence.',
+    )
   assert.equal(validateAgentRecord(multiPr, 'plan'), '')
+})
+
+test('rejects a multi-PR plan without an ordered sequence', () => {
+  const invalid = validPlan
+    .replace(
+      'Estimated authored changed lines: 240',
+      'Estimated authored changed lines: 6,000',
+    )
+    .replace(
+      'Delivery shape: One PR completes the change',
+      'Delivery shape: Multiple PRs complete the feature',
+    )
+    .replace(
+      'PR slices and acceptance evidence: One validator slice with contract tests',
+      'PR slices and acceptance evidence: None',
+    )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /multi-PR plan requires at least two ordered slices/,
+  )
 })
 
 test('rejects concrete workflow credentials', () => {
