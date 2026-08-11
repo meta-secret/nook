@@ -91,7 +91,7 @@ impl NookIdentitySnapshotLoad {
     }
 }
 
-#[wasm_bindgen(js_name = loadIdentitySnapshot)]
+#[wasm_bindgen]
 pub async fn load_identity_snapshot() -> Result<NookIdentitySnapshotLoad, wasm_bindgen::JsError> {
     let Some(record) = load_identity_record()
         .await

@@ -19,9 +19,9 @@ import {
   NookProviderSyncRevision,
   NookSyncConflictReview,
   NookVaultSyncAccessState,
-  readLocalVaultYaml,
+  read_local_vault_yaml,
   UnauthenticatedSyncDecision,
-  updateProviderSyncMetadata as updateProviderSyncMetadataWasm,
+  update_provider_sync_metadata,
 } from "$app-wasm";
 import {
   activeVaultScope,
@@ -75,7 +75,7 @@ export function applyVaultSyncResult({
     log.info("sync state changed (login gate)");
   }
 
-  const decision = state.clientPolicy.unauthenticatedSyncDecision(
+  const decision = state.clientPolicy.unauthenticated_sync_decision(
     result.changed,
     accessAssessed,
     accessStatus,
@@ -116,7 +116,9 @@ export async function hydrateMultiDeviceState(
       }
       const [mode, pat, repo] = state.providerWasmArgs(provider);
       const joins = (await state.enqueueStorage(() =>
-        state.requireManager().mergeRemoteJoinsFromProvider(mode, pat, repo),
+        state
+          .requireManager()
+          .merge_remote_joins_from_provider(mode, pat, repo),
       )) as JoinRequest[];
       if (joins.length > 0) {
         mergedJoins.push(...joins);
@@ -129,7 +131,7 @@ export async function hydrateMultiDeviceState(
     const snapshot = await state.enqueueStorage(async () => {
       await Promise.resolve();
       try {
-        await state.requireManager().ensureVaultRosterHydrated();
+        await state.requireManager().ensure_vault_roster_hydrated_js();
       } catch {
         // Roster repair is best-effort; still read the current session.
       }
@@ -165,7 +167,7 @@ export async function syncFromSyncProviders({
 }): Promise<void> {
   if (!state.hasManager) return;
   if (
-    !state.clientPolicy.shouldSyncFromProviders(
+    !state.clientPolicy.should_sync_from_providers(
       state.syncBlocked,
       options?.force ?? false,
       state.isVerifying,
@@ -319,7 +321,7 @@ export async function flushRemoteEventOutboxNow({
   if (target.kind === EventOutboxTargetKind.Unavailable) return;
   try {
     await state.enqueueStorage(() =>
-      state.requireManager().flushEventOutboxForProvider(...target.args),
+      state.requireManager().flush_event_outbox_for_provider(...target.args),
     );
   } catch {
     log.warn("event outbox flush skipped");
@@ -353,7 +355,7 @@ export async function updateProviderSyncMetadata({
             ? activeVaultScope(state.activeVault.storeId)
             : unselectedVaultScope(),
       };
-      state.providers = updateProviderSyncMetadataWasm(
+      state.providers = update_provider_sync_metadata(
         $state.snapshot(snapshotArgs),
         providerId,
         yaml,
@@ -454,7 +456,7 @@ export async function stageStagedProviderSyncIssue({
 }): Promise<boolean> {
   if (!state.hasManager) return false;
   const manager = state.requireManager();
-  const issueResult = manager.takeEventLogSyncIssue();
+  const issueResult = manager.take_event_log_sync_issue();
   if (issueResult.state === NookEventLogSyncIssueState.Clear) {
     issueResult.free();
     return false;
@@ -466,14 +468,14 @@ export async function stageStagedProviderSyncIssue({
     const localStoreId = issue.localStoreId;
     const remoteStoreId = issue.remoteStoreId;
 
-    const localYaml = await readLocalVaultYaml().catch(() => "");
+    const localYaml = await read_local_vault_yaml().catch(() => "");
     await state.enqueueStorage(() =>
-      manager.restoreLocalAfterProviderAssessment(),
+      manager.restore_local_after_provider_assessment(),
     );
     const revision = NookProviderSyncRevision.untracked();
     try {
       state.stageSyncConflict(
-        NookPendingSyncConflict.pendingStoreId(
+        NookPendingSyncConflict.pending_store_id(
           state.stagedProviderLabel(),
           localYaml,
           "",
@@ -504,8 +506,8 @@ export function startVaultSync(state: SyncActionsContext) {
   const syncIntervalConfig = import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS;
   const intervalMs =
     typeof syncIntervalConfig === "string"
-      ? state.runtimeConfig.resolveVaultSyncIntervalMs(syncIntervalConfig)
-      : state.runtimeConfig.resolveDefaultVaultSyncIntervalMs();
+      ? state.runtimeConfig.resolve_vault_sync_interval_ms(syncIntervalConfig)
+      : state.runtimeConfig.resolve_default_vault_sync_interval_ms();
   const needsRemoteUpdates =
     state.isAuthenticated ||
     state.joinEnrollmentPrompt !== JoinEnrollmentState.None ||
@@ -661,7 +663,7 @@ export async function manualSync(state: SyncActionsContext) {
   // vault crypto exists. Keep the device roster projection empty until a vault
   // or a connected sync provider exists.
   if (
-    !state.clientPolicy.manualSyncHasTarget(
+    !state.clientPolicy.manual_sync_has_target(
       state.localVaultPresent,
       state.syncProviders.length,
     )

@@ -2,18 +2,18 @@ import { companionWasmReady } from '../../../nook-web-shared/src/extension/compa
 
 void companionWasmReady
 import {
-  extractBackupCodeCandidates as wasmExtractBackupCodeCandidates,
-  pageHasBackupCodeHint as wasmPageHasBackupCodeHint,
+  extract_backup_code_candidates,
+  page_has_backup_code_hint,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export function pageHasBackupCodeHint(): boolean {
   const bodyText = document.body?.innerText ?? ''
-  return wasmPageHasBackupCodeHint(bodyText)
+  return page_has_backup_code_hint(bodyText)
 }
 
 export function extractBackupCodeCandidates(sourceText?: string): string[] {
   const text = sourceText ?? document.body?.innerText ?? ''
-  return wasmExtractBackupCodeCandidates(text)
+  return extract_backup_code_candidates(text)
 }
 
 export function clearBackupCodeCandidates(codes: string[]): void {

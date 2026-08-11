@@ -9,16 +9,16 @@ import type {
   NookVaultSyncResult,
 } from "$app-wasm";
 import {
-  authenticatorSetupKeyChanged,
-  defaultPasswordGenerationOptions,
+  authenticator_setup_key_changed,
+  default_password_generation_options,
   default as initNookWasm,
-  generateId,
+  generate_id,
   NookVaultManager as NookVaultManagerClass,
   NookSecretFormFields,
   SecretType,
-  buildSecretYaml as wasmBuildSecretYaml,
-  generatePassword,
-  generateSecretId,
+  build_secret_yaml,
+  generate_password,
+  generate_secret_id,
   VaultAccessStatus,
 } from "$app-wasm";
 import { createLogger, initWasmLogging } from "$lib/runtime/log";
@@ -40,11 +40,11 @@ export type {
   NookSecretFormFields,
 };
 export {
-  authenticatorSetupKeyChanged,
-  defaultPasswordGenerationOptions,
-  generateId,
-  generatePassword,
-  generateSecretId,
+  authenticator_setup_key_changed,
+  default_password_generation_options,
+  generate_id,
+  generate_password,
+  generate_secret_id,
   SecretType,
   VaultAccessStatus,
 };
@@ -110,14 +110,14 @@ const wasmLog = createLogger("wasm");
  * Pipe the wasm manager's status channel (e.g. `GITHUB_FETCH_START`,
  * `DECRYPT_SUCCESS`) into the persistent IndexedDB log at debug level.
  *
- * Uses the non-blocking `drainStatusLog` on an interval — the awaiting
+ * Uses the non-blocking `drain_status_log` on an interval — the awaiting
  * `next_status` variant would hold the wasm-bindgen borrow and deadlock
  * every `&mut self` manager call.
  */
 function drainWasmStatusIntoLog(manager: NookVaultManager) {
   setInterval(() => {
     try {
-      for (const status of manager.drainStatusLog()) {
+      for (const status of manager.drain_status_log()) {
         wasmLog.debug(status);
       }
     } catch {
@@ -129,7 +129,7 @@ function drainWasmStatusIntoLog(manager: NookVaultManager) {
 /** Build a validated YAML payload from a core-owned secret form variant. */
 export function buildSecretYaml(fields: NookSecretFormFields): string {
   try {
-    return wasmBuildSecretYaml(fields);
+    return build_secret_yaml(fields);
   } finally {
     fields.free();
   }

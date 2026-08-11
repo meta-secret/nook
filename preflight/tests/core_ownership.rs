@@ -237,7 +237,7 @@ fn remote_vault_recovery_requires_core_confirmed_connect_state() -> anyhow::Resu
             .join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/secrets.ts"),
     )?;
     assert!(
-        source.contains("remoteRecoveryConnectConfirmed("),
+        source.contains("remote_recovery_connect_confirmed("),
         "loadDb must ask Rust policy whether remote recovery was explicitly confirmed"
     );
     assert!(

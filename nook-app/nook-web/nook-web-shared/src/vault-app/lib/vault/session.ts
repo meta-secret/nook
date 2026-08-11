@@ -3,7 +3,7 @@ import {
   JoinEnrollmentState,
   SentinelGenesisPhase,
   SentinelVaultUnlockState,
-  setVaultSessionLocked,
+  set_vault_session_locked,
 } from "$app-wasm";
 import { VaultType } from "$lib/vault/architecture-model";
 import { createLogger } from "$lib/runtime/log";
@@ -21,7 +21,7 @@ export function resetVaultSessionState({
 }): void {
   if (resetManager && state.hasManager) {
     void state
-      .enqueueStorage(() => state.requireManager().resetVaultSession())
+      .enqueueStorage(() => state.requireManager().reset_vault_session())
       .catch(() => {
         // Engine may be tearing down.
       });
@@ -52,7 +52,7 @@ export function resetVaultSessionState({
 }
 
 export function markVaultUnlocked(state: SessionActionsContext): void {
-  setVaultSessionLocked(false);
+  set_vault_session_locked(false);
   state.isAuthenticated = true;
   state.awaitingJoinApproval = false;
   state.sessionExpiredByIdle = false;

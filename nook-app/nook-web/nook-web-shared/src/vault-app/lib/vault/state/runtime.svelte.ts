@@ -1,5 +1,5 @@
 import {
-  get_translation_catalog as getTranslationCatalog,
+  get_translation_catalog,
   NookBrowserLocale,
   NookClientRunModeUtil,
   NookRuntimeConfig,
@@ -17,7 +17,7 @@ export class VaultRuntimeState {
   );
 
   locale = $state<NookAppLocale>("en");
-  translations = $state(getTranslationCatalog("en"));
+  translations = $state(get_translation_catalog("en"));
 
   errorMsg = $state("");
   successMsg = $state("");

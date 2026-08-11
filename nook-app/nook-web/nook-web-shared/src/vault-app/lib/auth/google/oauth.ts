@@ -16,7 +16,7 @@ import type {
   StoredOAuthFileConfiguration,
 } from "$lib/auth/providers";
 import { configuredOAuthFile } from "$lib/auth/providers";
-import { googleOAuthTokensToConfig as googleOAuthTokensToConfigCore } from "$app-wasm";
+import { google_oauth_tokens_to_config } from "$app-wasm";
 import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/auth/google/config";
 
 const GIS_SCRIPT_URL = "https://accounts.google.com/gsi/client";
@@ -301,7 +301,7 @@ export function oauthTokensToConfig({
   readonly tokens: GoogleOAuthTokens;
   readonly existing: StoredOAuthFileConfiguration;
 }): OAuthFileConfig {
-  return googleOAuthTokensToConfigCore(
+  return google_oauth_tokens_to_config(
     tokens.accessToken,
     tokens.expiresAt,
     existing,

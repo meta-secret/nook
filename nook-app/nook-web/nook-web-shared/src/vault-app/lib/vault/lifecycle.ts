@@ -7,13 +7,13 @@ import {
   DeviceMode,
   DeviceProtectionDeviceModeState,
   DeviceProtectionStatus,
-  configuredVaultApplication,
-  hasActiveLocalVault,
+  configured_vault_application,
+  has_active_local_vault,
   NookAppLocaleParse,
-  parseAppLocale,
-  prepareNewLocalVaultSlot,
-  setActiveVault,
-  supportedAppLocaleCode,
+  parse_app_locale,
+  prepare_new_local_vault_slot,
+  set_active_vault,
+  supported_app_locale_code,
   type NookAppLocale,
   type NookVaultManager,
 } from "$app-wasm";
@@ -52,12 +52,12 @@ function savedAppLocale(): SavedAppLocale {
   if (!stored) {
     return { kind: SavedAppLocaleKind.Missing };
   }
-  const parsed = parseAppLocale(stored);
+  const parsed = parse_app_locale(stored);
   return parsed === NookAppLocaleParse.Unsupported
     ? { kind: SavedAppLocaleKind.Missing }
     : {
         kind: SavedAppLocaleKind.Supported,
-        locale: supportedAppLocaleCode(parsed) as NookAppLocale,
+        locale: supported_app_locale_code(parsed) as NookAppLocale,
       };
 }
 
@@ -68,7 +68,7 @@ export async function initOnce(state: VaultState): Promise<void> {
   if (!state.isVerifying) state.errorMsg = "";
   try {
     const localeState = savedAppLocale();
-    const browserLocale = state.browserLocale.appLocale() as NookAppLocale;
+    const browserLocale = state.browserLocale.app_locale() as NookAppLocale;
     const locale =
       localeState.kind === SavedAppLocaleKind.Supported
         ? localeState.locale
@@ -79,7 +79,7 @@ export async function initOnce(state: VaultState): Promise<void> {
     await state.updateLocale(initialLocaleArgs);
     await state.refreshLocalVaultCatalog();
     state.openManager(await getVaultManager());
-    const configuredApplication = configuredVaultApplication();
+    const configuredApplication = configured_vault_application();
     if (state.requireManager().vaultApplication !== configuredApplication) {
       const tArgs: Parameters<typeof state.t>[0] = {
         key: I18N_KEYS.AppCapabilityMismatch,
@@ -97,10 +97,10 @@ export async function initOnce(state: VaultState): Promise<void> {
     await state.updateLocale(updateLocaleArgs);
     state.deviceProtectionStatus = await state
       .requireManager()
-      .deviceProtectionStatus();
+      .device_protection_status();
     const persistedDeviceMode = await state
       .requireManager()
-      .deviceProtectionDeviceMode();
+      .device_protection_device_mode();
     if (persistedDeviceMode === DeviceProtectionDeviceModeState.Standard) {
       state.draftDeviceMode = DeviceMode.Standard;
     } else if (
@@ -193,11 +193,11 @@ export async function continueInitializationAfterDeviceUnlock(
   await state.initDeviceIdentity(initDeviceIdentityArgs);
   if (
     await state.enqueueStorage(() =>
-      state.requireManager().hasPendingSentinelGenesisFinalization(),
+      state.requireManager().has_pending_sentinel_genesis_finalization(),
     )
   ) {
     const rawResult = await state.enqueueStorage(() =>
-      state.requireManager().resumePendingSentinelGenesisFinalization(),
+      state.requireManager().resume_pending_sentinel_genesis_finalization(),
     );
     const applyFinalizeResultArgs: Parameters<
       typeof sentinelGenesisActions.applyFinalizeResult
@@ -216,9 +216,9 @@ export async function continueInitializationAfterDeviceUnlock(
     state.openActiveVault(state.localVaultCatalog.first.storeId);
   }
   if (state.activeVault.kind === ActiveVaultKind.Open) {
-    await setActiveVault(state.activeVault.storeId).catch(() => {});
+    await set_active_vault(state.activeVault.storeId).catch(() => {});
   }
-  state.localVaultPresent = await hasActiveLocalVault();
+  state.localVaultPresent = await has_active_local_vault();
   if (state.localVaultPresent) {
     state.storageMode = LOCAL_PROVIDER_TYPE;
     state.githubPat = "";
@@ -324,7 +324,7 @@ export async function authorizeWithExternalDeviceIdentity({
     return true;
   } catch {
     await state.enqueueStorage(() =>
-      state.requireManager().rollbackExtensionIdentityHandoff(),
+      state.requireManager().rollback_extension_identity_handoff(),
     );
     state.deviceId = "";
     state.devicePublicKey = "";
@@ -361,11 +361,11 @@ export async function createFreshVault(state: VaultState) {
     await state.initDeviceIdentity();
     const creatingAdditionalVault = state.localVaults.length > 0;
     if (creatingAdditionalVault) {
-      await prepareNewLocalVaultSlot();
+      await prepare_new_local_vault_slot();
     }
     const rawRecords = await state.enqueueStorage(async () => {
       if (creatingAdditionalVault) {
-        state.requireManager().resetVaultSession();
+        state.requireManager().reset_vault_session();
       }
       const connectPromise = state
         .requireManager()

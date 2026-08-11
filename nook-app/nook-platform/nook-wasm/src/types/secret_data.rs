@@ -42,7 +42,7 @@ impl NookSecretPage {
     }
 
     /// Transfer page-owned metadata items to JavaScript without cloning them.
-    #[wasm_bindgen(js_name = takeItems)]
+    #[wasm_bindgen]
     pub fn take_items(&mut self) -> Vec<NookSecretListItem> {
         std::mem::take(&mut self.items)
     }
@@ -89,7 +89,7 @@ impl NookImportResult {
     }
 }
 
-/// Variant-specific form payload for `buildSecretYaml`.
+/// Variant-specific form payload for `build_secret_yaml`.
 #[wasm_bindgen]
 pub struct NookSecretFormFields {
     pub(crate) inner: nook_core::SecretFormFields,
@@ -97,7 +97,7 @@ pub struct NookSecretFormFields {
 
 #[wasm_bindgen]
 impl NookSecretFormFields {
-    #[wasm_bindgen(js_name = login)]
+    #[wasm_bindgen]
     pub fn login(website_url: String, username: String, password: String, notes: String) -> Self {
         Self {
             inner: nook_core::SecretFormFields::Login(nook_core::LoginSecretForm {
@@ -109,7 +109,7 @@ impl NookSecretFormFields {
         }
     }
 
-    #[wasm_bindgen(js_name = apiKey)]
+    #[wasm_bindgen]
     pub fn api_key(website_url: String, key: String, expires_at: String) -> Self {
         Self {
             inner: nook_core::SecretFormFields::ApiKey(nook_core::ApiKeySecretForm {
@@ -120,7 +120,7 @@ impl NookSecretFormFields {
         }
     }
 
-    #[wasm_bindgen(js_name = seedPhrase)]
+    #[wasm_bindgen]
     pub fn seed_phrase(name: String, seed: String) -> Self {
         Self {
             inner: nook_core::SecretFormFields::SeedPhrase(nook_core::SeedPhraseSecretForm {
@@ -130,7 +130,7 @@ impl NookSecretFormFields {
         }
     }
 
-    #[wasm_bindgen(js_name = secureNote)]
+    #[wasm_bindgen]
     pub fn secure_note(title: String, note: String) -> Self {
         Self {
             inner: nook_core::SecretFormFields::SecureNote(nook_core::SecureNoteSecretForm {
@@ -140,7 +140,7 @@ impl NookSecretFormFields {
         }
     }
 
-    #[wasm_bindgen(js_name = authenticator)]
+    #[wasm_bindgen]
     #[allow(clippy::too_many_arguments)]
     pub fn authenticator(
         issuer: String,
@@ -166,7 +166,7 @@ impl NookSecretFormFields {
         }
     }
 
-    #[wasm_bindgen(js_name = creditCard)]
+    #[wasm_bindgen]
     #[allow(clippy::too_many_arguments)]
     pub fn credit_card(
         title: String,
@@ -190,7 +190,7 @@ impl NookSecretFormFields {
         }
     }
 
-    #[wasm_bindgen(js_name = fileAttachment)]
+    #[wasm_bindgen]
     pub fn file_attachment(
         title: String,
         file_name: String,

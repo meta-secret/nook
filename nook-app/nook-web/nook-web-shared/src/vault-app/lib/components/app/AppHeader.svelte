@@ -2,8 +2,8 @@
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { ArrowLeft, BookOpen, Lock, Moon, Sun } from '@lucide/svelte'
   import {
-    configuredVaultApplicationIsSentinel,
-    simpleVaultAppUrl,
+    configured_vault_application_is_sentinel,
+    simple_vault_app_url,
   } from '$app-wasm'
   import HeaderLanguageSelect from '$lib/components/HeaderLanguageSelect.svelte'
   import NookLogo from '$lib/components/NookLogo.svelte'
@@ -13,8 +13,8 @@
   import { ColorMode } from '$lib/app/theme'
   import type { VaultState } from '$lib/vault.svelte'
 
-  const IS_SENTINEL_APP = configuredVaultApplicationIsSentinel()
-  const SIMPLE_VAULT_APP_URL = simpleVaultAppUrl(
+  const IS_SENTINEL_APP = configured_vault_application_is_sentinel()
+  const SIMPLE_VAULT_APP_URL = simple_vault_app_url(
     import.meta.env.VITE_SIMPLE_APP_URL || '',
   )
 

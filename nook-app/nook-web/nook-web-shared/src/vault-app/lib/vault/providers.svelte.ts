@@ -1,7 +1,7 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 /** Provider actions that snapshot reactive Svelte state at WASM boundaries. */
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
-import { generateId, isoTimestamp, type VaultAccessStatus } from "$lib/nook";
+import { generate_id, isoTimestamp, type VaultAccessStatus } from "$lib/nook";
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
   DEFAULT_GITHUB_REPO,
@@ -55,30 +55,30 @@ import {
 } from "$lib/auth/providers";
 import { NookDuplicateSyncProviderState } from "$app-wasm";
 import {
-  authenticatedVaultStorageArgs,
-  draftGithubStorageArgs,
-  draftLocalStorageArgs,
-  draftOauthStorageArgs,
-  ensureLocalProviderRow as ensureLocalProviderRowWasm,
-  hasGithubCredentials,
-  hasLocalVault,
-  hasLocalFolderCredentials,
-  hasOAuthCredentials,
+  authenticated_vault_storage_args,
+  draft_github_storage_args,
+  draft_local_storage_args,
+  draft_oauth_storage_args,
+  ensure_local_provider_row,
+  has_github_credentials,
+  has_local_vault,
+  has_local_folder_credentials,
+  has_oauth_credentials,
   NookOAuthRemoteConfigurationUpdateState,
   NookStagedStorageArgsState,
-  providerWasmArgs as providerWasmArgsCore,
-  removeLocalFolderHandle,
+  provider_wasm_args,
+  remove_local_folder_handle,
   RemoteVaultAssessDecision,
   RemoteVaultRecoveryState,
-  stagedConfiguredOauthProviderLabel,
-  stagedGithubProviderLabel,
-  stagedLocalProviderLabel,
-  stagedGithubRemoteStorageArgs,
-  stagedLocalRemoteStorageArgs,
-  stagedOauthRemoteStorageArgs,
-  stagedUnconfiguredOauthProviderLabel,
-  updateOauthRemoteRef,
-  localVaultStorageArgs,
+  staged_configured_oauth_provider_label,
+  staged_github_provider_label,
+  staged_local_provider_label,
+  staged_github_remote_storage_args,
+  staged_local_remote_storage_args,
+  staged_oauth_remote_storage_args,
+  staged_unconfigured_oauth_provider_label,
+  update_oauth_remote_ref,
+  local_vault_storage_args,
   type NookStorageConnectArgs,
 } from "$app-wasm";
 import { createLogger } from "$lib/runtime/log";
@@ -156,16 +156,16 @@ export function wasmStorageArgs(
 ): [string, string, string] {
   const syncProvider = syncProviders(state)[0];
   if (state.localVaultPresent) {
-    return takeStorageArgsTuple(localVaultStorageArgs());
+    return takeStorageArgsTuple(local_vault_storage_args());
   }
   if (state.isAuthenticated && syncProvider) {
     return takeStorageArgsTuple(
-      authenticatedVaultStorageArgs($state.snapshot(syncProvider)),
+      authenticated_vault_storage_args($state.snapshot(syncProvider)),
     );
   }
   if (state.storageMode === GITHUB_PROVIDER_TYPE) {
     return takeStorageArgsTuple(
-      draftGithubStorageArgs(state.githubPat, state.githubRepo),
+      draft_github_storage_args(state.githubPat, state.githubRepo),
     );
   }
   if (
@@ -173,16 +173,16 @@ export function wasmStorageArgs(
     state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
   ) {
     return takeStorageArgsTuple(
-      draftOauthStorageArgs($state.snapshot(state.oauthFileDraft.config)),
+      draft_oauth_storage_args($state.snapshot(state.oauthFileDraft.config)),
     );
   }
-  return takeStorageArgsTuple(draftLocalStorageArgs());
+  return takeStorageArgsTuple(draft_local_storage_args());
 }
 
 export function providerWasmArgs(
   provider: StorageProvider,
 ): [string, string, string] {
-  return takeStorageArgsTuple(providerWasmArgsCore($state.snapshot(provider)));
+  return takeStorageArgsTuple(provider_wasm_args($state.snapshot(provider)));
 }
 
 export function connectStorageArgs(
@@ -197,7 +197,7 @@ export function connectStorageArgs(
 export function shouldUseJoinProviderForConnect(
   state: ProviderActionsContext,
 ): boolean {
-  return state.clientPolicy.shouldUseJoinProviderForConnect(
+  return state.clientPolicy.should_use_join_provider_for_connect(
     state.isAuthenticated,
     syncProviders(state).length,
     state.joinEnrollmentPrompt,
@@ -210,13 +210,13 @@ export function stagedRemoteStorageArgs(
   const type = stagedProviderType(state);
   const staged =
     type === GITHUB_PROVIDER_TYPE
-      ? stagedGithubRemoteStorageArgs(state.githubPat, state.githubRepo)
+      ? staged_github_remote_storage_args(state.githubPat, state.githubRepo)
       : type === OAUTH_FILE_PROVIDER_TYPE &&
           state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-        ? stagedOauthRemoteStorageArgs(
+        ? staged_oauth_remote_storage_args(
             $state.snapshot(state.oauthFileDraft.config),
           )
-        : stagedLocalRemoteStorageArgs();
+        : staged_local_remote_storage_args();
   try {
     return staged.state === NookStagedStorageArgsState.Ready
       ? {
@@ -232,13 +232,13 @@ export function stagedRemoteStorageArgs(
 export function stagedProviderLabel(state: ProviderActionsContext): string {
   const providerType = stagedProviderType(state);
   if (providerType === "github") {
-    return stagedGithubProviderLabel(state.githubRepo);
+    return staged_github_provider_label(state.githubRepo);
   }
   if (providerType === "oauth-file") {
     if (state.oauthFileDraft.kind === OAuthFileDraftKind.Configured) {
       const oauthFile = state.oauthFileDraft.config;
       const remoteFileName = oauthFileName(oauthFile);
-      return stagedConfiguredOauthProviderLabel(
+      return staged_configured_oauth_provider_label(
         remoteFileName.kind === OAuthFileNameKind.Resolved
           ? remoteFileName.fileName
           : DEFAULT_DRIVE_BACKUP_NAME,
@@ -246,10 +246,13 @@ export function stagedProviderLabel(state: ProviderActionsContext): string {
       );
     }
     return state.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
-      ? stagedConfiguredOauthProviderLabel("", state.oauthSetupSelection.preset)
-      : stagedUnconfiguredOauthProviderLabel();
+      ? staged_configured_oauth_provider_label(
+          "",
+          state.oauthSetupSelection.preset,
+        )
+      : staged_unconfigured_oauth_provider_label();
   }
-  return stagedLocalProviderLabel(providerType);
+  return staged_local_provider_label(providerType);
 }
 
 export function hasRemoteProviderCredentials(
@@ -264,19 +267,19 @@ export function hasRemoteProviderCredentials(
       ? localFolderHandle(state.localFolderDraft.config)
       : { kind: LocalFolderHandleKind.Unselected };
   if (state.storageMode === GITHUB_PROVIDER_TYPE) {
-    return hasGithubCredentials(state.githubPat);
+    return has_github_credentials(state.githubPat);
   }
   if (
     state.storageMode === OAUTH_FILE_PROVIDER_TYPE &&
     oauthCredential.kind === OAuthAccessTokenKind.Available
   ) {
-    return hasOAuthCredentials(oauthCredential.token);
+    return has_oauth_credentials(oauthCredential.token);
   }
   if (
     state.storageMode === LOCAL_FOLDER_PROVIDER_TYPE &&
     folderHandle.kind === LocalFolderHandleKind.Selected
   ) {
-    return hasLocalFolderCredentials(folderHandle.handleId);
+    return has_local_folder_credentials(folderHandle.handleId);
   }
   return state.storageMode === LOCAL_PROVIDER_TYPE;
 }
@@ -291,7 +294,7 @@ export function syncOAuthRemoteRefFromManager(
   ) {
     return;
   }
-  const updated = updateOauthRemoteRef(
+  const updated = update_oauth_remote_ref(
     $state.snapshot(state.oauthFileDraft.config),
     state.requireManager().storage_remote_ref ?? "",
   );
@@ -338,7 +341,7 @@ export async function handleRemoteVaultAssessStatus({
   readonly state: ProviderActionsContext;
   readonly accessStatus: VaultAccessStatus;
 }): Promise<boolean> {
-  const decision = state.clientPolicy.remoteVaultAssessDecision(
+  const decision = state.clientPolicy.remote_vault_assess_decision(
     accessStatus,
     state.loginRequiresExistingVault,
     state.loginSetup.kind === LoginSetupKind.Active,
@@ -402,8 +405,8 @@ export async function loadProviders({
 }) {
   const snapshot = await state.enqueueStorage(() =>
     options?.ensureLocalRow
-      ? state.requireManager().loadAuthProvidersWithLocalRow()
-      : state.requireManager().loadAuthProviders(),
+      ? state.requireManager().load_auth_providers_with_local_row()
+      : state.requireManager().load_auth_providers_snapshot(),
   );
   state.providers = snapshot.providers.map((p) =>
     p.label === "GitHub sync" ? { ...p, label: "GitHub" } : p,
@@ -419,7 +422,9 @@ export async function promoteSessionVaultToLocalIfNeeded(
   state: ProviderActionsContext,
 ): Promise<void> {
   const ensureLocalAuthProviderSnapshotArgs: Parameters<
-    ReturnType<typeof state.requireManager>["ensureLocalAuthProviderSnapshot"]
+    ReturnType<
+      typeof state.requireManager
+    >["ensure_local_auth_provider_snapshot"]
   >[0] = {
     providers: state.providers,
     activeVaultStoreId:
@@ -429,7 +434,7 @@ export async function promoteSessionVaultToLocalIfNeeded(
   };
   const snapshot = await state
     .requireManager()
-    .ensureLocalAuthProviderSnapshot(ensureLocalAuthProviderSnapshotArgs);
+    .ensure_local_auth_provider_snapshot(ensureLocalAuthProviderSnapshotArgs);
   if (snapshot.providers.length !== state.providers.length) {
     state.providers = snapshot.providers;
     await state.enqueueStorage(() =>
@@ -442,7 +447,7 @@ export async function promoteSessionVaultToLocalIfNeeded(
       })(),
     );
   }
-  state.localVaultPresent = await hasLocalVault();
+  state.localVaultPresent = await has_local_vault();
   if (state.localVaultPresent) {
     state.storageMode = LOCAL_PROVIDER_TYPE;
     state.githubPat = "";
@@ -529,7 +534,7 @@ export async function persistProviders({
 }) {
   if (!opts?.replace && state.localVaultPresent) {
     const snapshot = await state.enqueueStorage(() =>
-      state.requireManager().loadAuthProviders(),
+      state.requireManager().load_auth_providers_snapshot(),
     );
     const memoryIds = state.providers.map((p) => p.id);
     const extraSync = snapshot.providers.filter(
@@ -663,7 +668,7 @@ export async function removeProvider({
   ) {
     const folderHandle = localFolderHandle(folderConfiguration.config);
     if (folderHandle.kind === LocalFolderHandleKind.Selected) {
-      await removeLocalFolderHandle(folderHandle.handleId);
+      await remove_local_folder_handle(folderHandle.handleId);
     }
   }
   state.providers = state.providers.filter((p) => p.id !== id);
@@ -737,7 +742,7 @@ export async function ensureProviderSaved(
       };
       provider = {
         ...providerPersistenceDefaults(),
-        id: generateId(),
+        id: generate_id(),
         type,
         label: providerDefaultLabel(providerDefaultLabelArgs),
         githubPat: storedGithubPat(pat),
@@ -767,7 +772,7 @@ export async function ensureProviderSaved(
       };
       provider = {
         ...providerPersistenceDefaults(),
-        id: generateId(),
+        id: generate_id(),
         type,
         label: providerDefaultLabel(providerDefaultLabelArgs2),
         oauthFile: configuredOAuthFile(oauthFile),
@@ -791,7 +796,7 @@ export async function ensureProviderSaved(
       };
       provider = {
         ...providerPersistenceDefaults(),
-        id: generateId(),
+        id: generate_id(),
         type,
         label: providerDefaultLabel(providerDefaultLabelArgs3),
         localFolder: configuredLocalFolder(localFolder),
@@ -826,7 +831,7 @@ export async function ensureProviderSaved(
   ) {
     const provider: StorageProvider = {
       ...providerPersistenceDefaults(),
-      id: generateId(),
+      id: generate_id(),
       type: "local",
       label: (() => {
         const labelArgs: Parameters<typeof providerDefaultLabel>[0] = {
@@ -851,12 +856,12 @@ export async function ensureProviderSaved(
     );
   } else if (vaultStoreId.kind === ProviderSaveStoreIdKind.Available) {
     const ensureLocalProviderRowWasmArgs: Parameters<
-      typeof ensureLocalProviderRowWasm
+      typeof ensure_local_provider_row
     >[0] = {
       providers: state.providers,
       activeVaultStoreId: activeVaultScope(vaultStoreId.storeId),
     } as AuthProvidersSnapshot;
-    const snapshot = ensureLocalProviderRowWasm(
+    const snapshot = ensure_local_provider_row(
       ensureLocalProviderRowWasmArgs,
       vaultStoreId.storeId,
     );

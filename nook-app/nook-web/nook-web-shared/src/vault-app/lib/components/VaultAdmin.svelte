@@ -194,7 +194,7 @@
   function buildDrafts() {
     const next: Record<string, string> = {}
     for (const entry of vaults) {
-      next[entry.storeId] = entry.displayLabel(
+      next[entry.storeId] = entry.display_label(
         vault.t(I18N_KEYS.LoginVaultPickerUnnamed),
       )
     }
@@ -214,7 +214,7 @@
   function draftFor(entry: NookLocalVaultEntry) {
     return (
       drafts[entry.storeId] ??
-      entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
+      entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
     )
   }
 
@@ -227,13 +227,13 @@
     return (
       !isBusy &&
       draft.length > 0 &&
-      draft !== entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
+      draft !== entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
     )
   }
 
   function beginRename(entry: NookLocalVaultEntry) {
     if (isBusy) return
-    const setDraftArgs: Parameters<typeof setDraft>[0] = { entry, value: entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)) };
+    const setDraftArgs: Parameters<typeof setDraft>[0] = { entry, value: entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)) };
     setDraft(setDraftArgs)
     editingStoreId = {
       kind: VaultLabelEditorKind.Editing,
@@ -242,7 +242,7 @@
   }
 
   function cancelRename(entry: NookLocalVaultEntry) {
-    const setDraftArgs2: Parameters<typeof setDraft>[0] = { entry, value: entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)) };
+    const setDraftArgs2: Parameters<typeof setDraft>[0] = { entry, value: entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)) };
     setDraft(setDraftArgs2)
     if (
       editingStoreId.kind === VaultLabelEditorKind.Editing &&
@@ -414,7 +414,7 @@
                   data-store-id={entry.storeId}
                 >
                   <span class="truncate text-sm font-medium text-foreground">
-                    {entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))}
+                    {entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))}
                   </span>
                 </div>
               {/if}

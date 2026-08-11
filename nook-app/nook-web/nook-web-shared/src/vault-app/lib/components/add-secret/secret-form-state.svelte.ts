@@ -1,13 +1,13 @@
 import {
-  authenticatorSetupKeyChanged,
-  defaultPasswordGenerationOptions,
+  authenticator_setup_key_changed,
+  default_password_generation_options,
   SecretType,
 } from "$lib/nook";
 import type { NookSecretRecord } from "$lib/nook";
 import { NookSecretFormFields } from "$app-wasm";
 import { SecretEditorKind, type SecretEditor } from "../secret-vault-state";
 
-const passwordGenerationDefaults = defaultPasswordGenerationOptions();
+const passwordGenerationDefaults = default_password_generation_options();
 
 export class SecretFormState {
   showPasswordOptions = $state(false);
@@ -112,14 +112,14 @@ export class SecretFormState {
       );
     }
     if (selectedType === SecretType.ApiKey) {
-      return NookSecretFormFields.apiKey(
+      return NookSecretFormFields.api_key(
         this.websiteUrl.trim(),
         this.apiKey,
         this.expiresAt,
       );
     }
     if (selectedType === SecretType.SeedPhrase) {
-      return NookSecretFormFields.seedPhrase(
+      return NookSecretFormFields.seed_phrase(
         this.accountName.trim(),
         this.seedPhrase.trim(),
       );
@@ -128,7 +128,7 @@ export class SecretFormState {
       const setupKeyChanged =
         editor.kind === SecretEditorKind.Editing &&
         editor.record.type === SecretType.Authenticator &&
-        authenticatorSetupKeyChanged(
+        authenticator_setup_key_changed(
           editor.record.totpSecret,
           this.authenticatorSecret,
         );
@@ -144,7 +144,7 @@ export class SecretFormState {
       );
     }
     if (selectedType === SecretType.CreditCard) {
-      return NookSecretFormFields.creditCard(
+      return NookSecretFormFields.credit_card(
         this.cardTitle.trim(),
         this.cardholderName.trim(),
         this.cardNumber.trim(),
@@ -155,7 +155,7 @@ export class SecretFormState {
       );
     }
     if (selectedType === SecretType.FileAttachment) {
-      return NookSecretFormFields.fileAttachment(
+      return NookSecretFormFields.file_attachment(
         this.fileTitle.trim() || this.fileName.trim(),
         this.fileName.trim(),
         this.fileMimeType.trim() || "application/octet-stream",
@@ -163,7 +163,7 @@ export class SecretFormState {
         this.fileContentBase64,
       );
     }
-    return NookSecretFormFields.secureNote(
+    return NookSecretFormFields.secure_note(
       this.noteTitle.trim(),
       this.noteBody,
     );

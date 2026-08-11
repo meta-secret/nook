@@ -44,20 +44,20 @@ impl NookBrowserLocale {
         }
     }
 
-    #[wasm_bindgen(js_name = fromTags)]
+    #[wasm_bindgen]
     pub fn from_tags(tags: Vec<String>) -> Self {
         Self {
             language_tags: tags,
         }
     }
 
-    #[wasm_bindgen(js_name = languageTags)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn language_tags(&self) -> Vec<String> {
         self.language_tags.clone()
     }
 
-    #[wasm_bindgen(js_name = appLocale)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn app_locale(&self) -> String {
         nook_core::resolve_app_locale_from_tags(self.language_tags.iter().map(String::as_str))
@@ -187,7 +187,7 @@ pub struct NookVaultClientPolicy;
 
 #[wasm_bindgen]
 impl NookVaultClientPolicy {
-    #[wasm_bindgen(js_name = manualSyncHasTarget)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn manual_sync_has_target(
         &self,
@@ -200,7 +200,7 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = remoteRecoveryPromptVisible)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn remote_recovery_prompt_visible(
         &self,
@@ -209,7 +209,7 @@ impl NookVaultClientPolicy {
         nook_core::VaultClientPolicy::remote_recovery_prompt_visible(state)
     }
 
-    #[wasm_bindgen(js_name = remoteRecoveryPromptHasCache)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn remote_recovery_prompt_has_cache(
         &self,
@@ -218,7 +218,7 @@ impl NookVaultClientPolicy {
         nook_core::VaultClientPolicy::remote_recovery_prompt_has_cache(state)
     }
 
-    #[wasm_bindgen(js_name = remoteRecoveryConnectConfirmed)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn remote_recovery_connect_confirmed(
         &self,
@@ -233,7 +233,7 @@ impl NookVaultClientPolicy {
         Self
     }
 
-    #[wasm_bindgen(js_name = editBlockReason)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn edit_block_reason(
         &self,
@@ -248,7 +248,7 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = editsBlocked)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn edits_blocked(
         &self,
@@ -263,7 +263,7 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = editBlockMessage)]
+    #[wasm_bindgen]
     pub fn edit_block_message(
         &self,
         security_conflict_count: u32,
@@ -282,7 +282,7 @@ impl NookVaultClientPolicy {
         .ok_or_else(|| wasm_bindgen::JsError::new("blocked vault edit decision requires a message"))
     }
 
-    #[wasm_bindgen(js_name = isSyncActivityVisible)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn is_sync_activity_visible(
         &self,
@@ -299,7 +299,7 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = shouldUseJoinProviderForConnect)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn should_use_join_provider_for_connect(
         &self,
@@ -314,7 +314,7 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = shouldSyncFromProviders)]
+    #[wasm_bindgen]
     #[must_use]
     #[allow(clippy::too_many_arguments)]
     pub fn should_sync_from_providers(
@@ -338,7 +338,7 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = shouldAutoUnlock)]
+    #[wasm_bindgen]
     #[must_use]
     #[allow(clippy::too_many_arguments)]
     pub fn should_auto_unlock(
@@ -360,7 +360,7 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = existingVaultIdentityRecoveryRequired)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn existing_vault_identity_recovery_required(
         &self,
@@ -375,7 +375,7 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = shouldShowLoginVaultPicker)]
+    #[wasm_bindgen]
     #[must_use]
     #[allow(clippy::too_many_arguments)]
     pub fn should_show_login_vault_picker(
@@ -397,7 +397,7 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = remoteVaultAssessDecision)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn remote_vault_assess_decision(
         &self,
@@ -412,7 +412,7 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = unauthenticatedSyncDecision)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn unauthenticated_sync_decision(
         &self,
@@ -434,7 +434,7 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = shouldAutoConnectAfterApproval)]
+    #[wasm_bindgen]
     #[must_use]
     #[allow(clippy::too_many_arguments)]
     pub fn should_auto_connect_after_approval(
@@ -454,7 +454,7 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = normalizedSecretPageOffset)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn normalized_secret_page_offset(
         &self,
@@ -469,7 +469,7 @@ impl NookVaultClientPolicy {
         )
     }
 
-    #[wasm_bindgen(js_name = vaultSwitchTarget)]
+    #[wasm_bindgen]
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
     pub fn vault_switch_target(
@@ -565,54 +565,54 @@ impl NookRuntimeConfig {
         self.policy.allow_fast_idle()
     }
 
-    #[wasm_bindgen(js_name = allowFastSync)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn allow_fast_sync(&self) -> bool {
         self.policy.allow_fast_sync()
     }
 
-    #[wasm_bindgen(js_name = exposeDebugHooks)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn expose_debug_hooks(&self) -> bool {
         self.policy.expose_debug_hooks()
     }
 
-    #[wasm_bindgen(js_name = resolveVaultIdleTimeoutMs)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: &str) -> u32 {
         self.policy
             .resolve_vault_idle_timeout_ms(nook_core::RuntimeConfigValue::Set(raw_timeout_ms))
     }
 
-    #[wasm_bindgen(js_name = resolveDefaultVaultIdleTimeoutMs)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn resolve_default_vault_idle_timeout_ms(&self) -> u32 {
         self.policy
             .resolve_vault_idle_timeout_ms(nook_core::RuntimeConfigValue::Unset)
     }
 
-    #[wasm_bindgen(js_name = resolveVaultIdleWarningMs)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn resolve_vault_idle_warning_ms(&self, raw_warning_ms: &str) -> u32 {
         self.policy
             .resolve_vault_idle_warning_ms(nook_core::RuntimeConfigValue::Set(raw_warning_ms))
     }
 
-    #[wasm_bindgen(js_name = resolveDefaultVaultIdleWarningMs)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn resolve_default_vault_idle_warning_ms(&self) -> u32 {
         self.policy
             .resolve_vault_idle_warning_ms(nook_core::RuntimeConfigValue::Unset)
     }
 
-    #[wasm_bindgen(js_name = resolveVaultSyncIntervalMs)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn resolve_vault_sync_interval_ms(&self, raw_interval_ms: &str) -> u32 {
         self.policy
             .resolve_vault_sync_interval_ms(nook_core::RuntimeConfigValue::Set(raw_interval_ms))
     }
 
-    #[wasm_bindgen(js_name = resolveDefaultVaultSyncIntervalMs)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn resolve_default_vault_sync_interval_ms(&self) -> u32 {
         self.policy

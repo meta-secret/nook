@@ -1,12 +1,12 @@
 import type { Page, Worker } from '@playwright/test'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
-  classifyExtensionPersistenceDatabases,
+  classify_extension_persistence_databases,
   ExtensionPersistenceArea,
   ExtensionPersistenceDatabaseState,
   type ExtensionPersistenceObservation,
-  extensionPersistenceDatabaseName,
-  matchingExtensionPersistenceStores,
+  extension_persistence_database_name,
+  matching_extension_persistence_stores,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type ExtensionExecutionScope = Page | Worker
@@ -42,7 +42,7 @@ async function observedDatabaseNames(
 async function observedStoreNames(
   args: IndexedDbSnapshotArgs,
 ): Promise<string[]> {
-  const databaseName = extensionPersistenceDatabaseName(args.area)
+  const databaseName = extension_persistence_database_name(args.area)
   return args.scope.evaluate(async (name) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open(name)
@@ -67,7 +67,7 @@ async function readDatabaseSnapshot(
     observedNames: databaseNames,
   }
   const databaseState =
-    classifyExtensionPersistenceDatabases(databaseObservation)
+    classify_extension_persistence_databases(databaseObservation)
   if (databaseState === ExtensionPersistenceDatabaseState.Absent) {
     return 'database:absent'
   }
@@ -77,11 +77,11 @@ async function readDatabaseSnapshot(
     area: args.area,
     observedNames: stores,
   }
-  const storeNames = matchingExtensionPersistenceStores(storeObservation)
+  const storeNames = matching_extension_persistence_stores(storeObservation)
   if (storeNames.length === 0) return 'stores:absent'
 
   const readArgs: IndexedDbReadArgs = {
-    databaseName: extensionPersistenceDatabaseName(args.area),
+    databaseName: extension_persistence_database_name(args.area),
     storeNames,
   }
   return args.scope.evaluate(async (input) => {

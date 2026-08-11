@@ -1,7 +1,7 @@
 import {
-  buildEnrollmentLink as buildEnrollmentLinkCore,
-  configuredVaultApplication,
-  normalizeEnrollmentCode,
+  build_enrollment_link,
+  configured_vault_application,
+  normalize_enrollment_code,
   VaultApplication,
 } from "$app-wasm";
 
@@ -54,14 +54,14 @@ export function getEnrollmentLinkBase(): string {
   const configured = import.meta.env.VITE_PUBLIC_APP_URL?.trim();
   if (configured) {
     const enrollmentAppRootUrlArgs: Parameters<typeof enrollmentAppRootUrl>[0] =
-      { siteRoot: configured, appKind: configuredVaultApplication() };
+      { siteRoot: configured, appKind: configured_vault_application() };
     return enrollmentAppRootUrl(enrollmentAppRootUrlArgs);
   }
   const basePath = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
   const enrollmentAppRootUrlArgs2: Parameters<typeof enrollmentAppRootUrl>[0] =
     {
       siteRoot: `${window.location.origin}${basePath}`,
-      appKind: configuredVaultApplication(),
+      appKind: configured_vault_application(),
     };
   return enrollmentAppRootUrl(enrollmentAppRootUrlArgs2);
 }
@@ -74,7 +74,7 @@ export function buildEnrollmentLink({
   readonly code: string;
   readonly baseUrl: string;
 }): string {
-  return buildEnrollmentLinkCore(code, baseUrl);
+  return build_enrollment_link(code, baseUrl);
 }
 
 /**
@@ -103,7 +103,7 @@ export function consumeEnrollmentFromLocation(): EnrollmentLocation {
   );
   return {
     kind: EnrollmentLocationKind.Consumed,
-    payload: normalizeEnrollmentCode(raw.code),
+    payload: normalize_enrollment_code(raw.code),
   };
 }
 

@@ -6,10 +6,10 @@ import {
   workspaceRouteFromPath,
 } from "$lib/app/workspace-route";
 import {
-  buildSentinelGenesisParticipantResponseLink as buildParticipantResponseLinkCore,
-  buildSentinelGenesisRequestLink as buildRequestLinkCore,
-  normalizeSentinelGenesisParticipantPayload,
-  normalizeSentinelGenesisRequest,
+  build_sentinel_genesis_participant_response_link,
+  build_sentinel_genesis_request_link,
+  normalize_sentinel_genesis_participant_payload,
+  normalize_sentinel_genesis_request,
 } from "$app-wasm";
 
 const SENTINEL_REQUEST_HASH_PREFIX = "#sentinel-request=";
@@ -59,7 +59,7 @@ export function buildSentinelGenesisRequestLink({
   readonly baseUrl?: string;
 }): string {
   if (!requestJson.trim()) return "";
-  return buildRequestLinkCore(requestJson, baseUrl);
+  return build_sentinel_genesis_request_link(requestJson, baseUrl);
 }
 
 export function buildSentinelGenesisParticipantResponseLink({
@@ -70,7 +70,10 @@ export function buildSentinelGenesisParticipantResponseLink({
   readonly baseUrl?: string;
 }): string {
   if (!responseJson.trim()) return "";
-  return buildParticipantResponseLinkCore(responseJson, baseUrl);
+  return build_sentinel_genesis_participant_response_link(
+    responseJson,
+    baseUrl,
+  );
 }
 
 /**
@@ -86,7 +89,7 @@ export function consumeSentinelGenesisRequestFromLocation(): string {
   if (!hasRequest) return "";
 
   try {
-    const request = normalizeSentinelGenesisRequest(url.toString());
+    const request = normalize_sentinel_genesis_request(url.toString());
     url.hash = "";
     url.searchParams.delete("sentinel-request");
     const replaceStateArgs: Parameters<typeof history.replaceState>[0] = {};
@@ -106,7 +109,9 @@ export function consumeSentinelGenesisParticipantResponseFromLocation(): string 
   if (!hasResponse) return "";
 
   try {
-    const response = normalizeSentinelGenesisParticipantPayload(url.toString());
+    const response = normalize_sentinel_genesis_participant_payload(
+      url.toString(),
+    );
     url.hash = "";
     url.searchParams.delete("sentinel-response");
     const replaceStateArgs2: Parameters<typeof history.replaceState>[0] = {};

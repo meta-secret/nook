@@ -7,14 +7,14 @@ import {
   type StorageProvider,
 } from "$lib/auth/providers";
 import {
-  activeVaultProviders,
-  chooseLocalFolderBackupDirectory,
-  isLocalFolderBackupSupported,
-  isVaultSessionLocked,
-  localProviderForActiveVault,
+  active_vault_providers,
+  choose_local_folder_backup_directory,
+  is_local_folder_backup_supported,
+  is_vault_session_locked,
+  local_provider_for_active_vault,
   NookManagerStoreScope,
   NookProviderSelectionState,
-  syncProvidersForActiveVault,
+  sync_providers_for_active_vault,
 } from "$app-wasm";
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import {
@@ -44,7 +44,7 @@ export async function chooseLocalFolder(
       state.t(I18N_KEYS.ProviderSetupLocalFolderUnsupportedBrowser),
     );
   }
-  const folder = await chooseLocalFolderBackupDirectory();
+  const folder = await choose_local_folder_backup_directory();
   try {
     const request: Parameters<typeof state.configureLocalFolder>[0] = {
       directoryName: storedLocalFolderDirectory(folder.directoryName),
@@ -60,7 +60,7 @@ export function refreshLocalFolderBackupSupport(
   state: ProviderActionsContext,
 ): void {
   state.localFolderBackupSupported =
-    "window" in globalThis && isLocalFolderBackupSupported();
+    "window" in globalThis && is_local_folder_backup_supported();
 }
 
 export function localProvider(
@@ -69,7 +69,10 @@ export function localProvider(
   const scope = state.hasActiveVaultStore
     ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
     : NookManagerStoreScope.unscoped();
-  const selection = localProviderForActiveVault(providerSnapshot(state), scope);
+  const selection = local_provider_for_active_vault(
+    providerSnapshot(state),
+    scope,
+  );
   scope.free();
   if (selection.state === NookProviderSelectionState.Selected) {
     const provider = state.providers.find(
@@ -90,7 +93,7 @@ export function activeProviders(
   const scope = state.hasActiveVaultStore
     ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
     : NookManagerStoreScope.unscoped();
-  const providers = activeVaultProviders(
+  const providers = active_vault_providers(
     providerSnapshot(state),
     scope,
   ).providers;
@@ -104,7 +107,7 @@ export function syncProviders(
   const scope = state.hasActiveVaultStore
     ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
     : NookManagerStoreScope.unscoped();
-  const providers = syncProvidersForActiveVault(
+  const providers = sync_providers_for_active_vault(
     providerSnapshot(state),
     scope,
   ).providers;
@@ -113,12 +116,12 @@ export function syncProviders(
 }
 
 export function showLoginVaultPicker(state: ProviderActionsContext): boolean {
-  return state.clientPolicy.shouldShowLoginVaultPicker(
+  return state.clientPolicy.should_show_login_vault_picker(
     state.isAuthenticated,
     state.localVaults.length,
     state.hasSelectedLoginVaultStore,
     state.loginSetup.kind === LoginSetupKind.Active,
     state.addProviderOpen,
-    isVaultSessionLocked(),
+    is_vault_session_locked(),
   );
 }

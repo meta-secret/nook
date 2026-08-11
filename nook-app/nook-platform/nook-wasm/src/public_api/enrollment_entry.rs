@@ -33,13 +33,13 @@ impl NookEnrollmentEntryLabel {
     }
 }
 
-#[wasm_bindgen(js_name = peekEnrollmentEntryId)]
+#[wasm_bindgen]
 pub fn peek_enrollment_entry_id(code: &str) -> Result<String, wasm_bindgen::JsError> {
     let code = nook_core::normalize_enrollment_code(code);
     Ok(nook_core::peek_enrollment_entry_id(&code)?)
 }
 
-#[wasm_bindgen(js_name = peekEnrollmentEntryLabel)]
+#[wasm_bindgen]
 pub fn peek_enrollment_entry_label(
     code: &str,
 ) -> Result<NookEnrollmentEntryLabel, wasm_bindgen::JsError> {
@@ -49,13 +49,13 @@ pub fn peek_enrollment_entry_label(
     ))
 }
 
-#[wasm_bindgen(js_name = peekEnrollmentIssuedAt)]
+#[wasm_bindgen]
 pub fn peek_enrollment_issued_at(code: &str) -> Result<String, wasm_bindgen::JsError> {
     let code = nook_core::normalize_enrollment_code(code);
     Ok(nook_core::peek_enrollment_issued_at(&code)?)
 }
 
-#[wasm_bindgen(js_name = encryptUnlabeledEnrollmentPayload)]
+#[wasm_bindgen]
 pub fn encrypt_unlabeled_enrollment_payload(
     input: &NookEnrollmentIssueInput,
     password: &str,
@@ -67,7 +67,7 @@ pub fn encrypt_unlabeled_enrollment_payload(
     )?)
 }
 
-#[wasm_bindgen(js_name = encryptLabeledEnrollmentPayload)]
+#[wasm_bindgen]
 pub fn encrypt_labeled_enrollment_payload(
     input: &NookEnrollmentIssueInput,
     password: &str,
@@ -80,7 +80,7 @@ pub fn encrypt_labeled_enrollment_payload(
     )?)
 }
 
-#[wasm_bindgen(js_name = decryptEnrollmentPayload)]
+#[wasm_bindgen]
 pub fn decrypt_enrollment_payload(
     code: &str,
     password: &str,
@@ -91,13 +91,13 @@ pub fn decrypt_enrollment_payload(
     ))
 }
 
-#[wasm_bindgen(js_name = buildEnrollmentLink)]
+#[wasm_bindgen]
 #[must_use]
 pub fn build_enrollment_link(code: &str, base_url: &str) -> String {
     nook_core::build_enrollment_link(code, base_url)
 }
 
-#[wasm_bindgen(js_name = buildSentinelGenesisRequestLink)]
+#[wasm_bindgen]
 pub fn build_sentinel_genesis_request_link(
     request_json: &str,
     base_url: &str,
@@ -108,12 +108,12 @@ pub fn build_sentinel_genesis_request_link(
     )?)
 }
 
-#[wasm_bindgen(js_name = normalizeSentinelGenesisRequest)]
+#[wasm_bindgen]
 pub fn normalize_sentinel_genesis_request(input: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::normalize_sentinel_genesis_request(input)?)
 }
 
-#[wasm_bindgen(js_name = buildSentinelGenesisParticipantResponseLink)]
+#[wasm_bindgen]
 pub fn build_sentinel_genesis_participant_response_link(
     response_json: &str,
     base_url: &str,
@@ -124,7 +124,7 @@ pub fn build_sentinel_genesis_participant_response_link(
     )?)
 }
 
-#[wasm_bindgen(js_name = normalizeSentinelGenesisParticipantPayload)]
+#[wasm_bindgen]
 pub fn normalize_sentinel_genesis_participant_payload(
     input: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
@@ -133,14 +133,14 @@ pub fn normalize_sentinel_genesis_participant_payload(
     )?)
 }
 
-#[wasm_bindgen(js_name = sentinelGenesisParticipantFingerprint)]
+#[wasm_bindgen]
 pub fn sentinel_genesis_participant_fingerprint(
     input: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::sentinel_genesis_participant_fingerprint(input)?)
 }
 
-#[wasm_bindgen(js_name = normalizeEnrollmentCode)]
+#[wasm_bindgen]
 #[must_use]
 pub fn normalize_enrollment_code(code: &str) -> String {
     nook_core::normalize_enrollment_code(code)

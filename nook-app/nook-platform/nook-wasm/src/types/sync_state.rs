@@ -15,12 +15,12 @@ pub struct NookVaultLastSync(nook_core::VaultLastSync);
 
 #[wasm_bindgen]
 impl NookVaultLastSync {
-    #[wasm_bindgen(js_name = neverSynced)]
+    #[wasm_bindgen]
     pub fn never_synced() -> Self {
         Self(nook_core::VaultLastSync::NeverSynced)
     }
 
-    #[wasm_bindgen(js_name = synced)]
+    #[wasm_bindgen]
     pub fn synced(at_unix_milliseconds: f64) -> Result<Self, wasm_bindgen::JsError> {
         let at_unix_milliseconds = valid_javascript_milliseconds(at_unix_milliseconds)
             .map_err(wasm_bindgen::JsError::new)?;
@@ -76,12 +76,12 @@ pub struct NookManualProviderSync(nook_core::ManualProviderSync);
 
 #[wasm_bindgen]
 impl NookManualProviderSync {
-    #[wasm_bindgen(js_name = idle)]
+    #[wasm_bindgen]
     pub fn idle() -> Self {
         Self(nook_core::ManualProviderSync::Idle)
     }
 
-    #[wasm_bindgen(js_name = running)]
+    #[wasm_bindgen]
     pub fn running(provider_id: String) -> Self {
         Self(nook_core::ManualProviderSync::Running { provider_id })
     }
@@ -118,12 +118,12 @@ pub struct NookSyncConflictReview(nook_core::SyncConflictReview<NookPendingSyncC
 
 #[wasm_bindgen]
 impl NookSyncConflictReview {
-    #[wasm_bindgen(js_name = clear)]
+    #[wasm_bindgen]
     pub fn clear() -> Self {
         Self(nook_core::SyncConflictReview::Clear)
     }
 
-    #[wasm_bindgen(js_name = requiresDecision)]
+    #[wasm_bindgen]
     pub fn requires_decision(conflict: NookPendingSyncConflict) -> Self {
         Self(nook_core::SyncConflictReview::RequiresDecision(conflict))
     }
@@ -188,22 +188,22 @@ impl NookSyncConflictReview {
         Ok(self.conflict()?.kind())
     }
 
-    #[wasm_bindgen(js_name = contentLocalVersion)]
+    #[wasm_bindgen]
     pub fn content_local_version(&self) -> Result<u32, wasm_bindgen::JsError> {
         self.conflict()?.content_local_version()
     }
 
-    #[wasm_bindgen(js_name = contentRemoteVersion)]
+    #[wasm_bindgen]
     pub fn content_remote_version(&self) -> Result<u32, wasm_bindgen::JsError> {
         self.conflict()?.content_remote_version()
     }
 
-    #[wasm_bindgen(js_name = localStoreId)]
+    #[wasm_bindgen]
     pub fn local_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
         self.conflict()?.local_store_id()
     }
 
-    #[wasm_bindgen(js_name = remoteStoreId)]
+    #[wasm_bindgen]
     pub fn remote_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
         self.conflict()?.remote_store_id()
     }
@@ -233,12 +233,12 @@ pub struct NookLocalFolderHealth(nook_core::LocalFolderHealth);
 
 #[wasm_bindgen]
 impl NookLocalFolderHealth {
-    #[wasm_bindgen(js_name = healthy)]
+    #[wasm_bindgen]
     pub fn healthy() -> Self {
         Self(nook_core::LocalFolderHealth::Healthy)
     }
 
-    #[wasm_bindgen(js_name = multipleVaults)]
+    #[wasm_bindgen]
     pub fn multiple_vaults(
         provider_id: String,
         provider_label: String,

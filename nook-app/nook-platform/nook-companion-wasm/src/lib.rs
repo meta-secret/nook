@@ -13,7 +13,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 const EXTENSION_VAULT_EVENT_TYPESCRIPT: &str =
     nook_companion_core::EXTENSION_VAULT_EVENT_TYPESCRIPT;
 
-#[wasm_bindgen(js_name = validateExtensionSessionRequest)]
+#[wasm_bindgen]
 #[must_use]
 pub fn validate_extension_session_request(
     request: nook_companion_core::ExtensionSessionRequestWire,
@@ -22,7 +22,7 @@ pub fn validate_extension_session_request(
     nook_companion_core::ExtensionSessionRequestValidation::Accepted
 }
 
-#[wasm_bindgen(js_name = decodeWebsiteLoginOptions)]
+#[wasm_bindgen]
 pub fn decode_website_login_options(
     response: nook_companion_core::WebsiteLoginOptionsWireValue,
 ) -> Result<nook_companion_core::WebsiteLoginOptions, wasm_bindgen::JsError> {
@@ -30,7 +30,7 @@ pub fn decode_website_login_options(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeWebsiteLoginSaveOfferResponse)]
+#[wasm_bindgen]
 pub fn decode_website_login_save_offer_response(
     response: nook_companion_core::WebsiteLoginSaveOfferResponse,
 ) -> Result<nook_companion_core::WebsiteLoginSaveOfferResponse, wasm_bindgen::JsError> {
@@ -38,7 +38,7 @@ pub fn decode_website_login_save_offer_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeWebsiteLoginSavePendingResponse)]
+#[wasm_bindgen]
 pub fn decode_website_login_save_pending_response(
     response: nook_companion_core::WebsiteLoginSavePendingResponse,
 ) -> Result<nook_companion_core::WebsiteLoginSavePendingResponse, wasm_bindgen::JsError> {
@@ -46,7 +46,7 @@ pub fn decode_website_login_save_pending_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeWebsiteLoginSaveActionResponse)]
+#[wasm_bindgen]
 pub fn decode_website_login_save_action_response(
     response: nook_companion_core::WebsiteLoginSaveActionResponse,
 ) -> Result<nook_companion_core::WebsiteLoginSaveActionResponse, wasm_bindgen::JsError> {
@@ -54,7 +54,7 @@ pub fn decode_website_login_save_action_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeLoginPickerOpenResponse)]
+#[wasm_bindgen]
 pub fn decode_login_picker_open_response(
     response: nook_companion_core::LoginPickerOpenResponseWire,
 ) -> Result<nook_companion_core::LoginPickerOpenResponse, wasm_bindgen::JsError> {
@@ -62,7 +62,7 @@ pub fn decode_login_picker_open_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeAuthenticatorPickerOpenResponse)]
+#[wasm_bindgen]
 pub fn decode_authenticator_picker_open_response(
     response: nook_companion_core::AuthenticatorPickerOpenResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorPickerOpenResponse, wasm_bindgen::JsError> {
@@ -70,7 +70,7 @@ pub fn decode_authenticator_picker_open_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeAuthenticationOutcomeResponse)]
+#[wasm_bindgen]
 pub fn decode_authentication_outcome_response(
     response: nook_companion_core::AuthenticationOutcomeResponseWire,
 ) -> Result<nook_companion_core::AuthenticationOutcomeResponse, wasm_bindgen::JsError> {
@@ -78,7 +78,7 @@ pub fn decode_authentication_outcome_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeAuthenticationWorkflowSnapshotResponse)]
+#[wasm_bindgen]
 pub fn decode_authentication_workflow_snapshot_response(
     response: nook_companion_core::AuthenticationWorkflowSnapshotResponseWire,
 ) -> Result<nook_companion_core::AuthenticationWorkflowSnapshotResponse, wasm_bindgen::JsError> {
@@ -86,7 +86,7 @@ pub fn decode_authentication_workflow_snapshot_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeAuthenticatorBackupAttachResponse)]
+#[wasm_bindgen]
 pub fn decode_authenticator_backup_attach_response(
     response: nook_companion_core::AuthenticatorBackupAttachResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorBackupAttachResponse, wasm_bindgen::JsError> {
@@ -94,7 +94,7 @@ pub fn decode_authenticator_backup_attach_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeAuthenticatorCodeResponse)]
+#[wasm_bindgen]
 pub fn decode_authenticator_code_response(
     response: nook_companion_core::AuthenticatorCodeResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorCodeResponse, wasm_bindgen::JsError> {
@@ -102,7 +102,7 @@ pub fn decode_authenticator_code_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeAuthenticatorEnrollmentStageResponse)]
+#[wasm_bindgen]
 pub fn decode_authenticator_enrollment_stage_response(
     response: nook_companion_core::AuthenticatorEnrollmentStageResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorEnrollmentStageResponse, wasm_bindgen::JsError> {
@@ -110,7 +110,7 @@ pub fn decode_authenticator_enrollment_stage_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeAuthenticatorEnrollmentConfirmResponse)]
+#[wasm_bindgen]
 pub fn decode_authenticator_enrollment_confirm_response(
     response: nook_companion_core::AuthenticatorEnrollmentConfirmResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorEnrollmentConfirmResponse, wasm_bindgen::JsError> {
@@ -118,7 +118,7 @@ pub fn decode_authenticator_enrollment_confirm_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeGeneratedPasswordResponse)]
+#[wasm_bindgen]
 pub fn decode_generated_password_response(
     response: nook_companion_core::GeneratedPasswordResponseWire,
 ) -> Result<nook_companion_core::GeneratedPasswordResponse, wasm_bindgen::JsError> {
@@ -126,7 +126,7 @@ pub fn decode_generated_password_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeAuthenticatorOptionsResponse)]
+#[wasm_bindgen]
 pub fn decode_authenticator_options_response(
     response: nook_companion_core::AuthenticatorOptionsResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorOptionsResponse, wasm_bindgen::JsError> {
@@ -134,7 +134,7 @@ pub fn decode_authenticator_options_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = decodeAuthenticatorPreviewResponse)]
+#[wasm_bindgen]
 pub fn decode_authenticator_preview_response(
     response: nook_companion_core::AuthenticatorPreviewResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorPreviewResponse, wasm_bindgen::JsError> {
@@ -142,13 +142,13 @@ pub fn decode_authenticator_preview_response(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = pageHasBackupCodeHint)]
+#[wasm_bindgen]
 #[must_use]
 pub fn page_has_backup_code_hint(text: &str) -> bool {
     nook_companion_core::page_has_backup_code_hint(text)
 }
 
-#[wasm_bindgen(js_name = extractBackupCodeCandidates)]
+#[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
@@ -186,7 +186,7 @@ impl NookPageInputFieldObservation {
     }
 }
 
-#[wasm_bindgen(js_name = expandIdentityText)]
+#[wasm_bindgen]
 #[must_use]
 pub fn expand_identity_text(value: &str) -> String {
     nook_companion_core::expand_identity_text(value)
@@ -219,49 +219,49 @@ impl NookLoginContextObservation {
     }
 }
 
-#[wasm_bindgen(js_name = hasLoginContext)]
+#[wasm_bindgen]
 #[must_use]
 pub fn has_login_context(observation: &NookLoginContextObservation) -> bool {
     nook_companion_core::has_login_context(&observation.inner)
 }
 
-#[wasm_bindgen(js_name = looksLikeUsernameField)]
+#[wasm_bindgen]
 #[must_use]
 pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool {
     nook_companion_core::looks_like_username_field(&field.inner)
 }
 
-#[wasm_bindgen(js_name = looksLikeOneTimeCodeField)]
+#[wasm_bindgen]
 #[must_use]
 pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
     nook_companion_core::looks_like_one_time_code_field(&field.inner)
 }
 
-#[wasm_bindgen(js_name = looksLikePasskeyControlLabel)]
+#[wasm_bindgen]
 #[must_use]
 pub fn looks_like_passkey_control_label(label: &str) -> bool {
     nook_companion_core::looks_like_passkey_control_label(label)
 }
 
-#[wasm_bindgen(js_name = looksLikeManualCheckpointLabel)]
+#[wasm_bindgen]
 #[must_use]
 pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
     nook_companion_core::looks_like_manual_checkpoint_label(label)
 }
 
-#[wasm_bindgen(js_name = looksLikeEmailVerificationBody)]
+#[wasm_bindgen]
 #[must_use]
 pub fn looks_like_email_verification_body(body: &str) -> bool {
     nook_companion_core::looks_like_email_verification_body(body)
 }
 
-#[wasm_bindgen(js_name = parsePageInputType)]
+#[wasm_bindgen]
 #[must_use]
 pub fn parse_page_input_type(value: &str) -> nook_companion_core::PageInputType {
     nook_companion_core::PageInputType::parse(value)
 }
 
-#[wasm_bindgen(js_name = extensionPersistenceDatabaseName)]
+#[wasm_bindgen]
 #[must_use]
 pub fn extension_persistence_database_name(
     area: nook_companion_core::ExtensionPersistenceArea,
@@ -269,7 +269,7 @@ pub fn extension_persistence_database_name(
     area.database_name().to_owned()
 }
 
-#[wasm_bindgen(js_name = extensionPersistenceStoreNames)]
+#[wasm_bindgen]
 #[must_use]
 pub fn extension_persistence_store_names(
     area: nook_companion_core::ExtensionPersistenceArea,
@@ -277,7 +277,7 @@ pub fn extension_persistence_store_names(
     area.store_names()
 }
 
-#[wasm_bindgen(js_name = classifyExtensionPersistenceDatabases)]
+#[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn classify_extension_persistence_databases(
@@ -286,7 +286,7 @@ pub fn classify_extension_persistence_databases(
     nook_companion_core::classify_extension_database_names(input.area, &input.observed_names)
 }
 
-#[wasm_bindgen(js_name = classifyExtensionPersistenceStores)]
+#[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn classify_extension_persistence_stores(
@@ -295,7 +295,7 @@ pub fn classify_extension_persistence_stores(
     nook_companion_core::classify_extension_store_names(input.area, &input.observed_names)
 }
 
-#[wasm_bindgen(js_name = matchingExtensionPersistenceStores)]
+#[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn matching_extension_persistence_stores(
@@ -304,7 +304,7 @@ pub fn matching_extension_persistence_stores(
     nook_companion_core::matching_extension_store_names(input.area, &input.observed_names)
 }
 
-#[wasm_bindgen(js_name = classifyCompanionAuthenticationWorkflow)]
+#[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn classify_companion_authentication_workflow(
@@ -313,7 +313,7 @@ pub fn classify_companion_authentication_workflow(
     nook_companion_core::classify_authentication_workflow_candidates(&input.observations)
 }
 
-#[wasm_bindgen(js_name = classifyCompanionAuthenticationOutcome)]
+#[wasm_bindgen]
 #[must_use]
 pub fn classify_companion_authentication_outcome(
     input: nook_companion_core::AuthenticationOutcomeClassification,
@@ -324,7 +324,7 @@ pub fn classify_companion_authentication_outcome(
     )
 }
 
-#[wasm_bindgen(js_name = classifyCompanionAuthenticationOutcomeWithDefaultTimeout)]
+#[wasm_bindgen]
 #[must_use]
 pub fn classify_companion_authentication_outcome_with_default_timeout(
     observation: nook_companion_core::AuthenticationOutcomeObservation,
@@ -335,7 +335,7 @@ pub fn classify_companion_authentication_outcome_with_default_timeout(
     )
 }
 
-#[wasm_bindgen(js_name = validateCompanionAuthenticationOutcomeDecision)]
+#[wasm_bindgen]
 #[must_use]
 pub fn validate_companion_authentication_outcome_decision(
     decision: nook_companion_core::AuthenticationOutcomeDecision,
@@ -343,19 +343,19 @@ pub fn validate_companion_authentication_outcome_decision(
     decision
 }
 
-#[wasm_bindgen(js_name = extensionPairingGrantStorageKey)]
+#[wasm_bindgen]
 #[must_use]
 pub fn extension_pairing_grant_storage_key(vault_store_id: &str) -> String {
     nook_companion_core::grant_storage_key(vault_store_id)
 }
 
-#[wasm_bindgen(js_name = extensionPairingSetupStorageKey)]
+#[wasm_bindgen]
 #[must_use]
 pub fn extension_pairing_setup_storage_key() -> String {
     nook_companion_core::EXTENSION_SETUP_KEY.to_owned()
 }
 
-#[wasm_bindgen(js_name = extensionVaultAccessScope)]
+#[wasm_bindgen]
 #[must_use]
 pub fn extension_vault_access_scope() -> String {
     nook_companion_core::ExtensionConnectScope::VaultAccess
@@ -363,7 +363,7 @@ pub fn extension_vault_access_scope() -> String {
         .to_owned()
 }
 
-#[wasm_bindgen(js_name = extensionPasswordFillingScope)]
+#[wasm_bindgen]
 #[must_use]
 pub fn extension_password_filling_scope() -> String {
     nook_companion_core::ExtensionConnectScope::PasswordFilling
@@ -371,7 +371,7 @@ pub fn extension_password_filling_scope() -> String {
         .to_owned()
 }
 
-#[wasm_bindgen(js_name = extensionPasskeyManagementScope)]
+#[wasm_bindgen]
 #[must_use]
 pub fn extension_passkey_management_scope() -> String {
     nook_companion_core::ExtensionConnectScope::PasskeyManagement
@@ -379,7 +379,7 @@ pub fn extension_passkey_management_scope() -> String {
         .to_owned()
 }
 
-#[wasm_bindgen(js_name = extensionSyncProviderCredentialsScope)]
+#[wasm_bindgen]
 #[must_use]
 pub fn extension_sync_provider_credentials_scope() -> String {
     nook_companion_core::ExtensionConnectScope::SyncProviderCredentials
@@ -387,13 +387,13 @@ pub fn extension_sync_provider_credentials_scope() -> String {
         .to_owned()
 }
 
-#[wasm_bindgen(js_name = isExtensionConnectScope)]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_extension_connect_scope(value: &str) -> bool {
     nook_companion_core::ExtensionConnectScope::parse(value).is_some()
 }
 
-#[wasm_bindgen(js_name = createExtensionPairingState)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn create_extension_pairing_state(
     input: nook_companion_core::CreateExtensionPairingStateInput,
@@ -402,7 +402,7 @@ pub fn create_extension_pairing_state(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = refreshExtensionPairingGrant)]
+#[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 pub fn refresh_extension_pairing_grant(
     input: nook_companion_core::RefreshExtensionPairingGrantInput,
@@ -411,7 +411,7 @@ pub fn refresh_extension_pairing_grant(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = orderedExtensionPairingGrants)]
+#[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn ordered_extension_pairing_grants(
@@ -420,7 +420,7 @@ pub fn ordered_extension_pairing_grants(
     state.ordered_grants()
 }
 
-#[wasm_bindgen(js_name = selectedExtensionPairingGrant)]
+#[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn selected_extension_pairing_grant(
@@ -434,7 +434,7 @@ pub fn selected_extension_pairing_grant(
     )
 }
 
-#[wasm_bindgen(js_name = firstExtensionPairingGrant)]
+#[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn first_extension_pairing_grant(
@@ -448,7 +448,7 @@ pub fn first_extension_pairing_grant(
     )
 }
 
-#[wasm_bindgen(js_name = extensionSetupAfterPairingGrantRemoval)]
+#[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn extension_setup_after_pairing_grant_removal(
@@ -463,19 +463,19 @@ pub fn extension_setup_after_pairing_grant_removal(
         )
 }
 
-#[wasm_bindgen(js_name = isStoredExtensionPairingGrantJson)]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_stored_extension_pairing_grant_json(value: &str) -> bool {
     nook_companion_core::is_stored_pairing_grant_json(value)
 }
 
-#[wasm_bindgen(js_name = isExtensionReadySetupJson)]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_extension_ready_setup_json(value: &str) -> bool {
     nook_companion_core::is_ready_pairing_setup_json(value)
 }
 
-#[wasm_bindgen(js_name = migrateLegacyExtensionPairingStateJson)]
+#[wasm_bindgen]
 pub fn migrate_legacy_extension_pairing_state_json(
     value: &str,
 ) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
@@ -483,7 +483,7 @@ pub fn migrate_legacy_extension_pairing_state_json(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen(js_name = isCloudflarePrPreviewHost)]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_cloudflare_pr_preview_host(hostname: &str) -> bool {
     nook_companion_core::is_cloudflare_pr_preview_host(hostname)
@@ -497,7 +497,7 @@ pub struct NookOAuthOriginSupport {
 
 #[wasm_bindgen]
 impl NookOAuthOriginSupport {
-    #[wasm_bindgen(js_name = isSupported)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn is_supported(&self) -> bool {
         matches!(
@@ -517,7 +517,7 @@ impl NookOAuthOriginSupport {
         }
     }
 
-    #[wasm_bindgen(js_name = isUnsupported)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn is_unsupported(&self) -> bool {
         matches!(
@@ -527,7 +527,7 @@ impl NookOAuthOriginSupport {
     }
 
     /// Reason when [`Self::is_unsupported`] is true; otherwise `UnregisteredOrigin`.
-    #[wasm_bindgen(js_name = unsupportedReason)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn unsupported_reason(&self) -> nook_companion_core::OAuthOriginUnsupportedReason {
         match self.inner {
@@ -537,7 +537,7 @@ impl NookOAuthOriginSupport {
     }
 }
 
-#[wasm_bindgen(js_name = resolveOAuthOriginSupport)]
+#[wasm_bindgen]
 #[must_use]
 pub fn resolve_oauth_origin_support(
     provider: nook_companion_core::BrowserOAuthProvider,
@@ -554,53 +554,53 @@ pub fn resolve_oauth_origin_support(
     }
 }
 
-#[wasm_bindgen(js_name = defaultSimpleVaultUrl)]
+#[wasm_bindgen]
 #[must_use]
 pub fn default_simple_vault_url() -> String {
     nook_companion_core::DEFAULT_SIMPLE_VAULT_URL.to_owned()
 }
 
-#[wasm_bindgen(js_name = normalizeSimpleVaultBaseUrl)]
+#[wasm_bindgen]
 pub fn normalize_simple_vault_base_url(value: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_companion_core::normalize_simple_vault_base_url(value)?)
 }
 
-#[wasm_bindgen(js_name = simpleVaultUrl)]
+#[wasm_bindgen]
 pub fn simple_vault_url(base_url: &str, path: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_companion_core::simple_vault_url(base_url, path)?)
 }
 
-#[wasm_bindgen(js_name = simpleVaultMatchPattern)]
+#[wasm_bindgen]
 pub fn simple_vault_match_pattern(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_companion_core::simple_vault_match_pattern(base_url)?)
 }
 
 /// Matching Sentinel base URL for `base_url`, or an empty string when none matches.
-#[wasm_bindgen(js_name = matchingSentinelVaultBaseUrl)]
+#[wasm_bindgen]
 pub fn matching_sentinel_vault_base_url(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_companion_core::matching_sentinel_vault_base_url(base_url)?.unwrap_or_default())
 }
 
-#[wasm_bindgen(js_name = sentinelVaultMatchPatterns)]
+#[wasm_bindgen]
 pub fn sentinel_vault_match_patterns(base_url: &str) -> Result<Vec<String>, wasm_bindgen::JsError> {
     Ok(nook_companion_core::sentinel_vault_match_patterns(
         base_url,
     )?)
 }
 
-#[wasm_bindgen(js_name = isSimpleVaultHostname)]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_simple_vault_hostname(hostname: &str) -> bool {
     nook_companion_core::is_simple_vault_hostname(hostname)
 }
 
-#[wasm_bindgen(js_name = isSentinelVaultHostname)]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_sentinel_vault_hostname(hostname: &str) -> bool {
     nook_companion_core::is_sentinel_vault_hostname(hostname)
 }
 
-#[wasm_bindgen(js_name = nookVaultAppExcludeMatchPatterns)]
+#[wasm_bindgen]
 pub fn nook_vault_app_exclude_match_patterns(
     base_url: &str,
 ) -> Result<Vec<String>, wasm_bindgen::JsError> {
@@ -610,7 +610,7 @@ pub fn nook_vault_app_exclude_match_patterns(
 }
 
 /// `base_url` may be empty when no configured vault base is available.
-#[wasm_bindgen(js_name = isNookVaultAppUrl)]
+#[wasm_bindgen]
 pub fn is_nook_vault_app_url(
     candidate_url: &str,
     base_url: &str,
@@ -626,7 +626,7 @@ pub fn is_nook_vault_app_url(
     )?)
 }
 
-#[wasm_bindgen(js_name = belongsToSimpleVault)]
+#[wasm_bindgen]
 pub fn belongs_to_simple_vault(
     base_url: &str,
     candidate_url: &str,
@@ -637,7 +637,7 @@ pub fn belongs_to_simple_vault(
     )?)
 }
 
-#[wasm_bindgen(js_name = belongsToSentinelVault)]
+#[wasm_bindgen]
 pub fn belongs_to_sentinel_vault(
     base_url: &str,
     candidate_url: &str,

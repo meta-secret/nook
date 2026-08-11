@@ -8,7 +8,7 @@ import {
   clearTabScopedBrowserData,
   deleteLocalBrowserData,
 } from "$lib/runtime/browser-data";
-import { setVaultSessionLocked } from "$app-wasm";
+import { set_vault_session_locked } from "$app-wasm";
 import {
   AdminAccordionSection,
   SettingsAccordionSection,
@@ -195,14 +195,14 @@ export async function deleteLocalData(state: UiActionsContext): Promise<void> {
     const manager = state.requireManager();
     await deleteLocalBrowserData(() => {
       const deletion = state.enqueueStorage(() =>
-        manager.deleteLocalBrowserData(),
+        manager.delete_local_browser_data(),
       );
       state.localDataDeletionStarted = true;
       return deletion;
     });
   } catch (error) {
     const managerWasZeroized = state.localDataDeletionStarted;
-    setVaultSessionLocked(true);
+    set_vault_session_locked(true);
     state.clearUnlockedSession(!managerWasZeroized);
     state.localDataDeletionStarted = false;
     state.errorMsg =
@@ -218,12 +218,12 @@ export async function handleRemoteLocalBrowserDataDeletion(
 ): Promise<void> {
   if (state.localDataDeletionStarted) return;
   const resetManager = state.hasManager
-    ? state.enqueueStorage(() => state.requireManager().resetVaultSession())
+    ? state.enqueueStorage(() => state.requireManager().reset_vault_session())
     : state.waitForStorageChain();
   state.localDataDeletionStarted = true;
   state.stopIdleSessionTracking();
   state.stopVaultSync();
-  setVaultSessionLocked(true);
+  set_vault_session_locked(true);
   state.clearUnlockedSession(false);
   await resetManager;
   clearTabScopedBrowserData();

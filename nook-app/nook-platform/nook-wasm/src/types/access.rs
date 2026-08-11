@@ -28,7 +28,7 @@ impl NookPasskeySetup {
         self.prf_input.clone()
     }
 
-    #[wasm_bindgen(js_name = creationOptions)]
+    #[wasm_bindgen]
     pub fn creation_options(
         &self,
         rp_id: &str,
@@ -46,7 +46,7 @@ impl NookPasskeySetup {
     /// Build browser registration options with the label chosen by the caller.
     /// The browser ceremony remains in the presentation layer; this only
     /// prepares the typed `WebAuthn` request from Rust-owned setup material.
-    #[wasm_bindgen(js_name = creationOptionsWithLabel)]
+    #[wasm_bindgen]
     pub fn creation_options_with_label(
         &self,
         rp_id: &str,
@@ -94,7 +94,7 @@ impl NookPasskeyUnlockOptions {
         self.prf_input.clone()
     }
 
-    #[wasm_bindgen(js_name = requestOptions)]
+    #[wasm_bindgen]
     pub fn request_options(
         &self,
         rp_id: &str,

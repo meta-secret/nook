@@ -33,7 +33,7 @@
         {vault.t(I18N_KEYS.LoginWizardRemoteRecoveryTitle)}
       </p>
       <p class="text-xs leading-relaxed text-muted-foreground">
-        {#if vault.clientPolicy.remoteRecoveryPromptHasCache(state)}
+        {#if vault.clientPolicy.remote_recovery_prompt_has_cache(state)}
           {vault.t(I18N_KEYS.LoginWizardRemoteRecoveryDescWithCache)}
         {:else}
           {vault.t(I18N_KEYS.LoginWizardRemoteRecoveryDescMissingOnly)}
@@ -43,7 +43,7 @@
   </div>
 
   <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-    {#if vault.clientPolicy.remoteRecoveryPromptHasCache(state)}
+    {#if vault.clientPolicy.remote_recovery_prompt_has_cache(state)}
       <Button
         type="button"
         class="sm:min-w-[160px]"

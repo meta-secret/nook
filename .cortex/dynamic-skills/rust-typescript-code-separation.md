@@ -109,8 +109,8 @@ Put app/domain types in Rust first:
 // Preferred: ownership stays visible and no runtime wrapper is emitted.
 export type { NookStorageProvider as StorageProvider } from "$app-wasm";
 export {
-  providerReplicationCapability,
-  providerSupportsReplication,
+  provider_replication_capability,
+  provider_supports_replication,
 } from "$app-wasm";
 ```
 
@@ -194,14 +194,14 @@ pub struct NookEnrollmentProvider {
 
 #[wasm_bindgen]
 impl NookEnrollmentProvider {
-    #[wasm_bindgen(js_name = local)]
+    #[wasm_bindgen]
     pub fn local() -> Self {
         Self {
             inner: EnrollmentProvider::Local,
         }
     }
 
-    #[wasm_bindgen(js_name = github)]
+    #[wasm_bindgen]
     pub fn github(repo: String, pat: String) -> Self {
         Self {
             inner: EnrollmentProvider::Github { pat, repo },

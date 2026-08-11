@@ -211,7 +211,7 @@ mod wasm_tests {
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Create an authenticator from a consented `otpauth://totp/...` URI.
-    #[wasm_bindgen(js_name = addAuthenticatorFromOtpauth)]
+    #[wasm_bindgen]
     pub async fn add_authenticator_from_otpauth_js(
         &mut self,
         uri: &str,
@@ -241,7 +241,7 @@ impl NookVaultManager {
     }
 
     /// Attach reviewed recovery codes to an authenticator via replace/merge.
-    #[wasm_bindgen(js_name = attachAuthenticatorBackupCodes)]
+    #[wasm_bindgen]
     #[allow(clippy::needless_pass_by_value)]
     pub async fn attach_authenticator_backup_codes_js(
         &mut self,

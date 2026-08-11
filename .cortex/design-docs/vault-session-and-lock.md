@@ -80,13 +80,13 @@ discovered again.
 
 **User action:** Header **Lock vault** (`header-lock-vault-btn`) while authenticated.
 
-**Implementation:** `VaultState.lockVault()` → `setVaultSessionLocked(true)` + `clearUnlockedSession()`:
+**Implementation:** `VaultState.lockVault()` → `set_vault_session_locked(true)` + `clearUnlockedSession()`:
 
 | Cleared (memory) | Kept (disk) |
 |------------------|-------------|
 | `isAuthenticated`, current metadata page, revealed records | `nook_db` vault blobs + registry |
-| WASM vault keys + `VaultCrypto` via `resetVaultSession()` | `nook_db.device_identity_wrapped` |
-| WASM device identity via `lockDeviceIdentity()` | WebAuthn credential in the platform authenticator, or PIN fallback for PRF-missing platforms |
+| WASM vault keys + `VaultCrypto` via `reset_vault_session()` | `nook_db.device_identity_wrapped` |
+| WASM device identity via `lock_device_identity()` | WebAuthn credential in the platform authenticator, or PIN fallback for PRF-missing platforms |
 | Pending joins / roster UI cache | `nook_auth` sync provider list + tokens |
 | Settings / help panels | Password entries inside encrypted YAML |
 

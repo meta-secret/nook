@@ -13,7 +13,7 @@
   import {
     activeVaultScope,
     providerBelongsToVault,
-    sealAuthProvidersForDevicePublicKey,
+    seal_auth_providers_for_device_public_key,
     type StorageProvider,
   } from '$lib/auth/providers'
   import { Button } from '$lib/components/ui/button'
@@ -24,7 +24,7 @@
     type ExtensionConnectRequest,
   } from '$lib/extension/connect'
   import type { VaultState } from '$lib/vault.svelte'
-  import { approveExtensionDevice } from '$app-wasm'
+  import { approve_extension_device } from '$app-wasm'
   import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 
   let {
@@ -75,7 +75,7 @@
     if (vault.activeVault.kind === ActiveVaultKind.Open) {
       for (const entry of vault.localVaults) {
         if (entry.storeId === vault.activeVault.storeId) {
-          return entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
+          return entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
         }
       }
     }
@@ -135,7 +135,7 @@
     vault.errorMsg = ''
     try {
       await vault.enqueueStorage(() =>
-        approveExtensionDevice(
+        approve_extension_device(
           vault.requireManager(),
           request.deviceId,
           request.devicePublicKey,
@@ -154,25 +154,25 @@
         request.scopes.includes(ExtensionConnectScope.SyncProviderCredentials)
       ) {
         const authProviders = await vault.enqueueStorage(() =>
-          vault.requireManager().loadAuthProviders(),
+          vault.requireManager().load_auth_providers_snapshot(),
         )
         const matchingProviders = authProviders.providers.filter(
           (provider) => (() => { const providerBelongsToVaultArgs: Parameters<typeof providerBelongsToVault>[0] = { provider, storeId: vaultStoreId }; return providerBelongsToVault(providerBelongsToVaultArgs); })(),
         )
-        const sealAuthProvidersForDevicePublicKeyArgs: Parameters<typeof sealAuthProvidersForDevicePublicKey>[1] = {
+        const sealAuthProvidersForDevicePublicKeyArgs: Parameters<typeof seal_auth_providers_for_device_public_key>[1] = {
             providers: matchingProviders,
             activeVaultStoreId: activeVaultScope(vaultStoreId),
           };
-        grantedProviders = sealAuthProvidersForDevicePublicKey(
+        grantedProviders = seal_auth_providers_for_device_public_key(
           request.devicePublicKey,
           sealAuthProvidersForDevicePublicKeyArgs,
         ).providers
       }
       const eventLogRecordValues = await vault.enqueueStorage(() =>
-        vault.requireManager().exportEventLogRecords(),
+        vault.requireManager().export_event_log_records_js(),
       )
       try {
-        const sendGrantToExtensionArgs: Parameters<typeof sendGrantToExtension>[0] = { providers: grantedProviders, vaultStoreId, vaultName: activeVaultName(), eventLogRecords: eventLogRecordValues.toArray() as ExtensionEventLogRecord[] };
+        const sendGrantToExtensionArgs: Parameters<typeof sendGrantToExtension>[0] = { providers: grantedProviders, vaultStoreId, vaultName: activeVaultName(), eventLogRecords: eventLogRecordValues.to_array() as ExtensionEventLogRecord[] };
         await sendGrantToExtension(
           sendGrantToExtensionArgs,
         )

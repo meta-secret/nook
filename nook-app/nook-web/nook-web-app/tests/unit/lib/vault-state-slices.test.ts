@@ -16,7 +16,7 @@ import { LOCAL_FOLDER_PROVIDER_TYPE } from '$lib/auth/providers'
 describe('vault state slice transitions', () => {
   test('delegates transition methods to their owning slice', () => {
     const state = new VaultStateSlices(
-      new VaultRuntimeState(NookBrowserLocale.fromTags(['en'])),
+      new VaultRuntimeState(NookBrowserLocale.from_tags(['en'])),
     )
 
     state.activateLoginSetup(LOCAL_FOLDER_PROVIDER_TYPE)
@@ -40,7 +40,7 @@ describe('vault state slice transitions', () => {
     expect(state.lastSync.state).toBe(NookVaultLastSyncState.Synced)
     expect(state.lastSync.syncedAtUnixMilliseconds).toBe(syncedAt)
 
-    const localFolderIssue = NookLocalFolderHealth.multipleVaults(
+    const localFolderIssue = NookLocalFolderHealth.multiple_vaults(
       'provider-1',
       'Local folder',
       ['store-1', 'store-2'],

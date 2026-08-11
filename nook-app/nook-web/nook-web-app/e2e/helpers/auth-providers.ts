@@ -51,8 +51,10 @@ export function activeAuthProviderSeedScope(
 
 type AuthProviderBrowserHooks = {
   activeVaultScope(storeId: string): ActiveVaultScope
-  loadAuthProviders: () => Promise<AuthProvidersSnapshot>
-  saveAuthProviders: (snapshot: AuthProvidersSnapshot) => Promise<void>
+  load_auth_providers_snapshot: () => Promise<AuthProvidersSnapshot>
+  save_auth_providers_snapshot: (
+    snapshot: AuthProvidersSnapshot,
+  ) => Promise<void>
   unselectedVaultScope(): ActiveVaultScope
 }
 
@@ -203,9 +205,9 @@ async function appendSealedAuthProviders(
         }
       ).__nookAuthProviders
       if (!hook) throw new Error('E2E auth provider hooks are unavailable')
-      const snapshot = await hook.loadAuthProviders()
+      const snapshot = await hook.load_auth_providers_snapshot()
       snapshot.providers.push(...additions)
-      await hook.saveAuthProviders(snapshot)
+      await hook.save_auth_providers_snapshot(snapshot)
     },
     {
       providers: storedAdditions,
@@ -403,15 +405,15 @@ export async function loadDecryptedAuthProvidersInBrowser(page: Page) {
     const hook = (
       window as Window & {
         __nookAuthProviders?: {
-          loadAuthProviders: () => Promise<{
+          load_auth_providers_snapshot: () => Promise<{
             providers: StorageProvider[]
             activeVaultStoreId: ActiveVaultScope
           }>
         }
       }
     ).__nookAuthProviders
-    if (hook?.loadAuthProviders) {
-      return hook.loadAuthProviders()
+    if (hook?.load_auth_providers_snapshot) {
+      return hook.load_auth_providers_snapshot()
     }
     throw new Error('E2E auth provider hooks are unavailable')
   })
@@ -438,7 +440,7 @@ export async function saveAuthProvidersInBrowser(
         seedScope.kind === activeVaultKind
           ? hook.activeVaultScope(seedScope.storeId)
           : hook.unselectedVaultScope()
-      await hook.saveAuthProviders({ providers, activeVaultStoreId })
+      await hook.save_auth_providers_snapshot({ providers, activeVaultStoreId })
     },
     {
       providers,

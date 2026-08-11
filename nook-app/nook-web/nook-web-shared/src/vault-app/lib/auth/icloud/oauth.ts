@@ -15,11 +15,11 @@ import {
   type OAuthFileConfig,
   type StoredOAuthFileConfiguration,
 } from "$lib/auth/providers";
-import { iCloudOAuthTokensToConfig as iCloudOAuthTokensToConfigCore } from "$app-wasm";
+import { icloud_oauth_tokens_to_config } from "$app-wasm";
 import {
   default as initNookWasm,
-  createICloudSharedStorageTarget,
-  parseICloudSharedStorageTarget,
+  create_icloud_shared_storage_target,
+  parse_icloud_shared_storage_target,
   type ICloudSharedTarget,
 } from "$app-wasm";
 import {
@@ -336,7 +336,7 @@ function normalizedICloudShortGuid(value: string): string {
     throw new Error(I18N_KEYS.ProviderSetupIcloudSharedLinkRequired);
   }
   if (trimmed.startsWith("icloud-share-v1:")) {
-    const target = parseICloudSharedStorageTarget(trimmed);
+    const target = parse_icloud_shared_storage_target(trimmed);
     if (target.shortGuid?.trim()) return target.shortGuid.trim();
   }
   try {
@@ -461,7 +461,7 @@ export async function createICloudSharedVault(
     ownerRecordName,
     rootRecordName,
     shortGuid,
-    storageTargetId: createICloudSharedStorageTarget(
+    storageTargetId: create_icloud_shared_storage_target(
       "owner",
       zoneName,
       ownerRecordName,
@@ -483,7 +483,7 @@ export async function acceptICloudSharedVault(
     .startsWith("icloud-share-v1:")
     ? {
         kind: EncodedICloudSharedTargetKind.EncodedTarget,
-        target: parseICloudSharedStorageTarget(shareReference.trim()),
+        target: parse_icloud_shared_storage_target(shareReference.trim()),
       }
     : { kind: EncodedICloudSharedTargetKind.PlainShortGuid };
   const shortGuid = normalizedICloudShortGuid(shareReference);
@@ -498,7 +498,7 @@ export async function acceptICloudSharedVault(
     identity.identity.userRecordName?.trim() ===
       encodedTarget.target.ownerRecordName.trim()
   ) {
-    const storageTargetId = createICloudSharedStorageTarget(
+    const storageTargetId = create_icloud_shared_storage_target(
       "owner",
       encodedTarget.target.zoneName,
       encodedTarget.target.ownerRecordName,
@@ -527,7 +527,7 @@ export async function acceptICloudSharedVault(
     ownerRecordName,
     rootRecordName,
     shortGuid,
-    storageTargetId: createICloudSharedStorageTarget(
+    storageTargetId: create_icloud_shared_storage_target(
       "participant",
       zoneID.zoneName,
       ownerRecordName,
@@ -715,7 +715,7 @@ export function oauthTokensToICloudConfig({
   readonly tokens: ICloudOAuthTokens;
   readonly existing: StoredOAuthFileConfiguration;
 }): OAuthFileConfig {
-  return iCloudOAuthTokensToConfigCore(
+  return icloud_oauth_tokens_to_config(
     tokens.accessToken,
     tokens.accountName.kind === ICloudAccountNameKind.Available
       ? storedOAuthAccountEmail(tokens.accountName.value)

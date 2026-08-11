@@ -5,20 +5,20 @@ import {
   OnboardingType,
   ReplicationType,
   VaultType,
-  defaultVaultArchitecture,
-  firstCompatibleProviderId as wasmFirstCompatibleProviderId,
-  firstCompatibleProviderIdPreferred as wasmFirstCompatibleProviderIdPreferred,
+  default_vault_architecture,
+  first_compatible_provider_id,
+  first_compatible_provider_id_preferred,
   NookProviderSelectionState,
-  providerOauthPresetForConfig,
-  providerOauthPresetForProvider,
-  providerReplicationCapability,
-  providerSupportsReplication,
-  prepareSharedStorageGrant,
-  providerOnboardingType,
-  validateProviderReplication,
-  validateVaultArchitecture as wasmValidateVaultArchitecture,
-  vaultArchitectureCanCreateSecret as canCreateSecret,
-  vaultArchitectureOnboardingType as onboardingType,
+  provider_oauth_preset_for_config,
+  provider_oauth_preset_for_provider,
+  provider_replication_capability,
+  provider_supports_replication,
+  prepare_shared_storage_grant,
+  provider_onboarding_type,
+  validate_provider_replication,
+  validate_vault_architecture,
+  vault_architecture_can_create_secret,
+  vault_architecture_onboarding_type,
   type SharedStorageGrantCredential,
   type SharedStorageTargetHint,
   type SharedStorageTargetSelection,
@@ -40,16 +40,16 @@ export {
   OnboardingType,
   ReplicationType,
   VaultType,
-  canCreateSecret,
-  defaultVaultArchitecture,
-  onboardingType,
-  providerOnboardingType,
-  providerOauthPresetForConfig,
-  providerOauthPresetForProvider,
-  providerReplicationCapability,
-  providerSupportsReplication,
-  prepareSharedStorageGrant,
-  validateProviderReplication,
+  vault_architecture_can_create_secret,
+  default_vault_architecture,
+  vault_architecture_onboarding_type,
+  provider_onboarding_type,
+  provider_oauth_preset_for_config,
+  provider_oauth_preset_for_provider,
+  provider_replication_capability,
+  provider_supports_replication,
+  prepare_shared_storage_grant,
+  validate_provider_replication,
 };
 
 export function suggestedSharedStorageTarget(
@@ -106,7 +106,7 @@ export function validateVaultArchitecture(
           architecture.replication_type,
         );
   try {
-    return wasmValidateVaultArchitecture(candidate);
+    return validate_vault_architecture(candidate);
   } finally {
     candidate.free();
   }
@@ -124,7 +124,7 @@ export type ProviderCapabilityLabelKey =
 export function providerCapabilityLabelKey(
   provider: StorageProvider,
 ): ProviderCapabilityLabelKey {
-  const capability = providerReplicationCapability(provider);
+  const capability = provider_replication_capability(provider);
   try {
     return capability.supportsShared
       ? ProviderCapabilityLabelKey.PersonalShared
@@ -171,18 +171,18 @@ export function firstCompatibleProvider({
   readonly replicationType: ReplicationType;
   readonly preference: CompatibleProviderPreference;
 }): CompatibleProviderSelection {
-  const snapshot: Parameters<typeof wasmFirstCompatibleProviderId>[0] = {
+  const snapshot: Parameters<typeof first_compatible_provider_id>[0] = {
     providers,
     activeVaultStoreId: unselectedVaultScope(),
   };
   const selection =
     preference.kind === CompatibleProviderPreferenceKind.Selected
-      ? wasmFirstCompatibleProviderIdPreferred(
+      ? first_compatible_provider_id_preferred(
           snapshot,
           replicationType,
           preference.providerId,
         )
-      : wasmFirstCompatibleProviderId(snapshot, replicationType);
+      : first_compatible_provider_id(snapshot, replicationType);
   if (selection.state === NookProviderSelectionState.Selected) {
     const provider = providers.find(
       (candidate) => candidate.id === selection.providerId,

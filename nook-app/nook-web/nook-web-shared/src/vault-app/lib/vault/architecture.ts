@@ -1,6 +1,6 @@
 import type { ArchitectureActionsContext } from "$lib/vault/action-contexts";
 import {
-  canCreateSecret,
+  vault_architecture_can_create_secret,
   type VaultArchitecture,
 } from "$lib/vault/architecture-model";
 import { NookVaultArchitecture } from "$app-wasm";
@@ -37,11 +37,10 @@ export function applyDraftVaultArchitecture(
     typeof replaceVaultArchitecture
   >[0] = { state, architecture: draftVaultArchitecture(state) };
   replaceVaultArchitecture(replaceVaultArchitectureArgs);
-  state.architectureSecretCreationAllowed = canCreateSecret(
-    state.vaultArchitecture,
-  );
+  state.architectureSecretCreationAllowed =
+    vault_architecture_can_create_secret(state.vaultArchitecture);
   if (state.hasManager) {
-    state.requireManager().setVaultArchitecture(state.vaultArchitecture);
+    state.requireManager().set_vault_architecture(state.vaultArchitecture);
   }
 }
 
@@ -61,9 +60,8 @@ export function refreshVaultArchitectureFromManager(
     typeof replaceVaultArchitecture
   >[0] = { state, architecture };
   replaceVaultArchitecture(replaceVaultArchitectureArgs2);
-  state.architectureSecretCreationAllowed = canCreateSecret(
-    state.vaultArchitecture,
-  );
+  state.architectureSecretCreationAllowed =
+    vault_architecture_can_create_secret(state.vaultArchitecture);
   state.draftDeviceMode = state.vaultArchitecture.device_mode;
   state.draftVaultType = state.vaultArchitecture.vault_type;
   state.draftReplicationType = state.vaultArchitecture.replication_type;
@@ -73,14 +71,16 @@ export function refreshVaultArchitectureFromManager(
 export async function refreshArchitectureSecretCreationAllowed(
   state: ArchitectureActionsContext,
 ): Promise<void> {
-  const fallback = canCreateSecret(state.vaultArchitecture);
+  const fallback = vault_architecture_can_create_secret(
+    state.vaultArchitecture,
+  );
   if (!state.hasManager) {
     state.architectureSecretCreationAllowed = fallback;
     return;
   }
   try {
     state.architectureSecretCreationAllowed = await state.enqueueStorage(() =>
-      state.requireManager().canCreateSecretForVaultArchitecture(),
+      state.requireManager().can_create_secret_for_vault_architecture(),
     );
   } catch {
     state.architectureSecretCreationAllowed = fallback;

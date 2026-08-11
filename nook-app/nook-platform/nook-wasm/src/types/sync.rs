@@ -10,7 +10,7 @@ pub struct NookEnrollmentProvider(nook_core::EnrollmentProvider);
 
 #[wasm_bindgen]
 impl NookEnrollmentProvider {
-    #[wasm_bindgen(js_name = local)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn local() -> Self {
         Self(nook_core::EnrollmentProvider::personal(
@@ -18,7 +18,7 @@ impl NookEnrollmentProvider {
         ))
     }
 
-    #[wasm_bindgen(js_name = github)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn github(repo: String, pat: String) -> Self {
         Self(nook_core::EnrollmentProvider::personal(
@@ -26,7 +26,7 @@ impl NookEnrollmentProvider {
         ))
     }
 
-    #[wasm_bindgen(js_name = oauthFile)]
+    #[wasm_bindgen]
     #[must_use]
     #[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
     pub fn oauth_file(
@@ -49,7 +49,7 @@ impl NookEnrollmentProvider {
         ))
     }
 
-    #[wasm_bindgen(js_name = sharedProviderGrant)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn shared_provider_grant(joiner_identity: String, storage_target_id: String) -> Self {
         Self(nook_core::EnrollmentProvider::shared(
@@ -57,7 +57,7 @@ impl NookEnrollmentProvider {
         ))
     }
 
-    #[wasm_bindgen(js_name = iCloudShared)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn icloud_shared(storage_target_id: String) -> Self {
         Self(nook_core::EnrollmentProvider::shared(
@@ -266,13 +266,13 @@ pub struct NookSyncProviderTarget(nook_core::SyncProviderTarget);
 
 #[wasm_bindgen]
 impl NookSyncProviderTarget {
-    #[wasm_bindgen(js_name = local)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn local() -> Self {
         Self(nook_core::SyncProviderTarget::Local)
     }
 
-    #[wasm_bindgen(js_name = github)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn github(repo: String, pat: String) -> Self {
         Self(nook_core::SyncProviderTarget::Github(
@@ -280,37 +280,37 @@ impl NookSyncProviderTarget {
         ))
     }
 
-    #[wasm_bindgen(js_name = empty)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn empty() -> Self {
         Self(nook_core::SyncProviderTarget::Empty)
     }
 
-    #[wasm_bindgen(js_name = isLocal)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn is_local(&self) -> bool {
         matches!(self.0, nook_core::SyncProviderTarget::Local)
     }
 
-    #[wasm_bindgen(js_name = isLocalFolder)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn is_local_folder(&self) -> bool {
         matches!(self.0, nook_core::SyncProviderTarget::LocalFolder(_))
     }
 
-    #[wasm_bindgen(js_name = isGithub)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn is_github(&self) -> bool {
         matches!(self.0, nook_core::SyncProviderTarget::Github(_))
     }
 
-    #[wasm_bindgen(js_name = isEmpty)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn is_empty(&self) -> bool {
         matches!(self.0, nook_core::SyncProviderTarget::Empty)
     }
 
-    #[wasm_bindgen(js_name = isOauthFile)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn is_oauth_file(&self) -> bool {
         matches!(self.0, nook_core::SyncProviderTarget::OauthFile(_))
@@ -333,7 +333,7 @@ pub struct NookEnrollmentIssueInput {
 
 #[wasm_bindgen]
 impl NookEnrollmentIssueInput {
-    #[wasm_bindgen(js_name = unnamed)]
+    #[wasm_bindgen]
     pub fn unnamed(provider: NookEnrollmentProvider, entry_id: String, issued_at: String) -> Self {
         Self {
             provider,
@@ -343,7 +343,7 @@ impl NookEnrollmentIssueInput {
         }
     }
 
-    #[wasm_bindgen(js_name = named)]
+    #[wasm_bindgen]
     pub fn named(
         provider: NookEnrollmentProvider,
         vault_name: String,

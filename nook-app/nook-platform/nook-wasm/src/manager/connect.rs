@@ -86,7 +86,7 @@ impl NookVaultManager {
     /// Discover the single vault identity exposed by a staged sync provider
     /// without requiring or decrypting a device identity. Hosts use this only
     /// to bind an existing-vault import to an already-paired companion.
-    #[wasm_bindgen(js_name = discoverRemoteVaultStoreId)]
+    #[wasm_bindgen]
     pub async fn discover_remote_vault_store_id(
         &mut self,
         storage_mode: String,
@@ -175,7 +175,7 @@ impl NookVaultManager {
     /// Return an authenticated local session to local storage after a staged
     /// provider assessment is rejected. The rejected provider must not remain
     /// the destination for later local event-log outbox entries.
-    #[wasm_bindgen(js_name = restoreLocalAfterProviderAssessment)]
+    #[wasm_bindgen]
     pub async fn restore_local_after_provider_assessment(&mut self) -> Result<(), JsError> {
         self.prepare_storage_preserving_vault_metadata("local", "", "")
             .await?;
@@ -208,12 +208,12 @@ impl NookVaultManager {
 
     /// Next `connect` loads the browser-local vault cache and recreates the
     /// remote file after a successful unlock.
-    #[wasm_bindgen(js_name = prepareConnectFromLocalCache)]
+    #[wasm_bindgen]
     pub fn prepare_connect_from_local_cache(&mut self) {
         self.storage.use_local_cache_for_connect = true;
     }
 
-    #[wasm_bindgen(js_name = clearConnectRecovery)]
+    #[wasm_bindgen]
     pub fn clear_connect_recovery(&mut self) {
         self.storage.use_local_cache_for_connect = false;
     }

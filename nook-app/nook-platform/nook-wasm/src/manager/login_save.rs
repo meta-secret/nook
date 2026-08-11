@@ -140,7 +140,7 @@ impl NookVaultManager {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    #[wasm_bindgen(js_name = planWebsiteLoginSave)]
+    #[wasm_bindgen]
     pub async fn plan_website_login_save(
         &mut self,
         origin: &str,
@@ -153,7 +153,7 @@ impl NookVaultManager {
             .map_err(Into::into)
     }
 
-    #[wasm_bindgen(js_name = commitWebsiteLoginSave)]
+    #[wasm_bindgen]
     pub async fn commit_website_login_save(
         &mut self,
         origin: &str,

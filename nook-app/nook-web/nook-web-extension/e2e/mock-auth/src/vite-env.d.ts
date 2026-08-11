@@ -6,8 +6,11 @@ declare module 'nook-wasm' {
     module_or_path?:
       RequestInfo | URL | Response | BufferSource | WebAssembly.Module,
   ): Promise<unknown>
-  export function generateTotpCode(secret: string, unixSeconds: bigint): string
-  export function verifyTotpCode(
+  export function generate_totp_code(
+    secret: string,
+    unixSeconds: bigint,
+  ): string
+  export function verify_totp_code(
     secret: string,
     code: string,
     unixSeconds: bigint,

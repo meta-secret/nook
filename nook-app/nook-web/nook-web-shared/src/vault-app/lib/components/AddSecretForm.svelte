@@ -4,7 +4,7 @@
   import { Button } from '$lib/components/ui/button'
   import {
     buildSecretYaml,
-    generateSecretId,
+    generate_secret_id,
     SecretType,
     type PasswordGenerationOptions,
   } from '$lib/nook'
@@ -134,7 +134,7 @@
       const onReplaceSecretArgs: Parameters<typeof onReplaceSecret>[0] = { oldId: editor.record.id, type: selectedType, data: dataYaml };
       await onReplaceSecret(onReplaceSecretArgs)
     } else {
-      const onAddSecretArgs: Parameters<typeof onAddSecret>[0] = { id: generateSecretId(), type: selectedType, data: dataYaml };
+      const onAddSecretArgs: Parameters<typeof onAddSecret>[0] = { id: generate_secret_id(), type: selectedType, data: dataYaml };
       await onAddSecret(onAddSecretArgs)
     }
     resetForm()

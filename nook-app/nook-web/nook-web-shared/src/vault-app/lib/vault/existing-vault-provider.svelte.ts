@@ -1,5 +1,5 @@
 import {
-  existingVaultProviderReadiness,
+  existing_vault_provider_readiness,
   NookExistingVaultProviderReadiness,
 } from "$app-wasm";
 import {
@@ -48,7 +48,7 @@ export function prepareExistingVaultProvider({
   readonly state: ProviderActionsContext;
   readonly setupType: StorageProviderType;
 }): ExistingVaultProviderPreparation {
-  const readiness = existingVaultProviderReadiness(
+  const readiness = existing_vault_provider_readiness(
     setupType,
     state.oauthFileDraft.kind === OAuthFileDraftKind.Configured,
     state.localFolderDraft.kind === LocalFolderDraftKind.Configured,

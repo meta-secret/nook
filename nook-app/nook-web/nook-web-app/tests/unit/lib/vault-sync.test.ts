@@ -18,7 +18,7 @@ function buildConflict(kind: VaultSyncConflictKind): NookPendingSyncConflict {
   const revision = NookProviderSyncRevision.untracked()
   try {
     return kind === VaultSyncConflictKind.StoreId
-      ? NookPendingSyncConflict.storeId(
+      ? NookPendingSyncConflict.store_id(
           'provider-1',
           'GitHub',
           'local',
@@ -67,7 +67,7 @@ describe('resolveVaultSyncIntervalMs', () => {
       NookClientRunModeUtil.parse('production'),
       false,
     )
-    expect(config.resolveVaultSyncIntervalMs('1000')).toBe(60_000)
+    expect(config.resolve_vault_sync_interval_ms('1000')).toBe(60_000)
   })
 
   test('e2e build honors VITE_VAULT_SYNC_INTERVAL_MS', () => {
@@ -75,7 +75,7 @@ describe('resolveVaultSyncIntervalMs', () => {
       NookClientRunModeUtil.parse('production'),
       true,
     )
-    expect(config.resolveVaultSyncIntervalMs('1000')).toBe(1000)
+    expect(config.resolve_vault_sync_interval_ms('1000')).toBe(1000)
   })
 
   test('dev mode honors VITE_VAULT_SYNC_INTERVAL_MS', () => {
@@ -83,7 +83,7 @@ describe('resolveVaultSyncIntervalMs', () => {
       NookClientRunModeUtil.parse('development'),
       false,
     )
-    expect(config.resolveVaultSyncIntervalMs('500')).toBe(500)
+    expect(config.resolve_vault_sync_interval_ms('500')).toBe(500)
   })
 })
 
@@ -95,7 +95,7 @@ describe('syncConflictLabel', () => {
   test('uses the content conflict banner for normal conflicts', () => {
     expect(
       labelFor(
-        NookSyncConflictReview.requiresDecision(
+        NookSyncConflictReview.requires_decision(
           buildConflict(VaultSyncConflictKind.Content),
         ),
       ),
@@ -105,7 +105,7 @@ describe('syncConflictLabel', () => {
   test('uses the store-id conflict banner for store mismatches', () => {
     expect(
       labelFor(
-        NookSyncConflictReview.requiresDecision(
+        NookSyncConflictReview.requires_decision(
           buildConflict(VaultSyncConflictKind.StoreId),
         ),
       ),

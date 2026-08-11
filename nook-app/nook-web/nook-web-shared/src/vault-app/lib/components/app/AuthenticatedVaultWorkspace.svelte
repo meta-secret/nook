@@ -5,7 +5,7 @@
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
   } from '$lib/app/extension-setup'
-  import { configuredVaultApplicationSupportsExtension } from '$app-wasm'
+  import { configured_vault_application_supports_extension } from '$app-wasm'
   import { ExtensionSetupStatus } from '$lib/extension/install'
   import ExtensionInstallSetupCard from '$lib/components/ExtensionInstallSetupCard.svelte'
   import OnboardDevice from '$lib/components/OnboardDevice.svelte'
@@ -21,7 +21,7 @@
   import VaultSecurityGuideBanner from '$lib/components/VaultSecurityGuideBanner.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
-  import { generatePassword, SecretType } from '$lib/nook'
+  import { generate_password, SecretType } from '$lib/nook'
   import {
     SecretTypeSelectionKind,
     type SecretTypeSelection,
@@ -37,7 +37,7 @@
     type SecretEditorMode,
   } from './authenticated-vault-workspace-state'
 
-  const SUPPORTS_EXTENSION = configuredVaultApplicationSupportsExtension()
+  const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
 
   let {
     vault,
@@ -342,7 +342,7 @@
               onReplaceSecret={(secretRequest) =>
                 vault.handleReplaceSecret(secretRequest)}
               onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
-              onGeneratePassword={generatePassword}
+              onGeneratePassword={generate_password}
             />
           {/key}
         </div>

@@ -30,21 +30,21 @@ import type {
 } from '../../lib/login-save-messages'
 import type { AuthenticationOutcomeClassifyMessage } from '../../lib/outcome-evidence-messages'
 import {
-  decodeLoginPickerOpenResponse,
-  decodeAuthenticatorPickerOpenResponse,
-  decodeAuthenticationOutcomeResponse,
-  decodeAuthenticationWorkflowSnapshotResponse,
-  decodeAuthenticatorBackupAttachResponse,
-  decodeAuthenticatorCodeResponse,
-  decodeAuthenticatorEnrollmentConfirmResponse,
-  decodeAuthenticatorEnrollmentStageResponse,
-  decodeAuthenticatorOptionsResponse,
-  decodeAuthenticatorPreviewResponse,
-  decodeGeneratedPasswordResponse,
-  decodeWebsiteLoginSaveActionResponse,
-  decodeWebsiteLoginSaveOfferResponse,
-  decodeWebsiteLoginSavePendingResponse,
-  decodeWebsiteLoginOptions,
+  decode_login_picker_open_response,
+  decode_authenticator_picker_open_response,
+  decode_authentication_outcome_response,
+  decode_authentication_workflow_snapshot_response,
+  decode_authenticator_backup_attach_response,
+  decode_authenticator_code_response,
+  decode_authenticator_enrollment_confirm_response,
+  decode_authenticator_enrollment_stage_response,
+  decode_authenticator_options_response,
+  decode_authenticator_preview_response,
+  decode_generated_password_response,
+  decode_website_login_save_action_response,
+  decode_website_login_save_offer_response,
+  decode_website_login_save_pending_response,
+  decode_website_login_options,
   type AuthenticationWorkflowSnapshotResponse,
   type AuthenticationWorkflowSnapshotResponseWire,
   type AuthenticatorBackupAttachResponse,
@@ -191,7 +191,7 @@ export async function sendLoginOptionsRuntimeMessage(
     const responseWire = delivery.response as WebsiteLoginOptionsWireValue
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeWebsiteLoginOptions(responseWire),
+      response: decode_website_login_options(responseWire),
     }
   } catch {
     return unavailable()
@@ -210,7 +210,7 @@ export async function sendLoginSaveOfferRuntimeMessage(
     const response = delivery.response as WebsiteLoginSaveOfferResponse
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeWebsiteLoginSaveOfferResponse(response),
+      response: decode_website_login_save_offer_response(response),
     }
   } catch {
     return unavailable()
@@ -229,7 +229,7 @@ export async function sendLoginSavePendingRuntimeMessage(
     const response = delivery.response as WebsiteLoginSavePendingResponse
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeWebsiteLoginSavePendingResponse(response),
+      response: decode_website_login_save_pending_response(response),
     }
   } catch {
     return unavailable()
@@ -248,7 +248,7 @@ export async function sendLoginSaveActionRuntimeMessage(
     const response = delivery.response as WebsiteLoginSaveActionResponse
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeWebsiteLoginSaveActionResponse(response),
+      response: decode_website_login_save_action_response(response),
     }
   } catch {
     return unavailable()
@@ -267,7 +267,7 @@ export async function sendLoginPickerOpenRuntimeMessage(
     const responseWire = delivery.response as LoginPickerOpenResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeLoginPickerOpenResponse(responseWire),
+      response: decode_login_picker_open_response(responseWire),
     }
   } catch {
     return unavailable()
@@ -287,7 +287,7 @@ export async function sendAuthenticatorPickerOpenRuntimeMessage(
       delivery.response as AuthenticatorPickerOpenResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeAuthenticatorPickerOpenResponse(responseWire),
+      response: decode_authenticator_picker_open_response(responseWire),
     }
   } catch {
     return unavailable()
@@ -307,7 +307,7 @@ export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
       delivery.response as AuthenticationWorkflowSnapshotResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeAuthenticationWorkflowSnapshotResponse(responseWire),
+      response: decode_authentication_workflow_snapshot_response(responseWire),
     }
   } catch {
     return unavailable()
@@ -326,7 +326,7 @@ export async function sendAuthenticatorPreviewRuntimeMessage(
     const responseWire = delivery.response as AuthenticatorPreviewResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeAuthenticatorPreviewResponse(responseWire),
+      response: decode_authenticator_preview_response(responseWire),
     }
   } catch {
     return unavailable()
@@ -346,7 +346,7 @@ export async function sendAuthenticatorBackupAttachRuntimeMessage(
       delivery.response as AuthenticatorBackupAttachResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeAuthenticatorBackupAttachResponse(responseWire),
+      response: decode_authenticator_backup_attach_response(responseWire),
     }
   } catch {
     return unavailable()
@@ -366,7 +366,7 @@ export async function sendAuthenticatorCodeRuntimeMessage(
     const responseWire = delivery.response as AuthenticatorCodeResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeAuthenticatorCodeResponse(responseWire),
+      response: decode_authenticator_code_response(responseWire),
     }
   } catch {
     return unavailable()
@@ -385,7 +385,7 @@ export async function sendAuthenticatorOptionsRuntimeMessage(
     const responseWire = delivery.response as AuthenticatorOptionsResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeAuthenticatorOptionsResponse(responseWire),
+      response: decode_authenticator_options_response(responseWire),
     }
   } catch {
     return unavailable()
@@ -405,7 +405,7 @@ export async function sendAuthenticatorEnrollmentStageRuntimeMessage(
       delivery.response as AuthenticatorEnrollmentStageResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeAuthenticatorEnrollmentStageResponse(responseWire),
+      response: decode_authenticator_enrollment_stage_response(responseWire),
     }
   } catch {
     return unavailable()
@@ -425,7 +425,7 @@ export async function sendAuthenticatorEnrollmentConfirmRuntimeMessage(
       delivery.response as AuthenticatorEnrollmentConfirmResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeAuthenticatorEnrollmentConfirmResponse(responseWire),
+      response: decode_authenticator_enrollment_confirm_response(responseWire),
     }
   } catch {
     return unavailable()
@@ -444,7 +444,7 @@ export async function sendAuthenticationOutcomeRuntimeMessage(
     const responseWire = delivery.response as AuthenticationOutcomeResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeAuthenticationOutcomeResponse(responseWire),
+      response: decode_authentication_outcome_response(responseWire),
     }
   } catch {
     return unavailable()
@@ -463,7 +463,7 @@ export async function sendGeneratePasswordRuntimeMessage(
     const responseWire = delivery.response as GeneratedPasswordResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decodeGeneratedPasswordResponse(responseWire),
+      response: decode_generated_password_response(responseWire),
     }
   } catch {
     return unavailable()

@@ -13,13 +13,13 @@ pub struct NookOAuthRefreshCredential(pub(crate) nook_core::OAuthRefreshCredenti
 
 #[wasm_bindgen]
 impl NookOAuthRefreshCredential {
-    #[wasm_bindgen(js_name = notIssued)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn not_issued() -> Self {
         Self(nook_core::OAuthRefreshCredential::NotIssued)
     }
 
-    #[wasm_bindgen(js_name = token)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn token(value: String) -> Self {
         Self(nook_core::OAuthRefreshCredential::Token(value))
@@ -60,13 +60,13 @@ pub struct NookOAuthTokenExpiry(pub(crate) nook_core::OAuthTokenExpiry);
 
 #[wasm_bindgen]
 impl NookOAuthTokenExpiry {
-    #[wasm_bindgen(js_name = unknown)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn unknown() -> Self {
         Self(nook_core::OAuthTokenExpiry::Unknown)
     }
 
-    #[wasm_bindgen(js_name = expiresAt)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn expires_at(value: String) -> Self {
         Self(nook_core::OAuthTokenExpiry::ExpiresAt(value))
@@ -107,25 +107,25 @@ pub struct NookOAuthRemoteFile(pub(crate) nook_core::OAuthRemoteFile);
 
 #[wasm_bindgen]
 impl NookOAuthRemoteFile {
-    #[wasm_bindgen(js_name = unresolved)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn unresolved() -> Self {
         Self(nook_core::OAuthRemoteFile::Unresolved)
     }
 
-    #[wasm_bindgen(js_name = fileId)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn file_id(file_id: String) -> Self {
         Self(nook_core::OAuthRemoteFile::FileId { file_id })
     }
 
-    #[wasm_bindgen(js_name = fileName)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn file_name(file_name: String) -> Self {
         Self(nook_core::OAuthRemoteFile::FileName { file_name })
     }
 
-    #[wasm_bindgen(js_name = identified)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn identified(file_id: String, file_name: String) -> Self {
         Self(nook_core::OAuthRemoteFile::Identified { file_id, file_name })
@@ -181,13 +181,13 @@ pub struct NookOAuthAccountIdentity(pub(crate) nook_core::OAuthAccountIdentity);
 
 #[wasm_bindgen]
 impl NookOAuthAccountIdentity {
-    #[wasm_bindgen(js_name = unknown)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn unknown() -> Self {
         Self(nook_core::OAuthAccountIdentity::Unknown)
     }
 
-    #[wasm_bindgen(js_name = email)]
+    #[wasm_bindgen]
     #[must_use]
     pub fn email(value: String) -> Self {
         Self(nook_core::OAuthAccountIdentity::Email(value))

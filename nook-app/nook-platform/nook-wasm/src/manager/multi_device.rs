@@ -3,7 +3,7 @@
 //! Wraps the join / approve / enroll choreography that the `auth:` /
 //! `joins:` / `members:` sections of a keys-mode vault use. None of these
 //! methods are reachable when the vault is in password mode — the
-//! password-mode counterpart is `connectWithPassword` (`manager::password`).
+//! password-mode counterpart is `connect_with_password` (`manager::password`).
 
 use super::verified_access::VerifiedVaultAccessFlow;
 use super::{NookVaultManager, VaultCryptoState};
@@ -32,7 +32,7 @@ impl NookVaultManager {
 
     /// Ensure the genesis / approver device appears in the roster when keys are
     /// present but `members:` rows were not replayed from the event log.
-    #[wasm_bindgen(js_name = ensureVaultRosterHydrated)]
+    #[wasm_bindgen]
     pub async fn ensure_vault_roster_hydrated_js(&mut self) -> Result<bool, JsError> {
         Ok(self.ensure_vault_roster_hydrated().await?)
     }
@@ -360,7 +360,7 @@ impl NookVaultManager {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    #[wasm_bindgen(js_name = deviceSigningPublicKey)]
+    #[wasm_bindgen]
     pub async fn device_signing_public_key_js(&mut self) -> Result<String, JsError> {
         let signing = self.ensure_signing_identity().await?;
         Ok(hex::encode(signing.verifying_key().as_bytes()))

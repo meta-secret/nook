@@ -39,6 +39,10 @@ This document defines the strict development standards, architectural boundaries
     platforms—like a CLI tool or mobile apps—can reuse them without TypeScript.
 - **`nook-wasm` Bridge Responsibilities:**
   - Exposes Rust structs to JS via `#[wasm_bindgen]`.
+  - Exported Rust functions and methods keep their authored names in JavaScript.
+    Callable `js_name` renames are prohibited because they break direct
+    cross-language navigation. Property accessors and imported JavaScript APIs
+    may still name the external property or callable they bind.
   - Performs network/database input/output operations (e.g., IndexedDB, GitHub API).
   - Holds WASM session state (`Database`, vault metadata, `VaultCrypto`).
   - All complex business logic (crypto, formats, validation, password generation, search) must live in `nook-core` and be tested there.

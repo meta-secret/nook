@@ -152,7 +152,7 @@ the fallback for vaults without a suitable password entry.
 
 ```
 [Svelte] → VaultState.addVaultPassword(label, password)
-         → NookVaultManager.addVaultPassword(label, password)
+         → NookVaultManager.add_vault_password(label, password)
               → resolve current secrets_key + members_key
               → derive scrypt recipient(password)
               → age-encrypt {secrets_key, members_key}
@@ -164,7 +164,7 @@ Precondition: the device is already unlocked and enrolled. Postcondition:
 device-key unlock still works, and the new labelled password can unlock or
 enrol another device.
 
-`setVaultPassword(password)` remains as a compatibility wrapper that creates a
+`set_vault_password(password)` remains as a compatibility wrapper that creates a
 default-labelled entry.
 
 ### 4.2 Rotate or remove backup password
@@ -203,7 +203,7 @@ QR payload (JSON, then base64url, then a single-frame QR/link):
 The payload carries provider credentials plus the selected backup password.
 It does not carry raw vault keys.
 A joining device saves provider credentials.
-It calls `connectWithPassword(mode, creds, entry_id, password)`.
+It calls `connect_with_password(mode, creds, entry_id, password)`.
 It unwraps the entry.
 It generates its own device identity/signing key.
 It writes its `auth:`/`members:` rows.
@@ -221,7 +221,7 @@ directly:
 ```
 [Svelte] LoginGate
         → VaultState.unlockWithPassword(entry_id, password)
-        → NookVaultManager.connectWithPassword(provider_creds, entry_id, password)
+        → NookVaultManager.connect_with_password(provider_creds, entry_id, password)
 ```
 
 On an already-enrolled device the call refreshes this device's auth row from
@@ -285,12 +285,12 @@ All scrypt work happens in portable Rust (`nook-auth2`, Wasm-compatible).
 
 | Method                                                          | Role                                                                |
 | --------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `listVaultPasswordEntries()` / `fetchVaultPasswordEntries(...)` | Surface labelled password choices to login/settings/onboarding.     |
-| `addVaultPassword(label, password)`                             | Add a new backup password entry.                                    |
-| `updateVaultPasswordEntry(entry_id, password)`                  | Rotate one entry and start a new key epoch.                         |
-| `removeVaultPasswordEntry(entry_id)`                            | Remove one entry and start a new key epoch.                         |
-| `verifyVaultPassword(entry_id, password)`                       | Local password check for QR issuance and login UX.                  |
-| `connectWithPassword(mode, creds, entry_id, password)`          | Self-enrol/unlock via a selected password entry.                    |
+| `list_vault_password_entries()` / `fetch_vault_password_entries(...)` | Surface labelled password choices to login/settings/onboarding. |
+| `add_vault_password(label, password)`                           | Add a new backup password entry.                                    |
+| `update_vault_password_entry(entry_id, password)`               | Rotate one entry and start a new key epoch.                         |
+| `remove_vault_password_entry(entry_id)`                         | Remove one entry and start a new key epoch.                         |
+| `verify_vault_password(entry_id, password)`                     | Local password check for QR issuance and login UX.                  |
+| `connect_with_password(mode, creds, entry_id, password)`        | Self-enrol/unlock via a selected password entry.                    |
 
 There is no separate client unlock-mode flag: device keys remain primary and
 the presence of `password_entries` determines whether additive password

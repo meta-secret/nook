@@ -24,14 +24,14 @@ struct PendingSentinelGenesisFinalization {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    #[wasm_bindgen(js_name = hasPendingSentinelGenesisFinalization)]
+    #[wasm_bindgen]
     pub async fn has_pending_sentinel_genesis_finalization(&self) -> Result<bool, JsError> {
         Ok(load_sentinel_genesis_finalization_pending()
             .await?
             .is_some())
     }
 
-    #[wasm_bindgen(js_name = resumePendingSentinelGenesisFinalization)]
+    #[wasm_bindgen]
     pub async fn resume_pending_sentinel_genesis_finalization(
         &mut self,
     ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {
@@ -45,7 +45,7 @@ impl NookVaultManager {
 
     /// Atomically create the complete encrypted Sentinel projection. No vault key
     /// is installed in the browser session; opening still requires quorum.
-    #[wasm_bindgen(js_name = finalizeSentinelGenesis)]
+    #[wasm_bindgen]
     pub async fn finalize_sentinel_genesis(
         &mut self,
     ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {

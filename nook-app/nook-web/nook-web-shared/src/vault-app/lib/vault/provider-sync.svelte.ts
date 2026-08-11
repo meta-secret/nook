@@ -9,7 +9,7 @@ import {
   NookManualProviderSyncState,
   NookPendingSyncConflict,
   NookProviderSyncRevision,
-  readLocalVaultYaml,
+  read_local_vault_yaml,
 } from "$app-wasm";
 import {
   localFolderHandle,
@@ -38,7 +38,7 @@ function localFolderMultipleVaultsHealthFromTypedIssue({
   if (provider.type !== "local-folder") {
     throw new Error("Multiple-vault storage issue requires a local folder");
   }
-  return NookLocalFolderHealth.multipleVaults(
+  return NookLocalFolderHealth.multiple_vaults(
     provider.id,
     provider.label,
     storeIds,
@@ -57,7 +57,7 @@ async function stageProviderStoreMismatchConflict({
   readonly localStoreId: string;
   readonly remoteStoreId: string;
 }): Promise<boolean> {
-  const localYaml = await readLocalVaultYaml().catch(() => "");
+  const localYaml = await read_local_vault_yaml().catch(() => "");
   const args =
     provider.type === "local-folder"
       ? (["local-folder", "", ""] as const)
@@ -65,7 +65,7 @@ async function stageProviderStoreMismatchConflict({
   const revision = NookProviderSyncRevision.untracked();
   try {
     state.stageSyncConflict(
-      NookPendingSyncConflict.storeId(
+      NookPendingSyncConflict.store_id(
         provider.id,
         provider.label,
         localYaml,
@@ -105,7 +105,7 @@ export async function syncLocalFolderProvider({
     throw new Error(state.t(I18N_KEYS.ErrorsLocalBackupFolderRequired));
   }
   const localYaml = (await state.enqueueStorage(() =>
-    manager.syncLocalFolderProvider(handle.handleId),
+    manager.sync_local_folder_provider_js(handle.handleId),
   )) as string;
   if (localYaml.trim()) {
     const metadataRequest: Parameters<
@@ -176,7 +176,7 @@ export async function syncProviderById({
 
     const [mode, pat, repo] = state.providerWasmArgs(provider);
     // `sync_vault_from_storage` checks the IDB event-log flag; the in-memory
-    // `eventLogMode()` bit can be false after reload until connect finishes.
+    // `event_log_mode()` bit can be false after reload until connect finishes.
     const raw = await state.enqueueStorage<NookVaultSyncResult>(() =>
       (() => {
         const syncRequest: Parameters<typeof syncVaultFromStorage>[0] = {
@@ -204,7 +204,7 @@ export async function syncProviderById({
       typeof state.updateProviderSyncMetadata
     >[0] = {
       providerId,
-      yaml: await readLocalVaultYaml(),
+      yaml: await read_local_vault_yaml(),
       revision: NookProviderSyncRevision.untracked(),
     };
     await state.updateProviderSyncMetadata(metadataRequest);
@@ -216,7 +216,9 @@ export async function syncProviderById({
       failure: runtimeFailure(e),
     };
     syncError(syncErrorArgs4);
-    const eventLogIssueResult = state.requireManager().takeEventLogSyncIssue();
+    const eventLogIssueResult = state
+      .requireManager()
+      .take_event_log_sync_issue();
     const message = e instanceof Error ? e.message : String(e);
     let stagedStoreMismatch = false;
     let localFolderInspection: LocalFolderInspection = {

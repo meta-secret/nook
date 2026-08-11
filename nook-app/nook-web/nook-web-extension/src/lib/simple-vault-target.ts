@@ -2,21 +2,21 @@ import { companionWasmReady } from '../../../nook-web-shared/src/extension/compa
 
 void companionWasmReady
 import {
-  belongsToSentinelVault as wasmBelongsToSentinelVault,
-  belongsToSimpleVault as wasmBelongsToSimpleVault,
-  defaultSimpleVaultUrl,
-  isNookVaultAppUrl as wasmIsNookVaultAppUrl,
-  isSentinelVaultHostname as wasmIsSentinelVaultHostname,
-  isSimpleVaultHostname as wasmIsSimpleVaultHostname,
-  matchingSentinelVaultBaseUrl as wasmMatchingSentinelVaultBaseUrl,
-  nookVaultAppExcludeMatchPatterns as wasmNookVaultAppExcludeMatchPatterns,
-  normalizeSimpleVaultBaseUrl as wasmNormalizeSimpleVaultBaseUrl,
-  sentinelVaultMatchPatterns as wasmSentinelVaultMatchPatterns,
-  simpleVaultMatchPattern as wasmSimpleVaultMatchPattern,
-  simpleVaultUrl as wasmSimpleVaultUrl,
+  belongs_to_sentinel_vault,
+  belongs_to_simple_vault,
+  default_simple_vault_url,
+  is_nook_vault_app_url,
+  is_sentinel_vault_hostname,
+  is_simple_vault_hostname,
+  matching_sentinel_vault_base_url,
+  nook_vault_app_exclude_match_patterns,
+  normalize_simple_vault_base_url,
+  sentinel_vault_match_patterns,
+  simple_vault_match_pattern,
+  simple_vault_url,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 export function defaultSimpleVaultBaseUrl(): string {
-  return defaultSimpleVaultUrl()
+  return default_simple_vault_url()
 }
 
 enum MatchingSentinelBaseKind {
@@ -71,7 +71,7 @@ function matchingSentinelBaseUrlFallback(
 }
 
 export function normalizeSimpleVaultBaseUrl(value: string): string {
-  return wasmNormalizeSimpleVaultBaseUrl(value)
+  return normalize_simple_vault_base_url(value)
 }
 
 export type SimpleVaultUrlArgs = {
@@ -80,15 +80,15 @@ export type SimpleVaultUrlArgs = {
 }
 
 export function simpleVaultUrl(args: SimpleVaultUrlArgs): string {
-  return wasmSimpleVaultUrl(args.baseUrl, args.path)
+  return simple_vault_url(args.baseUrl, args.path)
 }
 
 export function simpleVaultMatchPattern(baseUrl: string): string {
-  return wasmSimpleVaultMatchPattern(baseUrl)
+  return simple_vault_match_pattern(baseUrl)
 }
 
 export function sentinelVaultBaseUrl(baseUrl: string): string {
-  const matching = wasmMatchingSentinelVaultBaseUrl(baseUrl)
+  const matching = matching_sentinel_vault_base_url(baseUrl)
   if (matching) {
     return matching
   }
@@ -104,19 +104,19 @@ export function sentinelVaultBaseUrl(baseUrl: string): string {
 }
 
 export function sentinelVaultMatchPatterns(baseUrl: string): string[] {
-  return wasmSentinelVaultMatchPatterns(baseUrl)
+  return sentinel_vault_match_patterns(baseUrl)
 }
 
 export function nookVaultAppExcludeMatchPatterns(baseUrl: string): string[] {
-  return wasmNookVaultAppExcludeMatchPatterns(baseUrl)
+  return nook_vault_app_exclude_match_patterns(baseUrl)
 }
 
 export function isSimpleVaultHostname(hostname: string): boolean {
-  return wasmIsSimpleVaultHostname(hostname)
+  return is_simple_vault_hostname(hostname)
 }
 
 export function isSentinelVaultHostname(hostname: string): boolean {
-  return wasmIsSentinelVaultHostname(hostname)
+  return is_sentinel_vault_hostname(hostname)
 }
 
 export type NookVaultAppUrlArgs = {
@@ -125,7 +125,7 @@ export type NookVaultAppUrlArgs = {
 }
 
 export function isNookVaultAppUrl(args: NookVaultAppUrlArgs): boolean {
-  return wasmIsNookVaultAppUrl(args.candidateUrl, args.baseUrl)
+  return is_nook_vault_app_url(args.candidateUrl, args.baseUrl)
 }
 
 export type VaultUrlMembershipArgs = {
@@ -134,9 +134,9 @@ export type VaultUrlMembershipArgs = {
 }
 
 export function belongsToSimpleVault(args: VaultUrlMembershipArgs): boolean {
-  return wasmBelongsToSimpleVault(args.baseUrl, args.candidateUrl)
+  return belongs_to_simple_vault(args.baseUrl, args.candidateUrl)
 }
 
 export function belongsToSentinelVault(args: VaultUrlMembershipArgs): boolean {
-  return wasmBelongsToSentinelVault(args.baseUrl, args.candidateUrl)
+  return belongs_to_sentinel_vault(args.baseUrl, args.candidateUrl)
 }

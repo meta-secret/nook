@@ -34,7 +34,7 @@
   import {
     SentinelGenesisPhase,
     VaultApplication,
-    sentinelGenesisParticipantFingerprint,
+    sentinel_genesis_participant_fingerprint,
     type NookSentinelGenesisDelivery,
     type NookSentinelGenesisParticipantStatus,
     type StartSentinelGenesisArgs,
@@ -305,7 +305,7 @@
         initiatorPasskeyRequested = true
         return
       }
-      initiatorFingerprint = sentinelGenesisParticipantFingerprint(payload)
+      initiatorFingerprint = sentinel_genesis_participant_fingerprint(payload)
       initiatorPasskeyRequested = false
     } catch {
       initiatorFingerprint = ''

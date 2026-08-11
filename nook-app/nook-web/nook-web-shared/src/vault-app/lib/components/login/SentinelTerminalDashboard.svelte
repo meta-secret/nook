@@ -21,7 +21,7 @@
   import type { VaultState } from '$lib/vault.svelte'
   import {
     SentinelGenesisPhase,
-    sentinelGenesisPhaseTranslationKey,
+    sentinel_genesis_phase_translation_key,
     type NookSentinelGenesisDelivery,
     type NookSentinelGenesisParticipantStatus,
     type StartSentinelGenesisArgs,
@@ -117,7 +117,7 @@
       text:
         status === SentinelGenesisPhase.Inactive
           ? vault.t(I18N_KEYS.LoginSentinelTerminalDraftNotice)
-          : `${vault.t(I18N_KEYS.LoginSentinelTerminalStatus)}  ${vault.t(sentinelGenesisPhaseTranslationKey(status)).toUpperCase()}`,
+          : `${vault.t(I18N_KEYS.LoginSentinelTerminalStatus)}  ${vault.t(sentinel_genesis_phase_translation_key(status)).toUpperCase()}`,
       tone: SentinelTerminalLineTone.Muted,
     },
   ])

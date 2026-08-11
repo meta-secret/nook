@@ -6,7 +6,7 @@ import type {
   NookSecretRecord,
   SecretType,
 } from "$lib/nook";
-import { generateSecretId, VaultAccessStatus } from "$lib/nook";
+import { generate_secret_id, VaultAccessStatus } from "$lib/nook";
 import { createLogger, runtimeFailure } from "$lib/runtime/log";
 import {
   JoinEnrollmentState,
@@ -129,7 +129,7 @@ export async function loadDb(state: VaultState) {
     }
 
     if (
-      !state.clientPolicy.remoteRecoveryConnectConfirmed(
+      !state.clientPolicy.remote_recovery_connect_confirmed(
         state.remoteVaultRecoveryState,
       ) &&
       (await state.handleRemoteVaultAssessStatus(accessStatus))
@@ -378,7 +378,8 @@ export async function handleBitwardenImport({
     typeof runPasswordManagerImport
   >[0] = {
     state,
-    importFromManager: (manager) => manager.importBitwardenJson(json, password),
+    importFromManager: (manager) =>
+      manager.import_bitwarden_json(json, password),
     sourceName: "Bitwarden",
     successKey: I18N_KEYS.ToastsBitwardenImported,
     failureKey: I18N_KEYS.BitwardenImportFailed,
@@ -397,7 +398,7 @@ export async function handleKeePassXcImport({
     typeof runPasswordManagerImport
   >[0] = {
     state,
-    importFromManager: (manager) => manager.importKeePassXcCsv(csv),
+    importFromManager: (manager) => manager.import_keepassxc_csv(csv),
     sourceName: "KeePassXC",
     successKey: I18N_KEYS.ToastsKeepassxcImported,
     failureKey: I18N_KEYS.KeepassxcImportFailed,
@@ -416,7 +417,7 @@ export async function handleLastPassImport({
     typeof runPasswordManagerImport
   >[0] = {
     state,
-    importFromManager: (manager) => manager.importLastPassCsv(csv),
+    importFromManager: (manager) => manager.import_lastpass_csv(csv),
     sourceName: "LastPass",
     successKey: I18N_KEYS.ToastsLastpassImported,
     failureKey: I18N_KEYS.LastpassImportFailed,
@@ -435,7 +436,7 @@ export async function handleKeeperImport({
     typeof runPasswordManagerImport
   >[0] = {
     state,
-    importFromManager: (manager) => manager.importKeeperCsv(csv),
+    importFromManager: (manager) => manager.import_keeper_csv(csv),
     sourceName: "Keeper",
     successKey: I18N_KEYS.ToastsKeeperImported,
     failureKey: I18N_KEYS.KeeperImportFailed,
@@ -454,7 +455,7 @@ export async function handleOnePasswordImport({
     typeof runPasswordManagerImport
   >[0] = {
     state,
-    importFromManager: (manager) => manager.importOnePasswordPux(archive),
+    importFromManager: (manager) => manager.import_onepassword_pux(archive),
     sourceName: "1Password",
     successKey: I18N_KEYS.ToastsOnepasswordImported,
     failureKey: I18N_KEYS.OnepasswordImportFailed,
@@ -474,7 +475,7 @@ export async function handleApplePasswordsImport({
   >[0] = {
     state,
     importFromManager: (manager) =>
-      manager.importApplePasswordsExport(exportBytes),
+      manager.import_apple_passwords_export(exportBytes),
     sourceName: "Safari / Apple Passwords",
     successKey: I18N_KEYS.ToastsApplePasswordsImported,
     failureKey: I18N_KEYS.ApplePasswordsImportFailed,
@@ -493,7 +494,7 @@ export async function handleChromePasswordsImport({
     typeof runPasswordManagerImport
   >[0] = {
     state,
-    importFromManager: (manager) => manager.importChromePasswordsCsv(csv),
+    importFromManager: (manager) => manager.import_chrome_passwords_csv(csv),
     sourceName: "Chrome passwords",
     successKey: I18N_KEYS.ToastsChromePasswordsImported,
     failureKey: I18N_KEYS.ChromePasswordsImportFailed,
@@ -512,7 +513,7 @@ export async function handleDashlaneImport({
     typeof runPasswordManagerImport
   >[0] = {
     state,
-    importFromManager: (manager) => manager.importDashlaneExport(exportBytes),
+    importFromManager: (manager) => manager.import_dashlane_export(exportBytes),
     sourceName: "Dashlane",
     successKey: I18N_KEYS.ToastsDashlaneImported,
     failureKey: I18N_KEYS.DashlaneImportFailed,
@@ -532,7 +533,7 @@ export async function handleGoogleAuthenticatorImport({
   >[0] = {
     state,
     importFromManager: (manager) =>
-      manager.importGoogleAuthenticatorMigration(migrationUris),
+      manager.import_google_authenticator_migration(migrationUris),
     sourceName: "Google Authenticator",
     successKey: I18N_KEYS.ToastsGoogleAuthenticatorImported,
     failureKey: I18N_KEYS.GoogleAuthenticatorImportFailed,
@@ -551,7 +552,7 @@ export async function handleProtonPassImport({
     typeof runPasswordManagerImport
   >[0] = {
     state,
-    importFromManager: (manager) => manager.importProtonPass(exportBytes),
+    importFromManager: (manager) => manager.import_proton_pass(exportBytes),
     sourceName: "Proton Pass",
     successKey: I18N_KEYS.ToastsProtonPassImported,
     failureKey: I18N_KEYS.ProtonPassImportFailed,
@@ -626,7 +627,7 @@ export async function handleReplaceSecret({
 }) {
   if (!(await prepareSecretMutation(state))) return;
   try {
-    const newId = generateSecretId();
+    const newId = generate_secret_id();
     await state.enqueueStorage(async () => {
       const rawRecords = (await state
         .requireManager()
@@ -658,7 +659,7 @@ export async function refreshPasswordEntriesList(
     const raw = await state.enqueueStorage(() =>
       state
         .requireManager()
-        .fetchVaultPasswordEntries(...state.wasmStorageArgs()),
+        .fetch_vault_password_entries(...state.wasmStorageArgs()),
     );
     state.passwordEntries = raw;
     if (
@@ -717,14 +718,14 @@ export async function loadSecretPage({
   const page = await state.enqueueStorage(() =>
     state
       .requireManager()
-      .queryPreparedSecretPage(
+      .query_prepared_secret_page_js(
         query,
         state.secretTypeFilter,
         requestedOffset,
         state.secretPageSize,
       ),
   );
-  let records = page.takeItems();
+  let records = page.take_items();
   let total = page.total;
   let offset = page.offset;
   page.free();
@@ -734,7 +735,7 @@ export async function loadSecretPage({
   }
 
   if (records.length === 0 && total > 0 && offset >= total) {
-    const lastOffset = state.clientPolicy.normalizedSecretPageOffset(
+    const lastOffset = state.clientPolicy.normalized_secret_page_offset(
       total,
       offset,
       state.secretPageSize,
@@ -742,14 +743,14 @@ export async function loadSecretPage({
     const lastPage = await state.enqueueStorage(() =>
       state
         .requireManager()
-        .querySecretPage(
+        .query_secret_page_js(
           query,
           state.secretTypeFilter,
           lastOffset,
           state.secretPageSize,
         ),
     );
-    records = lastPage.takeItems();
+    records = lastPage.take_items();
     total = lastPage.total;
     offset = lastPage.offset;
     lastPage.free();
@@ -776,7 +777,7 @@ export function applyConnectedSecretPage({
   readonly page: NookSecretPage;
   readonly query: string;
 }): void {
-  const records = page.takeItems();
+  const records = page.take_items();
   const total = page.total;
   const offset = page.offset;
   page.free();
@@ -798,7 +799,9 @@ export async function decryptSecret({
   if (!state.hasManager) {
     throw new Error("Vault manager is not initialized.");
   }
-  return state.enqueueStorage(() => state.requireManager().decryptSecret(id));
+  return state.enqueueStorage(() =>
+    state.requireManager().decrypt_secret_js(id),
+  );
 }
 
 export async function currentAuthenticatorCode({
@@ -813,7 +816,7 @@ export async function currentAuthenticatorCode({
   }
   const unixSeconds = Math.floor(Date.now() / 1000);
   const result = await state.enqueueStorage(() =>
-    state.requireManager().currentAuthenticatorCode(id, unixSeconds),
+    state.requireManager().current_authenticator_code(id, unixSeconds),
   );
   try {
     return {

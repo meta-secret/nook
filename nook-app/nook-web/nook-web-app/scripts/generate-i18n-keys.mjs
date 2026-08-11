@@ -299,7 +299,7 @@ async function verifyNoObsoleteRustKeyRegistries() {
 async function verifyNoLiteralLookupArguments() {
   const violations = []
   const lookup =
-    /(?:\b(?:t|translatedMessage|translatedMessageWithSubstitution|translateFromCatalog|translateWithReplacements)\s*\(|\.t\s*\(|chrome\.i18n\.getMessage\s*\()\s*(["'`])/g
+    /(?:\b(?:t|translatedMessage|translatedMessageWithSubstitution|translateFromCatalog|translateWithReplacements|translate_from_catalog|translate_with_replacements)\s*\(|\.t\s*\(|chrome\.i18n\.getMessage\s*\()\s*(["'`])/g
   for (const path of await sourceFiles(resolve(repositoryRoot, 'nook-app'))) {
     if (path === fileURLToPath(import.meta.url)) continue
     const source = await readFile(path, 'utf8')

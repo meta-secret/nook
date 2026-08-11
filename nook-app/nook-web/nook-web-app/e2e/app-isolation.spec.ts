@@ -29,10 +29,10 @@ type DebugVault = {
       replication_type: number
       free(): void
     }
-    setVaultArchitecture(value: { free(): void }): void
+    set_vault_architecture(value: { free(): void }): void
     device_id: string
     device_public_key: string
-    deviceSigningPublicKey(): Promise<string>
+    device_signing_public_key_js(): Promise<string>
   }
 }
 
@@ -106,7 +106,7 @@ test('exposes only the project capability and rejects the opposite vault type', 
         )
       : Architecture.simple(current.device_mode, current.replication_type)
     try {
-      manager.setVaultArchitecture(oppositeArchitecture)
+      manager.set_vault_architecture(oppositeArchitecture)
       return ''
     } catch (caught) {
       return caught instanceof Error ? caught.message : String(caught)
@@ -154,7 +154,8 @@ test('keeps extension routing and local session behavior app-specific', async ({
       try {
         const deviceId = manager.device_id
         const devicePublicKey = manager.device_public_key
-        const deviceSigningPublicKey = await manager.deviceSigningPublicKey()
+        const deviceSigningPublicKey =
+          await manager.device_signing_public_key_js()
         return { deviceId, devicePublicKey, deviceSigningPublicKey }
       } catch (caught) {
         lastError = caught instanceof Error ? caught.message : String(caught)

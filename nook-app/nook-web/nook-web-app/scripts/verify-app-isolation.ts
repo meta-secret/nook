@@ -207,9 +207,9 @@ const sharedBindings = await readFile(
   'utf8',
 )
 for (const requiredExport of [
-  'configureVaultApplication',
-  'configuredVaultApplication',
-  'approveExtensionDevice',
+  'configure_vault_application',
+  'configured_vault_application',
+  'approve_extension_device',
 ]) {
   if (!sharedBindings.includes(requiredExport)) {
     throw new Error(`Shared WASM is missing ${requiredExport}.`)

@@ -38,7 +38,7 @@
   import type { VaultState } from '$lib/vault.svelte'
   import {
     providerCapabilityLabelKey,
-    providerSupportsReplication,
+    provider_supports_replication,
   } from '$lib/vault/architecture-model'
   import { formatProviderSyncStatus } from '$lib/auth/provider-sync-status'
   import {
@@ -271,7 +271,7 @@
               data-testid="settings-providers-list"
             >
               {#each syncProviders as provider (provider.id)}
-                {@const supportsVaultReplication = providerSupportsReplication(
+                {@const supportsVaultReplication = provider_supports_replication(
                   provider,
                   vault.vaultArchitecture.replication_type,
                 )}

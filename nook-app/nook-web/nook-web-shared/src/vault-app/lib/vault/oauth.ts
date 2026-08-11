@@ -1,7 +1,7 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import {
-  bindGoogleDriveSharedFolder,
+  bind_google_drive_shared_folder,
   configuredOAuthFile,
   defaultOAuthFileConfig,
   DEFAULT_DRIVE_BACKUP_NAME,
@@ -11,8 +11,8 @@ import {
   OAuthAccessTokenKind,
   oauthFileName,
   OAuthFileNameKind,
-  setGoogleDriveProviderMode,
-  setICloudProviderMode,
+  set_google_drive_provider_mode,
+  set_icloud_provider_mode,
   storedICloudShareTarget,
   storedOAuthAccountEmail,
   storedOAuthRemoteFileName,
@@ -25,7 +25,7 @@ import {
 } from "$lib/auth/providers";
 import {
   NookDuplicateSyncProviderState,
-  verifySharedGoogleDriveFolder,
+  verify_shared_google_drive_folder,
 } from "$app-wasm";
 import {
   ensureValidOAuthFileConfig,
@@ -56,9 +56,9 @@ import {
 } from "$lib/auth/oauth-origin";
 import { createLogger } from "$lib/runtime/log";
 import {
-  prepareSharedStorageGrant,
+  prepare_shared_storage_grant,
   createSharedStorageTarget,
-  providerOauthPresetForConfig,
+  provider_oauth_preset_for_config,
   sharedStorageGrantAccessToken,
   suggestedSharedStorageTarget,
 } from "$lib/vault/architecture-model";
@@ -203,7 +203,7 @@ export function selectGoogleDriveMode({
   if (oauthFile.preset !== "google-drive") return;
   const current = oauthFile.driveMode;
   if (current === mode) return;
-  state.configureOauthFile(setGoogleDriveProviderMode(oauthFile, mode));
+  state.configureOauthFile(set_google_drive_provider_mode(oauthFile, mode));
   state.sharedGrantInstructions = "";
   state.errorMsg = "";
 }
@@ -220,7 +220,7 @@ export function selectICloudMode({
   if (oauthFile.preset !== "icloud") return;
   const current = oauthFile.iCloudMode;
   if (current === mode) return;
-  state.configureOauthFile(setICloudProviderMode(oauthFile, mode));
+  state.configureOauthFile(set_icloud_provider_mode(oauthFile, mode));
   state.sharedGrantInstructions = "";
   state.errorMsg = "";
 }
@@ -323,17 +323,19 @@ export async function createGoogleSharedFolder({
       ? remoteFileName.fileName
       : DEFAULT_DRIVE_BACKUP_NAME;
   const prepareSharedStorageGrantArgs: Parameters<
-    typeof prepareSharedStorageGrant
+    typeof prepare_shared_storage_grant
   >[0] = {
     providerType: OAUTH_FILE_PROVIDER_TYPE,
-    oauthPreset: providerOauthPresetForConfig(oauthFile),
+    oauthPreset: provider_oauth_preset_for_config(oauthFile),
     joinerIdentityKind: "email",
     joinerIdentity: collaboratorEmail,
     storageTargetHint: suggestedSharedStorageTarget(folderName),
     storageTarget: createSharedStorageTarget(),
     credential: sharedStorageGrantAccessToken(accessCredential.token),
   };
-  const grant = await prepareSharedStorageGrant(prepareSharedStorageGrantArgs);
+  const grant = await prepare_shared_storage_grant(
+    prepareSharedStorageGrantArgs,
+  );
   if (grant.kind === "unsupported") {
     throw new Error(state.t(grant.reasonKey));
   }
@@ -342,7 +344,7 @@ export async function createGoogleSharedFolder({
     throw new Error(state.t(I18N_KEYS.ProviderSetupGoogleSharedCreateFailed));
   }
   state.configureOauthFile(
-    bindGoogleDriveSharedFolder(
+    bind_google_drive_shared_folder(
       state.requireOauthFileConfig(),
       target.storageTargetId,
     ),
@@ -394,7 +396,7 @@ export async function useGoogleSharedFolder({
   }
   let folder;
   try {
-    folder = await verifySharedGoogleDriveFolder(
+    folder = await verify_shared_google_drive_folder(
       accessCredential.token,
       folderRef,
     );
@@ -421,7 +423,7 @@ export async function useGoogleSharedFolder({
     throw error;
   }
   state.configureOauthFile(
-    bindGoogleDriveSharedFolder(state.requireOauthFileConfig(), folder.id),
+    bind_google_drive_shared_folder(state.requireOauthFileConfig(), folder.id),
   );
   const tArgs3: Parameters<typeof state.t>[0] = {
     key: I18N_KEYS.ProviderSetupGoogleSharedFolderConnected,

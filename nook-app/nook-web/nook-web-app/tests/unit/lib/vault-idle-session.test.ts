@@ -15,8 +15,8 @@ describe('resolveVaultIdleTimeoutMs', () => {
       NookClientRunModeUtil.parse('production'),
       false,
     )
-    expect(config.resolveDefaultVaultIdleTimeoutMs()).toBe(5 * 60_000)
-    expect(config.resolveVaultIdleTimeoutMs('1000')).toBe(5 * 60_000)
+    expect(config.resolve_default_vault_idle_timeout_ms()).toBe(5 * 60_000)
+    expect(config.resolve_vault_idle_timeout_ms('1000')).toBe(5 * 60_000)
   })
 
   test('e2e build honors VITE_VAULT_IDLE_TIMEOUT_MS', () => {
@@ -24,7 +24,7 @@ describe('resolveVaultIdleTimeoutMs', () => {
       NookClientRunModeUtil.parse('production'),
       true,
     )
-    expect(config.resolveVaultIdleTimeoutMs('2500')).toBe(2500)
+    expect(config.resolve_vault_idle_timeout_ms('2500')).toBe(2500)
   })
 
   test('rejects values below minimum in dev/e2e', () => {
@@ -32,7 +32,7 @@ describe('resolveVaultIdleTimeoutMs', () => {
       NookClientRunModeUtil.parse('development'),
       false,
     )
-    expect(config.resolveVaultIdleTimeoutMs('100')).toBe(5 * 60_000)
+    expect(config.resolve_vault_idle_timeout_ms('100')).toBe(5 * 60_000)
   })
 })
 
@@ -42,7 +42,7 @@ describe('resolveVaultIdleWarningMs', () => {
       NookClientRunModeUtil.parse('prod'),
       false,
     )
-    expect(config.resolveDefaultVaultIdleWarningMs()).toBe(30_000)
+    expect(config.resolve_default_vault_idle_warning_ms()).toBe(30_000)
   })
 
   test('e2e can disable warning', () => {
@@ -50,7 +50,7 @@ describe('resolveVaultIdleWarningMs', () => {
       NookClientRunModeUtil.parse('prod'),
       true,
     )
-    expect(config.resolveVaultIdleWarningMs('0')).toBe(0)
+    expect(config.resolve_vault_idle_warning_ms('0')).toBe(0)
   })
 })
 

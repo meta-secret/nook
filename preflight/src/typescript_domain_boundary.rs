@@ -37,7 +37,7 @@ pub fn typescript_json_round_trip_clones(root: &Path) -> io::Result<Vec<Violatio
 
 /// Finds extension persistence decisions that must remain in companion Rust.
 ///
-/// Browser IndexedDB calls stay in TypeScript. Classification of the returned
+/// Browser `IndexedDB` calls stay in TypeScript. Classification of the returned
 /// database and store observations belongs in `nook-companion-core`.
 ///
 /// # Errors

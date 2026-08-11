@@ -81,23 +81,23 @@ export async function handleSessionMessage({
       clearWebsitePasskeyRequests()
       context.resetOperations(new Error('Extension session reset.'))
       const activeManager = await getManager()
-      activeManager.resetVaultSession()
+      activeManager.reset_vault_session()
       return { ok: true }
     }
     case ExtensionSessionMessageType.MigrateAuthProviders: {
       const activeManager = await getManager()
       if (
-        (await activeManager.deviceProtectionStatus()) !==
+        (await activeManager.device_protection_status()) !==
         DeviceProtectionStatus.Unlocked
       ) {
         return { ok: true, migrated: false }
       }
-      await activeManager.loadAuthProviders()
+      await activeManager.load_auth_providers_snapshot()
       return { ok: true, migrated: true }
     }
     case ExtensionSessionMessageType.Status: {
       const activeManager = await getManager()
-      const status = await activeManager.deviceProtectionStatus()
+      const status = await activeManager.device_protection_status()
       return {
         ok: true,
         status,
@@ -108,7 +108,7 @@ export async function handleSessionMessage({
     }
     case ExtensionSessionMessageType.BeginPasskeySetup: {
       const activeManager = await getManager()
-      const setup = await activeManager.beginDeviceProtection()
+      const setup = await activeManager.begin_device_protection()
       const userHandle = setup.userHandle
       const prfInput = setup.prfInput
       setup.free()
@@ -135,7 +135,7 @@ export async function handleSessionMessage({
         throw new Error('Unsupported extension device protection mode.')
       }
       try {
-        await activeManager.finishDeviceProtectionWithMode(
+        await activeManager.finish_device_protection_with_mode(
           credentialId,
           userHandle,
           prfInput,
@@ -157,7 +157,7 @@ export async function handleSessionMessage({
       const userHandle = toBytes(payload.userHandle)
       const prfOutput = toBytes(payload.prfOutput)
       try {
-        await activeManager.recoverDeviceProtectionWithPasskeyMaterial(
+        await activeManager.recover_device_protection_with_passkey_material(
           credentialId,
           userHandle,
           prfOutput,
@@ -170,7 +170,7 @@ export async function handleSessionMessage({
       return { ok: true, device: await activateSession() }
     }
     case ExtensionSessionMessageType.UnlockOptions: {
-      const options = await (await getManager()).passkeyUnlockOptions()
+      const options = await (await getManager()).passkey_unlock_options()
       try {
         return {
           ok: true,
@@ -186,7 +186,7 @@ export async function handleSessionMessage({
     case ExtensionSessionMessageType.UnlockPasskey: {
       const prfOutput = toBytes(message.payload.prfOutput)
       try {
-        await (await getManager()).unlockDeviceIdentity(prfOutput)
+        await (await getManager()).unlock_device_identity(prfOutput)
       } finally {
         prfOutput.fill(0)
       }
@@ -196,14 +196,14 @@ export async function handleSessionMessage({
       const pin = message.payload.pin
       if (typeof pin !== 'string')
         throw new Error('Extension session received an invalid PIN.')
-      await (await getManager()).finishPinDeviceProtection(pin)
+      await (await getManager()).finish_pin_device_protection(pin)
       return { ok: true, device: await activateSession() }
     }
     case ExtensionSessionMessageType.UnlockPin: {
       const pin = message.payload.pin
       if (typeof pin !== 'string')
         throw new Error('Extension session received an invalid PIN.')
-      await (await getManager()).unlockPinDeviceIdentity(pin)
+      await (await getManager()).unlock_pin_device_identity(pin)
       return { ok: true, device: await activateSession() }
     }
     case ExtensionSessionMessageType.SealIdentityHandoff: {
@@ -217,7 +217,7 @@ export async function handleSessionMessage({
         )
       }
       const activeManager = await getManager()
-      const status = await activeManager.deviceProtectionStatus()
+      const status = await activeManager.device_protection_status()
       if (status !== DeviceProtectionStatus.Unlocked) {
         throw new Error(SESSION_LOCKED_ERROR)
       }
@@ -231,7 +231,7 @@ export async function handleSessionMessage({
           'Extension identity request does not match this device.',
         )
       }
-      const envelope = await activeManager.sealExtensionIdentityHandoff(
+      const envelope = await activeManager.seal_extension_identity_handoff(
         recipientPublicKey,
         nonce,
       )
@@ -254,18 +254,19 @@ export async function handleSessionMessage({
           'Extension session received an invalid event-log update.',
         )
       }
-      const recordValues = NookExternalEventLogRecords.fromArray(
+      const recordValues = NookExternalEventLogRecords.from_array(
         payload.eventLogRecords,
       )
       const activeManager = await getManager()
-      const statusValue = await activeManager.importExtensionEventLogRecords(
-        grant.vaultStoreId,
-        grant.deviceId,
-        grant.devicePublicKey,
-        grant.deviceSigningPublicKey,
-        recordValues,
-      )
-      const status = statusValue.toObject()
+      const statusValue =
+        await activeManager.import_extension_event_log_records_js(
+          grant.vaultStoreId,
+          grant.deviceId,
+          grant.devicePublicKey,
+          grant.deviceSigningPublicKey,
+          recordValues,
+        )
+      const status = statusValue.to_object()
       statusValue.free()
       return { ok: true, status }
     }
@@ -284,7 +285,7 @@ export async function handleSessionMessage({
         grant,
       }
       await openPasskeyVault(nookTypedArgs0_0)
-      const accounts = await activeManager.listWebsitePasskeyAccounts(
+      const accounts = await activeManager.list_website_passkey_accounts(
         payload.rpId,
         payload.origin,
       )
@@ -313,7 +314,7 @@ export async function handleSessionMessage({
         grant,
       }
       await openPasskeyVault(nookTypedArgs0_1)
-      const accounts = await activeManager.listWebsiteLoginAccounts(
+      const accounts = await activeManager.list_website_login_accounts(
         payload.origin,
       )
       try {
@@ -345,7 +346,7 @@ export async function handleSessionMessage({
         grant,
       }
       await openPasskeyVault(nookTypedArgs0_2)
-      const credential = await activeManager.revealWebsiteLoginForFill(
+      const credential = await activeManager.reveal_website_login_for_fill(
         payload.secretId,
         payload.origin,
       )
@@ -373,7 +374,7 @@ export async function handleSessionMessage({
         grant,
       }
       await openPasskeyVault(nookTypedArgs0_3)
-      const accounts = await activeManager.listAuthenticatorAccounts(
+      const accounts = await activeManager.list_authenticator_accounts_js(
         payload.query,
       )
       try {
@@ -403,7 +404,7 @@ export async function handleSessionMessage({
         grant,
       }
       await openPasskeyVault(nookTypedArgs0_4)
-      const code = await activeManager.currentAuthenticatorCodeForFill(
+      const code = await activeManager.current_authenticator_code_for_fill(
         payload.secretId,
         Math.floor(Date.now() / 1000),
       )
@@ -447,7 +448,7 @@ export async function handleSessionMessage({
         grant,
       }
       await openPasskeyVault(nookTypedArgs0_9)
-      const plan = await activeManager.planWebsiteLoginSave(
+      const plan = await activeManager.plan_website_login_save(
         payload.origin,
         payload.username,
         payload.password,
@@ -559,7 +560,7 @@ export async function handleSessionMessage({
       }
       await openPasskeyVault(nookTypedArgs0_10)
       try {
-        await activeManager.commitWebsiteLoginSave(
+        await activeManager.commit_website_login_save(
           committedOffer.origin,
           committedOffer.username,
           committedOffer.password,

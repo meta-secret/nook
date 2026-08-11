@@ -97,8 +97,12 @@ and the load pipeline live in wasm; the web shim is adapters + i18n only.
 | Snapshot model + pure transforms (`normalize`, `migrate_provider_fields`, `ensure_local_provider_row`, `find_duplicate_sync_provider`, legacy-seed) | `nook-app/nook-platform/nook-core/src/sync/sync_provider_store.rs`                                               |
 | Seal/open credential fields with device identity                                                                                                    | `nook-app/nook-platform/nook-core/src/sync/sync_provider_credentials.rs`                                         |
 | `nook_auth` IndexedDB I/O (rexie), load pipeline, legacy `localStorage` read/clear                                                                  | `nook-app/nook-platform/nook-wasm/src/storage/auth_providers.rs`                                                 |
-| Manager APIs (`loadAuthProviders`, `loadAuthProvidersWithLocalRow`, `saveAuthProviders`)                                                            | `NookVaultManager` methods in `nook-app/nook-platform/nook-wasm/src/lib.rs`                                      |
-| Free helpers (`deleteAuthProvidersDb`, `findDuplicateSyncProvider`, `ensureLocalProviderRow`, `sealAuthProvidersForDevicePublicKey`, mode binders)  | wasm bindings + thin TS wrappers                                                                   |
+| Manager APIs (`load_auth_providers_snapshot`, `load_auth_providers_with_local_row`, `save_auth_providers_snapshot`)                                | `NookVaultManager` methods in `nook-app/nook-platform/nook-wasm/src/vault_api.rs`                                |
+| Delete the auth-provider database with `delete_auth_providers_db`                                                                                   | WASM binding + thin TypeScript wrapper                                                  |
+| Find duplicate sync providers with `find_duplicate_sync_provider`                                                                                  | WASM binding + thin TypeScript wrapper                                                  |
+| Ensure the local provider row with `ensure_local_provider_row`                                                                                     | WASM binding + thin TypeScript wrapper                                                  |
+| Seal providers with `seal_auth_providers_for_device_public_key`                                                                                    | WASM binding + thin TypeScript wrapper                                                  |
+| Bind provider storage modes                                                                                                                         | WASM bindings + thin TypeScript wrappers                                                |
 | Enrollment typestates (`TypedEnrollmentProvider`, personal vs shared)                                                                               | `nook-app/nook-platform/nook-auth2/src/auth/enrollment.rs` (re-exported via `nook-core`)                         |
 | Type re-exports, i18n presentation, wasm wrappers                                                                                                   | [`auth/providers.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/providers.ts) |
 | Vault wiring (`ensureProviderSaved`, active-provider mapping)                                                                                       | `vault.svelte.ts` + `vault/providers.ts` under `nook-web-shared`                                   |
@@ -121,7 +125,7 @@ the in-memory device secret (`DeviceIdentity::open_utf8`). Sealed values are
 age-armored ciphertext (they contain `BEGIN AGE ENCRYPTED FILE`, which
 distinguishes sealed from plaintext credential fields).
 
-**Extension pairing:** `sealAuthProvidersForDevicePublicKey` can seal a snapshot
+**Extension pairing:** `seal_auth_providers_for_device_public_key` can seal a snapshot
 for another device's public key without writing IndexedDB (used when staging
 credentials for the browser extension).
 
@@ -132,7 +136,7 @@ application. This fail-closed boundary prevents an unsealed credential from
 remaining usable or being mistaken for trusted encrypted state; users must
 re-enter the provider credential so the normal save path persists it sealed.
 
-**Provider switch:** Changing the active saved provider calls `resetVaultSession`
+**Provider switch:** Changing the active saved provider calls `reset_vault_session`
 in wasm and clears login password-entry preview state so backup-password lists
 always reflect the remote vault for that provider — never a prior provider's
 in-memory session.
@@ -223,7 +227,7 @@ with their own account before sync.
 
 Local backup uses the browser File System Access directory API
 (`showDirectoryPicker`) and persisted structured-clone directory handles. The
-provider picker must gate this option with `isLocalFolderBackupSupported()` and
+provider picker must gate this option with `is_local_folder_backup_supported()` and
 show it as unavailable when the browser cannot grant writable folder access; do
 not let unsupported browsers enter setup and surface the lower-level
 WASM/database error.
@@ -291,8 +295,9 @@ without those provider steps; sealed-provider sync remains paused.
 
 WASM still receives `(storageMode, githubPat)` per call for the active connect
 path. Provider persistence and shaping live in `nook-wasm`/`nook-core`; the web
-layer maps snapshots onto `VaultState` via `manager.loadAuthProviders()` /
-`manager.saveAuthProviders()` (wrapped by `auth/providers.ts`).
+layer maps snapshots onto `VaultState` via
+`manager.load_auth_providers_snapshot()` /
+`manager.save_auth_providers_snapshot()` (wrapped by `auth/providers.ts`).
 
 ---
 
@@ -314,7 +319,7 @@ projection cache and fans events out to sync providers listed in `nook_auth`
 opening a **different** vault requires Lock and connect/import flow (or the
 multi-vault picker when available).
 
-Whole-blob `reconcileVaultBlobs` / scalar `vault_version` reconciliation is
+Whole-blob reconciliation and scalar `vault_version` comparison are
 historical context in [unified-vault.md](unified-vault.md), not the primary
 provider sync path.
 

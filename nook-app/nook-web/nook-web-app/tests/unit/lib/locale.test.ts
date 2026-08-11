@@ -3,14 +3,14 @@ import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
   NookAppLocaleParse,
   NookBrowserLocale,
-  get_translation_catalog as getTranslationCatalog,
-  lookupTranslation,
-  mergeTranslationCatalogs,
-  parseAppLocale,
-  resolveAppLocaleFromTag,
-  resolveAppLocaleFromTags,
-  supportedAppLocaleCode,
-  translateFromCatalog,
+  get_translation_catalog,
+  lookup_translation,
+  merge_translation_catalogs,
+  parse_app_locale,
+  resolve_app_locale_from_tag,
+  resolve_app_locale_from_tags,
+  supported_app_locale_code,
+  translate_from_catalog,
 } from '$app-wasm'
 import { HELP_SECTIONS } from '$lib/content/help'
 
@@ -34,8 +34,8 @@ describe('locale', () => {
       )
     }
 
-    const english = flatten(JSON.parse(getTranslationCatalog('en')))
-    const russian = flatten(JSON.parse(getTranslationCatalog('ru')))
+    const english = flatten(JSON.parse(get_translation_catalog('en')))
+    const russian = flatten(JSON.parse(get_translation_catalog('ru')))
 
     expect(Object.keys(russian).sort()).toEqual(Object.keys(english).sort())
     for (const key of Object.keys(english)) {
@@ -44,44 +44,50 @@ describe('locale', () => {
     }
   })
 
-  test('parseAppLocale accepts only supported values', () => {
-    expect(supportedAppLocaleCode(parseAppLocale('en'))).toBe('en')
-    expect(supportedAppLocaleCode(parseAppLocale('ru'))).toBe('ru')
-    expect(parseAppLocale('de')).toBe(NookAppLocaleParse.Unsupported)
+  test('parse_app_locale accepts only supported values', () => {
+    expect(supported_app_locale_code(parse_app_locale('en'))).toBe('en')
+    expect(supported_app_locale_code(parse_app_locale('ru'))).toBe('ru')
+    expect(parse_app_locale('de')).toBe(NookAppLocaleParse.Unsupported)
   })
 
-  test('resolveAppLocaleFromTag maps BCP 47 tags', () => {
-    expect(supportedAppLocaleCode(resolveAppLocaleFromTag('ru-RU'))).toBe('ru')
-    expect(supportedAppLocaleCode(resolveAppLocaleFromTag('ru_BY'))).toBe('ru')
-    expect(supportedAppLocaleCode(resolveAppLocaleFromTag('en-GB'))).toBe('en')
-    expect(resolveAppLocaleFromTag('de-DE')).toBe(
+  test('resolve_app_locale_from_tag maps BCP 47 tags', () => {
+    expect(
+      supported_app_locale_code(resolve_app_locale_from_tag('ru-RU')),
+    ).toBe('ru')
+    expect(
+      supported_app_locale_code(resolve_app_locale_from_tag('ru_BY')),
+    ).toBe('ru')
+    expect(
+      supported_app_locale_code(resolve_app_locale_from_tag('en-GB')),
+    ).toBe('en')
+    expect(resolve_app_locale_from_tag('de-DE')).toBe(
       NookAppLocaleParse.Unsupported,
     )
   })
 
-  test('resolveAppLocaleFromTags respects preference order', () => {
-    expect(resolveAppLocaleFromTags(['de-DE', 'ru-RU'])).toBe('ru')
-    expect(resolveAppLocaleFromTags(['de-DE', 'fr-FR'])).toBe('en')
-    expect(resolveAppLocaleFromTags(['en-US', 'ru-RU'])).toBe('en')
+  test('resolve_app_locale_from_tags respects preference order', () => {
+    expect(resolve_app_locale_from_tags(['de-DE', 'ru-RU'])).toBe('ru')
+    expect(resolve_app_locale_from_tags(['de-DE', 'fr-FR'])).toBe('en')
+    expect(resolve_app_locale_from_tags(['en-US', 'ru-RU'])).toBe('en')
   })
 
   test('NookBrowserLocale resolves captured browser tags', () => {
-    expect(NookBrowserLocale.fromTags(['de-DE', 'ru-RU']).appLocale()).toBe(
+    expect(NookBrowserLocale.from_tags(['de-DE', 'ru-RU']).app_locale()).toBe(
       'ru',
     )
   })
 
   test('catalogs include provider picker strings', () => {
     for (const locale of ['en', 'ru'] as const) {
-      const catalog = getTranslationCatalog(locale)
+      const catalog = get_translation_catalog(locale)
       expect(
-        lookupTranslation(catalog, I18N_KEYS.ProviderPickerGoogleDrive),
+        lookup_translation(catalog, I18N_KEYS.ProviderPickerGoogleDrive),
       ).toBe('Google Drive')
       expect(
-        lookupTranslation(catalog, I18N_KEYS.ProviderPickerGoogleDriveDesc),
+        lookup_translation(catalog, I18N_KEYS.ProviderPickerGoogleDriveDesc),
       ).toBeTypeOf('string')
       expect(
-        lookupTranslation(
+        lookup_translation(
           catalog,
           I18N_KEYS.ProviderPickerUnsupportedReplicationDesc,
         ),
@@ -127,9 +133,9 @@ describe('locale', () => {
     ]
 
     for (const locale of ['en', 'ru'] as const) {
-      const catalog = getTranslationCatalog(locale)
+      const catalog = get_translation_catalog(locale)
       for (const key of keys) {
-        expect(lookupTranslation(catalog, key), `${locale}:${key}`).toBeTypeOf(
+        expect(lookup_translation(catalog, key), `${locale}:${key}`).toBeTypeOf(
           'string',
         )
       }
@@ -188,9 +194,9 @@ describe('locale', () => {
     ]
 
     for (const locale of ['en', 'ru'] as const) {
-      const catalog = getTranslationCatalog(locale)
+      const catalog = get_translation_catalog(locale)
       for (const key of modeKeys) {
-        expect(lookupTranslation(catalog, key), `${locale}:${key}`).toBeTypeOf(
+        expect(lookup_translation(catalog, key), `${locale}:${key}`).toBeTypeOf(
           'string',
         )
       }
@@ -216,24 +222,24 @@ describe('locale', () => {
     ]
 
     for (const locale of ['en', 'ru'] as const) {
-      const catalog = getTranslationCatalog(locale)
+      const catalog = get_translation_catalog(locale)
       for (const key of commonHelpKeys) {
-        expect(lookupTranslation(catalog, key), `${locale}:${key}`).toBeTypeOf(
+        expect(lookup_translation(catalog, key), `${locale}:${key}`).toBeTypeOf(
           'string',
         )
       }
       for (const section of HELP_SECTIONS) {
         expect(
-          lookupTranslation(catalog, section.titleKey),
+          lookup_translation(catalog, section.titleKey),
           `${locale}:${section.titleKey}`,
         ).toBeTypeOf('string')
         expect(
-          lookupTranslation(catalog, section.summaryKey),
+          lookup_translation(catalog, section.summaryKey),
           `${locale}:${section.summaryKey}`,
         ).toBeTypeOf('string')
         for (const bulletKey of section.bulletKeys) {
           expect(
-            lookupTranslation(catalog, bulletKey),
+            lookup_translation(catalog, bulletKey),
             `${locale}:${bulletKey}`,
           ).toBeTypeOf('string')
         }
@@ -248,29 +254,37 @@ describe('locale', () => {
         github: 'GitHub',
       },
     })
-    const merged = mergeTranslationCatalogs(
+    const merged = merge_translation_catalogs(
       staleWasm,
-      getTranslationCatalog('ru'),
+      get_translation_catalog('ru'),
     )
-    expect(lookupTranslation(merged, I18N_KEYS.ProviderPickerGoogleDrive)).toBe(
-      'Google Drive',
-    )
-    expect(lookupTranslation(merged, I18N_KEYS.ProviderPickerThisDevice)).toBe(
+    expect(
+      lookup_translation(merged, I18N_KEYS.ProviderPickerGoogleDrive),
+    ).toBe('Google Drive')
+    expect(lookup_translation(merged, I18N_KEYS.ProviderPickerThisDevice)).toBe(
       'Это устройство',
     )
   })
 
-  test('translateFromCatalog falls back to English', () => {
+  test('translate_from_catalog falls back to English', () => {
     const staleRu = JSON.stringify({
       provider_picker: {
         github: 'GitHub',
       },
     })
     expect(
-      translateFromCatalog(staleRu, 'ru', I18N_KEYS.ProviderPickerGoogleDrive),
+      translate_from_catalog(
+        staleRu,
+        'ru',
+        I18N_KEYS.ProviderPickerGoogleDrive,
+      ),
     ).toBe('Google Drive')
     expect(
-      translateFromCatalog(staleRu, 'en', I18N_KEYS.ProviderPickerGoogleDrive),
+      translate_from_catalog(
+        staleRu,
+        'en',
+        I18N_KEYS.ProviderPickerGoogleDrive,
+      ),
     ).toBe(I18N_KEYS.ProviderPickerGoogleDrive)
   })
 })

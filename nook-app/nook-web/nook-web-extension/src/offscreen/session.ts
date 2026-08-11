@@ -1,6 +1,6 @@
 import initNookWasm, {
-  configureVaultApplication,
-  decodeStorageProviders,
+  configure_vault_application,
+  decode_storage_providers,
   NookVaultManager,
   VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -74,7 +74,7 @@ function ensureWasm(): ReturnType<typeof initNookWasm> {
     module_or_path: chrome.runtime.getURL('offscreen/nook_wasm_bg.wasm'),
   }
   const operation = initNookWasm(initArgs).then((value) => {
-    configureVaultApplication(VaultApplication.Extension)
+    configure_vault_application(VaultApplication.Extension)
     return value
   })
   wasmStartup = { kind: WasmStartupKind.Initializing, operation }
@@ -97,7 +97,7 @@ async function deviceResult(
   return {
     deviceId: activeManager.device_id,
     devicePublicKey: activeManager.device_public_key,
-    deviceSigningPublicKey: await activeManager.deviceSigningPublicKey(),
+    deviceSigningPublicKey: await activeManager.device_signing_public_key_js(),
   }
 }
 
@@ -117,7 +117,7 @@ function scheduleSessionExpiry(generation: number): void {
       managerAvailability = { kind: VaultManagerAvailabilityKind.Locked }
       if (expiredManager.kind === VaultManagerAvailabilityKind.Active) {
         try {
-          expiredManager.manager.lockDeviceIdentity()
+          expiredManager.manager.lock_device_identity()
           expiredManager.manager.free()
         } catch {
           // The service worker closes this document immediately if a WASM call
@@ -183,7 +183,7 @@ const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> =
         providers: providers as StorageProvider[],
         activeVaultStoreId: { state: 'unselected' },
       }
-      return decodeStorageProviders(snapshot).providers
+      return decode_storage_providers(snapshot).providers
     },
   }
 const sessionMessageDispatcher = new ExtensionSessionMessageDispatcher(

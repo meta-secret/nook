@@ -47,7 +47,7 @@
   })
   const activeLabel = $derived(
     activeVault.kind === DisplayedVaultKind.Available
-      ? activeVault.entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
+      ? activeVault.entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
       : vault.t(I18N_KEYS.NavVault),
   )
   const vaultCount = $derived(vaults.length)
@@ -192,7 +192,7 @@
                 />
                 <span class="min-w-0 flex-1">
                   <span class="block truncate font-medium">
-                    {entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))}
+                    {entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))}
                   </span>
                   <span class="block truncate font-mono text-[10px] opacity-70">
                     {entry.storeId}

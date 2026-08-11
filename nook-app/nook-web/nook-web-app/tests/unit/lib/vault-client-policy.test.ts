@@ -6,10 +6,10 @@ import {
   NookVaultSwitchState,
   UnauthenticatedSyncDecision,
   VaultAccessStatus,
-  activeVaultProviders,
-  providersVisibleWhileDeviceLocked,
-  stagedOauthRemoteStorageArgs,
-  syncProvidersForActiveVault,
+  active_vault_providers,
+  providers_visible_while_device_locked,
+  staged_oauth_remote_storage_args,
+  sync_providers_for_active_vault,
   type AuthProvidersSnapshot,
 } from '$app-wasm'
 import type { OAuthFilePreset } from '$app-wasm'
@@ -66,14 +66,14 @@ describe('portable vault client policy', () => {
   test('owns automatic unlock and join approval transitions', () => {
     const policy = new NookVaultClientPolicy()
     try {
-      expect(policy.shouldAutoUnlock(false, true, 0, 0, false, false)).toBe(
+      expect(policy.should_auto_unlock(false, true, 0, 0, false, false)).toBe(
         true,
       )
-      expect(policy.shouldAutoUnlock(false, true, 0, 1, false, false)).toBe(
+      expect(policy.should_auto_unlock(false, true, 0, 1, false, false)).toBe(
         false,
       )
       expect(
-        policy.unauthenticatedSyncDecision(
+        policy.unauthenticated_sync_decision(
           true,
           true,
           VaultAccessStatus.Ready,
@@ -81,7 +81,7 @@ describe('portable vault client policy', () => {
           false,
         ),
       ).toBe(UnauthenticatedSyncDecision.Approved)
-      const switchVault = policy.vaultSwitchTarget(
+      const switchVault = policy.vault_switch_target(
         ' store-b ',
         true,
         'store-a',
@@ -90,7 +90,7 @@ describe('portable vault client policy', () => {
       expect(switchVault.state).toBe(NookVaultSwitchState.Switch)
       expect(switchVault.target()).toBe('store-b')
       switchVault.free()
-      const noSwitch = policy.vaultSwitchTarget(
+      const noSwitch = policy.vault_switch_target(
         'store-a',
         true,
         'store-a',
@@ -107,17 +107,17 @@ describe('portable vault client policy', () => {
     const scope = NookManagerStoreScope.scoped('store-a')
     try {
       expect(
-        activeVaultProviders(snapshot, scope).providers.map(
+        active_vault_providers(snapshot, scope).providers.map(
           (provider) => provider.id,
         ),
       ).toEqual(['local-a', 'github-a'])
       expect(
-        syncProvidersForActiveVault(snapshot, scope).providers.map(
+        sync_providers_for_active_vault(snapshot, scope).providers.map(
           (provider) => provider.id,
         ),
       ).toEqual(['github-a'])
       expect(
-        providersVisibleWhileDeviceLocked(snapshot).providers.map(
+        providers_visible_while_device_locked(snapshot).providers.map(
           (provider) => provider.id,
         ),
       ).toEqual(['local-a'])
@@ -128,7 +128,7 @@ describe('portable vault client policy', () => {
 
   test('rejects an invalid OAuth preset without a legacy fallback', () => {
     expect(() =>
-      stagedOauthRemoteStorageArgs({
+      staged_oauth_remote_storage_args({
         ...defaultOAuthFileConfig({
           preset: 'google-drive',
           fileName: DEFAULT_DRIVE_BACKUP_NAME,

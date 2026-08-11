@@ -60,10 +60,10 @@
     appShellSpacing,
   } from '$lib/app/shell-layout'
   import {
-    assessVaultSecurity,
-    configuredVaultApplicationIsSimple,
-    configuredVaultApplicationIsSentinel,
-    configuredVaultApplicationSupportsExtension,
+    assess_vault_security,
+    configured_vault_application_is_simple,
+    configured_vault_application_is_sentinel,
+    configured_vault_application_supports_extension,
   } from '$app-wasm'
   import { consumeSentinelOnboardingFromLocation } from '$lib/enrollment/sentinel-onboarding-link'
   import {
@@ -94,13 +94,13 @@
   } from '$lib/app/workspace-route'
   import { applyWorkspaceRoute } from '$lib/vault/ui'
   import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
-  const IS_SIMPLE_APP = configuredVaultApplicationIsSimple()
-  const IS_SENTINEL_APP = configuredVaultApplicationIsSentinel()
-  const SUPPORTS_EXTENSION = configuredVaultApplicationSupportsExtension()
+  const IS_SIMPLE_APP = configured_vault_application_is_simple()
+  const IS_SENTINEL_APP = configured_vault_application_is_sentinel()
+  const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
   const vault = new VaultState()
   const existingVaultImportLifecycle = new ExistingVaultImportLifecycle(vault)
   const vaultSecurityRecommendations = $derived(
-    assessVaultSecurity(vault.syncProviders.length, vault.vaultMembers.length),
+    assess_vault_security(vault.syncProviders.length, vault.vaultMembers.length),
   )
   let colorMode = $state<ColorMode>(systemColorMode())
   let followsSystemColorMode = $state(true)
@@ -269,7 +269,7 @@
       vault.loginRequiresExistingVault &&
       vault.loginSetup.kind === LoginSetupKind.Active
     const existingVaultImportNeedsIdentity =
-      vault.clientPolicy.existingVaultIdentityRecoveryRequired(
+      vault.clientPolicy.existing_vault_identity_recovery_required(
         vault.loginRequiresExistingVault,
         vault.loginSetup.kind === LoginSetupKind.Active,
         vault.deviceProtectionReady,

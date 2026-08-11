@@ -1,9 +1,9 @@
 import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
-  classifyCompanionAuthenticationOutcome,
-  classifyCompanionAuthenticationOutcomeWithDefaultTimeout,
-  classifyCompanionAuthenticationWorkflow,
+  classify_companion_authentication_outcome,
+  classify_companion_authentication_outcome_with_default_timeout,
+  classify_companion_authentication_workflow,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type {
   AuthenticationOutcomeClassification,
@@ -11,14 +11,14 @@ import type {
   AuthenticationPageObservations,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import initNookWasm, {
-  configureVaultApplication,
-  decodeStorageProviders as wasmDecodeStorageProviders,
-  defaultPasswordGenerationOptions as wasmDefaultPasswordGenerationOptions,
-  generatePassword as wasmGeneratePassword,
-  readExtensionPairingState as wasmReadExtensionPairingState,
-  reconcileExtensionPairingState as wasmReconcileExtensionPairingState,
-  removeExtensionPairingState as wasmRemoveExtensionPairingState,
-  writeExtensionPairingState as wasmWriteExtensionPairingState,
+  configure_vault_application,
+  decode_storage_providers,
+  default_password_generation_options,
+  generate_password,
+  read_extension_pairing_state,
+  reconcile_extension_pairing_state,
+  remove_extension_pairing_state,
+  write_extension_pairing_state,
   NookExternalEventLogRecords,
   NookVaultManager,
   VaultApplication,
@@ -66,7 +66,7 @@ function ensureExtensionWasm(): Promise<void> {
     module_or_path: chrome.runtime.getURL('background/nook_wasm_bg.wasm'),
   }
   const operation = initNookWasm(nookTypedArgs0_0).then(() => {
-    configureVaultApplication(VaultApplication.Extension)
+    configure_vault_application(VaultApplication.Extension)
   })
   backgroundWasmStartup = {
     kind: BackgroundWasmStartupKind.Initializing,
@@ -93,21 +93,21 @@ function pairingItemsFromState(
 
 export async function readExtensionPairingState(): Promise<ExtensionPairingItems> {
   await ensureExtensionWasm()
-  return pairingItemsFromState(await wasmReadExtensionPairingState())
+  return pairingItemsFromState(await read_extension_pairing_state())
 }
 
 export async function writeExtensionPairingState(
   items: ExtensionPairingItems,
 ): Promise<void> {
   await ensureExtensionWasm()
-  await wasmWriteExtensionPairingState(stateFromPairingItems(items))
+  await write_extension_pairing_state(stateFromPairingItems(items))
 }
 
 export async function removeExtensionPairingState(
   keys: string[],
 ): Promise<void> {
   await ensureExtensionWasm()
-  await wasmRemoveExtensionPairingState(keys)
+  await remove_extension_pairing_state(keys)
 }
 
 type ReconcileExtensionPairingStateArgs = {
@@ -120,7 +120,7 @@ export async function reconcileExtensionPairingState({
   removedKeys,
 }: ReconcileExtensionPairingStateArgs): Promise<void> {
   await ensureExtensionWasm()
-  await wasmReconcileExtensionPairingState(
+  await reconcile_extension_pairing_state(
     stateFromPairingItems(items),
     removedKeys,
   )
@@ -143,7 +143,7 @@ export async function authenticationWorkflowSnapshot(
 ): Promise<AuthenticationWorkflowSnapshot> {
   await companionWasmReady
   const input: AuthenticationPageObservations = { observations }
-  const workflowMatch = classifyCompanionAuthenticationWorkflow(input)
+  const workflowMatch = classify_companion_authentication_workflow(input)
   if (workflowMatch.kind === AuthenticationWorkflowSnapshotKind.NoMatch) {
     return { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
   }
@@ -155,7 +155,7 @@ export async function authenticationWorkflowSnapshot(
 
 export async function generateSuggestedPassword(): Promise<string> {
   await ensureExtensionWasm()
-  return wasmGeneratePassword(wasmDefaultPasswordGenerationOptions())
+  return generate_password(default_password_generation_options())
 }
 
 export async function classifyAuthenticationOutcome({
@@ -174,7 +174,7 @@ export async function classifyAuthenticationOutcome({
     observation: boundedObservation,
     timeoutMs: Math.max(1, Math.floor(timeoutMs)),
   }
-  return classifyCompanionAuthenticationOutcome(input)
+  return classify_companion_authentication_outcome(input)
 }
 
 export async function classifyAuthenticationOutcomeWithDefaultTimeout(
@@ -185,7 +185,7 @@ export async function classifyAuthenticationOutcomeWithDefaultTimeout(
     ...observation,
     elapsedMs: Math.max(0, Math.floor(observation.elapsedMs)),
   }
-  return classifyCompanionAuthenticationOutcomeWithDefaultTimeout(
+  return classify_companion_authentication_outcome_with_default_timeout(
     boundedObservation,
   )
 }
@@ -229,15 +229,15 @@ export async function importExtensionEventLog({
   await ensureExtensionWasm()
   const manager = new NookVaultManager()
   try {
-    const recordValues = NookExternalEventLogRecords.fromArray(records)
-    const statusValue = await manager.importExtensionEventLogRecords(
+    const recordValues = NookExternalEventLogRecords.from_array(records)
+    const statusValue = await manager.import_extension_event_log_records_js(
       grant.vaultStoreId,
       grant.deviceId,
       grant.devicePublicKey,
       grant.deviceSigningPublicKey,
       recordValues,
     )
-    const status = statusValue.toObject()
+    const status = statusValue.to_object()
     statusValue.free()
     if (!isImportedEventLogState(status)) {
       throw new Error('Rust returned an invalid extension event-log status.')
@@ -256,5 +256,5 @@ export async function decodeExtensionStorageProviders(
     providers: providers as StorageProvider[],
     activeVaultStoreId: { state: 'unselected' },
   }
-  return wasmDecodeStorageProviders(snapshot).providers
+  return decode_storage_providers(snapshot).providers
 }

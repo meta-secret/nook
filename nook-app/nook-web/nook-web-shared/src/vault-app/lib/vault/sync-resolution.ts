@@ -1,11 +1,11 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import {
-  importNamedLocalVaultBlob,
+  import_named_local_vault_blob,
   NookSyncConflictReviewState,
   RemoteVaultRecoveryState,
-  setActiveVault,
-  setVaultSessionLocked,
+  set_active_vault,
+  set_vault_session_locked,
   type NookReplacementConflict,
   type NookSecurityConflict,
   VaultSyncConflictKind,
@@ -45,7 +45,7 @@ export async function resolveReplacementConflict({
     const raw = await state.enqueueStorage(() =>
       state
         .requireManager()
-        .resolveProjectionConflict(oldSecretId, chosenSecretId),
+        .resolve_projection_conflict(oldSecretId, chosenSecretId),
     );
     for (const record of raw as NookSecretRecord[]) record.free();
     await state.refreshSecretsFromSession();
@@ -74,7 +74,7 @@ export async function refreshReplacementConflicts(
   // would trigger a wasm-bindgen recursive-borrow hang/panic.
   const [conflicts, securityConflicts] = await state.enqueueStorage(
     async () => {
-      if (!state.requireManager().eventLogMode()) {
+      if (!state.requireManager().event_log_mode()) {
         return [
           [] as NookReplacementConflict[],
           [] as NookSecurityConflict[],
@@ -83,10 +83,12 @@ export async function refreshReplacementConflicts(
       // Both wasm methods take `&mut self`; starting them together causes their
       // IndexedDB callbacks to re-enter a dropped wasm-bindgen closure. Keep
       // this pair serial even though the outer storage operation is queued.
-      const conflicts = await state.requireManager().listProjectionConflicts();
+      const conflicts = await state
+        .requireManager()
+        .list_projection_conflicts();
       const securityConflicts = await state
         .requireManager()
-        .listProjectionSecurityConflicts();
+        .list_projection_security_conflicts();
       return [conflicts, securityConflicts] as const;
     },
   );
@@ -134,7 +136,7 @@ export async function confirmRecoverRemoteVault(
   state.isVerifying = true;
   try {
     await state.enqueueStorage(() =>
-      state.requireManager().prepareConnectFromLocalCache(),
+      state.requireManager().prepare_connect_from_local_cache(),
     );
     state.remoteVaultRecoveryState = RemoteVaultRecoveryState.ConnectFromCache;
     if (state.loginSetup.kind === LoginSetupKind.Active) {
@@ -176,7 +178,7 @@ export async function confirmCreateFreshRemoteVault(
 export function clearRemoteVaultRecovery(state: SyncActionsContext): void {
   state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
   try {
-    if (state.hasManager) state.requireManager().clearConnectRecovery();
+    if (state.hasManager) state.requireManager().clear_connect_recovery();
   } catch {
     // Engine not ready yet.
   }
@@ -224,7 +226,7 @@ export async function resolveSyncConflictImportRemote(
     return;
   }
   const conflict = review;
-  const remoteStoreId = conflict.remoteStoreId();
+  const remoteStoreId = conflict.remote_store_id();
   if (!remoteStoreId) return;
   const pendingProvider = conflict.isPendingProvider;
   const providerLabel = conflict.providerLabel;
@@ -236,7 +238,7 @@ export async function resolveSyncConflictImportRemote(
   try {
     let importedStoreId: string;
     if (conflict.remoteYaml.trim()) {
-      importedStoreId = await importNamedLocalVaultBlob(
+      importedStoreId = await import_named_local_vault_blob(
         conflict.remoteYaml,
         conflict.providerLabel,
       );
@@ -261,13 +263,13 @@ export async function resolveSyncConflictImportRemote(
         importedStoreId = (await state.enqueueStorage(() =>
           state
             .requireManager()
-            .importLocalFolderEventLogAsLocalVault(handle.handleId),
+            .import_local_folder_event_log_as_local_vault(handle.handleId),
         )) as string;
       } else {
         importedStoreId = (await state.enqueueStorage(() =>
           state
             .requireManager()
-            .importProviderEventLogAsLocalVault(
+            .import_provider_event_log_as_local_vault(
               conflict.mode,
               conflict.pat,
               conflict.repo,
@@ -275,7 +277,7 @@ export async function resolveSyncConflictImportRemote(
         )) as string;
       }
     }
-    await setActiveVault(importedStoreId);
+    await set_active_vault(importedStoreId);
     state.openActiveVault(importedStoreId);
     state.localVaultPresent = true;
     await state.refreshLocalVaultCatalog();
@@ -314,7 +316,7 @@ export async function resolveSyncConflictImportRemote(
     state.clearPendingSyncConflict();
     await state.syncActiveVaultStoreIdToAuth();
     importedAsSeparateVault = true;
-    setVaultSessionLocked(true);
+    set_vault_session_locked(true);
     state.clearUnlockedSession();
     await state.refreshPasswordEntriesList();
     if (state.localVaults.length <= 1) {

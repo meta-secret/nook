@@ -11,7 +11,7 @@ import {
   type ExtensionSessionRequestWire,
   type PasskeyCeremonyQueueDisposition,
   type QueueDisposition,
-  validateExtensionSessionRequest,
+  validate_extension_session_request,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 
@@ -466,7 +466,7 @@ export async function parseExtensionSessionRequest(
     const requestWire: ExtensionSessionRequestWire =
       validationRequest as ExtensionSessionRequestWire
     if (
-      validateExtensionSessionRequest(requestWire) !==
+      validate_extension_session_request(requestWire) !==
       ExtensionSessionRequestValidation.Accepted
     ) {
       clearExtensionSessionIngressRequest(request)

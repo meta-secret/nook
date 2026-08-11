@@ -7,7 +7,7 @@
     buildSentinelGenesisParticipantResponseLink,
   } from "$lib/enrollment/sentinel-genesis-link";
   import type { VaultState } from "$lib/vault.svelte";
-  import { sentinelGenesisParticipantFingerprint } from "$app-wasm";
+  import { sentinel_genesis_participant_fingerprint } from "$app-wasm";
 
   let {
     vault,
@@ -97,7 +97,7 @@
         return;
       }
       joinPasskeyRequested = false;
-      generatedParticipantFingerprint = sentinelGenesisParticipantFingerprint(
+      generatedParticipantFingerprint = sentinel_genesis_participant_fingerprint(
         generatedParticipantResponse,
       );
     } catch (error) {
@@ -132,7 +132,7 @@
     try {
       generatedParticipantResponse =
         await onCreateParticipantResponse(requestPayload);
-      generatedParticipantFingerprint = sentinelGenesisParticipantFingerprint(
+      generatedParticipantFingerprint = sentinel_genesis_participant_fingerprint(
         generatedParticipantResponse,
       );
     } catch (error) {

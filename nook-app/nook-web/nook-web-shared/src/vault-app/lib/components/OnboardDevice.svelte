@@ -30,7 +30,7 @@
     type StorageProviderType,
   } from '$lib/auth/providers'
   import {
-    peekEnrollmentIssuedAt,
+    peek_enrollment_issued_at,
     type NookPasswordEntrySummary,
     type PasswordEntryId,
   } from '$app-wasm'
@@ -45,10 +45,10 @@
   import {
     CompatibleProviderSelectionKind,
     firstCompatibleProvider,
-    onboardingType,
+    vault_architecture_onboarding_type,
     providerCapabilityLabelKey,
-    providerOnboardingType,
-    providerSupportsReplication,
+    provider_onboarding_type,
+    provider_supports_replication,
   } from '$lib/vault/architecture-model'
   import {
     PasswordEntrySelectionKind,
@@ -111,7 +111,7 @@
   const hasSyncProviders = $derived(syncProviders.length > 0)
   const compatibleSyncProviders = $derived(
     syncProviders.filter((provider) =>
-      providerSupportsReplication(
+      provider_supports_replication(
         provider,
         vault.vaultArchitecture.replication_type,
       ),
@@ -195,11 +195,11 @@
   })
   const derivedOnboardingType = $derived(
     selectedProvider.kind === ResolvedOnboardingProviderKind.Available
-      ? providerOnboardingType(
+      ? provider_onboarding_type(
           selectedProvider.provider,
           vault.vaultArchitecture,
         )
-      : onboardingType(vault.vaultArchitecture),
+      : vault_architecture_onboarding_type(vault.vaultArchitecture),
   )
   const usesSharedProviderGrant = $derived(
     derivedOnboardingType === OnboardingType.SharedProviderGrant,
@@ -243,7 +243,7 @@
   })
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return ''
-    return peekEnrollmentIssuedAt(enrollmentCode)
+    return peek_enrollment_issued_at(enrollmentCode)
   })
   const showGenerating = $derived(
     (isGenerating || isBusy) && !enrollmentCode && !localError,
@@ -480,7 +480,7 @@
           >
             {#each syncProviders as provider (provider.id)}
               {@const selected = provider.id === effectiveProviderId}
-              {@const compatible = providerSupportsReplication(
+              {@const compatible = provider_supports_replication(
                 provider,
                 vault.vaultArchitecture.replication_type,
               )}

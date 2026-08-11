@@ -2,7 +2,7 @@
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     NookSecretTypeFilter,
-    secretTypeName,
+    secret_type_name,
     VaultEditDecision,
   } from '$app-wasm'
 
@@ -105,49 +105,49 @@
     {
       value: SecretType.Login,
       filter: NookSecretTypeFilter.Login,
-      testId: secretTypeName(SecretType.Login),
+      testId: secret_type_name(SecretType.Login),
       labelKey: I18N_KEYS.VaultTypesLogin,
     },
     {
       value: SecretType.Authenticator,
       filter: NookSecretTypeFilter.Authenticator,
-      testId: secretTypeName(SecretType.Authenticator),
+      testId: secret_type_name(SecretType.Authenticator),
       labelKey: I18N_KEYS.VaultTypesAuthenticator,
     },
     {
       value: SecretType.ApiKey,
       filter: NookSecretTypeFilter.ApiKey,
-      testId: secretTypeName(SecretType.ApiKey),
+      testId: secret_type_name(SecretType.ApiKey),
       labelKey: I18N_KEYS.VaultTypesApiKey,
     },
     {
       value: SecretType.SeedPhrase,
       filter: NookSecretTypeFilter.SeedPhrase,
-      testId: secretTypeName(SecretType.SeedPhrase),
+      testId: secret_type_name(SecretType.SeedPhrase),
       labelKey: I18N_KEYS.VaultTypesSeedPhrase,
     },
     {
       value: SecretType.SecureNote,
       filter: NookSecretTypeFilter.SecureNote,
-      testId: secretTypeName(SecretType.SecureNote),
+      testId: secret_type_name(SecretType.SecureNote),
       labelKey: I18N_KEYS.VaultTypesSecureNote,
     },
     {
       value: SecretType.CreditCard,
       filter: NookSecretTypeFilter.CreditCard,
-      testId: secretTypeName(SecretType.CreditCard),
+      testId: secret_type_name(SecretType.CreditCard),
       labelKey: I18N_KEYS.VaultTypesCreditCard,
     },
     {
       value: SecretType.FileAttachment,
       filter: NookSecretTypeFilter.FileAttachment,
-      testId: secretTypeName(SecretType.FileAttachment),
+      testId: secret_type_name(SecretType.FileAttachment),
       labelKey: I18N_KEYS.VaultTypesFileAttachment,
     },
     {
       value: SecretType.Passkey,
       filter: NookSecretTypeFilter.Passkey,
-      testId: secretTypeName(SecretType.Passkey),
+      testId: secret_type_name(SecretType.Passkey),
       labelKey: I18N_KEYS.VaultTypesPasskey,
     },
   ]

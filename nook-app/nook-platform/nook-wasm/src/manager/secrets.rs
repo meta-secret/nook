@@ -114,7 +114,7 @@ impl NookVaultManager {
         Ok(records)
     }
 
-    #[wasm_bindgen(js_name = prepareSecretSearch)]
+    #[wasm_bindgen]
     pub async fn prepare_secret_search_js(&mut self) -> Result<(), JsError> {
         self.prepare_secret_search_catalog()
             .await
@@ -122,7 +122,7 @@ impl NookVaultManager {
     }
 
     #[allow(clippy::needless_pass_by_value)]
-    #[wasm_bindgen(js_name = queryPreparedSecretPage)]
+    #[wasm_bindgen]
     pub async fn query_prepared_secret_page_js(
         &mut self,
         query: &str,
@@ -141,7 +141,7 @@ impl NookVaultManager {
     }
 
     #[allow(clippy::needless_pass_by_value)]
-    #[wasm_bindgen(js_name = querySecretPage)]
+    #[wasm_bindgen]
     pub fn query_secret_page_js(
         &self,
         query: &str,
@@ -158,7 +158,7 @@ impl NookVaultManager {
     }
 
     /// Decrypt one full record only after an explicit reveal or secret-value copy.
-    #[wasm_bindgen(js_name = decryptSecret)]
+    #[wasm_bindgen]
     pub fn decrypt_secret_js(&self, id: &str) -> Result<NookSecretRecord, JsError> {
         let crypto = self.vault.crypto.get()?;
         let id = nook_core::SecretId::from_vault_record(id);
@@ -172,7 +172,7 @@ impl NookVaultManager {
         Ok(NookSecretRecord::from_record(record))
     }
 
-    #[wasm_bindgen(js_name = currentAuthenticatorCode)]
+    #[wasm_bindgen]
     pub fn current_authenticator_code(
         &self,
         id: &str,
@@ -221,7 +221,7 @@ impl NookVaultManager {
     /// Unlike `next_status`, this never awaits, so it does not hold the
     /// wasm-bindgen borrow across a pending future (which would block every
     /// `&mut self` call like `connect` / `sync_vault_from_storage`).
-    #[wasm_bindgen(js_name = drainStatusLog)]
+    #[wasm_bindgen]
     pub fn drain_status_log(&self) -> Vec<String> {
         let mut messages = Vec::new();
         while let Ok(message) = self.status.rx.try_recv() {
@@ -311,7 +311,7 @@ impl NookVaultManager {
         .await
     }
 
-    #[wasm_bindgen(js_name = mergeRemoteJoinsFromProvider)]
+    #[wasm_bindgen]
     pub async fn merge_remote_joins_from_provider(
         &mut self,
         storage_mode: String,
@@ -329,7 +329,7 @@ impl NookVaultManager {
         Ok(self.pending_joins()?)
     }
 
-    #[wasm_bindgen(js_name = flushEventOutboxForProvider)]
+    #[wasm_bindgen]
     pub async fn flush_event_outbox_for_provider(
         &mut self,
         storage_mode: String,
@@ -347,7 +347,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    #[wasm_bindgen(js_name = syncEventLogForProvider)]
+    #[wasm_bindgen]
     pub async fn sync_event_log_for_provider(
         &mut self,
         storage_mode: String,
@@ -361,7 +361,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    #[wasm_bindgen(js_name = syncLocalFolderProvider)]
+    #[wasm_bindgen]
     pub async fn sync_local_folder_provider_js(
         &mut self,
         handle_id: &str,
@@ -394,7 +394,7 @@ impl NookVaultManager {
         Ok(records)
     }
 
-    #[wasm_bindgen(js_name = resolveProjectionConflict)]
+    #[wasm_bindgen]
     pub async fn resolve_projection_conflict(
         &mut self,
         old_secret_id: String,

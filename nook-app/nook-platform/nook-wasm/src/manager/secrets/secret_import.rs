@@ -270,7 +270,7 @@ impl NookVaultManager {
     /// Import supported entries from a plaintext or password-protected encrypted
     /// Bitwarden JSON export in one signed event. Exact values already present in
     /// the active vault are not imported again.
-    #[wasm_bindgen(js_name = importBitwardenJson)]
+    #[wasm_bindgen]
     pub async fn import_bitwarden_json(
         &mut self,
         json: String,
@@ -295,7 +295,7 @@ impl NookVaultManager {
 
     /// Import logins and secure notes from a `KeePassXC` CSV export in one signed
     /// event. The CSV is parsed in memory and never persisted.
-    #[wasm_bindgen(js_name = importKeePassXcCsv)]
+    #[wasm_bindgen]
     pub async fn import_keepassxc_csv(&mut self, csv: String) -> Result<NookImportResult, JsError> {
         let csv = zeroize::Zeroizing::new(csv);
         let plan = nook_core::plan_keepassxc_import(csv.as_str())
@@ -312,7 +312,7 @@ impl NookVaultManager {
     /// Import logins and secure notes from a plaintext `LastPass` generic CSV
     /// export in one signed event. The CSV is parsed in memory and never
     /// persisted.
-    #[wasm_bindgen(js_name = importLastPassCsv)]
+    #[wasm_bindgen]
     pub async fn import_lastpass_csv(&mut self, csv: String) -> Result<NookImportResult, JsError> {
         let csv = zeroize::Zeroizing::new(csv);
         let plan = nook_core::plan_lastpass_import(csv.as_str())
@@ -328,7 +328,7 @@ impl NookVaultManager {
 
     /// Import logins and secure notes from a plaintext Keeper CSV export in one
     /// signed event. The CSV is parsed in memory and never persisted.
-    #[wasm_bindgen(js_name = importKeeperCsv)]
+    #[wasm_bindgen]
     pub async fn import_keeper_csv(&mut self, csv: String) -> Result<NookImportResult, JsError> {
         let csv = zeroize::Zeroizing::new(csv);
         let plan = nook_core::plan_keeper_import(csv.as_str())
@@ -344,7 +344,7 @@ impl NookVaultManager {
 
     /// Import supported entries from an unencrypted 1Password 1PUX archive in
     /// one signed event. The archive is parsed in memory and never persisted.
-    #[wasm_bindgen(js_name = importOnePasswordPux)]
+    #[wasm_bindgen]
     pub async fn import_onepassword_pux(
         &mut self,
         archive: Vec<u8>,
@@ -364,7 +364,7 @@ impl NookVaultManager {
     /// Import passwords and verification codes from an Apple Passwords CSV or
     /// Safari browsing-data ZIP export in one signed event. The export is
     /// parsed only in memory.
-    #[wasm_bindgen(js_name = importApplePasswordsExport)]
+    #[wasm_bindgen]
     pub async fn import_apple_passwords_export(
         &mut self,
         export: Vec<u8>,
@@ -383,7 +383,7 @@ impl NookVaultManager {
 
     /// Import logins from a Chrome-family CSV export in one signed event. The
     /// plaintext CSV is parsed only in memory.
-    #[wasm_bindgen(js_name = importChromePasswordsCsv)]
+    #[wasm_bindgen]
     pub async fn import_chrome_passwords_csv(
         &mut self,
         csv: String,
@@ -402,7 +402,7 @@ impl NookVaultManager {
 
     /// Import supported items from an unencrypted Dashlane CSV or CSV ZIP export
     /// in one signed event. The export is parsed only in memory.
-    #[wasm_bindgen(js_name = importDashlaneExport)]
+    #[wasm_bindgen]
     pub async fn import_dashlane_export(
         &mut self,
         export: Vec<u8>,
@@ -421,7 +421,7 @@ impl NookVaultManager {
 
     /// Import TOTP accounts from one complete Google Authenticator migration
     /// QR batch in one signed event. QR contents are decoded only in memory.
-    #[wasm_bindgen(js_name = importGoogleAuthenticatorMigration)]
+    #[wasm_bindgen]
     pub async fn import_google_authenticator_migration(
         &mut self,
         migration_uris: Vec<String>,
@@ -441,7 +441,7 @@ impl NookVaultManager {
     /// Import logins and secure notes from an unencrypted Proton Pass ZIP
     /// export or decrypted data.json in one signed event. The export is parsed
     /// in memory and never persisted.
-    #[wasm_bindgen(js_name = importProtonPass)]
+    #[wasm_bindgen]
     pub async fn import_proton_pass(
         &mut self,
         export: Vec<u8>,

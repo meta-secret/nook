@@ -1,9 +1,9 @@
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookAppLocale } from "$app-wasm";
 import {
-  defaultTranslationCatalog,
-  get_translation_catalog as getTranslationCatalog,
-  resolveTranslationCatalog,
+  default_translation_catalog,
+  get_translation_catalog,
+  resolve_translation_catalog,
 } from "$app-wasm";
 
 enum TranslationCatalogLookupKind {
@@ -19,7 +19,7 @@ function wasmTranslationCatalog(
   try {
     return {
       kind: TranslationCatalogLookupKind.Loaded,
-      catalog: getTranslationCatalog(locale),
+      catalog: get_translation_catalog(locale),
     };
   } catch {
     return { kind: TranslationCatalogLookupKind.Unavailable };
@@ -43,12 +43,12 @@ export async function updateLocale({
 
   const preferWasm = options?.preferWasm ?? state.hasManager;
   if (!preferWasm) {
-    state.translations = defaultTranslationCatalog(newLocale);
+    state.translations = default_translation_catalog(newLocale);
     return;
   }
   const wasmCatalog = wasmTranslationCatalog(newLocale);
   state.translations =
     wasmCatalog.kind === TranslationCatalogLookupKind.Loaded
-      ? resolveTranslationCatalog(newLocale, wasmCatalog.catalog)
-      : defaultTranslationCatalog(newLocale);
+      ? resolve_translation_catalog(newLocale, wasmCatalog.catalog)
+      : default_translation_catalog(newLocale);
 }

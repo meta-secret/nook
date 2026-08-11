@@ -51,7 +51,7 @@ impl NookVaultManager {
     /// have different `store_id`s: preserve the provider's append-only events
     /// locally, then let normal unlock/access checks decide whether this device
     /// can open that vault.
-    #[wasm_bindgen(js_name = importProviderEventLogAsLocalVault)]
+    #[wasm_bindgen]
     pub async fn import_provider_event_log_as_local_vault(
         &mut self,
         storage_mode: String,
@@ -78,7 +78,7 @@ impl NookVaultManager {
     }
 
     /// Copy a single-vault local-folder event log into local storage as its own vault.
-    #[wasm_bindgen(js_name = importLocalFolderEventLogAsLocalVault)]
+    #[wasm_bindgen]
     pub async fn import_local_folder_event_log_as_local_vault(
         &mut self,
         handle_id: &str,

@@ -19,7 +19,7 @@
     type ProviderSetupRequest,
     type StorageProvider,
   } from '$lib/auth/providers'
-  import { providerReplicationCapability } from '$lib/vault/architecture-model'
+  import { provider_replication_capability } from '$lib/vault/architecture-model'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -88,7 +88,7 @@
 
   function blocked(request: ProviderSetupRequest): boolean {
     const draftProviderArgs: Parameters<typeof draftProvider>[0] = request;
-    const result = providerReplicationCapability(
+    const result = provider_replication_capability(
       draftProvider(draftProviderArgs),
     )
     try {

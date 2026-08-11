@@ -19,12 +19,12 @@ const E2E_PASSWORD_SCRYPT_LOG_N: u8 = 10;
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    #[wasm_bindgen(js_name = "listVaultPasswordEntries")]
+    #[wasm_bindgen]
     pub fn list_vault_password_entries(&self) -> Result<Vec<NookPasswordEntrySummary>, JsError> {
         Ok(password_entries_to_vec(&self.vault.password_entries))
     }
 
-    #[wasm_bindgen(js_name = "fetchVaultPasswordEntries")]
+    #[wasm_bindgen]
     pub async fn fetch_vault_password_entries(
         &mut self,
         storage_mode: String,
@@ -64,7 +64,7 @@ impl NookVaultManager {
         Ok(password_entries_to_vec(&entries))
     }
 
-    #[wasm_bindgen(js_name = "verifyVaultPassword")]
+    #[wasm_bindgen]
     pub fn verify_vault_password(&self, entry_id: &str, password: &str) -> bool {
         match self
             .vault
@@ -77,7 +77,7 @@ impl NookVaultManager {
         }
     }
 
-    #[wasm_bindgen(js_name = "addVaultPassword")]
+    #[wasm_bindgen]
     pub async fn add_vault_password(
         &mut self,
         label: String,
@@ -87,7 +87,7 @@ impl NookVaultManager {
             .await
     }
 
-    #[wasm_bindgen(js_name = "addVaultPasswordForE2e")]
+    #[wasm_bindgen]
     pub async fn add_vault_password_for_e2e(
         &mut self,
         label: String,
@@ -138,13 +138,13 @@ impl NookVaultManager {
         Ok(())
     }
 
-    #[wasm_bindgen(js_name = "setVaultPassword")]
+    #[wasm_bindgen]
     pub async fn set_vault_password(&mut self, password: String) -> Result<(), JsError> {
         self.add_vault_password("Vault password".to_owned(), password)
             .await
     }
 
-    #[wasm_bindgen(js_name = "updateVaultPasswordEntry")]
+    #[wasm_bindgen]
     pub async fn update_vault_password_entry(
         &mut self,
         entry_id: String,
@@ -158,7 +158,7 @@ impl NookVaultManager {
         .await
     }
 
-    #[wasm_bindgen(js_name = "updateVaultPasswordEntryForE2e")]
+    #[wasm_bindgen]
     pub async fn update_vault_password_entry_for_e2e(
         &mut self,
         entry_id: String,
@@ -214,7 +214,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    #[wasm_bindgen(js_name = "removeVaultPasswordEntry")]
+    #[wasm_bindgen]
     pub async fn remove_vault_password_entry(&mut self, entry_id: String) -> Result<(), JsError> {
         if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
             return Err(nook_core::MultiDeviceError::SentinelPasswordUnlockForbidden.into());
@@ -230,7 +230,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    #[wasm_bindgen(js_name = "removeVaultPassword")]
+    #[wasm_bindgen]
     pub async fn remove_vault_password(&mut self) -> Result<(), JsError> {
         if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
             return Err(nook_core::MultiDeviceError::SentinelPasswordUnlockForbidden.into());
@@ -258,7 +258,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    #[wasm_bindgen(js_name = "connectWithPassword")]
+    #[wasm_bindgen]
     pub async fn connect_with_password(
         &mut self,
         storage_mode: String,
