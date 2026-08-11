@@ -15,7 +15,6 @@ const ACTIONS_BOT = {
   name: "github-actions[bot]",
 } as const;
 
-const REPORTED_ONLY_PATH_PARTS = ["/dist/", "/generated/", "/vendor/"];
 const REPORTED_ONLY_FILENAMES = new Set([
   "Cargo.lock",
   "bun.lock",
@@ -45,6 +44,7 @@ type NumstatRecordParseResult =
       added: string;
       deleted: string;
       destinationPath: string;
+      renamed: boolean;
     };
 
 type ParseNumstatRecordArgs = {
@@ -77,6 +77,7 @@ function parseNumstatRecord(
       added,
       deleted,
       destinationPath: inlinePath,
+      renamed: false,
     };
   }
   const sourcePath = args.records.at(args.index + 1);
@@ -98,11 +99,42 @@ function parseNumstatRecord(
     added,
     deleted,
     destinationPath,
+    renamed: true,
   };
 }
 
-export function countAuthoredNumstat(numstat: string): number {
-  let total = 0;
+export type ReportedOnlyNumstat = {
+  binaryFiles: number;
+  generatedLines: number;
+  lockfileLines: number;
+  malformedRecords: number;
+  pureRenameFiles: number;
+  snapshotLines: number;
+  vendoredLines: number;
+};
+
+export type AuthoredNumstatSummary = {
+  authoredLines: number;
+  reportedOnly: ReportedOnlyNumstat;
+};
+
+function emptyReportedOnlyNumstat(): ReportedOnlyNumstat {
+  return {
+    binaryFiles: 0,
+    generatedLines: 0,
+    lockfileLines: 0,
+    malformedRecords: 0,
+    pureRenameFiles: 0,
+    snapshotLines: 0,
+    vendoredLines: 0,
+  };
+}
+
+export function summarizeAuthoredNumstat(
+  numstat: string,
+): AuthoredNumstatSummary {
+  let authoredLines = 0;
+  const reportedOnly = emptyReportedOnlyNumstat();
   const records = numstat.split("\0");
   let index = 0;
   while (index < records.length) {
@@ -110,23 +142,38 @@ export function countAuthoredNumstat(numstat: string): number {
     const parsed = parseNumstatRecord(parseArgs);
     if (parsed.kind === NumstatRecordParseKind.End) break;
     index = parsed.nextIndex;
-    if (parsed.kind === NumstatRecordParseKind.Malformed) continue;
-    const normalizedPath = `/${parsed.destinationPath.replaceAll("\\", "/")}`;
-    const filename = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1);
-    const reportedOnly =
-      REPORTED_ONLY_FILENAMES.has(filename) ||
-      normalizedPath.endsWith(".snap") ||
-      REPORTED_ONLY_PATH_PARTS.some((part) => normalizedPath.includes(part));
-    if (
-      reportedOnly ||
-      !/^\d+$/.test(parsed.added) ||
-      !/^\d+$/.test(parsed.deleted)
-    ) {
+    if (parsed.kind === NumstatRecordParseKind.Malformed) {
+      reportedOnly.malformedRecords += 1;
       continue;
     }
-    total += Number(parsed.added) + Number(parsed.deleted);
+    const normalizedPath = `/${parsed.destinationPath.replaceAll("\\", "/")}`;
+    const filename = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1);
+    if (!/^\d+$/.test(parsed.added) || !/^\d+$/.test(parsed.deleted)) {
+      reportedOnly.binaryFiles += 1;
+      continue;
+    }
+    const changedLines = Number(parsed.added) + Number(parsed.deleted);
+    if (REPORTED_ONLY_FILENAMES.has(filename)) {
+      reportedOnly.lockfileLines += changedLines;
+    } else if (normalizedPath.endsWith(".snap")) {
+      reportedOnly.snapshotLines += changedLines;
+    } else if (normalizedPath.includes("/generated/")) {
+      reportedOnly.generatedLines += changedLines;
+    } else if (normalizedPath.includes("/vendor/")) {
+      reportedOnly.vendoredLines += changedLines;
+    } else if (normalizedPath.includes("/dist/")) {
+      reportedOnly.generatedLines += changedLines;
+    } else if (parsed.renamed && changedLines === 0) {
+      reportedOnly.pureRenameFiles += 1;
+    } else {
+      authoredLines += changedLines;
+    }
   }
-  return total;
+  return { authoredLines, reportedOnly };
+}
+
+export function countAuthoredNumstat(numstat: string): number {
+  return summarizeAuthoredNumstat(numstat).authoredLines;
 }
 
 export async function assertAuthoredChangeBudget(
@@ -141,15 +188,17 @@ export async function assertAuthoredChangeBudget(
     "--numstat",
     "-z",
     "--find-renames",
+    "-l0",
     args.baseRef,
   ]);
-  const authoredLines = countAuthoredNumstat(stdout);
+  const summary = summarizeAuthoredNumstat(stdout);
   log.info(
-    `Implemented diff contains ${authoredLines} authored changed lines against ${args.baseRef}`,
+    `Implemented diff contains ${summary.authoredLines} authored changed lines against ${args.baseRef}`,
   );
-  if (authoredLines > args.maximumLines) {
+  log.info(`Reported-only diff rows: ${JSON.stringify(summary.reportedOnly)}`);
+  if (summary.authoredLines > args.maximumLines) {
     throw new Error(
-      `Implemented diff exceeds the ${args.maximumLines} authored changed-line budget: ${authoredLines}`,
+      `Implemented diff exceeds the ${args.maximumLines} authored changed-line budget: ${summary.authoredLines}`,
     );
   }
 }

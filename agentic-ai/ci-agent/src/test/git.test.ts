@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { countAuthoredNumstat } from "../main/git.js";
+import {
+  countAuthoredNumstat,
+  summarizeAuthoredNumstat,
+} from "../main/git.js";
 
 describe("countAuthoredNumstat", () => {
   it("counts authored additions and deletions", () => {
@@ -27,10 +30,27 @@ describe("countAuthoredNumstat", () => {
       "",
     ].join("\0");
     assert.equal(countAuthoredNumstat(numstat), 9);
+    const expectedReportedOnly = {
+      binaryFiles: 1,
+      generatedLines: 10,
+      lockfileLines: 60,
+      malformedRecords: 0,
+      pureRenameFiles: 1,
+      snapshotLines: 55,
+      vendoredLines: 19,
+    };
+    assert.deepEqual(
+      summarizeAuthoredNumstat(numstat).reportedOnly,
+      expectedReportedOnly,
+    );
   });
 
   it("skips malformed NUL-delimited records explicitly", () => {
     const numstat = "8\t1\tsrc/domain.ts\0malformed\0";
     assert.equal(countAuthoredNumstat(numstat), 9);
+    assert.equal(
+      summarizeAuthoredNumstat(numstat).reportedOnly.malformedRecords,
+      1,
+    );
   });
 });

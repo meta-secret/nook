@@ -21,7 +21,8 @@ const recordSections = {
 const planBudgetFields = [
   {
     label: 'Estimated authored changed lines',
-    pattern: /^- Estimated authored changed lines:\s*\d[\d,]*\s*$/m,
+    pattern:
+      /^- Estimated authored changed lines:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
   },
   {
     label: 'Owning modules, packages, or layers',
@@ -38,7 +39,7 @@ const planBudgetFields = [
   {
     label: 'Current PR estimated authored changed lines',
     pattern:
-      /^- Current PR estimated authored changed lines:\s*\d[\d,]*\s*$/m,
+      /^- Current PR estimated authored changed lines:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
   },
   {
     label: 'Current PR slice and acceptance evidence',
@@ -70,6 +71,59 @@ function countBudgetFieldLabels(candidate, label) {
   let count = 0
   for (const _match of candidate.matchAll(fieldPattern)) count += 1
   return count
+}
+
+function parseBudgetFieldValue(budgetSection, label) {
+  const fieldPattern = new RegExp(
+    `^- ${escapeRegExp(label)}:\\s*(.+?)\\s*$`,
+    'im',
+  )
+  const match = fieldPattern.exec(budgetSection)
+  if (!match || typeof match[1] !== 'string') {
+    return { kind: 'invalid', value: '' }
+  }
+  return { kind: 'valid', value: match[1].trim() }
+}
+
+function parseBudgetFields(budgetSection) {
+  const owningBoundary = parseBudgetFieldValue(
+    budgetSection,
+    'Owning modules, packages, or layers',
+  )
+  const estimate = parseBudgetFieldValue(
+    budgetSection,
+    'Estimated authored changed lines',
+  )
+  const currentPrEstimate = parseBudgetFieldValue(
+    budgetSection,
+    'Current PR estimated authored changed lines',
+  )
+  const deliveryShape = parseBudgetFieldValue(budgetSection, 'Delivery shape')
+  const currentSlice = parseBudgetFieldValue(
+    budgetSection,
+    'Current PR slice and acceptance evidence',
+  )
+  const sequenceMarker = '- PR slices and acceptance evidence:'
+  const sequenceStart = budgetSection.indexOf(sequenceMarker)
+  if (
+    owningBoundary.kind === 'invalid' ||
+    estimate.kind === 'invalid' ||
+    currentPrEstimate.kind === 'invalid' ||
+    deliveryShape.kind === 'invalid' ||
+    currentSlice.kind === 'invalid' ||
+    sequenceStart < 0
+  ) {
+    return { kind: 'invalid' }
+  }
+  return {
+    kind: 'valid',
+    owningBoundary: owningBoundary.value,
+    estimate: Number(estimate.value.replaceAll(',', '')),
+    currentPrEstimate: Number(currentPrEstimate.value.replaceAll(',', '')),
+    deliveryShape: deliveryShape.value,
+    currentSlice: currentSlice.value,
+    sequenceBody: budgetSection.slice(sequenceStart + sequenceMarker.length),
+  }
 }
 
 function parseSliceContract(value, numbered) {
@@ -153,7 +207,7 @@ function containsSourceTaskExcerpt(candidate, sourceTask) {
 
   const sourceWords = normalizedWords(sourceTask)
   const candidateWords = normalizedWords(candidate)
-  const excerptLength = Math.min(12, sourceWords.length)
+  const excerptLength = Math.min(8, sourceWords.length)
   if (excerptLength === 0 || candidateWords.length < excerptLength) return false
 
   const sourceExcerpts = new Set()
@@ -220,33 +274,18 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     )
     if (budgetFieldState.kind === 'invalid') return budgetFieldState.message
 
-    const owningBoundary = budgetSection
-      .match(/^- Owning modules, packages, or layers:\s*(.+)$/im)[1]
-      .trim()
-    if (isPlaceholder(owningBoundary)) {
+    const budgetFields = parseBudgetFields(budgetSection)
+    if (budgetFields.kind === 'invalid') {
+      return 'plan budget fields could not be parsed'
+    }
+    if (isPlaceholder(budgetFields.owningBoundary)) {
       return 'missing or empty plan field: Owning modules, packages, or layers'
     }
 
-    const estimate = Number(
-      budgetSection
-        .match(/^- Estimated authored changed lines:\s*([\d,]+)\s*$/m)[1]
-        .replaceAll(',', ''),
-    )
-    const currentPrEstimate = Number(
-      budgetSection
-        .match(
-          /^- Current PR estimated authored changed lines:\s*([\d,]+)\s*$/m,
-        )[1]
-        .replaceAll(',', ''),
-    )
-    const deliveryShape = budgetSection
-      .match(/^- Delivery shape:\s*(One PR|Multiple PRs)\s*$/im)[1]
-      .trim()
-
-    const currentSliceValue = budgetSection.match(
-      /^- Current PR slice and acceptance evidence:\s*(.+)$/im,
-    )[1]
-    const currentSlice = parseSliceContract(currentSliceValue, false)
+    const estimate = budgetFields.estimate
+    const currentPrEstimate = budgetFields.currentPrEstimate
+    const deliveryShape = budgetFields.deliveryShape
+    const currentSlice = parseSliceContract(budgetFields.currentSlice, false)
     if (!currentSlice.valid) {
       return 'missing or empty plan field: Current PR slice and acceptance evidence'
     }
@@ -267,8 +306,7 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
       return 'one-PR feature and current PR estimates must match'
     }
 
-    const sequenceBody = budgetSection
-      .split(/^- PR slices and acceptance evidence:\s*/m)[1]
+    const sequenceBody = budgetFields.sequenceBody
     if (deliveryShape === 'Multiple PRs') {
       const sliceLines = sequenceBody
         .trim()

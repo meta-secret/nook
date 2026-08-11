@@ -93,6 +93,20 @@ test('rejects a complete short source task copied verbatim', () => {
   )
 })
 
+test('rejects a shorter copied sentence from a long source task', () => {
+  const copiedSentence =
+    'Keep every focused pull request inside one clear architectural module boundary'
+  const sourceTask = `${copiedSentence}. Then continue with independently mergeable slices until the entire feature is complete.`
+  const copied = validPlan.replace(
+    'Deliver a durable two-phase agent context record.',
+    copiedSentence,
+  )
+  assert.match(
+    validateAgentRecord(copied, 'plan', [], sourceTask),
+    /verbatim source-task excerpt/,
+  )
+})
+
 test('accepts an independently synthesized representation of the source task', () => {
   const sourceTask =
     'Please preserve all important requirements by publishing this exact ordinary prose before the implementation phase begins.'
@@ -138,6 +152,19 @@ test('rejects a nonnumeric authored-line estimate', () => {
     /missing or empty plan field: Estimated authored changed lines/,
   )
 })
+
+for (const malformedEstimate of ['5,00', '1,,,,']) {
+  test(`rejects malformed estimate grouping: ${malformedEstimate}`, () => {
+    const invalid = validPlan.replace(
+      'Estimated authored changed lines: 240',
+      `Estimated authored changed lines: ${malformedEstimate}`,
+    )
+    assert.match(
+      validateAgentRecord(invalid, 'plan'),
+      /missing or empty plan field: Estimated authored changed lines/,
+    )
+  })
+}
 
 test('rejects an over-budget one-PR plan', () => {
   const invalid = validPlan
