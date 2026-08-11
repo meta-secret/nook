@@ -253,6 +253,9 @@ test('uses the paired demo vault for authenticator enrollment', async ({
 
   await widget.getByRole('button', { name: 'Replace existing codes' }).click()
   await expect(widget.getByText('Backup codes saved')).toBeVisible()
+  await expect(
+    widget.getByRole('button', { name: 'Save backup codes' }),
+  ).toBeVisible()
   await demoBeat(page)
   expect(bootstrapErrors).toEqual([])
 })
