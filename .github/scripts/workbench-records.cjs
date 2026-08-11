@@ -57,6 +57,42 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+function parseSliceContract(value, numbered) {
+  const emptyContract = { valid: false, number: 0, scope: '', evidence: '' }
+  let contractText = value.trim()
+  let number = 0
+
+  if (numbered) {
+    const numberedMatch = contractText.match(/^(\d+)\.\s+(.+)$/)
+    if (!numberedMatch) return emptyContract
+    number = Number(numberedMatch[1])
+    contractText = numberedMatch[2]
+  } else {
+    const optionalNumberMatch = contractText.match(/^1\.\s+(.+)$/)
+    if (optionalNumberMatch) contractText = optionalNumberMatch[1]
+  }
+
+  const contractMatch = contractText.match(
+    /^(.+?)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
+  )
+  if (!contractMatch) return emptyContract
+
+  const scope = contractMatch[1].trim()
+  const evidence = contractMatch[2].trim()
+  return {
+    valid:
+      !placeholderPattern.test(scope) &&
+      !placeholderPattern.test(evidence),
+    number,
+    scope,
+    evidence,
+  }
+}
+
+function normalizedContractValue(value) {
+  return value.toLocaleLowerCase('en-US')
+}
+
 const commonForbiddenPatterns = [
   /```/,
   /^\s{4}\S/m,
@@ -187,17 +223,17 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
       .match(/^- Delivery shape:\s*(One PR|Multiple PRs)\s*$/im)[1]
       .trim()
 
-    const currentSliceMatch = budgetSection.match(
-      /^- Current PR slice and acceptance evidence:\s*(.+?)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/im,
-    )
-    if (
-      !currentSliceMatch ||
-      placeholderPattern.test(currentSliceMatch[1].trim()) ||
-      placeholderPattern.test(currentSliceMatch[2].trim())
-    ) {
+    const currentSliceValue = budgetSection.match(
+      /^- Current PR slice and acceptance evidence:\s*(.+)$/im,
+    )[1]
+    const currentSlice = parseSliceContract(currentSliceValue, false)
+    if (!currentSlice.valid) {
       return 'missing or empty plan field: Current PR slice and acceptance evidence'
     }
 
+    if (estimate < 1 || currentPrEstimate < 1) {
+      return 'authored changed-line estimates must be positive integers'
+    }
     if (currentPrEstimate > 5_000) {
       return 'current PR estimate exceeds 5,000 authored changed lines'
     }
@@ -208,15 +244,15 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     const sequenceBody = budgetSection
       .split(/^- PR slices and acceptance evidence:\s*/m)[1]
     if (deliveryShape === 'Multiple PRs') {
-      const slicePattern =
-        /^(\d+)\.\s+(?!(?:None|N\/A|Not applicable)\s*$)\S.+;\s*Acceptance evidence:\s*(?!(?:None|N\/A|Not applicable)\s*$)\S.+$/i
       const sliceLines = sequenceBody
         .trim()
         .split('\n')
         .filter((line) => line.trim())
-      const orderedSlices = sliceLines.map((line) => line.match(slicePattern))
+      const orderedSlices = sliceLines.map((line) =>
+        parseSliceContract(line, true),
+      )
       const hasExactSequence = orderedSlices.every(
-        (slice, index) => slice && Number(slice[1]) === index + 1,
+        (slice, index) => slice.valid && slice.number === index + 1,
       )
       if (sliceLines.length < 2 || !hasExactSequence) {
         return 'multi-PR plan requires at least two ordered slices with acceptance evidence'
@@ -226,16 +262,24 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
         .trim()
         .split('\n')
         .filter((line) => line.trim())
-      const sliceMatch = sliceLines[0]?.match(
-        /^(?:1\.\s+)?(.+?)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
-      )
+      let sequenceSlice = {
+        valid: false,
+        number: 0,
+        scope: '',
+        evidence: '',
+      }
+      if (sliceLines.length === 1) {
+        sequenceSlice = parseSliceContract(sliceLines[0], false)
+      }
       if (
         sliceLines.length !== 1 ||
-        !sliceMatch ||
-        placeholderPattern.test(sliceMatch[1].trim()) ||
-        placeholderPattern.test(sliceMatch[2].trim())
+        !sequenceSlice.valid ||
+        normalizedContractValue(sequenceSlice.scope) !==
+          normalizedContractValue(currentSlice.scope) ||
+        normalizedContractValue(sequenceSlice.evidence) !==
+          normalizedContractValue(currentSlice.evidence)
       ) {
-        return 'one-PR plan requires exactly one slice with acceptance evidence'
+        return 'one-PR plan requires one slice matching the current PR contract'
       }
     }
   }

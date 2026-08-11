@@ -25,7 +25,7 @@ Deliver a durable two-phase agent context record.
 - Delivery shape: One PR
 - Current PR estimated authored changed lines: 240
 - Current PR slice and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass
-- PR slices and acceptance evidence: One validator slice; Acceptance evidence: Contract tests pass
+- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass
 
 ## Initial plan
 
@@ -161,7 +161,7 @@ test('accepts a bounded current slice for a multi-PR feature', () => {
       'Delivery shape: Multiple PRs',
     )
     .replace(
-      '- PR slices and acceptance evidence: One validator slice; Acceptance evidence: Contract tests pass',
+      '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
       '- PR slices and acceptance evidence:\n1. Validator schema; Acceptance evidence: Contract tests pass.\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
     )
   assert.equal(validateAgentRecord(multiPr, 'plan'), '')
@@ -178,7 +178,7 @@ test('rejects a multi-PR plan without an ordered sequence', () => {
       'Delivery shape: Multiple PRs',
     )
     .replace(
-      'PR slices and acceptance evidence: One validator slice; Acceptance evidence: Contract tests pass',
+      'PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
       'PR slices and acceptance evidence: None',
     )
   assert.match(
@@ -191,7 +191,7 @@ test('rejects multi-PR slices without acceptance evidence', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
     .replace(
-      'PR slices and acceptance evidence: One validator slice; Acceptance evidence: Contract tests pass',
+      'PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
       'PR slices and acceptance evidence:\n1. Storage\n2. UI',
     )
   assert.match(
@@ -208,8 +208,8 @@ for (const sequence of [
     const invalid = validPlan
       .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
       .replace(
-        'One validator slice; Acceptance evidence: Contract tests pass',
-        `\n${sequence}`,
+        '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
+        `- PR slices and acceptance evidence:\n${sequence}`,
       )
     assert.match(
       validateAgentRecord(invalid, 'plan'),
@@ -282,12 +282,49 @@ test('rejects a placeholder current slice with concrete evidence', () => {
 
 test('rejects multiple slices declared as one PR', () => {
   const invalid = validPlan.replace(
-    'One validator slice; Acceptance evidence: Contract tests pass',
-    '\n1. Validator schema; Acceptance evidence: Contract tests pass.\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
+    '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
+    '- PR slices and acceptance evidence:\n1. Validator schema; Acceptance evidence: Contract tests pass.\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /one-PR plan requires exactly one slice with acceptance evidence/,
+    /one-PR plan requires one slice matching the current PR contract/,
+  )
+})
+
+test('rejects a placeholder scope in a multi-PR slice', () => {
+  const invalid = validPlan
+    .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace(
+      '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
+      '- PR slices and acceptance evidence:\n1. None; Acceptance evidence: Contract tests pass.\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
+    )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /multi-PR plan requires at least two ordered slices with acceptance evidence/,
+  )
+})
+
+test('rejects a one-PR sequence that contradicts the current slice', () => {
+  const invalid = validPlan.replace(
+    '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
+    '- PR slices and acceptance evidence: Storage migration; Acceptance evidence: Migration tests pass',
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /one-PR plan requires one slice matching the current PR contract/,
+  )
+})
+
+test('rejects zero authored-line estimates', () => {
+  const invalid = validPlan
+    .replace('Estimated authored changed lines: 240', 'Estimated authored changed lines: 0')
+    .replace(
+      'Current PR estimated authored changed lines: 240',
+      'Current PR estimated authored changed lines: 0',
+    )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /authored changed-line estimates must be positive integers/,
   )
 })
 
