@@ -1,5 +1,13 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
+  GITHUB_PROVIDER_TYPE,
+  GOOGLE_DRIVE_OAUTH_FILE_PRESET,
+  ICLOUD_OAUTH_FILE_PRESET,
+  LOCAL_FOLDER_PROVIDER_TYPE,
+  LOCAL_PROVIDER_TYPE,
+  OAUTH_FILE_PROVIDER_TYPE,
+} from "./provider-types";
+import {
   bindGoogleDriveSharedFolder,
   deleteAuthProvidersDb,
   default as initNookWasm,
@@ -137,15 +145,14 @@ export function formatDriveStorageRef({
     : formatNewDriveStorageRef(fileName);
 }
 
-export const LOCAL_PROVIDER_TYPE = "local" satisfies StorageProviderType;
-export const LOCAL_FOLDER_PROVIDER_TYPE =
-  "local-folder" satisfies StorageProviderType;
-export const GITHUB_PROVIDER_TYPE = "github" satisfies StorageProviderType;
-export const OAUTH_FILE_PROVIDER_TYPE =
-  "oauth-file" satisfies StorageProviderType;
-export const GOOGLE_DRIVE_OAUTH_FILE_PRESET =
-  "google-drive" satisfies OAuthFilePreset;
-export const ICLOUD_OAUTH_FILE_PRESET = "icloud" satisfies OAuthFilePreset;
+export {
+  GITHUB_PROVIDER_TYPE,
+  GOOGLE_DRIVE_OAUTH_FILE_PRESET,
+  ICLOUD_OAUTH_FILE_PRESET,
+  LOCAL_FOLDER_PROVIDER_TYPE,
+  LOCAL_PROVIDER_TYPE,
+  OAUTH_FILE_PROVIDER_TYPE,
+};
 
 export type ProviderSetupRequest =
   | {
