@@ -51,6 +51,11 @@ pub(super) fn is_wasm_callable_export(
     module_reexports_wasm_symbol(module, exported_name, source_path, &mut visited)
 }
 
+pub(super) fn is_wasm_export(module: &str, exported_name: &str, source_path: &Path) -> bool {
+    let mut visited = HashSet::new();
+    module_reexports_wasm_symbol(module, exported_name, source_path, &mut visited)
+}
+
 pub(super) fn wasm_factory_return_type(
     module: &str,
     exported_name: &str,

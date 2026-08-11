@@ -47,6 +47,7 @@ pub fn rust_wasm_callable_name_overrides(root: &Path) -> io::Result<Vec<Violatio
             collect_wasm_inventory(
                 &syntax.items,
                 false,
+                &HashSet::new(),
                 &mut callable_names,
                 &mut wasm_type_names,
                 &mut wasm_methods_by_type,
@@ -302,9 +303,9 @@ mod tests {
     #[test]
     fn rejects_callable_name_override_through_renamed_attribute_import() -> Result<(), syn::Error> {
         let syntax = syn::parse_file(
-            r#"use wasm_bindgen::prelude::wasm_bindgen as export_wasm;
+            r"use wasm_bindgen::prelude::wasm_bindgen as export_wasm;
 #[export_wasm(js_name = generateSecretId)]
-pub fn generate_secret_id() {}"#,
+pub fn generate_secret_id() {}",
         )?;
         let aliases = collect_wasm_bindgen_attribute_aliases(&syntax.items);
         let Some(syn::Item::Fn(function)) = syntax.items.last() else {
@@ -928,8 +929,8 @@ const generateSecretId = manager.generate_secret_id;"#;
     #[test]
     fn permits_same_named_accessor_on_unrelated_receiver() -> Result<(), tree_sitter::LanguageError>
     {
-        let source = r#"const manager = sdk.requireManager();
-const openSocket = manager.connect;"#;
+        let source = r"const manager = sdk.requireManager();
+const openSocket = manager.connect;";
         assert!(typescript_wasm_import_alias_lines(source, 1, &callable_names())?.is_empty());
         Ok(())
     }

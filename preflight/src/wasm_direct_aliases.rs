@@ -27,6 +27,8 @@ pub(super) fn collect_direct_wasm_aliases_and_bindings(
                 collect_wasm_type_import_bindings(
                     node,
                     source,
+                    source_path,
+                    &module,
                     wasm_type_names,
                     wasm_class_bindings,
                 );

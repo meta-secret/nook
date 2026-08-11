@@ -31,6 +31,23 @@ pub(super) fn scoped_binding_is_visible(
     visible_scoped_binding(reference, name, source, bindings).is_some()
 }
 
+pub(super) fn invalidate_visible_scoped_binding(
+    reference: tree_sitter::Node<'_>,
+    name: &str,
+    source: &str,
+    bindings: &mut [ScopedBinding],
+) {
+    if let Some(binding) = bindings.iter_mut().find(|binding| {
+        binding.name == name
+            && binding.declaration_end <= reference.start_byte()
+            && binding.scope_start <= reference.start_byte()
+            && reference.end_byte() <= binding.scope_end
+            && !nested_scope_shadows(reference, binding, name, source)
+    }) {
+        binding.scope_end = reference.start_byte();
+    }
+}
+
 fn nested_scope_shadows(
     reference: tree_sitter::Node<'_>,
     binding: &ScopedBinding,

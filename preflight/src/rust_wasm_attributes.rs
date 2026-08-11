@@ -8,41 +8,44 @@ use syn::{Attribute, ImplItem, Item, Meta, Token, UseTree, punctuated::Punctuate
 
 use crate::Violation;
 
-pub(super) fn attribute_has_wasm_bindgen(attribute: &Attribute) -> bool {
-    meta_contains_wasm_bindgen(&attribute.meta)
+pub(super) fn attribute_has_wasm_bindgen_with_aliases(
+    attribute: &Attribute,
+    aliases: &HashSet<String>,
+) -> bool {
+    meta_contains_wasm_bindgen(&attribute.meta, aliases)
 }
 
-pub(super) fn attribute_is_wasm_accessor(attribute: &Attribute) -> bool {
-    meta_is_wasm_accessor(&attribute.meta)
+pub(super) fn attribute_is_wasm_accessor_with_aliases(
+    attribute: &Attribute,
+    aliases: &HashSet<String>,
+) -> bool {
+    meta_is_wasm_accessor(&attribute.meta, aliases)
 }
 
-fn meta_is_wasm_accessor(meta: &Meta) -> bool {
+fn meta_is_wasm_accessor(meta: &Meta, aliases: &HashSet<String>) -> bool {
     let Meta::List(list) = meta else {
         return false;
     };
     let Ok(options) = list.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated) else {
         return false;
     };
-    if meta
-        .path()
-        .segments
-        .last()
-        .is_some_and(|segment| segment.ident == "wasm_bindgen")
-    {
+    if meta.path().segments.last().is_some_and(|segment| {
+        segment.ident == "wasm_bindgen" || aliases.contains(&segment.ident.to_string())
+    }) {
         return options
             .iter()
             .any(|option| option.path().is_ident("getter") || option.path().is_ident("setter"));
     }
-    meta.path().is_ident("cfg_attr") && options.iter().any(meta_is_wasm_accessor)
+    meta.path().is_ident("cfg_attr")
+        && options
+            .iter()
+            .any(|option| meta_is_wasm_accessor(option, aliases))
 }
 
-fn meta_contains_wasm_bindgen(meta: &Meta) -> bool {
-    if meta
-        .path()
-        .segments
-        .last()
-        .is_some_and(|segment| segment.ident == "wasm_bindgen")
-    {
+fn meta_contains_wasm_bindgen(meta: &Meta, aliases: &HashSet<String>) -> bool {
+    if meta.path().segments.last().is_some_and(|segment| {
+        segment.ident == "wasm_bindgen" || aliases.contains(&segment.ident.to_string())
+    }) {
         return true;
     }
     if !meta.path().is_ident("cfg_attr") {
@@ -54,7 +57,9 @@ fn meta_contains_wasm_bindgen(meta: &Meta) -> bool {
     let Ok(nested) = list.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated) else {
         return false;
     };
-    nested.iter().any(meta_contains_wasm_bindgen)
+    nested
+        .iter()
+        .any(|nested_meta| meta_contains_wasm_bindgen(nested_meta, aliases))
 }
 
 pub(super) fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {

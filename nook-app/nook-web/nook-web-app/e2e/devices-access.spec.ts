@@ -16,12 +16,6 @@ enum PreviewTextKind {
   Present = 'present',
 }
 
-type DeviceAccessSnapshotFixture = {
-  passkeyName: NookDeviceAccessTextKind
-  providerLabel: NookDeviceAccessTextKind
-  protection: DeviceAccessProtectionKind
-}
-
 type DeviceAccessSnapshotRequestOwner = Pick<
   NookVaultManager,
   'device_access_snapshot_request'
