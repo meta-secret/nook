@@ -1,6 +1,5 @@
 import {
   currentCodeFromOtpauthUri,
-  decodeStorageProviders,
   DeviceMode,
   DeviceProtectionStatus,
   NookExternalEventLogRecords,
@@ -9,11 +8,6 @@ import {
   previewOtpauthUri,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type initNookWasm from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type {
-  AuthProvidersSnapshot,
-  StorageProvider,
-} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import { scrubProviderCredentials } from '../lib/provider-credential-staging'
 import { ExtensionSessionMessageType } from './session-message-dispatch'
 import { type ExtensionSessionRequest } from './session-request-adapter'
 import {
@@ -24,6 +18,8 @@ import {
 } from './login-save-offers'
 import {
   flushPasskeyEventToProviders,
+  importExtensionVault,
+  type ImportExtensionVaultArgs,
   openPasskeyVault,
 } from './session-vault-operations'
 import { toBytes, toNumbers } from './session-key-material'
@@ -244,67 +240,12 @@ export async function handleSessionMessage({
       return { ok: true, envelope }
     }
     case ExtensionSessionMessageType.ImportVault: {
-      const payload = message.payload
-      const grant = extensionVaultGrant(payload)
-      const records = payload.eventLogRecords
-      const providers = payload.providers
-      if (!Array.isArray(records) || !Array.isArray(providers)) {
-        throw new Error('Extension session received an invalid vault import.')
-      }
       const activeManager = await getManager()
-      const providerSnapshot: AuthProvidersSnapshot = {
-        providers: providers as StorageProvider[],
-        activeVaultStoreId: { state: 'unselected' },
+      const importArgs: ImportExtensionVaultArgs = {
+        activeManager,
+        message,
       }
-      const grantedProviders =
-        decodeStorageProviders(providerSnapshot).providers
-      try {
-        const recordValues = NookExternalEventLogRecords.fromArray(records)
-        const statusValue = await activeManager.importExtensionEventLogRecords(
-          grant.vaultStoreId,
-          grant.deviceId,
-          grant.devicePublicKey,
-          grant.deviceSigningPublicKey,
-          recordValues,
-        )
-        const status = statusValue.toObject()
-        statusValue.free()
-        const protection = await activeManager.deviceProtectionStatus()
-        if (protection === DeviceProtectionStatus.Unlocked) {
-          const nookTypedArgs0_2: Parameters<
-            typeof activeManager.replaceAuthProvidersForVault
-          >[0] = {
-            providers: grantedProviders,
-            activeVaultStoreId: {
-              state: 'storeId',
-              value: grant.vaultStoreId,
-            },
-          }
-          await activeManager.replaceAuthProvidersForVault(nookTypedArgs0_2)
-        } else {
-          // Pairing may race a closed/locked offscreen session. Website grants are
-          // already sealed for this device public key, so replace this vault's
-          // complete provider set without unlock, including an empty set.
-          const lockedManager = activeManager as NookVaultManager & {
-            savePresealedAuthProviders: (
-              snapshot: AuthProvidersSnapshot,
-            ) => Promise<void>
-          }
-          const nookTypedArgs0_3: Parameters<
-            typeof lockedManager.savePresealedAuthProviders
-          >[0] = {
-            providers: grantedProviders,
-            activeVaultStoreId: {
-              state: 'storeId',
-              value: grant.vaultStoreId,
-            },
-          }
-          await lockedManager.savePresealedAuthProviders(nookTypedArgs0_3)
-        }
-        return { ok: true, status }
-      } finally {
-        scrubProviderCredentials(grantedProviders)
-      }
+      return importExtensionVault(importArgs)
     }
     case ExtensionSessionMessageType.UpdateVault: {
       const payload = message.payload
