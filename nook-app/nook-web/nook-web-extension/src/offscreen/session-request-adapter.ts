@@ -263,10 +263,7 @@ function isExtensionSessionQueueEnvelope(
 
 function hasExtensionSessionQueue(payload: unknown): boolean {
   if (!payload || typeof payload !== 'object') return false
-  return (
-    'queue' in payload &&
-    isExtensionSessionQueueEnvelope(payload.queue)
-  )
+  return 'queue' in payload && isExtensionSessionQueueEnvelope(payload.queue)
 }
 
 function stageExtensionSessionIngressRequest(
