@@ -2,6 +2,7 @@ import { companionWasmReady } from '../../../nook-web-shared/src/extension/compa
 import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { summarizeAuthenticationWorkflowForms } from '../../../nook-web-shared/src/extension/password-forms'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
+import { AuthenticationWorkflowSnapshotMessageType } from '../lib/auth-workflow-messages'
 import { cancelPendingAuthenticatorPickerRequest } from './autofill/authenticator-actions'
 import {
   cancelPendingLoginPickerRequest,
@@ -96,7 +97,7 @@ async function scanAndRender(): Promise<void> {
   const message: Parameters<
     typeof sendAuthenticationWorkflowSnapshotRuntimeMessage
   >[0] = {
-    type: 'nook:authentication-workflow-snapshot',
+    type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
     payload: {
       origin: location.origin,
       observations: workflowForms.map(({ summary }) => ({

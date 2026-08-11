@@ -6,6 +6,19 @@ type LintTextOptions = {
 };
 
 describe('Loom ESLint contracts', () => {
+  test('rejects the generic object type', async () => {
+    const eslint = new ESLint();
+    const options: LintTextOptions = { filePath: 'src/cli.ts' };
+    const results = await eslint.lintText(
+      'declare function decode(message: object): void;',
+      options,
+    );
+
+    expect(results[0]?.messages.map((message) => message.ruleId)).toEqual([
+      '@typescript-eslint/no-restricted-types',
+    ]);
+  });
+
   test('rejects cast-wrapped constructor object arguments', async () => {
     const eslint = new ESLint();
     const options: LintTextOptions = { filePath: 'src/cli.ts' };

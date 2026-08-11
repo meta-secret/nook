@@ -35,7 +35,7 @@ describe('authenticator session adapter', () => {
       sendMessage: (
         ...parameters: [
           ExtensionSessionTransportRequest,
-          (response: object) => void,
+          (response: unknown) => void,
         ]
       ) => {
         const [message, callback] = parameters

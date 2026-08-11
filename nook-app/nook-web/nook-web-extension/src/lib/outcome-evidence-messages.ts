@@ -30,7 +30,7 @@ export type AuthenticationOutcomeClassifyMessage = {
 }
 
 export function isAuthenticationOutcomeClassifyMessage(
-  message: object,
+  message: unknown,
 ): message is AuthenticationOutcomeClassifyMessage {
   if (
     !message ||

@@ -16,6 +16,12 @@ import {
 } from '../lib/page-qr-capture'
 import { isTrustedAuthAction } from '../lib/auth-widget-policy'
 import {
+  WebsiteAuthenticatorEnrollConfirmMessageType,
+  WebsiteAuthenticatorEnrollDismissMessageType,
+  WebsiteAuthenticatorEnrollPreviewMessageType,
+  WebsiteAuthenticatorEnrollStageMessageType,
+} from '../lib/enrollment-messages'
+import {
   beginEnrollmentEvidenceWatch,
   enrollmentEvidenceWatchActive,
   fillStagedEnrollmentCode,
@@ -66,31 +72,49 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   openVaultButton: HTMLButtonElement
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
-  sendDecodedRuntimeMessage: <Response extends object>(
+  sendDecodedRuntimeMessage: <Response>(
     args: DecodedRuntimeMessageArgs<Response>,
   ) => Promise<RuntimeMessageDelivery<Response>>
   sendAuthenticationOutcomeRuntimeMessage: (
-    message: object,
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticationOutcomeRuntimeMessage
+    >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>>
   sendAuthenticatorBackupAttachRuntimeMessage: (
-    message: object,
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticatorBackupAttachRuntimeMessage
+    >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>>
   sendAuthenticatorCodeRuntimeMessage: (
-    message: object,
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticatorCodeRuntimeMessage
+    >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorCodeResponse>>
   sendAuthenticatorEnrollmentConfirmRuntimeMessage: (
-    message: object,
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticatorEnrollmentConfirmRuntimeMessage
+    >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentConfirmResponse>>
   sendAuthenticatorEnrollmentStageRuntimeMessage: (
-    message: object,
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticatorEnrollmentStageRuntimeMessage
+    >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentStageResponse>>
   sendAuthenticatorOptionsRuntimeMessage: (
-    message: object,
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticatorOptionsRuntimeMessage
+    >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorOptionsResponse>>
   sendAuthenticatorPreviewRuntimeMessage: (
-    message: object,
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticatorPreviewRuntimeMessage
+    >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorPreviewResponse>>
-  sendRuntimeMessageWithoutResponse: (message: object) => void
+  sendRuntimeMessageWithoutResponse: (
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendRuntimeMessageWithoutResponse
+    >[0],
+  ) => void
   translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (args: {
     key: BrowserMessageKey
@@ -120,7 +144,7 @@ async function commitStagedEnrollment({
   const confirmMessage: Parameters<
     typeof host.sendAuthenticatorEnrollmentConfirmRuntimeMessage
   >[0] = {
-    type: 'nook:website-authenticator-enroll-confirm',
+    type: WebsiteAuthenticatorEnrollConfirmMessageType.NookWebsiteAuthenticatorEnrollConfirm,
     payload: {
       origin: location.origin,
       vaultStoreId,
@@ -198,7 +222,7 @@ function enrollmentEvidenceCallbacks({
       const message: Parameters<
         typeof host.sendRuntimeMessageWithoutResponse
       >[0] = {
-        type: 'nook:website-authenticator-enroll-dismiss',
+        type: WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss,
         payload: { origin: location.origin, stageId },
       }
       host.sendRuntimeMessageWithoutResponse(message)
@@ -262,7 +286,7 @@ async function beginEnrollmentCeremony({
   const message: Parameters<
     typeof host.sendAuthenticatorEnrollmentStageRuntimeMessage
   >[0] = {
-    type: 'nook:website-authenticator-enroll-stage',
+    type: WebsiteAuthenticatorEnrollStageMessageType.NookWebsiteAuthenticatorEnrollStage,
     payload: {
       origin: location.origin,
       vaultStoreId,
@@ -346,7 +370,7 @@ async function beginEnrollmentCeremony({
       const message: Parameters<
         typeof host.sendRuntimeMessageWithoutResponse
       >[0] = {
-        type: 'nook:website-authenticator-enroll-dismiss',
+        type: WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss,
         payload: {
           origin: location.origin,
           stageId: stageResponse.stageId,
@@ -412,7 +436,7 @@ async function showQrPreview({
     const message: Parameters<
       typeof host.sendAuthenticatorPreviewRuntimeMessage
     >[0] = {
-      type: 'nook:website-authenticator-enroll-preview',
+      type: WebsiteAuthenticatorEnrollPreviewMessageType.NookWebsiteAuthenticatorEnrollPreview,
       payload: {
         origin: location.origin,
         otpauthUri: otpauthUri.value,

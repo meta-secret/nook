@@ -80,7 +80,7 @@ function isNonEmptyString(value: string): value is string {
 }
 
 export function isWebsiteAuthenticatorPickerOpenMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteAuthenticatorPickerOpenMessage {
   return (
     hasOriginPayload(message) &&
@@ -90,7 +90,7 @@ export function isWebsiteAuthenticatorPickerOpenMessage(
 }
 
 export function isAuthenticatorPickerQueryMessage(
-  message: object,
+  message: unknown,
 ): message is AuthenticatorPickerQueryMessage {
   if (
     !message ||
@@ -114,7 +114,7 @@ export function isAuthenticatorPickerQueryMessage(
 }
 
 export function isAuthenticatorPickerSelectMessage(
-  message: object,
+  message: unknown,
 ): message is AuthenticatorPickerSelectMessage {
   if (
     !message ||
@@ -138,7 +138,7 @@ export function isAuthenticatorPickerSelectMessage(
 }
 
 export function isAuthenticatorPickerCancelMessage(
-  message: object,
+  message: unknown,
 ): message is AuthenticatorPickerCancelMessage {
   if (
     !message ||
@@ -158,7 +158,7 @@ export function isAuthenticatorPickerCancelMessage(
 }
 
 export function isWebsiteAuthenticatorSelectedMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteAuthenticatorSelectedMessage {
   if (
     !message ||
@@ -192,7 +192,7 @@ export function isWebsiteAuthenticatorSelectedMessage(
 }
 
 export function isWebsiteAuthenticatorCanceledMessage(
-  message: object,
+  message: unknown,
 ): message is WebsiteAuthenticatorCanceledMessage {
   if (!hasOriginPayload(message)) return false
   const payload =

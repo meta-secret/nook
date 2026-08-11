@@ -35,7 +35,7 @@ import {
 } from './pairing-identity'
 import { ensureExtensionSessionDocument } from './session-lifecycle'
 
-export async function importPairingAfterCompanionReady(message: object) {
+export async function importPairingAfterCompanionReady(message: unknown) {
   try {
     await companionWasmReady
   } catch {

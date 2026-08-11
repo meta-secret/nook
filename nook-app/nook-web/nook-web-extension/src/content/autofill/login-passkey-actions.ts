@@ -12,8 +12,13 @@ import {
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   type WebsiteLoginAccountOption,
+  WebsiteLoginOptionsMessageType,
   WebsiteLoginRevealMessageType,
 } from '../../lib/login-fill-messages'
+import {
+  LoginPickerCancelMessageType,
+  WebsiteLoginPickerOpenMessageType,
+} from '../../lib/login-picker-messages'
 import {
   AuthenticationWorkflowAction,
   GeneratedPasswordResponseKind,
@@ -27,6 +32,7 @@ import {
   sendLoginFillMessage,
 } from './login-fill-runtime-adapter'
 import {
+  GeneratePasswordRequestType,
   RuntimeMessageDeliveryKind,
   sendGeneratePasswordRuntimeMessage,
   sendLoginOptionsRuntimeMessage,
@@ -231,7 +237,7 @@ async function openLoginPicker({
   const nookTypedArgs0_3: Parameters<
     typeof sendLoginPickerOpenRuntimeMessage
   >[0] = {
-    type: 'nook:website-login-picker-open',
+    type: WebsiteLoginPickerOpenMessageType.NookWebsiteLoginPickerOpen,
     payload: { origin: location.origin },
   }
   const delivery = await sendLoginPickerOpenRuntimeMessage(nookTypedArgs0_3)
@@ -374,7 +380,7 @@ function cancelLoginPickerRequest(requestId: string): void {
   const nookTypedArgs0_5: Parameters<
     typeof sendRuntimeMessageWithoutResponse
   >[0] = {
-    type: 'nook:login-picker-cancel',
+    type: LoginPickerCancelMessageType.NookLoginPickerCancel,
     payload: { requestId },
   }
   sendRuntimeMessageWithoutResponse(nookTypedArgs0_5)
@@ -424,7 +430,7 @@ export async function generatePasswordWithNook({
     const nookTypedArgs0_6: Parameters<
       typeof sendGeneratePasswordRuntimeMessage
     >[0] = {
-      type: 'nook:website-generate-password',
+      type: GeneratePasswordRequestType.NookWebsiteGeneratePassword,
       payload: { origin: location.origin },
     }
     const delivery = await sendGeneratePasswordRuntimeMessage(nookTypedArgs0_6)
@@ -597,7 +603,7 @@ export async function continueWithNook({
     const nookTypedArgs0_7: Parameters<
       typeof sendLoginOptionsRuntimeMessage
     >[0] = {
-      type: 'nook:website-login-options',
+      type: WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions,
       payload: { origin: location.origin },
     }
     const delivery = await sendLoginOptionsRuntimeMessage(nookTypedArgs0_7)

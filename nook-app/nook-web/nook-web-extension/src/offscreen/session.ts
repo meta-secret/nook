@@ -200,9 +200,7 @@ function extensionVaultGrant(payload: {
   }
 }
 
-async function handleMessage(
-  message: ExtensionSessionRequest,
-): Promise<object> {
+async function handleMessage(message: ExtensionSessionRequest) {
   switch (message.type) {
     case ExtensionSessionMessageType.Reset: {
       pendingLoginSaveOfferStore.clearAll()

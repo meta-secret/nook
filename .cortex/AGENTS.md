@@ -498,13 +498,14 @@ parameter. Multi-value inputs use a typed object argument. Nook web expands
 the shared ESLint scope one migrated package slice at a time. Full contract:
 [dynamic-skills/typescript-single-parameter.md](dynamic-skills/typescript-single-parameter.md).
 
-Loom and migrated Nook web TypeScript must not author the `unknown` type.
-New or changed domain and application APIs must not use generic value bags.
-A generic transport value is allowed only inside a dedicated untrusted-input
-adapter that narrows immediately. Existing generic APIs are staged migration
-debt, not compliant examples or exceptions. Do not expand or copy them.
-ESLint mechanically bans `unknown`; review enforces generic-value containment
-prospectively until the existing debt is migrated. Full contract:
+Loom and migrated Nook web TypeScript must not author the `unknown` or `object`
+type. New or changed domain and application APIs must not use generic value
+bags. The `object` type has no exception. An unavoidable untyped transport may
+use `unknown` only inside a dedicated adapter that narrows immediately.
+Existing generic APIs are staged migration debt. They are not compliant
+examples or exceptions. Do not expand or copy them. ESLint mechanically bans
+`unknown` and `object`. Review enforces generic-value containment until the
+existing debt is migrated. Full contract:
 [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md).
 
 Loom and migrated Nook web TypeScript must not pass raw object literals into

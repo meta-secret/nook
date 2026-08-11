@@ -26,7 +26,7 @@ export type LoginDetectionResponse = {
 }
 
 export function isQueryActiveTabLoginDetectionMessage(
-  message: object,
+  message: unknown,
 ): message is QueryActiveTabLoginDetectionMessage {
   return (
     !!message &&
@@ -38,7 +38,7 @@ export function isQueryActiveTabLoginDetectionMessage(
 }
 
 export function isQueryLoginDetectionMessage(
-  message: object,
+  message: unknown,
 ): message is QueryLoginDetectionMessage {
   return (
     !!message &&

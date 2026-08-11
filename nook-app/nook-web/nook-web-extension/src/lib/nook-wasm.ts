@@ -171,31 +171,48 @@ type ExtensionSessionResponseByType = {
   [ExtensionRuntimeRequestType.UnlockPin]: ExtensionDeviceResponse
 }
 
+type ExtensionSessionSuccess = {
+  [RequestType in keyof ExtensionSessionResponseByType]: {
+    ok: true
+  } & ExtensionSessionResponseByType[RequestType]
+}[keyof ExtensionSessionResponseByType]
+
+type ExtensionRuntimeResponse =
+  | { ok: true }
+  | ExtensionSessionSuccess
+  | { ok: false; reason: string }
+  | { ok: false; error: string }
+
 type PublicKeyCredentialWithPrf = PublicKeyCredential & {
   getClientExtensionResults(): AuthenticationExtensionsClientOutputs & {
     prf?: { enabled?: boolean; results?: { first?: ArrayBuffer } }
   }
 }
 
-function runtimeMessage(message: ExtensionRuntimeRequest): Promise<object> {
+function runtimeMessage(
+  message: ExtensionRuntimeRequest,
+): Promise<ExtensionRuntimeResponse> {
   // Promise owns this callback's resolve and reject signature.
   // eslint-disable-next-line max-params
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (runtimeResponse: object) => {
-      if (chrome.runtime.lastError?.message) {
-        reject(new Error(chrome.runtime.lastError.message))
-        return
-      }
-      if (
-        !runtimeResponse ||
-        typeof runtimeResponse !== 'object' ||
-        Array.isArray(runtimeResponse)
-      ) {
-        reject(new Error('Extension session returned a malformed response.'))
-        return
-      }
-      resolve(runtimeResponse)
-    })
+    chrome.runtime.sendMessage(
+      message,
+      (runtimeResponse: ExtensionRuntimeResponse) => {
+        if (chrome.runtime.lastError?.message) {
+          reject(new Error(chrome.runtime.lastError.message))
+          return
+        }
+        if (
+          !runtimeResponse ||
+          typeof runtimeResponse !== 'object' ||
+          Array.isArray(runtimeResponse)
+        ) {
+          reject(new Error('Extension session returned a malformed response.'))
+          return
+        }
+        resolve(runtimeResponse)
+      },
+    )
   })
 }
 
@@ -307,7 +324,7 @@ enum PasskeyOperation {
 }
 
 type PasskeyErrorArgs = {
-  error: object
+  error: Error | DOMException
   action: PasskeyOperation
 }
 

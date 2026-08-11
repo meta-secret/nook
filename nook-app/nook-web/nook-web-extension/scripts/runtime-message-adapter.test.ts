@@ -15,6 +15,7 @@ import {
   WebsiteLoginOptionsKind,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
+  GeneratePasswordRequestType,
   RuntimeMessageDeliveryKind,
   sendAuthenticatorBackupAttachRuntimeMessage,
   sendAuthenticatorCodeRuntimeMessage,
@@ -31,13 +32,35 @@ import {
   sendLoginSaveOfferRuntimeMessage,
   sendGeneratePasswordRuntimeMessage,
 } from '../src/content/autofill/runtime-message-adapter'
+import { AuthenticationWorkflowSnapshotMessageType } from '../src/lib/auth-workflow-messages'
+import { WebsiteAuthenticatorPickerOpenMessageType } from '../src/lib/authenticator-picker-messages'
+import {
+  WebsiteAuthenticatorBackupAttachMessageMode,
+  WebsiteAuthenticatorBackupAttachMessageType,
+  WebsiteAuthenticatorEnrollCodeMessageType,
+  WebsiteAuthenticatorEnrollConfirmMessageType,
+  WebsiteAuthenticatorEnrollPreviewMessageType,
+  WebsiteAuthenticatorEnrollStageMessageType,
+} from '../src/lib/enrollment-messages'
+import {
+  WebsiteAuthenticatorOptionsMessageType,
+  WebsiteLoginOptionsMessageType,
+} from '../src/lib/login-fill-messages'
+import { WebsiteLoginPickerOpenMessageType } from '../src/lib/login-picker-messages'
+import { WebsiteLoginSaveOfferMessageType } from '../src/lib/login-save-messages'
+import { AuthenticationOutcomeClassifyMessageType } from '../src/lib/outcome-evidence-messages'
 
 type TestAcknowledgement = { accepted: true }
 
 function isTestAcknowledgement(
-  response: object,
+  response: unknown,
 ): response is TestAcknowledgement {
-  return 'accepted' in response && response.accepted === true
+  return (
+    !!response &&
+    typeof response === 'object' &&
+    'accepted' in response &&
+    response.accepted === true
+  )
 }
 
 enum RuntimeMockKind {
@@ -46,12 +69,12 @@ enum RuntimeMockKind {
 }
 
 type RuntimeMock =
-  | { kind: RuntimeMockKind.Response; response: object }
+  | { kind: RuntimeMockKind.Response; response: unknown }
   | { kind: RuntimeMockKind.LastError }
 
 function installRuntimeMock(mock: RuntimeMock): void {
   const runtime = {
-    sendMessage: (...parameters: [object, (response: object) => void]) => {
+    sendMessage: (...parameters: [unknown, (response: unknown) => void]) => {
       const callback = parameters[1]
       const response =
         mock.kind === RuntimeMockKind.Response ? mock.response : {}
@@ -67,7 +90,116 @@ function installRuntimeMock(mock: RuntimeMock): void {
   globalThis.chrome = { runtime } as typeof chrome
 }
 
-const message = { type: 'test:runtime-adapter' }
+const loginOptionsMessage: Parameters<
+  typeof sendLoginOptionsRuntimeMessage
+>[0] = {
+  type: WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions,
+  payload: { origin: 'https://example.test' },
+}
+const loginSaveOfferMessage: Parameters<
+  typeof sendLoginSaveOfferRuntimeMessage
+>[0] = {
+  type: WebsiteLoginSaveOfferMessageType.NookWebsiteLoginSaveOffer,
+  payload: {
+    origin: 'https://example.test',
+    username: 'person@example.test',
+    password: 'secret',
+  },
+}
+const loginPickerOpenMessage: Parameters<
+  typeof sendLoginPickerOpenRuntimeMessage
+>[0] = {
+  type: WebsiteLoginPickerOpenMessageType.NookWebsiteLoginPickerOpen,
+  payload: { origin: 'https://example.test' },
+}
+const authenticatorPickerOpenMessage: Parameters<
+  typeof sendAuthenticatorPickerOpenRuntimeMessage
+>[0] = {
+  type: WebsiteAuthenticatorPickerOpenMessageType.NookWebsiteAuthenticatorPickerOpen,
+  payload: { origin: 'https://example.test' },
+}
+const workflowSnapshotMessage: Parameters<
+  typeof sendAuthenticationWorkflowSnapshotRuntimeMessage
+>[0] = {
+  type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
+  payload: { origin: 'https://example.test', observations: [] },
+}
+const authenticatorPreviewMessage: Parameters<
+  typeof sendAuthenticatorPreviewRuntimeMessage
+>[0] = {
+  type: WebsiteAuthenticatorEnrollPreviewMessageType.NookWebsiteAuthenticatorEnrollPreview,
+  payload: {
+    origin: 'https://example.test',
+    otpauthUri: 'otpauth://totp/Nook:test',
+  },
+}
+const authenticatorBackupAttachMessage: Parameters<
+  typeof sendAuthenticatorBackupAttachRuntimeMessage
+>[0] = {
+  type: WebsiteAuthenticatorBackupAttachMessageType.NookWebsiteAuthenticatorBackupAttach,
+  payload: {
+    origin: 'https://example.test',
+    vaultStoreId: 'vault',
+    secretId: 'secret',
+    codes: ['backup'],
+    mode: WebsiteAuthenticatorBackupAttachMessageMode.Merge,
+  },
+}
+const authenticatorCodeMessage: Parameters<
+  typeof sendAuthenticatorCodeRuntimeMessage
+>[0] = {
+  type: WebsiteAuthenticatorEnrollCodeMessageType.NookWebsiteAuthenticatorEnrollCode,
+  payload: { origin: 'https://example.test', stageId: 'stage' },
+}
+const authenticatorStageMessage: Parameters<
+  typeof sendAuthenticatorEnrollmentStageRuntimeMessage
+>[0] = {
+  type: WebsiteAuthenticatorEnrollStageMessageType.NookWebsiteAuthenticatorEnrollStage,
+  payload: {
+    origin: 'https://example.test',
+    vaultStoreId: 'vault',
+    otpauthUri: 'otpauth://totp/Nook:test',
+  },
+}
+const authenticatorConfirmMessage: Parameters<
+  typeof sendAuthenticatorEnrollmentConfirmRuntimeMessage
+>[0] = {
+  type: WebsiteAuthenticatorEnrollConfirmMessageType.NookWebsiteAuthenticatorEnrollConfirm,
+  payload: {
+    origin: 'https://example.test',
+    vaultStoreId: 'vault',
+    stageId: 'stage',
+  },
+}
+const generatedPasswordMessage: Parameters<
+  typeof sendGeneratePasswordRuntimeMessage
+>[0] = {
+  type: GeneratePasswordRequestType.NookWebsiteGeneratePassword,
+  payload: { origin: 'https://example.test' },
+}
+const authenticatorOptionsMessage: Parameters<
+  typeof sendAuthenticatorOptionsRuntimeMessage
+>[0] = {
+  type: WebsiteAuthenticatorOptionsMessageType.NookWebsiteAuthenticatorOptions,
+  payload: { origin: 'https://example.test' },
+}
+const authenticationOutcomeMessage: Parameters<
+  typeof sendAuthenticationOutcomeRuntimeMessage
+>[0] = {
+  type: AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify,
+  payload: {
+    observation: {
+      navigatedAwayFromAuthPath: false,
+      authFieldsPresent: true,
+      successMarkerPresent: false,
+      errorMarkerPresent: false,
+      sameDocumentMutation: false,
+      inIframe: false,
+      elapsedMs: 1,
+    },
+    timeoutMs: 1,
+  },
+}
 
 describe('runtime message adapters', () => {
   test('initializes companion WASM before decoding a valid login options wire', async () => {
@@ -87,7 +219,7 @@ describe('runtime message adapters', () => {
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery = await sendLoginOptionsRuntimeMessage(message)
+    const delivery = await sendLoginOptionsRuntimeMessage(loginOptionsMessage)
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
@@ -99,7 +231,7 @@ describe('runtime message adapters', () => {
     const response = { ok: true, status: 'ready' }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery = await sendLoginOptionsRuntimeMessage(message)
+    const delivery = await sendLoginOptionsRuntimeMessage(loginOptionsMessage)
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
@@ -117,7 +249,9 @@ describe('runtime message adapters', () => {
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery = await sendLoginSaveOfferRuntimeMessage(message)
+    const delivery = await sendLoginSaveOfferRuntimeMessage(
+      loginSaveOfferMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
@@ -126,7 +260,7 @@ describe('runtime message adapters', () => {
     const response = { ok: true, status: 'locked' }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery = await sendLoginOptionsRuntimeMessage(message)
+    const delivery = await sendLoginOptionsRuntimeMessage(loginOptionsMessage)
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
@@ -143,7 +277,9 @@ describe('runtime message adapters', () => {
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery = await sendLoginPickerOpenRuntimeMessage(message)
+    const delivery = await sendLoginPickerOpenRuntimeMessage(
+      loginPickerOpenMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
@@ -163,7 +299,9 @@ describe('runtime message adapters', () => {
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery = await sendLoginPickerOpenRuntimeMessage(message)
+    const delivery = await sendLoginPickerOpenRuntimeMessage(
+      loginPickerOpenMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
@@ -177,7 +315,9 @@ describe('runtime message adapters', () => {
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery = await sendAuthenticatorPickerOpenRuntimeMessage(message)
+    const delivery = await sendAuthenticatorPickerOpenRuntimeMessage(
+      authenticatorPickerOpenMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
@@ -197,7 +337,9 @@ describe('runtime message adapters', () => {
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery = await sendAuthenticatorPickerOpenRuntimeMessage(message)
+    const delivery = await sendAuthenticatorPickerOpenRuntimeMessage(
+      authenticatorPickerOpenMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
@@ -205,7 +347,7 @@ describe('runtime message adapters', () => {
   test('reports Chrome runtime failures as unavailable', async () => {
     installRuntimeMock({ kind: RuntimeMockKind.LastError })
 
-    const delivery = await sendLoginOptionsRuntimeMessage(message)
+    const delivery = await sendLoginOptionsRuntimeMessage(loginOptionsMessage)
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
@@ -225,8 +367,9 @@ describe('runtime message adapters', () => {
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery =
-      await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
+    const delivery = await sendAuthenticationWorkflowSnapshotRuntimeMessage(
+      workflowSnapshotMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
@@ -253,7 +396,9 @@ describe('runtime message adapters', () => {
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery = await sendAuthenticatorPreviewRuntimeMessage(message)
+    const delivery = await sendAuthenticatorPreviewRuntimeMessage(
+      authenticatorPreviewMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
@@ -284,7 +429,9 @@ describe('runtime message adapters', () => {
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery = await sendAuthenticatorPreviewRuntimeMessage(message)
+    const delivery = await sendAuthenticatorPreviewRuntimeMessage(
+      authenticatorPreviewMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
@@ -295,7 +442,9 @@ describe('runtime message adapters', () => {
       response: { ok: true },
     })
 
-    const delivery = await sendAuthenticatorBackupAttachRuntimeMessage(message)
+    const delivery = await sendAuthenticatorBackupAttachRuntimeMessage(
+      authenticatorBackupAttachMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
@@ -311,7 +460,9 @@ describe('runtime message adapters', () => {
       response: { ok: true, reason: 'authenticator-locked' },
     })
 
-    const delivery = await sendAuthenticatorBackupAttachRuntimeMessage(message)
+    const delivery = await sendAuthenticatorBackupAttachRuntimeMessage(
+      authenticatorBackupAttachMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
@@ -321,7 +472,9 @@ describe('runtime message adapters', () => {
       kind: RuntimeMockKind.Response,
       response: { ok: true, code: '123456' },
     })
-    const ready = await sendAuthenticatorCodeRuntimeMessage(message)
+    const ready = await sendAuthenticatorCodeRuntimeMessage(
+      authenticatorCodeMessage,
+    )
     expect(ready.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (ready.kind === RuntimeMessageDeliveryKind.Delivered) {
       expect(ready.response.kind).toBe(AuthenticatorCodeResponseKind.Ready)
@@ -333,7 +486,9 @@ describe('runtime message adapters', () => {
       { ok: true, code: '123456', reason: 'contradiction' },
     ]) {
       installRuntimeMock({ kind: RuntimeMockKind.Response, response })
-      const delivery = await sendAuthenticatorCodeRuntimeMessage(message)
+      const delivery = await sendAuthenticatorCodeRuntimeMessage(
+        authenticatorCodeMessage,
+      )
       expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
     }
   })
@@ -343,7 +498,9 @@ describe('runtime message adapters', () => {
       kind: RuntimeMockKind.Response,
       response: { ok: true, stageId: 'stage-1' },
     })
-    const staged = await sendAuthenticatorEnrollmentStageRuntimeMessage(message)
+    const staged = await sendAuthenticatorEnrollmentStageRuntimeMessage(
+      authenticatorStageMessage,
+    )
     expect(staged.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (staged.kind === RuntimeMessageDeliveryKind.Delivered) {
       expect(staged.response.kind).toBe(
@@ -355,8 +512,9 @@ describe('runtime message adapters', () => {
       kind: RuntimeMockKind.Response,
       response: { ok: true, secretId: 'secret-1' },
     })
-    const completed =
-      await sendAuthenticatorEnrollmentConfirmRuntimeMessage(message)
+    const completed = await sendAuthenticatorEnrollmentConfirmRuntimeMessage(
+      authenticatorConfirmMessage,
+    )
     expect(completed.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (completed.kind === RuntimeMessageDeliveryKind.Delivered) {
       expect(completed.response.kind).toBe(
@@ -373,8 +531,12 @@ describe('runtime message adapters', () => {
       installRuntimeMock({ kind: RuntimeMockKind.Response, response })
       const delivery =
         'stageId' in response
-          ? await sendAuthenticatorEnrollmentStageRuntimeMessage(message)
-          : await sendAuthenticatorEnrollmentConfirmRuntimeMessage(message)
+          ? await sendAuthenticatorEnrollmentStageRuntimeMessage(
+              authenticatorStageMessage,
+            )
+          : await sendAuthenticatorEnrollmentConfirmRuntimeMessage(
+              authenticatorConfirmMessage,
+            )
       expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
     }
   })
@@ -384,7 +546,9 @@ describe('runtime message adapters', () => {
       kind: RuntimeMockKind.Response,
       response: { ok: true, password: 'correct horse battery staple' },
     })
-    const generated = await sendGeneratePasswordRuntimeMessage(message)
+    const generated = await sendGeneratePasswordRuntimeMessage(
+      generatedPasswordMessage,
+    )
     expect(generated.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (generated.kind === RuntimeMessageDeliveryKind.Delivered) {
       expect(generated.response.kind).toBe(
@@ -396,7 +560,9 @@ describe('runtime message adapters', () => {
       kind: RuntimeMockKind.Response,
       response: { ok: true, password: '' },
     })
-    const blank = await sendGeneratePasswordRuntimeMessage(message)
+    const blank = await sendGeneratePasswordRuntimeMessage(
+      generatedPasswordMessage,
+    )
     expect(blank.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
 
@@ -418,7 +584,9 @@ describe('runtime message adapters', () => {
       },
     })
 
-    const delivery = await sendAuthenticatorOptionsRuntimeMessage(message)
+    const delivery = await sendAuthenticatorOptionsRuntimeMessage(
+      authenticatorOptionsMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
@@ -446,7 +614,9 @@ describe('runtime message adapters', () => {
       },
     })
 
-    const delivery = await sendAuthenticatorOptionsRuntimeMessage(message)
+    const delivery = await sendAuthenticatorOptionsRuntimeMessage(
+      authenticatorOptionsMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
@@ -466,8 +636,9 @@ describe('runtime message adapters', () => {
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery =
-      await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
+    const delivery = await sendAuthenticationWorkflowSnapshotRuntimeMessage(
+      workflowSnapshotMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
@@ -478,7 +649,7 @@ describe('runtime message adapters', () => {
     const sendArgs: Parameters<
       typeof sendDecodedRuntimeMessage<TestAcknowledgement>
     >[0] = {
-      message,
+      message: generatedPasswordMessage,
       decode: isTestAcknowledgement,
     }
 
@@ -494,7 +665,7 @@ describe('runtime message adapters', () => {
     const sendArgs: Parameters<
       typeof sendDecodedRuntimeMessage<TestAcknowledgement>
     >[0] = {
-      message,
+      message: generatedPasswordMessage,
       decode: isTestAcknowledgement,
     }
 
@@ -514,7 +685,9 @@ describe('runtime message adapters', () => {
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery = await sendAuthenticationOutcomeRuntimeMessage(message)
+    const delivery = await sendAuthenticationOutcomeRuntimeMessage(
+      authenticationOutcomeMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
@@ -529,7 +702,9 @@ describe('runtime message adapters', () => {
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery = await sendAuthenticationOutcomeRuntimeMessage(message)
+    const delivery = await sendAuthenticationOutcomeRuntimeMessage(
+      authenticationOutcomeMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
@@ -550,7 +725,9 @@ describe('runtime message adapters', () => {
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-    const delivery = await sendAuthenticationOutcomeRuntimeMessage(message)
+    const delivery = await sendAuthenticationOutcomeRuntimeMessage(
+      authenticationOutcomeMessage,
+    )
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })

@@ -41,7 +41,7 @@ type SensitivePayloadResidency =
     }
   | { kind: SensitivePayloadResidencyKind.Cleared }
 
-export type SessionMessageDispatchContext<SessionResponse extends object> = {
+export type SessionMessageDispatchContext<SessionResponse> = {
   handleMessage: (message: ExtensionSessionRequest) => Promise<SessionResponse>
   decodeProviders: (
     providers: SerializedStorageProvider[],
@@ -53,7 +53,7 @@ type InvalidProviderPayloadResponse = {
   error: 'invalid-provider-payload'
 }
 
-type ExtensionSessionDispatchResponse<SessionResponse extends object> =
+type ExtensionSessionDispatchResponse<SessionResponse> =
   SessionResponse | InvalidProviderPayloadResponse
 
 function sessionMessagePriority(
@@ -127,7 +127,7 @@ enum StagingOwnership {
   Cleared = 'cleared',
 }
 
-export class ExtensionSessionMessageDispatcher<SessionResponse extends object> {
+export class ExtensionSessionMessageDispatcher<SessionResponse> {
   private operations = new SessionOperationQueue()
   private operationGeneration = 0
 

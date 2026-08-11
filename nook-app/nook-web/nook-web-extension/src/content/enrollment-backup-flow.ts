@@ -17,6 +17,8 @@ import {
   safeSavedOptionNumber,
 } from '../lib/auth-widget-policy'
 import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
+import { WebsiteAuthenticatorOptionsMessageType } from '../lib/login-fill-messages'
+import { WebsiteAuthenticatorBackupAttachMessageType } from '../lib/enrollment-messages'
 import {
   RuntimeMessageDeliveryKind,
   type AuthenticatorBackupAttachResponse,
@@ -38,16 +40,24 @@ import {
 export interface BackupEnrollmentHost extends EnrollmentFlowViewHost {
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
-  sendDecodedRuntimeMessage: <Response extends object>(
+  sendDecodedRuntimeMessage: <Response>(
     args: DecodedRuntimeMessageArgs<Response>,
   ) => Promise<RuntimeMessageDelivery<Response>>
   sendAuthenticatorBackupAttachRuntimeMessage: (
-    message: object,
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticatorBackupAttachRuntimeMessage
+    >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>>
   sendAuthenticatorOptionsRuntimeMessage: (
-    message: object,
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticatorOptionsRuntimeMessage
+    >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorOptionsResponse>>
-  sendRuntimeMessageWithoutResponse: (message: object) => void
+  sendRuntimeMessageWithoutResponse: (
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendRuntimeMessageWithoutResponse
+    >[0],
+  ) => void
   translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (args: {
     key: BrowserMessageKey
@@ -122,7 +132,7 @@ function showBackupModeChooser({
     const message: Parameters<
       typeof host.sendAuthenticatorBackupAttachRuntimeMessage
     >[0] = {
-      type: 'nook:website-authenticator-backup-attach',
+      type: WebsiteAuthenticatorBackupAttachMessageType.NookWebsiteAuthenticatorBackupAttach,
       payload: {
         origin: location.origin,
         vaultStoreId: account.vaultStoreId,
@@ -302,7 +312,7 @@ async function continueBackupWithAuthenticatorOptions({
     const message: Parameters<
       typeof host.sendAuthenticatorOptionsRuntimeMessage
     >[0] = {
-      type: 'nook:website-authenticator-options',
+      type: WebsiteAuthenticatorOptionsMessageType.NookWebsiteAuthenticatorOptions,
       payload: { origin: location.origin },
     }
     const delivery = await host.sendAuthenticatorOptionsRuntimeMessage(message)

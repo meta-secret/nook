@@ -209,7 +209,7 @@ function clearSensitiveFieldValue(value: unknown): void {
 export function clearExtensionSessionSensitiveRequest(
   request: ExtensionSessionNonImportRequest,
 ): void {
-  const payload = request.payload as object as Record<string, unknown>
+  const payload = request.payload as Record<string, unknown>
   for (const field of sensitiveSessionFields[request.type]) {
     clearSensitiveFieldValue(payload[field])
     payload[field] = typeof payload[field] === 'string' ? '' : []
@@ -223,7 +223,7 @@ export function stageExtensionSessionSensitiveRequest(
   if (fields.length === 0) {
     return { kind: ExtensionSessionSensitiveStageKind.NotRequired }
   }
-  const sourcePayload = request.payload as object as Record<string, unknown>
+  const sourcePayload = request.payload as Record<string, unknown>
   const stagedPayload = { ...sourcePayload }
   for (const field of fields) {
     const value = sourcePayload[field]
@@ -249,7 +249,8 @@ function isExtensionSessionMessageType(
   return Object.prototype.hasOwnProperty.call(sensitiveSessionFields, value)
 }
 
-function hasExtensionSessionQueue(payload: object): boolean {
+function hasExtensionSessionQueue(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') return false
   return (
     'queue' in payload &&
     payload.queue instanceof Object &&
@@ -404,7 +405,7 @@ export function replaceExtensionSessionRequestPayload({
   payload,
 }: {
   request: ExtensionSessionNonImportRequest
-  payload: object
+  payload: ExtensionSessionNonImportRequest['payload']
 }): ExtensionSessionNonImportRequest {
   return { ...request, payload } as ExtensionSessionNonImportRequest
 }

@@ -20,8 +20,8 @@ function messagePayload(message: unknown): Record<string, unknown> {
     : {}
 }
 
-async function decodeProviders(providers: object) {
-  return structuredClone(providers) as object as StorageProvider[]
+async function decodeProviders(providers: StorageProvider[]) {
+  return structuredClone(providers)
 }
 
 describe('ExtensionSessionMessageDispatcher', () => {
@@ -512,7 +512,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     const stagedProviders = [
       { githubPat: 'github_pat_canceled_staged_secret' },
-    ] as object as StorageProvider[]
+    ] as StorageProvider[]
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
@@ -560,7 +560,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     const stagedProviders = [
       { githubPat: 'github_pat_expired_queue_secret' },
-    ] as object as StorageProvider[]
+    ] as StorageProvider[]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders: async () => stagedProviders,
@@ -613,7 +613,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     const stagedProviders = [
       { githubPat: 'github_pat_expired_staged_secret' },
-    ] as object as StorageProvider[]
+    ] as StorageProvider[]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders: () => decodedProviders,
