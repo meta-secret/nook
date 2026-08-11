@@ -20,7 +20,6 @@ import { WebsiteAuthenticatorResponseStatus } from '../../lib/login-fill-message
 import {
   extensionSessionInteractiveDeadline,
   extensionSessionProbeDeadline,
-  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
   type ExtensionSessionTransportRequest,
 } from '../../offscreen/session-request-adapter'
 import {
@@ -48,6 +47,7 @@ import {
   openCompanionLauncher,
   openCompanionLauncherBestEffort,
 } from './session-lifecycle'
+import { identityHandoffSessionRequest } from './session-request-projections'
 
 enum PendingIdentityHandoffKind {
   Pairing = 'pairing',
@@ -277,13 +277,7 @@ export async function createIdentityHandoff(
     }
     await removeSessionStorage(key)
     await ensureExtensionSessionDocument()
-    const nookTypedArgs0_3: Parameters<typeof sendSessionMessage>[0] = {
-      type: 'nook:extension-session-seal-identity-handoff',
-      payload: {
-        ...message.payload,
-        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-      },
-    }
+    const nookTypedArgs0_3 = identityHandoffSessionRequest(message)
     const response = await sendSessionMessage(nookTypedArgs0_3)
     if (
       !!response &&

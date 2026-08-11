@@ -1,5 +1,6 @@
 import { expect, test } from '../fixtures'
 import { connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
+import { isExtensionPairedVaultIdentityDiscoveryMessage } from '../../../nook-web-shared/src/extension/runtime-messages'
 
 // The repository-wide typed API contract covers the shared Svelte workspace
 // used by this flow. Keep this demo as the visible proof that extension install
@@ -99,6 +100,21 @@ test('offer browser extension install on vault home and in Devices', async ({
     'data-demo-extension-message-types',
     /nook:extension-paired-vault-identity-discovery/,
   )
+  const encodedDiscoveryMessage = await page
+    .locator('html')
+    .getAttribute('data-demo-extension-message')
+  if (typeof encodedDiscoveryMessage !== 'string') {
+    throw new Error('Paired-vault discovery message was not recorded.')
+  }
+  const discoveryMessage = JSON.parse(encodedDiscoveryMessage)
+  if (!isExtensionPairedVaultIdentityDiscoveryMessage(discoveryMessage)) {
+    throw new Error('Paired-vault discovery message was malformed.')
+  }
+  expect(Object.keys(discoveryMessage.payload).sort()).toEqual([
+    'expiresAt',
+    'requestId',
+    'vaultStoreId',
+  ])
   await page.getByTestId('extension-install-setup-connect').click()
   // Concrete companion request and response domains must preserve the exact
   // message envelope while the browser boundary rejects unnamed value bags.

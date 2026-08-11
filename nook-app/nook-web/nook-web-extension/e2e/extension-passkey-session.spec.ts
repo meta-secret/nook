@@ -39,6 +39,85 @@ type WebsitePageState =
   | { kind: WebsitePageStateKind.Skipped }
   | { kind: WebsitePageStateKind.Opened; page: Page }
 
+enum ExtensionConnectionParameter {
+  DeviceId = 'device_id',
+  DevicePublicKey = 'device_public_key',
+  DeviceSigningPublicKey = 'device_signing_public_key',
+  HandoffNonce = 'nonce',
+}
+
+enum ExtensionConnectionParametersParseKind {
+  Valid = 'valid',
+  Invalid = 'invalid',
+}
+
+type ExtensionConnectionParametersParseResult =
+  | {
+      kind: ExtensionConnectionParametersParseKind.Valid
+      deviceId: string
+      devicePublicKey: string
+      deviceSigningPublicKey: string
+      handoffNonce: string
+    }
+  | {
+      kind: ExtensionConnectionParametersParseKind.Invalid
+      missingParameter: ExtensionConnectionParameter
+    }
+
+function parseExtensionConnectionParameters(
+  connectionUrl: URL,
+): ExtensionConnectionParametersParseResult {
+  const deviceId = connectionUrl.searchParams.get(
+    ExtensionConnectionParameter.DeviceId,
+  )
+  if (typeof deviceId !== 'string' || deviceId.trim().length === 0) {
+    return {
+      kind: ExtensionConnectionParametersParseKind.Invalid,
+      missingParameter: ExtensionConnectionParameter.DeviceId,
+    }
+  }
+  const devicePublicKey = connectionUrl.searchParams.get(
+    ExtensionConnectionParameter.DevicePublicKey,
+  )
+  if (
+    typeof devicePublicKey !== 'string' ||
+    devicePublicKey.trim().length === 0
+  ) {
+    return {
+      kind: ExtensionConnectionParametersParseKind.Invalid,
+      missingParameter: ExtensionConnectionParameter.DevicePublicKey,
+    }
+  }
+  const deviceSigningPublicKey = connectionUrl.searchParams.get(
+    ExtensionConnectionParameter.DeviceSigningPublicKey,
+  )
+  if (
+    typeof deviceSigningPublicKey !== 'string' ||
+    deviceSigningPublicKey.trim().length === 0
+  ) {
+    return {
+      kind: ExtensionConnectionParametersParseKind.Invalid,
+      missingParameter: ExtensionConnectionParameter.DeviceSigningPublicKey,
+    }
+  }
+  const handoffNonce = connectionUrl.searchParams.get(
+    ExtensionConnectionParameter.HandoffNonce,
+  )
+  if (typeof handoffNonce !== 'string' || handoffNonce.trim().length === 0) {
+    return {
+      kind: ExtensionConnectionParametersParseKind.Invalid,
+      missingParameter: ExtensionConnectionParameter.HandoffNonce,
+    }
+  }
+  return {
+    kind: ExtensionConnectionParametersParseKind.Valid,
+    deviceId,
+    devicePublicKey,
+    deviceSigningPublicKey,
+    handoffNonce,
+  }
+}
+
 test('creates a passkey from browser-native WASM options after extension messaging', async ({
   browserName,
 }, testInfo) => {
@@ -88,17 +167,20 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const extensionId = new URL(popupPage.url()).host
     const simplePage = await openSimpleVaultConnection(context, popupPage)
     const connectUrl = new URL(simplePage.url())
-    const extensionDeviceId = connectUrl.searchParams.get('device_id')
-    const extensionDevicePublicKey =
-      connectUrl.searchParams.get('device_public_key')
-    const extensionDeviceSigningPublicKey = connectUrl.searchParams.get(
-      'device_signing_public_key',
-    )
-    const initialHandoffNonce = connectUrl.searchParams.get('nonce')
-    expect(extensionDeviceId).toBeTruthy()
-    expect(extensionDevicePublicKey).toBeTruthy()
-    expect(extensionDeviceSigningPublicKey).toBeTruthy()
-    expect(initialHandoffNonce).toBeTruthy()
+    const connectionParameters = parseExtensionConnectionParameters(connectUrl)
+    if (
+      connectionParameters.kind ===
+      ExtensionConnectionParametersParseKind.Invalid
+    ) {
+      throw new Error(
+        `Extension connection URL omitted ${connectionParameters.missingParameter}.`,
+      )
+    }
+    const extensionDeviceId = connectionParameters.deviceId
+    const extensionDevicePublicKey = connectionParameters.devicePublicKey
+    const extensionDeviceSigningPublicKey =
+      connectionParameters.deviceSigningPublicKey
+    const initialHandoffNonce = connectionParameters.handoffNonce
 
     await advanceCreateVaultWizardToFinalStep(simplePage)
     await simplePage
@@ -180,6 +262,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     )?.[1]
     expect(pairedGrant).toEqual(
       expect.objectContaining({
+        vaultName: extensionApprovalVaultName,
+        deviceLabel: expect.any(String),
+        approvedAt: expect.any(String),
         scopes: expect.arrayContaining([
           ExtensionConnectScope.PasskeyManagement,
           ExtensionConnectScope.PasswordFilling,
@@ -289,6 +374,24 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         ),
       ).toBe(extensionDeviceId)
     }
+    // Reopening a paired vault completes the paired-vault handoff through the
+    // strict Rust session payload. The stored grant above deliberately carries
+    // routing and display metadata that must not enter that payload.
+    await expect
+      .poll(async () => {
+        const entries = await readPersistedAppLogs(reopenedVaultPage)
+        return entries.filter((entry) => {
+          if (
+            entry.scope !== 'vault-lifecycle' ||
+            entry.message !== 'extension identity adopted' ||
+            typeof entry.data !== 'string'
+          ) {
+            return false
+          }
+          return entry.data.includes(extensionDeviceId)
+        }).length
+      })
+      .toBe(2)
 
     const emptyOtpPage = await context.newPage()
     await emptyOtpPage.goto(`${loginServer.origin}/otp`)
@@ -472,12 +575,16 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect
       .poll(async () => {
         const entries = await readPersistedAppLogs(reopenedVaultPage)
-        return (entries ?? []).filter(
-          (entry) =>
-            entry.scope === 'vault-lifecycle' &&
-            entry.message === 'extension identity adopted' &&
-            entry.data?.includes(extensionDeviceId ?? '') === true,
-        ).length
+        return entries.filter((entry) => {
+          if (
+            entry.scope !== 'vault-lifecycle' ||
+            entry.message !== 'extension identity adopted' ||
+            typeof entry.data !== 'string'
+          ) {
+            return false
+          }
+          return entry.data.includes(extensionDeviceId)
+        }).length
       })
       .toBe(3)
     if (
