@@ -29,7 +29,6 @@ type ImportVaultRequest = Extract<
 export type ImportExtensionVaultArgs = {
   activeManager: NookVaultManager
   message: ImportVaultRequest
-  dependencies?: ImportExtensionVaultDependencies
 }
 
 export type ImportExtensionVaultDependencies = {
@@ -44,11 +43,26 @@ const importExtensionVaultDependencies: ImportExtensionVaultDependencies = {
   createRecords: (records) => NookExternalEventLogRecords.fromArray(records),
 }
 
-export async function importExtensionVault({
+export type ImportExtensionVaultWithDependenciesArgs =
+  ImportExtensionVaultArgs & {
+    dependencies: ImportExtensionVaultDependencies
+  }
+
+export function importExtensionVault(
+  args: ImportExtensionVaultArgs,
+): ReturnType<typeof importExtensionVaultWithDependencies> {
+  const operationArgs: ImportExtensionVaultWithDependenciesArgs = {
+    ...args,
+    dependencies: importExtensionVaultDependencies,
+  }
+  return importExtensionVaultWithDependencies(operationArgs)
+}
+
+export async function importExtensionVaultWithDependencies({
   activeManager,
   message,
-  dependencies = importExtensionVaultDependencies,
-}: ImportExtensionVaultArgs) {
+  dependencies,
+}: ImportExtensionVaultWithDependenciesArgs) {
   const payload = message.payload
   const grant = extensionVaultGrant(payload)
   const records = payload.eventLogRecords

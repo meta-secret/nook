@@ -9,9 +9,9 @@ import {
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
 import {
-  importExtensionVault,
-  type ImportExtensionVaultArgs,
+  importExtensionVaultWithDependencies,
   type ImportExtensionVaultDependencies,
+  type ImportExtensionVaultWithDependenciesArgs,
 } from '../src/offscreen/session-vault-operations'
 
 type ImportManagerState = {
@@ -41,7 +41,7 @@ function githubProvider(): StorageProvider {
 
 function importRequest(
   provider: StorageProvider,
-): ImportExtensionVaultArgs['message'] {
+): ImportExtensionVaultWithDependenciesArgs['message'] {
   return {
     type: ExtensionSessionMessageType.ImportVault,
     payload: {
@@ -111,13 +111,13 @@ describe('extension vault import operations', () => {
   test('replaces the unlocked vault provider snapshot and scrubs credentials', async () => {
     const provider = githubProvider()
     const state = importState(DeviceProtectionStatus.Unlocked)
-    const args: ImportExtensionVaultArgs = {
+    const args: ImportExtensionVaultWithDependenciesArgs = {
       activeManager: importManager(state),
       message: importRequest(provider),
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVault(args)).resolves.toEqual({
+    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual({
       ok: true,
       status: { imported: true },
     })
@@ -135,13 +135,13 @@ describe('extension vault import operations', () => {
   test('saves the locked vault provider snapshot without requiring unlock', async () => {
     const provider = githubProvider()
     const state = importState(DeviceProtectionStatus.Pin)
-    const args: ImportExtensionVaultArgs = {
+    const args: ImportExtensionVaultWithDependenciesArgs = {
       activeManager: importManager(state),
       message: importRequest(provider),
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVault(args)).resolves.toEqual({
+    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual({
       ok: true,
       status: { imported: true },
     })
@@ -158,13 +158,15 @@ describe('extension vault import operations', () => {
     const provider = githubProvider()
     const state = importState(DeviceProtectionStatus.Unlocked)
     state.rejectImport = true
-    const args: ImportExtensionVaultArgs = {
+    const args: ImportExtensionVaultWithDependenciesArgs = {
       activeManager: importManager(state),
       message: importRequest(provider),
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVault(args)).rejects.toThrow('import failed')
+    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
+      'import failed',
+    )
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(false)
     expect(provider).not.toHaveProperty('githubPat')
