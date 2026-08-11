@@ -34,6 +34,50 @@ A feature directory replaces a GitHub milestone and aggregate issue. Its
 `README.md` owns the overall goal, shared decisions, current status, and issue
 index. Focused Markdown files replace sub-issues.
 
+## Multi-PR feature sequences
+
+One feature may require many focused issues and pull requests.
+
+Create a sequence when the complete feature is expected to exceed 5,000
+authored changed lines.
+
+Also create a sequence when separate module ownership makes independent slices
+safer, even below that size.
+
+The feature `README.md` must record:
+
+- the complete user-visible or operational outcome;
+- the ordered issue index;
+- dependencies between slices;
+- stable public or cross-module interfaces;
+- feature-level acceptance criteria;
+- current completion status.
+
+Each focused issue must own one cohesive module, package, layer, or
+architectural responsibility.
+
+Each issue should normally map to one pull request.
+
+Every issue must be independently testable and mergeable.
+
+Later issues must consume stable interfaces from earlier slices instead of
+repeatedly rewriting them.
+
+After a slice merges:
+
+1. Update its issue and the feature index.
+2. Publish the required worklog and statistics.
+3. Mark the next dependency-free issue ready.
+4. Start its branch from current Nook `origin/main`.
+
+The feature remains incomplete while any required issue remains incomplete.
+
+Do not convert remaining requested functionality into an optional follow-up.
+
+See
+[pull-requests.md](pull-requests.md#pull-request-size-and-modularity) for the
+size measure and architectural rules.
+
 ## Trigger
 
 Before an agent says any of the following, it must apply this workflow:
@@ -177,6 +221,11 @@ The plan must contain:
 - material functional, workflow, security, and delivery requirements;
 - explicit constraints, assumptions, and exclusions;
 - a small ordered execution plan;
+- an estimate of authored changed lines;
+- the expected module, package, or layer boundary;
+- the public or cross-module interfaces involved;
+- a one-PR decision or an ordered multi-PR sequence;
+- acceptance evidence for every planned PR slice;
 - expected completion evidence; and
 - a safety review confirming that no raw prompt, transcript, secret, private
   data, raw log, local path, or unnecessary infrastructure detail is present.

@@ -271,6 +271,22 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 
 ## 6. Git & Pull Request Workflow
 
+> ## ⛔ PLAN FOR NO MORE THAN 5,000 AUTHORED CHANGED LINES
+>
+> Estimate pull request size before implementation.
+>
+> Keep each pull request within one cohesive module, package, layer, or
+> architectural responsibility.
+>
+> When the feature is larger, create an ordered Workbench feature and issue
+> sequence. Land each pull request before starting the next one from current
+> `origin/main`.
+>
+> The task remains open until the complete requested feature is delivered.
+>
+> See
+> [workflows/pull-requests.md](workflows/pull-requests.md#pull-request-size-and-modularity).
+
 > ## ⛔ SQUASH MERGE ONLY — NO EXCEPTIONS
 >
 > **Every pull request merged into `main` MUST use GitHub’s “Squash and merge”.**

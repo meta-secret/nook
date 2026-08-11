@@ -10,6 +10,9 @@ AI agents must treat every implementation task as PR-bound from the start.
 
 - Fetch `origin/main`.
 - Synthesize the important request into a public-safe Workbench task plan and publish it before implementation edits.
+- Estimate authored changed lines and identify the owning module or layer.
+- Split work expected to exceed 5,000 authored changed lines into an ordered
+  Workbench issue and PR sequence.
 - Create a feature branch and plan the PR title/body/scope.
 - Open or update the PR as soon as there is a coherent commit to show, then keep working on that same PR branch.
 
@@ -28,9 +31,19 @@ A ready PR must merge without asking the user for separate authorization.
 
 Default PR-first loop:
 
-1. **Record the interpreted task** — fetch `origin/main`, write the important requirements and initial plan in the agent's own words, and publish that public-safe start snapshot to Nook Workbench. Never copy the raw prompt or chat transcript.
-2. **Prepare the PR path** — create a feature branch and decide whether this will be a draft or normal PR.
-3. **Implement functionality** — make scoped changes on the feature branch.
+1. **Record the interpreted task:**
+   - Fetch `origin/main`.
+   - Write the important requirements in the agent's own words.
+   - Estimate authored changed lines.
+   - Identify module and interface boundaries.
+   - Publish the public-safe start snapshot to Nook Workbench.
+   - Never copy the raw prompt or chat transcript.
+2. **Prepare the PR path** — if the feature is expected to exceed 5,000
+   authored changed lines, publish an ordered issue and PR sequence. Create a
+   feature branch for the first cohesive slice and decide whether its PR will
+   be draft or normal.
+3. **Implement functionality** — make the module-focused changes for the
+   current slice. Re-estimate when the scope changes.
 4. **Push and create/update the PR** — once the branch has a coherent formatted commit, push it and open the PR. Subsequent experimental commits update the same PR without starting the complete validation pipeline.
 5. **Validate explicitly on hosted workers:**
    - Run allowlisted `task remote TASK_NAME=<name>` only for isolated diagnostics that finish sooner than complete validation.
@@ -150,11 +163,20 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
 ## How it works
 
 0. **Interpret the request** — Identify the important requirements without copying the raw prompt or chat.
-1. **Fetch and publish the task plan** — Sync with remote, then publish the public-safe structured interpretation and initial execution plan to Workbench before implementation begins.
-2. **Branch from `origin/main` and prepare the PR** — Never commit on `main`. Create a feature branch for the work and keep the PR title/body/scope in mind from the first implementation step.
-3. **Implement** — Make the requested change. Follow [rules.md](../rules.md) and package boundaries in [ARCHITECTURE.md](../ARCHITECTURE.md). If part of the requested functionality is too large, risky, blocked, or out of scope, follow [issues.md](issues.md) before handoff:
-   - update or create the Workbench feature
-   - add focused Markdown records for the missing work
+1. **Fetch and publish the task plan** — Sync with remote. Estimate authored
+   changed lines. Identify module and interface boundaries. Publish the
+   public-safe structured interpretation and execution plan to Workbench before
+   implementation begins.
+2. **Branch from `origin/main` and prepare the PR** — Never commit on `main`.
+   Split work above the size boundary into an ordered Workbench issue sequence.
+   Create a feature branch for the first slice. Keep its PR title, body, and
+   scope in mind from the first implementation step.
+3. **Implement** — Make the module-focused change. Follow [rules.md](../rules.md)
+   and package boundaries in [ARCHITECTURE.md](../ARCHITECTURE.md). If work is
+   risky, blocked, or outside the authorized scope, follow [issues.md](issues.md)
+   before handoff:
+   - update or create the Workbench feature;
+   - add focused Markdown records for the missing work.
 4. **Pre-push hygiene** — Always run `task loom:pre-push`. Do not run a required local product gate.
 5. **Push and open/update PR** — Commit and push as soon as the branch has a coherent formatted implementation commit. If no PR exists, open it; pushes do not automatically start the complete validation workflow.
 6. **Explicit Nook PR checks:**
@@ -177,6 +199,16 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
     - Open a separate normal performance PR for actionable waste or regression.
     - See [issues.md](issues.md) and [agent-statistics.md](agent-statistics.md).
 12. **Finish** — report the task duration after the implementation PR and Workbench records are published and any required performance PR is landed.
+
+When a feature has multiple planned slices, return to step 1 for the next ready
+issue after each merge.
+
+Start every next slice from current `origin/main`.
+
+Finish only when the full feature acceptance criteria are complete.
+
+See
+[pull-requests.md § Pull request size and modularity](pull-requests.md#pull-request-size-and-modularity).
 
 ```mermaid
 flowchart TD
@@ -340,6 +372,10 @@ Do not wait for post-merge Main. Any performance fix belongs in a separate norma
 - **Settle feedback already present before merge.** Address and resolve all actionable comments, then require `task pr:ready`. Never request or wait for optional external reviewers or checks.
 - **Never kill the Docker daemon** — only stop containers. See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
 - **Never hide deferred scope** — if requested functionality is not fully implemented because it is large, risky, blocked, or out of scope, manage it in Workbench Markdown first. See [issues.md](issues.md).
+- **Plan bounded PRs** — target no more than 5,000 authored changed lines per
+  PR. Prefer one cohesive module, package, layer, or responsibility. Continue
+  through every planned slice until the requested feature is complete. See
+  [pull-requests.md](pull-requests.md#pull-request-size-and-modularity).
 - **Workbench plan before implementation; summary and statistics after merge** — publish the public-safe task plan before edits, then publish the issue update, plan-linked worklog, and `stats/ai-agent/<pr-number>.yaml` directly to Workbench. See [issues.md](issues.md) and [agent-statistics.md](agent-statistics.md).
 - **Duration report** on every completed implementation task. See [pull-requests.md §10](pull-requests.md#10-task-completion-report).
 
