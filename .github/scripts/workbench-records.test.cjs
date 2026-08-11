@@ -23,6 +23,8 @@ Deliver a durable two-phase agent context record.
 - Owning modules, packages, or layers: Workbench agent records
 - Public or cross-module interfaces: Plan validation contract
 - Delivery shape: One PR completes the change
+- Current PR estimated authored changed lines: 240
+- Current PR slice and acceptance evidence: Validator change with contract tests
 - PR slices and acceptance evidence: One validator slice with contract tests
 
 ## Initial plan
@@ -82,6 +84,8 @@ for (const field of [
   'Owning modules, packages, or layers',
   'Public or cross-module interfaces',
   'Delivery shape',
+  'Current PR estimated authored changed lines',
+  'Current PR slice and acceptance evidence',
   'PR slices and acceptance evidence',
 ]) {
   test(`rejects a plan without ${field}`, () => {
@@ -105,6 +109,46 @@ test('rejects a nonnumeric authored-line estimate', () => {
     validateAgentRecord(invalid, 'plan'),
     /missing or empty plan field: Estimated authored changed lines/,
   )
+})
+
+test('rejects an over-budget one-PR plan', () => {
+  const invalid = validPlan
+    .replace(
+      'Estimated authored changed lines: 240',
+      'Estimated authored changed lines: 6,000',
+    )
+    .replace(
+      'Current PR estimated authored changed lines: 240',
+      'Current PR estimated authored changed lines: 6,000',
+    )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /current PR estimate exceeds 5,000 authored changed lines/,
+  )
+})
+
+test('rejects a one-PR shape for an over-budget feature', () => {
+  const invalid = validPlan.replace(
+    'Estimated authored changed lines: 240',
+    'Estimated authored changed lines: 6,000',
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /one-PR plan exceeds 5,000 authored changed lines/,
+  )
+})
+
+test('accepts a bounded current slice for a multi-PR feature', () => {
+  const multiPr = validPlan
+    .replace(
+      'Estimated authored changed lines: 240',
+      'Estimated authored changed lines: 12,000',
+    )
+    .replace(
+      'Delivery shape: One PR completes the change',
+      'Delivery shape: Multiple PRs complete the feature',
+    )
+  assert.equal(validateAgentRecord(multiPr, 'plan'), '')
 })
 
 test('rejects concrete workflow credentials', () => {

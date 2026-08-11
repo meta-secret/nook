@@ -25,6 +25,8 @@ and in this order:
 - Owning modules, packages, or layers:
 - Public or cross-module interfaces:
 - Delivery shape:
+- Current PR estimated authored changed lines:
+- Current PR slice and acceptance evidence:
 - PR slices and acceptance evidence:
 
 ## Initial plan
@@ -44,8 +46,9 @@ configuration, scripts, and workflow code. Exclude generated files, lockfiles,
 snapshots, vendored sources, binary artifacts, and pure renames from the
 estimate. The delivery shape must say whether one PR can complete the feature.
 For a multi-PR feature, list each ordered, module-focused slice with its
-acceptance evidence. Use `None` when no public or cross-module interface
-changes.
+acceptance evidence. Identify the first or currently authorized slice
+separately. Its estimate must not exceed 5,000 authored changed lines. Use
+`None` when no public or cross-module interface changes.
 
 This repository is public. Do not quote, copy, or lightly reformat the source
 task. Do not include a raw prompt, transcript, conversational filler, secrets,
@@ -54,5 +57,6 @@ paths, internal hostnames or addresses, or unnecessary infrastructure details.
 The safety review must explicitly confirm these exclusions without naming any
 credential or environment variable.
 
-Do not inspect or edit product files. Do not run Git commands. Your only
+You may inspect repository files and run read-only Git commands to ground the
+estimate and ownership decision. Do not edit product files. Your only
 filesystem change must be `.nook-workbench-plan.md`.

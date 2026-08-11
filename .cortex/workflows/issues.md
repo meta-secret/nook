@@ -230,13 +230,19 @@ The plan must contain:
 - an `Owning modules, packages, or layers` value;
 - a `Public or cross-module interfaces` value;
 - a `Delivery shape` value;
+- a `Current PR estimated authored changed lines` value;
+- a `Current PR slice and acceptance evidence` value;
 - a `PR slices and acceptance evidence` value;
 - expected completion evidence; and
 - a safety review confirming that no raw prompt, transcript, secret, private
   data, raw log, local path, or unnecessary infrastructure detail is present.
 
-Plans are immutable start snapshots. If the request changes materially, publish
-a superseding plan rather than rewriting what the agent originally intended.
+Plans are immutable start snapshots.
+
+Publish a superseding plan when the request, design, scope, PR sequence, or
+estimate changes materially.
+
+Do not rewrite the earlier plan.
 Use the checked-in publisher for interactive work:
 
 ```bash

@@ -2,6 +2,7 @@
 
 const { execFileSync } = require('node:child_process')
 const { readFileSync } = require('node:fs')
+const { validateAgentRecord } = require('./workbench-records.cjs')
 
 const WorkbenchRemoteFileKind = Object.freeze({
   Missing: 'missing',
@@ -28,7 +29,15 @@ if (
   process.exit(2)
 }
 
-const content = readFileSync(localPath).toString('base64')
+const localContent = readFileSync(localPath, 'utf8')
+if (remotePath.startsWith('plans/')) {
+  const rejection = validateAgentRecord(localContent, 'plan')
+  if (rejection) {
+    console.error(`Refusing invalid Workbench plan: ${rejection}`)
+    process.exit(6)
+  }
+}
+const content = Buffer.from(localContent).toString('base64')
 let remoteFile = { kind: WorkbenchRemoteFileKind.Missing }
 try {
   remoteFile = {

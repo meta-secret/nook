@@ -33,7 +33,16 @@ const planBudgetFields = [
   },
   {
     label: 'Delivery shape',
-    pattern: /^- Delivery shape:\s*\S.+$/m,
+    pattern: /^- Delivery shape:\s*(?:One PR|Multiple PRs)\b.*$/im,
+  },
+  {
+    label: 'Current PR estimated authored changed lines',
+    pattern:
+      /^- Current PR estimated authored changed lines:\s*\d[\d,]*\s*$/m,
+  },
+  {
+    label: 'Current PR slice and acceptance evidence',
+    pattern: /^- Current PR slice and acceptance evidence:\s*\S.+$/m,
   },
   {
     label: 'PR slices and acceptance evidence',
@@ -133,6 +142,29 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     )
     if (missingBudgetField) {
       return `missing or empty plan field: ${missingBudgetField.label}`
+    }
+
+    const estimate = Number(
+      candidate
+        .match(/^- Estimated authored changed lines:\s*([\d,]+)\s*$/m)[1]
+        .replaceAll(',', ''),
+    )
+    const currentPrEstimate = Number(
+      candidate
+        .match(
+          /^- Current PR estimated authored changed lines:\s*([\d,]+)\s*$/m,
+        )[1]
+        .replaceAll(',', ''),
+    )
+    const deliveryShape = candidate.match(
+      /^- Delivery shape:\s*(.+)$/im,
+    )[1]
+
+    if (currentPrEstimate > 5_000) {
+      return 'current PR estimate exceeds 5,000 authored changed lines'
+    }
+    if (/^one pr\b/i.test(deliveryShape) && estimate > 5_000) {
+      return 'one-PR plan exceeds 5,000 authored changed lines'
     }
   }
 

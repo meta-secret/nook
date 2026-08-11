@@ -172,6 +172,8 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "Owning modules, packages, or layers",
         "Public or cross-module interfaces",
         "Delivery shape",
+        "Current PR estimated authored changed lines",
+        "Current PR slice and acceptance evidence",
         "PR slices and acceptance evidence",
         "## Initial plan",
         "## Completion evidence",
@@ -189,5 +191,16 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
             .any(|line| line == "/.nook-workbench-plan.md"),
         "the workflow-owned task plan must not be committed to the Nook PR"
     );
+
+    for required in [
+        "validateAgentRecord",
+        "remotePath.startsWith('plans/')",
+        "Refusing invalid Workbench plan",
+    ] {
+        assert!(
+            read(".github/scripts/workbench-publish.cjs").contains(required),
+            "interactive Workbench publisher is missing plan validation: {required}"
+        );
+    }
     Ok(())
 }

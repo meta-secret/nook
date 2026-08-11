@@ -86,9 +86,10 @@ The Workbench task plan must state:
 - the files, packages, modules, or layers expected to change;
 - the public or cross-module interfaces involved;
 - whether one PR can deliver the complete feature;
+- the current PR slice and its authored changed-line estimate;
 - the ordered PR slices when more than one PR is needed;
 - the acceptance evidence for each slice;
-- the estimate again when scope materially changes.
+- a superseding immutable plan when scope or the estimate materially changes.
 
 An estimate is a design tool.
 
