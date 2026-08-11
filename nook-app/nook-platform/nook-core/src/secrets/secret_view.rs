@@ -10,6 +10,7 @@ use url::Url;
 
 mod secret_presentation;
 pub use secret_presentation::*;
+mod secret_record_presentation;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "kebab-case")]
