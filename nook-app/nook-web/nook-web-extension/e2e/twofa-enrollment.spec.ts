@@ -488,10 +488,11 @@ test.describe('Browser 2FA enrollment', () => {
 
       // CTA opens the review UI; the confirm control reuses the same label.
       await widget.getByRole('button', { name: 'Save backup codes' }).click()
-      await expect(widget.locator('textarea')).toHaveValue(
-        'A1B2-C3D4-E5F6\nG7H8-I9J0-K1L2',
-        { timeout: 15_000 },
-      )
+      const reviewedCodes = widget.locator('.account-list label span')
+      await expect(reviewedCodes).toHaveText([
+        'A1B2-C3D4-E5F6',
+        'G7H8-I9J0-K1L2',
+      ])
       await widget.getByRole('button', { name: 'Save backup codes' }).click()
 
       const replaceButton = widget.getByRole('button', {
