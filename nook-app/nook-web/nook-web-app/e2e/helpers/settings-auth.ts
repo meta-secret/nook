@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 import { UnlockMethod } from '$lib/components/login/login-unlock-state'
+import type { ProviderLoadOptions } from '$lib/vault/providers.svelte'
 import { parseVaultYamlSnapshot, type VaultYamlSnapshot } from '../vault-yaml'
 import { E2E_OAUTH_ONBOARD_PROVIDER } from './auth-providers'
 import {
@@ -19,6 +20,15 @@ import {
   waitForGoogleOAuthSignedIn,
   waitForVaultOperationsIdle,
 } from './vault-runtime'
+
+interface VaultProviderReload {
+  readonly isAuthenticated?: boolean
+  readonly loadProviders?: (options: ProviderLoadOptions) => Promise<void>
+}
+
+interface VaultProviderReloadWindow extends Window {
+  readonly __nookVault?: VaultProviderReload
+}
 
 /** Expand the login enrollment accordion on the login gate. */
 export async function expandLoginEnrollmentPanel(page: Page) {
@@ -529,16 +539,10 @@ export async function authorizeDeviceProtection(
 
 export async function invokeVaultLoadProviders(page: Page) {
   await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault?: {
-          isAuthenticated?: boolean
-          loadProviders?: () => Promise<void>
-        }
-      }
-    ).__nookVault
+    const vault = (window as VaultProviderReloadWindow).__nookVault
     if (vault?.isAuthenticated && vault.loadProviders) {
-      await vault.loadProviders()
+      const options: ProviderLoadOptions = { ensureLocalRow: false }
+      await vault.loadProviders(options)
     }
   })
 }

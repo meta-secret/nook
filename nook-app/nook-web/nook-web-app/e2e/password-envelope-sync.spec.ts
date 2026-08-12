@@ -9,6 +9,7 @@ import {
   expandLoginEnrollmentPanel,
   expectNoVaultPasswords,
   openStorageSettings,
+  invokeVaultLoadProviders,
   revealSecretValue,
   rotateVaultPassword,
   seedExtraOauthFileProviders,
@@ -152,14 +153,7 @@ test.describe('vault password envelope with sync provider', () => {
         accessToken: target.pat,
       },
     ])
-    await deviceB.evaluate(async () => {
-      const vault = (
-        window as Window & {
-          __nookVault?: { loadProviders?: () => Promise<void> }
-        }
-      ).__nookVault
-      await vault?.loadProviders?.()
-    })
+    await invokeVaultLoadProviders(deviceB)
 
     await expandLoginEnrollmentPanel(deviceB)
     await deviceB.getByTestId('open-enrollment-code-btn').click()

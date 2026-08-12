@@ -630,16 +630,7 @@ export async function seedGithubSyncProvidersWhileUnlocked(
       vaultYaml,
     })
   }
-  await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault?: { loadProviders?: () => Promise<void> }
-      }
-    ).__nookVault
-    if (vault?.loadProviders) {
-      await vault.loadProviders()
-    }
-  })
+  await invokeVaultLoadProviders(page)
   await waitForLoadedSyncProviders(page, expectedSyncProviderCount)
   await forceVaultQuiescentForE2e(page)
 }
@@ -664,16 +655,7 @@ export async function seedOauthFileSyncProvidersWhileUnlocked(
       sharedStub,
     )
   }
-  await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault?: { loadProviders?: () => Promise<void> }
-      }
-    ).__nookVault
-    if (vault?.loadProviders) {
-      await vault.loadProviders()
-    }
-  })
+  await invokeVaultLoadProviders(page)
   await waitForLoadedSyncProviders(page, expectedSyncProviderCount)
   await forceVaultQuiescentForE2e(page)
 }
