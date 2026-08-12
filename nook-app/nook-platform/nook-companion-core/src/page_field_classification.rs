@@ -217,6 +217,13 @@ pub fn looks_like_email_verification_body(body: &str) -> bool {
     .any(|needle| lower.contains(needle))
 }
 
+/// True when an activatable control advances an authentication ceremony.
+#[must_use]
+pub fn looks_like_login_advance_control_label(label: &str) -> bool {
+    let identity = expand_identity_text(label);
+    contains_any_word(&identity, LOGIN_ADVANCE_WORDS) || contains_any_word(&identity, &["submit"])
+}
+
 fn has_autocomplete_token(tokens: &[String], expected: &str) -> bool {
     tokens
         .iter()
@@ -445,5 +452,14 @@ mod tests {
         assert!(looks_like_email_verification_body(
             "Please verify your email to continue"
         ));
+    }
+
+    #[test]
+    fn login_advance_labels_require_authentication_words() {
+        assert!(looks_like_login_advance_control_label("Next"));
+        assert!(looks_like_login_advance_control_label("SignIn"));
+        assert!(looks_like_login_advance_control_label("Submit"));
+        assert!(!looks_like_login_advance_control_label("Learn more"));
+        assert!(!looks_like_login_advance_control_label("Subscribe"));
     }
 }

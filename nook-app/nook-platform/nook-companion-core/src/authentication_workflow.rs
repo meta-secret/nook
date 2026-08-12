@@ -134,6 +134,28 @@ const fn workflow_candidate_priority(snapshot: AuthenticationWorkflowSnapshot) -
     }
 }
 
+/// Rank browser form observations before the host applies its bounded scan.
+///
+/// This preserves the structural priority independently of DOM ownership:
+/// active OTP, current-password login, single generic password, other
+/// password forms, then username/passkey-only surfaces.
+#[must_use]
+pub const fn authentication_form_observation_priority(
+    observation: AuthenticationPageObservation,
+) -> u8 {
+    if observation.one_time_code_field_count > 0 {
+        5
+    } else if observation.current_password_field_count > 0 {
+        4
+    } else if observation.generic_password_field_count == 1 {
+        3
+    } else if observation.password_field_count() > 0 {
+        2
+    } else {
+        1
+    }
+}
+
 #[must_use]
 pub fn classify_authentication_workflow_candidates(
     observations: &[AuthenticationPageObservation],
@@ -572,6 +594,36 @@ mod tests {
         );
         assert_eq!(snapshot.observation_index, 1);
         Ok(())
+    }
+
+    #[test]
+    fn ranks_form_observations_for_bounded_host_scans() {
+        let username = AuthenticationPageObservation {
+            username_field_count: 1,
+            ..observation()
+        };
+        let signup = AuthenticationPageObservation {
+            new_password_field_count: 1,
+            ..observation()
+        };
+        let generic_login = AuthenticationPageObservation {
+            generic_password_field_count: 1,
+            ..observation()
+        };
+        let current_login = AuthenticationPageObservation {
+            current_password_field_count: 1,
+            ..observation()
+        };
+        let code = AuthenticationPageObservation {
+            one_time_code_field_count: 1,
+            ..observation()
+        };
+
+        assert_eq!(authentication_form_observation_priority(username), 1);
+        assert_eq!(authentication_form_observation_priority(signup), 2);
+        assert_eq!(authentication_form_observation_priority(generic_login), 3);
+        assert_eq!(authentication_form_observation_priority(current_login), 4);
+        assert_eq!(authentication_form_observation_priority(code), 5);
     }
 
     #[test]
