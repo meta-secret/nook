@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 
 describe('ensureExtensionSessionDocument', () => {
   test('uses an existing offscreen session when Chrome rejects with a string', async () => {
@@ -38,9 +39,9 @@ describe('openCompanionLauncherBestEffort', () => {
     const { openCompanionLauncher } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(openCompanionLauncher()).rejects.toThrow(
-      'launcher unavailable',
-    )
+    await expect(
+      openCompanionLauncher(OpenCompanionLauncherIntent.Default),
+    ).rejects.toThrow('launcher unavailable')
   })
 
   test('contains launcher failures for callers returning locked responses', async () => {
@@ -58,7 +59,9 @@ describe('openCompanionLauncherBestEffort', () => {
     const { openCompanionLauncherBestEffort } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    expect(() => openCompanionLauncherBestEffort()).not.toThrow()
+    expect(() =>
+      openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default),
+    ).not.toThrow()
     await Promise.resolve()
   })
 })

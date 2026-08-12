@@ -11,6 +11,7 @@ import {
   type ExtensionPairedVaultUnlockRequestMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
+import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
 import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
 import { WebsiteAuthenticatorResponseStatus } from '../../lib/login-fill-messages'
@@ -504,7 +505,7 @@ export async function requestPairedVaultUnlock(
     nookTypedArgs0_7,
   )) as ExtensionSessionStatusResponse
   if (!isUnlockedSessionStatus(statusResponse)) {
-    await openCompanionLauncher()
+    await openCompanionLauncher(OpenCompanionLauncherIntent.Default)
   }
   return { ok: true, requestId, vaultStoreId }
 }
@@ -782,7 +783,7 @@ export async function availableWebsiteGrants({
   }
   const status = await sendSessionMessage(nookTypedArgs0_9)
   if (!isUnlockedSessionStatus(status)) {
-    openCompanionLauncherBestEffort()
+    openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default)
     return {
       response: {
         ok: true,

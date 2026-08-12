@@ -22,7 +22,7 @@ export enum AuthenticationWorkflowSnapshotMessageType {
   NookAuthenticationWorkflowSnapshot = 'nook:authentication-workflow-snapshot',
 }
 
-const MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS = 64
+export const MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS = 64
 
 export type AuthenticationWorkflowSnapshotMessage = {
   type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot

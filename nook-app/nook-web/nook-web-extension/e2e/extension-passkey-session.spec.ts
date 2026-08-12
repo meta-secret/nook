@@ -26,6 +26,7 @@ import {
 } from './helpers/extension-smoke-runtime'
 import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
+import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import { createLocalVaultOnLogin } from '../../nook-web-app/e2e/helpers'
 
 const chromiumExecutablePath =
@@ -277,7 +278,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     expect(
       await sendExternalMessage(simplePage, extensionId, {
         type: 'nook:open-companion-launcher',
-        payload: { intent: 'pair' },
+        payload: { intent: OpenCompanionLauncherIntent.Pair },
       }),
     ).toEqual({ ok: true })
     const pairingLauncher = await openedPairingLauncher

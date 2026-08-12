@@ -20,8 +20,6 @@ export const WIDGET_HOST_ID = 'nook-auth-widget'
 
 export const DRAG_THRESHOLD_PX = 4
 
-export const MAX_WORKFLOW_OBSERVATIONS = 20
-
 export const OUTCOME_EVIDENCE_TIMEOUT_MS = 8_000
 
 export const OUTCOME_EVIDENCE_POLL_MS = 250

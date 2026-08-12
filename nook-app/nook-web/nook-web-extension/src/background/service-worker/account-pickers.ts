@@ -2,6 +2,7 @@ import {
   type WebsiteAuthenticatorOption,
   type WebsiteLoginAccountOption,
 } from '../../lib/login-fill-messages'
+import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   extensionSessionGrantIdentity,
   type StoredExtensionPairingGrant,
@@ -242,7 +243,7 @@ export async function authorizedWebsiteGrant({
   }
   const status = await sendSessionMessage(nookTypedArgs0_4)
   if (!isUnlockedSessionStatus(status)) {
-    openCompanionLauncherBestEffort()
+    openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default)
     return { response: { ok: false, reason: reasons.locked } }
   }
   return { grant }

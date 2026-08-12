@@ -1,5 +1,9 @@
 import { isNokeySender } from './routing-trust'
 import type * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
+import {
+  OpenCompanionLauncherNormalizationKind,
+  type normalizeOpenCompanionLauncherMessage,
+} from '../../../../nook-web-shared/src/extension/companion-launcher-message-adapter'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
 import type * as SessionLifecycle from './session-lifecycle'
@@ -24,7 +28,7 @@ export type ExternalCompanionRoutingDependencies = {
   isExtensionPairedVaultIdentityDiscoveryMessage: typeof RuntimeMessages.isExtensionPairedVaultIdentityDiscoveryMessage
   isExtensionPairedVaultIdentityHandoffRequestMessage: typeof RuntimeMessages.isExtensionPairedVaultIdentityHandoffRequestMessage
   isExtensionPairedVaultUnlockRequestMessage: typeof RuntimeMessages.isExtensionPairedVaultUnlockRequestMessage
-  isOpenCompanionLauncherMessage: typeof RuntimeMessages.isOpenCompanionLauncherMessage
+  normalizeOpenCompanionLauncherMessage: typeof normalizeOpenCompanionLauncherMessage
   openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
   requestPairedVaultUnlock: typeof PairingIdentity.requestPairedVaultUnlock
 }
@@ -62,16 +66,19 @@ export function routeExternalCompanionMessage({
     isExtensionPairedVaultIdentityDiscoveryMessage,
     isExtensionPairedVaultIdentityHandoffRequestMessage,
     isExtensionPairedVaultUnlockRequestMessage,
-    isOpenCompanionLauncherMessage,
+    normalizeOpenCompanionLauncherMessage,
     openCompanionLauncher,
     requestPairedVaultUnlock,
   } = dependencies
-  if (isOpenCompanionLauncherMessage(message)) {
+  const launcherMessage = normalizeOpenCompanionLauncherMessage(message)
+  if (
+    launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
+  ) {
     if (!isNokeySender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void openCompanionLauncher(message.payload?.intent)
+    void openCompanionLauncher(launcherMessage.message.intent)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(launcherFailureResponse))
     return true

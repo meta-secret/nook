@@ -1,6 +1,9 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { OpenCompanionLauncherMessageType } from '../../nook-web-shared/src/extension/companion-launcher-message'
-import { isOpenCompanionLauncherMessage } from '../../nook-web-shared/src/extension/companion-launcher-message-adapter'
+import {
+  OpenCompanionLauncherIntent,
+  OpenCompanionLauncherMessageType,
+} from '../../nook-web-shared/src/extension/companion-launcher-message'
+import { normalizeOpenCompanionLauncherMessage } from '../../nook-web-shared/src/extension/companion-launcher-message-adapter'
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 import type { ExtensionLifecycleRoutingDependencies } from '../src/background/service-worker/extension-lifecycle-routing'
 import type { ExternalCompanionRoutingDependencies } from '../src/background/service-worker/external-companion-routing'
@@ -52,7 +55,7 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
   isExtensionPairedVaultIdentityDiscoveryMessage: mock(() => false),
   isExtensionPairedVaultIdentityHandoffRequestMessage: mock(() => false),
   isExtensionPairedVaultUnlockRequestMessage: mock(() => false),
-  isOpenCompanionLauncherMessage,
+  normalizeOpenCompanionLauncherMessage,
   openCompanionLauncher,
   requestPairedVaultUnlock: unusedAsyncDependency,
 }
@@ -100,6 +103,7 @@ describe('service worker routing', () => {
   })
 
   test('rejects a companion launcher request from an unauthorized external sender', async () => {
+    openCompanionLauncher.mockClear()
     const { routeExternalCompanionMessage } =
       await import('../src/background/service-worker/external-companion-routing')
     const sendResponse = mock(() => {})
@@ -124,6 +128,7 @@ describe('service worker routing', () => {
   })
 
   test('keeps an authorized external launcher response channel open', async () => {
+    openCompanionLauncher.mockClear()
     const { routeExternalCompanionMessage } =
       await import('../src/background/service-worker/external-companion-routing')
     const sendResponse = mock(() => {})
@@ -142,6 +147,32 @@ describe('service worker routing', () => {
     expect(routeExternalCompanionMessage(routingArgs)).toBe(true)
     await flushResponses()
     expect(openCompanionLauncher).toHaveBeenCalledTimes(1)
+    expect(openCompanionLauncher).toHaveBeenCalledWith(
+      OpenCompanionLauncherIntent.Default,
+    )
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+  })
+
+  test('normalizes pair intent before internal launcher routing', async () => {
+    openCompanionLauncher.mockClear()
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+    const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
+      dependencies: lifecycleDependencies,
+      message: {
+        type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+        payload: { intent: OpenCompanionLauncherIntent.Pair },
+      },
+      sender: { id: 'nook-extension' },
+      sendResponse,
+    }
+
+    expect(routeExtensionLifecycleMessage(routingArgs)).toBe(true)
+    await flushResponses()
+    expect(openCompanionLauncher).toHaveBeenCalledWith(
+      OpenCompanionLauncherIntent.Pair,
+    )
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
 })

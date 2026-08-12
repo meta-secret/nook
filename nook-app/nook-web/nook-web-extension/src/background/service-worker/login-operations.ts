@@ -5,6 +5,7 @@ import {
   type WebsiteLoginSaveOfferResponse,
   type WebsiteLoginSavePendingResponse,
 } from '../../lib/login-save-messages'
+import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   WebsiteAuthenticatorResponseStatus,
   type WebsiteLoginAccountOption,
@@ -326,7 +327,7 @@ export async function websiteLoginSaveOffer({
     !isUnlockedSessionStatus(status)
   ) {
     pendingPassword.value = ''
-    openCompanionLauncherBestEffort()
+    openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default)
     return { kind: 'locked' }
   }
 
@@ -539,7 +540,7 @@ export async function websiteLoginSaveCommit({
     typeof status !== 'object' ||
     !isUnlockedSessionStatus(status)
   ) {
-    openCompanionLauncherBestEffort()
+    openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default)
     return {
       kind: 'rejected',
       reason: 'login-save-locked',

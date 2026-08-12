@@ -4,6 +4,7 @@ import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isOpenCompanionLauncherMessage,
+  OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
   type ExtensionPairedVaultIdentityStatusMessage,
@@ -142,7 +143,7 @@ test('offer browser extension install on vault home and in Devices', async ({
     'data-demo-extension-message',
     JSON.stringify({
       type: 'nook:open-companion-launcher',
-      payload: { intent: 'pair' },
+      payload: { intent: OpenCompanionLauncherIntent.Pair },
     }),
   )
   const encodedLauncherMessage = await page

@@ -4,6 +4,7 @@ import {
 } from "./extension-connect-scope";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "./paired-vault-identity-status";
 import {
+  OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
   type OpenCompanionLauncherMessage,
 } from "./companion-launcher-message";
@@ -31,6 +32,7 @@ export {
   isExtensionLocalEventLogUpdatedMessage,
   isOpenCompanionLauncherMessage,
   isOpenSimpleVaultMessage,
+  OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
   OpenSimpleVaultMessageType,
   type BeginExtensionPairingMessage,

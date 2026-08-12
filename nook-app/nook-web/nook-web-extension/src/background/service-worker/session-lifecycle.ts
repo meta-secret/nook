@@ -4,6 +4,7 @@ import {
 } from '../../lib/login-detection-messages'
 import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
 import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 
 export const extensionSessionDocument = 'offscreen/session.html'
 
@@ -215,9 +216,14 @@ export async function queryActiveTabLoginDetection(): Promise<LoginDetectionResp
   return { ok: true, status: LoginDetectionStatus.Unavailable }
 }
 
-export async function openCompanionLauncher(intent?: 'pair'): Promise<void> {
+export async function openCompanionLauncher(
+  intent: OpenCompanionLauncherIntent,
+): Promise<void> {
   const popupUrl = chrome.runtime.getURL('popup/index.html')
-  const launcherUrl = intent ? `${popupUrl}?intent=${intent}` : popupUrl
+  const launcherUrl =
+    intent === OpenCompanionLauncherIntent.Pair
+      ? `${popupUrl}?intent=${OpenCompanionLauncherIntent.Pair}`
+      : popupUrl
   if (chrome.windows?.create) {
     const nookTypedArgs0_7: Parameters<typeof chrome.windows.create>[0] = {
       url: launcherUrl,
@@ -235,6 +241,8 @@ export async function openCompanionLauncher(intent?: 'pair'): Promise<void> {
   await chrome.tabs.create(nookTypedArgs0_8)
 }
 
-export function openCompanionLauncherBestEffort(intent?: 'pair'): void {
+export function openCompanionLauncherBestEffort(
+  intent: OpenCompanionLauncherIntent,
+): void {
   void openCompanionLauncher(intent).catch(() => {})
 }

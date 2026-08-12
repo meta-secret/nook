@@ -4,8 +4,8 @@ import {
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairedVaultUnlockRequestMessage,
-  isOpenCompanionLauncherMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
+import { normalizeOpenCompanionLauncherMessage } from '../../../nook-web-shared/src/extension/companion-launcher-message-adapter'
 import { isAuthenticationWorkflowSnapshotMessage } from '../lib/auth-workflow-messages'
 import {
   isAuthenticatorPickerCancelMessage,
@@ -149,7 +149,7 @@ const externalCompanionRoutingDependencies: Parameters<
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairedVaultUnlockRequestMessage,
-  isOpenCompanionLauncherMessage,
+  normalizeOpenCompanionLauncherMessage,
   openCompanionLauncher,
   requestPairedVaultUnlock,
 }

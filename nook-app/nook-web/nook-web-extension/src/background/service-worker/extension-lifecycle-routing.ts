@@ -3,7 +3,10 @@ import {
   isExtensionLocalEventLogUpdatedMessage,
   isOpenSimpleVaultMessage,
 } from '../../../../nook-web-shared/src/extension/lifecycle-runtime-message-adapter'
-import { isOpenCompanionLauncherMessage } from '../../../../nook-web-shared/src/extension/companion-launcher-message-adapter'
+import {
+  normalizeOpenCompanionLauncherMessage,
+  OpenCompanionLauncherNormalizationKind,
+} from '../../../../nook-web-shared/src/extension/companion-launcher-message-adapter'
 import { isExtensionRuntimeSender, isNokeySender } from './routing-trust'
 import type * as PairingState from '../../lib/pairing-state'
 import type * as PairingIdentity from './pairing-identity'
@@ -196,12 +199,15 @@ export function routeExtensionLifecycleMessage({
     return false
   }
 
-  if (isOpenCompanionLauncherMessage(message)) {
+  const launcherMessage = normalizeOpenCompanionLauncherMessage(message)
+  if (
+    launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
+  ) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void openCompanionLauncher(message.payload?.intent)
+    void openCompanionLauncher(launcherMessage.message.intent)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(launcherFailureResponse))
     return true
