@@ -78,6 +78,7 @@ pub struct NookAuthenticationWorkflowSnapshot(nook_core::AuthenticationWorkflowS
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NookAuthenticationWorkflowMatchState {
     NoMatch,
+    Rejected,
     Matched,
 }
 
@@ -98,6 +99,9 @@ impl NookAuthenticationWorkflowMatch {
             nook_core::AuthenticationWorkflowMatch::NoMatch => {
                 NookAuthenticationWorkflowMatchState::NoMatch
             }
+            nook_core::AuthenticationWorkflowMatch::Rejected => {
+                NookAuthenticationWorkflowMatchState::Rejected
+            }
             nook_core::AuthenticationWorkflowMatch::Matched(_) => {
                 NookAuthenticationWorkflowMatchState::Matched
             }
@@ -108,6 +112,9 @@ impl NookAuthenticationWorkflowMatch {
         match self.0 {
             nook_core::AuthenticationWorkflowMatch::NoMatch => Err(wasm_bindgen::JsError::new(
                 "authentication workflow was not detected",
+            )),
+            nook_core::AuthenticationWorkflowMatch::Rejected => Err(wasm_bindgen::JsError::new(
+                "authentication workflow observations were rejected",
             )),
             nook_core::AuthenticationWorkflowMatch::Matched(snapshot) => {
                 Ok(NookAuthenticationWorkflowSnapshot::from_core(snapshot))

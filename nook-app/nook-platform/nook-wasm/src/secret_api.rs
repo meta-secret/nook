@@ -348,9 +348,9 @@ mod wasm_tests {
     use super::*;
     use crate::{
         NookAuthenticationOutcomeObservation, NookAuthenticationPageObservation,
-        NookAuthenticationPageObservations, NookSecretPage, authentication_workflow_snapshot,
-        classify_authentication_outcome_with_default_timeout, generate_totp_code, verify_totp_code,
-        wasm_storage_mode_for_provider,
+        NookAuthenticationPageObservations, NookAuthenticationWorkflowMatchState, NookSecretPage,
+        authentication_workflow_snapshot, classify_authentication_outcome_with_default_timeout,
+        generate_totp_code, verify_totp_code, wasm_storage_mode_for_provider,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -403,6 +403,39 @@ mod wasm_tests {
         assert!(snapshot.requires_human_approval());
         assert_eq!(snapshot.observation_index(), 0);
         Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn authentication_workflow_snapshot_rejects_out_of_bounds_observations() {
+        let excessive_field_count = NookAuthenticationPageObservation::new(
+            nook_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1,
+            1,
+            0,
+            0,
+            0,
+            false,
+            false,
+            false,
+            false,
+            0,
+        );
+        let mut observations = NookAuthenticationPageObservations::new();
+        observations.add(&excessive_field_count);
+        assert_eq!(
+            authentication_workflow_snapshot(&observations).state(),
+            NookAuthenticationWorkflowMatchState::Rejected
+        );
+
+        let valid_login =
+            NookAuthenticationPageObservation::new(1, 1, 0, 0, 0, false, false, false, false, 0);
+        let mut observations = NookAuthenticationPageObservations::new();
+        for _ in 0..=nook_core::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS {
+            observations.add(&valid_login);
+        }
+        assert_eq!(
+            authentication_workflow_snapshot(&observations).state(),
+            NookAuthenticationWorkflowMatchState::Rejected
+        );
     }
 
     #[wasm_bindgen_test]

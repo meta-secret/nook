@@ -16,6 +16,8 @@ Continues [mobile-core-reuse.md](mobile-core-reuse.md).
       structured `LoginContextObservation` / `PageInputFieldObservation` inputs.
 - [x] Portable password-form priority and login advance-control label policy in
       `nook-companion-core`.
+- [x] Portable authentication observation batch and field-count bounds in
+      `nook-companion-core`, enforced through both WASM bridges.
 - [x] DOM scoping, visibility, fill, focus, and submit mechanics remain in the
       browser adapter.
 - [x] OAuth authorized-origin policy in `nook-companion-core`; web adapter uses

@@ -3,6 +3,8 @@ import { connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
   isExtensionPairedVaultIdentityDiscoveryMessage,
+  isOpenCompanionLauncherMessage,
+  OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
   type ExtensionPairedVaultIdentityStatusMessage,
@@ -141,9 +143,20 @@ test('offer browser extension install on vault home and in Devices', async ({
     'data-demo-extension-message',
     JSON.stringify({
       type: 'nook:open-companion-launcher',
-      payload: { intent: 'pair' },
+      payload: { intent: OpenCompanionLauncherIntent.Pair },
     }),
   )
+  const encodedLauncherMessage = await page
+    .locator('html')
+    .getAttribute('data-demo-extension-message')
+  if (typeof encodedLauncherMessage !== 'string') {
+    throw new Error('Companion launcher message was not recorded.')
+  }
+  const launcherMessage = JSON.parse(encodedLauncherMessage)
+  if (!isOpenCompanionLauncherMessage(launcherMessage)) {
+    throw new Error('Companion launcher message was malformed.')
+  }
+  expect(launcherMessage.payload).toEqual({ intent: 'pair' })
   const routedTypes = JSON.parse(
     (await page
       .locator('html')

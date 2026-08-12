@@ -2,7 +2,10 @@ import { companionWasmReady } from '../../../nook-web-shared/src/extension/compa
 import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { summarizeAuthenticationWorkflowForms } from '../../../nook-web-shared/src/extension/password-forms'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
-import { AuthenticationWorkflowSnapshotMessageType } from '../lib/auth-workflow-messages'
+import {
+  AuthenticationWorkflowSnapshotMessageType,
+  MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
+} from '../lib/auth-workflow-messages'
 import { cancelPendingAuthenticatorPickerRequest } from './autofill/authenticator-actions'
 import {
   cancelPendingLoginPickerRequest,
@@ -31,10 +34,7 @@ import {
   renderEnrollmentWidget,
   renderWidget,
 } from './autofill/widget-rendering'
-import {
-  MAX_WORKFLOW_OBSERVATIONS,
-  loadPilotVaultConnection,
-} from './autofill/workflow-ui'
+import { loadPilotVaultConnection } from './autofill/workflow-ui'
 import {
   detectEnrollmentHints,
   enrollmentCeremonyActive,
@@ -68,7 +68,7 @@ async function scanAndRender(): Promise<void> {
   const enrollmentHints = detectEnrollmentHints()
   const workflowForms = summarizeAuthenticationWorkflowForms().slice(
     0,
-    MAX_WORKFLOW_OBSERVATIONS,
+    MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
   )
   // Setup material starts an enrollment ceremony. Recovery hints remain part
   // of an active OTP challenge so Rust can keep code fill as the primary action,
@@ -93,7 +93,6 @@ async function scanAndRender(): Promise<void> {
     return
   }
 
-  const boundedCount = (count: number) => Math.min(count, 100)
   const message: Parameters<
     typeof sendAuthenticationWorkflowSnapshotRuntimeMessage
   >[0] = {
@@ -101,15 +100,11 @@ async function scanAndRender(): Promise<void> {
     payload: {
       origin: location.origin,
       observations: workflowForms.map(({ summary }) => ({
-        usernameFieldCount: boundedCount(summary.usernameFieldCount),
-        currentPasswordFieldCount: boundedCount(
-          summary.currentPasswordFieldCount,
-        ),
-        newPasswordFieldCount: boundedCount(summary.newPasswordFieldCount),
-        genericPasswordFieldCount: boundedCount(
-          summary.genericPasswordFieldCount,
-        ),
-        oneTimeCodeFieldCount: boundedCount(summary.oneTimeCodeFieldCount),
+        usernameFieldCount: summary.usernameFieldCount,
+        currentPasswordFieldCount: summary.currentPasswordFieldCount,
+        newPasswordFieldCount: summary.newPasswordFieldCount,
+        genericPasswordFieldCount: summary.genericPasswordFieldCount,
+        oneTimeCodeFieldCount: summary.oneTimeCodeFieldCount,
         manualCheckpointPresent: summary.manualCheckpointPresent,
         authenticatorSetupHint: detectEnrollmentHints().qr,
         backupCodesHint: detectEnrollmentHints().backupCodes,

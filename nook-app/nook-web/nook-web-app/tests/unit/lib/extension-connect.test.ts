@@ -19,6 +19,7 @@ import {
   isExtensionIdentityHandoffRequestMessage,
   isExtensionLocalEventLogUpdatedMessage,
   isOpenCompanionLauncherMessage,
+  OpenCompanionLauncherIntent,
   ExtensionPairingVaultType,
   ExtensionPairingApprovedMessageType,
   isExtensionPairedVaultIdentityDiscoveryMessage,
@@ -127,7 +128,7 @@ describe('installed extension launcher', () => {
         expect(extensionId).toBe('extension-123')
         expect(message).toEqual({
           type: 'nook:open-companion-launcher',
-          payload: { intent: 'pair' },
+          payload: { intent: OpenCompanionLauncherIntent.Pair },
         })
         callback({ ok: true })
       },
@@ -154,7 +155,7 @@ describe('installed extension launcher', () => {
     expect(
       isOpenCompanionLauncherMessage({
         type: 'nook:open-companion-launcher',
-        payload: { intent: 'pair' },
+        payload: { intent: OpenCompanionLauncherIntent.Pair },
       }),
     ).toBe(true)
     expect(

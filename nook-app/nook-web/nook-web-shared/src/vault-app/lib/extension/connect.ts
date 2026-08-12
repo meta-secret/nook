@@ -6,6 +6,7 @@ import {
   ExtensionPairedVaultIdentityStatusMessageStatus,
   ExtensionPairedVaultUnlockRequestMessageType,
   ExtensionIdentityHandoffRequestMessageType,
+  OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
   isExtensionPairedVaultIdentityStatusMessage,
   type ExtensionIdentityHandoffRequestMessage,
@@ -297,7 +298,7 @@ export async function openInstalledExtension(): Promise<boolean> {
 
   const message: OpenCompanionLauncherMessage = {
     type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
-    payload: { intent: "pair" },
+    payload: { intent: OpenCompanionLauncherIntent.Pair },
   };
   const sendExtensionMessageArgs: Parameters<typeof sendExtensionMessage>[0] = {
     extensionId: installedExtension.extensionRuntimeId,

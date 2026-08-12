@@ -4,8 +4,13 @@
 //! module owns the product decision about which workflow is present, where the
 //! user is in it, and which action Nook may offer next.
 
+mod observation_validation;
 mod vocabulary;
 
+pub use observation_validation::{
+    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    authentication_page_observations_are_valid,
+};
 pub use vocabulary::{
     AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowStage,
 };
@@ -74,6 +79,7 @@ pub struct AuthenticationWorkflowSnapshot {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationWorkflowMatch {
     NoMatch,
+    Rejected,
     Matched(AuthenticationWorkflowSnapshot),
 }
 
@@ -87,17 +93,22 @@ pub struct AuthenticationPageObservations {
 impl AuthenticationWorkflowMatch {
     pub const fn snapshot(
         self,
-    ) -> Result<AuthenticationWorkflowSnapshot, AuthenticationWorkflowNotDetected> {
+    ) -> Result<AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError> {
         match self {
-            Self::NoMatch => Err(AuthenticationWorkflowNotDetected),
+            Self::NoMatch => Err(AuthenticationWorkflowSnapshotError::NotDetected),
+            Self::Rejected => Err(AuthenticationWorkflowSnapshotError::Rejected),
             Self::Matched(snapshot) => Ok(snapshot),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[error("authentication workflow was not detected")]
-pub struct AuthenticationWorkflowNotDetected;
+pub enum AuthenticationWorkflowSnapshotError {
+    #[error("authentication workflow was not detected")]
+    NotDetected,
+    #[error("authentication workflow observations were rejected")]
+    Rejected,
+}
 
 impl AuthenticationWorkflowSnapshot {
     const fn new(
@@ -160,6 +171,10 @@ pub const fn authentication_form_observation_priority(
 pub fn classify_authentication_workflow_candidates(
     observations: &[AuthenticationPageObservation],
 ) -> AuthenticationWorkflowMatch {
+    if !authentication_page_observations_are_valid(observations) {
+        return AuthenticationWorkflowMatch::Rejected;
+    }
+
     let mut selected = AuthenticationWorkflowMatch::NoMatch;
     for (index, observation) in observations.iter().copied().enumerate() {
         let AuthenticationWorkflowMatch::Matched(mut candidate) =
@@ -170,6 +185,7 @@ pub fn classify_authentication_workflow_candidates(
         candidate.observation_index = u32::try_from(index).unwrap_or(u32::MAX);
         let replace = match selected {
             AuthenticationWorkflowMatch::NoMatch => true,
+            AuthenticationWorkflowMatch::Rejected => false,
             AuthenticationWorkflowMatch::Matched(current) => {
                 workflow_candidate_priority(candidate) > workflow_candidate_priority(current)
             }

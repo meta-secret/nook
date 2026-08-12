@@ -1,6 +1,6 @@
 //! Thin WASM exports for portable auth-companion heuristics and host policy.
 
-use crate::NookAuthenticationPageObservation;
+use crate::{NookAuthenticationPageObservation, NookAuthenticationPageObservations};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -128,6 +128,14 @@ pub fn authentication_form_observation_priority(
     observation: &NookAuthenticationPageObservation,
 ) -> u8 {
     nook_core::authentication_form_observation_priority(observation.to_core())
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn authentication_page_observations_are_valid(
+    observations: &NookAuthenticationPageObservations,
+) -> bool {
+    nook_core::authentication_page_observations_are_valid(observations.as_core())
 }
 
 #[wasm_bindgen]
@@ -354,5 +362,8 @@ mod tests {
         let login =
             NookAuthenticationPageObservation::new(1, 1, 0, 0, 0, false, false, false, false, 0);
         assert_eq!(authentication_form_observation_priority(&login), 4);
+        let mut observations = NookAuthenticationPageObservations::new();
+        observations.add(&login);
+        assert!(authentication_page_observations_are_valid(&observations));
     }
 }

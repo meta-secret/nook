@@ -27,7 +27,7 @@ describe('authentication workflow snapshot messages', () => {
     expect(isAuthenticationWorkflowSnapshotMessage(validMessage)).toBe(true)
   })
 
-  test('rejects missing, negative, fractional, and unbounded counts', () => {
+  test('rejects missing, negative, and fractional counts structurally', () => {
     const observationWithoutOneTimeCodeCount = {
       ...validMessage.payload.observations[0],
     }
@@ -47,7 +47,7 @@ describe('authentication workflow snapshot messages', () => {
       }),
     ).toBe(false)
 
-    for (const invalidCount of [-1, 0.5, 101]) {
+    for (const invalidCount of [-1, 0.5]) {
       expect(
         isAuthenticationWorkflowSnapshotMessage({
           ...validMessage,
@@ -65,17 +65,55 @@ describe('authentication workflow snapshot messages', () => {
     }
   })
 
-  test('rejects empty and oversized workflow observation batches', () => {
-    for (const observations of [
-      [],
-      Array.from({ length: 21 }, () => validMessage.payload.observations[0]),
-    ]) {
-      expect(
-        isAuthenticationWorkflowSnapshotMessage({
-          ...validMessage,
-          payload: { ...validMessage.payload, observations },
-        }),
-      ).toBe(false)
-    }
+  test('leaves portable upper bounds to the Rust workflow policy', () => {
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [
+            {
+              ...validMessage.payload.observations[0],
+              oneTimeCodeFieldCount: 101,
+            },
+          ],
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [
+            {
+              ...validMessage.payload.observations[0],
+              matchingPasskeyAccountCount: 101,
+            },
+          ],
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: Array.from(
+            { length: 21 },
+            () => validMessage.payload.observations[0],
+          ),
+        },
+      }),
+    ).toBe(true)
+  })
+
+  test('rejects empty observation batches structurally', () => {
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: { ...validMessage.payload, observations: [] },
+      }),
+    ).toBe(false)
   })
 })

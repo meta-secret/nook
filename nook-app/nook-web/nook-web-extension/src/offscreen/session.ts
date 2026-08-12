@@ -13,6 +13,7 @@ import {
   type SessionMessageDispatchContext,
 } from './session-message-dispatch'
 import type { ExtensionSessionRequest } from './session-request-adapter'
+import { ExtensionSessionLifecycleMessageType } from '../lib/extension-session-lifecycle-message-type'
 import {
   handleSessionMessage,
   type DeviceResult,
@@ -128,7 +129,7 @@ function scheduleSessionExpiry(generation: number): void {
         new Error(SESSION_LOCKED_ERROR),
       )
       const expiryMessage: Parameters<typeof chrome.runtime.sendMessage>[0] = {
-        type: 'nook:extension-session-expired',
+        type: ExtensionSessionLifecycleMessageType.Expired,
       }
       void chrome.runtime.sendMessage(expiryMessage)
     }, SESSION_DURATION_MS),

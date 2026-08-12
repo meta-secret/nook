@@ -1,9 +1,11 @@
 import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
+  CompanionAuthenticationWorkflowMatchKind,
   classify_companion_authentication_outcome,
   classify_companion_authentication_outcome_with_default_timeout,
   classify_companion_authentication_workflow,
+  companion_authentication_workflow_match_kind,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type {
   AuthenticationOutcomeClassification,
@@ -143,8 +145,15 @@ export async function authenticationWorkflowSnapshot(
 ): Promise<AuthenticationWorkflowSnapshot> {
   await companionWasmReady
   const workflowMatch = classify_companion_authentication_workflow(input)
-  if (workflowMatch.kind === AuthenticationWorkflowSnapshotKind.NoMatch) {
+  const matchKind = companion_authentication_workflow_match_kind(workflowMatch)
+  if (matchKind === CompanionAuthenticationWorkflowMatchKind.Rejected) {
+    throw new Error('authentication workflow observations were rejected')
+  }
+  if (matchKind === CompanionAuthenticationWorkflowMatchKind.NoMatch) {
     return { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
+  }
+  if (!('snapshot' in workflowMatch)) {
+    throw new Error('authentication workflow match omitted its snapshot')
   }
   return {
     kind: AuthenticationWorkflowSnapshotKind.Matched,

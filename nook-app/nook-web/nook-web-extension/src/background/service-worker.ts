@@ -1,14 +1,11 @@
 import {
   GeneratePasswordRequestType,
-  isBeginExtensionPairingMessage,
   isExtensionIdentityHandoffRequestMessage,
-  isExtensionLocalEventLogUpdatedMessage,
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairedVaultUnlockRequestMessage,
-  isOpenCompanionLauncherMessage,
-  isOpenSimpleVaultMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
+import { normalizeOpenCompanionLauncherMessage } from '../../../nook-web-shared/src/extension/companion-launcher-message-adapter'
 import { isAuthenticationWorkflowSnapshotMessage } from '../lib/auth-workflow-messages'
 import {
   isAuthenticatorPickerCancelMessage,
@@ -25,11 +22,6 @@ import {
   isWebsiteAuthenticatorEnrollPreviewMessage,
   isWebsiteAuthenticatorEnrollStageMessage,
 } from '../lib/enrollment-messages'
-import {
-  isQueryActiveTabLoginDetectionMessage,
-  LoginDetectionStatus,
-  type LoginDetectionResponse,
-} from '../lib/login-detection-messages'
 import {
   isWebsiteAuthenticatorFillMessage,
   isWebsiteAuthenticatorOptionsMessage,
@@ -49,7 +41,6 @@ import {
   isWebsiteLoginSavePendingMessage,
 } from '../lib/login-save-messages'
 import { isAuthenticationOutcomeClassifyMessage } from '../lib/outcome-evidence-messages'
-import { isExtensionPairingStateQueryMessage } from '../lib/pairing-state'
 import {
   isWebsitePasskeyCancelMessage,
   isWebsitePasskeyOptionsMessage,
@@ -87,15 +78,15 @@ import {
   discoverPairedVaultIdentity,
   hasPairingApprovedType,
   isAuthorizedWebsiteSender,
-  isNokeySender,
   openExtensionPairing,
   requestPairedVaultUnlock,
 } from './service-worker/pairing-identity'
-import { handlePairingStateQuery } from './service-worker/pairing-state-query'
 import {
-  importPairingAfterCompanionReady,
   importLocalEventLogUpdate,
+  importPairingAfterCompanionReady,
 } from './service-worker/pairing-import'
+import { handlePairingStateQuery } from './service-worker/pairing-state-query'
+import { isExtensionPairingStateQueryMessage } from '../lib/pairing-state'
 import {
   cancelWebsitePasskey,
   matchingPasskeyAccountCountForOriginSafe,
@@ -103,16 +94,23 @@ import {
   websitePasskeyOptions,
 } from './service-worker/passkey-operations'
 import {
+  ExtensionLifecycleRoutingResult,
+  routeExtensionLifecycleMessage,
+} from './service-worker/extension-lifecycle-routing'
+import { routeExternalCompanionMessage } from './service-worker/external-companion-routing'
+import {
   closeExtensionSessionDocument,
   ensureExtensionSessionDocument,
   extensionSessionDocument,
-  isExtensionSessionEnsureMessage,
-  isExtensionSessionExpiryMessage,
-  isExtensionSessionLockMessage,
   openCompanionLauncher,
   openSimpleVault,
   queryActiveTabLoginDetection,
 } from './service-worker/session-lifecycle'
+import {
+  isExtensionSessionEnsureMessage,
+  isExtensionSessionExpiryMessage,
+  isExtensionSessionLockMessage,
+} from './service-worker/session-runtime-messages'
 import {
   AuthenticationWorkflowSnapshotKind,
   authenticationWorkflowSnapshot,
@@ -120,16 +118,57 @@ import {
   generateSuggestedPassword,
 } from './vault-runtime'
 
+const extensionLifecycleRoutingDependencies: Parameters<
+  typeof routeExtensionLifecycleMessage
+>[0]['dependencies'] = {
+  closeExtensionSessionDocument,
+  ensureExtensionSessionDocument,
+  extensionSessionDocument,
+  handlePairingStateQuery,
+  hasPairingApprovedType,
+  importLocalEventLogUpdate,
+  importPairingAfterCompanionReady,
+  isExtensionPairingStateQueryMessage,
+  isExtensionSessionEnsureMessage,
+  isExtensionSessionExpiryMessage,
+  isExtensionSessionLockMessage,
+  openCompanionLauncher,
+  openExtensionPairing,
+  openSimpleVault,
+  queryActiveTabLoginDetection,
+}
+
+const externalCompanionRoutingDependencies: Parameters<
+  typeof routeExternalCompanionMessage
+>[0]['dependencies'] = {
+  createIdentityHandoff,
+  discoverPairedVaultIdentity,
+  hasPairingApprovedType,
+  importPairingAfterCompanionReady,
+  isExtensionIdentityHandoffRequestMessage,
+  isExtensionPairedVaultIdentityDiscoveryMessage,
+  isExtensionPairedVaultIdentityHandoffRequestMessage,
+  isExtensionPairedVaultUnlockRequestMessage,
+  normalizeOpenCompanionLauncherMessage,
+  openCompanionLauncher,
+  requestPairedVaultUnlock,
+}
+
 // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
 chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
   const message = runtimeMessage
-  if (isExtensionPairingStateQueryMessage(message)) {
-    const queryContext: Parameters<typeof handlePairingStateQuery>[0] = {
-      sender,
-      sendResponse,
-    }
-    return handlePairingStateQuery(queryContext)
+  const lifecycleRoutingArgs: Parameters<
+    typeof routeExtensionLifecycleMessage
+  >[0] = {
+    dependencies: extensionLifecycleRoutingDependencies,
+    message,
+    sender,
+    sendResponse,
+  }
+  const lifecycleResult = routeExtensionLifecycleMessage(lifecycleRoutingArgs)
+  if (lifecycleResult !== ExtensionLifecycleRoutingResult.Unhandled) {
+    return lifecycleResult
   }
 
   if (isWebsiteLoginPickerOpenMessage(message)) {
@@ -684,193 +723,6 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isExtensionSessionEnsureMessage(message)) {
-    if (sender.id !== chrome.runtime.id) {
-      const nookTypedArgs0_6: Parameters<typeof sendResponse>[0] = {
-        ok: false,
-        reason: 'forbidden-sender',
-      }
-      sendResponse(nookTypedArgs0_6)
-      return false
-    }
-    void ensureExtensionSessionDocument()
-      .then(() => {
-        const nookArrowArgs33: Parameters<typeof sendResponse>[0] = { ok: true }
-        return sendResponse(nookArrowArgs33)
-      })
-      .catch(() => {
-        const nookArrowArgs34: Parameters<typeof sendResponse>[0] = {
-          ok: false,
-          reason: 'session-runtime-failed',
-        }
-        return sendResponse(nookArrowArgs34)
-      })
-    return true
-  }
-
-  if (isExtensionSessionLockMessage(message)) {
-    const senderUrlAllowed =
-      !('url' in sender) ||
-      (typeof sender.url === 'string' &&
-        sender.url.startsWith(chrome.runtime.getURL('')))
-    const extensionSender = sender.id === chrome.runtime.id && senderUrlAllowed
-    if (!extensionSender) {
-      const nookTypedArgs0_7: Parameters<typeof sendResponse>[0] = {
-        ok: false,
-        reason: 'forbidden-sender',
-      }
-      sendResponse(nookTypedArgs0_7)
-      return false
-    }
-    void closeExtensionSessionDocument()
-      .then(() => {
-        const nookArrowArgs35: Parameters<typeof sendResponse>[0] = { ok: true }
-        return sendResponse(nookArrowArgs35)
-      })
-      .catch(() => {
-        const nookArrowArgs36: Parameters<typeof sendResponse>[0] = {
-          ok: false,
-          reason: 'session-lock-failed',
-        }
-        return sendResponse(nookArrowArgs36)
-      })
-    return true
-  }
-
-  if (isExtensionSessionExpiryMessage(message)) {
-    if (
-      sender.id !== chrome.runtime.id ||
-      !sender.url?.endsWith(`/${extensionSessionDocument}`)
-    ) {
-      const nookTypedArgs0_8: Parameters<typeof sendResponse>[0] = {
-        ok: false,
-        reason: 'forbidden-sender',
-      }
-      sendResponse(nookTypedArgs0_8)
-      return false
-    }
-    void closeExtensionSessionDocument().then(() => {
-      const nookArrowArgs37: Parameters<typeof sendResponse>[0] = { ok: true }
-      return sendResponse(nookArrowArgs37)
-    })
-    return true
-  }
-
-  if (hasPairingApprovedType(message)) {
-    if (sender.id !== chrome.runtime.id) {
-      const nookTypedArgs0_10: Parameters<typeof sendResponse>[0] = {
-        ok: false,
-        reason: 'forbidden-sender',
-      }
-      sendResponse(nookTypedArgs0_10)
-      return false
-    }
-
-    void importPairingAfterCompanionReady(message).then(sendResponse)
-    return true
-  }
-
-  if (isExtensionLocalEventLogUpdatedMessage(message)) {
-    if (sender.id !== chrome.runtime.id || !isNokeySender(sender)) {
-      const nookTypedArgs0_11: Parameters<typeof sendResponse>[0] = {
-        ok: false,
-        reason: 'forbidden-sender',
-      }
-      sendResponse(nookTypedArgs0_11)
-      return false
-    }
-    const nookTypedArgs0_12: Parameters<typeof importLocalEventLogUpdate>[0] = {
-      vaultStoreId: message.payload.vaultStoreId,
-      eventLogRecords: message.payload.eventLogRecords,
-    }
-    void importLocalEventLogUpdate(nookTypedArgs0_12).then(sendResponse)
-    return true
-  }
-
-  if (isQueryActiveTabLoginDetectionMessage(message)) {
-    if (sender.id !== chrome.runtime.id) {
-      const nookTypedArgs0_13: Parameters<typeof sendResponse>[0] = {
-        ok: false,
-        reason: 'forbidden-sender',
-      }
-      sendResponse(nookTypedArgs0_13)
-      return false
-    }
-    void queryActiveTabLoginDetection()
-      .then(sendResponse)
-      .catch(() => {
-        const nookArrowArgs38: Parameters<typeof sendResponse>[0] = {
-          ok: true,
-          status: LoginDetectionStatus.Unavailable,
-        } satisfies LoginDetectionResponse
-        return sendResponse(nookArrowArgs38)
-      })
-    return true
-  }
-
-  if (isOpenSimpleVaultMessage(message)) {
-    if (sender.id !== chrome.runtime.id) {
-      const nookTypedArgs0_14: Parameters<typeof sendResponse>[0] = {
-        ok: false,
-        reason: 'forbidden-sender',
-      }
-      sendResponse(nookTypedArgs0_14)
-      return false
-    }
-    openSimpleVault()
-    const nookTypedArgs0_15: Parameters<typeof sendResponse>[0] = { ok: true }
-    sendResponse(nookTypedArgs0_15)
-    return false
-  }
-
-  if (isOpenCompanionLauncherMessage(message)) {
-    if (sender.id !== chrome.runtime.id) {
-      const nookTypedArgs0_16: Parameters<typeof sendResponse>[0] = {
-        ok: false,
-        reason: 'forbidden-sender',
-      }
-      sendResponse(nookTypedArgs0_16)
-      return false
-    }
-    void openCompanionLauncher(message.payload?.intent)
-      .then(() => {
-        const nookArrowArgs39: Parameters<typeof sendResponse>[0] = { ok: true }
-        return sendResponse(nookArrowArgs39)
-      })
-      .catch(() => {
-        const nookArrowArgs40: Parameters<typeof sendResponse>[0] = {
-          ok: false,
-          reason: 'launcher-failed',
-        }
-        return sendResponse(nookArrowArgs40)
-      })
-    return true
-  }
-
-  if (isBeginExtensionPairingMessage(message)) {
-    if (sender.id !== chrome.runtime.id) {
-      const nookTypedArgs0_17: Parameters<typeof sendResponse>[0] = {
-        ok: false,
-        reason: 'forbidden-sender',
-      }
-      sendResponse(nookTypedArgs0_17)
-      return false
-    }
-    void openExtensionPairing(message.payload)
-      .then(() => {
-        const nookArrowArgs41: Parameters<typeof sendResponse>[0] = { ok: true }
-        return sendResponse(nookArrowArgs41)
-      })
-      .catch(() => {
-        const nookArrowArgs42: Parameters<typeof sendResponse>[0] = {
-          ok: false,
-          reason: 'pairing-launch-failed',
-        }
-        return sendResponse(nookArrowArgs42)
-      })
-    return true
-  }
-
   return false
 })
 
@@ -879,104 +731,14 @@ chrome.runtime.onMessageExternal.addListener(
   (runtimeMessage, sender, sendResponse) => {
     if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
     const message = runtimeMessage
-    if (isOpenCompanionLauncherMessage(message)) {
-      if (!isNokeySender(sender)) {
-        const nookTypedArgs0_18: Parameters<typeof sendResponse>[0] = {
-          ok: false,
-          reason: 'forbidden-sender',
-        }
-        sendResponse(nookTypedArgs0_18)
-        return false
-      }
-      void openCompanionLauncher(message.payload?.intent)
-        .then(() => {
-          const nookArrowArgs43: Parameters<typeof sendResponse>[0] = {
-            ok: true,
-          }
-          return sendResponse(nookArrowArgs43)
-        })
-        .catch(() => {
-          const nookArrowArgs44: Parameters<typeof sendResponse>[0] = {
-            ok: false,
-            reason: 'launcher-failed',
-          }
-          return sendResponse(nookArrowArgs44)
-        })
-      return true
+    const externalRoutingArgs: Parameters<
+      typeof routeExternalCompanionMessage
+    >[0] = {
+      dependencies: externalCompanionRoutingDependencies,
+      message,
+      sender,
+      sendResponse,
     }
-
-    if (isExtensionPairedVaultIdentityDiscoveryMessage(message)) {
-      if (!isNokeySender(sender)) {
-        const nookTypedArgs0_19: Parameters<typeof sendResponse>[0] = {
-          ok: false,
-          reason: 'forbidden-sender',
-        }
-        sendResponse(nookTypedArgs0_19)
-        return false
-      }
-      void discoverPairedVaultIdentity(message).then(sendResponse)
-      return true
-    }
-
-    if (isExtensionPairedVaultUnlockRequestMessage(message)) {
-      if (!isNokeySender(sender)) {
-        const nookTypedArgs0_20: Parameters<typeof sendResponse>[0] = {
-          ok: false,
-          reason: 'forbidden-sender',
-        }
-        sendResponse(nookTypedArgs0_20)
-        return false
-      }
-      void requestPairedVaultUnlock(message)
-        .then(sendResponse)
-        .catch(() => {
-          const nookArrowArgs45: Parameters<typeof sendResponse>[0] = {
-            ok: false,
-            requestId: message.payload.requestId,
-            vaultStoreId: message.payload.vaultStoreId,
-            reason: 'unlock-launch-failed',
-          }
-          return sendResponse(nookArrowArgs45)
-        })
-      return true
-    }
-
-    if (isExtensionIdentityHandoffRequestMessage(message)) {
-      if (!isNokeySender(sender)) {
-        const nookTypedArgs0_21: Parameters<typeof sendResponse>[0] = {
-          ok: false,
-          reason: 'forbidden-sender',
-        }
-        sendResponse(nookTypedArgs0_21)
-        return false
-      }
-      void createIdentityHandoff(message).then(sendResponse)
-      return true
-    }
-
-    if (isExtensionPairedVaultIdentityHandoffRequestMessage(message)) {
-      if (!isNokeySender(sender)) {
-        const nookTypedArgs0_22: Parameters<typeof sendResponse>[0] = {
-          ok: false,
-          reason: 'forbidden-sender',
-        }
-        sendResponse(nookTypedArgs0_22)
-        return false
-      }
-      void createIdentityHandoff(message).then(sendResponse)
-      return true
-    }
-
-    if (!hasPairingApprovedType(message) || !isNokeySender(sender)) {
-      const nookTypedArgs0_23: Parameters<typeof sendResponse>[0] = {
-        ok: false,
-        reason: 'invalid-pairing-grant',
-      }
-      sendResponse(nookTypedArgs0_23)
-      return false
-    }
-
-    void importPairingAfterCompanionReady(message).then(sendResponse)
-    return true
+    return routeExternalCompanionMessage(externalRoutingArgs)
   },
 )

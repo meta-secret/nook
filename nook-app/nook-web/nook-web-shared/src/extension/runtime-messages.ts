@@ -2,18 +2,51 @@ import {
   isExtensionConnectScopeValue,
   type ExtensionConnectScope,
 } from "./extension-connect-scope";
-import type { ExtensionVaultEventPayload } from "./nook-companion-wasm/nook_companion_wasm";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "./paired-vault-identity-status";
+import {
+  OpenCompanionLauncherIntent,
+  OpenCompanionLauncherMessageType,
+  type OpenCompanionLauncherMessage,
+} from "./companion-launcher-message";
+import { isOpenCompanionLauncherMessage } from "./companion-launcher-message-adapter";
+import {
+  BeginExtensionPairingMessageType,
+  ExtensionLocalEventLogUpdatedMessageType,
+  OpenSimpleVaultMessageType,
+  type BeginExtensionPairingMessage,
+  type ExtensionEventLogRecord,
+  type ExtensionLocalEventLogUpdatedMessage,
+  type OpenSimpleVaultMessage,
+} from "./lifecycle-runtime-messages";
+import {
+  hasRuntimeMessageType,
+  isBeginExtensionPairingMessage,
+  isExtensionLocalEventLogUpdatedMessage,
+  isOpenSimpleVaultMessage,
+} from "./lifecycle-runtime-message-adapter";
+
+export {
+  BeginExtensionPairingMessageType,
+  ExtensionLocalEventLogUpdatedMessageType,
+  isBeginExtensionPairingMessage,
+  isExtensionLocalEventLogUpdatedMessage,
+  isOpenCompanionLauncherMessage,
+  isOpenSimpleVaultMessage,
+  OpenCompanionLauncherIntent,
+  OpenCompanionLauncherMessageType,
+  OpenSimpleVaultMessageType,
+  type BeginExtensionPairingMessage,
+  type ExtensionEventLogRecord,
+  type ExtensionLocalEventLogUpdatedMessage,
+  type OpenCompanionLauncherMessage,
+  type OpenSimpleVaultMessage,
+};
 
 export { ExtensionPairedVaultIdentityStatusMessageStatus };
 
 export enum ExtensionPairingVaultType {
   Simple = "simple",
   Sentinel = "sentinel",
-}
-
-export enum OpenSimpleVaultMessageType {
-  NookOpenSimpleVault = "nook:open-simple-vault",
 }
 
 export enum GeneratePasswordRequestType {
@@ -23,35 +56,6 @@ export enum GeneratePasswordRequestType {
 export type GeneratePasswordRequest = {
   type: GeneratePasswordRequestType.NookWebsiteGeneratePassword;
   payload: { origin: string };
-};
-
-export type OpenSimpleVaultMessage = {
-  type: OpenSimpleVaultMessageType.NookOpenSimpleVault;
-};
-
-export enum OpenCompanionLauncherMessageType {
-  NookOpenCompanionLauncher = "nook:open-companion-launcher",
-}
-
-export type OpenCompanionLauncherMessage = {
-  type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher;
-  payload?: {
-    intent: "pair";
-  };
-};
-
-export enum BeginExtensionPairingMessageType {
-  NookBeginExtensionPairing = "nook:begin-extension-pairing",
-}
-
-export type BeginExtensionPairingMessage = {
-  type: BeginExtensionPairingMessageType.NookBeginExtensionPairing;
-  payload: {
-    deviceId: string;
-    devicePublicKey: string;
-    deviceSigningPublicKey: string;
-    deviceLabel: string;
-  };
 };
 
 export type ExtensionPairingApprovedGrant = {
@@ -79,12 +83,6 @@ export type ExtensionStorageProviderPayload = {
   type: `${ExtensionStorageProviderType}`;
 };
 
-export type ExtensionEventLogRecord = {
-  eventId: string;
-  path: string;
-  event: ExtensionVaultEventPayload;
-};
-
 export enum ExtensionPairingApprovedMessageType {
   NookExtensionPairingApproved = "nook:extension-pairing-approved",
 }
@@ -93,18 +91,6 @@ export type ExtensionPairingApprovedMessage = {
   type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved;
   payload: ExtensionPairingApprovedGrant;
   eventLogRecords: ExtensionEventLogRecord[];
-};
-
-export enum ExtensionLocalEventLogUpdatedMessageType {
-  NookExtensionLocalEventLogUpdated = "nook:extension-local-event-log-updated",
-}
-
-export type ExtensionLocalEventLogUpdatedMessage = {
-  type: ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated;
-  payload: {
-    vaultStoreId: string;
-    eventLogRecords: ExtensionEventLogRecord[];
-  };
 };
 
 export enum ExtensionIdentityHandoffRequestMessageType {
@@ -210,6 +196,10 @@ export type RuntimeMessage =
   | ExtensionPairingApprovedMessage
   | ExtensionLocalEventLogUpdatedMessage;
 
+export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
+  return hasRuntimeMessageType(message);
+}
+
 function isExtensionEventLogRecord(
   value: unknown,
 ): value is ExtensionEventLogRecord {
@@ -239,68 +229,6 @@ function isExtensionEventLogRecords(
     Array.isArray(value) &&
     value.length > 0 &&
     value.every(isExtensionEventLogRecord)
-  );
-}
-
-export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
-  return (
-    !!message &&
-    typeof message === "object" &&
-    "type" in message &&
-    typeof message.type === "string"
-  );
-}
-
-export function isOpenSimpleVaultMessage(
-  message: unknown,
-): message is OpenSimpleVaultMessage {
-  return (
-    isRuntimeMessage(message) &&
-    message.type === OpenSimpleVaultMessageType.NookOpenSimpleVault
-  );
-}
-
-export function isOpenCompanionLauncherMessage(
-  message: unknown,
-): message is OpenCompanionLauncherMessage {
-  if (
-    !isRuntimeMessage(message) ||
-    message.type !== OpenCompanionLauncherMessageType.NookOpenCompanionLauncher
-  ) {
-    return false;
-  }
-  if (!("payload" in message)) return true;
-  const payload = message.payload;
-  return (
-    !!payload &&
-    typeof payload === "object" &&
-    "intent" in payload &&
-    payload.intent === "pair"
-  );
-}
-
-export function isBeginExtensionPairingMessage(
-  message: unknown,
-): message is BeginExtensionPairingMessage {
-  if (
-    !isRuntimeMessage(message) ||
-    message.type !==
-      BeginExtensionPairingMessageType.NookBeginExtensionPairing ||
-    typeof (message as { payload?: unknown }).payload !== "object" ||
-    !(message as { payload?: unknown }).payload
-  ) {
-    return false;
-  }
-  const payload = (message as { payload: Record<string, unknown> }).payload;
-  return (
-    typeof payload.deviceId === "string" &&
-    payload.deviceId.length > 0 &&
-    typeof payload.devicePublicKey === "string" &&
-    payload.devicePublicKey.length > 0 &&
-    typeof payload.deviceSigningPublicKey === "string" &&
-    payload.deviceSigningPublicKey.length > 0 &&
-    typeof payload.deviceLabel === "string" &&
-    payload.deviceLabel.length > 0
   );
 }
 
@@ -532,25 +460,5 @@ function isExtensionStorageProviderPayload(
       provider.type === ExtensionStorageProviderType.LocalFolder ||
       provider.type === ExtensionStorageProviderType.Github ||
       provider.type === ExtensionStorageProviderType.OAuthFile)
-  );
-}
-
-export function isExtensionLocalEventLogUpdatedMessage(
-  message: unknown,
-): message is ExtensionLocalEventLogUpdatedMessage {
-  if (
-    !isRuntimeMessage(message) ||
-    message.type !==
-      ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated ||
-    typeof (message as { payload?: unknown }).payload !== "object" ||
-    !(message as { payload?: unknown }).payload
-  ) {
-    return false;
-  }
-  const payload = (message as { payload: Record<string, unknown> }).payload;
-  return (
-    typeof payload.vaultStoreId === "string" &&
-    payload.vaultStoreId.length > 0 &&
-    isExtensionEventLogRecords(payload.eventLogRecords)
   );
 }
