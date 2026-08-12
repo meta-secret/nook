@@ -151,7 +151,7 @@ export class VaultState extends VaultRuntimeState {
   /**
    * First-time setup: create an empty local vault secured by this device's keys.
    */
-  async createLocalVaultWithDeviceKeys(label?: string): Promise<void> {
+  async createLocalVaultWithDeviceKeys(label: string): Promise<void> {
     const createLocalVaultWithDeviceKeysArgs: Parameters<
       typeof localLoginActions.createLocalVaultWithDeviceKeys
     >[0] = { state: this, label };
@@ -236,7 +236,7 @@ export class VaultState extends VaultRuntimeState {
     return deviceProtectionActions.lockDeviceProtection(this);
   }
 
-  async loadProviders(options?: { ensureLocalRow?: boolean }) {
+  async loadProviders(options: providersActions.ProviderLoadOptions) {
     const loadProvidersArgs: Parameters<
       typeof providersActions.loadProviders
     >[0] = { state: this, options };
@@ -247,7 +247,7 @@ export class VaultState extends VaultRuntimeState {
     return providersActions.applyActiveProviderCredentials(this);
   }
 
-  async persistProviders(opts?: { replace?: boolean }) {
+  async persistProviders(opts: providersActions.ProviderPersistenceOptions) {
     const persistProvidersArgs: Parameters<
       typeof providersActions.persistProviders
     >[0] = { state: this, opts };

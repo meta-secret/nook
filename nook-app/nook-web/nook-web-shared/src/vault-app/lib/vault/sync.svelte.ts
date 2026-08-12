@@ -376,7 +376,10 @@ export async function updateProviderSyncMetadata({
     } finally {
       managerStoreScope.free();
     }
-    await state.persistProviders();
+    const persistenceOptions: Parameters<typeof state.persistProviders>[0] = {
+      replace: false,
+    };
+    await state.persistProviders(persistenceOptions);
     state.markSynced(Date.now());
   } finally {
     revision.free();

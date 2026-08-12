@@ -285,13 +285,48 @@ export function syncOAuthRemoteRefFromManager(
   }
 }
 
+export interface VaultConnectAssessmentRequest {
+  readonly state: ProviderActionsContext;
+  readonly args: [string, string, string];
+}
+
+export interface RemoteVaultAssessmentHandling {
+  readonly state: ProviderActionsContext;
+  readonly accessStatus: VaultAccessStatus;
+}
+
+export interface ProviderLoadOptions {
+  readonly ensureLocalRow: boolean;
+}
+
+export interface ProviderLoad {
+  readonly state: ProviderActionsContext;
+  readonly options: ProviderLoadOptions;
+}
+
+export interface ProviderPersistenceOptions {
+  readonly replace: boolean;
+}
+
+export interface ProviderPersistence {
+  readonly state: ProviderActionsContext;
+  readonly opts: ProviderPersistenceOptions;
+}
+
+export interface ProviderSetup {
+  readonly state: ProviderActionsContext;
+  readonly request: ProviderSetupRequest;
+}
+
+export interface ProviderRemoval {
+  readonly state: ProviderActionsContext;
+  readonly id: string;
+}
+
 export async function assessVaultConnectStatus({
   state,
   args,
-}: {
-  readonly state: ProviderActionsContext;
-  readonly args: [string, string, string];
-}): Promise<VaultAccessStatus> {
+}: VaultConnectAssessmentRequest): Promise<VaultAccessStatus> {
   if (!state.hasManager)
     throw new Error(state.t(I18N_KEYS.ErrorsEngineUnavailable));
   const manager = state.requireManager();
@@ -315,10 +350,7 @@ export async function assessVaultConnectStatus({
 export async function handleRemoteVaultAssessStatus({
   state,
   accessStatus,
-}: {
-  readonly state: ProviderActionsContext;
-  readonly accessStatus: VaultAccessStatus;
-}): Promise<boolean> {
+}: RemoteVaultAssessmentHandling): Promise<boolean> {
   const decision = state.clientPolicy.remote_vault_assess_decision(
     accessStatus,
     state.loginRequiresExistingVault,
@@ -371,15 +403,9 @@ function resetICloudSignInState(state: ProviderActionsContext) {
   state.icloudOAuthBusy = false;
 }
 
-export async function loadProviders({
-  state,
-  options,
-}: {
-  readonly state: ProviderActionsContext;
-  readonly options?: { ensureLocalRow?: boolean };
-}) {
+export async function loadProviders({ state, options }: ProviderLoad) {
   const snapshot = await state.enqueueStorage(() =>
-    options?.ensureLocalRow
+    options.ensureLocalRow
       ? state.requireManager().load_auth_providers_with_local_row()
       : state.requireManager().load_auth_providers_snapshot(),
   );
@@ -500,14 +526,8 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
   }
 }
 
-export async function persistProviders({
-  state,
-  opts,
-}: {
-  readonly state: ProviderActionsContext;
-  readonly opts?: { replace?: boolean };
-}) {
-  if (!opts?.replace && state.localVaultPresent) {
+export async function persistProviders({ state, opts }: ProviderPersistence) {
+  if (!opts.replace && state.localVaultPresent) {
     const snapshot = await state.enqueueStorage(() =>
       state.requireManager().load_auth_providers_snapshot(),
     );
@@ -535,13 +555,7 @@ export async function persistProviders({
   );
 }
 
-export function beginProviderSetup({
-  state,
-  request,
-}: {
-  readonly state: ProviderActionsContext;
-  readonly request: ProviderSetupRequest;
-}) {
+export function beginProviderSetup({ state, request }: ProviderSetup) {
   const { type } = request;
   if (!state.isAuthenticated) {
     state.resetVaultSessionState();
@@ -630,10 +644,7 @@ export function cancelProviderSetup(state: ProviderActionsContext) {
 export async function removeProvider({
   state,
   id,
-}: {
-  readonly state: ProviderActionsContext;
-  readonly id: string;
-}): Promise<void> {
+}: ProviderRemoval): Promise<void> {
   const target = state.providers.find((p) => p.id === id);
   if (!target || target.type === "local") return;
 
@@ -728,7 +739,10 @@ export async function ensureProviderSaved(
     state.loginRequiresExistingVault = false;
     state.addProviderOpen = false;
     state.applyActiveProviderCredentials();
-    await state.persistProviders();
+    const persistenceOptions: Parameters<typeof state.persistProviders>[0] = {
+      replace: false,
+    };
+    await state.persistProviders(persistenceOptions);
     log.info("sync provider saved");
     return true;
   } finally {

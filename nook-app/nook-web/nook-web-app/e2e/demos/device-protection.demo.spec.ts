@@ -112,6 +112,8 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+  await expect(page.getByTestId('authenticated-shell')).toBeVisible()
   await demoBeat(page)
 })
 

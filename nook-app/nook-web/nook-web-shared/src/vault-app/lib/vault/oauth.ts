@@ -76,6 +76,51 @@ export type ICloudSignInRequest = {
   readonly clickPreparedControl: boolean;
 };
 
+interface SharedICloudTargetBinding {
+  readonly config: OAuthFileConfig;
+  readonly storageTargetId: string;
+}
+
+export interface GoogleDriveModeSelection {
+  readonly state: VaultState;
+  readonly mode: GoogleDriveMode;
+}
+
+export interface ICloudModeSelection {
+  readonly state: VaultState;
+  readonly mode: ICloudMode;
+}
+
+export interface ICloudSharedProviderAccess {
+  readonly state: VaultState;
+  readonly shareReference: string;
+}
+
+export interface GoogleSharedFolderCreation {
+  readonly state: VaultState;
+  readonly collaboratorEmail: string;
+}
+
+export interface GoogleSharedFolderAccess {
+  readonly state: VaultState;
+  readonly folderRef: string;
+}
+
+interface ICloudTokenApplication {
+  readonly state: VaultState;
+  readonly tokens: ICloudOAuthTokens;
+}
+
+interface OAuthOriginRequirement {
+  readonly state: VaultState;
+  readonly provider: BrowserOAuthProvider;
+}
+
+interface GoogleTokenApplication {
+  readonly state: VaultState;
+  readonly tokens: GoogleOAuthTokens;
+}
+
 export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
   if (
     state.storageMode !== "oauth-file" ||
@@ -123,7 +168,10 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
         ? { ...provider, oauthFile: configuredOAuthFile(refreshed) }
         : provider,
     );
-    await state.persistProviders();
+    const persistenceOptions: Parameters<typeof state.persistProviders>[0] = {
+      replace: false,
+    };
+    await state.persistProviders(persistenceOptions);
   }
   log.info("oauth token freshness check refreshed provider");
 }
@@ -131,10 +179,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
 function bindSharedICloudTarget({
   config,
   storageTargetId,
-}: {
-  readonly config: OAuthFileConfig;
-  readonly storageTargetId: string;
-}): OAuthFileConfig {
+}: SharedICloudTargetBinding): OAuthFileConfig {
   const sharedConfig: OAuthFileConfig = {
     ...config,
     iCloudMode: "shared",
@@ -202,10 +247,7 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
 export function selectGoogleDriveMode({
   state,
   mode,
-}: {
-  readonly state: VaultState;
-  readonly mode: GoogleDriveMode;
-}): void {
+}: GoogleDriveModeSelection): void {
   if (state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured) return;
   const oauthFile = state.oauthFileDraft.config;
   if (oauthFile.preset !== "google-drive") return;
@@ -216,13 +258,7 @@ export function selectGoogleDriveMode({
   state.errorMsg = "";
 }
 
-export function selectICloudMode({
-  state,
-  mode,
-}: {
-  readonly state: VaultState;
-  readonly mode: ICloudMode;
-}): void {
+export function selectICloudMode({ state, mode }: ICloudModeSelection): void {
   if (state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured) return;
   const oauthFile = state.oauthFileDraft.config;
   if (oauthFile.preset !== "icloud") return;
@@ -273,10 +309,7 @@ export async function createICloudSharedProvider(
 export async function useICloudSharedProvider({
   state,
   shareReference,
-}: {
-  readonly state: VaultState;
-  readonly shareReference: string;
-}): Promise<void> {
+}: ICloudSharedProviderAccess): Promise<void> {
   if (
     state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
     oauthAccessToken(state.oauthFileDraft.config).kind ===
@@ -312,10 +345,7 @@ export async function useICloudSharedProvider({
 export async function createGoogleSharedFolder({
   state,
   collaboratorEmail,
-}: {
-  readonly state: VaultState;
-  readonly collaboratorEmail: string;
-}): Promise<string> {
+}: GoogleSharedFolderCreation): Promise<string> {
   if (state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured) {
     throw new Error(state.t(I18N_KEYS.ProviderSetupGoogleSharedSignInFirst));
   }
@@ -391,10 +421,7 @@ export async function createGoogleSharedFolder({
 export async function useGoogleSharedFolder({
   state,
   folderRef,
-}: {
-  readonly state: VaultState;
-  readonly folderRef: string;
-}): Promise<string> {
+}: GoogleSharedFolderAccess): Promise<string> {
   const accessCredential =
     state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? oauthAccessToken(state.oauthFileDraft.config)
@@ -547,10 +574,7 @@ export async function prepareICloudSignIn(state: VaultState): Promise<void> {
 async function applyICloudOAuthTokens({
   state,
   tokens,
-}: {
-  readonly state: VaultState;
-  readonly tokens: ICloudOAuthTokens;
-}): Promise<void> {
+}: ICloudTokenApplication): Promise<void> {
   state.activateLoginSetup("oauth-file");
   if (!state.addProviderOpen) {
     state.storageMode = "oauth-file";
@@ -588,10 +612,7 @@ async function applyICloudOAuthTokens({
 function ensureSupportedOAuthOrigin({
   state,
   provider,
-}: {
-  readonly state: VaultState;
-  readonly provider: BrowserOAuthProvider;
-}): boolean {
+}: OAuthOriginRequirement): boolean {
   const support = resolveCurrentOAuthOriginSupport(provider);
   if (support.supported) {
     log.info("oauth origin supported");
@@ -612,10 +633,7 @@ function ensureSupportedOAuthOrigin({
 async function applyGoogleOAuthTokens({
   state,
   tokens,
-}: {
-  readonly state: VaultState;
-  readonly tokens: GoogleOAuthTokens;
-}): Promise<void> {
+}: GoogleTokenApplication): Promise<void> {
   const email = await fetchGoogleAccountEmail(tokens.accessToken);
   const sharedFolderName = state.githubRepo.trim();
   state.activateLoginSetup("oauth-file");

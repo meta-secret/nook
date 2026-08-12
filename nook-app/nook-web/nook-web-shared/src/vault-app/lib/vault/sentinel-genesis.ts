@@ -18,6 +18,42 @@ type ReplaceOwnedWasmValuesArgs<T extends { free: () => void }> = {
   readonly replacement: T[];
 };
 
+export interface SentinelGenesisStatusUpdate {
+  readonly state: VaultState;
+  readonly status: NookSentinelGenesisStatus;
+}
+
+export interface SentinelGenesisFinalization {
+  readonly state: VaultState;
+  readonly result: NookSentinelGenesisFinalizeResult;
+}
+
+export interface SentinelGenesisStart {
+  readonly state: VaultState;
+  readonly args: StartSentinelGenesisArgs;
+}
+
+export interface SentinelGenesisParticipantResponseAddition {
+  readonly state: VaultState;
+  readonly payload: string;
+  readonly participantLabel: string;
+}
+
+export interface SentinelGenesisRequestPayload {
+  readonly state: VaultState;
+  readonly requestPayload: string;
+}
+
+export interface SentinelGenesisShareDelivery {
+  readonly state: VaultState;
+  readonly payload: string;
+}
+
+export interface SentinelOnboardingPackageAcceptance {
+  readonly state: VaultState;
+  readonly packageJson: string;
+}
+
 function replaceOwnedWasmValues<T extends { free: () => void }>({
   current,
   replacement,
@@ -43,10 +79,7 @@ export function releaseResults(state: VaultState): void {
 export function applyStatus({
   state,
   status,
-}: {
-  readonly state: VaultState;
-  readonly status: NookSentinelGenesisStatus;
-}): void {
+}: SentinelGenesisStatusUpdate): void {
   const participants = status.participants;
   state.sentinelGenesisParticipantCount = participants.length;
   const replaceOwnedWasmValuesArgs3: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisParticipantStatus> =
@@ -64,10 +97,7 @@ export function applyStatus({
 export function applyFinalizeResult({
   state,
   result,
-}: {
-  readonly state: VaultState;
-  readonly result: NookSentinelGenesisFinalizeResult;
-}): void {
+}: SentinelGenesisFinalization): void {
   state.sentinelGenesisPhase = result.phase;
   state.selectSentinelGenesisStore(result.storeId);
   state.openActiveVault(result.storeId);
@@ -86,10 +116,7 @@ export function applyFinalizeResult({
 export async function start({
   state,
   args,
-}: {
-  readonly state: VaultState;
-  readonly args: StartSentinelGenesisArgs;
-}): Promise<void> {
+}: SentinelGenesisStart): Promise<void> {
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return;
   state.isVerifying = true;
@@ -126,11 +153,7 @@ export async function addParticipantResponse({
   state,
   payload,
   participantLabel,
-}: {
-  readonly state: VaultState;
-  readonly payload: string;
-  readonly participantLabel: string;
-}): Promise<void> {
+}: SentinelGenesisParticipantResponseAddition): Promise<void> {
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return;
   state.isVerifying = true;
@@ -190,10 +213,7 @@ export async function createPublicKeyAnnouncement(
 export async function rememberRequest({
   state,
   requestPayload,
-}: {
-  readonly state: VaultState;
-  readonly requestPayload: string;
-}): Promise<void> {
+}: SentinelGenesisRequestPayload): Promise<void> {
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return;
   state.isVerifying = true;
@@ -218,10 +238,7 @@ export async function rememberRequest({
 export async function createParticipantResponse({
   state,
   requestPayload,
-}: {
-  readonly state: VaultState;
-  readonly requestPayload: string;
-}): Promise<string> {
+}: SentinelGenesisRequestPayload): Promise<string> {
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return "";
   state.isVerifying = true;
@@ -275,10 +292,7 @@ export async function finalize(state: VaultState): Promise<void> {
 export async function acceptShareDelivery({
   state,
   payload,
-}: {
-  readonly state: VaultState;
-  readonly payload: string;
-}): Promise<void> {
+}: SentinelGenesisShareDelivery): Promise<void> {
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return;
   state.isVerifying = true;
@@ -330,10 +344,7 @@ export async function completeDelivery(state: VaultState): Promise<void> {
 export async function acceptOnboardingPackage({
   state,
   packageJson,
-}: {
-  readonly state: VaultState;
-  readonly packageJson: string;
-}): Promise<void> {
+}: SentinelOnboardingPackageAcceptance): Promise<void> {
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   state.errorMsg = "";
   const storeId = await state.enqueueStorage(() =>
@@ -341,7 +352,10 @@ export async function acceptOnboardingPackage({
   );
   state.openActiveVault(storeId);
   await set_active_vault(storeId);
-  await state.loadProviders();
+  const providerLoadOptions: Parameters<typeof state.loadProviders>[0] = {
+    ensureLocalRow: false,
+  };
+  await state.loadProviders(providerLoadOptions);
   state.applyActiveProviderCredentials();
   await state.loadDb();
   state.sentinelGenesisPhase = state.requireManager().sentinelGenesisPhase;

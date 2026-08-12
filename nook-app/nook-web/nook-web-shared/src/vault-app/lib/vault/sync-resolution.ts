@@ -31,15 +31,23 @@ import { refreshLoginUnlockCapabilities } from "$lib/vault/login-unlock-capabili
 
 const log = createLogger("vault-sync-resolution");
 
+export interface ReplacementConflictResolution {
+  readonly state: SyncActionsContext;
+  readonly oldSecretId: string;
+  readonly chosenSecretId: string;
+}
+
+interface SyncConflictResumption {
+  readonly state: SyncActionsContext;
+  readonly providerId: string;
+  readonly pendingProvider: boolean;
+}
+
 export async function resolveReplacementConflict({
   state,
   oldSecretId,
   chosenSecretId,
-}: {
-  readonly state: SyncActionsContext;
-  readonly oldSecretId: string;
-  readonly chosenSecretId: string;
-}): Promise<void> {
+}: ReplacementConflictResolution): Promise<void> {
   if (!state.hasManager || state.isSaving) return;
   state.isSaving = true;
   state.errorMsg = "";
@@ -191,11 +199,7 @@ async function resumeConnectAfterSyncConflict({
   state,
   providerId,
   pendingProvider,
-}: {
-  readonly state: SyncActionsContext;
-  readonly providerId: string;
-  readonly pendingProvider: boolean;
-}): Promise<void> {
+}: SyncConflictResumption): Promise<void> {
   if (state.isAuthenticated) {
     if (!pendingProvider) {
       const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[0] =
@@ -316,7 +320,10 @@ export async function resolveSyncConflictImportRemote(
             }
           : provider,
       );
-      await state.persistProviders();
+      const persistenceOptions: Parameters<typeof state.persistProviders>[0] = {
+        replace: false,
+      };
+      await state.persistProviders(persistenceOptions);
     }
     state.finishStagedProviderConnectAfterConflict(conflict);
     state.clearPendingSyncConflict();

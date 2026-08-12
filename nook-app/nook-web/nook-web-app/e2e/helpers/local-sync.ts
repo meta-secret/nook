@@ -34,7 +34,7 @@ import {
   assertVaultReady,
   dismissSyncConflictIfVisible,
   ensureLoginLocalUnlockReady,
-  invokeVaultLoadProviders,
+  invokeInitializedVaultProviderReload,
   selectLoginUnlockMethod,
   unlockVaultOnLogin,
   waitForStableLocalVaultState,
@@ -630,16 +630,7 @@ export async function seedGithubSyncProvidersWhileUnlocked(
       vaultYaml,
     })
   }
-  await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault?: { loadProviders?: () => Promise<void> }
-      }
-    ).__nookVault
-    if (vault?.loadProviders) {
-      await vault.loadProviders()
-    }
-  })
+  await invokeInitializedVaultProviderReload(page)
   await waitForLoadedSyncProviders(page, expectedSyncProviderCount)
   await forceVaultQuiescentForE2e(page)
 }
@@ -664,16 +655,7 @@ export async function seedOauthFileSyncProvidersWhileUnlocked(
       sharedStub,
     )
   }
-  await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault?: { loadProviders?: () => Promise<void> }
-      }
-    ).__nookVault
-    if (vault?.loadProviders) {
-      await vault.loadProviders()
-    }
-  })
+  await invokeInitializedVaultProviderReload(page)
   await waitForLoadedSyncProviders(page, expectedSyncProviderCount)
   await forceVaultQuiescentForE2e(page)
 }
@@ -794,7 +776,7 @@ export async function waitForLoadedSyncProviders(
           }
         })
         if (state.authenticated && state.count < minCount) {
-          await invokeVaultLoadProviders(page).catch(() => {})
+          await invokeInitializedVaultProviderReload(page).catch(() => {})
         }
         return state.authenticated ? state.count : -1
       },

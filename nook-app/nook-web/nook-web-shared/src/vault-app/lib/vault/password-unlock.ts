@@ -219,7 +219,10 @@ export async function unlockWithPassword({
     state.applyConnectedSecretPage(connectedPageArgs);
     if (state.deviceProtectionReady) {
       await state.ensureProviderSaved();
-      await state.loadProviders();
+      const providerLoadOptions: Parameters<typeof state.loadProviders>[0] = {
+        ensureLocalRow: false,
+      };
+      await state.loadProviders(providerLoadOptions);
     }
     await state.refreshPasswordEntriesList();
     if (state.deviceProtectionReady) {

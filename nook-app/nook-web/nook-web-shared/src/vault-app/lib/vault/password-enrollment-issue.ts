@@ -279,7 +279,10 @@ export async function issueEnrollmentCode({
           state.providers = state.providers.map((row) =>
             row.id === selectedProvider.id ? enrollmentProviderRow : row,
           );
-          await state.persistProviders();
+          const persistenceOptions: Parameters<
+            typeof state.persistProviders
+          >[0] = { replace: false };
+          await state.persistProviders(persistenceOptions);
 
           if (
             (() => {

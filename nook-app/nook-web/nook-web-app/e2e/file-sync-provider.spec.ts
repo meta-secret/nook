@@ -8,6 +8,7 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   revealSecretValue,
   seedExtraOauthFileProviders,
+  invokeInitializedVaultProviderReload,
   sendJoinRequestLocalE2e,
   uniqueSecretKey,
   waitForLoadedSyncProviders,
@@ -223,14 +224,7 @@ async function addFileBackupProvider(
       accountEmail: `${opts.id}@e2e.local`,
     },
   ])
-  await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault?: { loadProviders?: () => Promise<void> }
-      }
-    ).__nookVault
-    await vault?.loadProviders?.()
-  })
+  await invokeInitializedVaultProviderReload(page)
   await waitForLoadedSyncProviders(page, opts.minProviderCount)
   await flushFileProviders(page)
   await waitForFileEvents(target, 1)

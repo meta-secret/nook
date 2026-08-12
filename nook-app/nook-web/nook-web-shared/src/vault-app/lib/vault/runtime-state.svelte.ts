@@ -57,6 +57,11 @@ export type SyncProviderLabel =
   | { kind: SyncProviderLabelKind.Idle }
   | { kind: SyncProviderLabelKind.Active; label: string };
 
+interface StorageTimeoutRace<T> {
+  readonly promise: Promise<T>;
+  readonly label: string;
+}
+
 /** Shared runtime, provider, locale, and queue capabilities for the vault facade. */
 export abstract class VaultRuntimeState extends VaultLifecycleState {
   secretPageGeneration = 0;
@@ -164,13 +169,7 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
 
   static storageOpTimeoutMs = 20_000;
 
-  raceStorageTimeout<T>({
-    promise,
-    label,
-  }: {
-    readonly promise: Promise<T>;
-    readonly label: string;
-  }): Promise<T> {
+  raceStorageTimeout<T>({ promise, label }: StorageTimeoutRace<T>): Promise<T> {
     const timeoutMs = VaultRuntimeState.storageOpTimeoutMs;
     return Promise.race([
       promise,

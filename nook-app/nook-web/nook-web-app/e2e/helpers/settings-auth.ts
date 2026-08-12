@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 import { UnlockMethod } from '$lib/components/login/login-unlock-state'
+import type { ProviderLoadOptions } from '$lib/vault/providers.svelte'
 import { parseVaultYamlSnapshot, type VaultYamlSnapshot } from '../vault-yaml'
 import { E2E_OAUTH_ONBOARD_PROVIDER } from './auth-providers'
 import {
@@ -19,6 +20,14 @@ import {
   waitForGoogleOAuthSignedIn,
   waitForVaultOperationsIdle,
 } from './vault-runtime'
+
+interface VaultProviderReload {
+  readonly loadProviders: (options: ProviderLoadOptions) => Promise<void>
+}
+
+interface VaultProviderReloadWindow extends Window {
+  readonly __nookVault: VaultProviderReload
+}
 
 /** Expand the login enrollment accordion on the login gate. */
 export async function expandLoginEnrollmentPanel(page: Page) {
@@ -527,19 +536,37 @@ export async function authorizeDeviceProtection(
   await waitForVaultOperationsIdle(page)
 }
 
-export async function invokeVaultLoadProviders(page: Page) {
+export async function invokeInitializedVaultProviderReload(page: Page) {
   await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault?: {
-          isAuthenticated?: boolean
-          loadProviders?: () => Promise<void>
-        }
-      }
-    ).__nookVault
-    if (vault?.isAuthenticated && vault.loadProviders) {
-      await vault.loadProviders()
+    enum VaultProviderReloadAvailabilityKind {
+      Available = 'available',
+      Unavailable = 'unavailable',
     }
+
+    interface AvailableVaultProviderReload {
+      readonly kind: VaultProviderReloadAvailabilityKind.Available
+      readonly vault: VaultProviderReload
+    }
+
+    interface UnavailableVaultProviderReload {
+      readonly kind: VaultProviderReloadAvailabilityKind.Unavailable
+    }
+
+    type VaultProviderReloadAvailability =
+      AvailableVaultProviderReload | UnavailableVaultProviderReload
+
+    const availability: VaultProviderReloadAvailability =
+      '__nookVault' in window
+        ? {
+            kind: VaultProviderReloadAvailabilityKind.Available,
+            vault: (window as VaultProviderReloadWindow).__nookVault,
+          }
+        : { kind: VaultProviderReloadAvailabilityKind.Unavailable }
+    if (availability.kind === VaultProviderReloadAvailabilityKind.Unavailable) {
+      throw new Error('Initialized vault provider reload is unavailable')
+    }
+    const options: ProviderLoadOptions = { ensureLocalRow: false }
+    await availability.vault.loadProviders(options)
   })
 }
 
