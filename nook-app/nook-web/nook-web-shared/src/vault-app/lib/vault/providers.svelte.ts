@@ -12,8 +12,6 @@ import {
   configuredLocalFolder,
   configuredOAuthFile,
   GITHUB_PROVIDER_TYPE,
-  githubPatValue,
-  githubRepositoryValue,
   LOCAL_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
   localFolderHandle,
@@ -49,6 +47,7 @@ import {
 } from "$lib/auth/providers";
 import {
   apply_provider_save_policy,
+  active_provider_credentials_projection,
   authenticated_vault_storage_args,
   draft_github_storage_args,
   draft_local_storage_args,
@@ -76,6 +75,7 @@ import {
   update_oauth_remote_ref,
   local_vault_storage_args,
   type NookStorageConnectArgs,
+  type ActiveProviderCredentialsRequest,
   type ProviderSaveRequest,
 } from "$app-wasm";
 import { createLogger } from "$lib/runtime/log";
@@ -458,70 +458,41 @@ export async function promoteSessionVaultToLocalIfNeeded(
 }
 
 export function applyActiveProviderCredentials(state: ProviderActionsContext) {
-  if (state.localVaultPresent) {
-    state.storageMode = "local";
-    state.githubPat = "";
-    state.clearOauthFile();
-    state.clearLocalFolder();
-    return;
-  }
-
-  if (state.loginSetup.kind === LoginSetupKind.Active) {
-    const setupType = state.loginSetup.providerType;
-    state.storageMode = setupType;
-    if (setupType !== "github") {
-      state.githubPat = "";
-    }
-    if (setupType !== "oauth-file") {
-      state.clearOauthFile();
-    }
-    if (setupType !== "local-folder") {
-      state.clearLocalFolder();
-    }
-    return;
-  }
-
-  const syncProvider = state.syncProviders[0];
-  if (!syncProvider) {
-    return;
-  }
-
-  state.storageMode = syncProvider.type;
-  state.githubPat = githubPatValue(syncProvider.githubPat);
-  if (syncProvider.type === "oauth-file") {
-    const oauthConfiguration = syncProvider.oauthFile;
-    if (isConfiguredOAuthFile(oauthConfiguration)) {
-      state.configureOauthFile(oauthConfiguration.config);
-    } else {
-      state.clearOauthFile();
-    }
-    state.clearLocalFolder();
-    const remoteFileName: OAuthFileName = isConfiguredOAuthFile(
-      oauthConfiguration,
-    )
-      ? oauthFileName(oauthConfiguration.config)
-      : { kind: OAuthFileNameKind.Unresolved };
-    state.githubRepo =
-      remoteFileName.kind === OAuthFileNameKind.Resolved
-        ? remoteFileName.fileName
-        : DEFAULT_DRIVE_BACKUP_NAME;
-  } else if (syncProvider.type === "local-folder") {
-    const localFolderConfiguration =
-      localFolderProviderConfiguration(syncProvider);
-    if (
-      localFolderConfiguration.kind ===
-      LocalFolderProviderConfigurationKind.Configured
-    ) {
-      state.configureLocalFolder(localFolderConfiguration.config);
-    } else {
-      state.clearLocalFolder();
-    }
-    state.githubRepo = DEFAULT_GITHUB_REPO;
-    state.clearOauthFile();
+  const currentOauthFile =
+    state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? configuredOAuthFile($state.snapshot(state.oauthFileDraft.config))
+      : oauthConfigurationNotApplicable();
+  const currentLocalFolder =
+    state.localFolderDraft.kind === LocalFolderDraftKind.Configured
+      ? configuredLocalFolder($state.snapshot(state.localFolderDraft.config))
+      : localFolderConfigurationNotApplicable();
+  const projectionArgs: ActiveProviderCredentialsRequest = {
+    localVaultPresent: state.localVaultPresent,
+    loginSetupActive: state.loginSetup.kind === LoginSetupKind.Active,
+    loginSetupProviderType:
+      state.loginSetup.kind === LoginSetupKind.Active
+        ? state.loginSetup.providerType
+        : state.storageMode,
+    syncProviders: $state.snapshot(state.syncProviders),
+    currentStorageMode: state.storageMode,
+    currentGithubPat: state.githubPat,
+    currentGithubRepo: state.githubRepo,
+    currentOauthFile,
+    currentLocalFolder,
+  };
+  const projection = active_provider_credentials_projection(projectionArgs);
+  if (!projection.apply) return;
+  state.storageMode = projection.storageMode;
+  state.githubPat = projection.githubPat;
+  state.githubRepo = projection.githubRepo;
+  if (isConfiguredOAuthFile(projection.oauthFile)) {
+    state.configureOauthFile(projection.oauthFile.config);
   } else {
-    state.githubRepo =
-      githubRepositoryValue(syncProvider.githubRepo) || DEFAULT_GITHUB_REPO;
     state.clearOauthFile();
+  }
+  if (projection.localFolder.state === "configured") {
+    state.configureLocalFolder(projection.localFolder.config);
+  } else {
     state.clearLocalFolder();
   }
 }

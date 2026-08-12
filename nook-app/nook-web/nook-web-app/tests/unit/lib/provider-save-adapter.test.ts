@@ -3,7 +3,10 @@ import type { Mock } from 'vitest'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
   GITHUB_PROVIDER_TYPE,
+  LOCAL_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
+  localFolderConfigurationNotApplicable,
+  oauthConfigurationNotApplicable,
   providerPersistenceDefaults,
   scopedProviderVault,
   storedGithubPat,
@@ -11,6 +14,10 @@ import {
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth/providers'
+import {
+  active_provider_credentials_projection,
+  type ActiveProviderCredentialsRequest,
+} from '$app-wasm'
 import type { ProviderSaveContext } from '$lib/vault/action-contexts'
 import { ensureProviderSaved } from '$lib/vault/providers.svelte'
 import type { TranslationRequest } from '$lib/vault/translation'
@@ -78,6 +85,28 @@ function githubProvider(): StorageProvider {
 }
 
 describe('provider save web adapter', () => {
+  test('projects active provider credentials through portable wasm policy', () => {
+    const request: ActiveProviderCredentialsRequest = {
+      localVaultPresent: false,
+      loginSetupActive: false,
+      loginSetupProviderType: LOCAL_PROVIDER_TYPE,
+      syncProviders: [githubProvider()],
+      currentStorageMode: LOCAL_PROVIDER_TYPE,
+      currentGithubPat: '',
+      currentGithubRepo: 'nook',
+      currentOauthFile: oauthConfigurationNotApplicable(),
+      currentLocalFolder: localFolderConfigurationNotApplicable(),
+    }
+
+    const projection = active_provider_credentials_projection(request)
+
+    expect(projection.storageMode).toBe(GITHUB_PROVIDER_TYPE)
+    expect(projection.githubPat).toBe('pat')
+    expect(projection.githubRepo).toBe('owner/repo')
+    expect(projection.oauthFile.state).toBe('notApplicable')
+    expect(projection.localFolder.state).toBe('notApplicable')
+  })
+
   test('maps an explicit duplicate to translated state without persistence', async () => {
     const state = providerState(GITHUB_PROVIDER_TYPE)
     state.providers = [githubProvider()]

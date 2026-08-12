@@ -73,6 +73,17 @@ pub fn apply_provider_save_policy(
     NookProviderSaveOutcome(nook_core::apply_provider_save_policy(&request))
 }
 
+/// Project the active provider into a portable credential draft. Browser and
+/// reactive state updates remain in the web adapter.
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn active_provider_credentials_projection(
+    request: nook_core::ActiveProviderCredentialsRequest,
+) -> nook_core::ActiveProviderCredentialsProjection {
+    nook_core::active_provider_credentials_projection(&request)
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Load the persisted sync-provider snapshot from `nook_auth`, including
