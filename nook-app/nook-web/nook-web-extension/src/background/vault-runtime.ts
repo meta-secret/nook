@@ -129,6 +129,7 @@ export async function reconcileExtensionPairingItems({
 export enum AuthenticationWorkflowSnapshotKind {
   Matched = 'matched',
   NoMatch = 'no-match',
+  Rejected = 'rejected',
 }
 
 export type AuthenticationWorkflowSnapshot =
@@ -143,6 +144,9 @@ export async function authenticationWorkflowSnapshot(
 ): Promise<AuthenticationWorkflowSnapshot> {
   await companionWasmReady
   const workflowMatch = classify_companion_authentication_workflow(input)
+  if (workflowMatch.kind === AuthenticationWorkflowSnapshotKind.Rejected) {
+    throw new Error('authentication workflow observations were rejected')
+  }
   if (workflowMatch.kind === AuthenticationWorkflowSnapshotKind.NoMatch) {
     return { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
   }

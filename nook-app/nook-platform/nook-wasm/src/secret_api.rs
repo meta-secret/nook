@@ -423,7 +423,7 @@ mod wasm_tests {
         observations.add(&excessive_field_count);
         assert_eq!(
             authentication_workflow_snapshot(&observations).state(),
-            NookAuthenticationWorkflowMatchState::NoMatch
+            NookAuthenticationWorkflowMatchState::Rejected
         );
 
         let valid_login =
@@ -434,7 +434,7 @@ mod wasm_tests {
         }
         assert_eq!(
             authentication_workflow_snapshot(&observations).state(),
-            NookAuthenticationWorkflowMatchState::NoMatch
+            NookAuthenticationWorkflowMatchState::Rejected
         );
     }
 

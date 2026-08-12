@@ -208,9 +208,6 @@ pub fn matching_extension_persistence_stores(
 pub fn classify_companion_authentication_workflow(
     input: nook_companion_core::AuthenticationPageObservations,
 ) -> nook_companion_core::AuthenticationWorkflowMatch {
-    if !nook_companion_core::authentication_page_observations_are_valid(&input.observations) {
-        return nook_companion_core::AuthenticationWorkflowMatch::NoMatch;
-    }
     nook_companion_core::classify_authentication_workflow_candidates(&input.observations)
 }
 
@@ -619,7 +616,7 @@ mod tests {
         };
         assert_eq!(
             classify_companion_authentication_workflow(input),
-            nook_companion_core::AuthenticationWorkflowMatch::NoMatch
+            nook_companion_core::AuthenticationWorkflowMatch::Rejected
         );
     }
 }

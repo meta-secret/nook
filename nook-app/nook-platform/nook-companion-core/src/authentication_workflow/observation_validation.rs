@@ -66,7 +66,7 @@ mod tests {
         }];
         assert_eq!(
             classify_authentication_workflow_candidates(&excessive_field_count),
-            AuthenticationWorkflowMatch::NoMatch
+            AuthenticationWorkflowMatch::Rejected
         );
 
         let excessive_pages = vec![
@@ -79,7 +79,7 @@ mod tests {
         ];
         assert_eq!(
             classify_authentication_workflow_candidates(&excessive_pages),
-            AuthenticationWorkflowMatch::NoMatch
+            AuthenticationWorkflowMatch::Rejected
         );
     }
 }

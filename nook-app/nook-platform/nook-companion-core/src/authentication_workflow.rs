@@ -79,6 +79,7 @@ pub struct AuthenticationWorkflowSnapshot {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationWorkflowMatch {
     NoMatch,
+    Rejected,
     Matched(AuthenticationWorkflowSnapshot),
 }
 
@@ -94,7 +95,7 @@ impl AuthenticationWorkflowMatch {
         self,
     ) -> Result<AuthenticationWorkflowSnapshot, AuthenticationWorkflowNotDetected> {
         match self {
-            Self::NoMatch => Err(AuthenticationWorkflowNotDetected),
+            Self::NoMatch | Self::Rejected => Err(AuthenticationWorkflowNotDetected),
             Self::Matched(snapshot) => Ok(snapshot),
         }
     }
@@ -166,7 +167,7 @@ pub fn classify_authentication_workflow_candidates(
     observations: &[AuthenticationPageObservation],
 ) -> AuthenticationWorkflowMatch {
     if !authentication_page_observations_are_valid(observations) {
-        return AuthenticationWorkflowMatch::NoMatch;
+        return AuthenticationWorkflowMatch::Rejected;
     }
 
     let mut selected = AuthenticationWorkflowMatch::NoMatch;
@@ -179,6 +180,7 @@ pub fn classify_authentication_workflow_candidates(
         candidate.observation_index = u32::try_from(index).unwrap_or(u32::MAX);
         let replace = match selected {
             AuthenticationWorkflowMatch::NoMatch => true,
+            AuthenticationWorkflowMatch::Rejected => false,
             AuthenticationWorkflowMatch::Matched(current) => {
                 workflow_candidate_priority(candidate) > workflow_candidate_priority(current)
             }
