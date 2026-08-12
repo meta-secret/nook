@@ -296,21 +296,21 @@ export interface RemoteVaultAssessmentHandling {
 }
 
 export interface ProviderLoadOptions {
-  readonly ensureLocalRow?: boolean;
+  readonly ensureLocalRow: boolean;
 }
 
 export interface ProviderLoad {
   readonly state: ProviderActionsContext;
-  readonly options?: ProviderLoadOptions;
+  readonly options: ProviderLoadOptions;
 }
 
 export interface ProviderPersistenceOptions {
-  readonly replace?: boolean;
+  readonly replace: boolean;
 }
 
 export interface ProviderPersistence {
   readonly state: ProviderActionsContext;
-  readonly opts?: ProviderPersistenceOptions;
+  readonly opts: ProviderPersistenceOptions;
 }
 
 export interface ProviderSetup {
@@ -405,7 +405,7 @@ function resetICloudSignInState(state: ProviderActionsContext) {
 
 export async function loadProviders({ state, options }: ProviderLoad) {
   const snapshot = await state.enqueueStorage(() =>
-    options?.ensureLocalRow
+    options.ensureLocalRow
       ? state.requireManager().load_auth_providers_with_local_row()
       : state.requireManager().load_auth_providers_snapshot(),
   );
@@ -527,7 +527,7 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
 }
 
 export async function persistProviders({ state, opts }: ProviderPersistence) {
-  if (!opts?.replace && state.localVaultPresent) {
+  if (!opts.replace && state.localVaultPresent) {
     const snapshot = await state.enqueueStorage(() =>
       state.requireManager().load_auth_providers_snapshot(),
     );
@@ -739,7 +739,10 @@ export async function ensureProviderSaved(
     state.loginRequiresExistingVault = false;
     state.addProviderOpen = false;
     state.applyActiveProviderCredentials();
-    await state.persistProviders();
+    const persistenceOptions: Parameters<typeof state.persistProviders>[0] = {
+      replace: false,
+    };
+    await state.persistProviders(persistenceOptions);
     log.info("sync provider saved");
     return true;
   } finally {

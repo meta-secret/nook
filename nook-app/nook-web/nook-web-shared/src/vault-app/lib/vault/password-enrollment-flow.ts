@@ -194,7 +194,10 @@ export async function connectWithEnrollmentCode({
         kind: SharedStorageTargetKind.Bound,
         storageTargetId: enrollmentProvider.sharedStorageTargetId,
       };
-      await state.loadProviders();
+      const providerLoadOptions: Parameters<typeof state.loadProviders>[0] = {
+        ensureLocalRow: false,
+      };
+      await state.loadProviders(providerLoadOptions);
       const findSharedGrantProviderArgs: Parameters<
         typeof findSharedGrantProvider
       >[0] = { providers: state.providers, preset, target: storageTarget };
@@ -390,7 +393,10 @@ export async function connectWithEnrollmentCode({
       state.clearLocalFolder();
       enrollmentStorageArgs = state.providerWasmArgs(oauthProvider);
     } else {
-      await state.loadProviders();
+      const providerLoadOptions2: Parameters<typeof state.loadProviders>[0] = {
+        ensureLocalRow: false,
+      };
+      await state.loadProviders(providerLoadOptions2);
       const hasLocalPasswordEntries = await localVaultHasPasswordEntries(state);
       let selection: SavedEnrollmentProvider = {
         kind: SavedEnrollmentProviderKind.Local,
@@ -448,7 +454,10 @@ export async function connectWithEnrollmentCode({
     await state.refreshLocalVaultCatalog();
     await state.syncActiveVaultStoreIdToAuth();
     await state.ensureProviderSaved();
-    await state.loadProviders();
+    const providerLoadOptions3: Parameters<typeof state.loadProviders>[0] = {
+      ensureLocalRow: false,
+    };
+    await state.loadProviders(providerLoadOptions3);
     await state.refreshPasswordEntriesList();
     void state.hydrateMultiDeviceState();
     state.markVaultUnlocked();

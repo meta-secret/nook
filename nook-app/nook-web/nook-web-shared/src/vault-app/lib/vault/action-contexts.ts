@@ -94,7 +94,7 @@ interface SharedStorageActionsContext {
   t(request: TranslationRequest): string;
 }
 
-type ProviderPersistenceOptions = { replace?: boolean };
+type ProviderPersistenceOptions = { readonly replace: boolean };
 type VaultStorageArguments = [string, string, string];
 
 export type ProviderSyncRequest = {
@@ -120,7 +120,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
     accessStatus: VaultAccessStatus,
   ): Promise<boolean>;
   loadDb(): Promise<void>;
-  persistProviders(options?: ProviderPersistenceOptions): Promise<void>;
+  persistProviders(options: ProviderPersistenceOptions): Promise<void>;
   resetVaultSessionState(resetManager?: boolean): void;
   refreshPasswordEntriesList(): Promise<boolean>;
   showSuccess(message: string): void;
@@ -228,7 +228,7 @@ type SyncStateFields = Pick<
   scheduleSync(request: SyncScheduleRequest): void;
 };
 
-type SyncProviderPersistenceOptions = { replace?: boolean };
+type SyncProviderPersistenceOptions = { readonly replace: boolean };
 
 type StorageTimeoutRace<T> = {
   readonly promise: Promise<T>;
@@ -271,7 +271,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   hydrateMultiDeviceState(): Promise<void>;
   initDeviceIdentity(): Promise<void>;
   loadDb(): Promise<void>;
-  persistProviders(options?: SyncProviderPersistenceOptions): Promise<void>;
+  persistProviders(options: SyncProviderPersistenceOptions): Promise<void>;
   providerWasmArgs(provider: StorageProvider): [string, string, string];
   raceStorageTimeout<T>(request: StorageTimeoutRace<T>): Promise<T>;
   assessVaultConnectStatus(

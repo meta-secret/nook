@@ -40,19 +40,19 @@ interface PasskeyCeremonyLogEntry {
   readonly data: ReturnType<typeof sanitizedPasskeyCeremonyData>;
 }
 
-export interface DeviceProtectionSetup {
+interface VaultDeviceProtectionSetupRequest {
   readonly state: VaultState;
   readonly passkeyLabel: string;
   readonly deviceMode: DeviceMode;
 }
 
-export interface PinDeviceProtectionSetup {
+interface PinDeviceProtectionSetupRequest {
   readonly state: VaultState;
   readonly pin: string;
   readonly confirmPin: string;
 }
 
-export interface PinDeviceProtectionUnlock {
+interface PinDeviceProtectionUnlockRequest {
   readonly state: VaultState;
   readonly pin: string;
 }
@@ -125,7 +125,7 @@ export async function setupDeviceProtection({
   state,
   passkeyLabel,
   deviceMode,
-}: DeviceProtectionSetup): Promise<void> {
+}: VaultDeviceProtectionSetupRequest): Promise<void> {
   if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
@@ -284,7 +284,7 @@ export async function setupPinDeviceProtection({
   state,
   pin,
   confirmPin,
-}: PinDeviceProtectionSetup): Promise<void> {
+}: PinDeviceProtectionSetupRequest): Promise<void> {
   if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
@@ -364,7 +364,7 @@ export async function unlockDeviceProtection(state: VaultState): Promise<void> {
 export async function unlockPinDeviceProtection({
   state,
   pin,
-}: PinDeviceProtectionUnlock): Promise<void> {
+}: PinDeviceProtectionUnlockRequest): Promise<void> {
   if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";

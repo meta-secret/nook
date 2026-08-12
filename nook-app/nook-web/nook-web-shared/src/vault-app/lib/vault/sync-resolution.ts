@@ -320,7 +320,10 @@ export async function resolveSyncConflictImportRemote(
             }
           : provider,
       );
-      await state.persistProviders();
+      const persistenceOptions: Parameters<typeof state.persistProviders>[0] = {
+        replace: false,
+      };
+      await state.persistProviders(persistenceOptions);
     }
     state.finishStagedProviderConnectAfterConflict(conflict);
     state.clearPendingSyncConflict();

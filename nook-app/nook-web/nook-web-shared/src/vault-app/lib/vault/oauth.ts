@@ -168,7 +168,10 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
         ? { ...provider, oauthFile: configuredOAuthFile(refreshed) }
         : provider,
     );
-    await state.persistProviders();
+    const persistenceOptions: Parameters<typeof state.persistProviders>[0] = {
+      replace: false,
+    };
+    await state.persistProviders(persistenceOptions);
   }
   log.info("oauth token freshness check refreshed provider");
 }

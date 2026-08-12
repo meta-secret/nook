@@ -207,7 +207,10 @@ export async function loadDb(state: VaultState) {
     // while `syncProviders` is still empty and never push the event remotely.
     state.syncOAuthRemoteRefFromManager();
     await state.ensureProviderSaved();
-    await state.loadProviders();
+    const providerLoadOptions: Parameters<typeof state.loadProviders>[0] = {
+      ensureLocalRow: false,
+    };
+    await state.loadProviders(providerLoadOptions);
     await state.promoteSessionVaultToLocalIfNeeded();
     await state.refreshPasswordEntriesList();
     await state.hydrateMultiDeviceState();

@@ -257,7 +257,10 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
     replaceUnlockSession(replaceUnlockSessionArgs3);
     state.sentinelUnlockStatus = SentinelVaultUnlockState.Unlocked;
     await state.ensureProviderSaved();
-    await state.loadProviders();
+    const providerLoadOptions: Parameters<typeof state.loadProviders>[0] = {
+      ensureLocalRow: false,
+    };
+    await state.loadProviders(providerLoadOptions);
     await state.refreshPasswordEntriesList();
     void state.hydrateMultiDeviceState();
     state.markVaultUnlocked();

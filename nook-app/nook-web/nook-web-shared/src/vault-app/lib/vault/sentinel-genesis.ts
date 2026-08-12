@@ -352,7 +352,10 @@ export async function acceptOnboardingPackage({
   );
   state.openActiveVault(storeId);
   await set_active_vault(storeId);
-  await state.loadProviders();
+  const providerLoadOptions: Parameters<typeof state.loadProviders>[0] = {
+    ensureLocalRow: false,
+  };
+  await state.loadProviders(providerLoadOptions);
   state.applyActiveProviderCredentials();
   await state.loadDb();
   state.sentinelGenesisPhase = state.requireManager().sentinelGenesisPhase;
