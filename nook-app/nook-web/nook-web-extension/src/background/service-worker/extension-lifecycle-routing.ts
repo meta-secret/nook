@@ -11,9 +11,9 @@ import {
 } from './pairing-import'
 import {
   hasPairingApprovedType,
-  isNokeySender,
   openExtensionPairing,
 } from './pairing-identity'
+import { isExtensionRuntimeSender, isNokeySender } from './routing-trust'
 import { handlePairingStateQuery } from './pairing-state-query'
 import {
   closeExtensionSessionDocument,
@@ -86,7 +86,7 @@ export function routeExtensionLifecycleMessage({
   }
 
   if (isExtensionSessionEnsureMessage(message)) {
-    if (sender.id !== chrome.runtime.id) {
+    if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -101,7 +101,7 @@ export function routeExtensionLifecycleMessage({
       !('url' in sender) ||
       (typeof sender.url === 'string' &&
         sender.url.startsWith(chrome.runtime.getURL('')))
-    if (sender.id !== chrome.runtime.id || !senderUrlAllowed) {
+    if (!isExtensionRuntimeSender(sender) || !senderUrlAllowed) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -113,7 +113,7 @@ export function routeExtensionLifecycleMessage({
 
   if (isExtensionSessionExpiryMessage(message)) {
     if (
-      sender.id !== chrome.runtime.id ||
+      !isExtensionRuntimeSender(sender) ||
       !sender.url?.endsWith(`/${extensionSessionDocument}`)
     ) {
       sendResponse(forbiddenSenderResponse)
@@ -126,7 +126,7 @@ export function routeExtensionLifecycleMessage({
   }
 
   if (hasPairingApprovedType(message)) {
-    if (sender.id !== chrome.runtime.id) {
+    if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -135,7 +135,7 @@ export function routeExtensionLifecycleMessage({
   }
 
   if (isExtensionLocalEventLogUpdatedMessage(message)) {
-    if (sender.id !== chrome.runtime.id || !isNokeySender(sender)) {
+    if (!isExtensionRuntimeSender(sender) || !isNokeySender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -148,7 +148,7 @@ export function routeExtensionLifecycleMessage({
   }
 
   if (isQueryActiveTabLoginDetectionMessage(message)) {
-    if (sender.id !== chrome.runtime.id) {
+    if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -165,7 +165,7 @@ export function routeExtensionLifecycleMessage({
   }
 
   if (isOpenSimpleVaultMessage(message)) {
-    if (sender.id !== chrome.runtime.id) {
+    if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -175,7 +175,7 @@ export function routeExtensionLifecycleMessage({
   }
 
   if (isOpenCompanionLauncherMessage(message)) {
-    if (sender.id !== chrome.runtime.id) {
+    if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
@@ -186,7 +186,7 @@ export function routeExtensionLifecycleMessage({
   }
 
   if (isBeginExtensionPairingMessage(message)) {
-    if (sender.id !== chrome.runtime.id) {
+    if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }

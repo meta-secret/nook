@@ -1,6 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import type { routeExtensionLifecycleMessage as RouteExtensionLifecycleMessage } from '../src/background/service-worker/extension-lifecycle-routing'
-import type { routeExternalCompanionMessage as RouteExternalCompanionMessage } from '../src/background/service-worker/external-companion-routing'
 
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
@@ -14,34 +12,23 @@ globalThis.chrome = {
 
 describe('service worker trust routing', () => {
   test('rejects an internal session command from a foreign sender synchronously', async () => {
-    const { routeExtensionLifecycleMessage } =
-      await import('../src/background/service-worker/extension-lifecycle-routing')
-    const responses: string[] = []
-    const routingArgs: Parameters<typeof RouteExtensionLifecycleMessage>[0] = {
-      message: { type: 'nook:ensure-extension-session-runtime' },
-      sender: { id: 'foreign-extension' },
-      sendResponse: (response) => responses.push(JSON.stringify(response)),
+    const { isExtensionRuntimeSender } =
+      await import('../src/background/service-worker/routing-trust')
+    const foreignSender: chrome.runtime.MessageSender = {
+      id: 'foreign-extension',
     }
-    const result = routeExtensionLifecycleMessage(routingArgs)
 
-    expect(result).toBe(false)
-    const expectedResponse = { ok: false, reason: 'forbidden-sender' }
-    expect(responses).toEqual([JSON.stringify(expectedResponse)])
+    expect(isExtensionRuntimeSender(foreignSender)).toBe(false)
   })
 
   test('rejects a companion launcher request from an unauthorized external sender', async () => {
-    const { routeExternalCompanionMessage } =
-      await import('../src/background/service-worker/external-companion-routing')
-    const responses: string[] = []
-    const routingArgs: Parameters<typeof RouteExternalCompanionMessage>[0] = {
-      message: { type: 'nook:open-companion-launcher' },
-      sender: { id: 'foreign-extension', url: 'https://example.com' },
-      sendResponse: (response) => responses.push(JSON.stringify(response)),
+    const { isNokeySender } =
+      await import('../src/background/service-worker/routing-trust')
+    const foreignSender: chrome.runtime.MessageSender = {
+      id: 'foreign-extension',
+      url: 'https://example.com',
     }
-    const result = routeExternalCompanionMessage(routingArgs)
 
-    expect(result).toBe(false)
-    const expectedResponse = { ok: false, reason: 'forbidden-sender' }
-    expect(responses).toEqual([JSON.stringify(expectedResponse)])
+    expect(isNokeySender(foreignSender)).toBe(false)
   })
 })

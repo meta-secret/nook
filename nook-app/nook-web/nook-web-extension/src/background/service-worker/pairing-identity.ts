@@ -12,10 +12,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
-import {
-  isRuntimeSimpleVaultUrl,
-  runtimeSimpleVaultUrl,
-} from '../../lib/simple-vault-runtime'
+import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
 import { WebsiteAuthenticatorResponseStatus } from '../../lib/login-fill-messages'
 import {
   extensionSessionInteractiveDeadline,
@@ -197,15 +194,6 @@ export async function openExtensionPairing(
     url: url.toString(),
   }
   void chrome.tabs.create(nookTypedArgs0_2)
-}
-
-export function isNokeySender(sender: chrome.runtime.MessageSender): boolean {
-  if (!sender.url) return false
-  try {
-    return isRuntimeSimpleVaultUrl(sender.url)
-  } catch {
-    return false
-  }
 }
 
 export function sendSessionMessage(

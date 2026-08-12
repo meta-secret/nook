@@ -10,9 +10,9 @@ import {
   createIdentityHandoff,
   discoverPairedVaultIdentity,
   hasPairingApprovedType,
-  isNokeySender,
   requestPairedVaultUnlock,
 } from './pairing-identity'
+import { isNokeySender } from './routing-trust'
 import { openCompanionLauncher } from './session-lifecycle'
 
 type ChromeMessageListener = Parameters<
