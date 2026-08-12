@@ -57,8 +57,32 @@ pub enum ActiveProviderCredentialsProjection {
     Apply(Box<ActiveProviderCredentialDraft>),
 }
 
+fn is_ecmascript_whitespace(character: char) -> bool {
+    matches!(
+        character,
+        '\u{0009}'
+            | '\u{000A}'
+            | '\u{000B}'
+            | '\u{000C}'
+            | '\u{000D}'
+            | '\u{0020}'
+            | '\u{00A0}'
+            | '\u{1680}'
+            | '\u{2028}'
+            | '\u{2029}'
+            | '\u{202F}'
+            | '\u{205F}'
+            | '\u{3000}'
+            | '\u{FEFF}'
+    ) || ('\u{2000}'..='\u{200A}').contains(&character)
+}
+
+fn trim_ecmascript_whitespace(value: &str) -> &str {
+    value.trim_matches(is_ecmascript_whitespace)
+}
+
 fn non_empty(value: &str) -> Option<&str> {
-    let value = value.trim();
+    let value = trim_ecmascript_whitespace(value);
     (!value.is_empty()).then_some(value)
 }
 
@@ -98,7 +122,7 @@ pub fn active_provider_credentials_projection(
     provider
         .github_pat
         .as_deref()
-        .map(str::trim)
+        .map(trim_ecmascript_whitespace)
         .unwrap_or_default()
         .clone_into(&mut draft.github_pat);
 
@@ -174,19 +198,22 @@ mod tests {
         }
     }
 
-    fn applied(projection: ActiveProviderCredentialsProjection) -> ActiveProviderCredentialDraft {
+    fn applied(
+        projection: ActiveProviderCredentialsProjection,
+    ) -> Result<ActiveProviderCredentialDraft, &'static str> {
         let ActiveProviderCredentialsProjection::Apply(draft) = projection else {
-            panic!("expected an applied credential draft");
+            return Err("expected an applied credential draft");
         };
-        *draft
+        Ok(*draft)
     }
 
     #[test]
-    fn local_vault_clears_remote_credentials_but_preserves_repository_draft() {
+    fn local_vault_clears_remote_credentials_but_preserves_repository_draft()
+    -> Result<(), &'static str> {
         let mut request = request();
         request.local_vault_present = true;
 
-        let projection = applied(active_provider_credentials_projection(&request));
+        let projection = applied(active_provider_credentials_projection(&request))?;
 
         assert_eq!(projection.storage_mode, StorageProviderType::Local);
         assert!(projection.github_pat.is_empty());
@@ -199,14 +226,15 @@ mod tests {
             projection.local_folder,
             StoredLocalFolderConfiguration::NotApplicable
         );
+        Ok(())
     }
 
     #[test]
-    fn login_setup_preserves_only_the_selected_provider_credentials() {
+    fn login_setup_preserves_only_the_selected_provider_credentials() -> Result<(), &'static str> {
         let mut request = request();
         request.login_setup = ActiveProviderLoginSetup::Active(StorageProviderType::OauthFile);
 
-        let projection = applied(active_provider_credentials_projection(&request));
+        let projection = applied(active_provider_credentials_projection(&request))?;
 
         assert_eq!(projection.storage_mode, StorageProviderType::OauthFile);
         assert!(projection.github_pat.is_empty());
@@ -219,6 +247,7 @@ mod tests {
             projection.local_folder,
             StoredLocalFolderConfiguration::NotApplicable
         );
+        Ok(())
     }
 
     #[test]
@@ -230,11 +259,12 @@ mod tests {
     }
 
     #[test]
-    fn github_provider_projects_pat_repo_and_clears_other_credentials() {
+    fn github_provider_projects_pat_repo_and_clears_other_credentials() -> Result<(), &'static str>
+    {
         let mut request = request();
         request.sync_providers = vec![provider(StorageProviderType::Github)];
 
-        let projection = applied(active_provider_credentials_projection(&request));
+        let projection = applied(active_provider_credentials_projection(&request))?;
 
         assert_eq!(projection.storage_mode, StorageProviderType::Github);
         assert_eq!(projection.github_pat, "provider-pat");
@@ -247,10 +277,11 @@ mod tests {
             projection.local_folder,
             StoredLocalFolderConfiguration::NotApplicable
         );
+        Ok(())
     }
 
     #[test]
-    fn oauth_provider_projects_configuration_and_remote_file_name() {
+    fn oauth_provider_projects_configuration_and_remote_file_name() -> Result<(), &'static str> {
         let oauth = OAuthFileConfigData {
             file_name: StoredOAuthRemoteFileName::FileName(" vault.yaml ".to_owned()),
             ..OAuthFileConfigData::default()
@@ -260,7 +291,7 @@ mod tests {
         let mut request = request();
         request.sync_providers = vec![provider];
 
-        let projection = applied(active_provider_credentials_projection(&request));
+        let projection = applied(active_provider_credentials_projection(&request))?;
 
         assert_eq!(projection.storage_mode, StorageProviderType::OauthFile);
         assert_eq!(projection.github_repo, "vault.yaml");
@@ -272,10 +303,11 @@ mod tests {
             projection.local_folder,
             StoredLocalFolderConfiguration::NotApplicable
         );
+        Ok(())
     }
 
     #[test]
-    fn local_folder_provider_projects_configuration_and_default_repo() {
+    fn local_folder_provider_projects_configuration_and_default_repo() -> Result<(), &'static str> {
         let folder = LocalFolderConfigData {
             handle_id: StoredLocalFolderHandle::HandleId("folder".to_owned()),
             ..LocalFolderConfigData::default()
@@ -285,7 +317,7 @@ mod tests {
         let mut request = request();
         request.sync_providers = vec![provider];
 
-        let projection = applied(active_provider_credentials_projection(&request));
+        let projection = applied(active_provider_credentials_projection(&request))?;
 
         assert_eq!(projection.storage_mode, StorageProviderType::LocalFolder);
         assert_eq!(projection.github_repo, DEFAULT_GITHUB_REPO_NAME);
@@ -297,5 +329,26 @@ mod tests {
             projection.oauth_file,
             StoredOAuthFileConfiguration::NotApplicable
         );
+        Ok(())
+    }
+
+    #[test]
+    fn provider_text_uses_ecmascript_whitespace_normalization() -> Result<(), &'static str> {
+        let mut provider = provider(StorageProviderType::Github);
+        provider.github_pat = StoredGithubPat::Token("\u{FEFF}provider-pat\u{FEFF}".to_owned());
+        provider.github_repo =
+            StoredGithubRepository::Repository("\u{FEFF}owner/repo\u{FEFF}".to_owned());
+        let mut request = request();
+        request.sync_providers = vec![provider];
+
+        let projection = applied(active_provider_credentials_projection(&request))?;
+
+        assert_eq!(projection.github_pat, "provider-pat");
+        assert_eq!(projection.github_repo, "owner/repo");
+        assert_eq!(
+            trim_ecmascript_whitespace("\u{0085}value\u{0085}"),
+            "\u{0085}value\u{0085}"
+        );
+        Ok(())
     }
 }
