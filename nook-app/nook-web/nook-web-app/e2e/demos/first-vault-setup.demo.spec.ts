@@ -1,8 +1,6 @@
 import { expect, test } from '../fixtures'
-import {
-  LOCAL_PROVIDER_TYPE,
-  type StorageProviderType,
-} from '../../../nook-web-shared/src/vault-app/lib/auth/providers'
+import { LOCAL_PROVIDER_TYPE } from '../../../nook-web-shared/src/vault-app/lib/auth/provider-types'
+import type { StorageProviderType } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   clearBrowserVault,
   connectLocalVault,
