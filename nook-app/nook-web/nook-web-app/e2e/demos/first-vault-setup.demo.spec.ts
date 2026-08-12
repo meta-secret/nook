@@ -47,6 +47,13 @@ test('open a new local vault without an empty-device sync error', async ({
     logs.some(
       (entry) =>
         entry.scope === 'vault-sync' &&
+        entry.message === 'vault sync timer started',
+    ),
+  ).toBe(true)
+  expect(
+    logs.some(
+      (entry) =>
+        entry.scope === 'vault-sync' &&
         entry.data?.includes('Vault crypto not initialized'),
     ),
   ).toBeFalsy()

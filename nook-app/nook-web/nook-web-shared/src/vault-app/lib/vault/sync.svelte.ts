@@ -9,26 +9,24 @@ import { createLogger, runtimeFailure } from "$lib/runtime/log";
 import {
   isoTimestamp,
   syncVaultFromStorage,
-  VaultAccessStatus,
   type JoinRequest,
-  type NookVaultSyncResult,
   type VaultMember,
 } from "$lib/nook";
 import {
-  JoinEnrollmentState,
   NookManagerStoreScope,
   NookEventLogSyncIssueState,
   NookLocalFolderHealthState,
   NookPendingSyncConflict,
   NookProviderSyncRevision,
   NookSyncConflictReview,
-  NookVaultSyncAccessState,
   ProviderSyncFailureHandling,
   ProviderSyncFreshness,
   ProviderSyncVisibility,
   read_local_vault_yaml,
-  UnauthenticatedSyncDecision,
   update_provider_sync_metadata,
+  VaultStorageSyncDecision,
+  VaultSyncTimerStartDecision,
+  VaultSyncTimerTickDecision,
 } from "$app-wasm";
 import {
   activeVaultScope,
@@ -45,67 +43,16 @@ import {
 } from "$lib/vault/sync-operation-state";
 import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
-import {
-  scheduleAutoConnectAfterApproval,
-  syncError,
-} from "$lib/vault/sync-runtime";
+import { syncError } from "$lib/vault/sync-runtime";
 import { publishExtensionEventLogUpdateForVault } from "$lib/vault/sync-extension-bridge";
 import { syncLocalFolderProvider } from "$lib/vault/provider-sync.svelte";
+export { applyVaultSyncResult } from "$lib/vault/sync-runtime";
 export { publishExtensionEventLogUpdateForVault };
 
 export * from "$lib/vault/sync-resolution";
 export { syncConflictLabel } from "$lib/vault/sync-conflict-label";
 
 const log = createLogger("vault-sync");
-
-export function applyVaultSyncResult({
-  state,
-  result,
-}: {
-  readonly state: SyncActionsContext;
-  readonly result: NookVaultSyncResult;
-}): void {
-  if (state.isAuthenticated) {
-    state.pendingJoins = result.pendingJoins;
-    state.vaultMembers = result.vaultMembers;
-    return;
-  }
-
-  const accessAssessed =
-    result.accessState === NookVaultSyncAccessState.Assessed;
-  const accessStatus = accessAssessed
-    ? result.accessStatus
-    : VaultAccessStatus.NewVault;
-  log.debug("sync result (unauthenticated)");
-
-  if (accessAssessed) {
-    log.info("sync state changed (login gate)");
-  }
-
-  const decision = state.clientPolicy.unauthenticated_sync_decision(
-    result.changed,
-    accessAssessed,
-    accessStatus,
-    state.joinEnrollmentPrompt,
-    state.awaitingJoinApproval,
-  );
-  switch (decision) {
-    case UnauthenticatedSyncDecision.Approved:
-      state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-      state.showSuccess(state.t(I18N_KEYS.ToastsDeviceApproved));
-      scheduleAutoConnectAfterApproval(state);
-      break;
-    case UnauthenticatedSyncDecision.AutoConnect:
-      scheduleAutoConnectAfterApproval(state);
-      break;
-    case UnauthenticatedSyncDecision.MarkJoinPending:
-      state.joinEnrollmentPrompt = JoinEnrollmentState.Pending;
-      state.awaitingJoinApproval = true;
-      break;
-    case UnauthenticatedSyncDecision.Ignore:
-      break;
-  }
-}
 
 export async function hydrateMultiDeviceState(
   state: SyncActionsContext,
@@ -512,52 +459,44 @@ export async function stageStagedProviderSyncIssue({
 
 export function startVaultSync(state: SyncActionsContext) {
   state.stopVaultSync();
-  if (state.isAuthenticated && !state.deviceProtectionReady) {
-    log.debug("vault sync timer skipped (device identity locked)");
-    return;
+  const startDecision = state.clientPolicy.vault_sync_timer_start_decision(
+    state.isAuthenticated,
+    state.deviceProtectionReady,
+    state.joinEnrollmentPrompt,
+    state.awaitingJoinApproval,
+  );
+  switch (startDecision) {
+    case VaultSyncTimerStartDecision.SkipDeviceProtectionLocked:
+      log.debug("vault sync timer skipped (device identity locked)");
+      return;
+    case VaultSyncTimerStartDecision.SkipNoRemoteUpdates:
+      log.debug("vault sync timer skipped (no remote updates needed)");
+      return;
+    case VaultSyncTimerStartDecision.Start:
+      break;
   }
   const syncIntervalConfig = import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS;
   const intervalMs =
     typeof syncIntervalConfig === "string"
       ? state.runtimeConfig.resolve_vault_sync_interval_ms(syncIntervalConfig)
       : state.runtimeConfig.resolve_default_vault_sync_interval_ms();
-  const needsRemoteUpdates =
-    state.isAuthenticated ||
-    state.joinEnrollmentPrompt !== JoinEnrollmentState.None ||
-    state.awaitingJoinApproval;
-  if (!needsRemoteUpdates) {
-    log.debug("vault sync timer skipped (no remote updates needed)");
-    return;
-  }
   log.info("vault sync timer started");
   if (state.isAuthenticated) {
     void state.syncFromStorage(ProviderSyncFreshness.Scheduled);
   }
   const scheduleSyncArgs: Parameters<typeof state.scheduleSync>[0] = {
     callback: () => {
-      if (
-        state.isVerifying ||
-        state.isSaving ||
-        state.isSyncing ||
-        state.isPasswordBusy
-      ) {
-        return;
-      }
-      if (
-        !state.isAuthenticated &&
-        state.joinEnrollmentPrompt === JoinEnrollmentState.None &&
-        !state.awaitingJoinApproval
-      ) {
-        return;
-      }
-      // Local-only vaults with no sync provider and no pending join have
-      // nothing remote to reconcile — skip the tick entirely rather than
-      // re-reading local IndexedDB into itself every interval.
-      if (
-        state.isAuthenticated &&
-        state.syncProviders.length === 0 &&
-        state.joinEnrollmentPrompt === JoinEnrollmentState.None
-      ) {
+      const tickDecision = state.clientPolicy.vault_sync_timer_tick_decision(
+        state.isVerifying,
+        state.isSaving,
+        state.isSyncing,
+        state.isPasswordBusy,
+        state.isAuthenticated,
+        state.joinEnrollmentPrompt,
+        state.awaitingJoinApproval,
+        state.syncProviders.length,
+      );
+      if (tickDecision !== VaultSyncTimerTickDecision.Sync) {
         return;
       }
       void state.syncFromStorage(ProviderSyncFreshness.Scheduled);
@@ -583,14 +522,23 @@ export async function syncFromStorage({
   freshness,
 }: StorageSyncExecution) {
   if (!state.hasManager) return;
-  if (state.syncBlocked) return;
-  const forced = freshness === ProviderSyncFreshness.Forced;
-  if (!forced && state.isVerifying) return;
-  if (!forced && state.isSaving) return;
-  if (!forced && state.isPasswordBusy) return;
-  if (!forced && state.isSyncing) return;
+  const syncDecision = state.clientPolicy.vault_storage_sync_decision(
+    state.syncBlocked,
+    freshness,
+    state.isVerifying,
+    state.isSaving,
+    state.isPasswordBusy,
+    state.isSyncing,
+    state.isAuthenticated,
+    state.syncProviders.length,
+    state.hasRemoteCredentials(),
+    state.localVaultPresent,
+  );
+  if (syncDecision === VaultStorageSyncDecision.Skip) return;
 
-  if (!state.isAuthenticated && state.syncProviders.length > 0) {
+  if (
+    syncDecision === VaultStorageSyncDecision.SyncFirstProviderUnauthenticated
+  ) {
     state.isSyncing = true;
     try {
       const provider = state.syncProviders[0]!;
@@ -626,13 +574,7 @@ export async function syncFromStorage({
     return;
   }
 
-  if (!state.hasRemoteCredentials()) return;
-
-  if (
-    state.isAuthenticated &&
-    state.localVaultPresent &&
-    state.syncProviders.length > 0
-  ) {
+  if (syncDecision === VaultStorageSyncDecision.SyncProviders) {
     const syncFromSyncProvidersArgs: SyncFromProvidersRequest = {
       visibility: ProviderSyncVisibility.Quiet,
       freshness,

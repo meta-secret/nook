@@ -7,13 +7,18 @@
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod connection;
+mod sync_policy;
 
 pub use connection::{
     ActiveVaultStore, JoinEnrollmentState, RemoteVaultAssessDecision, RemoteVaultRecoveryState,
     VaultConnectGateDecision, VaultConnectProbeDecision, VaultSwitchDecision,
 };
+pub use sync_policy::{
+    UnauthenticatedSyncDecision, VaultAccessObservation, VaultStorageSyncDecision,
+    VaultSyncTimerStartDecision, VaultSyncTimerTickDecision,
+};
 
-use crate::{VaultAccessStatus, translate_from_catalog};
+use crate::translate_from_catalog;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -127,34 +132,9 @@ impl VaultEditDecision {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum VaultAccessObservation {
-    Unavailable,
-    Available(VaultAccessStatus),
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum UnauthenticatedSyncDecision {
-    Ignore,
-    MarkJoinPending,
-    Approved,
-    AutoConnect,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VaultClientPolicy;
 
 impl VaultClientPolicy {
-    /// Device-dependent manual sync is meaningful only after a local vault or
-    /// an explicit sync-provider target exists.
-    #[must_use]
-    pub const fn manual_sync_has_target(
-        local_vault_present: bool,
-        sync_provider_count: usize,
-    ) -> bool {
-        local_vault_present || sync_provider_count > 0
-    }
-
     #[must_use]
     pub const fn edit_block_reason(
         security_conflict_count: usize,
@@ -211,17 +191,6 @@ impl VaultClientPolicy {
     }
 
     #[must_use]
-    #[allow(clippy::fn_params_excessive_bools)]
-    pub const fn sync_activity_visible(
-        fan_out_syncing: bool,
-        provider_syncing: bool,
-        syncing: bool,
-        saving: bool,
-    ) -> bool {
-        fan_out_syncing || provider_syncing || syncing || saving
-    }
-
-    #[must_use]
     pub const fn should_use_join_provider_for_connect(
         authenticated: bool,
         sync_provider_count: usize,
@@ -230,22 +199,6 @@ impl VaultClientPolicy {
         !authenticated
             && sync_provider_count > 0
             && !matches!(join_state, JoinEnrollmentState::None)
-    }
-
-    #[must_use]
-    #[allow(clippy::fn_params_excessive_bools)]
-    pub const fn should_sync_from_providers(
-        sync_blocked: bool,
-        force: bool,
-        verifying: bool,
-        saving: bool,
-        password_busy: bool,
-        syncing: bool,
-        sync_provider_count: usize,
-    ) -> bool {
-        !sync_blocked
-            && (force || (!verifying && !saving && !password_busy && !syncing))
-            && sync_provider_count > 0
     }
 
     #[must_use]
@@ -285,50 +238,6 @@ impl VaultClientPolicy {
     }
 
     #[must_use]
-    pub const fn unauthenticated_sync_decision(
-        changed: bool,
-        access_status: VaultAccessObservation,
-        join_state: JoinEnrollmentState,
-        awaiting_join_approval: bool,
-    ) -> UnauthenticatedSyncDecision {
-        if !changed {
-            return UnauthenticatedSyncDecision::Ignore;
-        }
-        match (access_status, join_state, awaiting_join_approval) {
-            (
-                VaultAccessObservation::Available(VaultAccessStatus::Ready),
-                JoinEnrollmentState::Pending,
-                _,
-            ) => UnauthenticatedSyncDecision::Approved,
-            (VaultAccessObservation::Available(VaultAccessStatus::Ready), _, true) => {
-                UnauthenticatedSyncDecision::AutoConnect
-            }
-            (
-                VaultAccessObservation::Available(VaultAccessStatus::JoinPending),
-                JoinEnrollmentState::None,
-                _,
-            ) => UnauthenticatedSyncDecision::MarkJoinPending,
-            _ => UnauthenticatedSyncDecision::Ignore,
-        }
-    }
-
-    #[must_use]
-    #[allow(clippy::fn_params_excessive_bools)]
-    pub const fn should_auto_connect_after_approval(
-        authenticated: bool,
-        verifying: bool,
-        password_prompt_open: bool,
-        session_expired_by_idle: bool,
-        session_explicitly_locked: bool,
-    ) -> bool {
-        !authenticated
-            && !verifying
-            && !password_prompt_open
-            && !session_expired_by_idle
-            && !session_explicitly_locked
-    }
-
-    #[must_use]
     pub const fn normalized_secret_page_offset(
         total: u32,
         requested_offset: u32,
@@ -344,13 +253,6 @@ impl VaultClientPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn manual_sync_requires_a_vault_or_explicit_provider_target() {
-        assert!(!VaultClientPolicy::manual_sync_has_target(false, 0));
-        assert!(VaultClientPolicy::manual_sync_has_target(true, 0));
-        assert!(VaultClientPolicy::manual_sync_has_target(false, 1));
-    }
 
     #[test]
     fn edit_blocking_has_security_first_precedence() {
@@ -433,18 +335,6 @@ mod tests {
             1,
             JoinEnrollmentState::Pending,
         ));
-        assert!(VaultClientPolicy::should_sync_from_providers(
-            false, false, false, false, false, false, 1,
-        ));
-        assert!(!VaultClientPolicy::should_sync_from_providers(
-            false, false, false, true, false, false, 1,
-        ));
-        assert!(VaultClientPolicy::should_sync_from_providers(
-            false, true, false, true, true, true, 1,
-        ));
-        assert!(!VaultClientPolicy::should_sync_from_providers(
-            true, true, false, false, false, false, 1,
-        ));
     }
 
     #[test]
@@ -484,46 +374,6 @@ mod tests {
         );
         assert_eq!(DeviceProtectionStatus::from_persisted("future"), None);
         assert_eq!(DeviceProtectionStatus::Unlocked.as_str(), "unlocked");
-    }
-
-    #[test]
-    fn join_sync_transition_preserves_approval_semantics() {
-        assert_eq!(
-            VaultClientPolicy::unauthenticated_sync_decision(
-                false,
-                VaultAccessObservation::Available(VaultAccessStatus::Ready),
-                JoinEnrollmentState::Pending,
-                true
-            ),
-            UnauthenticatedSyncDecision::Ignore
-        );
-        assert_eq!(
-            VaultClientPolicy::unauthenticated_sync_decision(
-                true,
-                VaultAccessObservation::Available(VaultAccessStatus::Ready),
-                JoinEnrollmentState::Pending,
-                true
-            ),
-            UnauthenticatedSyncDecision::Approved
-        );
-        assert_eq!(
-            VaultClientPolicy::unauthenticated_sync_decision(
-                true,
-                VaultAccessObservation::Available(VaultAccessStatus::Ready),
-                JoinEnrollmentState::None,
-                true
-            ),
-            UnauthenticatedSyncDecision::AutoConnect
-        );
-        assert_eq!(
-            VaultClientPolicy::unauthenticated_sync_decision(
-                true,
-                VaultAccessObservation::Available(VaultAccessStatus::JoinPending),
-                JoinEnrollmentState::None,
-                false
-            ),
-            UnauthenticatedSyncDecision::MarkJoinPending
-        );
     }
 
     #[test]
