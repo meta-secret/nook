@@ -165,6 +165,10 @@ pub const fn authentication_form_observation_priority(
 pub fn classify_authentication_workflow_candidates(
     observations: &[AuthenticationPageObservation],
 ) -> AuthenticationWorkflowMatch {
+    if !authentication_page_observations_are_valid(observations) {
+        return AuthenticationWorkflowMatch::NoMatch;
+    }
+
     let mut selected = AuthenticationWorkflowMatch::NoMatch;
     for (index, observation) in observations.iter().copied().enumerate() {
         let AuthenticationWorkflowMatch::Matched(mut candidate) =

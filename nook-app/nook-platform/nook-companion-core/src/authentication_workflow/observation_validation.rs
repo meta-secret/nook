@@ -29,6 +29,7 @@ pub fn authentication_page_observations_are_valid(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{AuthenticationWorkflowMatch, classify_authentication_workflow_candidates};
 
     #[test]
     fn validates_bounded_authentication_observation_envelopes() {
@@ -54,5 +55,31 @@ mod tests {
         assert!(!authentication_page_observations_are_valid(
             &excessive_pages
         ));
+    }
+
+    #[test]
+    fn classifier_rejects_observations_outside_the_portable_envelope() {
+        let excessive_field_count = [AuthenticationPageObservation {
+            username_field_count: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1,
+            current_password_field_count: 1,
+            ..Default::default()
+        }];
+        assert_eq!(
+            classify_authentication_workflow_candidates(&excessive_field_count),
+            AuthenticationWorkflowMatch::NoMatch
+        );
+
+        let excessive_pages = vec![
+            AuthenticationPageObservation {
+                username_field_count: 1,
+                current_password_field_count: 1,
+                ..Default::default()
+            };
+            MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 1
+        ];
+        assert_eq!(
+            classify_authentication_workflow_candidates(&excessive_pages),
+            AuthenticationWorkflowMatch::NoMatch
+        );
     }
 }
