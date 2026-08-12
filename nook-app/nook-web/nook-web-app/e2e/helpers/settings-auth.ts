@@ -29,18 +29,6 @@ interface VaultProviderReloadWindow extends Window {
   readonly __nookVault: VaultProviderReload
 }
 
-interface AvailableVaultProviderReload {
-  readonly kind: 'available'
-  readonly vault: VaultProviderReload
-}
-
-interface UnavailableVaultProviderReload {
-  readonly kind: 'unavailable'
-}
-
-type VaultProviderReloadAvailability =
-  AvailableVaultProviderReload | UnavailableVaultProviderReload
-
 /** Expand the login enrollment accordion on the login gate. */
 export async function expandLoginEnrollmentPanel(page: Page) {
   const toggle = page.getByTestId('login-enrollment-toggle')
@@ -550,14 +538,31 @@ export async function authorizeDeviceProtection(
 
 export async function invokeInitializedVaultProviderReload(page: Page) {
   await page.evaluate(async () => {
+    enum VaultProviderReloadAvailabilityKind {
+      Available = 'available',
+      Unavailable = 'unavailable',
+    }
+
+    interface AvailableVaultProviderReload {
+      readonly kind: VaultProviderReloadAvailabilityKind.Available
+      readonly vault: VaultProviderReload
+    }
+
+    interface UnavailableVaultProviderReload {
+      readonly kind: VaultProviderReloadAvailabilityKind.Unavailable
+    }
+
+    type VaultProviderReloadAvailability =
+      AvailableVaultProviderReload | UnavailableVaultProviderReload
+
     const availability: VaultProviderReloadAvailability =
       '__nookVault' in window
         ? {
-            kind: 'available',
+            kind: VaultProviderReloadAvailabilityKind.Available,
             vault: (window as VaultProviderReloadWindow).__nookVault,
           }
-        : { kind: 'unavailable' }
-    if (availability.kind === 'unavailable') {
+        : { kind: VaultProviderReloadAvailabilityKind.Unavailable }
+    if (availability.kind === VaultProviderReloadAvailabilityKind.Unavailable) {
       throw new Error('Initialized vault provider reload is unavailable')
     }
     const options: ProviderLoadOptions = { ensureLocalRow: false }
