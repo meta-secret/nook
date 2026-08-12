@@ -71,6 +71,11 @@ import {
 
 const log = createLogger("vault-oauth");
 
+export type ICloudSignInRequest = {
+  readonly state: VaultState;
+  readonly clickPreparedControl: boolean;
+};
+
 export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
   if (
     state.storageMode !== "oauth-file" ||
@@ -438,11 +443,8 @@ export async function useGoogleSharedFolder({
 
 export async function signInWithICloud({
   state,
-  options,
-}: {
-  readonly state: VaultState;
-  readonly options: { clickPreparedControl?: boolean };
-}): Promise<void> {
+  clickPreparedControl,
+}: ICloudSignInRequest): Promise<void> {
   log.info("iCloud sign-in requested");
   if (!isICloudOAuthConfigured()) {
     state.errorMsg = state.t(I18N_KEYS.ProviderSetupIcloudOauthUnconfigured);
@@ -478,7 +480,7 @@ export async function signInWithICloud({
     const requestPreparedICloudWebAuthTokenArgs: Parameters<
       typeof requestPreparedICloudWebAuthToken
     >[0] = {
-      clickSignInControl: options.clickPreparedControl ?? true,
+      clickSignInControl: clickPreparedControl,
       signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
     };
     const tokenRequest = requestPreparedICloudWebAuthToken(
