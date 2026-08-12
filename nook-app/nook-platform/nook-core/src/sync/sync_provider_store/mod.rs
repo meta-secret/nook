@@ -21,6 +21,7 @@ mod catalog;
 mod enrollment;
 mod legacy_storage;
 mod oauth;
+mod save;
 mod scope;
 mod state;
 mod storage_args;
@@ -39,6 +40,9 @@ pub use oauth::{
     bind_google_drive_shared_folder, google_oauth_tokens_to_config, icloud_oauth_tokens_to_config,
     oauth_remote_storage_ref, set_google_drive_provider_mode, set_icloud_provider_mode,
     update_oauth_remote_ref,
+};
+pub use save::{
+    ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup, apply_provider_save_policy,
 };
 pub use scope::{
     active_vault_providers, local_provider_for_active_vault, provider_label_by_id,
