@@ -34,7 +34,7 @@ import {
   assertVaultReady,
   dismissSyncConflictIfVisible,
   ensureLoginLocalUnlockReady,
-  invokeVaultLoadProviders,
+  invokeInitializedVaultProviderReload,
   selectLoginUnlockMethod,
   unlockVaultOnLogin,
   waitForStableLocalVaultState,
@@ -630,7 +630,7 @@ export async function seedGithubSyncProvidersWhileUnlocked(
       vaultYaml,
     })
   }
-  await invokeVaultLoadProviders(page)
+  await invokeInitializedVaultProviderReload(page)
   await waitForLoadedSyncProviders(page, expectedSyncProviderCount)
   await forceVaultQuiescentForE2e(page)
 }
@@ -655,7 +655,7 @@ export async function seedOauthFileSyncProvidersWhileUnlocked(
       sharedStub,
     )
   }
-  await invokeVaultLoadProviders(page)
+  await invokeInitializedVaultProviderReload(page)
   await waitForLoadedSyncProviders(page, expectedSyncProviderCount)
   await forceVaultQuiescentForE2e(page)
 }
@@ -776,7 +776,7 @@ export async function waitForLoadedSyncProviders(
           }
         })
         if (state.authenticated && state.count < minCount) {
-          await invokeVaultLoadProviders(page).catch(() => {})
+          await invokeInitializedVaultProviderReload(page).catch(() => {})
         }
         return state.authenticated ? state.count : -1
       },

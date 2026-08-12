@@ -9,7 +9,7 @@ import {
   expandLoginEnrollmentPanel,
   expectNoVaultPasswords,
   openStorageSettings,
-  invokeVaultLoadProviders,
+  invokeInitializedVaultProviderReload,
   revealSecretValue,
   rotateVaultPassword,
   seedExtraOauthFileProviders,
@@ -153,7 +153,7 @@ test.describe('vault password envelope with sync provider', () => {
         accessToken: target.pat,
       },
     ])
-    await invokeVaultLoadProviders(deviceB)
+    await invokeInitializedVaultProviderReload(deviceB)
 
     await expandLoginEnrollmentPanel(deviceB)
     await deviceB.getByTestId('open-enrollment-code-btn').click()

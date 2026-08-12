@@ -22,7 +22,6 @@ import {
 } from './vault-runtime'
 
 interface VaultProviderReload {
-  readonly isAuthenticated?: boolean
   readonly loadProviders?: (options: ProviderLoadOptions) => Promise<void>
 }
 
@@ -537,10 +536,10 @@ export async function authorizeDeviceProtection(
   await waitForVaultOperationsIdle(page)
 }
 
-export async function invokeVaultLoadProviders(page: Page) {
+export async function invokeInitializedVaultProviderReload(page: Page) {
   await page.evaluate(async () => {
     const vault = (window as VaultProviderReloadWindow).__nookVault
-    if (vault?.isAuthenticated && vault.loadProviders) {
+    if (vault?.loadProviders) {
       const options: ProviderLoadOptions = { ensureLocalRow: false }
       await vault.loadProviders(options)
     }
