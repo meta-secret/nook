@@ -40,7 +40,6 @@ import {
   unknownOAuthTokenExpiry,
   unresolvedOAuthRemoteFileId,
   type LocalFolderHandle,
-  type OAuthFileName,
   type ProviderSetupRequest,
   type StorageProvider,
   type StorageProviderType,
