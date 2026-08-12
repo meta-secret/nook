@@ -340,6 +340,79 @@ impl NookVaultClientPolicy {
 
     #[wasm_bindgen]
     #[must_use]
+    pub fn vault_sync_timer_start_decision(
+        &self,
+        authenticated: bool,
+        device_protection_ready: bool,
+        join_state: nook_core::JoinEnrollmentState,
+        awaiting_join_approval: bool,
+    ) -> nook_core::VaultSyncTimerStartDecision {
+        nook_core::VaultClientPolicy::vault_sync_timer_start_decision(
+            authenticated,
+            device_protection_ready,
+            join_state,
+            awaiting_join_approval,
+        )
+    }
+
+    #[wasm_bindgen]
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub fn vault_sync_timer_tick_decision(
+        &self,
+        verifying: bool,
+        saving: bool,
+        syncing: bool,
+        password_busy: bool,
+        authenticated: bool,
+        join_state: nook_core::JoinEnrollmentState,
+        awaiting_join_approval: bool,
+        sync_provider_count: u32,
+    ) -> nook_core::VaultSyncTimerTickDecision {
+        nook_core::VaultClientPolicy::vault_sync_timer_tick_decision(
+            verifying,
+            saving,
+            syncing,
+            password_busy,
+            authenticated,
+            join_state,
+            awaiting_join_approval,
+            sync_provider_count as usize,
+        )
+    }
+
+    #[wasm_bindgen]
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub fn vault_storage_sync_decision(
+        &self,
+        sync_blocked: bool,
+        freshness: nook_core::ProviderSyncFreshness,
+        verifying: bool,
+        saving: bool,
+        password_busy: bool,
+        syncing: bool,
+        authenticated: bool,
+        sync_provider_count: u32,
+        has_remote_credentials: bool,
+        local_vault_present: bool,
+    ) -> nook_core::VaultStorageSyncDecision {
+        nook_core::VaultClientPolicy::vault_storage_sync_decision(
+            sync_blocked,
+            freshness,
+            verifying,
+            saving,
+            password_busy,
+            syncing,
+            authenticated,
+            sync_provider_count as usize,
+            has_remote_credentials,
+            local_vault_present,
+        )
+    }
+
+    #[wasm_bindgen]
+    #[must_use]
     #[allow(clippy::too_many_arguments)]
     pub fn should_auto_unlock(
         &self,

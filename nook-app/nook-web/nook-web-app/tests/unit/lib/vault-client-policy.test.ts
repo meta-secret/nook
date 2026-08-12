@@ -4,10 +4,14 @@ import {
   NookManagerStoreScope,
   NookVaultClientPolicy,
   NookVaultSwitchState,
+  ProviderSyncFreshness,
   UnauthenticatedSyncDecision,
   VaultAccessStatus,
   VaultConnectGateDecision,
   VaultConnectProbeDecision,
+  VaultStorageSyncDecision,
+  VaultSyncTimerStartDecision,
+  VaultSyncTimerTickDecision,
   active_vault_providers,
   providers_visible_while_device_locked,
   staged_oauth_remote_storage_args,
@@ -165,6 +169,142 @@ describe('portable vault client policy', () => {
       ).toEqual(['local-a'])
     } finally {
       scope.free()
+    }
+  })
+
+  test('routes scheduled and storage sync through portable policy', () => {
+    const policy = new NookVaultClientPolicy()
+    try {
+      expect(
+        policy.vault_sync_timer_start_decision(
+          true,
+          false,
+          JoinEnrollmentState.None,
+          false,
+        ),
+      ).toBe(VaultSyncTimerStartDecision.SkipDeviceProtectionLocked)
+      expect(
+        policy.vault_sync_timer_start_decision(
+          false,
+          true,
+          JoinEnrollmentState.None,
+          false,
+        ),
+      ).toBe(VaultSyncTimerStartDecision.SkipNoRemoteUpdates)
+      expect(
+        policy.vault_sync_timer_start_decision(
+          false,
+          true,
+          JoinEnrollmentState.Pending,
+          true,
+        ),
+      ).toBe(VaultSyncTimerStartDecision.Start)
+      expect(
+        policy.vault_sync_timer_tick_decision(
+          true,
+          false,
+          false,
+          false,
+          true,
+          JoinEnrollmentState.None,
+          false,
+          1,
+        ),
+      ).toBe(VaultSyncTimerTickDecision.SkipBusy)
+      expect(
+        policy.vault_sync_timer_tick_decision(
+          false,
+          false,
+          false,
+          false,
+          false,
+          JoinEnrollmentState.None,
+          false,
+          1,
+        ),
+      ).toBe(VaultSyncTimerTickDecision.SkipNoRemoteUpdates)
+      expect(
+        policy.vault_sync_timer_tick_decision(
+          false,
+          false,
+          false,
+          false,
+          true,
+          JoinEnrollmentState.None,
+          false,
+          0,
+        ),
+      ).toBe(VaultSyncTimerTickDecision.SkipLocalOnly)
+      expect(
+        policy.vault_sync_timer_tick_decision(
+          false,
+          false,
+          false,
+          false,
+          false,
+          JoinEnrollmentState.Pending,
+          true,
+          1,
+        ),
+      ).toBe(VaultSyncTimerTickDecision.Sync)
+      expect(
+        policy.vault_storage_sync_decision(
+          false,
+          ProviderSyncFreshness.Forced,
+          false,
+          true,
+          true,
+          true,
+          false,
+          1,
+          false,
+          false,
+        ),
+      ).toBe(VaultStorageSyncDecision.SyncFirstProviderUnauthenticated)
+      expect(
+        policy.vault_storage_sync_decision(
+          false,
+          ProviderSyncFreshness.Forced,
+          false,
+          false,
+          false,
+          false,
+          true,
+          2,
+          true,
+          true,
+        ),
+      ).toBe(VaultStorageSyncDecision.SyncProviders)
+      expect(
+        policy.vault_storage_sync_decision(
+          false,
+          ProviderSyncFreshness.Scheduled,
+          false,
+          true,
+          false,
+          false,
+          true,
+          1,
+          true,
+          true,
+        ),
+      ).toBe(VaultStorageSyncDecision.Skip)
+      expect(
+        policy.vault_storage_sync_decision(
+          false,
+          ProviderSyncFreshness.Forced,
+          false,
+          false,
+          false,
+          false,
+          false,
+          0,
+          true,
+          false,
+        ),
+      ).toBe(VaultStorageSyncDecision.SyncConfiguredStorage)
+    } finally {
+      policy.free()
     }
   })
 
