@@ -2,7 +2,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::javascript_literals::{
-    semantic_javascript_name as semantic_node_name, static_javascript_string,
+    callable_expression_name, semantic_javascript_name as semantic_node_name,
+    static_javascript_string,
 };
 use crate::javascript_scopes::{
     ScopedBinding, declaration_is_in_program_scope, invalidate_visible_scoped_binding,
@@ -297,7 +298,7 @@ fn collect_dynamic_wasm_aliases(
     scoped_wasm_runtime_receivers: &[ScopedBinding],
     scoped_wasm_namespaces: &mut Vec<ScopedBinding>,
     scoped_wasm_instances: &mut Vec<ScopedBinding>,
-    scoped_wasm_callables: &mut [ScopedBinding],
+    scoped_wasm_callables: &mut Vec<ScopedBinding>,
     imported_callable_bindings: &mut HashSet<String>,
     lines: &mut Vec<usize>,
 ) {
@@ -439,7 +440,7 @@ fn collect_binding_aliases(
     scoped_wasm_runtime_receivers: &[ScopedBinding],
     scoped_wasm_namespaces: &mut Vec<ScopedBinding>,
     scoped_wasm_instances: &mut Vec<ScopedBinding>,
-    scoped_wasm_callables: &[ScopedBinding],
+    scoped_wasm_callables: &mut Vec<ScopedBinding>,
     imported_callable_bindings: &mut HashSet<String>,
     lines: &mut Vec<usize>,
     inspect_object_pattern: bool,
@@ -462,6 +463,7 @@ fn collect_binding_aliases(
         source,
         wasm_class_bindings,
         wasm_namespace_bindings,
+        scoped_wasm_namespaces,
         wasm_type_names,
         wasm_instance_factories,
         scoped_wasm_factories,
@@ -486,6 +488,7 @@ fn collect_binding_aliases(
             wasm_instance_bindings,
             scoped_wasm_namespaces,
             scoped_wasm_instances,
+            scoped_wasm_callables,
             imported_callable_bindings,
             lines,
         )
@@ -506,6 +509,7 @@ fn collect_binding_aliases(
         wasm_instance_bindings,
         scoped_wasm_namespaces,
         scoped_wasm_instances,
+        scoped_wasm_callables,
         imported_callable_bindings,
         lines,
     );
@@ -551,6 +555,7 @@ fn wasm_instance_binding(
     source: &str,
     wasm_class_bindings: &HashMap<String, String>,
     wasm_namespace_bindings: &HashMap<String, String>,
+    scoped_wasm_namespaces: &[ScopedBinding],
     wasm_type_names: &HashSet<String>,
     wasm_instance_factories: &HashMap<String, String>,
     scoped_wasm_factories: &[ScopedBinding],
@@ -567,6 +572,7 @@ fn wasm_instance_binding(
         source,
         wasm_class_bindings,
         wasm_namespace_bindings,
+        scoped_wasm_namespaces,
         wasm_type_names,
         wasm_instance_factories,
         scoped_wasm_factories,
@@ -670,6 +676,7 @@ fn value_is_wasm_instance(
     source: &str,
     wasm_class_bindings: &HashMap<String, String>,
     wasm_namespace_bindings: &HashMap<String, String>,
+    scoped_wasm_namespaces: &[ScopedBinding],
     wasm_type_names: &HashSet<String>,
     wasm_instance_factories: &HashMap<String, String>,
     scoped_wasm_factories: &[ScopedBinding],
@@ -699,6 +706,7 @@ fn value_is_wasm_instance(
             source,
             wasm_class_bindings,
             wasm_namespace_bindings,
+            scoped_wasm_namespaces,
             wasm_type_names,
         )
     {
@@ -741,6 +749,7 @@ fn value_is_wasm_instance(
                 source,
                 wasm_class_bindings,
                 wasm_namespace_bindings,
+                scoped_wasm_namespaces,
                 wasm_type_names,
                 wasm_instance_factories,
                 scoped_wasm_factories,
@@ -758,6 +767,7 @@ fn constructor_wasm_class(
     source: &str,
     wasm_class_bindings: &HashMap<String, String>,
     wasm_namespace_bindings: &HashMap<String, String>,
+    scoped_wasm_namespaces: &[ScopedBinding],
     wasm_type_names: &HashSet<String>,
 ) -> Option<String> {
     if constructor.kind() == "identifier" {
@@ -781,10 +791,11 @@ fn constructor_wasm_class(
         .child_by_field_name("property")
         .and_then(|property| semantic_node_name(property, source))?;
     let namespace_name = namespace.utf8_text(source.as_bytes()).ok()?;
-    (wasm_namespace_bindings.contains_key(namespace_name)
-        && root_binding_is_visible(namespace, namespace_name, source)
-        && wasm_type_names.contains(&class_name))
-    .then_some(class_name)
+    let namespace_is_wasm = (wasm_namespace_bindings.contains_key(namespace_name)
+        && root_binding_is_visible(namespace, namespace_name, source))
+        || scoped_wasm_module_visible(namespace, namespace_name, source, scoped_wasm_namespaces)
+            .is_some();
+    (namespace_is_wasm && wasm_type_names.contains(&class_name)).then_some(class_name)
 }
 
 fn copied_wasm_class(
@@ -850,19 +861,6 @@ fn wasm_runtime_accessor_receiver_is_visible(
     receiver.utf8_text(source.as_bytes()).is_ok_and(|name| {
         scoped_binding_is_visible(receiver, name, source, scoped_wasm_runtime_receivers)
     })
-}
-
-fn callable_expression_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
-    match node.kind() {
-        "identifier" => semantic_node_name(node, source),
-        "member_expression" => node
-            .child_by_field_name("property")
-            .and_then(|property| semantic_node_name(property, source)),
-        "subscript_expression" => node
-            .child_by_field_name("index")
-            .and_then(|property| semantic_node_name(property, source)),
-        _ => None,
-    }
 }
 
 fn collect_typed_wasm_parameters(

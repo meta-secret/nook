@@ -108,49 +108,17 @@ impl NookDeviceAccessSnapshotRequest {
 fn wasm_callable_web_fixtures() -> Vec<(&'static str, &'static str)> {
     vec![
         f("aliased-attribute.ts", r#"import { generate_secret_id as generateSecretId } from "$app-wasm";"#),
-        (
-            "reassignment.ts",
-            r#"let client = await import("$app-wasm");
-client = socketApi;
-const openSocket = client.connect;"#,
-        ),
-        (
-            "object-property.ts",
-            r#"import * as wasm from "$app-wasm";
-const api = { generateSecretId: wasm.generate_secret_id };
-api.generateSecretId();"#,
-        ),
-        (
-            "namespace-static.ts",
-            r#"import * as wasm from "$app-wasm";
-const simpleVault = wasm.NookVaultArchitecture.simple;"#,
-        ),
-        (
-            "facade.ts",
-            r#"export { NookVaultArchitecture } from "$app-wasm";
-export { NookVaultManager } from "third-party";"#,
-        ),
+        f("reassignment.ts", "let client = await import(\"$app-wasm\");\nclient = socketApi;\nconst openSocket = client.connect;"),
+        f("object-property.ts", "import * as wasm from \"$app-wasm\";\nconst api = { generateSecretId: wasm.generate_secret_id };\napi.generateSecretId();"),
+        f("namespace-static.ts", "import * as wasm from \"$app-wasm\";\nconst simpleVault = wasm.NookVaultArchitecture.simple;"),
+        f("facade.ts", "export { NookVaultArchitecture } from \"$app-wasm\";\nexport { NookVaultManager } from \"third-party\";"),
         f("commonjs-bridge.cjs", r#"exports.generate_secret_id = require("nook-wasm").generate_secret_id;"#),
         f("commonjs-consumer.ts", r#"const { generate_secret_id: generateSecretId } = require("./commonjs-bridge.cjs");"#),
         f("commonjs-module-bridge.cjs", r#"module.exports.generate_secret_id = require("nook-wasm").generate_secret_id;"#),
         f("commonjs-module-consumer.ts", r#"const { generate_secret_id: createSecretId } = require("./commonjs-module-bridge.cjs");"#),
-        (
-            "conditional-reassignment.ts",
-            r#"let wasm = await import("$app-wasm");
-if (useSocket) wasm = socketApi;
-const generateSecretId = wasm.generate_secret_id;"#,
-        ),
-        (
-            "destructuring-instance.ts",
-            r#"import { NookVaultManager } from "$app-wasm";
-const manager = new NookVaultManager();
-const { connect: connectVault } = manager;"#,
-        ),
-        (
-            "destructuring-static.ts",
-            r#"import { NookVaultArchitecture } from "$app-wasm";
-const { simple: simpleVault } = NookVaultArchitecture;"#,
-        ),
+        f("conditional-reassignment.ts", "let wasm = await import(\"$app-wasm\");\nif (useSocket) wasm = socketApi;\nconst generateSecretId = wasm.generate_secret_id;"),
+        f("destructuring-instance.ts", "import { NookVaultManager } from \"$app-wasm\";\nconst manager = new NookVaultManager();\nconst { connect: connectVault } = manager;"),
+        f("destructuring-static.ts", "import { NookVaultArchitecture } from \"$app-wasm\";\nconst { simple: simpleVault } = NookVaultArchitecture;"),
         (
             "factory-third-party.ts",
             r#"import { NookVaultManager as SocketManager } from "third-party";
@@ -162,37 +130,11 @@ export function makeSocket(): SocketManager { throw new Error(); }"#,
 const socket = makeSocket();
 const openSocket = socket.connect;"#,
         ),
-        (
-            "member-assignment.ts",
-            r#"import * as wasm from "$app-wasm";
-const api = {};
-api.generateSecretId = wasm.generate_secret_id;"#,
-        ),
-        (
-            "mixed-facade.ts",
-            r#"import { NookVaultManager } from "./facade";
-const manager = new NookVaultManager();
-const openSocket = manager.connect;"#,
-        ),
-        (
-            "namespace-copy.ts",
-            r#"const wasm = await import("$app-wasm");
-const bridge = wasm;
-const generateSecretId = bridge.generate_secret_id;"#,
-        ),
-        (
-            "wrapped-receiver.ts",
-            r#"import { NookVaultManager } from "$app-wasm";
-const manager = new NookVaultManager();
-const connectVault = (manager as NookVaultManager).connect;"#,
-        ),
-        (
-            "instance-copy.ts",
-            r#"import { NookVaultManager } from "$app-wasm";
-const manager = new NookVaultManager();
-const bridge = manager;
-const connectVault = bridge.connect;"#,
-        ),
+        f("member-assignment.ts", "import * as wasm from \"$app-wasm\";\nconst api = {};\napi.generateSecretId = wasm.generate_secret_id;"),
+        f("mixed-facade.ts", "import { NookVaultManager } from \"./facade\";\nconst manager = new NookVaultManager();\nconst openSocket = manager.connect;"),
+        f("namespace-copy.ts", "const wasm = await import(\"$app-wasm\");\nconst bridge = wasm;\nconst generateSecretId = bridge.generate_secret_id;"),
+        f("wrapped-receiver.ts", "import { NookVaultManager } from \"$app-wasm\";\nconst manager = new NookVaultManager();\nconst connectVault = (manager as NookVaultManager).connect;"),
+        f("instance-copy.ts", "import { NookVaultManager } from \"$app-wasm\";\nconst manager = new NookVaultManager();\nconst bridge = manager;\nconst connectVault = bridge.connect;"),
         (
             "scoped-dynamic-destructuring.ts",
             r#"{
@@ -200,16 +142,8 @@ const connectVault = bridge.connect;"#,
   const generateSecretId = generate_secret_id;
 }"#,
         ),
-        (
-            "namespace-export-bridge.ts",
-            r#"export * as wasm from "$app-wasm";
-export { connect } from "socket-lib";"#,
-        ),
-        (
-            "namespace-export-consumer.ts",
-            r#"import { wasm } from "./namespace-export-bridge";
-const generateSecretId = wasm.generate_secret_id;"#,
-        ),
+        f("namespace-export-bridge.ts", "export * as wasm from \"$app-wasm\";\nexport { connect } from \"socket-lib\";"),
+        f("namespace-export-consumer.ts", "import { wasm } from \"./namespace-export-bridge\";\nconst generateSecretId = wasm.generate_secret_id;"),
         (
             "template-member.ts",
             r#"import * as wasm from "$app-wasm";
@@ -414,6 +348,12 @@ class Api { generateSecretId = wasm.generate_secret_id; }"#,
         f("shadowed-export-bridge.ts", r#"export * from "$app-wasm"; export { connect } from "socket-lib";"#),
         f("shadowed-export-consumer.ts", r#"import { connect as openSocket } from "./shadowed-export-bridge";"#),
         f("reassigned-callable.ts", "let { generate_secret_id } = await import(\"$app-wasm\");\ngenerate_secret_id = socketApi.connect;\nconst openSocket = generate_secret_id;"),
+        f("scoped-namespace-constructor.ts", "const wasm = await import(\"$app-wasm\");\nconst manager = new wasm.NookVaultManager();\nconst connectVault = manager.connect;"),
+        f("block-local-callable.ts", "import * as wasm from \"$app-wasm\";\nfunction run() {\nconst generate_secret_id = wasm.generate_secret_id;\nconst generateSecretId = generate_secret_id;\n}"),
+        f("commonjs-object-bridge.ts", r#"const wasm = require("nook-wasm"); module.exports = { generate_secret_id: wasm.generate_secret_id };"#),
+        f("commonjs-object-consumer.ts", r#"const { generate_secret_id: generateSecretId } = require("./commonjs-object-bridge");"#),
+        f("method-parameter-scope.ts", r#"import type { NookVaultManager } from "$app-wasm"; class Api { run(manager: NookVaultManager) { manager.connect(); } } const manager = socketApi; const openSocket = manager.connect;"#),
+        f("array-destructuring.ts", r#"import * as wasm from "$app-wasm"; const [generateSecretId] = [wasm.generate_secret_id];"#),
     ]
 }
 
@@ -462,6 +402,10 @@ fn expected_wasm_callable_alias_locations() -> Vec<(PathBuf, usize)> {
         ("multi-declarator-consumer.ts", 1),
         ("direct-object-argument.ts", 1),
         ("default-factory-consumer.ts", 1),
+        ("scoped-namespace-constructor.ts", 3),
+        ("block-local-callable.ts", 4),
+        ("commonjs-object-consumer.ts", 1),
+        ("array-destructuring.ts", 1),
         ("escaped-import.ts", 1),
         ("bound-method.ts", 3),
         ("class-field.ts", 2),

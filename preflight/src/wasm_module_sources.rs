@@ -696,11 +696,23 @@ fn collect_commonjs_export(
     if left
         .utf8_text(source.as_bytes())
         .is_ok_and(|text| text.trim() == "module.exports")
-        && let Some(module) = node
-            .child_by_field_name("right")
-            .and_then(|right| required_module(right, source))
     {
-        exports.push(ForwardedExport::All { module });
+        let Some(right) = node.child_by_field_name("right") else {
+            return;
+        };
+        if right.kind() == "object" {
+            let mut cursor = right.walk();
+            exports.extend(right.named_children(&mut cursor).filter_map(|pair| {
+                forwarded_namespace_member(
+                    semantic_node_name(pair.child_by_field_name("key")?, source)?,
+                    pair.child_by_field_name("value")?,
+                    source,
+                    imported_bindings,
+                )
+            }));
+        } else if let Some(module) = required_module(right, source) {
+            exports.push(ForwardedExport::All { module });
+        }
         return;
     }
     let Some(exported) = commonjs_named_export(left, source) else {

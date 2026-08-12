@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::javascript_literals::semantic_javascript_name as semantic_node_name;
-use crate::javascript_scopes::{ScopedBinding, root_binding_is_visible};
+use crate::javascript_scopes::{ScopedBinding, root_binding_is_visible, scoped_binding};
 use crate::wasm_dynamic_aliases::{
     loaded_module_specifier, scoped_wasm_module_visible, scoped_wasm_type_visible,
     unwrap_transparent_expression, wasm_module_specifier,
@@ -25,9 +25,40 @@ pub(super) fn collect_destructuring_aliases(
     wasm_instance_bindings: &HashMap<String, String>,
     scoped_wasm_namespaces: &[ScopedBinding],
     scoped_wasm_instances: &[ScopedBinding],
+    scoped_wasm_callables: &mut Vec<ScopedBinding>,
     imported_callable_bindings: &mut HashSet<String>,
     lines: &mut Vec<usize>,
 ) -> bool {
+    if binding.kind() == "array_pattern" && value.kind() == "array" {
+        let (mut bindings, mut values) = (binding.walk(), value.walk());
+        for (binding, value) in binding
+            .named_children(&mut bindings)
+            .zip(value.named_children(&mut values))
+        {
+            if let Some(callable) = wasm_callable_member_name(
+                value,
+                source,
+                source_path,
+                callable_names,
+                wasm_type_names,
+                wasm_types,
+                wasm_namespace_bindings,
+                wasm_class_bindings,
+                wasm_instance_bindings,
+                scoped_wasm_namespaces,
+                scoped_wasm_instances,
+            ) && let Some(name) = semantic_node_name(binding, source)
+            {
+                if name != callable {
+                    lines.push(first_line + binding.start_position().row);
+                }
+                if let Some(scoped) = scoped_binding(binding, source, None, None) {
+                    scoped_wasm_callables.push(scoped);
+                }
+            }
+        }
+        return true;
+    }
     if binding.kind() != "object_pattern" {
         return false;
     }
@@ -117,6 +148,7 @@ pub(super) fn collect_namespace_member_alias(
     wasm_instance_bindings: &HashMap<String, String>,
     scoped_wasm_namespaces: &[ScopedBinding],
     scoped_wasm_instances: &[ScopedBinding],
+    scoped_wasm_callables: &mut Vec<ScopedBinding>,
     imported_callable_bindings: &mut HashSet<String>,
     lines: &mut Vec<usize>,
 ) {
@@ -152,7 +184,11 @@ pub(super) fn collect_namespace_member_alias(
         lines.push(first_line + binding_name_node.start_position().row);
     }
     if binding.kind() == "identifier" {
-        imported_callable_bindings.insert(binding_name);
+        if let Some(scoped) = scoped_binding(binding, source, None, None) {
+            scoped_wasm_callables.push(scoped);
+        } else {
+            imported_callable_bindings.insert(binding_name);
+        }
     }
 }
 

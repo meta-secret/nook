@@ -28,6 +28,19 @@ pub(super) fn semantic_javascript_name(
     }
 }
 
+pub(super) fn callable_expression_name(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+) -> Option<String> {
+    let property = match node.kind() {
+        "identifier" => Some(node),
+        "member_expression" => node.child_by_field_name("property"),
+        "subscript_expression" => node.child_by_field_name("index"),
+        _ => None,
+    };
+    property.and_then(|property| semantic_javascript_name(property, source))
+}
+
 fn contains_template_substitution(node: tree_sitter::Node<'_>) -> bool {
     let mut cursor = node.walk();
     node.named_children(&mut cursor)
