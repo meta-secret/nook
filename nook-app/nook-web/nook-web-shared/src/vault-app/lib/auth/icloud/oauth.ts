@@ -86,9 +86,30 @@ export type ICloudOAuthTokens = {
   accountName: ICloudAccountName;
 };
 
-type ICloudWebAuthTokenRequestOptions = {
-  signInTimeoutMs?: number;
-  clickSignInControl?: boolean;
+export type ICloudWebAuthTokenRequest = {
+  readonly signInTimeoutMs: number;
+  readonly clickSignInControl: boolean;
+};
+
+type CloudKitAuthFailureLog = {
+  readonly message: string;
+  readonly details: CloudKitAuthErrorDetails;
+};
+
+type CloudKitRecordPreviewRequest = {
+  readonly container: CloudKitContainer;
+  readonly shortGuid: string;
+};
+
+type CloudKitSignInRequest = {
+  readonly container: CloudKitContainer;
+  readonly timeoutMs: number;
+  readonly clickSignInControl: boolean;
+};
+
+export type ICloudOAuthConfigurationUpdate = {
+  readonly tokens: ICloudOAuthTokens;
+  readonly existing: StoredOAuthFileConfiguration;
 };
 
 let cloudKitInitialization: CloudKitInitialization = {
@@ -153,12 +174,7 @@ function hasCloudKitSignInControl(): boolean {
   );
 }
 
-function logCloudKitAuthFailure({
-  message,
-}: {
-  readonly message: string;
-  readonly details: CloudKitAuthErrorDetails;
-}): void {
+function logCloudKitAuthFailure({ message }: CloudKitAuthFailureLog): void {
   log.warn(message);
 }
 
@@ -381,10 +397,7 @@ type CloudKitRecordPreview =
 async function previewCloudKitRecord({
   container,
   shortGuid,
-}: {
-  readonly container: CloudKitContainer;
-  readonly shortGuid: string;
-}): Promise<CloudKitRecordPreview> {
+}: CloudKitRecordPreviewRequest): Promise<CloudKitRecordPreview> {
   try {
     if (!container.fetchRecordInfos) {
       return { kind: CloudKitRecordPreviewKind.Unavailable };
@@ -542,16 +555,9 @@ export async function acceptICloudSharedVault(
 async function waitForCloudKitSignIn({
   container,
   timeoutMs,
-  options,
-}: {
-  readonly container: CloudKitContainer;
-  readonly timeoutMs: number;
-  readonly options: Pick<
-    ICloudWebAuthTokenRequestOptions,
-    "clickSignInControl"
-  >;
-}): Promise<CloudKitIdentity> {
-  const shouldClickSignInControl = options.clickSignInControl !== false;
+  clickSignInControl,
+}: CloudKitSignInRequest): Promise<CloudKitIdentity> {
+  const shouldClickSignInControl = clickSignInControl;
   const useDirectAuthWithoutNativeClick =
     shouldClickSignInControl && isBraveBrowser();
   log.info("CloudKit sign-in wait started");
@@ -641,7 +647,7 @@ async function waitForCloudKitSignIn({
 }
 
 export function requestPreparedICloudWebAuthToken(
-  options: ICloudWebAuthTokenRequestOptions = {},
+  request: ICloudWebAuthTokenRequest,
 ): Promise<ICloudOAuthTokens> {
   log.info("CloudKit prepared token request started");
   if (
@@ -662,8 +668,8 @@ export function requestPreparedICloudWebAuthToken(
   const waitForCloudKitSignInArgs: Parameters<typeof waitForCloudKitSignIn>[0] =
     {
       container,
-      timeoutMs: options.signInTimeoutMs ?? ICLOUD_SIGN_IN_TIMEOUT_MS,
-      options,
+      timeoutMs: request.signInTimeoutMs,
+      clickSignInControl: request.clickSignInControl,
     };
   return waitForCloudKitSignIn(waitForCloudKitSignInArgs).then((identity) =>
     requireStoredWebAuthToken(identity),
@@ -671,7 +677,7 @@ export function requestPreparedICloudWebAuthToken(
 }
 
 export async function requestICloudWebAuthToken(
-  options: ICloudWebAuthTokenRequestOptions = {},
+  request: ICloudWebAuthTokenRequest,
 ): Promise<ICloudOAuthTokens> {
   log.info("CloudKit direct token request started");
   await initICloudAuth();
@@ -701,8 +707,8 @@ export async function requestICloudWebAuthToken(
       typeof waitForCloudKitSignIn
     >[0] = {
       container,
-      timeoutMs: options.signInTimeoutMs ?? ICLOUD_SIGN_IN_TIMEOUT_MS,
-      options,
+      timeoutMs: request.signInTimeoutMs,
+      clickSignInControl: request.clickSignInControl,
     };
     await waitForCloudKitSignIn(waitForCloudKitSignInArgs2);
   }
@@ -713,10 +719,7 @@ export async function requestICloudWebAuthToken(
 export function oauthTokensToICloudConfig({
   tokens,
   existing,
-}: {
-  readonly tokens: ICloudOAuthTokens;
-  readonly existing: StoredOAuthFileConfiguration;
-}): OAuthFileConfig {
+}: ICloudOAuthConfigurationUpdate): OAuthFileConfig {
   return icloud_oauth_tokens_to_config(
     tokens.accessToken,
     tokens.accountName.kind === ICloudAccountNameKind.Available
@@ -732,7 +735,11 @@ export async function ensureValidICloudOAuthFileConfig(
   if (oauthAccessToken(config).kind === OAuthAccessTokenKind.Available) {
     return config;
   }
-  const refreshed = await requestICloudWebAuthToken();
+  const request: ICloudWebAuthTokenRequest = {
+    signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
+    clickSignInControl: true,
+  };
+  const refreshed = await requestICloudWebAuthToken(request);
   const oauthTokensToICloudConfigArgs: Parameters<
     typeof oauthTokensToICloudConfig
   >[0] = { tokens: refreshed, existing: configuredOAuthFile(config) };

@@ -23,13 +23,15 @@ export type OAuthOriginSupport =
 
 type BrowserLocation = Pick<Location, "origin" | "hostname">;
 
+export type OAuthOriginAssessment = {
+  readonly provider: BrowserOAuthProvider;
+  readonly location: BrowserLocation;
+};
+
 export function resolveOAuthOriginSupport({
   provider,
   location,
-}: {
-  readonly provider: BrowserOAuthProvider;
-  readonly location: BrowserLocation;
-}): OAuthOriginSupport {
+}: OAuthOriginAssessment): OAuthOriginSupport {
   const resolved = resolve_oauth_origin_support(
     provider,
     location.origin,

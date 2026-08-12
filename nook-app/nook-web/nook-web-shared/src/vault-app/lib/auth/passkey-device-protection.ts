@@ -72,6 +72,12 @@ type SanitizedPasskeyErrorName =
   | { kind: SanitizedPasskeyErrorNameKind.Omitted }
   | { kind: SanitizedPasskeyErrorNameKind.Safe; name: string };
 
+export type DeviceProtectionSetup = {
+  readonly manager: NookVaultManager;
+  readonly passkeyLabel: string;
+  readonly deviceMode: DeviceMode;
+};
+
 function sanitizedPasskeyErrorName(error: unknown): SanitizedPasskeyErrorName {
   if (!(error instanceof Error)) {
     return { kind: SanitizedPasskeyErrorNameKind.Omitted };
@@ -93,11 +99,7 @@ export async function setupDeviceProtection({
   manager,
   passkeyLabel,
   deviceMode,
-}: {
-  readonly manager: NookVaultManager;
-  readonly passkeyLabel: string;
-  readonly deviceMode: DeviceMode;
-}): Promise<void> {
+}: DeviceProtectionSetup): Promise<void> {
   await manager.setup_device_protection_with_passkey_mode(
     location.hostname,
     "Nook",

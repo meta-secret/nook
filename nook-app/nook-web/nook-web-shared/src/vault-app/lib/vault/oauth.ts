@@ -31,6 +31,7 @@ import {
   ensureValidOAuthFileConfig,
   fetchGoogleAccountEmail,
   GoogleAccountIdentityKind,
+  GoogleDriveOAuthScope,
   initGoogleAuth,
   isGoogleOAuthConfigured,
   GoogleOAuthPrompt,
@@ -42,6 +43,7 @@ import {
 import {
   acceptICloudSharedVault,
   createICloudSharedVault,
+  ICLOUD_SIGN_IN_TIMEOUT_MS,
   ensureValidICloudOAuthFileConfig,
   isICloudOAuthConfigured,
   oauthTokensToICloudConfig,
@@ -165,6 +167,7 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
             typeof requestGoogleDriveSharedAccess
           >[0] = {
             prompt: GoogleOAuthPrompt.Consent,
+            scope: GoogleDriveOAuthScope.AppData,
           };
           return requestGoogleDriveSharedAccess(
             requestGoogleDriveSharedAccessArgs,
@@ -475,7 +478,8 @@ export async function signInWithICloud({
     const requestPreparedICloudWebAuthTokenArgs: Parameters<
       typeof requestPreparedICloudWebAuthToken
     >[0] = {
-      clickSignInControl: options.clickPreparedControl,
+      clickSignInControl: options.clickPreparedControl ?? true,
+      signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
     };
     const tokenRequest = requestPreparedICloudWebAuthToken(
       requestPreparedICloudWebAuthTokenArgs,

@@ -57,6 +57,7 @@ import {
 } from "$lib/auth/google/oauth";
 import {
   acceptICloudSharedVault,
+  ICLOUD_SIGN_IN_TIMEOUT_MS,
   ICloudAccountNameKind,
   oauthTokensToICloudConfig,
   requestICloudWebAuthToken,
@@ -267,7 +268,14 @@ export async function connectWithEnrollmentCode({
                       }
                     : { kind: ICloudAccountNameKind.Unavailable as const },
               }
-            : await requestICloudWebAuthToken();
+            : await (() => {
+                const request: Parameters<typeof requestICloudWebAuthToken>[0] =
+                  {
+                    signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
+                    clickSignInControl: true,
+                  };
+                return requestICloudWebAuthToken(request);
+              })();
         const accepted = await acceptICloudSharedVault(
           storageTarget.storageTargetId,
         );

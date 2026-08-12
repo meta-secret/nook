@@ -133,13 +133,25 @@ export type DriveFileIdentity =
   | { kind: DriveFileIdentityKind.New }
   | { kind: DriveFileIdentityKind.Existing; fileId: string };
 
+export type DriveStorageReference = {
+  readonly identity: DriveFileIdentity;
+  readonly fileName: string;
+};
+
+export type VaultProviderMembership = {
+  readonly provider: StorageProvider;
+  readonly storeId: string;
+};
+
+export type OAuthFileDefaults = {
+  readonly preset: OAuthFilePreset;
+  readonly fileName: string;
+};
+
 export function formatDriveStorageRef({
   identity,
   fileName,
-}: {
-  readonly identity: DriveFileIdentity;
-  readonly fileName: string;
-}): string {
+}: DriveStorageReference): string {
   return identity.kind === DriveFileIdentityKind.Existing
     ? format_drive_storage_ref(identity.fileId, fileName)
     : format_new_drive_storage_ref(fileName);
@@ -188,10 +200,7 @@ export function scopedProviderVault(storeId: string): ProviderVaultScope {
 export function providerBelongsToVault({
   provider,
   storeId,
-}: {
-  readonly provider: StorageProvider;
-  readonly storeId: string;
-}): boolean {
+}: VaultProviderMembership): boolean {
   return (
     provider.storeId.state === "unscoped" || provider.storeId.value === storeId
   );
@@ -354,10 +363,7 @@ export function storedLocalFolderHandle(
 export function defaultOAuthFileConfig({
   preset,
   fileName,
-}: {
-  readonly preset: OAuthFilePreset;
-  readonly fileName: string;
-}): OAuthFileConfig {
+}: OAuthFileDefaults): OAuthFileConfig {
   return {
     preset,
     accessToken: signedOutOAuthCredential(),
@@ -488,13 +494,39 @@ export type DuplicateSyncProvider =
     }
   | { state: NookDuplicateSyncProviderState.Unique };
 
+export type SyncProviderCandidateSet = {
+  readonly providers: StorageProvider[];
+  readonly candidate: StorageProvider;
+};
+
+export type SyncProviderCandidateExclusion = SyncProviderCandidateSet & {
+  readonly excludeId: string;
+};
+
+export type AuthProviderPersistence = {
+  readonly manager: NookVaultManager;
+  readonly snapshot: AuthProvidersSnapshot;
+};
+
+export type ProviderLabelDetails = {
+  readonly detail?: string;
+  readonly oauthPreset?: OAuthFilePreset;
+};
+
+export type ProviderLabelRequest = {
+  readonly type: StorageProviderType;
+  readonly options: ProviderLabelDetails;
+};
+
+export type ProviderLabelLocalization = {
+  readonly label: string;
+  readonly t: (key: string) => string;
+};
+
 export function findDuplicateSyncProvider({
   providers,
   candidate,
-}: {
-  readonly providers: StorageProvider[];
-  readonly candidate: StorageProvider;
-}): DuplicateSyncProvider {
+}: SyncProviderCandidateSet): DuplicateSyncProvider {
   const findDuplicateSyncProviderWasmArgs: Parameters<
     typeof find_duplicate_sync_provider
   >[0] = { providers, activeVaultStoreId: unselectedVaultScope() };
@@ -520,11 +552,7 @@ export function findDuplicateSyncProviderExcluding({
   providers,
   candidate,
   excludeId,
-}: {
-  readonly providers: StorageProvider[];
-  readonly candidate: StorageProvider;
-  readonly excludeId: string;
-}): DuplicateSyncProvider {
+}: SyncProviderCandidateExclusion): DuplicateSyncProvider {
   const findDuplicateSyncProviderExcludingWasmArgs: Parameters<
     typeof find_duplicate_sync_provider_excluding
   >[0] = { providers, activeVaultStoreId: unselectedVaultScope() };
@@ -550,23 +578,14 @@ export function findDuplicateSyncProviderExcluding({
 export async function saveAuthProviders({
   manager,
   snapshot,
-}: {
-  readonly manager: NookVaultManager;
-  readonly snapshot: AuthProvidersSnapshot;
-}): Promise<void> {
+}: AuthProviderPersistence): Promise<void> {
   await manager.save_auth_providers_snapshot(snapshot);
 }
 
 export function providerDefaultLabel({
   type,
   options,
-}: {
-  readonly type: StorageProviderType;
-  readonly options: {
-    detail?: string;
-    oauthPreset?: OAuthFilePreset;
-  };
-}): string {
+}: ProviderLabelRequest): string {
   const oauthPreset = options.oauthPreset ?? "google-drive";
   return typeof options.detail === "string"
     ? provider_default_label(type, options.detail, oauthPreset)
@@ -576,10 +595,7 @@ export function providerDefaultLabel({
 export function localizeProviderLabel({
   label,
   t,
-}: {
-  readonly label: string;
-  readonly t: (key: string) => string;
-}): string {
+}: ProviderLabelLocalization): string {
   return localize_provider_label(
     label,
     t(I18N_KEYS.ProviderPickerThisDevice),
@@ -600,13 +616,17 @@ export type GithubPatDisplay =
   | { kind: GithubPatDisplayKind.NoToken }
   | { kind: GithubPatDisplayKind.Stored; pat: string };
 
-export function maskGithubPat({
-  state,
-  t,
-}: {
+export type GithubPatHintRequest = {
   readonly state: GithubPatDisplay;
   readonly t?: (key: string) => string;
-}): string {
+};
+
+export type ProviderStorageDescription = {
+  readonly provider: StorageProvider;
+  readonly t?: (key: string) => string;
+};
+
+export function maskGithubPat({ state, t }: GithubPatHintRequest): string {
   const hint = mask_github_pat_hint(
     state.kind === GithubPatDisplayKind.Stored
       ? storedGithubPat(state.pat)
@@ -626,10 +646,7 @@ export function maskGithubPat({
 export function providerStorageDetail({
   provider,
   t,
-}: {
-  readonly provider: StorageProvider;
-  readonly t?: (key: string) => string;
-}): string {
+}: ProviderStorageDescription): string {
   return provider_storage_detail(
     provider,
     t
