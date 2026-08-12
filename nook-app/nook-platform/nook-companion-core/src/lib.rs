@@ -40,7 +40,8 @@ pub use authentication_outcome_response::{
 pub use authentication_workflow::{
     AuthenticationPageObservation, AuthenticationPageObservations, AuthenticationWorkflowAction,
     AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowNotDetected,
-    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage, classify_authentication_workflow,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
+    authentication_form_observation_priority, classify_authentication_workflow,
     classify_authentication_workflow_candidates,
 };
 pub use authentication_workflow_response::{
@@ -116,8 +117,9 @@ pub use outcome_evidence::{
 };
 pub use page_field_classification::{
     LoginContextObservation, PageInputFieldObservation, PageInputType, expand_identity_text,
-    has_login_context, looks_like_email_verification_body, looks_like_manual_checkpoint_label,
-    looks_like_one_time_code_field, looks_like_passkey_control_label, looks_like_username_field,
+    has_login_context, looks_like_email_verification_body, looks_like_login_advance_control_label,
+    looks_like_manual_checkpoint_label, looks_like_one_time_code_field,
+    looks_like_passkey_control_label, looks_like_username_field,
 };
 pub use vault_host_policy::{
     DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError, belongs_to_sentinel_vault,
