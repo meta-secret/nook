@@ -285,7 +285,7 @@ export function syncOAuthRemoteRefFromManager(
   }
 }
 
-export interface VaultConnectAssessment {
+export interface VaultConnectAssessmentRequest {
   readonly state: ProviderActionsContext;
   readonly args: [string, string, string];
 }
@@ -326,7 +326,7 @@ export interface ProviderRemoval {
 export async function assessVaultConnectStatus({
   state,
   args,
-}: VaultConnectAssessment): Promise<VaultAccessStatus> {
+}: VaultConnectAssessmentRequest): Promise<VaultAccessStatus> {
   if (!state.hasManager)
     throw new Error(state.t(I18N_KEYS.ErrorsEngineUnavailable));
   const manager = state.requireManager();

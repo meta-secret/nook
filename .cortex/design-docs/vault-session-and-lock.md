@@ -92,12 +92,14 @@ discovered again.
 
 **Refresh:** `sessionStorage` flag `nook_vault_session_locked` blocks `shouldAutoUnlock()` until the user unlocks again (`markVaultUnlocked()` clears the flag). Device-key vaults still auto-unlock on reload when the user did **not** lock.
 
-**Unlock ordering:** Device-key unlock runs `loadProviders()` (and related
-provider hydrate) before `markVaultUnlocked()`. Fan-out after local save uses
-`syncProviders`; unlocking that path earlier lets a fast edit push with an
+**Unlock ordering:** Device-key unlock runs
+`loadProviders({ ensureLocalRow: false })` before `markVaultUnlocked()`.
+The explicit policy loads only the persisted provider snapshot. It does not
+create a local provider row during unlock. Fan-out after local save uses
+`syncProviders`. Unlocking that path earlier lets a fast edit push with an
 empty provider list and leave the remote event log stale. Backup-password
-unlock is the exception: it may open the local vault while the device identity
-and its sealed provider credentials remain locked, and remote fan-out stays
+unlock is the exception. It may open the local vault while the device identity
+and its sealed provider credentials remain locked. Remote fan-out stays
 disabled until device authorization.
 
 After lock, the app stays in **`LoginGate`** without opening a passkey prompt.
