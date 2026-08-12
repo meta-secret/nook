@@ -31,15 +31,34 @@ import { syncError } from "$lib/vault/sync-runtime";
 
 const log = createLogger("vault-sync");
 
+interface LocalFolderMultipleVaultsIssue {
+  readonly provider: StorageProvider;
+  readonly storeIds: string[];
+  readonly message: string;
+}
+
+interface ProviderStoreMismatchConflict {
+  readonly state: SyncActionsContext;
+  readonly provider: StorageProvider;
+  readonly localStoreId: string;
+  readonly remoteStoreId: string;
+}
+
+interface LocalFolderProviderSync {
+  readonly state: SyncActionsContext;
+  readonly provider: StorageProvider;
+}
+
+interface StagedLocalFolderMultipleVaultsIssue {
+  readonly state: SyncActionsContext;
+  readonly issue: NookLocalFolderHealth;
+}
+
 function localFolderMultipleVaultsHealthFromTypedIssue({
   provider,
   storeIds,
   message,
-}: {
-  readonly provider: StorageProvider;
-  readonly storeIds: string[];
-  readonly message: string;
-}): NookLocalFolderHealth {
+}: LocalFolderMultipleVaultsIssue): NookLocalFolderHealth {
   if (provider.type !== "local-folder") {
     throw new Error("Multiple-vault storage issue requires a local folder");
   }
@@ -56,12 +75,7 @@ async function stageProviderStoreMismatchConflict({
   provider,
   localStoreId,
   remoteStoreId,
-}: {
-  readonly state: SyncActionsContext;
-  readonly provider: StorageProvider;
-  readonly localStoreId: string;
-  readonly remoteStoreId: string;
-}): Promise<boolean> {
+}: ProviderStoreMismatchConflict): Promise<boolean> {
   const localYaml = await read_local_vault_yaml().catch(() => "");
   const args =
     provider.type === "local-folder"
@@ -93,10 +107,7 @@ async function stageProviderStoreMismatchConflict({
 export async function syncLocalFolderProvider({
   state,
   provider,
-}: {
-  readonly state: SyncActionsContext;
-  readonly provider: StorageProvider;
-}): Promise<void> {
+}: LocalFolderProviderSync): Promise<void> {
   if (!state.hasManager) {
     throw new Error(state.t(I18N_KEYS.ErrorsManagerUninitialized));
   }
@@ -127,10 +138,7 @@ export async function syncLocalFolderProvider({
 function stageLocalFolderMultipleVaultsIssue({
   state,
   issue,
-}: {
-  readonly state: SyncActionsContext;
-  readonly issue: NookLocalFolderHealth;
-}) {
+}: StagedLocalFolderMultipleVaultsIssue) {
   log.warn("local folder contains multiple vault logs");
   state.reportLocalFolderMultipleVaults(issue);
 }

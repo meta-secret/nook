@@ -23,6 +23,22 @@ import { refreshLoginUnlockCapabilities } from "$lib/vault/login-unlock-capabili
 
 const log = createLogger("vault-local");
 
+export interface LoginVaultSelection {
+  readonly state: VaultState;
+  readonly storeId: string;
+}
+
+export interface LocalVaultCreation {
+  readonly state: VaultState;
+  readonly label?: string;
+}
+
+export interface LocalVaultRename {
+  readonly state: VaultState;
+  readonly storeId: string;
+  readonly label: string;
+}
+
 export async function reloadProvidersForActiveVault(
   state: VaultState,
 ): Promise<void> {
@@ -45,10 +61,7 @@ export function beginLoginVaultPicker(state: VaultState): void {
 export async function chooseLoginVault({
   state,
   storeId,
-}: {
-  readonly state: VaultState;
-  readonly storeId: string;
-}): Promise<void> {
+}: LoginVaultSelection): Promise<void> {
   await state.selectVaultForUnlock(storeId);
   state.selectLoginVault(storeId);
 }
@@ -56,10 +69,7 @@ export async function chooseLoginVault({
 export async function switchToVault({
   state,
   storeId,
-}: {
-  readonly state: VaultState;
-  readonly storeId: string;
-}): Promise<void> {
+}: LoginVaultSelection): Promise<void> {
   const switchDecision = state.clientPolicy.vault_switch_target(
     storeId,
     state.hasActiveVaultStore,
@@ -147,10 +157,7 @@ export async function prepareLocalLogin(state: VaultState): Promise<void> {
 export async function selectVaultForUnlock({
   state,
   storeId,
-}: {
-  readonly state: VaultState;
-  readonly storeId: string;
-}): Promise<void> {
+}: LoginVaultSelection): Promise<void> {
   state.errorMsg = "";
   state.dismissSuccess();
   state.isVerifying = true;
@@ -196,10 +203,7 @@ export async function prepareExistingVaultImportSlot(
 export async function createLocalVaultWithDeviceKeys({
   state,
   label,
-}: {
-  readonly state: VaultState;
-  readonly label?: string;
-}): Promise<void> {
+}: LocalVaultCreation): Promise<void> {
   if (!state.hasManager) {
     state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
     return;
@@ -284,11 +288,7 @@ export async function renameLocalVaultLabel({
   state,
   storeId,
   label,
-}: {
-  readonly state: VaultState;
-  readonly storeId: string;
-  readonly label: string;
-}): Promise<void> {
+}: LocalVaultRename): Promise<void> {
   const trimmedStoreId = storeId.trim();
   const trimmedLabel = label.trim();
   if (!trimmedStoreId) return;
@@ -370,10 +370,7 @@ export async function syncActiveVaultStoreIdToAuth(
 export async function activateConnectedExistingVault({
   state,
   storeId,
-}: {
-  readonly state: VaultState;
-  readonly storeId: string;
-}): Promise<void> {
+}: LoginVaultSelection): Promise<void> {
   if (!state.hasManager || !state.isAuthenticated) return;
   const connectedStoreId = requireManagerVaultStoreId(state.requireManager());
   if (connectedStoreId !== storeId) {

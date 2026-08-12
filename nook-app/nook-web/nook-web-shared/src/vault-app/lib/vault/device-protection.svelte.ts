@@ -25,6 +25,38 @@ import {
 
 const log = createLogger("vault-device-protection");
 
+interface AuthorizedDeviceInitialization {
+  readonly state: VaultState;
+  readonly mode: DeviceProtectionStatus;
+}
+
+interface FailedDeviceAuthorization {
+  readonly state: VaultState;
+  readonly deviceIdentityUnlocked: boolean;
+}
+
+interface PasskeyCeremonyLogEntry {
+  readonly message: string;
+  readonly data: ReturnType<typeof sanitizedPasskeyCeremonyData>;
+}
+
+export interface DeviceProtectionSetup {
+  readonly state: VaultState;
+  readonly passkeyLabel: string;
+  readonly deviceMode: DeviceMode;
+}
+
+export interface PinDeviceProtectionSetup {
+  readonly state: VaultState;
+  readonly pin: string;
+  readonly confirmPin: string;
+}
+
+export interface PinDeviceProtectionUnlock {
+  readonly state: VaultState;
+  readonly pin: string;
+}
+
 export function lockDeviceProtection(state: VaultState): Promise<void> {
   state.deviceProtectionStatus = state.deviceProtectionLockedStatus;
   state.deviceAuthorizationInProgress = false;
@@ -62,10 +94,7 @@ export function lockDeviceProtection(state: VaultState): Promise<void> {
 async function finishAuthorizedInitialization({
   state,
   mode,
-}: {
-  readonly state: VaultState;
-  readonly mode: DeviceProtectionStatus;
-}): Promise<void> {
+}: AuthorizedDeviceInitialization): Promise<void> {
   state.deviceAuthorizationInProgress = true;
   state.deviceProtectionLockedStatus = mode;
   await state.continueInitializationAfterDeviceUnlock();
@@ -75,10 +104,7 @@ async function finishAuthorizedInitialization({
 function lockFailedAuthorization({
   state,
   deviceIdentityUnlocked,
-}: {
-  readonly state: VaultState;
-  readonly deviceIdentityUnlocked: boolean;
-}): void {
+}: FailedDeviceAuthorization): void {
   if (
     state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
     deviceIdentityUnlocked
@@ -87,13 +113,7 @@ function lockFailedAuthorization({
   }
 }
 
-function logPasskeyCeremony({
-  message,
-  data,
-}: {
-  readonly message: string;
-  readonly data: ReturnType<typeof sanitizedPasskeyCeremonyData>;
-}): void {
+function logPasskeyCeremony({ message, data }: PasskeyCeremonyLogEntry): void {
   const context: Parameters<typeof log.warnWithContext>[0] = {
     message,
     serializedContext: JSON.stringify(data),
@@ -105,11 +125,7 @@ export async function setupDeviceProtection({
   state,
   passkeyLabel,
   deviceMode,
-}: {
-  readonly state: VaultState;
-  readonly passkeyLabel: string;
-  readonly deviceMode: DeviceMode;
-}): Promise<void> {
+}: DeviceProtectionSetup): Promise<void> {
   if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
@@ -268,11 +284,7 @@ export async function setupPinDeviceProtection({
   state,
   pin,
   confirmPin,
-}: {
-  readonly state: VaultState;
-  readonly pin: string;
-  readonly confirmPin: string;
-}): Promise<void> {
+}: PinDeviceProtectionSetup): Promise<void> {
   if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
@@ -352,10 +364,7 @@ export async function unlockDeviceProtection(state: VaultState): Promise<void> {
 export async function unlockPinDeviceProtection({
   state,
   pin,
-}: {
-  readonly state: VaultState;
-  readonly pin: string;
-}): Promise<void> {
+}: PinDeviceProtectionUnlock): Promise<void> {
   if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
