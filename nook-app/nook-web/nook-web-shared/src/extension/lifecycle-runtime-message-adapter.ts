@@ -8,7 +8,7 @@ import {
   type OpenSimpleVaultMessage,
 } from './lifecycle-runtime-messages'
 
-export function isRuntimeMessage(
+export function hasRuntimeMessageType(
   message: unknown,
 ): message is { type: string } {
   return (
@@ -23,7 +23,7 @@ export function isOpenSimpleVaultMessage(
   message: unknown,
 ): message is OpenSimpleVaultMessage {
   return (
-    isRuntimeMessage(message) &&
+    hasRuntimeMessageType(message) &&
     message.type === OpenSimpleVaultMessageType.NookOpenSimpleVault
   )
 }
@@ -32,7 +32,7 @@ export function isBeginExtensionPairingMessage(
   message: unknown,
 ): message is BeginExtensionPairingMessage {
   if (
-    !isRuntimeMessage(message) ||
+    !hasRuntimeMessageType(message) ||
     message.type !== BeginExtensionPairingMessageType.NookBeginExtensionPairing ||
     !('payload' in message) ||
     typeof message.payload !== 'object' ||
@@ -74,7 +74,7 @@ export function isExtensionLocalEventLogUpdatedMessage(
   message: unknown,
 ): message is ExtensionLocalEventLogUpdatedMessage {
   if (
-    !isRuntimeMessage(message) ||
+    !hasRuntimeMessageType(message) ||
     message.type !==
       ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated ||
     !('payload' in message) ||

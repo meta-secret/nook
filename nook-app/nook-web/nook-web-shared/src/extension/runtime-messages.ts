@@ -18,10 +18,10 @@ import {
   type OpenSimpleVaultMessage,
 } from "./lifecycle-runtime-messages";
 import {
+  hasRuntimeMessageType,
   isBeginExtensionPairingMessage,
   isExtensionLocalEventLogUpdatedMessage,
   isOpenSimpleVaultMessage,
-  isRuntimeMessage,
 } from "./lifecycle-runtime-message-adapter";
 
 export {
@@ -31,7 +31,6 @@ export {
   isExtensionLocalEventLogUpdatedMessage,
   isOpenCompanionLauncherMessage,
   isOpenSimpleVaultMessage,
-  isRuntimeMessage,
   OpenCompanionLauncherMessageType,
   OpenSimpleVaultMessageType,
   type BeginExtensionPairingMessage,
@@ -194,6 +193,10 @@ export type RuntimeMessage =
   | ExtensionPairedVaultIdentityHandoffRequestMessage
   | ExtensionPairingApprovedMessage
   | ExtensionLocalEventLogUpdatedMessage;
+
+export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
+  return hasRuntimeMessageType(message);
+}
 
 function isExtensionEventLogRecord(
   value: unknown,
