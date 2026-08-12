@@ -27,6 +27,12 @@ test('open a new local vault without an empty-device sync error', async ({
   await expect(page.getByTestId('header-lock-vault-btn')).toBeEnabled()
   await page.waitForTimeout(DEMO_BEAT_MS)
 
+  const languageSelect = page.getByTestId('header-language-select')
+  await languageSelect.click()
+  await page.getByTestId('header-language-option-ru').click()
+  await expect(languageSelect).toHaveText('RU')
+  await page.waitForTimeout(DEMO_BEAT_MS)
+
   await flushNookLogPersistQueue(page)
   const logs = await readPersistedAppLogs(page)
   expect(
