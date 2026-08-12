@@ -287,44 +287,44 @@ pub(super) fn collect_type_pattern_aliases(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn collect_object_literal_aliases(
-    object: tree_sitter::Node<'_>,
-    source: &str,
-    source_path: &Path,
-    first_line: usize,
-    callable_names: &HashSet<String>,
-    wasm_type_names: &HashSet<String>,
-    wasm_types: &WasmTypeInventory,
-    wasm_namespace_bindings: &HashMap<String, String>,
-    wasm_class_bindings: &HashMap<String, String>,
-    wasm_instance_bindings: &HashMap<String, String>,
-    scoped_wasm_namespaces: &[ScopedBinding],
-    scoped_wasm_instances: &[ScopedBinding],
-    scoped_wasm_callables: &mut Vec<ScopedBinding>,
-    lines: &mut Vec<usize>,
-) {
+#[rustfmt::skip]
+pub(super) fn collect_object_literal_aliases(object: tree_sitter::Node<'_>, source: &str, source_path: &Path, first_line: usize, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], scoped_wasm_instances: &[ScopedBinding], scoped_wasm_callables: &mut Vec<ScopedBinding>, imported_callable_bindings: &HashSet<String>, lines: &mut Vec<usize>) {
     let mut cursor = object.walk();
     for child in object.named_children(&mut cursor) {
-        if child.kind() == "pair"
-            && let (Some(key), Some(value)) = (
+        let pair = (child.kind() == "pair").then(|| {
+            Some((
                 child.child_by_field_name("key"),
                 child.child_by_field_name("value"),
-            )
-            && let Some(property_name) = semantic_node_name(key, source)
-            && let Some(callable_name) = wasm_callable_member_name(
-                value,
-                source,
-                source_path,
-                callable_names,
-                wasm_type_names,
-                wasm_types,
-                wasm_namespace_bindings,
-                wasm_class_bindings,
-                wasm_instance_bindings,
-                scoped_wasm_namespaces,
-                scoped_wasm_instances,
-            )
-        {
+            ))
+        });
+        let shorthand = matches!(child.kind(), "shorthand_property_identifier" | "shorthand_property_identifier_pattern").then_some((Some(child), Some(child)));
+        let Some((Some(key), Some(value))) = pair.flatten().or(shorthand) else {
+            continue;
+        };
+        let Some(property_name) = semantic_node_name(key, source) else {
+            continue;
+        };
+        let callable_name = wasm_callable_member_name(
+            value,
+            source,
+            source_path,
+            callable_names,
+            wasm_type_names,
+            wasm_types,
+            wasm_namespace_bindings,
+            wasm_class_bindings,
+            wasm_instance_bindings,
+            scoped_wasm_namespaces,
+            scoped_wasm_instances,
+        )
+        .or_else(|| {
+            let name = semantic_node_name(value, source)?;
+            ((imported_callable_bindings.contains(&name)
+                && root_binding_is_visible(value, &name, source))
+                || scoped_binding_is_visible(value, &name, source, scoped_wasm_callables))
+            .then_some(name)
+        });
+        if let Some(callable_name) = callable_name {
             if property_name != callable_name {
                 lines.push(first_line + key.start_position().row);
             }
@@ -357,6 +357,7 @@ pub(super) fn collect_object_literal_aliases_in_tree(
     scoped_wasm_namespaces: &[ScopedBinding],
     scoped_wasm_instances: &[ScopedBinding],
     scoped_wasm_callables: &mut Vec<ScopedBinding>,
+    imported_callable_bindings: &HashSet<String>,
     lines: &mut Vec<usize>,
 ) {
     if node.kind() == "object" {
@@ -374,6 +375,7 @@ pub(super) fn collect_object_literal_aliases_in_tree(
             scoped_wasm_namespaces,
             scoped_wasm_instances,
             scoped_wasm_callables,
+            imported_callable_bindings,
             lines,
         );
     }
@@ -393,26 +395,22 @@ pub(super) fn collect_object_literal_aliases_in_tree(
             scoped_wasm_namespaces,
             scoped_wasm_instances,
             scoped_wasm_callables,
+            imported_callable_bindings,
             lines,
         );
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-fn wasm_callable_member_name(
-    value: tree_sitter::Node<'_>,
-    source: &str,
-    source_path: &Path,
-    callable_names: &HashSet<String>,
-    wasm_type_names: &HashSet<String>,
-    wasm_types: &WasmTypeInventory,
-    wasm_namespace_bindings: &HashMap<String, String>,
-    wasm_class_bindings: &HashMap<String, String>,
-    wasm_instance_bindings: &HashMap<String, String>,
-    scoped_wasm_namespaces: &[ScopedBinding],
-    scoped_wasm_instances: &[ScopedBinding],
-) -> Option<String> {
+#[rustfmt::skip]
+fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_path: &Path, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], scoped_wasm_instances: &[ScopedBinding]) -> Option<String> {
     let mut value = unwrap_transparent_expression(value);
+    if value.kind() == "sequence_expression" {
+        let mut cursor = value.walk();
+        return value.named_children(&mut cursor).last().and_then(|result| {
+            wasm_callable_member_name(result, source, source_path, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, scoped_wasm_namespaces, scoped_wasm_instances)
+        });
+    }
     if matches!(value.kind(), "ternary_expression" | "binary_expression") {
         let mut cursor = value.walk();
         return value.named_children(&mut cursor).find_map(|branch| {

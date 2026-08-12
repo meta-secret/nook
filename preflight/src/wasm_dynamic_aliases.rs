@@ -13,7 +13,8 @@ use crate::javascript_scopes::{
 use crate::wasm_dynamic_callables::collect_scoped_dynamic_callable_bindings;
 use crate::wasm_factories::{
     collect_factory_calls_for_receivers, collect_imported_wasm_instance_factories,
-    collect_member_alias_receiver_names, collect_wasm_instance_factories,
+    collect_member_alias_receiver_names, collect_typed_wasm_instances,
+    collect_wasm_instance_factories,
 };
 use crate::wasm_inventory::WasmTypeInventory;
 use crate::wasm_member_aliases::{
@@ -224,7 +225,7 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         &mut imported_wasm_factories,
     );
     collect_wasm_runtime_receivers(node, source, &mut scoped_wasm_runtime_receivers);
-    collect_typed_wasm_parameters(
+    collect_typed_wasm_instances(
         node,
         source,
         wasm_class_bindings,
@@ -275,6 +276,7 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         &scoped_wasm_namespaces,
         &scoped_wasm_instances,
         &mut scoped_wasm_callables,
+        imported_callable_bindings,
         lines,
     );
     collect_dynamic_wasm_aliases(
@@ -856,33 +858,6 @@ fn wasm_runtime_accessor_receiver_is_visible(
     receiver.utf8_text(source.as_bytes()).is_ok_and(|name| {
         scoped_binding_is_visible(receiver, name, source, scoped_wasm_runtime_receivers)
     })
-}
-
-fn collect_typed_wasm_parameters(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    classes: &HashMap<String, String>,
-    instances: &mut Vec<ScopedBinding>,
-) {
-    if matches!(node.kind(), "required_parameter" | "optional_parameter")
-        && let Some(binding) = node
-            .child_by_field_name("name")
-            .or_else(|| node.child_by_field_name("pattern"))
-        && let Some(annotation) = node.child_by_field_name("type").or_else(|| {
-            let mut cursor = node.walk();
-            node.named_children(&mut cursor)
-                .find(|child| child.kind() == "type_annotation")
-        })
-        && let Ok(text) = annotation.utf8_text(source.as_bytes())
-        && let Some(wasm_type) = classes.get(text.trim().trim_start_matches(':').trim())
-        && let Some(scoped) = scoped_binding(binding, source, Some(wasm_type.clone()), None)
-    {
-        instances.push(scoped);
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_typed_wasm_parameters(child, source, classes, instances);
-    }
 }
 
 pub(super) fn wasm_module_specifier(

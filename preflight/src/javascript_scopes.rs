@@ -18,7 +18,12 @@ pub(super) fn scoped_binding(
     while let Some(node) = ancestor {
         if matches!(
             node.kind(),
-            "function_declaration" | "function_expression" | "arrow_function" | "method_definition"
+            "function_declaration"
+                | "function_expression"
+                | "generator_function_declaration"
+                | "generator_function"
+                | "arrow_function"
+                | "method_definition"
         ) {
             let body = node.child_by_field_name("body")?;
             return Some(ScopedBinding {

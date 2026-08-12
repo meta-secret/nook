@@ -46,39 +46,70 @@ pub(super) fn collect_wasm_instance_factories(
     }
 }
 
-fn inferred_wasm_class(
-    function: tree_sitter::Node<'_>,
-    source: &str,
-    classes: &HashMap<String, String>,
-) -> Option<String> {
+#[rustfmt::skip]
+fn inferred_wasm_class(function: tree_sitter::Node<'_>, source: &str, classes: &HashMap<String, String>) -> Option<String> {
     let body = function.child_by_field_name("body")?;
-    returned_wasm_class(body, source, classes)
+    if body.kind() == "statement_block" {
+        find_returned_wasm_class(body, source, classes)
+    } else {
+        constructed_wasm_class(body, source, classes)
+    }
 }
 
-fn returned_wasm_class(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    classes: &HashMap<String, String>,
-) -> Option<String> {
+#[rustfmt::skip]
+fn find_returned_wasm_class(node: tree_sitter::Node<'_>, source: &str, classes: &HashMap<String, String>) -> Option<String> {
+    if node.kind() == "return_statement" {
+        return constructed_wasm_class(node, source, classes);
+    }
+    if matches!(node.kind(), "function_declaration" | "function_expression" | "generator_function_declaration" | "generator_function" | "arrow_function") {
+        return None;
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .find_map(|child| find_returned_wasm_class(child, source, classes))
+}
+
+#[rustfmt::skip]
+fn constructed_wasm_class(node: tree_sitter::Node<'_>, source: &str, classes: &HashMap<String, String>) -> Option<String> {
     if node.kind() == "new_expression" {
         return node
             .child_by_field_name("constructor")
             .and_then(|constructor| semantic_node_name(constructor, source))
             .and_then(|name| classes.get(&name).cloned());
     }
-    if matches!(
-        node.kind(),
-        "function_declaration"
-            | "function_expression"
-            | "generator_function_declaration"
-            | "generator_function"
-            | "arrow_function"
-    ) {
-        return None;
-    }
     let mut cursor = node.walk();
     node.named_children(&mut cursor)
-        .find_map(|child| returned_wasm_class(child, source, classes))
+        .find_map(|child| constructed_wasm_class(child, source, classes))
+}
+
+#[rustfmt::skip]
+pub(super) fn collect_typed_wasm_instances(node: tree_sitter::Node<'_>, source: &str, classes: &HashMap<String, String>, instances: &mut Vec<ScopedBinding>) {
+    if matches!(node.kind(), "required_parameter" | "optional_parameter" | "public_field_definition")
+        && let Some(binding) = node.child_by_field_name("name").or_else(|| node.child_by_field_name("pattern"))
+        && let Some(annotation) = node.child_by_field_name("type").or_else(|| {
+            let mut cursor = node.walk();
+            node.named_children(&mut cursor)
+                .find(|child| child.kind() == "type_annotation")
+        })
+        && let Ok(text) = annotation.utf8_text(source.as_bytes())
+        && let Some(wasm_type) = classes.get(text.trim().trim_start_matches(':').trim())
+        && let Some(mut scoped) = scoped_binding(binding, source, Some(wasm_type.clone()), None)
+    {
+        if node.kind() == "public_field_definition"
+            && let Some(name) = semantic_node_name(binding, source)
+        {
+            scoped.name = format!("this.{name}");
+            if let Some(body) = node.parent() {
+                scoped.scope_start = body.start_byte();
+                scoped.scope_end = body.end_byte();
+            }
+        }
+        instances.push(scoped);
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_typed_wasm_instances(child, source, classes, instances);
+    }
 }
 
 pub(super) fn collect_imported_wasm_instance_factories(
