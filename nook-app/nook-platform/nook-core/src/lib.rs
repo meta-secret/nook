@@ -337,7 +337,8 @@ pub use vault_client_policy::{
     ExternalDeviceIdentityAuthorizationMode, JoinEnrollmentState, ProviderSyncFailureHandling,
     ProviderSyncFreshness, ProviderSyncVisibility, RemoteVaultAssessDecision,
     RemoteVaultRecoveryState, SentinelVaultUnlockState, UnauthenticatedSyncDecision,
-    VaultAccessObservation, VaultClientPolicy, VaultEditDecision, VaultSwitchDecision,
+    VaultAccessObservation, VaultClientPolicy, VaultConnectGateDecision, VaultConnectProbeDecision,
+    VaultEditDecision, VaultSwitchDecision,
 };
 pub use vault_connect::{
     LoadedVault, UnlockedVault, VaultAccessStatus, VaultContentMetadata,

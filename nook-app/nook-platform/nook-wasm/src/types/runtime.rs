@@ -414,6 +414,43 @@ impl NookVaultClientPolicy {
 
     #[wasm_bindgen]
     #[must_use]
+    pub fn vault_connect_probe_decision(
+        &self,
+        access_status: nook_core::VaultAccessStatus,
+        authenticated: bool,
+        sync_provider_count: u32,
+    ) -> nook_core::VaultConnectProbeDecision {
+        nook_core::VaultClientPolicy::vault_connect_probe_decision(
+            access_status,
+            authenticated,
+            sync_provider_count as usize,
+        )
+    }
+
+    #[wasm_bindgen]
+    #[must_use]
+    pub fn vault_connect_gate_decision(
+        &self,
+        access_status: nook_core::VaultAccessStatus,
+        password_entry_count: u32,
+    ) -> nook_core::VaultConnectGateDecision {
+        nook_core::VaultClientPolicy::vault_connect_gate_decision(
+            access_status,
+            password_entry_count as usize,
+        )
+    }
+
+    #[wasm_bindgen]
+    #[must_use]
+    pub fn vault_connect_password_lookup_required(
+        &self,
+        access_status: nook_core::VaultAccessStatus,
+    ) -> bool {
+        nook_core::VaultClientPolicy::vault_connect_password_lookup_required(access_status)
+    }
+
+    #[wasm_bindgen]
+    #[must_use]
     pub fn unauthenticated_sync_decision(
         &self,
         changed: bool,
