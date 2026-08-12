@@ -31,12 +31,6 @@ import { syncError } from "$lib/vault/sync-runtime";
 
 const log = createLogger("vault-sync");
 
-interface LocalFolderMultipleVaultsIssue {
-  readonly provider: StorageProvider;
-  readonly storeIds: string[];
-  readonly message: string;
-}
-
 interface ProviderStoreMismatchConflict {
   readonly state: SyncActionsContext;
   readonly provider: StorageProvider;
@@ -52,22 +46,6 @@ interface LocalFolderProviderSync {
 interface StagedLocalFolderMultipleVaultsIssue {
   readonly state: SyncActionsContext;
   readonly issue: NookLocalFolderHealth;
-}
-
-function localFolderMultipleVaultsHealthFromTypedIssue({
-  provider,
-  storeIds,
-  message,
-}: LocalFolderMultipleVaultsIssue): NookLocalFolderHealth {
-  if (provider.type !== "local-folder") {
-    throw new Error("Multiple-vault storage issue requires a local folder");
-  }
-  return NookLocalFolderHealth.multiple_vaults(
-    provider.id,
-    provider.label,
-    storeIds,
-    message,
-  );
 }
 
 async function stageProviderStoreMismatchConflict({
@@ -251,13 +229,22 @@ export async function syncProviderById({
             stageProviderStoreMismatchConflictArgs,
           );
         } else if (eventLogIssue.isMultipleStores) {
-          const localFolderMultipleVaultsHealthFromTypedIssueArgs: Parameters<
-            typeof localFolderMultipleVaultsHealthFromTypedIssue
-          >[0] = { provider, storeIds: eventLogIssue.storeIds, message };
+          if (provider.type !== "local-folder") {
+            const multipleVaultStorageIssueErrorOptions: ErrorOptions = {
+              cause: e,
+            };
+            throw new Error(
+              "Multiple-vault storage issue requires a local folder",
+              multipleVaultStorageIssueErrorOptions,
+            );
+          }
           localFolderInspection = {
             kind: LocalFolderInspectionKind.MultipleVaults,
-            issue: localFolderMultipleVaultsHealthFromTypedIssue(
-              localFolderMultipleVaultsHealthFromTypedIssueArgs,
+            issue: NookLocalFolderHealth.multiple_vaults(
+              provider.id,
+              provider.label,
+              eventLogIssue.storeIds,
+              message,
             ),
           };
         }
