@@ -362,6 +362,10 @@ export default wasm.generate_secret_id;"#,
             r#"import generateSecretId from "./default-bridge";"#,
         ),
         (
+            "generated-default-init.ts",
+            r#"import initNookWasm from "$app-wasm";"#,
+        ),
+        (
             "escaped-import.ts",
             "import { generate_\\u0073ecret_id as generateSecretId } from \"$app-wasm\";",
         ),

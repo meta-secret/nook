@@ -306,13 +306,13 @@ fn module_reexports_wasm_symbol(
     visited: &mut HashSet<(PathBuf, String)>,
 ) -> bool {
     if WASM_MODULE_ALIASES.contains(&module) {
-        return true;
+        return exported_name != "default";
     }
     let Some(resolved) = resolve_module(module, source_path) else {
         return false;
     };
     if is_known_wasm_path(&strip_module_extension(resolved.clone())) {
-        return true;
+        return exported_name != "default";
     }
     if !visited.insert((resolved.clone(), exported_name.to_owned())) {
         return false;
