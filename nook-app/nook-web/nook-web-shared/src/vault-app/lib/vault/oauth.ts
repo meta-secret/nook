@@ -31,6 +31,7 @@ import {
   ensureValidOAuthFileConfig,
   fetchGoogleAccountEmail,
   GoogleAccountIdentityKind,
+  GoogleDriveOAuthScope,
   initGoogleAuth,
   isGoogleOAuthConfigured,
   GoogleOAuthPrompt,
@@ -42,6 +43,7 @@ import {
 import {
   acceptICloudSharedVault,
   createICloudSharedVault,
+  ICLOUD_SIGN_IN_TIMEOUT_MS,
   ensureValidICloudOAuthFileConfig,
   isICloudOAuthConfigured,
   oauthTokensToICloudConfig,
@@ -68,6 +70,11 @@ import {
 } from "$lib/vault/state/provider.svelte";
 
 const log = createLogger("vault-oauth");
+
+export type ICloudSignInRequest = {
+  readonly state: VaultState;
+  readonly clickPreparedControl: boolean;
+};
 
 export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
   if (
@@ -176,6 +183,7 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
             typeof requestGoogleAccessToken
           >[0] = {
             prompt: GoogleOAuthPrompt.Consent,
+            scope: GoogleDriveOAuthScope.AppData,
           };
           return requestGoogleAccessToken(requestGoogleAccessTokenArgs);
         })();
@@ -435,11 +443,8 @@ export async function useGoogleSharedFolder({
 
 export async function signInWithICloud({
   state,
-  options,
-}: {
-  readonly state: VaultState;
-  readonly options: { clickPreparedControl?: boolean };
-}): Promise<void> {
+  clickPreparedControl,
+}: ICloudSignInRequest): Promise<void> {
   log.info("iCloud sign-in requested");
   if (!isICloudOAuthConfigured()) {
     state.errorMsg = state.t(I18N_KEYS.ProviderSetupIcloudOauthUnconfigured);
@@ -475,7 +480,8 @@ export async function signInWithICloud({
     const requestPreparedICloudWebAuthTokenArgs: Parameters<
       typeof requestPreparedICloudWebAuthToken
     >[0] = {
-      clickSignInControl: options.clickPreparedControl,
+      clickSignInControl: clickPreparedControl,
+      signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
     };
     const tokenRequest = requestPreparedICloudWebAuthToken(
       requestPreparedICloudWebAuthTokenArgs,

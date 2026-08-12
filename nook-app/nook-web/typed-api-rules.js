@@ -14,6 +14,7 @@ export const namedParameterContractFiles = [
   "nook-web-shared/src/vault-app/lib/app/**/*.{ts,svelte}",
   "nook-web-shared/src/vault-app/lib/content/**/*.{ts,svelte}",
   "nook-web-shared/src/vault-app/lib/runtime/**/*.{ts,svelte}",
+  "nook-web-shared/src/vault-app/lib/auth/**/*.{ts,svelte}",
   "nook-web-shared/src/vault-app/lib/vault/state/**/*.{ts,svelte}",
   "nook-web-shared/src/vault-app/lib/auth/icloud/auth-errors.ts",
   "nook-web-shared/src/vault-app/lib/auth/icloud/cloudkit-runtime.ts",

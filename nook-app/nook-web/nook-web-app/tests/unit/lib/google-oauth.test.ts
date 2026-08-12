@@ -4,10 +4,15 @@ import {
   DRIVE_FILE_SCOPE,
   DRIVE_READONLY_SCOPE,
   GoogleDriveOAuthScope,
+  GoogleOAuthPrompt,
   isGoogleOAuthConfigured,
   isOAuthAccessTokenExpired,
   oauthTokensToConfig,
   requestGoogleAccessToken,
+  type GoogleAccessTokenRequest,
+  type GoogleOAuthConfigurationUpdate,
+  type GoogleOAuthExpiryAssessment,
+  type GoogleTokenPromptRequest,
 } from '$lib/auth/google/oauth'
 import { oauthConfigurationNotApplicable } from '$lib/auth/providers'
 
@@ -17,16 +22,19 @@ describe('google-oauth', () => {
   })
 
   it('detects expired oauth access tokens with skew', () => {
-    const expired = oauthTokensToConfig({
+    const configurationUpdate: GoogleOAuthConfigurationUpdate = {
       tokens: {
         accessToken: 'token',
         expiresAt: new Date(Date.now() - 1000).toISOString(),
       },
       existing: oauthConfigurationNotApplicable(),
-    })
-    expect(isOAuthAccessTokenExpired({ config: expired, skewMs: 60_000 })).toBe(
-      true,
-    )
+    }
+    const expired = oauthTokensToConfig(configurationUpdate)
+    const expiryAssessment: GoogleOAuthExpiryAssessment = {
+      config: expired,
+      skewMs: 60_000,
+    }
+    expect(isOAuthAccessTokenExpired(expiryAssessment)).toBe(true)
   })
 
   it('settles concurrent token requests independently by scope', async () => {
@@ -64,18 +72,29 @@ describe('google-oauth', () => {
       },
     })
 
-    const appdataToken = requestGoogleAccessToken({
+    const appDataRequest: GoogleAccessTokenRequest = {
       scope: GoogleDriveOAuthScope.AppData,
-    })
+      prompt: GoogleOAuthPrompt.Default,
+    }
+    const appdataToken = requestGoogleAccessToken(appDataRequest)
     const sharedScope = `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`
-    const fileToken = requestGoogleAccessToken({
+    const sharedRequest: GoogleAccessTokenRequest = {
       scope: GoogleDriveOAuthScope.Shared,
-    })
+      prompt: GoogleOAuthPrompt.Default,
+    }
+    const fileToken = requestGoogleAccessToken(sharedRequest)
 
     await vi.waitFor(() => {
       expect(requests.get(DRIVE_APPDATA_SCOPE)).toHaveBeenCalledOnce()
       expect(requests.get(sharedScope)).toHaveBeenCalledOnce()
     })
+    const defaultPromptRequest: GoogleTokenPromptRequest = {
+      prompt: GoogleOAuthPrompt.Default,
+    }
+    expect(requests.get(DRIVE_APPDATA_SCOPE)).toHaveBeenCalledWith(
+      defaultPromptRequest,
+    )
+    expect(requests.get(sharedScope)).toHaveBeenCalledWith(defaultPromptRequest)
     callbacks.get(sharedScope)!({
       access_token: 'file-token',
       expires_in: 3600,

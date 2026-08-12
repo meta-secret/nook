@@ -234,7 +234,7 @@
         log.info('CloudKit native sign-in deferred wait started')
         const signInWithICloudArgs: Parameters<typeof oauthActions.signInWithICloud>[0] = {
           state: vault,
-          options: { clickPreparedControl: false },
+          clickPreparedControl: false,
         };
         void oauthActions.signInWithICloud(signInWithICloudArgs)
       }, 0)

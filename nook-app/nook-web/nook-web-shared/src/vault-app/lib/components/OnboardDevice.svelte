@@ -23,8 +23,8 @@
     GITHUB_PROVIDER_TYPE,
     GOOGLE_DRIVE_OAUTH_FILE_PRESET,
     isICloudProvider,
+    localizedProviderStorageDetail,
     localizeProviderLabel,
-    providerStorageDetail,
     type ProviderSetupRequest,
     type StorageProvider,
     type StorageProviderType,
@@ -529,7 +529,7 @@
                       : 'text-muted-foreground/80'}"
                     data-testid="onboard-provider-detail-{provider.id}"
                   >
-                    {(() => { const providerStorageDetailArgs: Parameters<typeof providerStorageDetail>[0] = { provider, t: vault.t }; return providerStorageDetail(providerStorageDetailArgs); })()}
+                    {(() => { const localizedProviderStorageDetailRequest: Parameters<typeof localizedProviderStorageDetail>[0] = { provider, t: vault.t }; return localizedProviderStorageDetail(localizedProviderStorageDetailRequest); })()}
                   </div>
                   <div
                     class="text-[11px] {compatible

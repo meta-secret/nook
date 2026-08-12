@@ -29,11 +29,11 @@
     GITHUB_PROVIDER_TYPE,
     localFolderHandle,
     LocalFolderHandleKind,
+    localizedProviderStorageDetail,
     localizeProviderLabel,
     oauthAccessToken,
     OAuthAccessTokenKind,
     OAUTH_FILE_PROVIDER_TYPE,
-    providerStorageDetail,
   } from '$lib/auth/providers'
   import type { VaultState } from '$lib/vault.svelte'
   import {
@@ -292,7 +292,7 @@
                       <span
                         class="block truncate text-xs text-muted-foreground"
                       >
-                        {(() => { const providerStorageDetailArgs: Parameters<typeof providerStorageDetail>[0] = { provider, t: vault.t }; return providerStorageDetail(providerStorageDetailArgs); })()}
+                        {(() => { const localizedProviderStorageDetailRequest: Parameters<typeof localizedProviderStorageDetail>[0] = { provider, t: vault.t }; return localizedProviderStorageDetail(localizedProviderStorageDetailRequest); })()}
                       </span>
                       <span
                         class="block truncate text-[11px] text-muted-foreground"

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   acceptICloudSharedVault,
   createICloudSharedVault,
+  ICLOUD_SIGN_IN_TIMEOUT_MS,
   ICloudAccountNameKind,
   isICloudOAuthConfigured,
   oauthTokensToICloudConfig,
@@ -10,6 +11,7 @@ import {
   requestICloudWebAuthToken,
   resetICloudAuthStateForTests,
   type ICloudOAuthTokens,
+  type ICloudWebAuthTokenRequest,
 } from '$lib/auth/icloud/oauth'
 import { oauthConfigurationNotApplicable } from '$lib/auth/providers'
 import { CloudKitAuthErrorTranslationKey } from '$lib/auth/icloud/auth-errors'
@@ -21,6 +23,26 @@ import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 
 function resolvedCloudKitEffect() {
   return vi.fn(async (): Promise<void> => {})
+}
+
+function defaultICloudWebAuthTokenRequest(): ICloudWebAuthTokenRequest {
+  return {
+    signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
+    clickSignInControl: true,
+  }
+}
+
+function timedICloudWebAuthTokenRequest(
+  signInTimeoutMs: number,
+): ICloudWebAuthTokenRequest {
+  return { signInTimeoutMs, clickSignInControl: true }
+}
+
+function nativeICloudWebAuthTokenRequest(): ICloudWebAuthTokenRequest {
+  return {
+    signInTimeoutMs: ICLOUD_SIGN_IN_TIMEOUT_MS,
+    clickSignInControl: false,
+  }
 }
 
 function iCloudTokensWithoutAccountName(
@@ -313,7 +335,8 @@ describe('icloud-oauth', () => {
         whenUserSignsIn,
       })
 
-      await expect(requestICloudWebAuthToken()).resolves.toEqual(
+      const request = defaultICloudWebAuthTokenRequest()
+      await expect(requestICloudWebAuthToken(request)).resolves.toEqual(
         iCloudTokensWithoutAccountName('existing-token'),
       )
       expect(setUpAuth).toHaveBeenCalledWith({
@@ -335,7 +358,8 @@ describe('icloud-oauth', () => {
         whenUserSignsIn,
       })
 
-      const pending = requestICloudWebAuthToken()
+      const request = defaultICloudWebAuthTokenRequest()
+      const pending = requestICloudWebAuthToken(request)
       await vi.waitFor(() => {
         expect(window.CloudKit!.configure).toHaveBeenCalled()
         expect(whenUserSignsIn).toHaveBeenCalled()
@@ -362,7 +386,8 @@ describe('icloud-oauth', () => {
         whenUserSignsIn,
       })
 
-      const pending = requestICloudWebAuthToken({ signInTimeoutMs: 100 })
+      const request = timedICloudWebAuthTokenRequest(100)
+      const pending = requestICloudWebAuthToken(request)
       await vi.waitFor(() => {
         expect(window.CloudKit!.configure).toHaveBeenCalled()
         expect(whenUserSignsIn).toHaveBeenCalled()
@@ -388,7 +413,8 @@ describe('icloud-oauth', () => {
       signInButton?.addEventListener('click', clickSpy)
 
       await prepareICloudSignInControl()
-      const pending = requestPreparedICloudWebAuthToken()
+      const request = defaultICloudWebAuthTokenRequest()
+      const pending = requestPreparedICloudWebAuthToken(request)
 
       expect(clickSpy).toHaveBeenCalledOnce()
       expect(setUpAuth).toHaveBeenCalledTimes(1)
@@ -416,7 +442,8 @@ describe('icloud-oauth', () => {
       signInControl?.addEventListener('click', clickSpy)
 
       await prepareICloudSignInControl()
-      const pending = requestPreparedICloudWebAuthToken()
+      const request = defaultICloudWebAuthTokenRequest()
+      const pending = requestPreparedICloudWebAuthToken(request)
 
       expect(clickSpy).toHaveBeenCalledOnce()
 
@@ -449,9 +476,8 @@ describe('icloud-oauth', () => {
       })
 
       await prepareICloudSignInControl()
-      const pending = requestPreparedICloudWebAuthToken({
-        clickSignInControl: false,
-      })
+      const request = nativeICloudWebAuthTokenRequest()
+      const pending = requestPreparedICloudWebAuthToken(request)
 
       expect(clickSpy).not.toHaveBeenCalled()
       expect(whenUserSignsIn).toHaveBeenCalledOnce()
@@ -490,9 +516,8 @@ describe('icloud-oauth', () => {
         })
         resolveSignIn({ lookupInfo: {} })
       })
-      const pending = requestPreparedICloudWebAuthToken({
-        clickSignInControl: false,
-      })
+      const request = nativeICloudWebAuthTokenRequest()
+      const pending = requestPreparedICloudWebAuthToken(request)
       await vi.waitFor(() => {
         expect(whenUserSignsIn).toHaveBeenCalledOnce()
       })
@@ -515,9 +540,8 @@ describe('icloud-oauth', () => {
       })
 
       await prepareICloudSignInControl()
-      const pending = requestPreparedICloudWebAuthToken({
-        clickSignInControl: false,
-      })
+      const request = nativeICloudWebAuthTokenRequest()
+      const pending = requestPreparedICloudWebAuthToken(request)
       await vi.waitFor(() => {
         expect(whenUserSignsIn).toHaveBeenCalledOnce()
       })
@@ -562,9 +586,8 @@ describe('icloud-oauth', () => {
 
       await prepareICloudSignInControl()
       // Programmatic click path may open the direct Web Services window.
-      const pending = requestPreparedICloudWebAuthToken({
-        signInTimeoutMs: 5000,
-      })
+      const request = timedICloudWebAuthTokenRequest(5000)
+      const pending = requestPreparedICloudWebAuthToken(request)
 
       await vi.waitFor(() => {
         expect(open).toHaveBeenCalledWith(
@@ -608,10 +631,11 @@ describe('icloud-oauth', () => {
       )
 
       await prepareICloudSignInControl()
-      const pending = requestPreparedICloudWebAuthToken({
+      const request: ICloudWebAuthTokenRequest = {
         clickSignInControl: false,
         signInTimeoutMs: 5000,
-      })
+      }
+      const pending = requestPreparedICloudWebAuthToken(request)
 
       await vi.waitFor(() => {
         expect(whenUserSignsIn).toHaveBeenCalledOnce()
@@ -666,9 +690,8 @@ describe('icloud-oauth', () => {
       )
 
       await prepareICloudSignInControl()
-      const pending = requestPreparedICloudWebAuthToken({
-        signInTimeoutMs: 5000,
-      })
+      const request = timedICloudWebAuthTokenRequest(5000)
+      const pending = requestPreparedICloudWebAuthToken(request)
 
       await vi.waitFor(() => {
         expect(open).toHaveBeenCalledWith(
@@ -719,11 +742,10 @@ describe('icloud-oauth', () => {
 
       await prepareICloudSignInControl()
 
-      await expect(
-        requestPreparedICloudWebAuthToken({
-          signInTimeoutMs: 5000,
-        }),
-      ).rejects.toThrow(CloudKitAuthErrorTranslationKey.UnknownError)
+      const request = timedICloudWebAuthTokenRequest(5000)
+      await expect(requestPreparedICloudWebAuthToken(request)).rejects.toThrow(
+        CloudKitAuthErrorTranslationKey.UnknownError,
+      )
     })
 
     it('fails when CloudKit sign-in never completes', async () => {
@@ -734,9 +756,10 @@ describe('icloud-oauth', () => {
         whenUserSignsIn,
       })
 
-      await expect(
-        requestICloudWebAuthToken({ signInTimeoutMs: 1 }),
-      ).rejects.toThrow(CloudKitAuthErrorTranslationKey.SignInFailed)
+      const request = timedICloudWebAuthTokenRequest(1)
+      await expect(requestICloudWebAuthToken(request)).rejects.toThrow(
+        CloudKitAuthErrorTranslationKey.SignInFailed,
+      )
       expect(whenUserSignsIn).toHaveBeenCalled()
     })
 
@@ -768,9 +791,8 @@ describe('icloud-oauth', () => {
         mockPendingCloudKitSignIn(setUpAuth)
 
       await prepareICloudSignInControl()
-      const pending = requestPreparedICloudWebAuthToken({
-        clickSignInControl: false,
-      })
+      const request = nativeICloudWebAuthTokenRequest()
+      const pending = requestPreparedICloudWebAuthToken(request)
       const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         ckWebAuthToken: 'auth-required-token',
@@ -791,9 +813,8 @@ describe('icloud-oauth', () => {
         mockPendingCloudKitSignIn(setUpAuth)
 
       await prepareICloudSignInControl()
-      const pending = requestPreparedICloudWebAuthToken({
-        clickSignInControl: false,
-      })
+      const request = nativeICloudWebAuthTokenRequest()
+      const pending = requestPreparedICloudWebAuthToken(request)
       const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         ckWebAuthToken: 'opaque-setup-token',
@@ -831,7 +852,8 @@ describe('icloud-oauth', () => {
         whenUserSignsIn,
       })
 
-      const pending = requestICloudWebAuthToken({ signInTimeoutMs: 5000 })
+      const request = timedICloudWebAuthTokenRequest(5000)
+      const pending = requestICloudWebAuthToken(request)
       await vi.waitFor(() => {
         expect(whenUserSignsIn).toHaveBeenCalled()
       })
@@ -856,7 +878,8 @@ describe('icloud-oauth', () => {
         whenUserSignsIn,
       })
 
-      const pending = requestICloudWebAuthToken({ signInTimeoutMs: 500 })
+      const request = timedICloudWebAuthTokenRequest(500)
+      const pending = requestICloudWebAuthToken(request)
       await vi.waitFor(() => {
         expect(window.CloudKit!.configure).toHaveBeenCalled()
         expect(whenUserSignsIn).toHaveBeenCalled()
@@ -881,9 +904,10 @@ describe('icloud-oauth', () => {
       })
 
       // First attempt times out.
-      await expect(
-        requestICloudWebAuthToken({ signInTimeoutMs: 1 }),
-      ).rejects.toThrow(CloudKitAuthErrorTranslationKey.SignInFailed)
+      const firstRequest = timedICloudWebAuthTokenRequest(1)
+      await expect(requestICloudWebAuthToken(firstRequest)).rejects.toThrow(
+        CloudKitAuthErrorTranslationKey.SignInFailed,
+      )
 
       // Second attempt should re-run setUpAuth (not reuse stale promise).
       let resolveSignIn: (value: unknown) => void = () => {}
@@ -895,7 +919,8 @@ describe('icloud-oauth', () => {
         whenUserSignsIn: vi.fn().mockReturnValue(signInPromise),
       })
 
-      const pending = requestICloudWebAuthToken({ signInTimeoutMs: 5000 })
+      const retryRequest = timedICloudWebAuthTokenRequest(5000)
+      const pending = requestICloudWebAuthToken(retryRequest)
 
       const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {

@@ -66,6 +66,9 @@ test('choose private or shared iCloud vault storage', async ({ page }) => {
   await expect(page.getByTestId('icloud-origin-unsupported')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  await expect(page.getByTestId('icloud-sign-in-btn')).toHaveClass(
+    /pointer-events-none/,
+  )
   // On the unsupported demo origin, show the host gate rather than a premature
   // iCloud sign-in failure, and do not open a second Apple auth window.
   await expect(page.getByTestId('icloud-oauth-error')).toHaveCount(0)

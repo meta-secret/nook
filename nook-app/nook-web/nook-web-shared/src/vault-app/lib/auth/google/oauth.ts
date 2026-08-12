@@ -69,8 +69,31 @@ type GoogleTokenClientConfig = {
   callback: (response: GoogleTokenResponse) => void;
 };
 
+export type GoogleTokenPromptRequest = {
+  readonly prompt: string;
+};
+
 type TokenClient = {
-  requestAccessToken: (opts?: { prompt?: string }) => void;
+  requestAccessToken: (request: GoogleTokenPromptRequest) => void;
+};
+
+export type GoogleAccessTokenRequest = {
+  readonly prompt: GoogleOAuthPrompt;
+  readonly scope: GoogleDriveOAuthScope;
+};
+
+export type GoogleSharedDriveAccessRequest = {
+  readonly prompt: GoogleOAuthPrompt;
+};
+
+export type GoogleOAuthConfigurationUpdate = {
+  readonly tokens: GoogleOAuthTokens;
+  readonly existing: StoredOAuthFileConfiguration;
+};
+
+export type GoogleOAuthExpiryAssessment = {
+  readonly config: OAuthFileConfig;
+  readonly skewMs: number;
 };
 
 declare global {
@@ -249,11 +272,10 @@ function tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
   };
 }
 
-export async function requestGoogleAccessToken(options?: {
-  prompt?: GoogleOAuthPrompt;
-  scope?: GoogleDriveOAuthScope;
-}): Promise<GoogleOAuthTokens> {
-  const scope = options?.scope ?? GoogleDriveOAuthScope.AppData;
+export async function requestGoogleAccessToken(
+  request: GoogleAccessTokenRequest,
+): Promise<GoogleOAuthTokens> {
+  const scope = request.scope;
   const slot = await tokenClientForScope(scope);
 
   return new Promise(
@@ -269,26 +291,22 @@ export async function requestGoogleAccessToken(options?: {
           }
         },
       };
-      if (options && "prompt" in options) {
-        const requestAccessTokenArgs: Parameters<
-          typeof slot.client.requestAccessToken
-        >[0] = { prompt: options.prompt };
-        slot.client.requestAccessToken(requestAccessTokenArgs);
-        return;
-      }
-      slot.client.requestAccessToken();
+      const tokenPromptRequest: GoogleTokenPromptRequest = {
+        prompt: request.prompt,
+      };
+      slot.client.requestAccessToken(tokenPromptRequest);
     },
   );
 }
 
 /** Request the scopes required for cross-account shared-folder replication. */
-export async function requestGoogleDriveSharedAccess(options?: {
-  prompt?: GoogleOAuthPrompt;
-}): Promise<GoogleOAuthTokens> {
+export async function requestGoogleDriveSharedAccess(
+  request: GoogleSharedDriveAccessRequest,
+): Promise<GoogleOAuthTokens> {
   const requestGoogleAccessTokenArgs: Parameters<
     typeof requestGoogleAccessToken
   >[0] = {
-    prompt: options?.prompt ?? GoogleOAuthPrompt.Consent,
+    prompt: request.prompt,
     scope: GoogleDriveOAuthScope.Shared,
   };
   return requestGoogleAccessToken(requestGoogleAccessTokenArgs);
@@ -297,10 +315,7 @@ export async function requestGoogleDriveSharedAccess(options?: {
 export function oauthTokensToConfig({
   tokens,
   existing,
-}: {
-  readonly tokens: GoogleOAuthTokens;
-  readonly existing: StoredOAuthFileConfiguration;
-}): OAuthFileConfig {
+}: GoogleOAuthConfigurationUpdate): OAuthFileConfig {
   return google_oauth_tokens_to_config(
     tokens.accessToken,
     tokens.expiresAt,
@@ -311,10 +326,7 @@ export function oauthTokensToConfig({
 export function isOAuthAccessTokenExpired({
   config,
   skewMs,
-}: {
-  readonly config: OAuthFileConfig;
-  readonly skewMs: number;
-}): boolean {
+}: GoogleOAuthExpiryAssessment): boolean {
   if (config.expiresAt.state === "unknown") return false;
   const expiresAt = Date.parse(config.expiresAt.value);
   if (Number.isNaN(expiresAt)) return false;
