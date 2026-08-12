@@ -47,15 +47,22 @@ export type SharedGrantProvider =
   | { kind: SharedGrantProviderKind.Existing; provider: StorageProvider }
   | { kind: SharedGrantProviderKind.AuthorizationRequired };
 
+export type SharedGrantProviderSearch = {
+  readonly providers: StorageProvider[];
+  readonly preset: OAuthFilePreset;
+  readonly target: SharedStorageTarget;
+};
+
+export type SharedDriveGrantFlushAssessment = {
+  readonly grant: SharedStorageGrantOutcome;
+  readonly accessCredential: ReturnType<typeof oauthAccessToken>;
+};
+
 export function findSharedGrantProvider({
   providers,
   preset,
   target,
-}: {
-  readonly providers: StorageProvider[];
-  readonly preset: OAuthFilePreset;
-  readonly target: SharedStorageTarget;
-}): SharedGrantProvider {
+}: SharedGrantProviderSearch): SharedGrantProvider {
   const snapshot: Parameters<typeof shared_grant_provider_id>[0] = {
     providers,
     activeVaultStoreId: unselectedVaultScope(),
@@ -83,10 +90,7 @@ export function findSharedGrantProvider({
 export function shouldFlushSharedDriveGrant({
   grant,
   accessCredential,
-}: {
-  readonly grant: SharedStorageGrantOutcome;
-  readonly accessCredential: ReturnType<typeof oauthAccessToken>;
-}): boolean {
+}: SharedDriveGrantFlushAssessment): boolean {
   const credential: SharedStorageGrantCredential =
     accessCredential.kind === OAuthAccessTokenKind.Available
       ? { state: "accessToken", accessToken: accessCredential.token }

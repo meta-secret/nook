@@ -11,6 +11,12 @@ enum TranslationCatalogLookupKind {
   Loaded = "loaded",
 }
 
+export type LocaleUpdate = {
+  readonly state: VaultState;
+  readonly newLocale: NookAppLocale;
+  readonly preferWasm: boolean;
+};
+
 function wasmTranslationCatalog(
   locale: NookAppLocale,
 ):
@@ -29,19 +35,14 @@ function wasmTranslationCatalog(
 export async function updateLocale({
   state,
   newLocale,
-  options,
-}: {
-  readonly state: VaultState;
-  readonly newLocale: NookAppLocale;
-  readonly options?: { preferWasm?: boolean };
-}): Promise<void> {
+  preferWasm,
+}: LocaleUpdate): Promise<void> {
   state.locale = newLocale;
   localStorage.setItem("nook_locale", newLocale);
   if ("document" in globalThis) {
     document.documentElement.lang = newLocale;
   }
 
-  const preferWasm = options?.preferWasm ?? state.hasManager;
   if (!preferWasm) {
     state.translations = default_translation_catalog(newLocale);
     return;

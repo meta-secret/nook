@@ -76,13 +76,21 @@ type SavedEnrollmentProvider =
   | { kind: SavedEnrollmentProviderKind.Local }
   | { kind: SavedEnrollmentProviderKind.Remote; provider: StorageProvider };
 
+type SavedEnrollmentProviderApplication = {
+  readonly state: VaultState;
+  readonly selection: SavedEnrollmentProvider;
+};
+
+export type EnrollmentCodeConnection = {
+  readonly state: VaultState;
+  readonly code: string;
+  readonly password: string;
+};
+
 function applySavedEnrollmentProvider({
   state,
   selection,
-}: {
-  readonly state: VaultState;
-  readonly selection: SavedEnrollmentProvider;
-}) {
+}: SavedEnrollmentProviderApplication) {
   if (
     selection.kind === SavedEnrollmentProviderKind.Local ||
     selection.provider.type === "local"
@@ -150,11 +158,7 @@ export async function connectWithEnrollmentCode({
   state,
   code,
   password,
-}: {
-  readonly state: VaultState;
-  readonly code: string;
-  readonly password: string;
-}): Promise<void> {
+}: EnrollmentCodeConnection): Promise<void> {
   if (!state.hasManager) {
     state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
     return;

@@ -43,6 +43,11 @@ export type VaultEditRestriction =
       reason: string;
     };
 
+export type VaultLocaleSelection = {
+  readonly newLocale: NookAppLocale;
+  readonly preferWasm: boolean;
+};
+
 export enum SyncProviderLabelKind {
   Idle = "idle",
   Active = "active",
@@ -284,17 +289,11 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     return providersActions.providerWasmArgs(provider);
   }
 
-  async updateLocale({
-    newLocale,
-    options,
-  }: {
-    readonly newLocale: NookAppLocale;
-    readonly options?: { preferWasm?: boolean };
-  }) {
+  async updateLocale({ newLocale, preferWasm }: VaultLocaleSelection) {
     const request: Parameters<typeof localeActions.updateLocale>[0] = {
       state: this.completeVaultState(),
       newLocale,
-      options,
+      preferWasm,
     };
     return localeActions.updateLocale(request);
   }

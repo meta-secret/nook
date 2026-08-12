@@ -77,6 +77,7 @@ export async function initOnce(state: VaultState): Promise<void> {
         : browserLocale;
     const initialLocaleArgs: Parameters<typeof state.updateLocale>[0] = {
       newLocale: locale,
+      preferWasm: false,
     };
     await state.updateLocale(initialLocaleArgs);
     await state.refreshLocalVaultCatalog();
@@ -94,7 +95,7 @@ export async function initOnce(state: VaultState): Promise<void> {
     }
     const updateLocaleArgs: Parameters<typeof state.updateLocale>[0] = {
       newLocale: locale,
-      options: { preferWasm: true },
+      preferWasm: true,
     };
     await state.updateLocale(updateLocaleArgs);
     state.deviceProtectionStatus = await state
