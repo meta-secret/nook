@@ -38,6 +38,7 @@ test('Google Drive setup shows the demo-origin gate and provider-agnostic timeou
   await expect(page.getByTestId('google-oauth-setup')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  await expect(page.getByTestId('cancel-provider-setup')).toBeVisible()
   // UI demos run on 127.0.0.1:5183, which is outside Google's authorized origins.
   await expect(page.getByTestId('google-origin-unsupported')).toBeVisible({
     timeout: UI_TIMEOUT_MS,

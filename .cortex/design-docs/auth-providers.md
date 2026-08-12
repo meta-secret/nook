@@ -94,18 +94,33 @@ and the load pipeline live in wasm; the web shim is adapters + i18n only.
 
 | Concern                                                                                                                                             | Home                                                                                               |
 | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Snapshot model + pure transforms (`normalize`, `migrate_provider_fields`, `ensure_local_provider_row`, `find_duplicate_sync_provider`, legacy-seed) | `nook-app/nook-platform/nook-core/src/sync/sync_provider_store.rs`                                               |
-| Seal/open credential fields with device identity                                                                                                    | `nook-app/nook-platform/nook-core/src/sync/sync_provider_credentials.rs`                                         |
-| `nook_auth` IndexedDB I/O (rexie), load pipeline, legacy `localStorage` read/clear                                                                  | `nook-app/nook-platform/nook-wasm/src/storage/auth_providers.rs`                                                 |
-| Manager APIs (`load_auth_providers_snapshot`, `load_auth_providers_with_local_row`, `save_auth_providers_snapshot`)                                | `NookVaultManager` methods in `nook-app/nook-platform/nook-wasm/src/vault_api.rs`                                |
-| Delete the auth-provider database with `delete_auth_providers_db`                                                                                   | WASM binding + thin TypeScript wrapper                                                  |
-| Find duplicate sync providers with `find_duplicate_sync_provider`                                                                                  | WASM binding + thin TypeScript wrapper                                                  |
-| Ensure the local provider row with `ensure_local_provider_row`                                                                                     | WASM binding + thin TypeScript wrapper                                                  |
-| Seal providers with `seal_auth_providers_for_device_public_key`                                                                                    | WASM binding + thin TypeScript wrapper                                                  |
-| Bind provider storage modes                                                                                                                         | WASM bindings + thin TypeScript wrappers                                                |
-| Enrollment typestates (`TypedEnrollmentProvider`, personal vs shared)                                                                               | `nook-app/nook-platform/nook-auth2/src/auth/enrollment.rs` (re-exported via `nook-core`)                         |
+| Snapshot model + pure transforms (`normalize`, `migrate_provider_fields`, `ensure_local_provider_row`, `find_duplicate_sync_provider`, legacy-seed) | `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/`                                  |
+| Provider-save policy                                                                                                                                | `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/save.rs`                           |
+| Seal/open credential fields with device identity                                                                                                    | `nook-app/nook-platform/nook-core/src/sync/sync_provider_credentials.rs`                          |
+| `nook_auth` IndexedDB I/O (rexie), load pipeline, legacy `localStorage` read/clear                                                                  | `nook-app/nook-platform/nook-wasm/src/storage/auth_providers.rs`                                  |
+| Manager APIs (`load_auth_providers_snapshot`, `load_auth_providers_with_local_row`, `save_auth_providers_snapshot`)                                | `NookVaultManager` methods in `nook-app/nook-platform/nook-wasm/src/vault_api.rs`                 |
+| Delete the auth-provider database with `delete_auth_providers_db`                                                                                   | WASM binding + thin TypeScript wrapper                                                             |
+| Find duplicate sync providers with `find_duplicate_sync_provider`                                                                                  | WASM binding + thin TypeScript wrapper                                                             |
+| Ensure the local provider row with `ensure_local_provider_row`                                                                                     | WASM binding + thin TypeScript wrapper                                                             |
+| Seal providers with `seal_auth_providers_for_device_public_key`                                                                                    | WASM binding + thin TypeScript wrapper                                                             |
+| Bind provider storage modes                                                                                                                         | WASM bindings + thin TypeScript wrappers                                                           |
+| Enrollment typestates (`TypedEnrollmentProvider`, personal vs shared)                                                                               | `nook-app/nook-platform/nook-auth2/src/auth/enrollment.rs` (re-exported via `nook-core`)          |
 | Type re-exports, i18n presentation, wasm wrappers                                                                                                   | [`auth/providers.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/providers.ts) |
-| Vault wiring (`ensureProviderSaved`, active-provider mapping)                                                                                       | `vault.svelte.ts` + `vault/providers.ts` under `nook-web-shared`                                   |
+| Browser persistence and Svelte state                                                                                                                | `vault/providers.svelte.ts` under `nook-web-shared`                                                |
+
+The provider-save policy owns:
+
+- provider construction;
+- duplicate handling;
+- vault scoping;
+- local-provider row seeding; and
+- OAuth configuration merging.
+
+TypeScript owns browser integration:
+
+- supplying generated IDs and timestamps;
+- mapping typed failures to translated messages; and
+- persisting the resulting snapshot.
 
 **Credentials are sealed at rest with the device key.** Secret fields —
 `githubPat`, `oauthFile.accessToken`, `oauthFile.refreshToken` — are sealed
