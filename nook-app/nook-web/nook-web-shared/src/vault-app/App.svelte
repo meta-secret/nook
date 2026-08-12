@@ -4,6 +4,7 @@
   import { VaultState } from '$lib/vault.svelte'
   import {
     DeviceProtectionStatus,
+    ExternalDeviceIdentityAuthorizationMode,
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
   import {
@@ -318,7 +319,9 @@
           }
           return adoptExtensionIdentity(adoptionArgs)
         },
-        options: { deferInitialization: existingVaultImport },
+        mode: existingVaultImport
+          ? ExternalDeviceIdentityAuthorizationMode.DeferInitialization
+          : ExternalDeviceIdentityAuthorizationMode.ContinueInitialization,
       };
       const adopted = await vault.authorizeWithExternalDeviceIdentity(
         authorizeWithExternalDeviceIdentityArgs,
@@ -370,7 +373,9 @@
               }
               return adoptExtensionIdentity(adoptionArgs)
             },
-            options: { deferInitialization: existingVaultImport },
+            mode: existingVaultImport
+              ? ExternalDeviceIdentityAuthorizationMode.DeferInitialization
+              : ExternalDeviceIdentityAuthorizationMode.ContinueInitialization,
           };
           const adopted = await vault.authorizeWithExternalDeviceIdentity(
             authorizeWithExternalDeviceIdentityArgs2,
@@ -555,6 +560,7 @@
           }
           return adoptExtensionIdentity(adoptionArgs)
         },
+        mode: ExternalDeviceIdentityAuthorizationMode.ContinueInitialization,
       }
       const adopted = await vault.authorizeWithExternalDeviceIdentity(
         authorizationRequest,

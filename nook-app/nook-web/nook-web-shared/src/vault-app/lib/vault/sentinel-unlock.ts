@@ -11,6 +11,7 @@ import {
   classify_vault_recovery_error,
   JoinEnrollmentState,
   NookSentinelUnlockSessionStatus,
+  ProviderSyncFreshness,
   SentinelVaultUnlockState,
   VaultRecoveryErrorKind,
   type NookSentinelStoredDeliverySummary as SentinelStoredDeliverySummary,
@@ -27,13 +28,15 @@ export function inactiveSentinelUnlockSession(): NookSentinelUnlockSessionStatus
   return NookSentinelUnlockSessionStatus.inactive();
 }
 
+type UnlockSessionReplacement = {
+  readonly state: VaultState;
+  readonly status: NookSentinelUnlockSessionStatus;
+};
+
 function replaceUnlockSession({
   state,
   status,
-}: {
-  readonly state: VaultState;
-  readonly status: NookSentinelUnlockSessionStatus;
-}): void {
+}: UnlockSessionReplacement): void {
   const previous = state.sentinelUnlockSession;
   state.sentinelUnlockSession = status;
   if (previous !== status) previous.free();
@@ -124,10 +127,7 @@ export async function ensureSentinelCeremonyHydrated(
   if (!state.hasManager || state.isAuthenticated || state.isVerifying) return;
   await state.initDeviceIdentity();
   try {
-    const syncFromStorageArgs: Parameters<typeof state.syncFromStorage>[0] = {
-      force: true,
-    };
-    await state.syncFromStorage(syncFromStorageArgs);
+    await state.syncFromStorage(ProviderSyncFreshness.Forced);
   } catch {
     // A locked Sentinel sync may fail closed until its local share is selected.
   }
@@ -172,13 +172,15 @@ export async function startSentinelUnlock(state: VaultState): Promise<void> {
   );
 }
 
+type SentinelUnlockResponseSubmission = {
+  readonly state: VaultState;
+  readonly response: string;
+};
+
 export async function addSentinelUnlockResponse({
   state,
   response,
-}: {
-  readonly state: VaultState;
-  readonly response: string;
-}): Promise<void> {
+}: SentinelUnlockResponseSubmission): Promise<void> {
   if (!state.hasManager || !response.trim()) return;
   const status = await state.enqueueStorage(() =>
     state.requireManager().add_sentinel_unlock_response(response.trim()),
@@ -201,15 +203,17 @@ export async function listSentinelStoredDeliveries(
   return summaries;
 }
 
+type SentinelUnlockResponseCreation = {
+  readonly state: VaultState;
+  readonly storeId: string;
+  readonly request: string;
+};
+
 export async function createSentinelUnlockResponse({
   state,
   storeId,
   request,
-}: {
-  readonly state: VaultState;
-  readonly storeId: string;
-  readonly request: string;
-}): Promise<string> {
+}: SentinelUnlockResponseCreation): Promise<string> {
   if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (!storeId.trim() || !request.trim()) return "";
   await state.initDeviceIdentity();
@@ -280,13 +284,15 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
   }
 }
 
+type SentinelCeremonyPresentation = {
+  readonly state: VaultState;
+  readonly failure: RuntimeFailure;
+};
+
 export async function surfaceSentinelCeremonyIfNeeded({
   state,
   failure,
-}: {
-  readonly state: VaultState;
-  readonly failure: RuntimeFailure;
-}): Promise<boolean> {
+}: SentinelCeremonyPresentation): Promise<boolean> {
   if (!isSentinelCeremonyRequiredError(failure) && !isSentinelVault(state)) {
     return false;
   }

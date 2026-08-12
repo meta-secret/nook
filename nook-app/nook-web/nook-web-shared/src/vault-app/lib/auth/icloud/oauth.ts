@@ -510,9 +510,11 @@ export async function acceptICloudSharedVault(
   if (!container.acceptShares || !container.fetchRecordInfos) {
     throw new Error(I18N_KEYS.ProviderSetupIcloudSharedConnectFailed);
   }
-  const previewCloudKitRecordArgs: Parameters<typeof previewCloudKitRecord>[0] =
-    { container, shortGuid };
-  const current = await previewCloudKitRecord(previewCloudKitRecordArgs);
+  const recordPreviewRequest: Parameters<typeof previewCloudKitRecord>[0] = {
+    container,
+    shortGuid,
+  };
+  const current = await previewCloudKitRecord(recordPreviewRequest);
   const response =
     current.kind === CloudKitRecordPreviewKind.Available &&
     current.response.results[0]?.participantStatus ===

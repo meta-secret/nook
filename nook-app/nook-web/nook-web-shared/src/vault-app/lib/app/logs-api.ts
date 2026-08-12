@@ -40,15 +40,17 @@ const LOG_LEVELS: readonly LogLevel[] = [
   LogLevel.Trace,
 ];
 
+type LogLevelParseRequest = {
+  readonly params: URLSearchParams;
+  readonly name: string;
+  readonly fallback: LogLevel;
+};
+
 function parseLevel({
   params,
   name,
   fallback,
-}: {
-  readonly params: URLSearchParams;
-  readonly name: string;
-  readonly fallback: LogLevel;
-}): LogLevel {
+}: LogLevelParseRequest): LogLevel {
   const raw = params.get(name);
   const value = raw?.trim().toLowerCase();
   return LOG_LEVELS.includes(value as LogLevel)
@@ -56,17 +58,19 @@ function parseLevel({
     : fallback;
 }
 
+type PositiveIntegerParseRequest = {
+  readonly params: URLSearchParams;
+  readonly name: string;
+  readonly fallback: number;
+  readonly max: number;
+};
+
 function parsePositiveInt({
   params,
   name,
   fallback,
   max,
-}: {
-  readonly params: URLSearchParams;
-  readonly name: string;
-  readonly fallback: number;
-  readonly max: number;
-}) {
+}: PositiveIntegerParseRequest) {
   const raw = params.get(name);
   const parsed = Number.parseInt(raw ?? "", 10);
   if (!Number.isFinite(parsed) || parsed < 0) return fallback;
@@ -114,13 +118,15 @@ export function parseAppLogsQuery(search: string): AppLogsQuery {
   };
 }
 
+type AppLogsUrlRequest = {
+  readonly query: Partial<AppLogsQuery>;
+  readonly basePath: string;
+};
+
 export function buildAppLogsUrl({
   query,
   basePath,
-}: {
-  readonly query: Partial<AppLogsQuery>;
-  readonly basePath: string;
-}): string {
+}: AppLogsUrlRequest): string {
   const params = new URLSearchParams();
   if (query.minLevel) params.set("minLevel", query.minLevel);
   if ("limit" in query) params.set("limit", String(query.limit));

@@ -28,6 +28,12 @@ test('issue a password enrollment link through the portable Rust policy', async 
 
   await openOnboardDevicePanel(page)
   await expect(page.getByTestId('onboard-password-entry-list')).toBeVisible()
+  const secondDeviceTextOptions: Parameters<typeof page.getByText>[1] = {
+    exact: true,
+  }
+  await expect(
+    page.getByText('Second device', secondDeviceTextOptions),
+  ).toBeVisible()
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   const linkInput = await submitOnboardEnrollmentCode(page, ENROLLMENT_PASSWORD)

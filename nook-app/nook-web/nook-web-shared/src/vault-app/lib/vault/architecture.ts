@@ -18,13 +18,15 @@ export function draftVaultArchitecture(
   );
 }
 
+type VaultArchitectureReplacement = {
+  readonly state: ArchitectureActionsContext;
+  readonly architecture: VaultArchitecture;
+};
+
 export function replaceVaultArchitecture({
   state,
   architecture,
-}: {
-  readonly state: ArchitectureActionsContext;
-  readonly architecture: VaultArchitecture;
-}): void {
+}: VaultArchitectureReplacement): void {
   const previous = state.vaultArchitecture;
   state.vaultArchitecture = architecture;
   if (previous !== architecture) previous.free();

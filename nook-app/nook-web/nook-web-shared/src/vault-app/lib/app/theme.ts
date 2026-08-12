@@ -10,13 +10,15 @@ export function systemColorMode(): ColorMode {
     : ColorMode.Light;
 }
 
+type ManualColorModeSelection = {
+  readonly current: ColorMode;
+  readonly storageKey: string;
+};
+
 export function manualColorMode({
   current,
   storageKey,
-}: {
-  readonly current: ColorMode;
-  readonly storageKey: string;
-}): ColorMode {
+}: ManualColorModeSelection): ColorMode {
   const selected =
     current === ColorMode.Dark ? ColorMode.Light : ColorMode.Dark;
   localStorage.setItem(storageKey, selected);

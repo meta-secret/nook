@@ -2,7 +2,11 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp, type NookSecretRecord } from "$lib/nook";
 import { createLogger } from "$lib/runtime/log";
-import { JoinEnrollmentState } from "$app-wasm";
+import {
+  JoinEnrollmentState,
+  ProviderSyncFreshness,
+  ProviderSyncVisibility,
+} from "$app-wasm";
 import {
   EventOutboxRequestKind,
   EventOutboxTargetKind,
@@ -19,13 +23,12 @@ export async function refreshPendingJoinsFromProviders(state: VaultState) {
   await state.hydrateMultiDeviceState();
 }
 
-export async function approveJoin({
-  state,
-  joinDeviceId,
-}: {
+type DeviceJoinApproval = {
   readonly state: VaultState;
   readonly joinDeviceId: string;
-}) {
+};
+
+export async function approveJoin({ state, joinDeviceId }: DeviceJoinApproval) {
   if (!state.hasManager) return;
   state.errorMsg = "";
   state.dismissSuccess();
@@ -44,10 +47,7 @@ export async function approveJoin({
     state.pendingJoins = state.pendingJoins.filter(
       (entry) => entry.deviceId !== joinDeviceId,
     );
-    const fanOutSyncToProvidersArgs: Parameters<
-      typeof state.fanOutSyncToProviders
-    >[0] = { quiet: true };
-    await state.fanOutSyncToProviders(fanOutSyncToProvidersArgs);
+    await state.fanOutSyncToProviders(ProviderSyncVisibility.Quiet);
     state.pendingJoins = state.pendingJoins.filter(
       (entry) => entry.deviceId !== joinDeviceId,
     );
@@ -61,13 +61,12 @@ export async function approveJoin({
   }
 }
 
-export async function denyJoin({
-  state,
-  joinDeviceId,
-}: {
+type DeviceJoinDenial = {
   readonly state: VaultState;
   readonly joinDeviceId: string;
-}) {
+};
+
+export async function denyJoin({ state, joinDeviceId }: DeviceJoinDenial) {
   if (!state.hasManager) return;
   state.errorMsg = "";
   state.dismissSuccess();
@@ -89,15 +88,13 @@ export async function denyJoin({
   }
 }
 
-export async function renameDevice({
-  state,
-  authId,
-  label,
-}: {
+type DeviceRename = {
   readonly state: VaultState;
   readonly authId: string;
   readonly label: string;
-}) {
+};
+
+export async function renameDevice({ state, authId, label }: DeviceRename) {
   if (!state.hasManager) return;
   state.errorMsg = "";
   state.dismissSuccess();
@@ -122,13 +119,12 @@ export async function renameDevice({
   }
 }
 
-export async function revokeDevice({
-  state,
-  authId,
-}: {
+type DeviceRevocation = {
   readonly state: VaultState;
   readonly authId: string;
-}) {
+};
+
+export async function revokeDevice({ state, authId }: DeviceRevocation) {
   if (!state.hasManager) return;
   const isSelf = state.vaultMembers.some(
     (member) => member.authId === authId && member.deviceId === state.deviceId,
@@ -219,7 +215,7 @@ export async function enrollAndConnect(state: VaultState) {
     state.enrollMembersKey = "";
     await state.ensureProviderSaved();
     void state.hydrateMultiDeviceState();
-    await state.syncFromStorage();
+    await state.syncFromStorage(ProviderSyncFreshness.Scheduled);
     state.showSuccess(state.t(I18N_KEYS.ToastsEnrolledConnected));
     log.info("enrolled and connected");
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;

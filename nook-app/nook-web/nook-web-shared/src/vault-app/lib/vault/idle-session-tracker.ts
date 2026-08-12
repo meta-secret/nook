@@ -37,12 +37,16 @@ type SessionState =
   | { kind: SessionStateKind.Stopped }
   | { kind: SessionStateKind.Tracking; timers: ScheduledTimers };
 
-export function createVaultIdleSessionTracker(options: {
+type VaultIdleSessionTrackerConfiguration = {
   timeoutMs: number;
   warningMs: number;
   onExpire: () => void;
   onWarning?: () => void;
-}): VaultIdleSessionTracker {
+};
+
+export function createVaultIdleSessionTracker(
+  options: VaultIdleSessionTrackerConfiguration,
+): VaultIdleSessionTracker {
   let state: SessionState = { kind: SessionStateKind.Stopped };
 
   const clearTimers = (timers: ScheduledTimers) => {

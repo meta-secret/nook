@@ -12,13 +12,12 @@ Applies to:
 - `agentic-ai/loom` authored TypeScript;
 - raw object call arguments in all authored production TypeScript and Svelte
   under `nook-app/nook-web`;
-- named parameter-contract declarations in the completed extension and research
-  source slices.
+- named parameter-contract declarations in the completed extension, research,
+  and shared vault foundation source slices.
 
-The main vault application and shared vault sources are the next declaration
-migration slice. Existing declarations there are migration debt, not precedent.
-New or changed object parameters must already follow this contract during
-review.
+Remaining shared vault orchestration, component, main application, test, and
+end-to-end declarations are migration debt, not precedent. New or changed
+object parameters must already follow this contract during review.
 
 Generated bindings are excluded.
 

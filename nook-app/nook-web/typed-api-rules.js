@@ -6,12 +6,33 @@ export const typedApiSourceFiles = [
   "nook-vault-{simple,sentinel}/**/*.{ts,svelte}",
 ];
 
-// The extension and research catalog are the first completed migration slice.
-// Keep the main vault sources on raw-call enforcement until their named
-// parameter contracts land in the immediately following slice.
+// Expand this list only with source boundaries whose declarations and call
+// sites have completed the named semantic parameter migration.
 export const namedParameterContractFiles = [
   "nook-web-extension/src/**/*.{ts,svelte}",
   "nook-web-research/src/**/*.{ts,svelte}",
+  "nook-web-shared/src/vault-app/lib/app/**/*.{ts,svelte}",
+  "nook-web-shared/src/vault-app/lib/content/**/*.{ts,svelte}",
+  "nook-web-shared/src/vault-app/lib/runtime/**/*.{ts,svelte}",
+  "nook-web-shared/src/vault-app/lib/vault/state/**/*.{ts,svelte}",
+  "nook-web-shared/src/vault-app/lib/auth/icloud/auth-errors.ts",
+  "nook-web-shared/src/vault-app/lib/auth/icloud/cloudkit-runtime.ts",
+  "nook-web-shared/src/vault-app/lib/auth/provider-sync-status.ts",
+  "nook-web-shared/src/vault-app/lib/enrollment/qr.ts",
+  "nook-web-shared/src/vault-app/lib/extension/install.ts",
+  "nook-web-shared/src/vault-app/lib/vault/action-contexts.ts",
+  "nook-web-shared/src/vault-app/lib/vault/architecture.ts",
+  "nook-web-shared/src/vault-app/lib/vault/existing-vault-import.svelte.ts",
+  "nook-web-shared/src/vault-app/lib/vault/idle-session-tracker.ts",
+  "nook-web-shared/src/vault-app/lib/vault/lifecycle.ts",
+  "nook-web-shared/src/vault-app/lib/vault/multi-device.ts",
+  "nook-web-shared/src/vault-app/lib/vault/password-unlock.ts",
+  "nook-web-shared/src/vault-app/lib/vault/secret-exposure.ts",
+  "nook-web-shared/src/vault-app/lib/vault/sentinel-unlock.ts",
+  "nook-web-shared/src/vault-app/lib/vault/session.ts",
+  "nook-web-shared/src/vault-app/lib/vault/sync-runtime.ts",
+  "nook-web-shared/src/vault-app/lib/vault/ui.ts",
+  "nook-web-shared/src/vault-app/lib/vault/vault-discovery-timeout.ts",
 ];
 
 export const untrustedInputAdapterFiles = [

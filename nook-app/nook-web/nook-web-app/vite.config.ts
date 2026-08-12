@@ -8,7 +8,10 @@ import { svelteTesting } from '@testing-library/svelte/vite'
 import {
   buildRobotsTxt,
   buildSitemapXml,
+  ConfiguredSiteUrlEnvironment,
+  DefaultSiteUrlEnvironment,
   siteUrlFromEnv,
+  type SiteUrlEnvironment,
 } from '../nook-web-shared/src/vault-app/lib/content/sitemap'
 import {
   VAULT_WORKSPACE_OUTPUT_ALIASES,
@@ -156,12 +159,22 @@ const SeoStaticFileKind = {
   PassThrough: 'pass-through',
 } as const
 
+function currentSiteUrlEnvironment(): SiteUrlEnvironment {
+  const configuredSiteUrl = process.env.VITE_SITE_URL
+  return typeof configuredSiteUrl === 'string'
+    ? new ConfiguredSiteUrlEnvironment(configuredSiteUrl)
+    : new DefaultSiteUrlEnvironment()
+}
+
 function seoStaticFiles(outputDirectory: string): Plugin {
   const serveDevelopmentSeoFiles = (server: ViteDevServer): void => {
     server.middlewares.use((request, response, next) => {
       const pathname = request.url?.split(/[?#]/, 1)[0]
-      const siteUrl = siteUrlFromEnv(process.env)
-      const sitemapArgs: Parameters<typeof buildSitemapXml>[0] = { siteUrl }
+      const siteUrl = siteUrlFromEnv(currentSiteUrlEnvironment())
+      const sitemapArgs: Parameters<typeof buildSitemapXml>[0] = {
+        siteUrl,
+        lastmod: new Date(),
+      }
       const staticFile =
         pathname === '/robots.txt'
           ? {
@@ -194,8 +207,11 @@ function seoStaticFiles(outputDirectory: string): Plugin {
     },
     writeBundle() {
       const outDir = join(process.cwd(), outputDirectory)
-      const siteUrl = siteUrlFromEnv(process.env)
-      const sitemapArgs: Parameters<typeof buildSitemapXml>[0] = { siteUrl }
+      const siteUrl = siteUrlFromEnv(currentSiteUrlEnvironment())
+      const sitemapArgs: Parameters<typeof buildSitemapXml>[0] = {
+        siteUrl,
+        lastmod: new Date(),
+      }
       writeFileSync(join(outDir, 'sitemap.xml'), buildSitemapXml(sitemapArgs))
       writeFileSync(join(outDir, 'robots.txt'), buildRobotsTxt(siteUrl))
     },

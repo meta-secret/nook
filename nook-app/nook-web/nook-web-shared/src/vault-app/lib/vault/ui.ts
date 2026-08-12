@@ -35,15 +35,17 @@ function pushWorkspaceRoute(route: WorkspaceRoute): void {
   window.history.pushState(pushStateArgs, "", path);
 }
 
+type SettingsViewSelection = {
+  readonly state: UiActionsContext;
+  readonly section: SettingsSection;
+  readonly accordion: SettingsAccordionSection;
+};
+
 function applySettings({
   state,
   section,
   accordion,
-}: {
-  readonly state: UiActionsContext;
-  readonly section: SettingsSection;
-  readonly accordion: SettingsAccordionSection;
-}): void {
+}: SettingsViewSelection): void {
   state.helpOpen = false;
   state.settingsSection = section;
   if (section === SettingsSection.Storage) {
@@ -55,13 +57,12 @@ function applySettings({
   void state.refreshDeviceState();
 }
 
-function applyAdmin({
-  state,
-  accordion,
-}: {
+type AdminViewSelection = {
   readonly state: UiActionsContext;
   readonly accordion: OpenAdminAccordion;
-}): void {
+};
+
+function applyAdmin({ state, accordion }: AdminViewSelection): void {
   state.helpOpen = false;
   state.cancelProviderSetup();
   state.cancelAddProvider();
@@ -80,13 +81,15 @@ function applyVault(state: UiActionsContext): void {
 }
 
 /** Apply browser history to UI state without creating another history entry. */
+type WorkspaceRouteApplication = {
+  readonly state: UiActionsContext;
+  readonly route: WorkspaceRoute;
+};
+
 export function applyWorkspaceRoute({
   state,
   route,
-}: {
-  readonly state: UiActionsContext;
-  readonly route: WorkspaceRoute;
-}): void {
+}: WorkspaceRouteApplication): void {
   switch (route) {
     case WorkspaceRoute.Vault:
       applyVault(state);
@@ -163,13 +166,12 @@ export function openSettings({
   pushWorkspaceRoute(workspaceRouteForSettings(section));
 }
 
-export function openAdmin({
-  state,
-  accordion,
-}: {
+type AdminPanelOpening = {
   readonly state: UiActionsContext;
   readonly accordion: OpenAdminAccordion;
-}): void {
+};
+
+export function openAdmin({ state, accordion }: AdminPanelOpening): void {
   const applyAdminArgs2: Parameters<typeof applyAdmin>[0] = {
     state,
     accordion,

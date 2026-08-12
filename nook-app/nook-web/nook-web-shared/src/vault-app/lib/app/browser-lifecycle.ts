@@ -104,19 +104,21 @@ export function mountBrowserLifecycle({
   };
 }
 
+type ApplicationDocumentUpdate = {
+  readonly colorMode: ColorMode;
+  readonly legalRoute: LegalRoute;
+  readonly logsPage: boolean;
+  readonly extensionConnectRoute: boolean;
+  readonly sentinelApplication: boolean;
+};
+
 export function updateApplicationDocument({
   colorMode,
   legalRoute,
   logsPage,
   extensionConnectRoute,
   sentinelApplication,
-}: {
-  readonly colorMode: ColorMode;
-  readonly legalRoute: LegalRoute;
-  readonly logsPage: boolean;
-  readonly extensionConnectRoute: boolean;
-  readonly sentinelApplication: boolean;
-}): void {
+}: ApplicationDocumentUpdate): void {
   document.documentElement.classList.toggle(
     "dark",
     colorMode === ColorMode.Dark,

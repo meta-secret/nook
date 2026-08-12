@@ -3,6 +3,9 @@ import type {
   NookProviderSyncRevision,
   NookRuntimeConfig,
   NookSyncConflictReview,
+  ProviderSyncFailureHandling,
+  ProviderSyncFreshness,
+  ProviderSyncVisibility,
 } from "$app-wasm";
 import type { NookVaultSyncResult, VaultAccessStatus } from "$lib/nook";
 import type {
@@ -91,13 +94,22 @@ interface SharedStorageActionsContext {
   t(request: TranslationRequest): string;
 }
 
+type ProviderPersistenceOptions = { replace?: boolean };
+type VaultStorageArguments = [string, string, string];
+
+export type ProviderSyncRequest = {
+  readonly providerId: string;
+  readonly visibility: ProviderSyncVisibility;
+  readonly failureHandling: ProviderSyncFailureHandling;
+};
+
 interface ProviderActionPorts extends SharedStorageActionsContext {
   readonly activeVaultProviders: StorageProvider[];
   readonly localProvider: LocalProviderLookup;
   readonly syncProviders: StorageProvider[];
   applyActiveProviderCredentials(): void;
   assessVaultConnectStatus(
-    argsOverride?: [string, string, string],
+    argsOverride?: VaultStorageArguments,
   ): Promise<VaultAccessStatus>;
   clearUnlockedSession(resetManager?: boolean): void;
   connectAndSyncStagedProvider(): Promise<void>;
@@ -108,18 +120,13 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
     accessStatus: VaultAccessStatus,
   ): Promise<boolean>;
   loadDb(): Promise<void>;
-  persistProviders(options?: { replace?: boolean }): Promise<void>;
+  persistProviders(options?: ProviderPersistenceOptions): Promise<void>;
   resetVaultSessionState(resetManager?: boolean): void;
   refreshPasswordEntriesList(): Promise<boolean>;
   showSuccess(message: string): void;
-  stageStagedProviderSyncIssue(
-    args: [string, string, string],
-  ): Promise<boolean>;
+  stageStagedProviderSyncIssue(args: VaultStorageArguments): Promise<boolean>;
   stagedRemoteStorageArgs(): StagedRemoteStorage;
-  syncProviderById(request: {
-    readonly providerId: string;
-    readonly options?: { quiet?: boolean; propagateError?: boolean };
-  }): Promise<void>;
+  syncProviderById(request: ProviderSyncRequest): Promise<void>;
   wasmStorageArgs(): [string, string, string];
 }
 
@@ -194,6 +201,11 @@ type SyncSessionFields = Pick<
   | "vaultMembers"
 >;
 
+type SyncScheduleRequest = {
+  readonly callback: () => void;
+  readonly intervalMs: number;
+};
+
 type SyncStateFields = Pick<
   VaultSyncState,
   | "beginManualProviderSync"
@@ -213,10 +225,25 @@ type SyncStateFields = Pick<
 > & {
   fanOutSyncChain: Promise<void>;
   isSyncScheduled(): boolean;
-  scheduleSync(request: {
-    readonly callback: () => void;
-    readonly intervalMs: number;
-  }): void;
+  scheduleSync(request: SyncScheduleRequest): void;
+};
+
+type SyncProviderPersistenceOptions = { replace?: boolean };
+
+type StorageTimeoutRace<T> = {
+  readonly promise: Promise<T>;
+  readonly label: string;
+};
+
+export type SyncFromProvidersRequest = {
+  readonly visibility: ProviderSyncVisibility;
+  readonly freshness: ProviderSyncFreshness;
+};
+
+type ProviderSyncMetadataRequest = {
+  readonly providerId: string;
+  readonly yaml: string;
+  readonly revision: NookProviderSyncRevision;
 };
 
 interface SyncActionPorts extends SharedStorageActionsContext {
@@ -242,25 +269,20 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   ): void;
   hasRemoteCredentials(): boolean;
   hydrateMultiDeviceState(): Promise<void>;
-  initDeviceIdentity(options?: {
-    allowPendingAuthorization?: boolean;
-  }): Promise<void>;
+  initDeviceIdentity(): Promise<void>;
   loadDb(): Promise<void>;
-  persistProviders(options?: { replace?: boolean }): Promise<void>;
+  persistProviders(options?: SyncProviderPersistenceOptions): Promise<void>;
   providerWasmArgs(provider: StorageProvider): [string, string, string];
-  raceStorageTimeout<T>(request: {
-    readonly promise: Promise<T>;
-    readonly label: string;
-  }): Promise<T>;
+  raceStorageTimeout<T>(request: StorageTimeoutRace<T>): Promise<T>;
   assessVaultConnectStatus(
-    args?: [string, string, string],
+    args?: VaultStorageArguments,
   ): Promise<VaultAccessStatus>;
   refreshLocalVaultCatalog(): Promise<void>;
   refreshPasswordEntriesList(): Promise<boolean>;
   refreshReplacementConflicts(): Promise<void>;
   refreshSecretsFromSession(): Promise<void>;
   runFanOutSyncAfterLocalSave(): Promise<void>;
-  runFanOutSyncToProviders(options?: { quiet?: boolean }): Promise<void>;
+  runFanOutSyncToProviders(visibility: ProviderSyncVisibility): Promise<void>;
   flushRemoteEventOutboxNow(request: EventOutboxRequest): Promise<void>;
   removeProvider(providerId: string): Promise<void>;
   ensureProviderSaved(): Promise<boolean>;
@@ -270,20 +292,12 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   stageSyncConflict(conflict: NookPendingSyncConflict): void;
   stopVaultSync(): void;
   syncActiveVaultStoreIdToAuth(): Promise<void>;
-  syncFromStorage(options?: { force?: boolean }): Promise<void>;
-  syncFromSyncProviders(options?: {
-    quiet?: boolean;
-    force?: boolean;
-  }): Promise<void>;
-  syncProviderById(request: {
-    readonly providerId: string;
-    readonly options?: { quiet?: boolean; propagateError?: boolean };
-  }): Promise<void>;
-  updateProviderSyncMetadata(request: {
-    readonly providerId: string;
-    readonly yaml: string;
-    readonly revision: NookProviderSyncRevision;
-  }): Promise<void>;
+  syncFromStorage(freshness: ProviderSyncFreshness): Promise<void>;
+  syncFromSyncProviders(request: SyncFromProvidersRequest): Promise<void>;
+  syncProviderById(request: ProviderSyncRequest): Promise<void>;
+  updateProviderSyncMetadata(
+    request: ProviderSyncMetadataRequest,
+  ): Promise<void>;
   wasmStorageArgs(): [string, string, string];
 }
 

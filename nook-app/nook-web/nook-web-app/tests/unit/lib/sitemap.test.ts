@@ -3,6 +3,7 @@ import {
   absoluteSiteUrl,
   buildRobotsTxt,
   buildSitemapXml,
+  ConfiguredSiteUrlEnvironment,
   PUBLIC_SITEMAP_ENTRIES,
   siteUrlFromEnv,
 } from '$lib/content/sitemap'
@@ -54,9 +55,8 @@ describe('sitemap', () => {
   })
 
   test('siteUrlFromEnv prefers VITE_SITE_URL', () => {
-    expect(siteUrlFromEnv({ VITE_SITE_URL: 'https://example.com/' })).toBe(
-      'https://example.com',
-    )
+    const environment = new ConfiguredSiteUrlEnvironment('https://example.com/')
+    expect(siteUrlFromEnv(environment)).toBe('https://example.com')
   })
 
   test('absoluteSiteUrl normalizes trailing slashes', () => {
