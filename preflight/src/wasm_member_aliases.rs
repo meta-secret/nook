@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::javascript_literals::semantic_javascript_name as semantic_node_name;
-use crate::javascript_scopes::{ScopedBinding, root_binding_is_visible, scoped_binding};
+use crate::javascript_scopes::{
+    ScopedBinding, root_binding_is_visible, scoped_binding, scoped_binding_is_visible,
+};
 use crate::wasm_dynamic_aliases::{
     constructor_wasm_class, loaded_module_specifier, scoped_wasm_module_visible,
     scoped_wasm_type_visible, unwrap_transparent_expression, wasm_module_specifier,
@@ -62,6 +64,16 @@ pub(super) fn collect_destructuring_aliases(
     if binding.kind() != "object_pattern" {
         return false;
     }
+    if collect_tracked_object_pattern_aliases(
+        binding,
+        value,
+        source,
+        first_line,
+        scoped_wasm_callables,
+        lines,
+    ) {
+        return true;
+    }
     if let Some(module) = wasm_module_specifier(
         value,
         source,
@@ -105,6 +117,42 @@ pub(super) fn collect_destructuring_aliases(
         lines,
     );
     true
+}
+
+fn collect_tracked_object_pattern_aliases(
+    pattern: tree_sitter::Node<'_>,
+    value: tree_sitter::Node<'_>,
+    source: &str,
+    first_line: usize,
+    callables: &mut Vec<ScopedBinding>,
+    lines: &mut Vec<usize>,
+) -> bool {
+    let Some(owner) = semantic_node_name(value, source) else {
+        return false;
+    };
+    let mut found = false;
+    let mut cursor = pattern.walk();
+    for pair in pattern.named_children(&mut cursor) {
+        let Some(property) = pair.child_by_field_name("key") else {
+            continue;
+        };
+        let Some(property_name) = semantic_node_name(property, source) else {
+            continue;
+        };
+        let full_name = format!("{owner}.{property_name}");
+        if !scoped_binding_is_visible(value, &full_name, source, callables) {
+            continue;
+        }
+        let binding = pair.child_by_field_name("value").unwrap_or(property);
+        if semantic_node_name(binding, source).is_some_and(|name| name != property_name) {
+            lines.push(first_line + property.start_position().row);
+        }
+        if let Some(scoped) = scoped_binding(binding, source, None, None) {
+            callables.push(scoped);
+        }
+        found = true;
+    }
+    found
 }
 
 fn array_elements(node: tree_sitter::Node<'_>) -> HashMap<usize, tree_sitter::Node<'_>> {
@@ -252,6 +300,7 @@ pub(super) fn collect_object_literal_aliases(
     wasm_instance_bindings: &HashMap<String, String>,
     scoped_wasm_namespaces: &[ScopedBinding],
     scoped_wasm_instances: &[ScopedBinding],
+    scoped_wasm_callables: &mut Vec<ScopedBinding>,
     lines: &mut Vec<usize>,
 ) {
     let mut cursor = object.walk();
@@ -275,9 +324,20 @@ pub(super) fn collect_object_literal_aliases(
                 scoped_wasm_namespaces,
                 scoped_wasm_instances,
             )
-            && property_name != callable_name
         {
-            lines.push(first_line + key.start_position().row);
+            if property_name != callable_name {
+                lines.push(first_line + key.start_position().row);
+            }
+            if let Some(owner) = object
+                .parent()
+                .filter(|parent| parent.kind() == "variable_declarator")
+                .and_then(|parent| parent.child_by_field_name("name"))
+                && let Some(owner_name) = semantic_node_name(owner, source)
+                && let Some(mut scoped) = scoped_binding(owner, source, None, None)
+            {
+                scoped.name = format!("{owner_name}.{property_name}");
+                scoped_wasm_callables.push(scoped);
+            }
         }
     }
 }
@@ -296,6 +356,7 @@ pub(super) fn collect_object_literal_aliases_in_tree(
     wasm_instance_bindings: &HashMap<String, String>,
     scoped_wasm_namespaces: &[ScopedBinding],
     scoped_wasm_instances: &[ScopedBinding],
+    scoped_wasm_callables: &mut Vec<ScopedBinding>,
     lines: &mut Vec<usize>,
 ) {
     if node.kind() == "object" {
@@ -312,6 +373,7 @@ pub(super) fn collect_object_literal_aliases_in_tree(
             wasm_instance_bindings,
             scoped_wasm_namespaces,
             scoped_wasm_instances,
+            scoped_wasm_callables,
             lines,
         );
     }
@@ -330,6 +392,7 @@ pub(super) fn collect_object_literal_aliases_in_tree(
             wasm_instance_bindings,
             scoped_wasm_namespaces,
             scoped_wasm_instances,
+            scoped_wasm_callables,
             lines,
         );
     }

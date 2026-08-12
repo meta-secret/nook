@@ -20,6 +20,13 @@ pub(super) fn collect_direct_wasm_aliases_and_bindings(
     imported_callable_bindings: &mut HashSet<String>,
     lines: &mut Vec<usize>,
 ) {
+    if matches!(node.kind(), "import_statement" | "import_alias")
+        && let Some((binding, module)) = import_equals_binding(node, source)
+        && is_wasm_callable_source(&module, source_path)
+    {
+        wasm_namespace_bindings.insert(binding, module);
+        return;
+    }
     if matches!(node.kind(), "import_statement" | "export_statement") {
         if let Some(module) = module_specifier(node, source) {
             if node.kind() == "import_statement" && is_wasm_callable_source(&module, source_path) {
@@ -77,6 +84,20 @@ pub(super) fn collect_direct_wasm_aliases_and_bindings(
             lines,
         );
     }
+}
+
+fn import_equals_binding(node: tree_sitter::Node<'_>, source: &str) -> Option<(String, String)> {
+    let text = node.utf8_text(source.as_bytes()).ok()?.trim();
+    let assignment = text.strip_prefix("import ")?;
+    let (binding, required) = assignment.split_once('=')?;
+    let module = required
+        .trim()
+        .strip_prefix("require(")?
+        .trim_end_matches(';')
+        .strip_suffix(')')?
+        .trim()
+        .trim_matches(['\'', '"']);
+    Some((binding.trim().to_owned(), module.to_owned()))
 }
 
 #[allow(clippy::too_many_arguments)]

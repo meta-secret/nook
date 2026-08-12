@@ -24,6 +24,7 @@ pub(super) fn collect_wasm_instance_factories(
     ) && let Some(wasm_type) = node
         .child_by_field_name("return_type")
         .and_then(|return_type| referenced_wasm_class(return_type, source, wasm_class_bindings))
+        .or_else(|| inferred_wasm_class(node, source, wasm_class_bindings))
         && let Some(binding) = callable_declaration_binding(node)
         && let Some(mut factory) = scoped_binding(binding, source, Some(wasm_type), None)
     {
@@ -31,6 +32,10 @@ pub(super) fn collect_wasm_instance_factories(
             node.kind(),
             "function_declaration" | "generator_function_declaration"
         ) {
+            if let Some(scope) = node.parent() {
+                factory.scope_start = scope.start_byte();
+                factory.scope_end = scope.end_byte();
+            }
             factory.declaration_end = factory.scope_start;
         }
         factories.push(factory);
@@ -39,6 +44,41 @@ pub(super) fn collect_wasm_instance_factories(
     for child in node.children(&mut cursor) {
         collect_wasm_instance_factories(child, source, wasm_class_bindings, factories);
     }
+}
+
+fn inferred_wasm_class(
+    function: tree_sitter::Node<'_>,
+    source: &str,
+    classes: &HashMap<String, String>,
+) -> Option<String> {
+    let body = function.child_by_field_name("body")?;
+    returned_wasm_class(body, source, classes)
+}
+
+fn returned_wasm_class(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    classes: &HashMap<String, String>,
+) -> Option<String> {
+    if node.kind() == "new_expression" {
+        return node
+            .child_by_field_name("constructor")
+            .and_then(|constructor| semantic_node_name(constructor, source))
+            .and_then(|name| classes.get(&name).cloned());
+    }
+    if matches!(
+        node.kind(),
+        "function_declaration"
+            | "function_expression"
+            | "generator_function_declaration"
+            | "generator_function"
+            | "arrow_function"
+    ) {
+        return None;
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .find_map(|child| returned_wasm_class(child, source, classes))
 }
 
 pub(super) fn collect_imported_wasm_instance_factories(

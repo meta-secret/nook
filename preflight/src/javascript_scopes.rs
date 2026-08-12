@@ -313,7 +313,12 @@ fn subtree_declares_var(node: tree_sitter::Node<'_>, name: &str, source: &str) -
     }
     if matches!(
         node.kind(),
-        "function_declaration" | "function_expression" | "arrow_function" | "class_declaration"
+        "function_declaration"
+            | "function_expression"
+            | "generator_function_declaration"
+            | "generator_function"
+            | "arrow_function"
+            | "class_declaration"
     ) {
         return false;
     }

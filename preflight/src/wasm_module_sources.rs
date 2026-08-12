@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::javascript_literals::{
     semantic_javascript_name as semantic_node_name, static_javascript_string,
 };
+use crate::javascript_scopes::root_binding_is_visible;
 
 const WASM_MODULE_ALIASES: &[&str] = &[
     "$app-wasm",
@@ -686,6 +687,9 @@ fn forwarded_namespace_member(
 ) -> Option<ForwardedExport> {
     let namespace = value.child_by_field_name("object")?;
     let namespace_name = semantic_node_name(namespace, source)?;
+    if !root_binding_is_visible(namespace, &namespace_name, source) {
+        return None;
+    }
     let (module, imported_namespace) = imports.get(&namespace_name)?;
     if imported_namespace != "*" {
         return None;
@@ -773,6 +777,9 @@ fn forwarded_member(
     required_member(node, source).or_else(|| {
         let object = node.child_by_field_name("object")?;
         let name = semantic_node_name(object, source)?;
+        if !root_binding_is_visible(object, &name, source) {
+            return None;
+        }
         let (module, namespace) = imported_bindings.get(&name)?;
         (namespace == "*").then(|| {
             let imported = node

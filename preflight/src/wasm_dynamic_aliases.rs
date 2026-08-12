@@ -181,6 +181,7 @@ fn expression_contains_property(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
 pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
     node: tree_sitter::Node<'_>,
     source: &str,
@@ -260,6 +261,22 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         imported_callable_bindings,
         lines,
     );
+    collect_object_literal_aliases_in_tree(
+        node,
+        source,
+        source_path,
+        first_line,
+        callable_names,
+        wasm_type_names,
+        wasm_types,
+        wasm_namespace_bindings,
+        wasm_class_bindings,
+        wasm_instance_bindings,
+        &scoped_wasm_namespaces,
+        &scoped_wasm_instances,
+        &mut scoped_wasm_callables,
+        lines,
+    );
     collect_dynamic_wasm_aliases(
         node,
         source,
@@ -278,21 +295,6 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         &mut scoped_wasm_instances,
         &mut scoped_wasm_callables,
         imported_callable_bindings,
-        lines,
-    );
-    collect_object_literal_aliases_in_tree(
-        node,
-        source,
-        source_path,
-        first_line,
-        callable_names,
-        wasm_type_names,
-        wasm_types,
-        wasm_namespace_bindings,
-        wasm_class_bindings,
-        wasm_instance_bindings,
-        &scoped_wasm_namespaces,
-        &scoped_wasm_instances,
         lines,
     );
 }
@@ -318,12 +320,13 @@ fn collect_dynamic_wasm_aliases(
     imported_callable_bindings: &mut HashSet<String>,
     lines: &mut Vec<usize>,
 ) {
-    if node.kind() == "assignment_expression"
-        && let (Some(binding), Some(value)) = (
-            node.child_by_field_name("left"),
-            node.child_by_field_name("right"),
-        )
-    {
+    if matches!(
+        node.kind(),
+        "assignment_expression" | "augmented_assignment_expression"
+    ) && let (Some(binding), Some(value)) = (
+        node.child_by_field_name("left"),
+        node.child_by_field_name("right"),
+    ) {
         invalidate_reassigned_wasm_binding(
             binding,
             source,
