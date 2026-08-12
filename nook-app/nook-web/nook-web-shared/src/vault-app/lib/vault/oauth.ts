@@ -167,7 +167,6 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
             typeof requestGoogleDriveSharedAccess
           >[0] = {
             prompt: GoogleOAuthPrompt.Consent,
-            scope: GoogleDriveOAuthScope.AppData,
           };
           return requestGoogleDriveSharedAccess(
             requestGoogleDriveSharedAccessArgs,
@@ -179,6 +178,7 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
             typeof requestGoogleAccessToken
           >[0] = {
             prompt: GoogleOAuthPrompt.Consent,
+            scope: GoogleDriveOAuthScope.AppData,
           };
           return requestGoogleAccessToken(requestGoogleAccessTokenArgs);
         })();
