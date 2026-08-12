@@ -1,5 +1,9 @@
 import { expect, test } from './fixtures'
-import { DeviceAccessProtectionKind, NookDeviceAccessTextKind } from '$app-wasm'
+import {
+  DeviceAccessProtectionKind,
+  NookDeviceAccessTextKind,
+  type NookVaultManager,
+} from '$app-wasm'
 import {
   addVaultPassword,
   connectLocalVault,
@@ -12,11 +16,10 @@ enum PreviewTextKind {
   Present = 'present',
 }
 
-type DeviceAccessSnapshotFixture = {
-  passkeyName: NookDeviceAccessTextKind
-  providerLabel: NookDeviceAccessTextKind
-  protection: DeviceAccessProtectionKind
-}
+type DeviceAccessSnapshotRequestOwner = Pick<
+  NookVaultManager,
+  'device_access_snapshot_request'
+>
 
 test.describe('devices and access dashboard', () => {
   test.beforeEach(async ({ page }) => {
@@ -419,16 +422,17 @@ test.describe('devices and access dashboard', () => {
       const vault = (
         window as Window & {
           __nookVault: {
-            requireManager(): { device_access_snapshot_request: () => unknown }
+            requireManager(): DeviceAccessSnapshotRequestOwner
           }
         }
       ).__nookVault
       const manager = vault.requireManager()
-      const original = manager.device_access_snapshot_request
+      const managerPrototype = Reflect.getPrototypeOf(
+        manager,
+      ) as DeviceAccessSnapshotRequestOwner
       manager.device_access_snapshot_request = () => {
-        const request = original.call(manager) as {
-          resolve: () => Promise<DeviceAccessSnapshotFixture>
-        }
+        const request =
+          managerPrototype.device_access_snapshot_request.call(manager)
         const resolve = request.resolve.bind(request)
         request.resolve = async () => {
           const snapshot = await resolve()
@@ -470,16 +474,17 @@ test.describe('devices and access dashboard', () => {
       const vault = (
         window as Window & {
           __nookVault: {
-            requireManager(): { device_access_snapshot_request: () => unknown }
+            requireManager(): DeviceAccessSnapshotRequestOwner
           }
         }
       ).__nookVault
       const manager = vault.requireManager()
-      const original = manager.device_access_snapshot_request
+      const managerPrototype = Reflect.getPrototypeOf(
+        manager,
+      ) as DeviceAccessSnapshotRequestOwner
       manager.device_access_snapshot_request = () => {
-        const request = original.call(manager) as {
-          resolve: () => Promise<DeviceAccessSnapshotFixture>
-        }
+        const request =
+          managerPrototype.device_access_snapshot_request.call(manager)
         const resolve = request.resolve.bind(request)
         request.resolve = async () => {
           const snapshot = await resolve()
@@ -687,14 +692,13 @@ test.describe('devices and access dashboard', () => {
       const manager = (
         window as Window & {
           __nookVault?: {
-            requireManager(): { device_access_snapshot_request: () => unknown }
+            requireManager(): DeviceAccessSnapshotRequestOwner
           }
         }
       ).__nookVault?.requireManager()
       if (!manager) throw new Error('Vault manager is not exposed')
-      const original = manager.device_access_snapshot_request
       manager.device_access_snapshot_request = () => {
-        manager.device_access_snapshot_request = original
+        Reflect.deleteProperty(manager, 'device_access_snapshot_request')
         throw new Error('Forced dashboard reload failure')
       }
     })
@@ -710,19 +714,16 @@ test.describe('devices and access dashboard', () => {
     await page.evaluate(() => {
       const scope = window as Window & {
         __nookVault?: {
-          requireManager(): { device_access_snapshot_request: () => unknown }
+          requireManager(): DeviceAccessSnapshotRequestOwner
         }
         __nookReloadSettled?: boolean
       }
       const manager = scope.__nookVault?.requireManager()
       if (!manager) throw new Error('Vault manager is not exposed')
       scope.__nookReloadSettled = false
-      const original = manager.device_access_snapshot_request
       manager.device_access_snapshot_request = () => {
-        manager.device_access_snapshot_request = original
-        const request = original.call(manager) as {
-          resolve: () => Promise<unknown>
-        }
+        Reflect.deleteProperty(manager, 'device_access_snapshot_request')
+        const request = manager.device_access_snapshot_request()
         const resolve = request.resolve.bind(request)
         request.resolve = async () => {
           await new Promise((settle) => setTimeout(settle, 750))

@@ -4,11 +4,12 @@ use std::path::PathBuf;
 use nook_preflight::{
     authored_rust_macro_definitions, portable_core_browser_dependencies,
     rust_test_untyped_json_assertions, rust_tsify_implicit_absence_overrides,
-    rust_wasm_domain_boundary_escape_hatches, typescript_domain_boundary_boilerplate,
-    typescript_extension_persistence_policy, typescript_generic_optional_state,
-    typescript_implicit_application_state, typescript_json_round_trip_clones,
-    typescript_mutable_void_state, typescript_null_absence_sentinels,
-    typescript_raw_string_discriminants, typescript_svelte_state_modeling_violations,
+    rust_wasm_callable_name_overrides, rust_wasm_domain_boundary_escape_hatches,
+    typescript_domain_boundary_boilerplate, typescript_extension_persistence_policy,
+    typescript_generic_optional_state, typescript_implicit_application_state,
+    typescript_json_round_trip_clones, typescript_mutable_void_state,
+    typescript_null_absence_sentinels, typescript_raw_string_discriminants,
+    typescript_svelte_state_modeling_violations,
 };
 
 #[test]
@@ -17,6 +18,16 @@ fn authored_rust_defines_no_macros() -> anyhow::Result<()> {
     assert!(
         violations.is_empty(),
         "authored Rust must use explicit items and control flow instead of repository-defined macros: {violations:#?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn rust_wasm_callables_keep_their_authored_names_in_javascript() -> anyhow::Result<()> {
+    let violations = rust_wasm_callable_name_overrides(&repository_root())?;
+    assert!(
+        violations.is_empty(),
+        "Rust WASM functions and methods must keep their authored names through generated JavaScript and TypeScript call sites; js_name and generated-binding import aliases make cross-language navigation incoherent: {violations:#?}"
     );
     Ok(())
 }
