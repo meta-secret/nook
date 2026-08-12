@@ -28,16 +28,14 @@ import type {
   ExtensionPairingState,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type {
-  AuthenticationPageObservationView,
-  AuthenticationWorkflowSnapshotView,
-} from '../lib/auth-workflow-messages'
+import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
 import type {
   AuthenticationOutcomeObservationView,
   AuthenticationOutcomeVerdictView,
 } from '../lib/outcome-evidence-messages'
 import type { SerializedStorageProvider } from '../lib/provider-credential-staging'
 import type {
+  ExtensionSessionGrantIdentity,
   ExtensionPairingItems,
   ImportedEventLogState,
 } from './pairing-grants'
@@ -91,34 +89,36 @@ function pairingItemsFromState(
   )
 }
 
-export async function readExtensionPairingState(): Promise<ExtensionPairingItems> {
+export async function loadExtensionPairingItems(): Promise<ExtensionPairingItems> {
   await ensureExtensionWasm()
   return pairingItemsFromState(await read_extension_pairing_state())
 }
 
-export async function writeExtensionPairingState(
+export async function persistExtensionPairingItems(
   items: ExtensionPairingItems,
 ): Promise<void> {
   await ensureExtensionWasm()
   await write_extension_pairing_state(stateFromPairingItems(items))
 }
 
-export async function removeExtensionPairingState(
-  keys: string[],
+export type ExtensionPairingStorageKeys = string[]
+
+export async function deleteExtensionPairingItems(
+  keys: ExtensionPairingStorageKeys,
 ): Promise<void> {
   await ensureExtensionWasm()
   await remove_extension_pairing_state(keys)
 }
 
-type ReconcileExtensionPairingStateArgs = {
+type ReconcileExtensionPairingItemsRequest = {
   items: ExtensionPairingItems
   removedKeys: string[]
 }
 
-export async function reconcileExtensionPairingState({
+export async function reconcileExtensionPairingItems({
   items,
   removedKeys,
-}: ReconcileExtensionPairingStateArgs): Promise<void> {
+}: ReconcileExtensionPairingItemsRequest): Promise<void> {
   await ensureExtensionWasm()
   await reconcile_extension_pairing_state(
     stateFromPairingItems(items),
@@ -139,10 +139,9 @@ export type AuthenticationWorkflowSnapshot =
     }
 
 export async function authenticationWorkflowSnapshot(
-  observations: AuthenticationPageObservationView[],
+  input: AuthenticationPageObservations,
 ): Promise<AuthenticationWorkflowSnapshot> {
   await companionWasmReady
-  const input: AuthenticationPageObservations = { observations }
   const workflowMatch = classify_companion_authentication_workflow(input)
   if (workflowMatch.kind === AuthenticationWorkflowSnapshotKind.NoMatch) {
     return { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
@@ -158,13 +157,15 @@ export async function generateSuggestedPassword(): Promise<string> {
   return generate_password(default_password_generation_options())
 }
 
+type AuthenticationOutcomeClassificationRequest = {
+  observation: AuthenticationOutcomeObservationView
+  timeoutMs: number
+}
+
 export async function classifyAuthenticationOutcome({
   observation,
   timeoutMs,
-}: {
-  observation: AuthenticationOutcomeObservationView
-  timeoutMs: number
-}): Promise<AuthenticationOutcomeVerdictView> {
+}: AuthenticationOutcomeClassificationRequest): Promise<AuthenticationOutcomeVerdictView> {
   await companionWasmReady
   const boundedObservation: AuthenticationOutcomeObservation = {
     ...observation,
@@ -214,18 +215,15 @@ function isImportedEventLogState(
   return true
 }
 
+type ExtensionEventLogImportRequest = {
+  grant: ExtensionSessionGrantIdentity
+  records: ExtensionEventLogRecord[]
+}
+
 export async function importExtensionEventLog({
   grant,
   records,
-}: {
-  grant: {
-    vaultStoreId: string
-    deviceId: string
-    devicePublicKey: string
-    deviceSigningPublicKey: string
-  }
-  records: ExtensionEventLogRecord[]
-}): Promise<ImportedEventLogState> {
+}: ExtensionEventLogImportRequest): Promise<ImportedEventLogState> {
   await ensureExtensionWasm()
   const manager = new NookVaultManager()
   try {
@@ -248,8 +246,10 @@ export async function importExtensionEventLog({
   }
 }
 
+export type SerializedExtensionStorageProviders = SerializedStorageProvider[]
+
 export async function decodeExtensionStorageProviders(
-  providers: SerializedStorageProvider[],
+  providers: SerializedExtensionStorageProviders,
 ): Promise<StorageProvider[]> {
   await ensureExtensionWasm()
   const snapshot: AuthProvidersSnapshot = {

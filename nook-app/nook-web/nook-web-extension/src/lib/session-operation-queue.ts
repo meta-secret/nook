@@ -74,7 +74,7 @@ export class SessionOperationQueue {
   private running = false
   private state: QueueState = { kind: QueueStateKind.Open }
 
-  close(error = new Error('Extension session queue closed.')): void {
+  close(error: Error): void {
     if (this.state.kind === QueueStateKind.Closed) return
     this.state = { kind: QueueStateKind.Closed, error }
     const pending = this.entries

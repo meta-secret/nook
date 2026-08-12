@@ -29,12 +29,14 @@ const BUTTON_SIZE_CLASSES: Record<ButtonSize, string> = {
   [ButtonSize.Icon]: 'size-10',
 }
 
+type ButtonVariantsArgs = {
+  variant?: ButtonVariant
+  size?: ButtonSize
+}
+
 export function buttonVariants({
   variant = ButtonVariant.Default,
   size = ButtonSize.Default,
-}: {
-  variant?: ButtonVariant
-  size?: ButtonSize
-} = {}): string {
+}: ButtonVariantsArgs): string {
   return `${BUTTON_BASE} ${BUTTON_VARIANT_CLASSES[variant]} ${BUTTON_SIZE_CLASSES[size]}`
 }

@@ -519,8 +519,17 @@ Review enforces generic-value containment until the existing debt is migrated.
 Full contract:
 [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md).
 
-Loom and migrated Nook web TypeScript must not pass raw object literals into
-calls. Assign a named typed argument value first. Loom uses ESLint
+Loom and migrated Nook web TypeScript must not declare inline object-shaped
+parameter types or pass raw object literals into calls. Object-shaped includes
+object literals, mapped types such as `Pick<T, K>` and `Omit<T, K>`, arrays,
+tuples, `Array<T>`, `ReadonlyArray<T>`, maps, sets, and records. Parameters use
+a named semantic `type`, `interface`, or Rust-generated boundary type. Generic
+and operation-only names such as
+`Args`, `CallbackArgs`, `PutArgs`, and line-number-derived names are
+prohibited. Imported generic contract names are also prohibited. A
+function-valued parameter may return an inline object type. That return value
+is not the parameter contract.
+Callers assign a named typed argument value first. Loom uses ESLint
 `loom/no-raw-object-arguments`. Nook web uses
 `nook-typed-api/no-raw-object-arguments`. Full contract:
 [dynamic-skills/typescript-named-args.md](dynamic-skills/typescript-named-args.md).

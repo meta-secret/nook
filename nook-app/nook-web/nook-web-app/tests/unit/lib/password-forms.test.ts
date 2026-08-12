@@ -6,11 +6,19 @@ import {
   findPasskeyControl,
   pageHasPasskeyControl,
   PasskeyControlLookupKind,
+  PasswordFormQueryKind,
   PasswordFormScopeKind,
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
   summarizePasswordForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
+
+const wholeDocumentOneTimeCodeFieldQuery: Parameters<
+  typeof findOneTimeCodeFields
+>[0] = {}
+const wholeDocumentPasswordFormSubmission: Parameters<
+  typeof submitLoginForm
+>[0] = { kind: PasswordFormQueryKind.Root, root: document }
 
 afterEach(() => {
   document.body.replaceChildren()
@@ -28,7 +36,9 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    expect(findOneTimeCodeFields()).toHaveLength(2)
+    expect(
+      findOneTimeCodeFields(wholeDocumentOneTimeCodeFieldQuery),
+    ).toHaveLength(2)
     expect(summarizePasswordForms()).toMatchObject({
       passwordFieldCount: 0,
       oneTimeCodeFieldCount: 2,
@@ -56,7 +66,7 @@ describe('website one-time-code fields', () => {
       <input name="hotpot-special" type="text" placeholder="Favorite dish" />
     `
 
-    const fields = findOneTimeCodeFields()
+    const fields = findOneTimeCodeFields(wholeDocumentOneTimeCodeFieldQuery)
     expect(fields.map((field) => field.name)).toEqual([
       'Code',
       'VerificationCode',
@@ -97,6 +107,8 @@ describe('website one-time-code fields', () => {
     })
     const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
       credentials: { username: 'user@contoso.com', password: '' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
     }
     expect(fillLoginCredentials(loginFillArgs)).toBe(true)
     expect(
@@ -159,6 +171,8 @@ describe('website one-time-code fields', () => {
         username: 'pilot@nook.test',
         password: 'extension-fill-password',
       },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
     }
     expect(fillLoginCredentials(loginFillArgs)).toBe(true)
     expect(document.querySelector<HTMLInputElement>('#email')?.value).toBe(
@@ -286,9 +300,11 @@ describe('website one-time-code fields', () => {
 
       const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
         credentials: { username: 'pilot@nook.test', password: '' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
       }
       expect(fillLoginCredentials(loginFillArgs)).toBe(true)
-      expect(submitLoginForm()).toBe(true)
+      expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
       expect(advanced).toBe(true)
       expect(
         document.querySelector<HTMLInputElement>('[name="email"]')?.value,
@@ -342,6 +358,8 @@ describe('website one-time-code fields', () => {
     })
     const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
       credentials: { username: 'pilot', password: 'secret' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
     }
     expect(fillLoginCredentials(loginFillArgs)).toBe(true)
     expect(
@@ -460,6 +478,8 @@ describe('website one-time-code fields', () => {
 
     const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
       credentials: { username: 'pilot', password: 'secret' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
     }
     expect(fillLoginCredentials(loginFillArgs)).toBe(true)
     expect(
@@ -480,6 +500,7 @@ describe('website one-time-code fields', () => {
     `
 
     const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
+      kind: PasswordFormQueryKind.Scoped,
       root: document,
       formScope: { kind: PasswordFormScopeKind.Unowned },
     }
@@ -494,7 +515,7 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    expect(submitLoginForm()).toBe(false)
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
   })
 
   test('reports submission only when the form emits a submit event', () => {
@@ -508,7 +529,7 @@ describe('website one-time-code fields', () => {
       event.preventDefault()
     })
 
-    expect(submitLoginForm()).toBe(true)
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
   })
 
   test('fills the first enabled OTP field through the native value setter', () => {
@@ -522,6 +543,8 @@ describe('website one-time-code fields', () => {
 
     const oneTimeCodeFillArgs: Parameters<typeof fillOneTimeCode>[0] = {
       code: '123456',
+      kind: PasswordFormQueryKind.Root,
+      root: document,
     }
     expect(fillOneTimeCode(oneTimeCodeFillArgs)).toBe(true)
     expect(field?.value).toBe('123456')

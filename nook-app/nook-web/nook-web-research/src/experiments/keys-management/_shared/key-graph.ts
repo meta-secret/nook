@@ -287,56 +287,66 @@ export function graphById(id: GraphId): KeyGraph {
   return match ? match : tangle
 }
 
+type DevicesForPasskeyArgs = {
+  graph: KeyGraph
+  passkeyId: string
+}
+
 export function devicesForPasskey({
   graph,
   passkeyId,
-}: {
-  graph: KeyGraph
-  passkeyId: string
-}): Device[] {
+}: DevicesForPasskeyArgs): Device[] {
   return graph.devices.filter((device) => device.passkeyIds.includes(passkeyId))
+}
+
+type PasskeysForDeviceArgs = {
+  graph: KeyGraph
+  device: Device
 }
 
 export function passkeysForDevice({
   graph,
   device,
-}: {
-  graph: KeyGraph
-  device: Device
-}): Passkey[] {
+}: PasskeysForDeviceArgs): Passkey[] {
   return graph.passkeys.filter((passkey) =>
     device.passkeyIds.includes(passkey.id),
   )
 }
 
+type DevicesForVaultArgs = {
+  graph: KeyGraph
+  vault: Vault
+}
+
 export function devicesForVault({
   graph,
   vault,
-}: {
-  graph: KeyGraph
-  vault: Vault
-}): Device[] {
+}: DevicesForVaultArgs): Device[] {
   return graph.devices.filter((device) => vault.deviceIds.includes(device.id))
+}
+
+type VaultsForDeviceArgs = {
+  graph: KeyGraph
+  deviceId: string
 }
 
 export function vaultsForDevice({
   graph,
   deviceId,
-}: {
-  graph: KeyGraph
-  deviceId: string
-}): Vault[] {
+}: VaultsForDeviceArgs): Vault[] {
   return graph.vaults.filter((vault) => vault.deviceIds.includes(deviceId))
 }
 
 /** Every vault this passkey reaches, through any device it is enrolled on. */
+type VaultsForPasskeyArgs = {
+  graph: KeyGraph
+  passkeyId: string
+}
+
 export function vaultsForPasskey({
   graph,
   passkeyId,
-}: {
-  graph: KeyGraph
-  passkeyId: string
-}): Vault[] {
+}: VaultsForPasskeyArgs): Vault[] {
   const nookNamedArgs0_0: Parameters<typeof devicesForPasskey>[0] = {
     graph,
     passkeyId,
@@ -350,13 +360,15 @@ export function vaultsForPasskey({
 }
 
 /** Every passkey that reaches this vault, through any device in between. */
+type PasskeysForVaultArgs = {
+  graph: KeyGraph
+  vault: Vault
+}
+
 export function passkeysForVault({
   graph,
   vault,
-}: {
-  graph: KeyGraph
-  vault: Vault
-}): Passkey[] {
+}: PasskeysForVaultArgs): Passkey[] {
   const nookNamedArgs0_1: Parameters<typeof devicesForVault>[0] = {
     graph,
     vault,
@@ -374,26 +386,24 @@ export function hereDevices(graph: KeyGraph): Device[] {
   return graph.devices.filter((device) => device.id === id)
 }
 
-export function isHere({
-  graph,
-  device,
-}: {
+type IsHereArgs = {
   graph: KeyGraph
   device: Device
-}): boolean {
+}
+
+export function isHere({ graph, device }: IsHereArgs): boolean {
   return (
     graph.here.kind === HereKind.Prepared && graph.here.deviceId === device.id
   )
 }
 
 /** Whether this browser, as it stands, can open the vault at all. */
-export function openableHere({
-  graph,
-  vault,
-}: {
+type OpenableHereArgs = {
   graph: KeyGraph
   vault: Vault
-}): boolean {
+}
+
+export function openableHere({ graph, vault }: OpenableHereArgs): boolean {
   return hereDevices(graph).some((device) =>
     vault.deviceIds.includes(device.id),
   )
@@ -434,13 +444,12 @@ export interface Highlight {
   vaultIds: string[]
 }
 
-export function highlightFor({
-  graph,
-  node,
-}: {
+type HighlightForArgs = {
   graph: KeyGraph
   node: NodeRef
-}): Highlight {
+}
+
+export function highlightFor({ graph, node }: HighlightForArgs): Highlight {
   if (node.kind === NodeKind.Passkey) {
     const nookNamedArgs0_2: Parameters<typeof devicesForPasskey>[0] = {
       graph,

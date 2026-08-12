@@ -3,10 +3,14 @@ import type { ExtensionStorageProviderPayload } from '../../../nook-web-shared/s
 
 export type SerializedStorageProvider =
   StorageProvider | ExtensionStorageProviderPayload
+export type SerializedExtensionStorageProviders = SerializedStorageProvider[]
+export type DecodedExtensionStorageProviders = StorageProvider[]
+export type ExtensionStorageProviderIdentities =
+  ExtensionStorageProviderPayload[]
 
 export function extensionSessionProviderIdentities(
-  providers: SerializedStorageProvider[],
-): ExtensionStorageProviderPayload[] {
+  providers: SerializedExtensionStorageProviders,
+): ExtensionStorageProviderIdentities {
   return providers.map((provider) => ({
     id: provider.id,
     type: provider.type,
@@ -46,7 +50,7 @@ function isSerializedProviderField(value: unknown): boolean {
 }
 
 export function scrubProviderCredentials(
-  providers: SerializedStorageProvider[],
+  providers: SerializedExtensionStorageProviders,
 ): void {
   const candidates = providers as ProviderCredentialCandidate[]
   for (const provider of candidates) {
@@ -88,8 +92,10 @@ export async function runWithProviderCredentialCleanup<Result>(
 }
 
 export type StageProviderCredentialsArgs = {
-  providers: SerializedStorageProvider[]
-  decode: (providers: SerializedStorageProvider[]) => Promise<StorageProvider[]>
+  providers: SerializedExtensionStorageProviders
+  decode: (
+    providers: SerializedExtensionStorageProviders,
+  ) => Promise<DecodedExtensionStorageProviders>
 }
 
 export async function stageProviderCredentials(

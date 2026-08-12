@@ -288,16 +288,20 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
         ? matchingPasskeyAccountCountForOriginSafe(message.payload.origin)
         : Promise.resolve(0)
     )
-      .then((matchingPasskeyAccountCount) =>
-        authenticationWorkflowSnapshot(
-          message.payload.observations.map((observation) => ({
+      .then((matchingPasskeyAccountCount) => {
+        const observations = message.payload.observations.map(
+          (observation) => ({
             ...observation,
             matchingPasskeyAccountCount: observation.passkeyControlPresent
               ? matchingPasskeyAccountCount
               : 0,
-          })),
-        ),
-      )
+          }),
+        )
+        const workflowInput: Parameters<
+          typeof authenticationWorkflowSnapshot
+        >[0] = { observations }
+        return authenticationWorkflowSnapshot(workflowInput)
+      })
       .then((result) => {
         const matchedResponse: Parameters<typeof sendResponse>[0] = {
           ok: true,

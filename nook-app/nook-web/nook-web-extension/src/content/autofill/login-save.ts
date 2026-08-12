@@ -2,6 +2,7 @@ import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { LoginCredentials } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   LoginCredentialsLookupKind,
+  PasswordFormQueryKind,
   readLoginCredentials,
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
@@ -39,7 +40,11 @@ import {
   widgetState,
   type PendingSaveWatch,
 } from './state'
-import { applyWidgetPosition, attachPointerDrag } from './widget-position'
+import {
+  applyWidgetPosition,
+  attachPointerDrag,
+  PointerDragBehaviorKind,
+} from './widget-position'
 import { createWidgetMark } from './widget-shell'
 import {
   OUTCOME_EVIDENCE_POLL_MS,
@@ -78,15 +83,17 @@ function pageLooksLikeAuthPath(pathname: string): boolean {
   )
 }
 
+type CollectOutcomeObservationArgs = {
+  startedAt: number
+  authPath: string
+  sawMutation: boolean
+}
+
 function collectOutcomeObservation({
   startedAt,
   authPath,
   sawMutation,
-}: {
-  startedAt: number
-  authPath: string
-  sawMutation: boolean
-}): AuthenticationOutcomeObservationView {
+}: CollectOutcomeObservationArgs): AuthenticationOutcomeObservationView {
   const successMarkerPresent = Boolean(
     document.querySelector(
       '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
@@ -249,6 +256,7 @@ export function captureSubmittedLogin(event: Event): void {
   )
   if (!workflow || workflow.summary.passwordFieldCount === 0) return
   const nookTypedArgs0_1: Parameters<typeof readLoginCredentials>[0] = {
+    kind: PasswordFormQueryKind.Scoped,
     root: workflow.root,
     formScope: workflow.formScope,
   }
@@ -581,6 +589,7 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   const pointerDragArgs: Parameters<typeof attachPointerDrag>[0] = {
     host,
     handle: toolbar,
+    behavior: { kind: PointerDragBehaviorKind.DragOnly },
   }
   attachPointerDrag(pointerDragArgs)
   if (widgetState.placement.kind === WidgetPlacementKind.Positioned) {

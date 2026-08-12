@@ -5,6 +5,27 @@ trusted to do and what it is never trusted to do. A slim rail tracks the act you
 are reading via IntersectionObserver and lets you jump between them.
 -->
 <script lang="ts">
+  type ActForArgs = {
+    access: AccessScenario
+    stage: ChainStage
+    index: number
+  }
+
+  type VaultActArgs = {
+    access: AccessScenario
+    numeral: string
+  }
+
+  type DeviceActArgs = {
+    access: AccessScenario
+    numeral: string
+  }
+
+  type PasskeyActArgs = {
+    access: AccessScenario
+    numeral: string
+  }
+
   import { ArrowDown } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import ScenarioSwitch from '../_shared/ScenarioSwitch.svelte'
@@ -57,13 +78,7 @@ are reading via IntersectionObserver and lets you jump between them.
     }),
   )
 
-  function passkeyAct({
-    access,
-    numeral,
-  }: {
-    access: AccessScenario
-    numeral: string
-  }): Act {
+  function passkeyAct({ access, numeral }: PasskeyActArgs): Act {
     const ready = isPrepared(access)
     return {
       stage: ChainStage.Passkey,
@@ -85,13 +100,7 @@ are reading via IntersectionObserver and lets you jump between them.
     }
   }
 
-  function deviceAct({
-    access,
-    numeral,
-  }: {
-    access: AccessScenario
-    numeral: string
-  }): Act {
+  function deviceAct({ access, numeral }: DeviceActArgs): Act {
     const ready = isPrepared(access)
     return {
       stage: ChainStage.DeviceKey,
@@ -109,13 +118,7 @@ are reading via IntersectionObserver and lets you jump between them.
     }
   }
 
-  function vaultAct({
-    access,
-    numeral,
-  }: {
-    access: AccessScenario
-    numeral: string
-  }): Act {
+  function vaultAct({ access, numeral }: VaultActArgs): Act {
     const verified = verifiedVaults(access)
     const names = verified.map((vault) => vault.label).join(', ')
     return {
@@ -142,15 +145,7 @@ are reading via IntersectionObserver and lets you jump between them.
     }
   }
 
-  function actFor({
-    access,
-    stage,
-    index,
-  }: {
-    access: AccessScenario
-    stage: ChainStage
-    index: number
-  }): Act {
+  function actFor({ access, stage, index }: ActForArgs): Act {
     const numeral = NUMERALS[index]
     const nookNamedArgument111: Parameters<typeof passkeyAct>[0] = {
       access,

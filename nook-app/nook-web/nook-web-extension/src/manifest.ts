@@ -1,9 +1,9 @@
+import { defaultSimpleVaultBaseUrl } from './lib/simple-vault-target'
 import {
-  defaultSimpleVaultBaseUrl,
-  nookVaultAppExcludeMatchPatterns,
-  sentinelVaultMatchPatterns,
-  simpleVaultMatchPattern,
-} from './lib/simple-vault-target'
+  nook_vault_app_exclude_match_patterns,
+  sentinel_vault_match_patterns,
+  simple_vault_match_pattern,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 enum ManifestIconSize {
   Small = '16',
@@ -116,9 +116,9 @@ export function createManifest(
     args.kind === ExtensionManifestBuildKind.StoreRelease
       ? defaultSimpleVaultBaseUrl()
       : args.simpleVaultBaseUrl
-  const simpleVaultMatch = simpleVaultMatchPattern(simpleVaultBaseUrl)
+  const simpleVaultMatch = simple_vault_match_pattern(simpleVaultBaseUrl)
   const vaultAppExclusions =
-    nookVaultAppExcludeMatchPatterns(simpleVaultBaseUrl)
+    nook_vault_app_exclude_match_patterns(simpleVaultBaseUrl)
   const manifest: ExtensionManifest = {
     manifest_version: 3,
     default_locale: 'en',
@@ -171,7 +171,7 @@ export function createManifest(
       },
       {
         matches: [simpleVaultMatch],
-        exclude_matches: sentinelVaultMatchPatterns(simpleVaultBaseUrl),
+        exclude_matches: sentinel_vault_match_patterns(simpleVaultBaseUrl),
         js: ['content/simple-vault-bridge.js'],
         run_at: ContentScriptRunAt.DocumentStart,
       },

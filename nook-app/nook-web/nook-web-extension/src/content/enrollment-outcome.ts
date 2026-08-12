@@ -1,4 +1,7 @@
-import { fillOneTimeCode } from '../../../nook-web-shared/src/extension/password-forms'
+import {
+  fillOneTimeCode,
+  PasswordFormQueryKind,
+} from '../../../nook-web-shared/src/extension/password-forms'
 import {
   AuthenticationOutcomeResponseKind,
   AuthenticationOutcomeVerdict,
@@ -105,15 +108,17 @@ function hasDisplayedOutcomeMarker(selector: string): boolean {
   )
 }
 
+type CollectEnrollmentOutcomeObservationArgs = {
+  startedAt: number
+  authPath: string
+  sawMutation: boolean
+}
+
 function collectEnrollmentOutcomeObservation({
   startedAt,
   authPath,
   sawMutation,
-}: {
-  startedAt: number
-  authPath: string
-  sawMutation: boolean
-}): AuthenticationOutcomeObservationView {
+}: CollectEnrollmentOutcomeObservationArgs): AuthenticationOutcomeObservationView {
   // Only count markers that are actually shown. Soft SPA demos keep a hidden
   // success node in the document; treating that as present commits too early.
   const successMarkerPresent = hasDisplayedOutcomeMarker(
@@ -140,13 +145,15 @@ function collectEnrollmentOutcomeObservation({
   }
 }
 
+type ClassifyEnrollmentOutcomeArgs = {
+  host: EnrollmentOutcomeHost
+  observation: AuthenticationOutcomeObservationView
+}
+
 async function classifyEnrollmentOutcome({
   host,
   observation,
-}: {
-  host: EnrollmentOutcomeHost
-  observation: AuthenticationOutcomeObservationView
-}): Promise<EnrollmentOutcomeClassification> {
+}: ClassifyEnrollmentOutcomeArgs): Promise<EnrollmentOutcomeClassification> {
   const message: Parameters<
     typeof host.sendAuthenticationOutcomeRuntimeMessage
   >[0] = {
@@ -174,13 +181,15 @@ async function classifyEnrollmentOutcome({
   }
 }
 
+type FillStagedEnrollmentCodeArgs = {
+  host: EnrollmentOutcomeHost
+  stageId: string
+}
+
 export async function fillStagedEnrollmentCode({
   host,
   stageId,
-}: {
-  host: EnrollmentOutcomeHost
-  stageId: string
-}): Promise<boolean> {
+}: FillStagedEnrollmentCodeArgs): Promise<boolean> {
   const message: Parameters<
     typeof host.sendAuthenticatorCodeRuntimeMessage
   >[0] = {
@@ -197,6 +206,8 @@ export async function fillStagedEnrollmentCode({
   }
   const nookTypedArgs0_0: Parameters<typeof fillOneTimeCode>[0] = {
     code: delivery.response.code,
+    kind: PasswordFormQueryKind.Root,
+    root: document,
   }
   return fillOneTimeCode(nookTypedArgs0_0)
 }
@@ -278,15 +289,17 @@ async function evaluatePendingEnrollmentEvidence(): Promise<void> {
   }
 }
 
+type BeginEnrollmentEvidenceWatchArgs = {
+  host: EnrollmentOutcomeHost
+  stageId: string
+  callbacks: EnrollmentEvidenceCallbacks
+}
+
 export function beginEnrollmentEvidenceWatch({
   host,
   stageId,
   callbacks,
-}: {
-  host: EnrollmentOutcomeHost
-  stageId: string
-  callbacks: EnrollmentEvidenceCallbacks
-}): void {
+}: BeginEnrollmentEvidenceWatchArgs): void {
   stopPendingEnrollmentWatch()
   const observer = new MutationObserver(() => {
     if (enrollmentWatchState.kind !== EnrollmentWatchStateKind.Watching) return

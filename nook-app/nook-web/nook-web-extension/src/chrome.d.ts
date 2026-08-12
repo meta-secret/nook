@@ -1,3 +1,16 @@
+type ChromeOffscreenDocumentCreationRequest = {
+  url: string
+  reasons: Array<'WORKERS'>
+  justification: string
+}
+
+type ChromeTabsQueryRequest = { active?: boolean; currentWindow?: boolean }
+
+type ChromeTabCreationRequest = { url: string }
+
+type ChromeTabCreationPromiseRequest = { url: string }
+type ChromeStorageItems = Record<string, unknown>
+
 declare namespace chrome {
   namespace runtime {
     type MessageSender = {
@@ -54,21 +67,21 @@ declare namespace chrome {
   }
 
   namespace offscreen {
-    function createDocument(options: {
-      url: string
-      reasons: Array<'WORKERS'>
-      justification: string
-    }): Promise<void>
+    function createDocument(
+      options: ChromeOffscreenDocumentCreationRequest,
+    ): Promise<void>
 
     function closeDocument(): Promise<void>
   }
 
   namespace i18n {
+    type ChromeI18nSubstitutions = string | string[]
+
     function getUILanguage(): string
     // eslint-disable-next-line max-params -- Chrome owns this localization signature.
     function getMessage(
       messageName: string,
-      substitutions?: string | string[],
+      substitutions?: ChromeI18nSubstitutions,
     ): string
   }
 
@@ -79,7 +92,7 @@ declare namespace chrome {
   }
 
   namespace windows {
-    type CreateData = {
+    type ChromeWindowCreationRequest = {
       url: string
       type?: 'normal' | 'popup' | 'panel' | 'detached_panel'
       width?: number
@@ -88,8 +101,11 @@ declare namespace chrome {
     }
 
     // eslint-disable-next-line max-params -- Chrome owns this callback overload.
-    function create(createData: CreateData, callback: () => void): void
-    function create(createData: CreateData): Promise<unknown>
+    function create(
+      createData: ChromeWindowCreationRequest,
+      callback: () => void,
+    ): void
+    function create(createData: ChromeWindowCreationRequest): Promise<unknown>
   }
 
   namespace tabs {
@@ -98,19 +114,22 @@ declare namespace chrome {
       url?: string
       title?: string
     }
+    type ChromeTabQueryResults = Tab[]
 
     // eslint-disable-next-line max-params -- Chrome owns this callback overload.
     function query(
-      queryInfo: { active?: boolean; currentWindow?: boolean },
-      callback: (tabs: Tab[]) => void,
+      queryInfo: ChromeTabsQueryRequest,
+      callback: (tabs: ChromeTabQueryResults) => void,
     ): void
 
     // eslint-disable-next-line max-params -- Chrome owns this callback overload.
     function create(
-      createProperties: { url: string },
+      createProperties: ChromeTabCreationRequest,
       callback: (tab: Tab) => void,
     ): void
-    function create(createProperties: { url: string }): Promise<Tab>
+    function create(
+      createProperties: ChromeTabCreationPromiseRequest,
+    ): Promise<Tab>
 
     // eslint-disable-next-line max-params -- Chrome owns this callback overload.
     function sendMessage<TResponse = unknown>(
@@ -126,14 +145,17 @@ declare namespace chrome {
   }
 
   namespace storage {
+    type ChromeStorageKeys = string | string[]
+    type ChromeStorageKeySelection = ChromeStorageKeys | ChromeStorageItems
+
     type StorageArea = {
-      get(callback: (items: Record<string, unknown>) => void): void
+      get(callback: (items: ChromeStorageItems) => void): void
       get(
-        keys?: string | string[] | Record<string, unknown> | null,
-        callback?: (items: Record<string, unknown>) => void,
+        keys?: ChromeStorageKeySelection,
+        callback?: (items: ChromeStorageItems) => void,
       ): void
-      set(items: Record<string, unknown>, callback?: () => void): void
-      remove(keys: string | string[], callback?: () => void): void
+      set(items: ChromeStorageItems, callback?: () => void): void
+      remove(keys: ChromeStorageKeys, callback?: () => void): void
     }
     const local: StorageArea
     const session: StorageArea

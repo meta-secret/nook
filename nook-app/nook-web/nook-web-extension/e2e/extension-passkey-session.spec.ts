@@ -1,9 +1,8 @@
 import { chromium, expect, test, type Page } from '@playwright/test'
 import {
-  assertWebsitePasskey,
+  assertWebsitePasskeyThroughExtension,
   attachNookLogsForTest,
   advanceCreateVaultWizardToFinalStep,
-  belongsToSimpleVault,
   extensionApprovalVaultName,
   extensionDir,
   EXTENSION_UNLOCK_TIMEOUT_MS,
@@ -16,14 +15,16 @@ import {
   readExtensionStorage,
   removeExtensionStorageKeys,
   readPersistedAppLogs,
-  registerWebsitePasskey,
+  registerWebsitePasskeyThroughExtension,
   sendExternalMessage,
   setupPasskeyExtensionPopup,
   setupStorageKey,
   simpleVaultBaseUrl,
   startLoginServer,
   waitForExtensionPairingReady,
+  type WebsitePasskeyAssertionBrowserFlow,
 } from './helpers/extension-smoke-runtime'
+import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { createLocalVaultOnLogin } from '../../nook-web-app/e2e/helpers'
 
@@ -297,10 +298,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await pairingLauncher.getByTestId('connect-simple-vault-btn').click()
     const reconnectPage = await reopenedConnectPage
     await expect(reconnectPage).toHaveURL((url) =>
-      belongsToSimpleVault({
-        baseUrl: simpleVaultBaseUrl,
-        candidateUrl: url.toString(),
-      }),
+      belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
     )
     await reconnectPage.close()
     await pairingLauncher.close()
@@ -317,13 +315,19 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       kind: WebsitePasskeyStateKind.NotCreated,
     }
     if (website.kind === WebsitePageStateKind.Opened) {
-      const websiteCredentialId = await registerWebsitePasskey(website.page)
+      const websiteCredentialId = await registerWebsitePasskeyThroughExtension(
+        website.page,
+      )
       websitePasskeyState = {
         kind: WebsitePasskeyStateKind.Created,
         credentialId: websiteCredentialId,
       }
       expect(websiteCredentialId).toBeTruthy()
-      await assertWebsitePasskey(website.page, websiteCredentialId)
+      const websitePasskeyAssertion: WebsitePasskeyAssertionBrowserFlow = {
+        page: website.page,
+        credentialId: websiteCredentialId,
+      }
+      await assertWebsitePasskeyThroughExtension(websitePasskeyAssertion)
       await website.page.close()
     }
 
@@ -591,10 +595,11 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       websiteAfterUnlock.kind === WebsitePageStateKind.Opened &&
       websitePasskeyState.kind === WebsitePasskeyStateKind.Created
     ) {
-      await assertWebsitePasskey(
-        websiteAfterUnlock.page,
-        websitePasskeyState.credentialId,
-      )
+      const websitePasskeyAssertion: WebsitePasskeyAssertionBrowserFlow = {
+        page: websiteAfterUnlock.page,
+        credentialId: websitePasskeyState.credentialId,
+      }
+      await assertWebsitePasskeyThroughExtension(websitePasskeyAssertion)
       await websiteAfterUnlock.page.close()
     }
     await attachNookLogsForTest(reopenedVaultPage, testInfo)
@@ -687,7 +692,7 @@ test('accepts the pairing grant after the extension session was locked', async (
     ).toBeVisible()
 
     // Close the offscreen session before Approve. The grant handoff must still
-    // import the event log without requiring an unlocked saveAuthProviders path.
+    // import the event log without requiring an unlocked save_auth_providers_snapshot path.
     await lockExtensionSession(context)
 
     await simplePage.getByTestId('approve-extension-device-btn').click()
@@ -748,10 +753,7 @@ test('re-approves an existing local vault after reload without event-log-access-
     await pairPopup.getByTestId('connect-simple-vault-btn').click()
     const connectPage = await openedConnect
     await expect(connectPage).toHaveURL((url) =>
-      belongsToSimpleVault({
-        baseUrl: simpleVaultBaseUrl,
-        candidateUrl: url.toString(),
-      }),
+      belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
     )
 
     const consent = connectPage.getByTestId('extension-connect-consent')
@@ -823,10 +825,7 @@ test('re-approves an existing local vault after reload without event-log-access-
     await repairPopup.getByTestId('connect-simple-vault-btn').click()
     const reconnectPage = await reopenedConnect
     await expect(reconnectPage).toHaveURL((url) =>
-      belongsToSimpleVault({
-        baseUrl: simpleVaultBaseUrl,
-        candidateUrl: url.toString(),
-      }),
+      belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
     )
 
     const reconnectConsent = reconnectPage.getByTestId(

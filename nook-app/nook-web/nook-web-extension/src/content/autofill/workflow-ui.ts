@@ -64,14 +64,24 @@ export function workflowCopy(kind: AuthenticationWorkflowKind): WorkflowCopy {
   }
 }
 
+type ProgressLabelArgs = {
+  currentStep: number
+  totalSteps: number
+}
+
 export function progressLabel({
   currentStep,
   totalSteps,
-}: {
+}: ProgressLabelArgs): string {
+  return `${translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel)} · ${currentStep}/${totalSteps}`
+}
+
+type SetFlightProgressArgs = {
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
   currentStep: number
   totalSteps: number
-}): string {
-  return `${translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel)} · ${currentStep}/${totalSteps}`
+  titleKey: BrowserMessageKey
 }
 
 export function setFlightProgress({
@@ -80,13 +90,7 @@ export function setFlightProgress({
   currentStep,
   totalSteps,
   titleKey,
-}: {
-  step: HTMLParagraphElement
-  title: HTMLHeadingElement
-  currentStep: number
-  totalSteps: number
-  titleKey: BrowserMessageKey
-}): void {
+}: SetFlightProgressArgs): void {
   const nookTypedArgs0_0: Parameters<typeof progressLabel>[0] = {
     currentStep,
     totalSteps,
@@ -120,13 +124,15 @@ export function translatedMessage(key: BrowserMessageKey): string {
   return chrome.i18n.getMessage(key) || 'Nook'
 }
 
+type TranslatedMessageWithSubstitutionArgs = {
+  key: BrowserMessageKey
+  substitution: string
+}
+
 export function translatedMessageWithSubstitution({
   key,
   substitution,
-}: {
-  key: BrowserMessageKey
-  substitution: string
-}): string {
+}: TranslatedMessageWithSubstitutionArgs): string {
   return chrome.i18n.getMessage(key, substitution) || 'Nook'
 }
 

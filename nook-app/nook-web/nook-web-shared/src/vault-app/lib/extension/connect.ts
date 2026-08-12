@@ -22,7 +22,7 @@ import {
 } from "$web-shared/extension/extension-connect-types";
 import {
   ExtensionConnectScope,
-  isExtensionConnectScope,
+  isExtensionConnectScopeValue,
 } from "$web-shared/extension/extension-connect-scope";
 
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
@@ -78,7 +78,7 @@ function parseScopes(params: URLSearchParams): ExtensionConnectScope[] {
     .map((scope) => scope.trim())
     .filter(Boolean);
 
-  return scopes.filter(isExtensionConnectScope);
+  return scopes.filter(isExtensionConnectScopeValue);
 }
 
 export function extensionConnectRequestFromLocation(
@@ -373,7 +373,9 @@ async function discoverPairedExtensionIdentityOnce(
       discovery: { status: statusMessage.payload.status },
     };
   }
-  const scopes = statusMessage.payload.scopes.filter(isExtensionConnectScope);
+  const scopes = statusMessage.payload.scopes.filter(
+    isExtensionConnectScopeValue,
+  );
   if (scopes.length === 0) {
     return {
       kind: ExtensionMessageDeliveryKind.Received,

@@ -1,4 +1,9 @@
 <script lang="ts">
+  type VaultTerminalLineAppendRequest = {
+    text: string
+    tone?: Line['tone']
+  }
+
   import { onMount, tick, untrack } from 'svelte'
   import {
     ArrowLeft,
@@ -107,10 +112,7 @@
   function write({
     text,
     tone = VaultTerminalLineTone.Muted,
-  }: {
-    text: string
-    tone?: Line['tone']
-  }) {
+  }: VaultTerminalLineAppendRequest) {
     lines = [...lines, { text, tone }]
   }
 

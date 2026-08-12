@@ -9,6 +9,34 @@ through my device are solid and marked; the rest are dashed. Other devices only
 get a quiet footer: they exist, and that is all this browser can say about them.
 -->
 <script lang="ts">
+  type IsSelectedArgs = { kind: NodeKind; id: string }
+
+  type ChainStrengthSelectionRequest = { kind: NodeKind; id: string }
+
+  type BraceYArgs = { count: number; index: number }
+
+  type GradeOfArgs = {
+    passkeys: number
+    managers: number
+  }
+
+  type ReadForArgs = {
+    source: KeyGraph
+    vault: Vault
+  }
+
+  type StrandForArgs = {
+    source: KeyGraph
+    vault: Vault
+    device: Device
+    passkey: Passkey
+  }
+
+  type ReachForArgs = {
+    mine: boolean
+    usable: boolean
+  }
+
   import { Fingerprint, Laptop, Vault as VaultIcon } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import GraphSwitch from '../_shared/GraphSwitch.svelte'
@@ -102,13 +130,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     }),
   )
 
-  function reachFor({
-    mine,
-    usable,
-  }: {
-    mine: boolean
-    usable: boolean
-  }): PathReach {
+  function reachFor({ mine, usable }: ReachForArgs): PathReach {
     if (!usable) return PathReach.PasskeyElsewhere
     return mine ? PathReach.Now : PathReach.OtherDevice
   }
@@ -118,12 +140,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     vault,
     device,
     passkey,
-  }: {
-    source: KeyGraph
-    vault: Vault
-    device: Device
-    passkey: Passkey
-  }): Strand {
+  }: StrandForArgs): Strand {
     const nookNamedArgument238: Parameters<typeof isHere>[0] = {
       graph: source,
       device,
@@ -147,13 +164,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     }
   }
 
-  function readFor({
-    source,
-    vault,
-  }: {
-    source: KeyGraph
-    vault: Vault
-  }): VaultRead {
+  function readFor({ source, vault }: ReadForArgs): VaultRead {
     const nookNamedArgument240: Parameters<typeof devicesForVault>[0] = {
       graph: source,
       vault,
@@ -200,13 +211,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     }
   }
 
-  function gradeOf({
-    passkeys,
-    managers,
-  }: {
-    passkeys: number
-    managers: number
-  }): Redundancy {
+  function gradeOf({ passkeys, managers }: GradeOfArgs): Redundancy {
     if (passkeys === 0) return Redundancy.Severed
     if (passkeys === 1) return Redundancy.Single
     return managers === 1 ? Redundancy.OneManager : Redundancy.Spread
@@ -250,7 +255,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     return 'bg-[#a8431c]'
   }
 
-  function braceY({ count, index }: { count: number; index: number }): number {
+  function braceY({ count, index }: BraceYArgs): number {
     return ((index + 0.5) / count) * 100
   }
 
@@ -268,11 +273,11 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     return 'Passkey not available on this browser'
   }
 
-  function pick({ kind, id }: { kind: NodeKind; id: string }) {
+  function pick({ kind, id }: ChainStrengthSelectionRequest) {
     selected = { kind, id }
   }
 
-  function isSelected({ kind, id }: { kind: NodeKind; id: string }): boolean {
+  function isSelected({ kind, id }: IsSelectedArgs): boolean {
     return selected.kind === kind && selected.id === id
   }
 

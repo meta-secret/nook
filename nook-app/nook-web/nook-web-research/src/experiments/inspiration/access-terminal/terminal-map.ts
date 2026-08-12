@@ -25,17 +25,18 @@ const STROKES: Record<string, number> = {
 }
 const GLYPHS = ' │││─└┌├─┘┐┤─┴┬┼'
 
-export function pad({ text, width }: { text: string; width: number }): string {
+type TerminalColumnPadding = { text: string; width: number }
+
+export function pad({ text, width }: TerminalColumnPadding): string {
   return text.length >= width ? text : text + ' '.repeat(width - text.length)
 }
 
-export function columns({
-  cells,
-  widths,
-}: {
+type TerminalMapColumnLayout = {
   cells: string[]
   widths: number[]
-}): string {
+}
+
+export function columns({ cells, widths }: TerminalMapColumnLayout): string {
   return [...cells.entries()]
     .map(([index, cell]) => {
       const column: Parameters<typeof pad>[0] = {
@@ -48,17 +49,14 @@ export function columns({
     .trimEnd()
 }
 
-function put({
-  grid,
-  x,
-  y,
-  mark,
-}: {
+type TerminalGridStrokePlacement = {
   grid: string[][]
   x: number
   y: number
   mark: string
-}) {
+}
+
+function put({ grid, x, y, mark }: TerminalGridStrokePlacement) {
   const row = grid[y]
   if (!row) return
   if (x < 0 || x >= row.length) return
@@ -70,7 +68,9 @@ function put({
   row[x] = merge(nookNamedArgument63)
 }
 
-function merge({ current, mark }: { current: string; mark: string }): string {
+type TerminalStrokeMerge = { current: string; mark: string }
+
+function merge({ current, mark }: TerminalStrokeMerge): string {
   if (mark === '>') return mark
   if (current === ' ') return mark
   const held = STROKES[current]
@@ -79,17 +79,14 @@ function merge({ current, mark }: { current: string; mark: string }): string {
   return GLYPHS.charAt(held | added)
 }
 
-function box({
-  grid,
-  x,
-  top,
-  body,
-}: {
+type TerminalMapBoxDrawing = {
   grid: string[][]
   x: number
   top: number
   body: string
-}) {
+}
+
+function box({ grid, x, top, body }: TerminalMapBoxDrawing) {
   const bar = '─'.repeat(BOX_W - 2)
   const nookNamedArgument64: Parameters<typeof pad>[0] = {
     text: body,
@@ -109,6 +106,15 @@ function box({
   )
 }
 
+type TerminalMapWireDrawing = {
+  grid: string[][]
+  fromX: number
+  fromY: number
+  toX: number
+  toY: number
+  channel: number
+}
+
 function wire({
   grid,
   fromX,
@@ -116,14 +122,7 @@ function wire({
   toX,
   toY,
   channel,
-}: {
-  grid: string[][]
-  fromX: number
-  fromY: number
-  toX: number
-  toY: number
-  channel: number
-}) {
+}: TerminalMapWireDrawing) {
   for (let x = fromX; x < channel; x += 1) {
     const horizontalStart: Parameters<typeof put>[0] = {
       grid,
@@ -185,7 +184,13 @@ function wire({
   put(nookNamedArgument72)
 }
 
-function place({ line, x, text }: { line: string[]; x: number; text: string }) {
+type TerminalMapLineTextPlacement = {
+  line: string[]
+  x: number
+  text: string
+}
+
+function place({ line, x, text }: TerminalMapLineTextPlacement) {
   ;[...[...text].entries()].forEach(([i, mark]) => {
     if (x + i < line.length) line[x + i] = mark
   })

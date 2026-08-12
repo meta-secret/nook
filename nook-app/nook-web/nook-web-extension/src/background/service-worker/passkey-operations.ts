@@ -36,25 +36,29 @@ import { extensionSessionGrantIdentity } from '../pairing-grants'
 
 const pendingWebsitePasskeyRequests = new Set<string>()
 
+type PasskeyRequestKeyArgs = {
+  sender: chrome.runtime.MessageSender
+  requestId: string
+}
+
 function passkeyRequestKey({
   sender,
   requestId,
-}: {
-  sender: chrome.runtime.MessageSender
-  requestId: string
-}): string {
+}: PasskeyRequestKeyArgs): string {
   return `${sender.tab?.id ?? -1}:${sender.frameId ?? 0}:${requestId}`
 }
 
 const PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS = 1500
 
+type MatchingPasskeyAccountCountForOriginArgs = {
+  origin: string
+  queueExpiresAt: number
+}
+
 async function matchingPasskeyAccountCountForOrigin({
   origin,
   queueExpiresAt,
-}: {
-  origin: string
-  queueExpiresAt: number
-}): Promise<number> {
+}: MatchingPasskeyAccountCountForOriginArgs): Promise<number> {
   let hostname: string
   try {
     hostname = new URL(origin).hostname
@@ -118,10 +122,7 @@ async function matchingPasskeyAccountCountForOriginSafe(
   }
 }
 
-export async function websitePasskeyOptions({
-  message,
-  sender,
-}: {
+type WebsitePasskeyOptionsArgs = {
   message: Parameters<typeof isWebsitePasskeyOptionsMessage>[0] & {
     payload: {
       requestId: string
@@ -131,7 +132,12 @@ export async function websitePasskeyOptions({
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<WebsitePasskeyOptionsResponse> {
+}
+
+export async function websitePasskeyOptions({
+  message,
+  sender,
+}: WebsitePasskeyOptionsArgs): Promise<WebsitePasskeyOptionsResponse> {
   const nookTypedArgs0_2: Parameters<typeof requestOriginAndRpId>[0] = {
     ceremony: message.payload.ceremony,
     requestJson: message.payload.requestJson,
@@ -210,10 +216,7 @@ export async function websitePasskeyOptions({
   return { ok: true, status: WebsitePasskeyOptionsStatus.Ready, options }
 }
 
-export async function performWebsitePasskey({
-  message,
-  sender,
-}: {
+type PerformWebsitePasskeyArgs = {
   message: Parameters<typeof isWebsitePasskeyPerformMessage>[0] & {
     payload: {
       requestId: string
@@ -225,7 +228,12 @@ export async function performWebsitePasskey({
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<WebsitePasskeyPerformResponse> {
+}
+
+export async function performWebsitePasskey({
+  message,
+  sender,
+}: PerformWebsitePasskeyArgs): Promise<WebsitePasskeyPerformResponse> {
   const nookTypedArgs0_6: Parameters<typeof requestOriginAndRpId>[0] = {
     ceremony: message.payload.ceremony,
     requestJson: message.payload.requestJson,
@@ -289,15 +297,17 @@ export async function performWebsitePasskey({
   }
 }
 
-export async function cancelWebsitePasskey({
-  message,
-  sender,
-}: {
+type CancelWebsitePasskeyArgs = {
   message: Parameters<typeof isWebsitePasskeyCancelMessage>[0] & {
     payload: { requestId: string }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<{ ok: true }> {
+}
+
+export async function cancelWebsitePasskey({
+  message,
+  sender,
+}: CancelWebsitePasskeyArgs): Promise<{ ok: true }> {
   const nookTypedArgs0_2: Parameters<typeof passkeyRequestKey>[0] = {
     sender,
     requestId: message.payload.requestId,

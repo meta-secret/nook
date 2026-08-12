@@ -31,17 +31,20 @@ interface Match {
 
 type Block = TerminalBlock
 
-function pad({ text, width }: { text: string; width: number }): string {
+type TerminalReportColumnPadding = { text: string; width: number }
+
+function pad({ text, width }: TerminalReportColumnPadding): string {
   return text.length >= width ? text : text + ' '.repeat(width - text.length)
 }
 
-function columns({
-  cells,
-  widths,
-}: {
+type KeyAccessTerminalColumnLayout = {
   cells: string[]
   widths: number[]
-}): string {
+}
+
+type TerminalShortIdentifiers = string[]
+
+function columns({ cells, widths }: KeyAccessTerminalColumnLayout): string {
   return [...cells.entries()]
     .map(([index, cell]) => {
       const nookNamedArgument117: Parameters<typeof pad>[0] = {
@@ -54,7 +57,7 @@ function columns({
     .trimEnd()
 }
 
-function ids(shortIds: string[]): string {
+function ids(shortIds: TerminalShortIdentifiers): string {
   return shortIds.length > 0 ? shortIds.join('  ') : '—'
 }
 
@@ -70,15 +73,13 @@ function reachWord(passkey: Passkey): string {
 }
 
 /** Whether this passkey opens this vault through the key of this browser. */
-function routeHere({
-  graph,
-  passkeyId,
-  vault,
-}: {
+type RouteHereArgs = {
   graph: KeyGraph
   passkeyId: string
   vault: Vault
-}) {
+}
+
+function routeHere({ graph, passkeyId, vault }: RouteHereArgs) {
   return hereDevices(graph).some(
     (device) =>
       vault.deviceIds.includes(device.id) &&
@@ -87,15 +88,13 @@ function routeHere({
 }
 
 /** `here`, or the identifiers of the other devices the route depends on. */
-function routeWord({
-  graph,
-  passkeyId,
-  vault,
-}: {
+type RouteWordArgs = {
   graph: KeyGraph
   passkeyId: string
   vault: Vault
-}): string {
+}
+
+function routeWord({ graph, passkeyId, vault }: RouteWordArgs): string {
   const nookNamedArgument118: Parameters<typeof routeHere>[0] = {
     graph,
     passkeyId,
@@ -112,17 +111,18 @@ function routeWord({
   return via.length > 0 ? `via ${via.join(' ')}` : 'no route'
 }
 
-function branch({ index, count }: { index: number; count: number }): string {
+type TerminalReportBranchPosition = { index: number; count: number }
+
+function branch({ index, count }: TerminalReportBranchPosition): string {
   return index === count - 1 ? '└─' : '├─'
 }
 
-function vaultBlock({
-  graph,
-  vault,
-}: {
+type VaultBlockArgs = {
   graph: KeyGraph
   vault: Vault
-}): string[] {
+}
+
+function vaultBlock({ graph, vault }: VaultBlockArgs): string[] {
   const nookNamedArgument120: Parameters<typeof openableHere>[0] = {
     graph,
     vault,
@@ -248,13 +248,12 @@ function myLines(graph: KeyGraph): string[] {
   ]
 }
 
-function otherDeviceLines({
-  graph,
-  device,
-}: {
+type OtherDeviceLinesArgs = {
   graph: KeyGraph
   device: Device
-}): string[] {
+}
+
+function otherDeviceLines({ graph, device }: OtherDeviceLinesArgs): string[] {
   const nookNamedArgument134: Parameters<typeof columns>[0] = {
     cells: ['other device', device.shortId, device.label],
     widths: [14, 9, 20],
@@ -281,13 +280,12 @@ function otherDeviceLines({
   ]
 }
 
-function passkeyLines({
-  graph,
-  passkey,
-}: {
+type PasskeyLinesArgs = {
   graph: KeyGraph
   passkey: Passkey
-}): string[] {
+}
+
+function passkeyLines({ graph, passkey }: PasskeyLinesArgs): string[] {
   const nookNamedArgument138: Parameters<typeof vaultsForPasskey>[0] = {
     graph,
     passkeyId: passkey.id,
@@ -493,17 +491,14 @@ export function opening(graph: KeyGraph): Block[] {
   return [banner(graph), { id: 1, prompt: 'map', lines: mapLines(graph) }]
 }
 
-function hits({
-  query,
-  shortId,
-  id,
-  label,
-}: {
+type KeyAccessTerminalTextMatch = {
   query: string
   shortId: string
   id: string
   label: string
-}) {
+}
+
+function hits({ query, shortId, id, label }: KeyAccessTerminalTextMatch) {
   const needle = query.toLowerCase()
   return (
     shortId.toLowerCase().startsWith(needle) ||
@@ -512,7 +507,9 @@ function hits({
   )
 }
 
-function lookup({ graph, query }: { graph: KeyGraph; query: string }): Match[] {
+type KeyAccessTerminalGraphLookup = { graph: KeyGraph; query: string }
+
+function lookup({ graph, query }: KeyAccessTerminalGraphLookup): Match[] {
   return [
     ...graph.passkeys
       .filter((passkey) => {
@@ -566,7 +563,9 @@ function lookup({ graph, query }: { graph: KeyGraph; query: string }): Match[] {
 }
 
 /** My device key never reads as one more `Device key` row among the rest. */
-function kindWord({ graph, match }: { graph: KeyGraph; match: Match }): string {
+type KindWordArgs = { graph: KeyGraph; match: Match }
+
+function kindWord({ graph, match }: KindWordArgs): string {
   if (match.kind !== NodeKind.Device) return kindLabel(match.kind)
   return graph.devices.some((device) => {
     const nookNamedArgument166: Parameters<typeof isHere>[0] = {
@@ -579,13 +578,12 @@ function kindWord({ graph, match }: { graph: KeyGraph; match: Match }): string {
     : 'other device'
 }
 
-function matchLines({
-  graph,
-  matches,
-}: {
+type MatchLinesArgs = {
   graph: KeyGraph
   matches: Match[]
-}): string[] {
+}
+
+function matchLines({ graph, matches }: MatchLinesArgs): string[] {
   return matches.map((match) => {
     const nookNamedArgument168: Parameters<typeof kindWord>[0] = {
       graph,
@@ -646,13 +644,12 @@ function indexLines(graph: KeyGraph): string[] {
   ]
 }
 
-function reportFor({
-  graph,
-  match,
-}: {
+type ReportForArgs = {
   graph: KeyGraph
   match: Match
-}): string[] {
+}
+
+function reportFor({ graph, match }: ReportForArgs): string[] {
   if (match.kind === NodeKind.Passkey) {
     return graph.passkeys
       .filter((passkey) => passkey.id === match.id)
@@ -692,13 +689,12 @@ function reportFor({
     })
 }
 
-function idCommand({
-  graph,
-  query,
-}: {
+type IdCommandArgs = {
   graph: KeyGraph
   query: string
-}): string[] {
+}
+
+function idCommand({ graph, query }: IdCommandArgs): string[] {
   if (query.length === 0) return ['id <id>', '', ...indexLines(graph)]
   const nookNamedArgument177: Parameters<typeof lookup>[0] = { graph, query }
   const matches = lookup(nookNamedArgument177)
@@ -725,13 +721,12 @@ function idCommand({
   })
 }
 
-export function outputFor({
-  graph,
-  command,
-}: {
+type OutputForArgs = {
   graph: KeyGraph
   command: string
-}): string[] {
+}
+
+export function outputFor({ graph, command }: OutputForArgs): string[] {
   const [verb, ...rest] = command.split(' ')
   const argument = rest.join(' ')
   if (command === 'map') return mapLines(graph)

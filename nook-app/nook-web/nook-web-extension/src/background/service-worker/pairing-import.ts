@@ -25,7 +25,7 @@ import {
 import {
   decodeExtensionStorageProviders,
   importExtensionEventLog,
-  reconcileExtensionPairingState,
+  reconcileExtensionPairingItems,
 } from '../vault-runtime'
 import {
   ensureLegacyPairingMigration,
@@ -47,12 +47,16 @@ export async function importPairingAfterCompanionReady(message: unknown) {
   return importApprovedPairing(message)
 }
 
-async function reconcilePairingStorage(args: {
+type ReconcilePairingStorageArgs = {
   items: ExtensionPairingItems
   removedKeys: string[]
-}): Promise<void> {
+}
+
+async function reconcilePairingStorage(
+  args: ReconcilePairingStorageArgs,
+): Promise<void> {
   await ensureLegacyPairingMigration()
-  await reconcileExtensionPairingState(args)
+  await reconcileExtensionPairingItems(args)
 }
 
 type RestorePairingStorageArgs = {
@@ -232,13 +236,15 @@ export async function importApprovedPairing(
   }
 }
 
+type ImportLocalEventLogUpdateArgs = {
+  vaultStoreId: string
+  eventLogRecords: Parameters<typeof importExtensionEventLog>[0]['records']
+}
+
 export async function importLocalEventLogUpdate({
   vaultStoreId,
   eventLogRecords,
-}: {
-  vaultStoreId: string
-  eventLogRecords: Parameters<typeof importExtensionEventLog>[0]['records']
-}): Promise<PairingImportResult> {
+}: ImportLocalEventLogUpdateArgs): Promise<PairingImportResult> {
   const pairingPolicy = await extensionPairingGrantPolicyReady
   const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
   try {

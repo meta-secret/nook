@@ -22,6 +22,27 @@ export type PasswordFormScope =
   | { kind: PasswordFormScopeKind.Owned; owner: HTMLFormElement }
   | { kind: PasswordFormScopeKind.Unowned };
 
+export type PasswordFieldQuery = {
+  root?: ParentNode;
+  formScope?: PasswordFormScope;
+};
+
+type ScopedInputFieldQuery = {
+  root: ParentNode;
+  selector: string;
+  formScope?: PasswordFormScope;
+};
+
+type PageInputClassificationRequest = {
+  field: HTMLInputElement;
+  loginContext: boolean;
+};
+
+export type AutocompleteTokenMatchRequest = {
+  field: HTMLInputElement;
+  expected: string;
+};
+
 export const usernameFieldSelectors = [
   'input[autocomplete~="username" i]',
   'input[autocomplete~="email" i]',
@@ -105,11 +126,7 @@ function findFields({
   root,
   selector,
   formScope,
-}: {
-  root: ParentNode;
-  selector: string;
-  formScope?: PasswordFormScope;
-}): HTMLInputElement[] {
+}: ScopedInputFieldQuery): HTMLInputElement[] {
   const queryRoot =
     formScope?.kind === PasswordFormScopeKind.Owned
       ? formScope.owner.ownerDocument
@@ -128,10 +145,7 @@ function findFields({
 export function findPasswordFields({
   root = document,
   formScope,
-}: {
-  root?: ParentNode;
-  formScope?: PasswordFormScope;
-}): HTMLInputElement[] {
+}: PasswordFieldQuery): HTMLInputElement[] {
   const findArgs: Parameters<typeof findFields>[0] = {
     root,
     selector: 'input[type="password"]',
@@ -232,10 +246,7 @@ function hasLoginContext(field: HTMLInputElement): boolean {
 function pageInputObservation({
   field,
   loginContext,
-}: {
-  field: HTMLInputElement;
-  loginContext: boolean;
-}): NookPageInputFieldObservation {
+}: PageInputClassificationRequest): NookPageInputFieldObservation {
   return new NookPageInputFieldObservation(
     parse_page_input_type(field.type),
     field.disabled,
@@ -277,10 +288,7 @@ function looksLikeOneTimeCodeField(field: HTMLInputElement): boolean {
 export function findUsernameFields({
   root = document,
   formScope,
-}: {
-  root?: ParentNode;
-  formScope?: PasswordFormScope;
-}): HTMLInputElement[] {
+}: PasswordFieldQuery): HTMLInputElement[] {
   const seen = new Set<HTMLInputElement>();
   const fields: HTMLInputElement[] = [];
   const selectorArgs: Parameters<typeof findFields>[0] = {
@@ -307,10 +315,7 @@ export function findUsernameFields({
 export function findOneTimeCodeFields({
   root = document,
   formScope,
-}: {
-  root?: ParentNode;
-  formScope?: PasswordFormScope;
-} = {}): HTMLInputElement[] {
+}: PasswordFieldQuery): HTMLInputElement[] {
   const seen = new Set<HTMLInputElement>();
   const fields: HTMLInputElement[] = [];
   const findArgs: Parameters<typeof findFields>[0] = {
@@ -329,10 +334,7 @@ export function findOneTimeCodeFields({
 export function hasAutocompleteToken({
   field,
   expected,
-}: {
-  field: HTMLInputElement;
-  expected: string;
-}): boolean {
+}: AutocompleteTokenMatchRequest): boolean {
   return field.autocomplete
     .toLowerCase()
     .split(/\s+/u)

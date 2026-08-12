@@ -7,6 +7,40 @@ large monospace, its state, and then flat groups of identifier chips for what
 it connects to.
 -->
 <script lang="ts">
+  type IdClassArgs = { kind: NodeKind; id: string }
+
+  type TickInkArgs = { kind: NodeKind; id: string }
+
+  type TickClassArgs = { kind: NodeKind; id: string }
+
+  type RowClassArgs = { kind: NodeKind; id: string }
+
+  type MarkedArgs = { kind: NodeKind; id: string }
+
+  type ChosenArgs = { kind: NodeKind; id: string }
+
+  type KeyIndexSelectionRequest = { kind: NodeKind; id: string }
+
+  type GroupsForArgs = {
+    source: KeyGraph
+    node: NodeRef
+  }
+
+  type VaultChipArgs = {
+    source: KeyGraph
+    vault: Vault
+  }
+
+  type DeviceChipArgs = {
+    source: KeyGraph
+    device: Device
+  }
+
+  type LabelForArgs = {
+    source: KeyGraph
+    node: NodeRef
+  }
+
   import {
     Check,
     Fingerprint,
@@ -130,13 +164,7 @@ it connects to.
     ),
   )
 
-  function labelFor({
-    source,
-    node,
-  }: {
-    source: KeyGraph
-    node: NodeRef
-  }): string {
+  function labelFor({ source, node }: LabelForArgs): string {
     if (node.kind !== NodeKind.Device) return kindLabel(node.kind)
     const mine = source.devices.some((device) => {
       const nookNamedArgument207: Parameters<typeof isHere>[0] = {
@@ -160,13 +188,7 @@ it connects to.
     }
   }
 
-  function deviceChip({
-    source,
-    device,
-  }: {
-    source: KeyGraph
-    device: Device
-  }): DetailChip {
+  function deviceChip({ source, device }: DeviceChipArgs): DetailChip {
     const nookNamedArgument208: Parameters<typeof isHere>[0] = {
       graph: source,
       device,
@@ -182,13 +204,7 @@ it connects to.
     }
   }
 
-  function vaultChip({
-    source,
-    vault,
-  }: {
-    source: KeyGraph
-    vault: Vault
-  }): DetailChip {
+  function vaultChip({ source, vault }: VaultChipArgs): DetailChip {
     const nookNamedArgument209: Parameters<typeof openableHere>[0] = {
       graph: source,
       vault,
@@ -204,13 +220,7 @@ it connects to.
     }
   }
 
-  function groupsFor({
-    source,
-    node,
-  }: {
-    source: KeyGraph
-    node: NodeRef
-  }): DetailGroup[] {
+  function groupsFor({ source, node }: GroupsForArgs): DetailGroup[] {
     if (node.kind === NodeKind.Passkey) {
       const nookNamedArgument210: Parameters<typeof devicesForPasskey>[0] = {
         graph: source,
@@ -386,21 +396,21 @@ it connects to.
       })
   }
 
-  function pick({ kind, id }: { kind: NodeKind; id: string }) {
+  function pick({ kind, id }: KeyIndexSelectionRequest) {
     selected = { kind, id }
   }
 
-  function chosen({ kind, id }: { kind: NodeKind; id: string }): boolean {
+  function chosen({ kind, id }: ChosenArgs): boolean {
     return selected.kind === kind && selected.id === id
   }
 
-  function marked({ kind, id }: { kind: NodeKind; id: string }): boolean {
+  function marked({ kind, id }: MarkedArgs): boolean {
     if (kind === NodeKind.Passkey) return highlight.passkeyIds.includes(id)
     if (kind === NodeKind.Device) return highlight.deviceIds.includes(id)
     return highlight.vaultIds.includes(id)
   }
 
-  function rowClass({ kind, id }: { kind: NodeKind; id: string }): string {
+  function rowClass({ kind, id }: RowClassArgs): string {
     const base =
       'flex w-full items-center gap-2.5 py-1.5 text-left transition duration-200 motion-reduce:transition-none'
     const nookNamedArgument227: Parameters<typeof chosen>[0] = { kind, id }
@@ -410,7 +420,7 @@ it connects to.
     return `${base} opacity-30 hover:opacity-70`
   }
 
-  function tickClass({ kind, id }: { kind: NodeKind; id: string }): string {
+  function tickClass({ kind, id }: TickClassArgs): string {
     const base = 'block w-[2px] shrink-0 rounded-full'
     const nookNamedArgument229: Parameters<typeof chosen>[0] = { kind, id }
     if (chosen(nookNamedArgument229)) return `${base} h-10`
@@ -418,14 +428,14 @@ it connects to.
     return marked(nookNamedArgument230) ? `${base} h-7` : `${base} h-4`
   }
 
-  function tickInk({ kind, id }: { kind: NodeKind; id: string }): string {
+  function tickInk({ kind, id }: TickInkArgs): string {
     const nookNamedArgument231: Parameters<typeof chosen>[0] = { kind, id }
     if (chosen(nookNamedArgument231)) return ACCENT
     const nookNamedArgument232: Parameters<typeof marked>[0] = { kind, id }
     return marked(nookNamedArgument232) ? 'rgba(240,112,58,0.5)' : '#2b3037'
   }
 
-  function idClass({ kind, id }: { kind: NodeKind; id: string }): string {
+  function idClass({ kind, id }: IdClassArgs): string {
     const base = 'font-mono text-[13px] tracking-wide'
     const nookNamedArgument233: Parameters<typeof chosen>[0] = { kind, id }
     return chosen(nookNamedArgument233)

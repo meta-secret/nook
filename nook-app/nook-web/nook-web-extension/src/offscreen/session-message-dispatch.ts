@@ -1,7 +1,7 @@
 import {
   ProviderCredentialStagingKind,
   scrubProviderCredentials,
-  type SerializedStorageProvider,
+  type SerializedExtensionStorageProviders,
   stageProviderCredentials,
 } from '../lib/provider-credential-staging'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -44,7 +44,7 @@ type SensitivePayloadResidency =
 export type SessionMessageDispatchContext<SessionResponse> = {
   handleMessage: (message: ExtensionSessionRequest) => Promise<SessionResponse>
   decodeProviders: (
-    providers: SerializedStorageProvider[],
+    providers: SerializedExtensionStorageProviders,
   ) => Promise<StorageProvider[]>
 }
 
@@ -134,6 +134,21 @@ enum StagingOwnership {
   Cleared = 'cleared',
 }
 
+type ExtensionSessionMessageDispatcherenqueueSensitiveMessageArgs = {
+  request: ExtensionSessionNonImportRequest
+  priority: SessionOperationPriority
+  expiresAt: number
+}
+
+type ExtensionSessionMessageDispatcherenqueueVaultImportArgs = {
+  message: Extract<
+    ParsedExtensionSessionTransportRequest,
+    { type: ExtensionSessionMessageType.ImportVault }
+  >
+  priority: SessionOperationPriority
+  requestedExpiry: RequestedQueueExpiry
+}
+
 export class ExtensionSessionMessageDispatcher<SessionResponse> {
   private operations = new SessionOperationQueue()
   private operationGeneration = 0
@@ -158,11 +173,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     request,
     priority,
     expiresAt,
-  }: {
-    request: ExtensionSessionNonImportRequest
-    priority: SessionOperationPriority
-    expiresAt: number
-  }): Promise<SessionResponse> {
+  }: ExtensionSessionMessageDispatcherenqueueSensitiveMessageArgs): Promise<SessionResponse> {
     let payloadResidency: SensitivePayloadResidency = {
       kind: SensitivePayloadResidencyKind.Resident,
       request,
@@ -205,21 +216,17 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     message,
     priority,
     requestedExpiry,
-  }: {
-    message: Extract<
-      ParsedExtensionSessionTransportRequest,
-      { type: ExtensionSessionMessageType.ImportVault }
-    >
-    priority: SessionOperationPriority
-    requestedExpiry: RequestedQueueExpiry
-  }): Promise<ExtensionSessionDispatchResponse<SessionResponse>> {
+  }: ExtensionSessionMessageDispatcherenqueueVaultImportArgs): Promise<
+    ExtensionSessionDispatchResponse<SessionResponse>
+  > {
     const payload = message.payload
     const operationGeneration = this.operationGeneration
     if (!Array.isArray(payload.providers)) {
       payload.providers = []
       return { ok: false, error: 'invalid-provider-payload' }
     }
-    const providerCandidate: SerializedStorageProvider[] = payload.providers
+    const providerCandidate: SerializedExtensionStorageProviders =
+      payload.providers
     const stagingArgs: Parameters<typeof stageProviderCredentials>[0] = {
       providers: providerCandidate,
       decode: this.context.decodeProviders,

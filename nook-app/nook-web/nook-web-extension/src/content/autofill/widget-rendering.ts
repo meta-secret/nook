@@ -33,13 +33,15 @@ import {
 import type { PilotVaultConnection } from './workflow-ui'
 import { removeWidget, translatedMessage, workflowCopy } from './workflow-ui'
 
+type RenderEnrollmentWidgetArgs = {
+  hints: EnrollmentPageHints
+  vaultConnection: PilotVaultConnection
+}
+
 export function renderEnrollmentWidget({
   hints,
   vaultConnection,
-}: {
-  hints: EnrollmentPageHints
-  vaultConnection: PilotVaultConnection
-}): void {
+}: RenderEnrollmentWidgetArgs): void {
   if (widgetState.dismissed) {
     removeWidget()
     return
@@ -96,15 +98,17 @@ export function renderEnrollmentWidget({
   renderEnrollmentActions(nookTypedArgs1_0)
 }
 
+type RenderWidgetArgs = {
+  snapshot: AuthenticationWorkflowSnapshotView
+  workflow: PasswordFormObservation
+  vaultConnection: PilotVaultConnection
+}
+
 export function renderWidget({
   snapshot,
   workflow,
   vaultConnection,
-}: {
-  snapshot: AuthenticationWorkflowSnapshotView
-  workflow: PasswordFormObservation
-  vaultConnection: PilotVaultConnection
-}): void {
+}: RenderWidgetArgs): void {
   if (widgetState.dismissed) {
     removeWidget()
     return

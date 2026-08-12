@@ -18,13 +18,15 @@ export type EnrollmentPageHints = {
 
 const ENROLLMENT_SECTION_CLASS = 'enrollment-actions'
 
+type ResetEnrollmentHeadlineArgs = {
+  host: EnrollmentFlowViewHost
+  hints: EnrollmentPageHints
+}
+
 export function resetEnrollmentHeadline({
   host,
   hints,
-}: {
-  host: EnrollmentFlowViewHost
-  hints: EnrollmentPageHints
-}): void {
+}: ResetEnrollmentHeadlineArgs): void {
   const titleKey = hints.qr
     ? BROWSER_MESSAGE_KEYS.WidgetEnrollTitle
     : BROWSER_MESSAGE_KEYS.WidgetBackupTitle
@@ -48,27 +50,38 @@ export function createEnrollmentSection(panel: HTMLElement): HTMLElement {
   return section
 }
 
+type SetHostDescriptionArgs = {
+  host: EnrollmentFlowViewHost
+  text: string
+}
+
 export function setHostDescription({
   host,
   text,
-}: {
-  host: EnrollmentFlowViewHost
-  text: string
-}): void {
+}: SetHostDescriptionArgs): void {
   host.description.textContent = text
+}
+
+type AppendButtonRowArgs = {
+  container: HTMLElement
+  buttons: HTMLButtonElement[]
 }
 
 export function appendButtonRow({
   container,
   buttons,
-}: {
-  container: HTMLElement
-  buttons: HTMLButtonElement[]
-}): void {
+}: AppendButtonRowArgs): void {
   const row = document.createElement('div')
   row.className = 'account-list'
   buttons.forEach((button) => row.append(button))
   container.append(row)
+}
+
+type EnrollmentFlowButtonCreationRequest = {
+  host: EnrollmentFlowViewHost
+  className: string
+  labelKey: BrowserMessageKey
+  onClick: (event: MouseEvent) => void
 }
 
 function createButton({
@@ -76,12 +89,7 @@ function createButton({
   className,
   labelKey,
   onClick,
-}: {
-  host: EnrollmentFlowViewHost
-  className: string
-  labelKey: BrowserMessageKey
-  onClick: (event: MouseEvent) => void
-}): HTMLButtonElement {
+}: EnrollmentFlowButtonCreationRequest): HTMLButtonElement {
   const button = document.createElement('button')
   button.type = 'button'
   button.className = className
@@ -91,15 +99,17 @@ function createButton({
   return button
 }
 
+type CreatePrimaryButtonArgs = {
+  host: EnrollmentFlowViewHost
+  labelKey: BrowserMessageKey
+  onClick: (event: MouseEvent) => void
+}
+
 export function createPrimaryButton({
   host,
   labelKey,
   onClick,
-}: {
-  host: EnrollmentFlowViewHost
-  labelKey: BrowserMessageKey
-  onClick: (event: MouseEvent) => void
-}): HTMLButtonElement {
+}: CreatePrimaryButtonArgs): HTMLButtonElement {
   const nookTypedArgs0_0: Parameters<typeof createButton>[0] = {
     host,
     className: 'primary-button',
@@ -109,15 +119,17 @@ export function createPrimaryButton({
   return createButton(nookTypedArgs0_0)
 }
 
+type CreateSecondaryButtonArgs = {
+  host: EnrollmentFlowViewHost
+  labelKey: BrowserMessageKey
+  onClick: (event: MouseEvent) => void
+}
+
 export function createSecondaryButton({
   host,
   labelKey,
   onClick,
-}: {
-  host: EnrollmentFlowViewHost
-  labelKey: BrowserMessageKey
-  onClick: (event: MouseEvent) => void
-}): HTMLButtonElement {
+}: CreateSecondaryButtonArgs): HTMLButtonElement {
   const nookTypedArgs0_1: Parameters<typeof createButton>[0] = {
     host,
     className: 'secondary-button',
@@ -127,15 +139,17 @@ export function createSecondaryButton({
   return createButton(nookTypedArgs0_1)
 }
 
+type CreateTextButtonArgs = {
+  host: EnrollmentFlowViewHost
+  labelKey: BrowserMessageKey
+  onClick: (event: MouseEvent) => void
+}
+
 export function createTextButton({
   host,
   labelKey,
   onClick,
-}: {
-  host: EnrollmentFlowViewHost
-  labelKey: BrowserMessageKey
-  onClick: (event: MouseEvent) => void
-}): HTMLButtonElement {
+}: CreateTextButtonArgs): HTMLButtonElement {
   const nookTypedArgs0_2: Parameters<typeof createButton>[0] = {
     host,
     className: 'text-button',
@@ -145,15 +159,17 @@ export function createTextButton({
   return createButton(nookTypedArgs0_2)
 }
 
+type RenderPreviewDetailsArgs = {
+  container: HTMLElement
+  host: EnrollmentFlowViewHost
+  preview: AuthenticatorEnrollmentPreview
+}
+
 export function renderPreviewDetails({
   container,
   host,
   preview,
-}: {
-  container: HTMLElement
-  host: EnrollmentFlowViewHost
-  preview: AuthenticatorEnrollmentPreview
-}): void {
+}: RenderPreviewDetailsArgs): void {
   const details = document.createElement('div')
   details.className = 'account-list'
   const rows: Array<[BrowserMessageKey, string]> = [

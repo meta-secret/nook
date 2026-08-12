@@ -4,6 +4,78 @@ identifier you copied out of a password manager and the console prints back
 every route it carries, as aligned columns and box-drawn ASCII.
 -->
 <script lang="ts">
+  type OutputForArgs = {
+    graph: KeyGraph
+    command: string
+  }
+
+  type OpensCommandArgs = {
+    graph: KeyGraph
+    query: string
+  }
+
+  type IdCommandArgs = {
+    graph: KeyGraph
+    query: string
+  }
+
+  type AccessTerminalGraphLookup = {
+    graph: KeyGraph
+    query: string
+  }
+
+  type ReportForArgs = {
+    graph: KeyGraph
+    match: Match
+  }
+
+  type VaultReportArgs = {
+    graph: KeyGraph
+    id: string
+  }
+
+  type DeviceReportArgs = {
+    graph: KeyGraph
+    id: string
+  }
+
+  type PasskeyReportArgs = {
+    graph: KeyGraph
+    id: string
+  }
+
+  type RoutesIntoVaultArgs = {
+    graph: KeyGraph
+    vault: Vault
+  }
+
+  type RoutesFromPasskeyArgs = {
+    graph: KeyGraph
+    passkeyId: string
+  }
+
+  type AccessTerminalTextMatch = {
+    query: string
+    shortId: string
+    id: string
+    label: string
+  }
+
+  type VaultMatchesArgs = {
+    graph: KeyGraph
+    query: string
+  }
+
+  type DeviceMatchesArgs = {
+    graph: KeyGraph
+    query: string
+  }
+
+  type PasskeyMatchesArgs = {
+    graph: KeyGraph
+    query: string
+  }
+
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import GraphSwitch from '../../keys-management/_shared/GraphSwitch.svelte'
   import { columns, legend, mapArt } from './terminal-map'
@@ -52,6 +124,9 @@ every route it carries, as aligned columns and box-drawn ASCII.
     reach: string
   }
 
+  type TerminalRoutes = Route[]
+  type TerminalMatches = Match[]
+
   const INPUT_ID = 'access-terminal-input'
   const LOG_ID = 'access-terminal-log'
 
@@ -93,13 +168,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
     }
   }
 
-  function passkeyMatches({
-    graph,
-    query,
-  }: {
-    graph: KeyGraph
-    query: string
-  }): Match[] {
+  function passkeyMatches({ graph, query }: PasskeyMatchesArgs): Match[] {
     return graph.passkeys
       .filter((passkey) => {
         const nookNamedArgument13: Parameters<typeof hits>[0] = {
@@ -118,13 +187,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
       }))
   }
 
-  function deviceMatches({
-    graph,
-    query,
-  }: {
-    graph: KeyGraph
-    query: string
-  }): Match[] {
+  function deviceMatches({ graph, query }: DeviceMatchesArgs): Match[] {
     return graph.devices
       .filter((device) => {
         const nookNamedArgument14: Parameters<typeof hits>[0] = {
@@ -143,13 +206,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
       }))
   }
 
-  function vaultMatches({
-    graph,
-    query,
-  }: {
-    graph: KeyGraph
-    query: string
-  }): Match[] {
+  function vaultMatches({ graph, query }: VaultMatchesArgs): Match[] {
     return graph.vaults
       .filter((vault) => {
         const nookNamedArgument15: Parameters<typeof hits>[0] = {
@@ -168,17 +225,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
       }))
   }
 
-  function hits({
-    query,
-    shortId,
-    id,
-    label,
-  }: {
-    query: string
-    shortId: string
-    id: string
-    label: string
-  }) {
+  function hits({ query, shortId, id, label }: AccessTerminalTextMatch) {
     const needle = query.toLowerCase()
     return (
       shortId.toLowerCase().startsWith(needle) ||
@@ -190,10 +237,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
   function routesFromPasskey({
     graph,
     passkeyId,
-  }: {
-    graph: KeyGraph
-    passkeyId: string
-  }): Route[] {
+  }: RoutesFromPasskeyArgs): Route[] {
     return graph.passkeys
       .filter((passkey) => passkey.id === passkeyId)
       .flatMap((passkey) => {
@@ -217,13 +261,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
       })
   }
 
-  function routesIntoVault({
-    graph,
-    vault,
-  }: {
-    graph: KeyGraph
-    vault: Vault
-  }): Route[] {
+  function routesIntoVault({ graph, vault }: RoutesIntoVaultArgs): Route[] {
     const nookNamedArgument18: Parameters<typeof devicesForVault>[0] = {
       graph,
       vault,
@@ -243,7 +281,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
     })
   }
 
-  function routeLines(routes: Route[]): string[] {
+  function routeLines(routes: TerminalRoutes): string[] {
     if (routes.length === 0) return ['  —  no route']
     return routes.map((route) => {
       const nookNamedArgument20: Parameters<typeof columns>[0] = {
@@ -258,13 +296,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
     })
   }
 
-  function passkeyReport({
-    graph,
-    id,
-  }: {
-    graph: KeyGraph
-    id: string
-  }): string[] {
+  function passkeyReport({ graph, id }: PasskeyReportArgs): string[] {
     return graph.passkeys
       .filter((passkey) => passkey.id === id)
       .flatMap((passkey) => {
@@ -322,13 +354,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
       })
   }
 
-  function deviceReport({
-    graph,
-    id,
-  }: {
-    graph: KeyGraph
-    id: string
-  }): string[] {
+  function deviceReport({ graph, id }: DeviceReportArgs): string[] {
     return graph.devices
       .filter((device) => device.id === id)
       .flatMap((device) => {
@@ -375,13 +401,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
       })
   }
 
-  function vaultReport({
-    graph,
-    id,
-  }: {
-    graph: KeyGraph
-    id: string
-  }): string[] {
+  function vaultReport({ graph, id }: VaultReportArgs): string[] {
     return graph.vaults
       .filter((vault) => vault.id === id)
       .flatMap((vault) => {
@@ -434,13 +454,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
       })
   }
 
-  function reportFor({
-    graph,
-    match,
-  }: {
-    graph: KeyGraph
-    match: Match
-  }): string[] {
+  function reportFor({ graph, match }: ReportForArgs): string[] {
     const nookNamedArgument42: Parameters<typeof passkeyReport>[0] = {
       graph,
       id: match.id,
@@ -459,7 +473,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
     return vaultReport(nookNamedArgument44)
   }
 
-  function matchLines(matches: Match[]): string[] {
+  function matchLines(matches: TerminalMatches): string[] {
     return matches.map((match) => {
       const nookNamedArgument45: Parameters<typeof columns>[0] = {
         cells: [`  ${match.shortId}`, kindLabel(match.kind), match.label],
@@ -644,13 +658,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
     ]
   }
 
-  function lookup({
-    graph,
-    query,
-  }: {
-    graph: KeyGraph
-    query: string
-  }): Match[] {
+  function lookup({ graph, query }: AccessTerminalGraphLookup): Match[] {
     const nookNamedArgument95: Parameters<typeof passkeyMatches>[0] = {
       graph,
       query,
@@ -670,13 +678,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
     ]
   }
 
-  function idCommand({
-    graph,
-    query,
-  }: {
-    graph: KeyGraph
-    query: string
-  }): string[] {
+  function idCommand({ graph, query }: IdCommandArgs): string[] {
     const nookNamedArgument98: Parameters<typeof lookup>[0] = {
       graph,
       query: '',
@@ -708,13 +710,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
     })
   }
 
-  function opensCommand({
-    graph,
-    query,
-  }: {
-    graph: KeyGraph
-    query: string
-  }): string[] {
+  function opensCommand({ graph, query }: OpensCommandArgs): string[] {
     if (query.length === 0) {
       const nookNamedArgument102: Parameters<typeof vaultMatches>[0] = {
         graph,
@@ -751,13 +747,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
     })
   }
 
-  function outputFor({
-    graph,
-    command,
-  }: {
-    graph: KeyGraph
-    command: string
-  }): string[] {
+  function outputFor({ graph, command }: OutputForArgs): string[] {
     const [verb, ...rest] = command.split(' ')
     const argument = rest.join(' ')
     if (command === 'ls') {

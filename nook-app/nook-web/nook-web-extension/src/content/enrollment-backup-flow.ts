@@ -4,8 +4,8 @@ import {
 } from '../lib/browser-message-keys'
 import {
   clearBackupCodeCandidates,
-  extractBackupCodeCandidates,
-  pageHasBackupCodeHint,
+  extractDocumentBackupCodeCandidates,
+  pageHasDocumentBackupCodeHint,
 } from '../lib/backup-code-candidates'
 import { pageHasQrEnrollmentHint } from '../lib/page-qr-capture'
 import {
@@ -40,6 +40,11 @@ import {
   type EnrollmentPageHints,
 } from './enrollment-flow-view'
 
+type TranslatedMessageWithSubstitutionArgs = {
+  key: BrowserMessageKey
+  substitution: string
+}
+
 export interface BackupEnrollmentHost extends EnrollmentFlowViewHost {
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
@@ -62,17 +67,16 @@ export interface BackupEnrollmentHost extends EnrollmentFlowViewHost {
     >[0],
   ) => void
   translatedMessage: (key: BrowserMessageKey) => string
-  translatedMessageWithSubstitution: (args: {
-    key: BrowserMessageKey
-    substitution: string
-  }) => string
+  translatedMessageWithSubstitution: (
+    args: TranslatedMessageWithSubstitutionArgs,
+  ) => string
   returnToActions: () => void
 }
 
 function detectEnrollmentHints(): EnrollmentPageHints {
   return {
     qr: pageHasQrEnrollmentHint(),
-    backupCodes: pageHasBackupCodeHint(),
+    backupCodes: pageHasDocumentBackupCodeHint(),
   }
 }
 
@@ -84,13 +88,15 @@ function lockedBackupMessage(host: BackupEnrollmentHost): string {
   return host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollUnlock)
 }
 
+type MergeBackupCandidatesArgs = {
+  existing: string[]
+  incoming: string[]
+}
+
 function mergeBackupCandidates({
   existing,
   incoming,
-}: {
-  existing: string[]
-  incoming: string[]
-}): string[] {
+}: MergeBackupCandidatesArgs): string[] {
   const merged = [...existing]
   const seen = new Set(existing)
   for (const code of incoming) {
@@ -101,17 +107,19 @@ function mergeBackupCandidates({
   return merged
 }
 
+type ShowBackupModeChooserArgs = {
+  host: BackupEnrollmentHost
+  section: HTMLElement
+  account: WebsiteAuthenticatorOption
+  codes: string[]
+}
+
 function showBackupModeChooser({
   host,
   section,
   account,
   codes,
-}: {
-  host: BackupEnrollmentHost
-  section: HTMLElement
-  account: WebsiteAuthenticatorOption
-  codes: string[]
-}): void {
+}: ShowBackupModeChooserArgs): void {
   section.replaceChildren()
   const nookTypedArgs0_45: Parameters<typeof setHostDescription>[0] = {
     host,
@@ -225,17 +233,19 @@ function showBackupModeChooser({
   section.append(cancelButton)
 }
 
+type ShowBackupAuthenticatorChooserArgs = {
+  host: BackupEnrollmentHost
+  section: HTMLElement
+  accounts: WebsiteAuthenticatorOption[]
+  codes: string[]
+}
+
 function showBackupAuthenticatorChooser({
   host,
   section,
   accounts,
   codes,
-}: {
-  host: BackupEnrollmentHost
-  section: HTMLElement
-  accounts: WebsiteAuthenticatorOption[]
-  codes: string[]
-}): void {
+}: ShowBackupAuthenticatorChooserArgs): void {
   section.replaceChildren()
   const nookTypedArgs0_56: Parameters<typeof setHostDescription>[0] = {
     host,
@@ -290,15 +300,17 @@ function showBackupAuthenticatorChooser({
   section.append(cancelButton)
 }
 
+type ContinueBackupWithAuthenticatorOptionsArgs = {
+  host: BackupEnrollmentHost
+  section: HTMLElement
+  codes: string[]
+}
+
 async function continueBackupWithAuthenticatorOptions({
   host,
   section,
   codes,
-}: {
-  host: BackupEnrollmentHost
-  section: HTMLElement
-  codes: string[]
-}): Promise<void> {
+}: ContinueBackupWithAuthenticatorOptionsArgs): Promise<void> {
   const nookTypedArgs0_60: Parameters<typeof setHostDescription>[0] = {
     host,
     text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupWorking),
@@ -413,15 +425,17 @@ function collectSelectedBackupCodes(list: HTMLElement): string[] {
   return selected
 }
 
+type ShowBackupReviewArgs = {
+  host: BackupEnrollmentHost
+  section: HTMLElement
+  codes: string[]
+}
+
 function showBackupReview({
   host,
   section,
   codes,
-}: {
-  host: BackupEnrollmentHost
-  section: HTMLElement
-  codes: string[]
-}): void {
+}: ShowBackupReviewArgs): void {
   section.replaceChildren()
   host.title.textContent = host.translatedMessage(
     BROWSER_MESSAGE_KEYS.WidgetBackupTitle,
@@ -488,7 +502,7 @@ function showBackupReview({
     host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupPaste),
   )
   pasteArea.addEventListener('input', () => {
-    const pasted = extractBackupCodeCandidates(pasteArea.value)
+    const pasted = extractDocumentBackupCodeCandidates(pasteArea.value)
     if (pasted.length === 0) return
     const nookTypedArgs0_72: Parameters<typeof mergeBackupCandidates>[0] = {
       existing: codes,
@@ -552,13 +566,15 @@ function showBackupReview({
   appendButtonRow(nookTypedArgs0_77)
 }
 
+type StartBackupEnrollmentArgs = {
+  host: BackupEnrollmentHost
+  section: HTMLElement
+}
+
 export async function startBackupEnrollment({
   host,
   section,
-}: {
-  host: BackupEnrollmentHost
-  section: HTMLElement
-}): Promise<void> {
+}: StartBackupEnrollmentArgs): Promise<void> {
   host.title.textContent = host.translatedMessage(
     BROWSER_MESSAGE_KEYS.WidgetBackupTitle,
   )
@@ -571,7 +587,7 @@ export async function startBackupEnrollment({
   section.replaceChildren()
 
   try {
-    const codes = extractBackupCodeCandidates()
+    const codes = extractDocumentBackupCodeCandidates()
     if (codes.length === 0) {
       const nookTypedArgs0_79: Parameters<typeof setHostDescription>[0] = {
         host,

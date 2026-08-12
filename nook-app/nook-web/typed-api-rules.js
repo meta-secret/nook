@@ -6,6 +6,14 @@ export const typedApiSourceFiles = [
   "nook-vault-{simple,sentinel}/**/*.{ts,svelte}",
 ];
 
+// The extension and research catalog are the first completed migration slice.
+// Keep the main vault sources on raw-call enforcement until their named
+// parameter contracts land in the immediately following slice.
+export const namedParameterContractFiles = [
+  "nook-web-extension/src/**/*.{ts,svelte}",
+  "nook-web-research/src/**/*.{ts,svelte}",
+];
+
 export const untrustedInputAdapterFiles = [
   "nook-web-app/src/landing/github-stars-state.ts",
   "nook-web-extension/src/chrome.d.ts",
@@ -114,7 +122,10 @@ export const typedApiRules = {
       },
     },
   ],
-  "nook-typed-api/no-raw-object-arguments": "error",
+  "nook-typed-api/no-raw-object-arguments": [
+    "error",
+    { enforceNamedParameterContracts: false },
+  ],
 };
 
 export const untrustedInputAdapterRules = {

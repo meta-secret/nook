@@ -33,6 +33,7 @@ export type PairingSetupAfterRemoval = ExtensionSetupAfterRemoval
 export type SelectedPairingGrant = SelectedExtensionPairingGrant
 export type { StoredExtensionPairingGrant }
 export type ExtensionPairingItems = Record<string, ExtensionPairingRecord>
+export type LegacyPairingStorageItems = Record<string, unknown>
 
 export type ExtensionSessionGrantIdentity = Pick<
   StoredExtensionPairingGrant,
@@ -176,7 +177,7 @@ function firstStoredPairingGrant(
 }
 
 function migratedLegacyPairingStorageItems(
-  legacy: Record<string, unknown>,
+  legacy: LegacyPairingStorageItems,
 ): ExtensionPairingItems {
   const result = transportJson(legacy)
   if (result.kind === TransportJsonResultKind.SerializationFailed) return {}

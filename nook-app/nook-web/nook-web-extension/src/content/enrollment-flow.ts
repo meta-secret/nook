@@ -2,7 +2,7 @@ import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
 } from '../lib/browser-message-keys'
-import { pageHasBackupCodeHint } from '../lib/backup-code-candidates'
+import { pageHasDocumentBackupCodeHint } from '../lib/backup-code-candidates'
 import {
   AuthenticatorEnrollmentConfirmResponseKind,
   AuthenticatorEnrollmentStageResponseKind,
@@ -62,8 +62,13 @@ export type { EnrollmentPageHints } from './enrollment-flow-view'
 export function detectEnrollmentHints(): EnrollmentPageHints {
   return {
     qr: pageHasQrEnrollmentHint(),
-    backupCodes: pageHasBackupCodeHint(),
+    backupCodes: pageHasDocumentBackupCodeHint(),
   }
+}
+
+type TranslatedMessageWithSubstitutionArgs = {
+  key: BrowserMessageKey
+  substitution: string
 }
 
 export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
@@ -116,26 +121,27 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
     >[0],
   ) => void
   translatedMessage: (key: BrowserMessageKey) => string
-  translatedMessageWithSubstitution: (args: {
-    key: BrowserMessageKey
-    substitution: string
-  }) => string
+  translatedMessageWithSubstitution: (
+    args: TranslatedMessageWithSubstitutionArgs,
+  ) => string
 }
 
 /** Keep the post-save enrollment widget from being rebuilt by scanAndRender. */
 let holdEnrollmentWidgetAfterSave = false
+
+type CommitStagedEnrollmentArgs = {
+  host: EnrollmentFlowHost
+  section: HTMLElement
+  stageId: string
+  vaultStoreId: string
+}
 
 async function commitStagedEnrollment({
   host,
   section,
   stageId,
   vaultStoreId,
-}: {
-  host: EnrollmentFlowHost
-  section: HTMLElement
-  stageId: string
-  vaultStoreId: string
-}): Promise<void> {
+}: CommitStagedEnrollmentArgs): Promise<void> {
   const nookTypedArgs0_0: Parameters<typeof setHostDescription>[0] = {
     host,
     text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollWorking),
@@ -197,17 +203,19 @@ async function commitStagedEnrollment({
   section.replaceChildren()
 }
 
+type EnrollmentEvidenceCallbacksArgs = {
+  host: EnrollmentFlowHost
+  section: HTMLElement
+  stageId: string
+  vaultStoreId: string
+}
+
 function enrollmentEvidenceCallbacks({
   host,
   section,
   stageId,
   vaultStoreId,
-}: {
-  host: EnrollmentFlowHost
-  section: HTMLElement
-  stageId: string
-  vaultStoreId: string
-}) {
+}: EnrollmentEvidenceCallbacksArgs) {
   return {
     commit: () => {
       const nookArrowArgs0: Parameters<typeof commitStagedEnrollment>[0] = {
@@ -251,19 +259,21 @@ function enrollmentEvidenceCallbacks({
   }
 }
 
+type BeginEnrollmentCeremonyArgs = {
+  host: EnrollmentFlowHost
+  section: HTMLElement
+  vaultStoreId: string
+  otpauthUri: { value: string }
+  candidate: DecodedOtpauthCandidate
+}
+
 async function beginEnrollmentCeremony({
   host,
   section,
   vaultStoreId,
   otpauthUri,
   candidate,
-}: {
-  host: EnrollmentFlowHost
-  section: HTMLElement
-  vaultStoreId: string
-  otpauthUri: { value: string }
-  candidate: DecodedOtpauthCandidate
-}): Promise<void> {
+}: BeginEnrollmentCeremonyArgs): Promise<void> {
   holdEnrollmentWidgetAfterSave = false
   const nookTypedArgs0_8: Parameters<typeof setHostDescription>[0] = {
     host,
@@ -394,7 +404,9 @@ async function beginEnrollmentCeremony({
   host.setBusy(false)
 }
 
-function clearOtpauthUri(uri: { value: string }): void {
+type ClearOtpauthUriArgs = { value: string }
+
+function clearOtpauthUri(uri: ClearOtpauthUriArgs): void {
   uri.value = ''
 }
 
@@ -410,17 +422,19 @@ function lockedEnrollMessage(host: EnrollmentFlowHost): string {
   return host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollUnlock)
 }
 
+type ShowQrPreviewArgs = {
+  host: EnrollmentFlowHost
+  section: HTMLElement
+  otpauthUri: { value: string }
+  candidate: DecodedOtpauthCandidate
+}
+
 async function showQrPreview({
   host,
   section,
   otpauthUri,
   candidate,
-}: {
-  host: EnrollmentFlowHost
-  section: HTMLElement
-  otpauthUri: { value: string }
-  candidate: DecodedOtpauthCandidate
-}): Promise<void> {
+}: ShowQrPreviewArgs): Promise<void> {
   section.replaceChildren()
   host.title.textContent = host.translatedMessage(
     BROWSER_MESSAGE_KEYS.WidgetEnrollPreview,
@@ -550,15 +564,17 @@ async function showQrPreview({
   }
 }
 
+type ShowQrCandidatePickerArgs = {
+  host: EnrollmentFlowHost
+  section: HTMLElement
+  candidates: DecodedOtpauthCandidate[]
+}
+
 function showQrCandidatePicker({
   host,
   section,
   candidates,
-}: {
-  host: EnrollmentFlowHost
-  section: HTMLElement
-  candidates: DecodedOtpauthCandidate[]
-}): void {
+}: ShowQrCandidatePickerArgs): void {
   section.replaceChildren()
   const nookTypedArgs0_32: Parameters<typeof setHostDescription>[0] = {
     host,
@@ -609,13 +625,15 @@ function showQrCandidatePicker({
   section.append(cancelButton)
 }
 
+type StartQrEnrollmentArgs = {
+  host: EnrollmentFlowHost
+  section: HTMLElement
+}
+
 async function startQrEnrollment({
   host,
   section,
-}: {
-  host: EnrollmentFlowHost
-  section: HTMLElement
-}): Promise<void> {
+}: StartQrEnrollmentArgs): Promise<void> {
   host.title.textContent = host.translatedMessage(
     BROWSER_MESSAGE_KEYS.WidgetEnrollTitle,
   )
@@ -701,13 +719,15 @@ export function releaseEnrollmentWidgetHold(): void {
   holdEnrollmentWidgetAfterSave = false
 }
 
+type RenderEnrollmentActionsArgs = {
+  host: EnrollmentFlowHost
+  hints: EnrollmentPageHints
+}
+
 export function renderEnrollmentActions({
   host,
   hints,
-}: {
-  host: EnrollmentFlowHost
-  hints: EnrollmentPageHints
-}): void {
+}: RenderEnrollmentActionsArgs): void {
   if (enrollmentEvidenceWatchActive()) return
   if (!hints.qr && !hints.backupCodes) {
     clearEnrollmentSection(host.panel)

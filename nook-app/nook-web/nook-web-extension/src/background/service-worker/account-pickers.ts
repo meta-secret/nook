@@ -161,13 +161,15 @@ export function isAuthenticatorPickerSender(
   }
 }
 
+type AuthenticatorAccountsArgs = {
+  grants: StoredExtensionPairingGrant[]
+  query: string
+}
+
 export async function authenticatorAccounts({
   grants,
   query,
-}: {
-  grants: StoredExtensionPairingGrant[]
-  query: string
-}): Promise<WebsiteAuthenticatorOption[]> {
+}: AuthenticatorAccountsArgs): Promise<WebsiteAuthenticatorOption[]> {
   const accounts: WebsiteAuthenticatorOption[] = []
   for (const grant of grants) {
     const nookTypedArgs0_1: Parameters<typeof sendSessionMessage>[0] = {
@@ -205,17 +207,19 @@ export async function authenticatorAccounts({
   return accounts
 }
 
+type AuthorizedWebsiteGrantArgs = {
+  origin: string
+  vaultStoreId: string
+  sender: chrome.runtime.MessageSender
+  reasons: { forbidden: string; missing: string; locked: string }
+}
+
 export async function authorizedWebsiteGrant({
   origin,
   vaultStoreId,
   sender,
   reasons,
-}: {
-  origin: string
-  vaultStoreId: string
-  sender: chrome.runtime.MessageSender
-  reasons: { forbidden: string; missing: string; locked: string }
-}): Promise<
+}: AuthorizedWebsiteGrantArgs): Promise<
   | { grant: StoredExtensionPairingGrant }
   | { response: { ok: false; reason: string } }
 > {
@@ -244,15 +248,17 @@ export async function authorizedWebsiteGrant({
   return { grant }
 }
 
+type LoginAccountsForOriginArgs = {
+  grants: StoredExtensionPairingGrant[]
+  origin: string
+  query?: string
+}
+
 export async function loginAccountsForOrigin({
   grants,
   origin,
   query = '',
-}: {
-  grants: StoredExtensionPairingGrant[]
-  origin: string
-  query?: string
-}): Promise<WebsiteLoginAccountOption[]> {
+}: LoginAccountsForOriginArgs): Promise<WebsiteLoginAccountOption[]> {
   const accounts: WebsiteLoginAccountOption[] = []
   const needle = query.trim().toLowerCase()
   for (const grant of grants) {
@@ -305,17 +311,19 @@ export async function loginAccountsForOrigin({
   return accounts
 }
 
-export async function websiteLoginOptions({
-  message,
-  sender,
-}: {
+type WebsiteLoginOptionsArgs = {
   message: {
     payload: {
       origin: string
     }
   }
   sender: chrome.runtime.MessageSender
-}): Promise<unknown> {
+}
+
+export async function websiteLoginOptions({
+  message,
+  sender,
+}: WebsiteLoginOptionsArgs): Promise<unknown> {
   const nookTypedArgs0_6: Parameters<typeof availableWebsiteGrants>[0] = {
     origin: message.payload.origin,
     sender,

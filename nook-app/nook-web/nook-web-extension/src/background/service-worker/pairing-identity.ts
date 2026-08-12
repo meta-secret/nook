@@ -30,6 +30,7 @@ import {
 } from '../../lib/webauthn-messages'
 import type {
   ExtensionPairingItems,
+  LegacyPairingStorageItems,
   StoredExtensionPairingGrant,
 } from '../pairing-grants'
 import {
@@ -37,8 +38,8 @@ import {
   setupStorageKey,
 } from '../pairing-grants'
 import {
-  readExtensionPairingState,
-  writeExtensionPairingState,
+  loadExtensionPairingItems,
+  persistExtensionPairingItems,
 } from '../vault-runtime'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
@@ -104,8 +105,10 @@ function isPendingIdentityHandoff(
   )
 }
 
+type ExtensionSessionStorageWrite = Record<string, unknown>
+
 export function setSessionStorage(
-  items: Record<string, unknown>,
+  items: ExtensionSessionStorageWrite,
 ): Promise<void> {
   // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
@@ -141,13 +144,15 @@ export function removeSessionStorage(key: string): Promise<void> {
   })
 }
 
+type IssueIdentityHandoffArgs = {
+  nonce: string
+  pending: PendingIdentityHandoff
+}
+
 async function issueIdentityHandoff({
   nonce,
   pending,
-}: {
-  nonce: string
-  pending: PendingIdentityHandoff
-}): Promise<void> {
+}: IssueIdentityHandoffArgs): Promise<void> {
   const nookTypedArgs0_0: Parameters<typeof setSessionStorage>[0] = {
     [pendingIdentityHandoffStorageKey(nonce)]: pending,
   }
@@ -216,11 +221,12 @@ export function sendSessionMessage(
   })
 }
 
+type PairedVaultGrantIsCurrentArgs = {
+  kind: PendingIdentityHandoffKind.PairedVault
+}
+
 async function pairedVaultGrantIsCurrent(
-  pending: Extract<
-    PendingIdentityHandoff,
-    { kind: PendingIdentityHandoffKind.PairedVault }
-  >,
+  pending: Extract<PendingIdentityHandoff, PairedVaultGrantIsCurrentArgs>,
 ): Promise<boolean> {
   const pairingPolicy = await extensionPairingGrantPolicyReady
   const key = pairingPolicy.pairingGrantStorageKey(pending.vaultStoreId)
@@ -535,7 +541,7 @@ export async function setPairingStorage(
   items: ExtensionPairingItems,
 ): Promise<void> {
   await ensureLegacyPairingMigration()
-  await writeExtensionPairingState(items)
+  await persistExtensionPairingItems(items)
 }
 
 enum LegacyPairingMigrationKind {
@@ -551,7 +557,7 @@ let legacyPairingMigration: LegacyPairingMigration = {
   kind: LegacyPairingMigrationKind.NotStarted,
 }
 
-function legacyPairingStorageKeys(stored: Record<string, unknown>): string[] {
+function legacyPairingStorageKeys(stored: LegacyPairingStorageItems): string[] {
   return Object.keys(stored).filter(
     (key) =>
       key === setupStorageKey ||
@@ -559,7 +565,7 @@ function legacyPairingStorageKeys(stored: Record<string, unknown>): string[] {
   )
 }
 
-function readLegacyPairingStorage(): Promise<Record<string, unknown>> {
+function readLegacyPairingStorage(): Promise<LegacyPairingStorageItems> {
   // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.storage.local.get((items) => {
@@ -577,7 +583,11 @@ function readLegacyPairingStorage(): Promise<Record<string, unknown>> {
   })
 }
 
-function removeLegacyPairingStorage(keys: string[]): Promise<void> {
+type LegacyPairingStorageKeys = string[]
+
+function removeLegacyPairingStorage(
+  keys: LegacyPairingStorageKeys,
+): Promise<void> {
   // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {
     chrome.storage.local.remove(keys, () => {
@@ -608,7 +618,7 @@ export function ensureLegacyPairingMigration(): Promise<void> {
     const legacyPairingRecords = Object.fromEntries(
       legacyKeys.map((key) => [key, legacy[key]]),
     )
-    const current = await readExtensionPairingState()
+    const current = await loadExtensionPairingItems()
     const pairingPolicy = await extensionPairingGrantPolicyReady
     const migrated =
       pairingPolicy.migratedLegacyPairingStorageItems(legacyPairingRecords)
@@ -628,7 +638,7 @@ export function ensureLegacyPairingMigration(): Promise<void> {
       return
     }
     if (Object.keys(migrated).length > 0) {
-      await writeExtensionPairingState(migrated)
+      await persistExtensionPairingItems(migrated)
       await removeLegacyPairingStorage(
         Object.keys(migrated).filter((key) => legacyKeys.includes(key)),
       )
@@ -645,7 +655,7 @@ export async function getPairingStorage(
   key?: string,
 ): Promise<ExtensionPairingItems> {
   await ensureLegacyPairingMigration()
-  const stored = await readExtensionPairingState()
+  const stored = await loadExtensionPairingItems()
   if (!key) return stored
   return key in stored ? { [key]: stored[key] } : {}
 }
@@ -664,13 +674,15 @@ export type WebsitePasskeyRequestContext =
       request: WebsitePasskeyRequest
     }
 
+type RequestOriginAndRpIdArgs = {
+  ceremony: WebsitePasskeyCeremony
+  requestJson: string
+}
+
 export function requestOriginAndRpId({
   ceremony,
   requestJson,
-}: {
-  ceremony: WebsitePasskeyCeremony
-  requestJson: string
-}): WebsitePasskeyRequestContext {
+}: RequestOriginAndRpIdArgs): WebsitePasskeyRequestContext {
   const parseArgs: Parameters<typeof parsedWebsitePasskeyRequest>[0] = {
     ceremony,
     requestJson,
@@ -687,13 +699,15 @@ export function requestOriginAndRpId({
   }
 }
 
+type IsAuthorizedWebsiteSenderArgs = {
+  sender: chrome.runtime.MessageSender
+  origin: string
+}
+
 export function isAuthorizedWebsiteSender({
   sender,
   origin,
-}: {
-  sender: chrome.runtime.MessageSender
-  origin: string
-}): boolean {
+}: IsAuthorizedWebsiteSenderArgs): boolean {
   if (
     sender.id !== chrome.runtime.id ||
     !sender.tab ||
@@ -733,15 +747,17 @@ export async function passwordPairingGrants(): Promise<
     )
 }
 
+type AvailableWebsiteGrantsArgs = {
+  origin: string
+  sender: chrome.runtime.MessageSender
+  forbiddenReason: string
+}
+
 export async function availableWebsiteGrants({
   origin,
   sender,
   forbiddenReason,
-}: {
-  origin: string
-  sender: chrome.runtime.MessageSender
-  forbiddenReason: string
-}): Promise<
+}: AvailableWebsiteGrantsArgs): Promise<
   | { grants: StoredExtensionPairingGrant[] }
   | {
       response:

@@ -59,12 +59,23 @@ Rules:
 
 1. Maximum one parameter per authored function, method, constructor, or arrow
    function.
-2. When more than one value is needed, wrap them in a named exported type when
-   the shape is reused, or an inline object type for local helpers.
-3. Do not use optional `undefined` parameters to fake multi-arg APIs. Model
+2. Every object-shaped parameter uses a named semantic `type`, `interface`, or
+   Rust-generated boundary type. Object-shaped includes object literals,
+   mapped types such as `Pick<T, K>` and `Omit<T, K>`, arrays, tuples, maps,
+   sets, and records.
+3. Inline object parameter annotations are prohibited, including for local
+   helpers, destructured parameters, `T[]`, tuples, `Array<T>`, and
+   `ReadonlyArray<T>`.
+4. Generic or operation-only contract names such as `Args`, `CallbackArgs`,
+   `PutArgs`, or names derived from line numbers are prohibited. Name the
+   contract after its domain value or request.
+5. Do not use optional `undefined` parameters to fake multi-arg APIs. Model
    omitted fields with domain unions or required object fields.
-4. Default values belong at the call site or inside the function body after
+6. Default values belong at the call site or inside the function body after
    reading the object, not as a second positional parameter.
+7. A function-valued parameter may return an inline object type. That return
+   value is not the parameter contract. Object-shaped callback parameters still
+   require named semantic contracts.
 
 ## Enforcement
 
@@ -83,5 +94,6 @@ bun run --cwd agentic-ai/loom lint
 
 - [ ] New authored functions take zero or one parameter.
 - [ ] Multi-value inputs use a typed object argument.
+- [ ] Every object-shaped parameter refers to a named semantic contract.
 - [ ] Any host-callback exception is local and explains the host contract.
 - [ ] The applicable Loom or web lint task stays green.

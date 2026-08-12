@@ -9,8 +9,8 @@ import {
   isWebsiteAuthenticatorEnrollStageMessage,
 } from '../src/lib/enrollment-messages'
 import {
-  extractBackupCodeCandidates,
-  pageHasBackupCodeHint,
+  extractDocumentBackupCodeCandidates,
+  pageHasDocumentBackupCodeHint,
 } from '../src/lib/backup-code-candidates'
 
 describe('enrollment message guards', () => {
@@ -113,7 +113,7 @@ describe('backup code candidate extraction', () => {
       'alice@example.test',
     ].join('\n')
 
-    expect(extractBackupCodeCandidates(text)).toEqual([
+    expect(extractDocumentBackupCodeCandidates(text)).toEqual([
       'A1B2-C3D4-E5F6',
       'G7H8-I9J0-K1L2',
     ])
@@ -130,11 +130,11 @@ describe('backup code candidate extraction', () => {
       value: { body },
     })
     try {
-      expect(pageHasBackupCodeHint()).toBe(false)
+      expect(pageHasDocumentBackupCodeHint()).toBe(false)
       body.innerText = 'Save your backup codes\nA1B2-C3D4-E5F6'
-      expect(pageHasBackupCodeHint()).toBe(true)
+      expect(pageHasDocumentBackupCodeHint()).toBe(true)
       body.innerText = 'Enable 2FA codes for your account'
-      expect(pageHasBackupCodeHint()).toBe(true)
+      expect(pageHasDocumentBackupCodeHint()).toBe(true)
     } finally {
       if (!documentWasPresent) {
         Reflect.deleteProperty(globalThis, 'document')

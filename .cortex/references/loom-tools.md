@@ -40,6 +40,8 @@ and [typescript-no-unknown.md](../dynamic-skills/typescript-no-unknown.md):
 - toolsList `inputSchema` values are typed `ObjectJsonSchema` (not raw object
   bags); field names come from field enums
 - call sites must not pass raw object literals; name a typed args value first
+- object parameters must use named semantic types or interfaces; inline object
+  parameter annotations and generic contract names are prohibited
 - mechanically enforced by ESLint `max-params: 1`, `no-restricted-types`, and
   `loom/no-raw-object-arguments` in `agentic-ai/loom`
 - review enforces generic-value containment while the existing debt is migrated

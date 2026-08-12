@@ -38,13 +38,15 @@ function responseRecord(response: unknown): Record<string, unknown> {
   return response as Record<string, unknown>
 }
 
+type AuthenticatorCodeFromSessionArgs = {
+  grant: StoredExtensionPairingGrant
+  secretId: string
+}
+
 export async function authenticatorCodeFromSession({
   grant,
   secretId,
-}: {
-  grant: StoredExtensionPairingGrant
-  secretId: string
-}): Promise<AuthenticatorCodeSessionResponse> {
+}: AuthenticatorCodeFromSessionArgs): Promise<AuthenticatorCodeSessionResponse> {
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-code',
     payload: {
@@ -115,15 +117,17 @@ export async function stagedAuthenticatorCodeFromSession(
   return { ok: true, code: response.code }
 }
 
+type ConfirmAuthenticatorEnrollmentArgs = {
+  grant: StoredExtensionPairingGrant
+  otpauthUri: string
+  origin: string
+}
+
 export async function confirmAuthenticatorEnrollment({
   grant,
   otpauthUri,
   origin,
-}: {
-  grant: StoredExtensionPairingGrant
-  otpauthUri: string
-  origin: string
-}): Promise<AuthenticatorSecretSessionResponse> {
+}: ConfirmAuthenticatorEnrollmentArgs): Promise<AuthenticatorSecretSessionResponse> {
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-enroll-confirm',
     payload: {
@@ -136,17 +140,19 @@ export async function confirmAuthenticatorEnrollment({
   return authenticatorSecretResponse(await sendSessionMessage(message))
 }
 
-export async function attachAuthenticatorBackupCodes({
-  grant,
-  secretId,
-  codes,
-  mode,
-}: {
+type AuthenticatorBackupCodesSessionAttachmentRequest = {
   grant: StoredExtensionPairingGrant
   secretId: string
   codes: string[]
   mode: WebsiteAuthenticatorBackupAttachMessageMode
-}): Promise<VerifiedAuthenticatorBackupAttachResponse> {
+}
+
+export async function attachAuthenticatorBackupCodesFromSession({
+  grant,
+  secretId,
+  codes,
+  mode,
+}: AuthenticatorBackupCodesSessionAttachmentRequest): Promise<VerifiedAuthenticatorBackupAttachResponse> {
   const transportCodes = [...codes]
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-backup-attach',
@@ -199,19 +205,21 @@ function verifiedAuthenticatorBackupAttachResponse(
   }
 }
 
+type SelectedAuthenticatorPageAcknowledgedArgs = {
+  tabId: number
+  origin: string
+  requestId: string
+  vaultStoreId: string
+  secretId: string
+}
+
 export async function selectedAuthenticatorPageAcknowledged({
   tabId,
   origin,
   requestId,
   vaultStoreId,
   secretId,
-}: {
-  tabId: number
-  origin: string
-  requestId: string
-  vaultStoreId: string
-  secretId: string
-}): Promise<boolean> {
+}: SelectedAuthenticatorPageAcknowledgedArgs): Promise<boolean> {
   const message: Parameters<typeof chrome.tabs.sendMessage>[1] = {
     type: 'nook:website-authenticator-selected',
     payload: {
