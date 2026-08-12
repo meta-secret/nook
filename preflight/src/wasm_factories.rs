@@ -5,7 +5,7 @@ use crate::javascript_literals::{
     semantic_javascript_name as semantic_node_name, static_javascript_string,
 };
 use crate::javascript_scopes::ScopedBinding;
-use crate::wasm_dynamic_aliases::scoped_binding;
+use crate::javascript_scopes::scoped_binding;
 use crate::wasm_module_sources::wasm_factory_return_type;
 
 pub(super) fn collect_wasm_instance_factories(
@@ -88,6 +88,24 @@ fn collect_imported_factory_specifiers(
     called_bindings: &HashSet<String>,
     factories: &mut HashMap<String, String>,
 ) {
+    if node.kind() == "namespace_import"
+        && let Some(local) = node
+            .named_child(0)
+            .and_then(|child| semantic_node_name(child, source))
+    {
+        for called in called_bindings
+            .iter()
+            .filter(|called| called.starts_with(&format!("{local}.")))
+        {
+            let imported = called.trim_start_matches(&format!("{local}."));
+            if let Some(wasm_type) =
+                wasm_factory_return_type(module, imported, source_path, wasm_type_names)
+            {
+                factories.insert(called.clone(), wasm_type);
+            }
+        }
+        return;
+    }
     if node.kind() == "import_specifier"
         && !node_is_type_only_import(node, source)
         && let Some(imported_node) = node.child_by_field_name("name")
@@ -183,8 +201,13 @@ fn called_identifier(node: tree_sitter::Node<'_>, source: &str) -> Option<String
         return None;
     }
     let function = node.child_by_field_name("function")?;
-    (function.kind() == "identifier")
-        .then(|| semantic_node_name(function, source))
+    matches!(function.kind(), "identifier" | "member_expression")
+        .then(|| {
+            function
+                .utf8_text(source.as_bytes())
+                .ok()
+                .map(str::to_owned)
+        })
         .flatten()
 }
 

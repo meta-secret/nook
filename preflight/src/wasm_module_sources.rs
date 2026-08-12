@@ -420,6 +420,17 @@ fn collect_imported_bindings(
         collect_import_specifiers(node, source, &module, bindings);
         return;
     }
+    if node.kind() == "variable_declarator"
+        && let Some(local) = node
+            .child_by_field_name("name")
+            .and_then(|binding| semantic_node_name(binding, source))
+        && let Some(module) = node
+            .child_by_field_name("value")
+            .and_then(|value| required_module(value, source))
+    {
+        bindings.insert(local, (module, "*".to_owned()));
+        return;
+    }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         collect_imported_bindings(child, source, bindings);
@@ -469,7 +480,7 @@ fn collect_forwarded_exports(
         return;
     }
     if node.kind() == "assignment_expression" {
-        collect_commonjs_export(node, source, exports);
+        collect_commonjs_export(node, source, imported_bindings, exports);
         return;
     }
     let mut cursor = node.walk();
@@ -553,8 +564,21 @@ fn exported_callable_declaration(
         .is_ok_and(|text| text.trim_start().starts_with("export default "))
     {
         let mut cursor = node.walk();
-        let value = node
-            .named_children(&mut cursor)
+        let children = node.named_children(&mut cursor).collect::<Vec<_>>();
+        if let Some(local) = children
+            .iter()
+            .find(|child| child.kind() == "identifier")
+            .and_then(|child| semantic_node_name(*child, source))
+            && let Some((module, imported)) = imports.get(&local)
+        {
+            return Some(ForwardedExport::Named {
+                exported: "default".to_owned(),
+                imported: imported.clone(),
+                module: module.clone(),
+            });
+        }
+        let value = children
+            .into_iter()
             .find(|child| matches!(child.kind(), "member_expression" | "subscript_expression"))?;
         return forwarded_namespace_member("default".to_owned(), value, source, imports);
     }
@@ -611,6 +635,7 @@ fn namespace_export_name(node: tree_sitter::Node<'_>, source: &str) -> Option<St
 fn collect_commonjs_export(
     node: tree_sitter::Node<'_>,
     source: &str,
+    imported_bindings: &HashMap<String, (String, String)>,
     exports: &mut Vec<ForwardedExport>,
 ) {
     let Some(left) = node.child_by_field_name("left") else {
@@ -629,10 +654,22 @@ fn collect_commonjs_export(
     let Some(exported) = commonjs_named_export(left, source) else {
         return;
     };
-    let Some((module, imported)) = node
-        .child_by_field_name("right")
-        .and_then(|right| required_member(right, source))
-    else {
+    let Some((module, imported)) = node.child_by_field_name("right").and_then(|right| {
+        required_member(right, source).or_else(|| {
+            let object = right.child_by_field_name("object")?;
+            let name = semantic_node_name(object, source)?;
+            let (module, namespace) = imported_bindings.get(&name)?;
+            (namespace == "*")
+                .then(|| {
+                    let imported = right
+                        .child_by_field_name("property")
+                        .or_else(|| right.child_by_field_name("index"))
+                        .and_then(|property| semantic_node_name(property, source))?;
+                    Some((module.clone(), imported))
+                })
+                .flatten()
+        })
+    }) else {
         return;
     };
     exports.push(ForwardedExport::Named {

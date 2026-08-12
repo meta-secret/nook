@@ -366,6 +366,67 @@ export default wasm.generate_secret_id;"#,
             r#"import initNookWasm from "$app-wasm";"#,
         ),
         (
+            "default-identifier-bridge.ts",
+            r#"import { generate_secret_id } from "$app-wasm";
+export default generate_secret_id;"#,
+        ),
+        (
+            "default-identifier-consumer.ts",
+            r#"import generateSecretId from "./default-identifier-bridge";"#,
+        ),
+        (
+            "conditional-member.ts",
+            r#"import * as wasm from "$app-wasm";
+const generateSecretId = ready ? wasm.generate_secret_id : fallback;"#,
+        ),
+        (
+            "default-parameter.ts",
+            r#"import * as wasm from "$app-wasm";
+function run(generateSecretId = wasm.generate_secret_id) { generateSecretId(); }"#,
+        ),
+        (
+            "svelte-destructured-shadow.svelte",
+            r#"<script lang="ts">import * as wasm from "$app-wasm";</script>
+{#each socketApis as { wasm }}
+  {@const openSocket = wasm.connect}
+{/each}"#,
+        ),
+        (
+            "typed-parameter.ts",
+            r#"import type { NookVaultManager } from "$app-wasm";
+function run(manager: NookVaultManager) { const connectVault = manager.connect; }"#,
+        ),
+        (
+            "namespace-factory.ts",
+            r#"import * as bridge from "./assigned-factory";
+const manager = bridge.getVaultManager();
+const connectVault = manager.connect;"#,
+        ),
+        (
+            "commonjs-namespace-bridge.ts",
+            r#"const wasm = require("nook-wasm");
+exports.generate_secret_id = wasm.generate_secret_id;"#,
+        ),
+        (
+            "commonjs-namespace-consumer.ts",
+            r#"const { generate_secret_id: generateSecretId } = require("./commonjs-namespace-bridge");"#,
+        ),
+        (
+            "switch-shadow.ts",
+            r#"import * as wasm from "$app-wasm";
+switch (kind) {
+  case "socket":
+    const wasm = socketApi;
+    const openSocket = wasm.connect;
+}"#,
+        ),
+        (
+            "unused-deferred-assignment.ts",
+            r#"let api = socketApi;
+async function load() { api = await import("$app-wasm"); }
+const openSocket = api.connect;"#,
+        ),
+        (
             "escaped-import.ts",
             "import { generate_\\u0073ecret_id as generateSecretId } from \"$app-wasm\";",
         ),
@@ -422,6 +483,12 @@ fn expected_wasm_callable_alias_locations() -> Vec<(PathBuf, usize)> {
         ("method-return.ts", 3),
         ("outer-assignment.ts", 4),
         ("default-consumer.ts", 1),
+        ("default-identifier-consumer.ts", 1),
+        ("conditional-member.ts", 2),
+        ("default-parameter.ts", 2),
+        ("typed-parameter.ts", 2),
+        ("namespace-factory.ts", 3),
+        ("commonjs-namespace-consumer.ts", 1),
         ("escaped-import.ts", 1),
         ("bound-method.ts", 3),
         ("class-field.ts", 2),

@@ -6,7 +6,7 @@ use crate::javascript_literals::{
 };
 use crate::javascript_scopes::{
     ScopedBinding, declaration_is_in_program_scope, invalidate_visible_scoped_binding,
-    root_binding_is_visible, scoped_binding_is_visible, visible_scoped_binding,
+    root_binding_is_visible, scoped_binding, scoped_binding_is_visible, visible_scoped_binding,
 };
 use crate::wasm_dynamic_callables::collect_scoped_dynamic_callable_bindings;
 use crate::wasm_factories::{
@@ -77,7 +77,6 @@ pub(super) fn collect_wasm_type_import_bindings(
     wasm_class_bindings: &mut HashMap<String, String>,
 ) {
     if node.kind() == "import_specifier"
-        && !node_is_type_only_import(node, source)
         && let Some(imported) = node.child_by_field_name("name")
         && let Some(imported_name) = semantic_node_name(imported, source)
         && wasm_type_names.contains(&imported_name)
@@ -208,6 +207,12 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         &mut imported_wasm_factories,
     );
     collect_wasm_runtime_receivers(node, source, &mut scoped_wasm_runtime_receivers);
+    collect_typed_wasm_parameters(
+        node,
+        source,
+        wasm_class_bindings,
+        &mut scoped_wasm_instances,
+    );
     collect_scoped_dynamic_callable_bindings(
         node,
         source,
@@ -320,9 +325,13 @@ fn collect_dynamic_wasm_aliases(
 
     if matches!(
         node.kind(),
-        "variable_declarator" | "public_field_definition"
+        "variable_declarator"
+            | "public_field_definition"
+            | "required_parameter"
+            | "optional_parameter"
     ) && let (Some(binding), Some(value)) = (
-        node.child_by_field_name("name"),
+        node.child_by_field_name("name")
+            .or_else(|| node.child_by_field_name("pattern")),
         node.child_by_field_name("value"),
     ) && collect_binding_aliases(
         binding,
@@ -591,6 +600,7 @@ fn find_declared_binding<'a>(
         && let Some(binding) = node.child_by_field_name("name")
         && semantic_node_name(binding, source).as_deref() == Some(name)
         && let Some(scoped) = scoped_binding(binding, source, None, None)
+        && deferred_assignment_executes(reference, &scoped, source)
         && scoped_binding_is_visible(reference, name, source, &[scoped])
     {
         return Some(binding);
@@ -598,6 +608,56 @@ fn find_declared_binding<'a>(
     let mut cursor = node.walk();
     node.named_children(&mut cursor)
         .find_map(|child| find_declared_binding(child, reference, name, source))
+}
+
+fn deferred_assignment_executes(
+    reference: tree_sitter::Node<'_>,
+    binding: &ScopedBinding,
+    source: &str,
+) -> bool {
+    let mut ancestor = reference.parent();
+    while let Some(function) = ancestor {
+        if matches!(
+            function.kind(),
+            "function_declaration" | "function_expression" | "arrow_function"
+        ) && binding.scope_start < function.start_byte()
+        {
+            let Some(name) = function
+                .child_by_field_name("name")
+                .and_then(|node| semantic_node_name(node, source))
+            else {
+                return false;
+            };
+            let mut root = function;
+            while let Some(parent) = root.parent() {
+                root = parent;
+            }
+            return function_call_after(root, &name, function.end_byte(), source);
+        }
+        ancestor = function.parent();
+    }
+    true
+}
+
+fn function_call_after(
+    node: tree_sitter::Node<'_>,
+    name: &str,
+    after: usize,
+    source: &str,
+) -> bool {
+    if node.kind() == "call_expression"
+        && node.start_byte() >= after
+        && node
+            .child_by_field_name("function")
+            .and_then(|callee| semantic_node_name(callee, source))
+            .as_deref()
+            == Some(name)
+    {
+        return true;
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .any(|child| function_call_after(child, name, after, source))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -644,6 +704,11 @@ fn value_is_wasm_instance(
         && let Some(function) = value.child_by_field_name("function")
         && let Some(name) = callable_expression_name(function, source)
     {
+        if let Ok(full_name) = function.utf8_text(source.as_bytes())
+            && let Some(wasm_type) = wasm_instance_factories.get(full_name)
+        {
+            return Some(wasm_type.clone());
+        }
         if name == WASM_MANAGER_ACCESSOR
             && wasm_runtime_accessor_receiver_is_visible(
                 function,
@@ -796,55 +861,31 @@ fn callable_expression_name(node: tree_sitter::Node<'_>, source: &str) -> Option
     }
 }
 
-pub(super) fn scoped_binding(
-    binding: tree_sitter::Node<'_>,
+fn collect_typed_wasm_parameters(
+    node: tree_sitter::Node<'_>,
     source: &str,
-    wasm_type: Option<String>,
-    wasm_module: Option<String>,
-) -> Option<ScopedBinding> {
-    let name = binding.utf8_text(source.as_bytes()).ok()?.to_owned();
-    let is_var = binding_is_var(binding, source);
-    let mut ancestor = binding.parent();
-    let scope = loop {
-        let candidate = ancestor?;
-        let function_body = candidate.kind() == "statement_block"
-            && candidate.parent().is_some_and(|parent| {
-                matches!(
-                    parent.kind(),
-                    "function_declaration"
-                        | "function_expression"
-                        | "generator_function"
-                        | "arrow_function"
-                )
-            });
-        if candidate.kind() == "program"
-            || (candidate.kind() == "statement_block" && (!is_var || function_body))
-        {
-            break candidate;
-        }
-        ancestor = candidate.parent();
-    };
-    Some(ScopedBinding {
-        name,
-        scope_start: scope.start_byte(),
-        scope_end: scope.end_byte(),
-        declaration_end: binding.parent()?.parent()?.end_byte(),
-        wasm_type,
-        wasm_module,
-    })
-}
-
-fn binding_is_var(binding: tree_sitter::Node<'_>, source: &str) -> bool {
-    let mut ancestor = binding.parent();
-    while let Some(node) = ancestor {
-        if matches!(node.kind(), "variable_declaration" | "lexical_declaration") {
-            return node
-                .utf8_text(source.as_bytes())
-                .is_ok_and(|text| text.trim_start().starts_with("var "));
-        }
-        ancestor = node.parent();
+    classes: &HashMap<String, String>,
+    instances: &mut Vec<ScopedBinding>,
+) {
+    if matches!(node.kind(), "required_parameter" | "optional_parameter")
+        && let Some(binding) = node
+            .child_by_field_name("name")
+            .or_else(|| node.child_by_field_name("pattern"))
+        && let Some(annotation) = node.child_by_field_name("type").or_else(|| {
+            let mut cursor = node.walk();
+            node.named_children(&mut cursor)
+                .find(|child| child.kind() == "type_annotation")
+        })
+        && let Ok(text) = annotation.utf8_text(source.as_bytes())
+        && let Some(wasm_type) = classes.get(text.trim().trim_start_matches(':').trim())
+        && let Some(scoped) = scoped_binding(binding, source, Some(wasm_type.clone()), None)
+    {
+        instances.push(scoped);
     }
-    false
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_typed_wasm_parameters(child, source, classes, instances);
+    }
 }
 
 pub(super) fn wasm_module_specifier(

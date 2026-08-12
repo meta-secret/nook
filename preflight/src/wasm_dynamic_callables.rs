@@ -3,7 +3,8 @@ use std::path::Path;
 
 use crate::javascript_literals::semantic_javascript_name;
 use crate::javascript_scopes::ScopedBinding;
-use crate::wasm_dynamic_aliases::{loaded_module_specifier, scoped_binding, wasm_module_specifier};
+use crate::javascript_scopes::scoped_binding;
+use crate::wasm_dynamic_aliases::{loaded_module_specifier, wasm_module_specifier};
 use crate::wasm_module_sources::{is_wasm_callable_export, is_wasm_callable_source};
 
 #[allow(clippy::too_many_arguments)]

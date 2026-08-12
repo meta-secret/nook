@@ -260,6 +260,24 @@ fn wasm_callable_member_name(
     scoped_wasm_instances: &[ScopedBinding],
 ) -> Option<String> {
     let mut value = unwrap_transparent_expression(value);
+    if matches!(value.kind(), "ternary_expression" | "binary_expression") {
+        let mut cursor = value.walk();
+        return value.named_children(&mut cursor).find_map(|branch| {
+            wasm_callable_member_name(
+                branch,
+                source,
+                source_path,
+                callable_names,
+                wasm_type_names,
+                wasm_types,
+                wasm_namespace_bindings,
+                wasm_class_bindings,
+                wasm_instance_bindings,
+                scoped_wasm_namespaces,
+                scoped_wasm_instances,
+            )
+        });
+    }
     if value.kind() == "call_expression"
         && let Some(function) = value.child_by_field_name("function")
         && matches!(

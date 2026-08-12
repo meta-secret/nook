@@ -76,15 +76,8 @@ fn preserve_block_scope(node: tree_sitter::Node<'_>, source: &str, composite: &m
     };
     let Some(raw) = raw else { return };
     let names = raw
-        .split(',')
-        .filter_map(|part| {
-            let name = part.trim().split([':', '=', ' ', ')', '(']).next()?;
-            (!name.is_empty()
-                && name
-                    .chars()
-                    .all(|character| character.is_alphanumeric() || matches!(character, '_' | '$')))
-            .then_some(name)
-        })
+        .split(|character: char| !(character.is_alphanumeric() || matches!(character, '_' | '$')))
+        .filter(|name| !name.is_empty() && !name.chars().next().is_some_and(char::is_numeric))
         .collect::<Vec<_>>()
         .join(",");
     if names.is_empty() {

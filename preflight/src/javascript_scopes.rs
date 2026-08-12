@@ -7,6 +7,79 @@ pub(super) struct ScopedBinding {
     pub(super) wasm_module: Option<String>,
 }
 
+pub(super) fn scoped_binding(
+    binding: tree_sitter::Node<'_>,
+    source: &str,
+    wasm_type: Option<String>,
+    wasm_module: Option<String>,
+) -> Option<ScopedBinding> {
+    let name = binding.utf8_text(source.as_bytes()).ok()?.to_owned();
+    let mut ancestor = binding.parent();
+    while let Some(node) = ancestor {
+        if matches!(
+            node.kind(),
+            "function_declaration" | "function_expression" | "arrow_function"
+        ) {
+            let body = node.child_by_field_name("body")?;
+            return Some(ScopedBinding {
+                name,
+                scope_start: body.start_byte(),
+                scope_end: body.end_byte(),
+                declaration_end: body.start_byte(),
+                wasm_type,
+                wasm_module,
+            });
+        }
+        if matches!(node.kind(), "statement_block" | "switch_body" | "program") {
+            break;
+        }
+        ancestor = node.parent();
+    }
+    let is_var = binding_is_var(binding, source);
+    let mut ancestor = binding.parent();
+    let scope = loop {
+        let candidate = ancestor?;
+        let function_body = candidate.kind() == "statement_block"
+            && candidate.parent().is_some_and(|parent| {
+                matches!(
+                    parent.kind(),
+                    "function_declaration"
+                        | "function_expression"
+                        | "generator_function"
+                        | "arrow_function"
+                )
+            });
+        if candidate.kind() == "program"
+            || (matches!(candidate.kind(), "statement_block" | "switch_body")
+                && (!is_var || function_body))
+        {
+            break candidate;
+        }
+        ancestor = candidate.parent();
+    };
+    Some(ScopedBinding {
+        name,
+        scope_start: scope.start_byte(),
+        scope_end: scope.end_byte(),
+        declaration_end: binding.parent()?.parent()?.end_byte(),
+        wasm_type,
+        wasm_module,
+    })
+}
+
+fn binding_is_var(binding: tree_sitter::Node<'_>, source: &str) -> bool {
+    let mut ancestor = binding.parent();
+    while let Some(node) = ancestor {
+        if matches!(node.kind(), "variable_declaration" | "lexical_declaration") {
+            return node
+                .utf8_text(source.as_bytes())
+                .is_ok_and(|text| text.trim_start().starts_with("var "));
+        }
+        ancestor = node.parent();
+    }
+    false
+}
+
 pub(super) fn visible_scoped_binding<'a>(
     reference: tree_sitter::Node<'_>,
     name: &str,
@@ -183,7 +256,7 @@ fn function_parameters_declare(scope: tree_sitter::Node<'_>, name: &str, source:
 }
 
 fn block_declares_name(scope: tree_sitter::Node<'_>, name: &str, source: &str) -> bool {
-    if scope.kind() != "statement_block" {
+    if !matches!(scope.kind(), "statement_block" | "switch_body") {
         return false;
     }
     let mut cursor = scope.walk();
@@ -197,6 +270,13 @@ fn block_declares_name(scope: tree_sitter::Node<'_>, name: &str, source: &str) -
                 statement
                     .child_by_field_name("name")
                     .is_some_and(|binding| binding_matches(binding, name, source))
+            }
+            "switch_case" | "switch_default" => {
+                let mut cursor = statement.walk();
+                statement.named_children(&mut cursor).any(|child| {
+                    matches!(child.kind(), "lexical_declaration" | "variable_declaration")
+                        && declaration_declares(child, name, source)
+                })
             }
             _ => false,
         })
