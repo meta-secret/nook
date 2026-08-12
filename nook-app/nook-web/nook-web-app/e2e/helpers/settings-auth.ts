@@ -22,12 +22,24 @@ import {
 } from './vault-runtime'
 
 interface VaultProviderReload {
-  readonly loadProviders?: (options: ProviderLoadOptions) => Promise<void>
+  readonly loadProviders: (options: ProviderLoadOptions) => Promise<void>
 }
 
 interface VaultProviderReloadWindow extends Window {
-  readonly __nookVault?: VaultProviderReload
+  readonly __nookVault: VaultProviderReload
 }
+
+interface AvailableVaultProviderReload {
+  readonly kind: 'available'
+  readonly vault: VaultProviderReload
+}
+
+interface UnavailableVaultProviderReload {
+  readonly kind: 'unavailable'
+}
+
+type VaultProviderReloadAvailability =
+  AvailableVaultProviderReload | UnavailableVaultProviderReload
 
 /** Expand the login enrollment accordion on the login gate. */
 export async function expandLoginEnrollmentPanel(page: Page) {
@@ -538,11 +550,18 @@ export async function authorizeDeviceProtection(
 
 export async function invokeInitializedVaultProviderReload(page: Page) {
   await page.evaluate(async () => {
-    const vault = (window as VaultProviderReloadWindow).__nookVault
-    if (vault?.loadProviders) {
-      const options: ProviderLoadOptions = { ensureLocalRow: false }
-      await vault.loadProviders(options)
+    const availability: VaultProviderReloadAvailability =
+      '__nookVault' in window
+        ? {
+            kind: 'available',
+            vault: (window as VaultProviderReloadWindow).__nookVault,
+          }
+        : { kind: 'unavailable' }
+    if (availability.kind === 'unavailable') {
+      throw new Error('Initialized vault provider reload is unavailable')
     }
+    const options: ProviderLoadOptions = { ensureLocalRow: false }
+    await availability.vault.loadProviders(options)
   })
 }
 
