@@ -50,8 +50,10 @@ pub(super) fn scoped_binding(
                     parent.kind(),
                     "function_declaration"
                         | "function_expression"
+                        | "generator_function_declaration"
                         | "generator_function"
                         | "arrow_function"
+                        | "method_definition"
                 )
             });
         if candidate.kind() == "program"
@@ -475,11 +477,9 @@ fn function_call_after(
 ) -> Option<usize> {
     if node.kind() == "call_expression"
         && node.start_byte() >= after
-        && node
-            .child_by_field_name("function")
-            .and_then(|callee| semantic_javascript_name(callee, source))
-            .as_deref()
-            == Some(name)
+        && let Some(callee) = node.child_by_field_name("function")
+        && semantic_javascript_name(callee, source).as_deref() == Some(name)
+        && root_binding_is_visible(callee, name, source)
     {
         return Some(node.end_byte());
     }

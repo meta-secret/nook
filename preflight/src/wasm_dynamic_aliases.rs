@@ -249,7 +249,10 @@ fn invalidate_reassigned_wasm_binding(
     imported_callable_bindings: &mut HashSet<String>,
 ) {
     let binding = unwrap_transparent_expression(binding);
-    if binding.kind() != "identifier" {
+    if !matches!(
+        binding.kind(),
+        "identifier" | "member_expression" | "subscript_expression"
+    ) {
         return;
     }
     let Ok(name) = binding.utf8_text(source.as_bytes()) else {
@@ -257,7 +260,9 @@ fn invalidate_reassigned_wasm_binding(
     };
     invalidate_visible_scoped_binding(binding, name, source, scoped_wasm_namespaces);
     invalidate_visible_scoped_binding(binding, name, source, scoped_wasm_instances);
-    if invalidate_visible_scoped_binding(binding, name, source, scoped_wasm_callables) {
+    if invalidate_visible_scoped_binding(binding, name, source, scoped_wasm_callables)
+        && binding.kind() == "identifier"
+    {
         imported_callable_bindings.remove(name);
     }
 }
@@ -617,7 +622,16 @@ pub(super) fn constructor_wasm_class(
         while let Some(parent) = root.parent() {
             root = parent;
         }
-        return copied_wasm_class(root, constructor, name, source, wasm_class_bindings);
+        return copied_wasm_class(
+            root,
+            constructor,
+            name,
+            source,
+            wasm_class_bindings,
+            wasm_namespace_bindings,
+            scoped_wasm_namespaces,
+            wasm_type_names,
+        );
     }
     if constructor.kind() != "member_expression" {
         return None;
@@ -634,13 +648,24 @@ pub(super) fn constructor_wasm_class(
     (namespace_is_wasm && wasm_type_names.contains(&class_name)).then_some(class_name)
 }
 
-fn copied_wasm_class(
-    node: tree_sitter::Node<'_>,
-    reference: tree_sitter::Node<'_>,
-    name: &str,
-    source: &str,
-    classes: &HashMap<String, String>,
-) -> Option<String> {
+#[allow(clippy::too_many_arguments)]
+#[rustfmt::skip]
+fn copied_wasm_class(node: tree_sitter::Node<'_>, reference: tree_sitter::Node<'_>, name: &str, source: &str, classes: &HashMap<String, String>, namespaces: &HashMap<String, String>, scoped_namespaces: &[ScopedBinding], wasm_type_names: &HashSet<String>) -> Option<String> {
+    if node.kind() == "variable_declarator"
+        && let (Some(pattern), Some(namespace)) = (node.child_by_field_name("name"), node.child_by_field_name("value"))
+        && pattern.kind() == "object_pattern"
+        && let Some(namespace_name) = semantic_node_name(namespace, source)
+        && ((namespaces.contains_key(&namespace_name) && root_binding_is_visible(namespace, &namespace_name, source)) || scoped_wasm_module_visible(namespace, &namespace_name, source, scoped_namespaces).is_some())
+    {
+        let mut cursor = pattern.walk();
+        if let Some(wasm_type) = pattern.named_children(&mut cursor).find_map(|pair| {
+            let key = pair.child_by_field_name("key").and_then(|key| semantic_node_name(key, source))?;
+            let alias = pair.child_by_field_name("value").and_then(|value| semantic_node_name(value, source))?;
+            (alias == name && wasm_type_names.contains(&key)).then_some(key)
+        }) {
+            return Some(wasm_type);
+        }
+    }
     if matches!(node.kind(), "variable_declarator" | "assignment_expression")
         && let (Some(binding), Some(value)) = (
             node.child_by_field_name("name")
@@ -662,8 +687,7 @@ fn copied_wasm_class(
         return Some(wasm_type.clone());
     }
     let mut cursor = node.walk();
-    node.named_children(&mut cursor)
-        .find_map(|child| copied_wasm_class(child, reference, name, source, classes))
+    node.named_children(&mut cursor).find_map(|child| copied_wasm_class(child, reference, name, source, classes, namespaces, scoped_namespaces, wasm_type_names))
 }
 
 pub(super) fn unwrap_transparent_expression(

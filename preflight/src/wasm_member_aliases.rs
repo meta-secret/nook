@@ -113,6 +113,7 @@ pub(super) fn collect_destructuring_aliases(
         first_line,
         &wasm_type,
         wasm_types,
+        scoped_wasm_callables,
         imported_callable_bindings,
         lines,
     );
@@ -252,36 +253,34 @@ pub(super) fn collect_namespace_member_alias(
     }
 }
 
-pub(super) fn collect_type_pattern_aliases(
-    pattern: tree_sitter::Node<'_>,
-    source: &str,
-    first_line: usize,
-    wasm_type: &str,
-    wasm_types: &WasmTypeInventory,
-    imported_callable_bindings: &mut HashSet<String>,
-    lines: &mut Vec<usize>,
-) {
+#[allow(clippy::too_many_arguments)]
+#[rustfmt::skip]
+pub(super) fn collect_type_pattern_aliases(pattern: tree_sitter::Node<'_>, source: &str, first_line: usize, wasm_type: &str, wasm_types: &WasmTypeInventory, scoped_callable_bindings: &mut Vec<ScopedBinding>, imported_callable_bindings: &mut HashSet<String>, lines: &mut Vec<usize>) {
     let Some(methods) = wasm_types.methods.get(wasm_type) else {
         return;
     };
     let mut cursor = pattern.walk();
     for child in pattern.named_children(&mut cursor) {
-        if child.kind() == "pair_pattern"
-            && let Some(method_node) = child.child_by_field_name("key")
-            && let Some(method_name) = semantic_node_name(method_node, source)
-            && methods.contains(&method_name)
-            && let Some(binding) = child.child_by_field_name("value")
-            && let Some(binding_name) = semantic_node_name(binding, source)
-        {
-            if binding_name != method_name {
-                lines.push(first_line + method_node.start_position().row);
-            }
+        let pair = (child.kind() == "pair_pattern").then(|| Some((child.child_by_field_name("key")?, child.child_by_field_name("value")?))).flatten();
+        let defaulted = (child.kind() == "object_assignment_pattern").then(|| child.child_by_field_name("left").map(|left| (left, left))).flatten();
+        let shorthand =
+            (child.kind() == "shorthand_property_identifier_pattern").then_some((child, child));
+        let Some((method_node, binding)) = pair.or(defaulted).or(shorthand) else {
+            continue;
+        };
+        let Some(method_name) = semantic_node_name(method_node, source).filter(|name| methods.contains(name))
+        else {
+            continue;
+        };
+        let binding = binding.child_by_field_name("left").unwrap_or(binding);
+        let Some(binding_name) = semantic_node_name(binding, source) else {
+            continue;
+        };
+        if binding_name != method_name { lines.push(first_line + method_node.start_position().row); }
+        if let Some(scoped) = scoped_binding(binding, source, None, None) {
+            scoped_callable_bindings.push(scoped);
+        } else {
             imported_callable_bindings.insert(binding_name);
-        } else if child.kind() == "shorthand_property_identifier_pattern"
-            && let Some(method_name) = semantic_node_name(child, source)
-            && methods.contains(&method_name)
-        {
-            imported_callable_bindings.insert(method_name);
         }
     }
 }
