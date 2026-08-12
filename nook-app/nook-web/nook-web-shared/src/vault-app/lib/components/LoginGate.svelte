@@ -1,4 +1,8 @@
 <script lang="ts">
+  type EnrollmentCodeUnlock = { readonly code: string; readonly password: string }
+
+  type VaultPasswordUnlock = { readonly entryId: string; readonly password: string }
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { KeyRound, RefreshCw, ShieldCheck } from '@lucide/svelte'
   import { onMount, tick, untrack } from 'svelte'
@@ -130,10 +134,10 @@
     onCancelSetup: () => void
     onOpenHelp?: () => void
     onUseEnrollmentCode?: (
-      args: { readonly code: string; readonly password: string },
+      args: EnrollmentCodeUnlock,
     ) => void | Promise<void>
     onUnlockWithPassword: (
-      args: { readonly entryId: string; readonly password: string },
+      args: VaultPasswordUnlock,
     ) => void | Promise<void>
     onSwitchVault: () => void | Promise<void>
     onSentinelUnlocked?: () => void | Promise<void>

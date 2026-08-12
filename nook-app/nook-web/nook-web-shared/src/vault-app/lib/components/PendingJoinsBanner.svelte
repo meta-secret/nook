@@ -1,4 +1,6 @@
 <script lang="ts">
+  type IdentityTextTruncation = { readonly value: string; readonly head: number; readonly tail: number }
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { RefreshCw, UserPlus } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
@@ -22,7 +24,7 @@
     onOpenDevicesSettings?: () => void
   } = $props()
 
-  function truncate({ value, head, tail }: { readonly value: string; readonly head: number; readonly tail: number }) {
+  function truncate({ value, head, tail }: IdentityTextTruncation) {
     if (value.length <= head + tail + 3) return value
     return `${value.slice(0, head)}…${value.slice(-tail)}`
   }

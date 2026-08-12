@@ -1,4 +1,6 @@
 <script lang="ts">
+  type SecretAddModeChange = { readonly open: boolean; readonly selection: SecretTypeSelection }
+
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { onDestroy, tick } from 'svelte'
   import {
@@ -84,7 +86,7 @@
       secretsAddFormType.itemType === SecretType.SecureNote,
   )
 
-  function setAddMode({ open, selection }: { readonly open: boolean; readonly selection: SecretTypeSelection }) {
+  function setAddMode({ open, selection }: SecretAddModeChange) {
     secretsAddOpen = open
     secretsAddFormType =
       open && selection.kind === SecretTypeSelectionKind.EditingFields

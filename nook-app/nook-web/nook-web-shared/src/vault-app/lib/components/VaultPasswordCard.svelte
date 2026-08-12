@@ -1,4 +1,12 @@
 <script lang="ts">
+  type VaultPasswordPanelSelection = { readonly target: VaultPasswordPanel; readonly selection: ActivePasswordEntry }
+
+  type VaultPasswordCreation = { readonly label: string; readonly password: string }
+
+  type VaultPasswordEntryUpdate = { readonly entryId: PasswordEntryId; readonly password: string }
+
+  type EnrollmentCodeIssue = { readonly entryId: PasswordEntryId; readonly password: string }
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     KeyRound,
@@ -50,12 +58,12 @@
     isBusy: boolean
     passwordError: string
     enrollmentCode: string
-    onAddPassword: (args: { readonly label: string; readonly password: string }) => void | Promise<void>
+    onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>
     onUpdatePassword: (
-      args: { readonly entryId: PasswordEntryId; readonly password: string },
+      args: VaultPasswordEntryUpdate,
     ) => void | Promise<void>
     onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>
-    onIssueCode: (args: { readonly entryId: PasswordEntryId; readonly password: string }) => Promise<string>
+    onIssueCode: (args: EnrollmentCodeIssue) => Promise<string>
     onClearCode: () => void
     embedded?: boolean
     allowIssueCode?: boolean
@@ -123,7 +131,7 @@
   })
 
   function openPanel(
-    { target, selection }: { readonly target: VaultPasswordPanel; readonly selection: ActivePasswordEntry },
+    { target, selection }: VaultPasswordPanelSelection,
   ) {
     panel = target
     activeEntryId = selection

@@ -1,10 +1,22 @@
+type TextVaultImport = {
+  readonly file: File;
+  readonly isSaving: boolean;
+  readonly onImport: (text: string) => Promise<NookImportResult>;
+};
+
+type BinaryVaultImport = {
+  readonly file: File;
+  readonly isSaving: boolean;
+  readonly onImport: (bytes: Uint8Array) => Promise<NookImportResult>;
+};
+
 import type { NookImportResult } from "$lib/nook";
 import type { VaultState } from "$lib/vault.svelte";
 
-export type ImportPanelProps<Input> = {
+export type ImportPanelProps<ImportSource> = {
   vault: VaultState;
   isSaving: boolean;
-  onImport: (input: Input) => Promise<NookImportResult>;
+  onImport: (source: ImportSource) => Promise<NookImportResult>;
   embedded?: boolean;
 };
 
@@ -23,11 +35,7 @@ export async function importTextFile({
   file,
   isSaving,
   onImport,
-}: {
-  readonly file: File;
-  readonly isSaving: boolean;
-  readonly onImport: (text: string) => Promise<NookImportResult>;
-}): Promise<ImportAttempt> {
+}: TextVaultImport): Promise<ImportAttempt> {
   if (isSaving) return { kind: ImportAttemptKind.Skipped };
   try {
     return {
@@ -46,11 +54,7 @@ export async function importBinaryFile({
   file,
   isSaving,
   onImport,
-}: {
-  readonly file: File;
-  readonly isSaving: boolean;
-  readonly onImport: (bytes: Uint8Array) => Promise<NookImportResult>;
-}): Promise<ImportAttempt> {
+}: BinaryVaultImport): Promise<ImportAttempt> {
   if (isSaving) return { kind: ImportAttemptKind.Skipped };
   const bytes = new Uint8Array(await file.arrayBuffer());
   try {

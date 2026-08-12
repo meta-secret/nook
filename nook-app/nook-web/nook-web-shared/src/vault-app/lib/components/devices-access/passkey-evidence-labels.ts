@@ -1,3 +1,39 @@
+type PasskeyAttachmentLabelRequest = {
+  readonly vault: VaultState;
+  readonly value: NookPasskeyAttachmentState;
+};
+
+type PasskeyBackupLabelRequest = {
+  readonly vault: VaultState;
+  readonly value: NookPasskeyBackupState;
+};
+
+type PasskeyTransportLabelRequest = {
+  readonly vault: VaultState;
+  readonly value: PasskeyTransport;
+};
+
+type PasskeyTransportsLabelRequest = {
+  readonly vault: VaultState;
+  readonly values: readonly PasskeyTransport[];
+};
+
+type PasskeyBrowserLabelRequest = {
+  readonly vault: VaultState;
+  readonly value: PasskeyObservedBrowser;
+};
+
+type PasskeyPlatformLabelRequest = {
+  readonly vault: VaultState;
+  readonly value: PasskeyObservedPlatform;
+};
+
+type PasskeyClientEnvironmentLabelRequest = {
+  readonly vault: VaultState;
+  readonly browser: PasskeyObservedBrowser;
+  readonly platform: PasskeyObservedPlatform;
+};
+
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import {
   NookPasskeyAttachmentState,
@@ -15,10 +51,7 @@ import type { VaultState } from "$lib/vault.svelte";
 export function attachmentLabel({
   vault,
   value,
-}: {
-  readonly vault: VaultState;
-  readonly value: NookPasskeyAttachmentState;
-}): string {
+}: PasskeyAttachmentLabelRequest): string {
   if (value === NookPasskeyAttachmentState.Platform) {
     return vault.t(I18N_KEYS.DevicesAccessAttachmentPlatform);
   }
@@ -30,10 +63,7 @@ export function attachmentLabel({
 export function backupLabel({
   vault,
   value,
-}: {
-  readonly vault: VaultState;
-  readonly value: NookPasskeyBackupState;
-}): string {
+}: PasskeyBackupLabelRequest): string {
   if (value === NookPasskeyBackupState.BackedUp) {
     return vault.t(I18N_KEYS.DevicesAccessBackupBackedUp);
   }
@@ -48,10 +78,7 @@ export function backupLabel({
 function transportLabel({
   vault,
   value,
-}: {
-  readonly vault: VaultState;
-  readonly value: PasskeyTransport;
-}): string {
+}: PasskeyTransportLabelRequest): string {
   if (value === PasskeyTransport.Ble) {
     return vault.t(I18N_KEYS.DevicesAccessTransportBle);
   }
@@ -69,10 +96,7 @@ function transportLabel({
 export function transportsLabel({
   vault,
   values,
-}: {
-  readonly vault: VaultState;
-  readonly values: readonly PasskeyTransport[];
-}): string {
+}: PasskeyTransportsLabelRequest): string {
   if (values.length === 0) return vault.t(I18N_KEYS.DevicesAccessUnknown);
   const ListFormatArgs: ConstructorParameters<typeof Intl.ListFormat>[1] = {
     style: "long",
@@ -91,13 +115,7 @@ export function transportsLabel({
   );
 }
 
-function browserLabel({
-  vault,
-  value,
-}: {
-  readonly vault: VaultState;
-  readonly value: PasskeyObservedBrowser;
-}): string {
+function browserLabel({ vault, value }: PasskeyBrowserLabelRequest): string {
   if (value === PasskeyObservedBrowser.Edge) {
     return vault.t(I18N_KEYS.DevicesAccessBrowserEdge);
   }
@@ -115,13 +133,7 @@ function browserLabel({
     : vault.t(I18N_KEYS.DevicesAccessUnknown);
 }
 
-function platformLabel({
-  vault,
-  value,
-}: {
-  readonly vault: VaultState;
-  readonly value: PasskeyObservedPlatform;
-}): string {
+function platformLabel({ vault, value }: PasskeyPlatformLabelRequest): string {
   if (value === PasskeyObservedPlatform.Android) {
     return vault.t(I18N_KEYS.DevicesAccessPlatformAndroid);
   }
@@ -146,11 +158,7 @@ export function clientEnvironmentLabel({
   vault,
   browser,
   platform,
-}: {
-  readonly vault: VaultState;
-  readonly browser: PasskeyObservedBrowser;
-  readonly platform: PasskeyObservedPlatform;
-}): string {
+}: PasskeyClientEnvironmentLabelRequest): string {
   if (
     browser === PasskeyObservedBrowser.Unknown &&
     platform === PasskeyObservedPlatform.Unknown

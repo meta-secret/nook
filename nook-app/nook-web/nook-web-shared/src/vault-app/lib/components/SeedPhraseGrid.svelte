@@ -1,4 +1,16 @@
 <script lang="ts">
+  type PastedMnemonicApplication = { readonly text: string; readonly startIndex: number }
+
+  type SeedPhraseCellChange = { readonly index: number; readonly nextValue: string }
+
+  type SeedPhraseCellInput = { readonly index: number; readonly nextValue: string }
+
+  type SeedPhraseCellPaste = { readonly index: number; readonly event: ClipboardEvent }
+
+  type SeedPhraseSuggestionSelection = { readonly word: string; readonly index: number }
+
+  type SeedPhraseCellKeydown = { readonly index: number; readonly event: KeyboardEvent }
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { Check } from "@lucide/svelte";
   import type { VaultState } from "$lib/vault.svelte";
@@ -88,7 +100,7 @@
     });
   }
 
-  function applyPastedMnemonic({ text, startIndex }: { readonly text: string; readonly startIndex: number }) {
+  function applyPastedMnemonic({ text, startIndex }: PastedMnemonicApplication) {
     const words = parse_bip39_words(text);
     if (words.length === 0) return;
 
@@ -130,14 +142,14 @@
     focusCell(0);
   }
 
-  function setCellValue({ index, nextValue }: { readonly index: number; readonly nextValue: string }) {
+  function setCellValue({ index, nextValue }: SeedPhraseCellChange) {
     const next = [...cells];
     next[index] = nextValue.toLowerCase();
     cells = next;
     syncValueFromCells();
   }
 
-  function onCellInput({ index, nextValue }: { readonly index: number; readonly nextValue: string }) {
+  function onCellInput({ index, nextValue }: SeedPhraseCellInput) {
     if (/\s/.test(nextValue)) {
       const applyPastedMnemonicArgs: Parameters<typeof applyPastedMnemonic>[0] = { text: nextValue, startIndex: index };
       applyPastedMnemonic(applyPastedMnemonicArgs);
@@ -149,7 +161,7 @@
     suggestionIndex = 0;
   }
 
-  function onCellPaste({ index, event }: { readonly index: number; readonly event: ClipboardEvent }) {
+  function onCellPaste({ index, event }: SeedPhraseCellPaste) {
     if (readonly) return;
     const text = event.clipboardData?.getData("text");
     if (!text?.trim()) return;
@@ -158,7 +170,7 @@
     applyPastedMnemonic(applyPastedMnemonicArgs2);
   }
 
-  function selectSuggestion({ word, index }: { readonly word: string; readonly index: number }) {
+  function selectSuggestion({ word, index }: SeedPhraseSuggestionSelection) {
     const setCellValueArgs2: Parameters<typeof setCellValue>[0] = { index, nextValue: word };
     setCellValue(setCellValueArgs2);
     focusedIndex = { kind: FocusedWordKind.None };
@@ -173,7 +185,7 @@
     });
   }
 
-  function onCellKeyDown({ index, event }: { readonly index: number; readonly event: KeyboardEvent }) {
+  function onCellKeyDown({ index, event }: SeedPhraseCellKeydown) {
     if (
       suggestions.length > 0 &&
       focusedIndex.kind === FocusedWordKind.Focused &&

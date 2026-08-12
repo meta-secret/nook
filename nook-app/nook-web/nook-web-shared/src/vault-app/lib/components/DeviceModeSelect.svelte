@@ -1,4 +1,6 @@
 <script lang="ts">
+  type DeviceModeTranslation = { readonly mode: DeviceMode; readonly suffix: DeviceModeTranslationPart }
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { DeviceMode } from '$app-wasm'
   import * as Select from '$lib/components/ui/select'
@@ -18,7 +20,7 @@
   const deviceModes = [DeviceMode.Standard, DeviceMode.AntiHacker]
 
   function modeTranslationKey(
-    { mode, suffix }: { readonly mode: DeviceMode; readonly suffix: DeviceModeTranslationPart },
+    { mode, suffix }: DeviceModeTranslation,
   ) {
     if (mode === DeviceMode.AntiHacker) {
       return suffix === DeviceModeTranslationPart.Title

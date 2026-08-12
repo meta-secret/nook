@@ -1,4 +1,9 @@
 <script lang="ts">
+  type DeviceAccessDetailNavigation = {
+      readonly event: KeyboardEvent
+      readonly currentStage: AccessChainStage
+    }
+
   import { tick } from 'svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
@@ -44,10 +49,7 @@
   async function navigateDetailTabs({
     event,
     currentStage,
-  }: {
-    readonly event: KeyboardEvent
-    readonly currentStage: AccessChainStage
-  }): Promise<void> {
+  }: DeviceAccessDetailNavigation): Promise<void> {
     const stages = [
       AccessChainStage.Unlock,
       AccessChainStage.DeviceKey,

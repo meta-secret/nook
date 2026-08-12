@@ -78,7 +78,6 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         "JsonValue: { message: \"Use a concrete Nook domain value.\" }",
         "GenericValue: { message: \"Use a concrete Nook domain value.\" }",
         "\"nook-typed-api/no-raw-object-arguments\": [",
-        "enforceNamedParameterContracts: false",
         "enforceNamedParameterContracts: true",
         "TSAsExpression",
         "TSTypeAssertion",

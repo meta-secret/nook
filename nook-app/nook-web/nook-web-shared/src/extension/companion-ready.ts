@@ -9,8 +9,10 @@ type NodeFsReadFileSync = {
   existsSync: (path: string) => boolean;
 };
 
+type NodePathSegments = string[];
+
 type NodePathJoin = {
-  join: (...parts: string[]) => string;
+  join: (...parts: NodePathSegments) => string;
 };
 
 type BunFileApi = {
@@ -99,7 +101,8 @@ async function companionWasmDiskCandidates(): Promise<string[]> {
   ).process;
   const fromEnv = nodeProcess?.env?.NOOK_COMPANION_WASM_PATH?.trim() ?? "";
   const cwd = nodeProcess?.cwd?.() ?? "";
-  let join: NodePathJoin["join"] = (...parts: string[]) => parts.join("/");
+  let join: NodePathJoin["join"] = (...parts: NodePathSegments) =>
+    parts.join("/");
   try {
     const nodePath = await importNodeModule<NodePathJoin>("node:path");
     join = nodePath.join.bind(nodePath);

@@ -1,3 +1,20 @@
+type ExtensionMessageRequest = {
+  readonly extensionId: string;
+  readonly message: unknown;
+};
+
+type ExtensionPairingApprovalDelivery = {
+  readonly request: ExtensionConnectRequest;
+  readonly message: ExtensionPairingApprovedMessage;
+};
+
+type IdentityEnvelopeRequest = {
+  readonly request: ExtensionConnectRequest;
+  readonly message:
+    | ExtensionIdentityHandoffRequestMessage
+    | ExtensionPairedVaultIdentityHandoffRequestMessage;
+};
+
 import { stripBasePath } from "$lib/runtime/routes";
 import type { NookVaultManager } from "$app-wasm";
 import {
@@ -35,7 +52,7 @@ export type ExtensionConnectRequest =
 export type PairedExtensionIdentityDiscovery =
   PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>;
 
-export type AdoptExtensionIdentityArgs = {
+export type ExtensionIdentityAdoption = {
   manager: NookVaultManager;
   request: ExtensionConnectRequest;
 };
@@ -168,10 +185,7 @@ export function readInstalledExtensionRuntimeId(): InstalledExtensionRuntime {
 function sendExtensionMessage({
   extensionId,
   message,
-}: {
-  readonly extensionId: string;
-  readonly message: unknown;
-}): Promise<ExtensionMessageDelivery> {
+}: ExtensionMessageRequest): Promise<ExtensionMessageDelivery> {
   return new Promise((resolve) => {
     const runtime = (
       globalThis as typeof globalThis & {
@@ -263,10 +277,7 @@ function pairingDeliveryFromResponse(
 export async function deliverExtensionPairingApproval({
   request,
   message,
-}: {
-  readonly request: ExtensionConnectRequest;
-  readonly message: ExtensionPairingApprovedMessage;
-}): Promise<ExtensionPairingDelivery> {
+}: ExtensionPairingApprovalDelivery): Promise<ExtensionPairingDelivery> {
   let lastDelivery: ExtensionPairingDelivery = {
     kind: ExtensionPairingDeliveryKind.MessagingUnavailable,
   };
@@ -458,12 +469,7 @@ type ExtensionIdentityHandoffResponse = {
 function requestIdentityEnvelope({
   request,
   message,
-}: {
-  readonly request: ExtensionConnectRequest;
-  readonly message:
-    | ExtensionIdentityHandoffRequestMessage
-    | ExtensionPairedVaultIdentityHandoffRequestMessage;
-}): Promise<{ envelope: string; nextNonce: string }> {
+}: IdentityEnvelopeRequest): Promise<{ envelope: string; nextNonce: string }> {
   const runtime = (
     globalThis as typeof globalThis & {
       chrome?: {
@@ -523,7 +529,7 @@ function requestIdentityEnvelope({
  * to JavaScript. Only an age-encrypted, nonce-bound envelope crosses the
  * extension boundary; Rust/WASM validates and installs its contents. */
 export async function adoptExtensionIdentity(
-  args: AdoptExtensionIdentityArgs,
+  args: ExtensionIdentityAdoption,
 ): Promise<void> {
   const { manager, request } = args;
   const nonce = request.nonce;

@@ -20,6 +20,11 @@ export type LoginVaultEntry =
   | { kind: LoginVaultEntryKind.Unavailable }
   | { kind: LoginVaultEntryKind.Available; entry: NookLocalVaultEntry };
 
+type VaultPasswordUnlock = {
+  readonly entryId: string;
+  readonly password: string;
+};
+
 export enum PasswordUnlockCapabilityKind {
   Unavailable = "unavailable",
   Available = "available",
@@ -29,10 +34,7 @@ export type PasswordUnlockCapability =
   | { kind: PasswordUnlockCapabilityKind.Unavailable }
   | {
       kind: PasswordUnlockCapabilityKind.Available;
-      unlock(request: {
-        readonly entryId: string;
-        readonly password: string;
-      }): void | Promise<void>;
+      unlock(request: VaultPasswordUnlock): void | Promise<void>;
     };
 
 export enum DeviceKeysUnlockCapabilityKind {

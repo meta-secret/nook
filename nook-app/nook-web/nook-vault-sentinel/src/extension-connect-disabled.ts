@@ -28,7 +28,7 @@ export type ExtensionConnectRequest =
 export type PairedExtensionIdentityDiscovery =
   PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>;
 
-export type AdoptExtensionIdentityArgs = {
+export type ExtensionIdentityAdoption = {
   manager: NookVaultManager;
   request: ExtensionConnectRequest;
 };
@@ -95,7 +95,7 @@ export function scopeLabel(): never {
 }
 
 export async function adoptExtensionIdentity(
-  args: AdoptExtensionIdentityArgs,
+  args: ExtensionIdentityAdoption,
 ): Promise<void> {
   void args;
   throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);

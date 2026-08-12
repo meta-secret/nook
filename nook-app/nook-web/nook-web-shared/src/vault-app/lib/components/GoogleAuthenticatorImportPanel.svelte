@@ -1,4 +1,6 @@
 <script lang="ts">
+  type AuthenticatorMigrationUriCollection = string[]
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { onDestroy } from "svelte";
   import { Camera, ImageUp, QrCode, Trash2, Upload, X } from "@lucide/svelte";
@@ -33,7 +35,7 @@
   }: {
     vault: VaultState;
     isSaving: boolean;
-    onImport: (migrationUris: string[]) => Promise<NookImportResult>;
+    onImport: (migrationUris: AuthenticatorMigrationUriCollection) => Promise<NookImportResult>;
     embedded?: boolean;
   } = $props();
 

@@ -16,7 +16,114 @@ export { loadDb } from "$lib/vault/connection";
 
 const log = createLogger("connect");
 
-function freeSecretRecords(records: ReadonlyArray<{ free(): void }>) {
+interface VaultSecretAllocation {
+  free(): void;
+}
+type VaultSecretAllocationCollection = ReadonlyArray<VaultSecretAllocation>;
+
+interface PasswordManagerImportExecution {
+  readonly state: VaultState;
+  readonly importFromManager: (
+    manager: NookVaultManager,
+  ) => Promise<NookImportResult>;
+  readonly sourceName: string;
+  readonly successKey: string;
+  readonly failureKey: string;
+}
+
+interface SecretCreation {
+  readonly state: VaultState;
+  readonly id: string;
+  readonly type: SecretType;
+  readonly data: string;
+}
+
+interface BitwardenVaultImport {
+  readonly state: VaultState;
+  readonly json: string;
+  readonly password: string;
+}
+
+interface KeePassXcVaultImport {
+  readonly state: VaultState;
+  readonly csv: string;
+}
+
+interface LastPassVaultImport {
+  readonly state: VaultState;
+  readonly csv: string;
+}
+
+interface KeeperVaultImport {
+  readonly state: VaultState;
+  readonly csv: string;
+}
+
+interface OnePasswordVaultImport {
+  readonly state: VaultState;
+  readonly archive: Uint8Array;
+}
+
+interface ApplePasswordsVaultImport {
+  readonly state: VaultState;
+  readonly exportBytes: Uint8Array;
+}
+
+interface ChromePasswordsVaultImport {
+  readonly state: VaultState;
+  readonly csv: string;
+}
+
+interface DashlaneVaultImport {
+  readonly state: VaultState;
+  readonly exportBytes: Uint8Array;
+}
+
+interface ProtonPassVaultImport {
+  readonly state: VaultState;
+  readonly exportBytes: Uint8Array;
+}
+
+interface AuthenticatorMigrationImport {
+  readonly state: VaultState;
+  readonly migrationUris: string[];
+}
+
+interface SecretDeletion {
+  readonly state: VaultState;
+  readonly id: string;
+}
+
+interface SecretReplacement {
+  readonly state: VaultState;
+  readonly oldId: string;
+  readonly type: SecretType;
+  readonly data: string;
+}
+
+interface SecretPageRequest {
+  readonly state: VaultState;
+  readonly query: string;
+  readonly requestedOffset: number;
+}
+
+interface ConnectedSecretPageApplication {
+  readonly state: VaultState;
+  readonly page: NookSecretPage;
+  readonly query: string;
+}
+
+interface SecretDecryption {
+  readonly state: VaultState;
+  readonly id: string;
+}
+
+interface AuthenticatorCodeRequest {
+  readonly state: VaultState;
+  readonly id: string;
+}
+
+function freeSecretRecords(records: VaultSecretAllocationCollection) {
   for (const record of records) record.free();
 }
 
@@ -26,15 +133,7 @@ async function runPasswordManagerImport({
   sourceName,
   successKey,
   failureKey,
-}: {
-  readonly state: VaultState;
-  readonly importFromManager: (
-    manager: NookVaultManager,
-  ) => Promise<NookImportResult>;
-  readonly sourceName: string;
-  readonly successKey: string;
-  readonly failureKey: string;
-}): Promise<NookImportResult> {
+}: PasswordManagerImportExecution): Promise<NookImportResult> {
   if (!state.hasManager)
     throw new Error(state.t(I18N_KEYS.ErrorsEngineUnavailable));
   const manager = state.requireManager();
@@ -94,12 +193,7 @@ export async function handleAddSecret({
   id,
   type,
   data,
-}: {
-  readonly state: VaultState;
-  readonly id: string;
-  readonly type: SecretType;
-  readonly data: string;
-}) {
+}: SecretCreation) {
   if (!(await prepareSecretMutation(state))) return;
   try {
     await state.enqueueStorage(async () => {
@@ -131,11 +225,7 @@ export async function handleBitwardenImport({
   state,
   json,
   password,
-}: {
-  readonly state: VaultState;
-  readonly json: string;
-  readonly password: string;
-}): Promise<NookImportResult> {
+}: BitwardenVaultImport): Promise<NookImportResult> {
   const runPasswordManagerImportArgs: Parameters<
     typeof runPasswordManagerImport
   >[0] = {
@@ -152,10 +242,7 @@ export async function handleBitwardenImport({
 export async function handleKeePassXcImport({
   state,
   csv,
-}: {
-  readonly state: VaultState;
-  readonly csv: string;
-}): Promise<NookImportResult> {
+}: KeePassXcVaultImport): Promise<NookImportResult> {
   const runPasswordManagerImportArgs2: Parameters<
     typeof runPasswordManagerImport
   >[0] = {
@@ -171,10 +258,7 @@ export async function handleKeePassXcImport({
 export async function handleLastPassImport({
   state,
   csv,
-}: {
-  readonly state: VaultState;
-  readonly csv: string;
-}): Promise<NookImportResult> {
+}: LastPassVaultImport): Promise<NookImportResult> {
   const runPasswordManagerImportArgs3: Parameters<
     typeof runPasswordManagerImport
   >[0] = {
@@ -190,10 +274,7 @@ export async function handleLastPassImport({
 export async function handleKeeperImport({
   state,
   csv,
-}: {
-  readonly state: VaultState;
-  readonly csv: string;
-}): Promise<NookImportResult> {
+}: KeeperVaultImport): Promise<NookImportResult> {
   const runPasswordManagerImportArgs4: Parameters<
     typeof runPasswordManagerImport
   >[0] = {
@@ -209,10 +290,7 @@ export async function handleKeeperImport({
 export async function handleOnePasswordImport({
   state,
   archive,
-}: {
-  readonly state: VaultState;
-  readonly archive: Uint8Array;
-}): Promise<NookImportResult> {
+}: OnePasswordVaultImport): Promise<NookImportResult> {
   const runPasswordManagerImportArgs5: Parameters<
     typeof runPasswordManagerImport
   >[0] = {
@@ -228,10 +306,7 @@ export async function handleOnePasswordImport({
 export async function handleApplePasswordsImport({
   state,
   exportBytes,
-}: {
-  readonly state: VaultState;
-  readonly exportBytes: Uint8Array;
-}): Promise<NookImportResult> {
+}: ApplePasswordsVaultImport): Promise<NookImportResult> {
   const runPasswordManagerImportArgs6: Parameters<
     typeof runPasswordManagerImport
   >[0] = {
@@ -248,10 +323,7 @@ export async function handleApplePasswordsImport({
 export async function handleChromePasswordsImport({
   state,
   csv,
-}: {
-  readonly state: VaultState;
-  readonly csv: string;
-}): Promise<NookImportResult> {
+}: ChromePasswordsVaultImport): Promise<NookImportResult> {
   const runPasswordManagerImportArgs7: Parameters<
     typeof runPasswordManagerImport
   >[0] = {
@@ -267,10 +339,7 @@ export async function handleChromePasswordsImport({
 export async function handleDashlaneImport({
   state,
   exportBytes,
-}: {
-  readonly state: VaultState;
-  readonly exportBytes: Uint8Array;
-}): Promise<NookImportResult> {
+}: DashlaneVaultImport): Promise<NookImportResult> {
   const runPasswordManagerImportArgs8: Parameters<
     typeof runPasswordManagerImport
   >[0] = {
@@ -286,10 +355,7 @@ export async function handleDashlaneImport({
 export async function handleGoogleAuthenticatorImport({
   state,
   migrationUris,
-}: {
-  readonly state: VaultState;
-  readonly migrationUris: string[];
-}): Promise<NookImportResult> {
+}: AuthenticatorMigrationImport): Promise<NookImportResult> {
   const runPasswordManagerImportArgs9: Parameters<
     typeof runPasswordManagerImport
   >[0] = {
@@ -306,10 +372,7 @@ export async function handleGoogleAuthenticatorImport({
 export async function handleProtonPassImport({
   state,
   exportBytes,
-}: {
-  readonly state: VaultState;
-  readonly exportBytes: Uint8Array;
-}): Promise<NookImportResult> {
+}: ProtonPassVaultImport): Promise<NookImportResult> {
   const runPasswordManagerImportArgs10: Parameters<
     typeof runPasswordManagerImport
   >[0] = {
@@ -322,13 +385,7 @@ export async function handleProtonPassImport({
   return runPasswordManagerImport(runPasswordManagerImportArgs10);
 }
 
-export async function handleDeleteSecret({
-  state,
-  id,
-}: {
-  readonly state: VaultState;
-  readonly id: string;
-}) {
+export async function handleDeleteSecret({ state, id }: SecretDeletion) {
   if (!state.hasManager) return;
   const editRestriction = state.editRestriction;
   if (editRestriction.decision !== VaultEditDecision.Allowed) {
@@ -381,12 +438,7 @@ export async function handleReplaceSecret({
   oldId,
   type,
   data,
-}: {
-  readonly state: VaultState;
-  readonly oldId: string;
-  readonly type: SecretType;
-  readonly data: string;
-}) {
+}: SecretReplacement) {
   if (!(await prepareSecretMutation(state))) return;
   try {
     const newId = generate_secret_id();
@@ -463,11 +515,7 @@ export async function loadSecretPage({
   state,
   query,
   requestedOffset,
-}: {
-  readonly state: VaultState;
-  readonly query: string;
-  readonly requestedOffset: number;
-}): Promise<void> {
+}: SecretPageRequest): Promise<void> {
   if (!state.hasManager) return;
   // Publish the request immediately so maintenance refreshes queued behind it
   // cannot re-submit the previous query or page.
@@ -534,11 +582,7 @@ export function applyConnectedSecretPage({
   state,
   page,
   query,
-}: {
-  readonly state: VaultState;
-  readonly page: NookSecretPage;
-  readonly query: string;
-}): void {
+}: ConnectedSecretPageApplication): void {
   const records = page.take_items();
   const total = page.total;
   const offset = page.offset;
@@ -554,10 +598,7 @@ export function applyConnectedSecretPage({
 export async function decryptSecret({
   state,
   id,
-}: {
-  readonly state: VaultState;
-  readonly id: string;
-}): Promise<NookSecretRecord> {
+}: SecretDecryption): Promise<NookSecretRecord> {
   if (!state.hasManager) {
     throw new Error("Vault manager is not initialized.");
   }
@@ -569,10 +610,7 @@ export async function decryptSecret({
 export async function currentAuthenticatorCode({
   state,
   id,
-}: {
-  readonly state: VaultState;
-  readonly id: string;
-}): Promise<AuthenticatorCodeView> {
+}: AuthenticatorCodeRequest): Promise<AuthenticatorCodeView> {
   if (!state.hasManager) {
     throw new Error("Vault manager is not initialized.");
   }

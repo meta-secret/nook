@@ -1,14 +1,14 @@
 ---
 name: typescript-named-args
 description: >-
-  Loom and migrated Nook web TypeScript: require named semantic object parameter types and ban
+  Loom and Nook web TypeScript: require named semantic object parameter types and ban
   raw object literals in calls. Enforced by ESLint loom/no-raw-object-arguments in Loom and
   nook-typed-api/no-raw-object-arguments in Nook web.
 ---
 
 # TypeScript Named Call Arguments
 
-Use this skill when editing Loom or migrated Nook web TypeScript.
+Use this skill when editing Loom or any Nook web production TypeScript/Svelte.
 
 Read `.cortex/dynamic-skills/typescript-named-args.md` and apply it:
 

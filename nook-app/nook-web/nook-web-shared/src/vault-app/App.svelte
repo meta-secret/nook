@@ -1,4 +1,6 @@
 <script lang="ts">
+  type EnrollmentCodeUseRequest = { readonly code: string; readonly password: string }
+
   import { I18N_KEYS } from '../generated/i18n-keys'
   import { onMount, untrack } from 'svelte'
   import { VaultState } from '$lib/vault.svelte'
@@ -44,7 +46,7 @@
     ExtensionIdentityRequestSource,
     isExtensionConnectPath,
     requestPairedExtensionUnlock,
-    type AdoptExtensionIdentityArgs,
+    type ExtensionIdentityAdoption,
     type ExtensionConnectRequestState,
   } from '$lib/extension/connect'
   import {
@@ -313,7 +315,7 @@
       const connectRequest = extensionIdentityRequestState.request
       const authorizeWithExternalDeviceIdentityArgs: Parameters<typeof vault.authorizeWithExternalDeviceIdentity>[0] = {
         adopt: (manager) => {
-          const adoptionArgs: AdoptExtensionIdentityArgs = {
+          const adoptionArgs: ExtensionIdentityAdoption = {
             manager,
             request: connectRequest,
           }
@@ -367,7 +369,7 @@
         if (extensionIdentityCanUnlock) {
           const authorizeWithExternalDeviceIdentityArgs2: Parameters<typeof vault.authorizeWithExternalDeviceIdentity>[0] = {
             adopt: (manager) => {
-              const adoptionArgs: AdoptExtensionIdentityArgs = {
+              const adoptionArgs: ExtensionIdentityAdoption = {
                 manager,
                 request: connectRequest,
               }
@@ -469,7 +471,7 @@
       !vault.deviceProtectionReady,
   )
 
-  async function handleUseEnrollmentCode({ code, password }: { readonly code: string; readonly password: string }) {
+  async function handleUseEnrollmentCode({ code, password }: EnrollmentCodeUseRequest) {
     if (!vault.deviceProtectionReady) {
       pendingEnrollmentSubmitState = {
         kind: EnrollmentSubmitQueueKind.WaitingForDevice,
@@ -554,7 +556,7 @@
         typeof vault.authorizeWithExternalDeviceIdentity
       >[0] = {
         adopt: (manager) => {
-          const adoptionArgs: AdoptExtensionIdentityArgs = {
+          const adoptionArgs: ExtensionIdentityAdoption = {
             manager,
             request: connectRequest,
           }

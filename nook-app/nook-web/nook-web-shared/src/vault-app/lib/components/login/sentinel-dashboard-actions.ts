@@ -1,12 +1,20 @@
+type SentinelDashboardAction = {
+  readonly allowed: boolean;
+  readonly setBusy: (busy: boolean) => void;
+  readonly action: () => void | Promise<void>;
+};
+
+type SentinelRequestCopy = {
+  readonly request: string;
+  readonly onCopied: () => void;
+  readonly onFailure: () => void;
+};
+
 export async function runSentinelDashboardAction({
   allowed,
   setBusy,
   action,
-}: {
-  readonly allowed: boolean;
-  readonly setBusy: (busy: boolean) => void;
-  readonly action: () => void | Promise<void>;
-}): Promise<void> {
+}: SentinelDashboardAction): Promise<void> {
   if (!allowed) return;
   setBusy(true);
   try {
@@ -20,11 +28,7 @@ export async function copySentinelRequest({
   request,
   onCopied,
   onFailure,
-}: {
-  readonly request: string;
-  readonly onCopied: () => void;
-  readonly onFailure: () => void;
-}): Promise<void> {
+}: SentinelRequestCopy): Promise<void> {
   if (!request) return;
   try {
     await navigator.clipboard.writeText(request);

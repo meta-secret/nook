@@ -34,7 +34,9 @@ type StorageConnection =
 
 const log = createLogger("connect");
 
-function freeSecretRecords(records: ReadonlyArray<{ free(): void }>) {
+type SecretRecordCollection = ReadonlyArray<NookSecretRecord>;
+
+function freeSecretRecords(records: SecretRecordCollection) {
   for (const record of records) record.free();
 }
 

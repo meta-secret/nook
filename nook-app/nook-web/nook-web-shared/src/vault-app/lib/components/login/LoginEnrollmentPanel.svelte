@@ -1,4 +1,6 @@
 <script lang="ts">
+  type EnrollmentCodeUnlock = { readonly code: string; readonly password: string }
+
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { ChevronDown, QrCode, RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
@@ -20,7 +22,7 @@
     initialCode?: string;
     openFormInitially?: boolean;
     onUseEnrollmentCode?: (
-      args: { readonly code: string; readonly password: string },
+      args: EnrollmentCodeUnlock,
     ) => void | Promise<void>;
   } = $props();
 

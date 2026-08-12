@@ -95,7 +95,11 @@ interface SharedStorageActionsContext {
 }
 
 type ProviderPersistenceOptions = { readonly replace: boolean };
-type VaultStorageArguments = [string, string, string];
+export type VaultStorageArguments = [
+  mode: string,
+  credential: string,
+  repository: string,
+];
 
 export type ProviderSyncRequest = {
   readonly providerId: string;
@@ -408,7 +412,7 @@ export type UiActionsContext = Pick<
     waitForStorageChain(): Promise<void>;
   };
 
-export type OpenSettingsArgs = {
+export type SettingsNavigationRequest = {
   readonly section: SettingsSection;
   readonly accordion: SettingsAccordionSection;
 };

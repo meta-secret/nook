@@ -519,8 +519,9 @@ Review enforces generic-value containment until the existing debt is migrated.
 Full contract:
 [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md).
 
-Loom and migrated Nook web TypeScript must not declare inline object-shaped
-parameter types or pass raw object literals into calls. Object-shaped includes
+Loom and all authored Nook web production TypeScript must not declare inline
+object-shaped parameter types or pass raw object literals into calls.
+Object-shaped includes
 object literals, mapped types such as `Pick<T, K>` and `Omit<T, K>`, arrays,
 tuples, `Array<T>`, `ReadonlyArray<T>`, maps, sets, and records. Parameters use
 a named semantic `type`, `interface`, or Rust-generated boundary type. Generic
@@ -747,7 +748,9 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 - [dynamic-skills/prefer-popular-libraries.md](dynamic-skills/prefer-popular-libraries.md) — **Prefer mature high-adoption libraries over hand-rolled boilerplate; reject obscure deps**.
 - [dynamic-skills/typescript-single-parameter.md](dynamic-skills/typescript-single-parameter.md) — **Loom and migrated Nook web: max one function parameter**.
 - [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md) — **Loom and migrated Nook web: require domain values; generic transport values are boundary-only exceptions**.
-- [dynamic-skills/typescript-named-args.md](dynamic-skills/typescript-named-args.md) — **Loom and migrated Nook web: name object call arguments**.
+- [dynamic-skills/typescript-named-args.md](dynamic-skills/typescript-named-args.md) —
+  **Loom and all Nook web production TypeScript/Svelte: require named semantic
+  object parameter contracts and name object call arguments**.
 - [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 - [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.
 - [workflows/remote-execution.md](workflows/remote-execution.md) — **Main agent execution path** (allowlisted focused hosted tasks, label-gated exact-head PR validation, and failure loops).

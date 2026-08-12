@@ -1,4 +1,6 @@
 <script lang="ts">
+  type VaultWorkflowTabNavigation = { readonly event: KeyboardEvent; readonly index: number }
+
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { CloudDownload, FolderOpen, Plus } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
@@ -33,7 +35,7 @@
     },
   ] as const
 
-  function handleTabKeydown({ event, index }: { readonly event: KeyboardEvent; readonly index: number }) {
+  function handleTabKeydown({ event, index }: VaultWorkflowTabNavigation) {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     event.preventDefault()
     const offset = event.key === 'ArrowRight' ? 1 : -1

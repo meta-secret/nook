@@ -1,4 +1,9 @@
 <script lang="ts">
+  type ProviderDescriptionRequest = {
+      readonly key: string
+      readonly request: ProviderSetupRequest
+    }
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ReplicationType } from '$app-wasm'
 
@@ -103,10 +108,7 @@
   function description({
     key,
     request,
-  }: {
-    readonly key: string
-    readonly request: ProviderSetupRequest
-  }): string {
+  }: ProviderDescriptionRequest): string {
     if (blocked(request)) {
       return vault.t(I18N_KEYS.ProviderPickerUnsupportedReplicationDesc)
     }

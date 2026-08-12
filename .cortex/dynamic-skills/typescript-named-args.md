@@ -10,14 +10,11 @@ must both be named and typed.
 Applies to:
 
 - `agentic-ai/loom` authored TypeScript;
-- raw object call arguments in all authored production TypeScript and Svelte
-  under `nook-app/nook-web`;
-- named parameter-contract declarations in the completed extension, research,
-  and shared vault foundation source slices.
+- all authored production TypeScript and Svelte under `nook-app/nook-web`.
 
-Remaining shared vault orchestration, component, main application, test, and
-end-to-end declarations are migration debt, not precedent. New or changed
-object parameters must already follow this contract during review.
+There is no production-source migration allowlist. Every function-valued prop,
+local helper, callback, method, and exported function must use a named semantic
+parameter contract when its parameter is object-shaped.
 
 Generated bindings are excluded.
 
@@ -37,12 +34,32 @@ review harder.
 Inline object parameter annotations create the same problem at the declaration:
 
 ```ts
-function collectOutcomeObservation(args: { startedAt: number }): void
+function collectOutcomeObservation({
+  startedAt,
+  authPath,
+  sawMutation,
+}: {
+  startedAt: number;
+  authPath: string;
+  sawMutation: boolean;
+}): void
 ```
 
 ## Preferred Pattern
 
 ```ts
+interface OutcomeObservationRequest {
+  readonly startedAt: number;
+  readonly authPath: string;
+  readonly sawMutation: boolean;
+}
+
+function collectOutcomeObservation({
+  startedAt,
+  authPath,
+  sawMutation,
+}: OutcomeObservationRequest): void
+
 const includeDensityLintArgs: ExpectFieldArgs<CortexAuditField> = {
   record: object.value,
   key: CortexAuditField.IncludeDensityLint,

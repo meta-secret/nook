@@ -1,4 +1,6 @@
 <script lang="ts">
+  type SecretFieldCopy = { readonly text: string; readonly id: string; readonly field: string }
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { Check, Copy } from '@lucide/svelte'
   import type { NookSecretListItem } from '$lib/nook'
@@ -24,7 +26,7 @@
     authenticatorCode: AuthenticatorCodePresentation
     isCopied: (fieldKey: string) => boolean
     onCopyToClipboard: (
-      args: { readonly text: string; readonly id: string; readonly field: string },
+      args: SecretFieldCopy,
     ) => Promise<void>
     onCopySecret: (id: string) => Promise<void>
     vault: VaultState

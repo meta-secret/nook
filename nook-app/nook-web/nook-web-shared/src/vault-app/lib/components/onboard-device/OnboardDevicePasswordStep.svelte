@@ -1,4 +1,6 @@
 <script lang="ts">
+  type VaultPasswordCreation = { readonly label: string; readonly password: string }
+
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
@@ -29,10 +31,7 @@
     isGenerating: boolean
     passwordError: string
     open: boolean
-    onAddPassword: (args: {
-      readonly label: string
-      readonly password: string
-    }) => void | Promise<void>
+    onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>
     onSelectPasswordEntry: (entryId: PasswordEntryId) => void
   } = $props()
 

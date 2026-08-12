@@ -1,4 +1,6 @@
 <script lang="ts">
+  type BitwardenVaultImport = { readonly json: string; readonly password: string }
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ArrowLeft, FileJson, Upload } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
@@ -22,7 +24,7 @@
   }: {
     vault: VaultState
     isSaving: boolean
-    onImport: (args: { readonly json: string; readonly password: string }) => Promise<NookImportResult>
+    onImport: (args: BitwardenVaultImport) => Promise<NookImportResult>
     onClose?: () => void
     embedded?: boolean
   } = $props()

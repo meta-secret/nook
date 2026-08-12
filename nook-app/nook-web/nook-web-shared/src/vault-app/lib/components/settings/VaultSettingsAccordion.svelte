@@ -1,4 +1,6 @@
 <script lang="ts">
+  type DeviceRename = { readonly authId: string; readonly label: string }
+
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Laptop, Globe, Trash2, TriangleAlert } from '@lucide/svelte'
   import type { NookAppLocale } from '$app-wasm'
@@ -36,7 +38,7 @@
     hasPasswordEnvelope?: boolean
     onApproveJoin: (deviceId: string) => void | Promise<void>
     onDenyJoin: (deviceId: string) => void | Promise<void>
-    onRenameDevice: (args: { readonly authId: string; readonly label: string }) => void | Promise<void>
+    onRenameDevice: (args: DeviceRename) => void | Promise<void>
     onRevokeDevice: (authId: string) => void | Promise<void>
     accordionSection?: SettingsAccordionSection
   } = $props()

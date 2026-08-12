@@ -4,6 +4,7 @@ import type {
   ProviderSyncRequest,
   SyncActionsContext,
   SyncFromProvidersRequest,
+  VaultStorageArguments,
 } from "$lib/vault/action-contexts";
 import { createLogger, runtimeFailure } from "$lib/runtime/log";
 import {
@@ -54,6 +55,42 @@ export { syncConflictLabel } from "$lib/vault/sync-conflict-label";
 
 const log = createLogger("vault-sync");
 
+interface EventOutboxTargetSelection {
+  readonly state: SyncActionsContext;
+  readonly request: EventOutboxRequest;
+}
+
+interface RemoteEventOutboxFlush {
+  readonly state: SyncActionsContext;
+  readonly request: EventOutboxRequest;
+}
+
+interface ProviderSyncMetadataUpdate {
+  readonly state: SyncActionsContext;
+  readonly providerId: string;
+  readonly yaml: string;
+  readonly revision: NookProviderSyncRevision;
+}
+
+interface StagedProviderConflictCompletion {
+  readonly state: SyncActionsContext;
+  readonly conflict: NookSyncConflictReview;
+}
+
+interface ProviderConflictPersistence {
+  readonly state: SyncActionsContext;
+  readonly conflict: NookSyncConflictReview;
+}
+
+interface StagedProviderSyncIssueAssessment {
+  readonly state: SyncActionsContext;
+  readonly args: VaultStorageArguments;
+}
+
+interface SyncConflictStaging {
+  readonly state: SyncActionsContext;
+  readonly conflict: NookPendingSyncConflict;
+}
 export async function hydrateMultiDeviceState(
   state: SyncActionsContext,
 ): Promise<void> {
@@ -215,10 +252,7 @@ export function eventOutboxRequestForProvider(
 export function eventOutboxTarget({
   state,
   request,
-}: {
-  readonly state: SyncActionsContext;
-  readonly request: EventOutboxRequest;
-}): EventOutboxTarget {
+}: EventOutboxTargetSelection): EventOutboxTarget {
   if (request.kind === EventOutboxRequestKind.LocalFolder) {
     return {
       kind: EventOutboxTargetKind.LocalFolder,
@@ -254,10 +288,7 @@ export function eventOutboxTarget({
 export async function flushRemoteEventOutboxNow({
   state,
   request,
-}: {
-  readonly state: SyncActionsContext;
-  readonly request: EventOutboxRequest;
-}): Promise<void> {
+}: RemoteEventOutboxFlush): Promise<void> {
   if (!state.hasManager) return;
   const eventOutboxTargetArgs: Parameters<typeof eventOutboxTarget>[0] = {
     state,
@@ -291,12 +322,7 @@ export async function updateProviderSyncMetadata({
   providerId,
   yaml,
   revision,
-}: {
-  readonly state: SyncActionsContext;
-  readonly providerId: string;
-  readonly yaml: string;
-  readonly revision: NookProviderSyncRevision;
-}): Promise<void> {
+}: ProviderSyncMetadataUpdate): Promise<void> {
   try {
     const managerStoreId = state.hasManager
       ? await state.enqueueStorage(() => state.requireManager().vaultStoreId)
@@ -371,10 +397,7 @@ export async function chooseReplacementLocalFolderForIssue(
 export function finishStagedProviderConnectAfterConflict({
   state,
   conflict,
-}: {
-  readonly state: SyncActionsContext;
-  readonly conflict: NookSyncConflictReview;
-}): void {
+}: StagedProviderConflictCompletion): void {
   if (!conflict.isPendingProvider) return;
   state.clearLoginSetup();
   state.addProviderOpen = false;
@@ -383,10 +406,7 @@ export function finishStagedProviderConnectAfterConflict({
 export async function ensureProviderSavedAfterConflict({
   state,
   conflict,
-}: {
-  readonly state: SyncActionsContext;
-  readonly conflict: NookSyncConflictReview;
-}): Promise<string> {
+}: ProviderConflictPersistence): Promise<string> {
   if (
     !conflict.isPendingProvider &&
     state.providers.some((provider) => provider.id === conflict.providerId)
@@ -410,10 +430,7 @@ export async function ensureProviderSavedAfterConflict({
 export async function stageStagedProviderSyncIssue({
   state,
   args,
-}: {
-  readonly state: SyncActionsContext;
-  readonly args: [string, string, string];
-}): Promise<boolean> {
+}: StagedProviderSyncIssueAssessment): Promise<boolean> {
   if (!state.hasManager) return false;
   const manager = state.requireManager();
   const issueResult = manager.take_event_log_sync_issue();
@@ -685,13 +702,7 @@ export async function fanOutSyncToProviders({
   return run;
 }
 
-export function stageSyncConflict({
-  state,
-  conflict,
-}: {
-  readonly state: SyncActionsContext;
-  readonly conflict: NookPendingSyncConflict;
-}) {
+export function stageSyncConflict({ state, conflict }: SyncConflictStaging) {
   log.warn("sync conflict staged");
   state.stageSyncConflict(conflict);
   state.errorMsg = "";
