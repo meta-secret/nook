@@ -35,6 +35,12 @@ test('open a new local vault without an empty-device sync error', async ({
   await expect(languageSelect).toHaveText('RU')
   await page.waitForTimeout(DEMO_BEAT_MS)
 
+  // Keep the typed workspace-to-secret-form callback boundary in the demo.
+  await page.getByTestId('add-secret-btn').click()
+  await expect(page.getByTestId('item-type-picker')).toBeVisible()
+  await page.getByTestId('add-secret-back-btn').click()
+  await expect(page.getByTestId('add-secret-panel')).toBeHidden()
+
   await flushNookLogPersistQueue(page)
   const logs = await readPersistedAppLogs(page)
   expect(

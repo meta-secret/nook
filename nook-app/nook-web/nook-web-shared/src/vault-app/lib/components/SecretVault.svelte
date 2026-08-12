@@ -1,4 +1,14 @@
 <script lang="ts">
+  type SecretFieldCopy = { readonly text: string; readonly id: string; readonly field: string }
+
+  type SecretCreationSubmission = { readonly id: string; readonly type: SecretType; readonly data: string }
+
+  type SecretReplacementSubmission = { readonly oldId: string; readonly type: SecretType; readonly data: string }
+
+  type SecretAddModeChange = { readonly open: boolean; readonly selection: SecretTypeSelection }
+
+  type SecretListItemCollection = ReadonlyArray<NookSecretListItem>
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     NookSecretTypeFilter,
@@ -72,13 +82,13 @@
     isSaving: boolean
     editRestriction?: VaultEditRestriction
     secrets?: NookSecretListItem[]
-    onAddSecret: (args: { readonly id: string; readonly type: SecretType; readonly data: string }) => Promise<void>
+    onAddSecret: (args: SecretCreationSubmission) => Promise<void>
     onReplaceSecret: (
-      args: { readonly oldId: string; readonly type: SecretType; readonly data: string },
+      args: SecretReplacementSubmission,
     ) => Promise<void>
     onDeleteSecret: (id: string) => Promise<void>
     onGeneratePassword: (options: PasswordGenerationOptions) => string
-    onAddModeChange?: (args: { readonly open: boolean; readonly selection: SecretTypeSelection }) => void
+    onAddModeChange?: (args: SecretAddModeChange) => void
   } = $props()
 
   const editsBlocked = $derived(
@@ -171,7 +181,7 @@
     Math.max(1, Math.ceil(vault.secretTotal / vault.secretPageSize)),
   )
 
-  function getGroupIcon(items: NookSecretListItem[]) {
+  function getGroupIcon(items: SecretListItemCollection) {
     if (items.some((item) => item.type === SecretType.Login)) return Globe
     if (items.some((item) => item.type === SecretType.ApiKey)) return Braces
     if (items.some((item) => item.type === SecretType.SeedPhrase)) return Sprout
@@ -302,7 +312,7 @@
       formSelectedType.itemType === SecretType.SecureNote,
   )
 
-  async function copyToClipboard({ text, id, field }: { readonly text: string; readonly id: string; readonly field: string }) {
+  async function copyToClipboard({ text, id, field }: SecretFieldCopy) {
     await navigator.clipboard.writeText(text)
     copiedKey = {
       kind: ClipboardNoticeKind.Visible,

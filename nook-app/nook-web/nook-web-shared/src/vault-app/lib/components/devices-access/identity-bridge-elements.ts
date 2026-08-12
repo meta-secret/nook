@@ -1,3 +1,56 @@
+type IdentityBridgeGraphNode = {
+  readonly id: string;
+  readonly data: IdentityBridgeNodeData;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+};
+
+type IdentityBridgeStageNode = {
+  readonly id: string;
+  readonly label: string;
+  readonly flow: IdentityBridgeFlow;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+};
+
+type IdentityBridgeGraphEdge = {
+  readonly id: string;
+  readonly source: string;
+  readonly target: string;
+  readonly relation: IdentityBridgeRelationKind;
+  readonly ariaLabel: string;
+  readonly lateralAccessPort: boolean;
+};
+
+type IdentityBridgeIdentityDataRequest = {
+  readonly input: IdentityBridgeInput;
+  readonly flow: IdentityBridgeFlow;
+  readonly portMode: IdentityBridgePortMode;
+  readonly lateralAccessPort: boolean;
+};
+
+type IdentityBridgeProtectionDataRequest = {
+  readonly input: IdentityBridgeInput;
+  readonly flow: IdentityBridgeFlow;
+};
+
+type IdentityBridgeVaultDataRequest = {
+  readonly vault: VaultAccessView;
+  readonly input: IdentityBridgeInput;
+  readonly flow: IdentityBridgeFlow;
+  readonly portMode: IdentityBridgePortMode;
+  readonly lateralAccessPort: boolean;
+};
+
+type IdentityBridgeDeviceDataRequest = {
+  readonly input: IdentityBridgeInput;
+  readonly flow: IdentityBridgeFlow;
+  readonly portMode: IdentityBridgePortMode;
+  readonly incomingRelation: string;
+};
+
 import { MarkerType, type Edge, type Node } from "@xyflow/svelte";
 import type { DeviceAccessIdentityState } from "$app-wasm";
 import type { VaultAccessView } from "./access-chain";
@@ -242,13 +295,7 @@ export function graphNode({
   x,
   y,
   width,
-}: {
-  readonly id: string;
-  readonly data: IdentityBridgeNodeData;
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-}): IdentityBridgeNode {
+}: IdentityBridgeGraphNode): IdentityBridgeNode {
   return {
     id,
     type: IdentityBridgeNodeType.Bridge,
@@ -269,14 +316,7 @@ export function stageNode({
   x,
   y,
   width,
-}: {
-  readonly id: string;
-  readonly label: string;
-  readonly flow: IdentityBridgeFlow;
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-}): IdentityBridgeNode {
+}: IdentityBridgeStageNode): IdentityBridgeNode {
   const graphNodeArgs: Parameters<typeof graphNode>[0] = {
     id,
     data: {
@@ -299,14 +339,7 @@ export function graphEdge({
   relation,
   ariaLabel,
   lateralAccessPort,
-}: {
-  readonly id: string;
-  readonly source: string;
-  readonly target: string;
-  readonly relation: IdentityBridgeRelationKind;
-  readonly ariaLabel: string;
-  readonly lateralAccessPort: boolean;
-}): IdentityBridgeEdge {
+}: IdentityBridgeGraphEdge): IdentityBridgeEdge {
   const verified = relation === IdentityBridgeRelationKind.VerifiedDeviceAccess;
   const color = verified
     ? "var(--primary)"
@@ -335,12 +368,7 @@ export function identityData({
   flow,
   portMode,
   lateralAccessPort,
-}: {
-  readonly input: IdentityBridgeInput;
-  readonly flow: IdentityBridgeFlow;
-  readonly portMode: IdentityBridgePortMode;
-  readonly lateralAccessPort: boolean;
-}): IdentityBridgeIdentityData {
+}: IdentityBridgeIdentityDataRequest): IdentityBridgeIdentityData {
   return {
     kind: IdentityBridgeNodeKind.Identity,
     flow,
@@ -362,10 +390,7 @@ export function identityData({
 export function protectionData({
   input,
   flow,
-}: {
-  readonly input: IdentityBridgeInput;
-  readonly flow: IdentityBridgeFlow;
-}): IdentityBridgeProtectionData {
+}: IdentityBridgeProtectionDataRequest): IdentityBridgeProtectionData {
   return {
     kind: IdentityBridgeNodeKind.Protection,
     flow,
@@ -383,13 +408,7 @@ export function vaultData({
   flow,
   portMode,
   lateralAccessPort,
-}: {
-  readonly vault: VaultAccessView;
-  readonly input: IdentityBridgeInput;
-  readonly flow: IdentityBridgeFlow;
-  readonly portMode: IdentityBridgePortMode;
-  readonly lateralAccessPort: boolean;
-}): IdentityBridgeVaultData {
+}: IdentityBridgeVaultDataRequest): IdentityBridgeVaultData {
   return {
     kind: IdentityBridgeNodeKind.Vault,
     flow,
@@ -421,12 +440,7 @@ export function deviceData({
   flow,
   portMode,
   incomingRelation,
-}: {
-  readonly input: IdentityBridgeInput;
-  readonly flow: IdentityBridgeFlow;
-  readonly portMode: IdentityBridgePortMode;
-  readonly incomingRelation: string;
-}): IdentityBridgeDeviceData {
+}: IdentityBridgeDeviceDataRequest): IdentityBridgeDeviceData {
   return {
     kind: IdentityBridgeNodeKind.Device,
     flow,

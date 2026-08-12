@@ -1,4 +1,8 @@
 <script lang="ts">
+  type EnrollmentCodeUnlock = { readonly code: string; readonly password: string }
+
+  type VaultPasswordUnlock = { readonly entryId: string; readonly password: string }
+
   import {
     configured_vault_application,
     type StartSentinelGenesisArgs,
@@ -41,9 +45,9 @@
     sentinelParticipantResponse: string
     sentinelOnboardingPackage: string
     onUnlock: (skipExtensionDiscovery?: boolean) => Promise<void>
-    onUseEnrollmentCode: (args: { readonly code: string; readonly password: string }) => Promise<void>
+    onUseEnrollmentCode: (args: EnrollmentCodeUnlock) => Promise<void>
     onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
-    onUnlockWithPassword: (args: { readonly entryId: string; readonly password: string }) => Promise<void>
+    onUnlockWithPassword: (args: VaultPasswordUnlock) => Promise<void>
     onSwitchVault: () => Promise<void>
     onSentinelUnlocked: () => Promise<void>
     onCreateDeviceVault: (label: string) => Promise<void>

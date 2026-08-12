@@ -1,4 +1,8 @@
 <script lang="ts">
+  type SecretCreationSubmission = { readonly id: string; readonly type: SecretType; readonly data: string }
+
+  type SecretReplacementSubmission = { readonly oldId: string; readonly type: SecretType; readonly data: string }
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ArrowLeft, RefreshCw } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
@@ -33,9 +37,9 @@
   }: {
     vault: VaultState
     isSaving: boolean
-    onAddSecret: (args: { readonly id: string; readonly type: SecretType; readonly data: string }) => Promise<void>
+    onAddSecret: (args: SecretCreationSubmission) => Promise<void>
     onReplaceSecret?: (
-      args: { readonly oldId: string; readonly type: SecretType; readonly data: string },
+      args: SecretReplacementSubmission,
     ) => Promise<void>
     onGeneratePassword: (options: PasswordGenerationOptions) => string
     onCancel: () => void

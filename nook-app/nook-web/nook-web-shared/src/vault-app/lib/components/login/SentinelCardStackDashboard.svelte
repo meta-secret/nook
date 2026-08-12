@@ -1,4 +1,6 @@
 <script lang="ts">
+  type SentinelParticipation = { readonly payload: string; readonly participantLabel: string }
+
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     ArrowLeft,
@@ -62,7 +64,7 @@
     onBack: () => void
     onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onAddParticipant: (
-      args: { readonly payload: string; readonly participantLabel: string },
+      args: SentinelParticipation,
     ) => void | Promise<void>
     onFinalize: () => void | Promise<void>
     onCompleteDelivery: () => void | Promise<void>

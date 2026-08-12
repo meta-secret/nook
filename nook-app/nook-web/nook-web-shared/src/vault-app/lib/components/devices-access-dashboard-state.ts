@@ -1,3 +1,19 @@
+type ProviderSaveFocusRequest = {
+  readonly unlockSelected: boolean;
+  readonly control: DashboardElement;
+};
+
+type DevicesAccessNudgeVisibility = {
+  readonly hasActiveLocalVault: boolean;
+  readonly localVaultCount: number;
+  readonly preference: DevicesAccessNudgePreference;
+};
+
+type DevicesAccessNudgeStorageRead = {
+  readonly storage: Storage;
+  readonly storageKey: string;
+};
+
 export enum DashboardLoadKind {
   Loading = "loading",
   Ready = "ready",
@@ -96,10 +112,7 @@ export type ProviderSaveFocus =
 export function providerSaveFocus({
   unlockSelected,
   control,
-}: {
-  readonly unlockSelected: boolean;
-  readonly control: DashboardElement;
-}): ProviderSaveFocus {
+}: ProviderSaveFocusRequest): ProviderSaveFocus {
   return unlockSelected && control.kind === DashboardElementKind.Mounted
     ? { kind: ProviderSaveFocusKind.Control, element: control.element }
     : { kind: ProviderSaveFocusKind.SelectedChainLink };
@@ -114,11 +127,7 @@ export function shouldShowDevicesAccessNudge({
   hasActiveLocalVault,
   localVaultCount,
   preference,
-}: {
-  readonly hasActiveLocalVault: boolean;
-  readonly localVaultCount: number;
-  readonly preference: DevicesAccessNudgePreference;
-}): boolean {
+}: DevicesAccessNudgeVisibility): boolean {
   return (
     !hasActiveLocalVault &&
     localVaultCount === 0 &&
@@ -158,10 +167,7 @@ export type DevicesAccessNudgeStorageState =
 export function readDevicesAccessNudgeStorage({
   storage,
   storageKey,
-}: {
-  readonly storage: Storage;
-  readonly storageKey: string;
-}): DevicesAccessNudgeStorageState {
+}: DevicesAccessNudgeStorageRead): DevicesAccessNudgeStorageState {
   const serialized = storage.getItem(storageKey);
   return typeof serialized === "string"
     ? { kind: DevicesAccessNudgeStorageKind.Stored, serialized }

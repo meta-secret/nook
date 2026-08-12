@@ -1,3 +1,13 @@
+type SecretFormFieldProjection = {
+  readonly selectedType: SecretType;
+  readonly editor: SecretEditor;
+};
+
+type SecretFormSubmissionAssessment = {
+  readonly selectedType: SecretType;
+  readonly isSaving: boolean;
+};
+
 import {
   authenticator_setup_key_changed,
   default_password_generation_options,
@@ -99,10 +109,7 @@ export class SecretFormState {
   toFormFields({
     selectedType,
     editor,
-  }: {
-    readonly selectedType: SecretType;
-    readonly editor: SecretEditor;
-  }): NookSecretFormFields {
+  }: SecretFormFieldProjection): NookSecretFormFields {
     if (selectedType === SecretType.Login) {
       return NookSecretFormFields.login(
         this.websiteUrl.trim(),
@@ -169,13 +176,7 @@ export class SecretFormState {
     );
   }
 
-  canSubmit({
-    selectedType,
-    isSaving,
-  }: {
-    readonly selectedType: SecretType;
-    readonly isSaving: boolean;
-  }) {
+  canSubmit({ selectedType, isSaving }: SecretFormSubmissionAssessment) {
     if (isSaving) return false;
     if (selectedType === SecretType.Login) {
       return (

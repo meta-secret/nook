@@ -1,4 +1,8 @@
 <script lang="ts">
+  type EnrollmentCodeIssue = { readonly entryId: PasswordEntryId; readonly password: string; readonly providerId: string }
+
+  type VaultPasswordCreation = { readonly label: string; readonly password: string }
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     ChevronLeft,
@@ -96,10 +100,10 @@
     githubPat: string
     githubRepo: string
     onIssueCode: (
-      args: { readonly entryId: PasswordEntryId; readonly password: string; readonly providerId: string },
+      args: EnrollmentCodeIssue,
     ) => Promise<string>
     onClearCode: () => void
-    onAddPassword: (args: { readonly label: string; readonly password: string }) => void | Promise<void>
+    onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
     onBeginSetup: (request: ProviderSetupRequest) => void

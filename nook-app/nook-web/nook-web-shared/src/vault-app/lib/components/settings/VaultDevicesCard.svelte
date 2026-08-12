@@ -1,4 +1,8 @@
 <script lang="ts">
+  type IdentityTextTruncation = { readonly value: string; readonly head: number; readonly tail: number }
+
+  type DeviceRename = { readonly authId: string; readonly label: string }
+
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     Check,
@@ -61,7 +65,7 @@
     hasPasswordEnvelope?: boolean
     onApproveJoin: (deviceId: string) => void | Promise<void>
     onDenyJoin: (deviceId: string) => void | Promise<void>
-    onRenameDevice: (args: { readonly authId: string; readonly label: string }) => void | Promise<void>
+    onRenameDevice: (args: DeviceRename) => void | Promise<void>
     onRevokeDevice: (authId: string) => void | Promise<void>
   } = $props()
 
@@ -187,7 +191,7 @@
     return `${browser} ${vault.t(I18N_KEYS.DevicesCardOn)} ${os}`
   }
 
-  function truncate({ value, head, tail }: { readonly value: string; readonly head: number; readonly tail: number }) {
+  function truncate({ value, head, tail }: IdentityTextTruncation) {
     if (value.length <= head + tail + 3) return value
     return `${value.slice(0, head)}…${value.slice(-tail)}`
   }

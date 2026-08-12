@@ -6,11 +6,12 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Extension persistence area inspected by smoke and migration checks.
 #[wasm_bindgen]
+#[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExtensionPersistenceArea {
-    Pairing,
-    EventLog,
-    Provider,
+    Pairing = 0,
+    EventLog = 1,
+    Provider = 2,
 }
 
 impl Serialize for ExtensionPersistenceArea {
@@ -27,6 +28,9 @@ impl<'de> Deserialize<'de> for ExtensionPersistenceArea {
     where
         D: Deserializer<'de>,
     {
+        // `wasm_bindgen` exposes fieldless enums to JavaScript as their numeric
+        // discriminants. Keep that transport representation at this adapter;
+        // application logic receives only the domain enum.
         match u32::deserialize(deserializer)? {
             0 => Ok(Self::Pairing),
             1 => Ok(Self::EventLog),

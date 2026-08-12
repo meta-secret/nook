@@ -1,4 +1,16 @@
 <script lang="ts">
+  type VaultNameDraftChange = { readonly entry: NookLocalVaultEntry; readonly value: string }
+
+  type VaultPasswordCreation = { readonly label: string; readonly password: string }
+
+  type VaultPasswordEntryUpdate = { readonly entryId: PasswordEntryId; readonly password: string }
+
+  type EnrollmentCodeIssue = { readonly entryId: PasswordEntryId; readonly password: string }
+
+  type BitwardenVaultImport = { readonly json: string; readonly password: string }
+
+  type AuthenticatorMigrationUriCollection = string[]
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     Check,
@@ -115,15 +127,15 @@
     onBeginSetup: (request: ProviderSetupRequest) => void
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
-    onAddPassword: (args: { readonly label: string; readonly password: string }) => void | Promise<void>
+    onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>
     onUpdatePassword: (
-      args: { readonly entryId: PasswordEntryId; readonly password: string },
+      args: VaultPasswordEntryUpdate,
     ) => void | Promise<void>
     onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>
-    onIssueCode: (args: { readonly entryId: PasswordEntryId; readonly password: string }) => Promise<string>
+    onIssueCode: (args: EnrollmentCodeIssue) => Promise<string>
     onClearCode: () => void
     onImportBitwarden: (
-      args: { readonly json: string; readonly password: string },
+      args: BitwardenVaultImport,
     ) => Promise<NookImportResult>
     onImportKeePassXc: (csv: string) => Promise<NookImportResult>
     onImportLastPass: (csv: string) => Promise<NookImportResult>
@@ -135,7 +147,7 @@
     onImportChromePasswords: (csv: string) => Promise<NookImportResult>
     onImportDashlane: (exportBytes: Uint8Array) => Promise<NookImportResult>
     onImportGoogleAuthenticator: (
-      migrationUris: string[],
+      migrationUris: AuthenticatorMigrationUriCollection,
     ) => Promise<NookImportResult>
     onImportProtonPass: (exportBytes: Uint8Array) => Promise<NookImportResult>
     activeSection?: AdminAccordionSection
@@ -218,7 +230,7 @@
     )
   }
 
-  function setDraft({ entry, value }: { readonly entry: NookLocalVaultEntry; readonly value: string }) {
+  function setDraft({ entry, value }: VaultNameDraftChange) {
     drafts = { ...drafts, [entry.storeId]: value }
   }
 

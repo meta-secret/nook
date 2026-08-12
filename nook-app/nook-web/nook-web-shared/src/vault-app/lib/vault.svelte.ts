@@ -26,10 +26,11 @@ import {
 import { type ProviderSetupRequest } from "$lib/auth/providers";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
-  OpenSettingsArgs,
+  SettingsNavigationRequest,
   ProviderActionsContext,
   ProviderSyncRequest,
   SyncFromProvidersRequest,
+  VaultStorageArguments,
 } from "$lib/vault/action-contexts";
 import * as providersActions from "$lib/vault/providers.svelte";
 import * as localLoginActions from "$lib/vault/local-login";
@@ -63,6 +64,82 @@ type ExternalDeviceIdentityAdoptionRequest = {
   readonly adopt: (manager: NookVaultManager) => Promise<void>;
   readonly mode: ExternalDeviceIdentityAuthorizationMode;
 };
+
+interface LocalVaultRenameRequest {
+  readonly storeId: StoreId;
+  readonly label: string;
+}
+
+interface ProviderSyncMetadataChange {
+  readonly providerId: string;
+  readonly yaml: string;
+  readonly revision: NookProviderSyncRevision;
+}
+
+interface ReplacementConflictChoice {
+  readonly oldSecretId: string;
+  readonly chosenSecretId: string;
+}
+
+interface SecretPageSelection {
+  readonly query: string;
+  readonly requestedOffset: number;
+}
+
+interface ConnectedSecretPage {
+  readonly page: NookSecretPage;
+  readonly query: string;
+}
+
+interface DeviceRename {
+  readonly authId: string;
+  readonly label: string;
+}
+
+interface VaultPasswordCreation {
+  readonly label: string;
+  readonly password: string;
+}
+
+interface VaultPasswordEntryUpdate {
+  readonly entryId: PasswordEntryId;
+  readonly password: string;
+}
+
+interface EnrollmentCodeIssue {
+  readonly entryId: PasswordEntryId;
+  readonly password: string;
+  readonly providerId: string;
+}
+
+interface VaultPasswordUnlock {
+  readonly entryId: PasswordEntryId;
+  readonly password: string;
+}
+
+interface EnrollmentCodeConnectionInput {
+  readonly code: string;
+  readonly password: string;
+}
+
+interface SecretCreationInput {
+  readonly id: string;
+  readonly type: SecretType;
+  readonly data: string;
+}
+
+interface BitwardenVaultImportInput {
+  readonly json: string;
+  readonly password: string;
+}
+
+type AuthenticatorMigrationUriCollection = string[];
+
+interface SecretReplacementInput {
+  readonly oldId: string;
+  readonly type: SecretType;
+  readonly data: string;
+}
 
 export class VaultState extends VaultRuntimeState {
   protected providerActionsContext(): ProviderActionsContext {
@@ -171,10 +248,7 @@ export class VaultState extends VaultRuntimeState {
   async renameLocalVault({
     storeId,
     label,
-  }: {
-    readonly storeId: StoreId;
-    readonly label: string;
-  }): Promise<void> {
+  }: LocalVaultRenameRequest): Promise<void> {
     const renameLocalVaultLabelArgs: Parameters<
       typeof localLoginActions.renameLocalVaultLabel
     >[0] = { state: this, storeId, label };
@@ -304,7 +378,7 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async assessVaultConnectStatus(
-    argsOverride?: [string, string, string],
+    argsOverride?: VaultStorageArguments,
   ): Promise<VaultAccessStatus> {
     const args = argsOverride ?? this.connectStorageArgs();
     const assessVaultConnectStatusArgs: Parameters<
@@ -477,11 +551,7 @@ export class VaultState extends VaultRuntimeState {
     providerId,
     yaml,
     revision,
-  }: {
-    readonly providerId: string;
-    readonly yaml: string;
-    readonly revision: NookProviderSyncRevision;
-  }): Promise<void> {
+  }: ProviderSyncMetadataChange): Promise<void> {
     const metadataArgs: Parameters<
       typeof syncActions.updateProviderSyncMetadata
     >[0] = { state: this, providerId, yaml, revision };
@@ -495,10 +565,7 @@ export class VaultState extends VaultRuntimeState {
   async resolveReplacementConflict({
     oldSecretId,
     chosenSecretId,
-  }: {
-    readonly oldSecretId: string;
-    readonly chosenSecretId: string;
-  }): Promise<void> {
+  }: ReplacementConflictChoice): Promise<void> {
     const resolutionArgs: Parameters<
       typeof syncActions.resolveReplacementConflict
     >[0] = { state: this, oldSecretId, chosenSecretId };
@@ -526,7 +593,7 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async stageStagedProviderSyncIssue(
-    args: [string, string, string],
+    args: VaultStorageArguments,
   ): Promise<boolean> {
     const stageStagedProviderSyncIssueArgs: Parameters<
       typeof syncActions.stageStagedProviderSyncIssue
@@ -579,7 +646,7 @@ export class VaultState extends VaultRuntimeState {
     return providersActions.discoverStagedVaultStoreId(this);
   }
 
-  openSettings(options: OpenSettingsArgs) {
+  openSettings(options: SettingsNavigationRequest) {
     const openSettingsArgs: Parameters<typeof uiActions.openSettings>[0] = {
       state: this,
       ...options,
@@ -625,26 +692,14 @@ export class VaultState extends VaultRuntimeState {
     return secretsActions.refreshSecretsFromSession(this);
   }
 
-  async loadSecretPage({
-    query,
-    requestedOffset,
-  }: {
-    readonly query: string;
-    readonly requestedOffset: number;
-  }) {
+  async loadSecretPage({ query, requestedOffset }: SecretPageSelection) {
     const loadSecretPageArgs: Parameters<
       typeof secretsActions.loadSecretPage
     >[0] = { state: this, query, requestedOffset };
     return secretsActions.loadSecretPage(loadSecretPageArgs);
   }
 
-  applyConnectedSecretPage({
-    page,
-    query,
-  }: {
-    readonly page: NookSecretPage;
-    readonly query: string;
-  }) {
+  applyConnectedSecretPage({ page, query }: ConnectedSecretPage) {
     const connectedPageArgs: Parameters<
       typeof secretsActions.applyConnectedSecretPage
     >[0] = { state: this, page, query };
@@ -691,13 +746,7 @@ export class VaultState extends VaultRuntimeState {
     return multiDeviceActions.denyJoin(denyJoinArgs);
   }
 
-  async renameDevice({
-    authId,
-    label,
-  }: {
-    readonly authId: string;
-    readonly label: string;
-  }) {
+  async renameDevice({ authId, label }: DeviceRename) {
     const renameDeviceArgs: Parameters<
       typeof multiDeviceActions.renameDevice
     >[0] = { state: this, authId, label };
@@ -734,10 +783,7 @@ export class VaultState extends VaultRuntimeState {
   async addVaultPassword({
     label,
     password,
-  }: {
-    readonly label: string;
-    readonly password: string;
-  }): Promise<void> {
+  }: VaultPasswordCreation): Promise<void> {
     const passwordArgs: Parameters<
       typeof passwordUnlockActions.addVaultPassword
     >[0] = { state: this, label, password };
@@ -747,10 +793,7 @@ export class VaultState extends VaultRuntimeState {
   async updateVaultPasswordEntry({
     entryId,
     password,
-  }: {
-    readonly entryId: PasswordEntryId;
-    readonly password: string;
-  }): Promise<void> {
+  }: VaultPasswordEntryUpdate): Promise<void> {
     const passwordEntryArgs: Parameters<
       typeof passwordUnlockActions.updateVaultPasswordEntry
     >[0] = { state: this, entryId, password };
@@ -779,11 +822,7 @@ export class VaultState extends VaultRuntimeState {
     entryId,
     password,
     providerId,
-  }: {
-    readonly entryId: PasswordEntryId;
-    readonly password: string;
-    readonly providerId: string;
-  }): Promise<string> {
+  }: EnrollmentCodeIssue): Promise<string> {
     const enrollmentArgs: Parameters<
       typeof passwordUnlockActions.issueEnrollmentCode
     >[0] = { state: this, entryId, password, providerId };
@@ -800,10 +839,7 @@ export class VaultState extends VaultRuntimeState {
   async unlockWithPassword({
     entryId,
     password,
-  }: {
-    readonly entryId: PasswordEntryId;
-    readonly password: string;
-  }): Promise<void> {
+  }: VaultPasswordUnlock): Promise<void> {
     const unlockArgs: Parameters<
       typeof passwordUnlockActions.unlockWithPassword
     >[0] = { state: this, entryId, password };
@@ -824,25 +860,14 @@ export class VaultState extends VaultRuntimeState {
   async connectWithEnrollmentCode({
     code,
     password,
-  }: {
-    readonly code: string;
-    readonly password: string;
-  }): Promise<void> {
+  }: EnrollmentCodeConnectionInput): Promise<void> {
     const enrollmentArgs: Parameters<
       typeof passwordUnlockActions.connectWithEnrollmentCode
     >[0] = { state: this, code, password };
     return passwordUnlockActions.connectWithEnrollmentCode(enrollmentArgs);
   }
 
-  async handleAddSecret({
-    id,
-    type,
-    data,
-  }: {
-    readonly id: string;
-    readonly type: SecretType;
-    readonly data: string;
-  }) {
+  async handleAddSecret({ id, type, data }: SecretCreationInput) {
     const addSecretArgs: Parameters<typeof secretsActions.handleAddSecret>[0] =
       {
         state: this,
@@ -856,10 +881,7 @@ export class VaultState extends VaultRuntimeState {
   async handleBitwardenImport({
     json,
     password,
-  }: {
-    readonly json: string;
-    readonly password: string;
-  }): Promise<NookImportResult> {
+  }: BitwardenVaultImportInput): Promise<NookImportResult> {
     const importArgs: Parameters<
       typeof secretsActions.handleBitwardenImport
     >[0] = { state: this, json, password };
@@ -926,7 +948,7 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async handleGoogleAuthenticatorImport(
-    migrationUris: string[],
+    migrationUris: AuthenticatorMigrationUriCollection,
   ): Promise<NookImportResult> {
     const handleGoogleAuthenticatorImportArgs: Parameters<
       typeof secretsActions.handleGoogleAuthenticatorImport
@@ -959,15 +981,7 @@ export class VaultState extends VaultRuntimeState {
     return secretsActions.handleDeleteSecret(handleDeleteSecretArgs);
   }
 
-  async handleReplaceSecret({
-    oldId,
-    type,
-    data,
-  }: {
-    readonly oldId: string;
-    readonly type: SecretType;
-    readonly data: string;
-  }) {
+  async handleReplaceSecret({ oldId, type, data }: SecretReplacementInput) {
     const replaceSecretArgs: Parameters<
       typeof secretsActions.handleReplaceSecret
     >[0] = { state: this, oldId, type, data };

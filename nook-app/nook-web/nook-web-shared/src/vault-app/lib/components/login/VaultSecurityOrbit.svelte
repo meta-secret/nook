@@ -1,4 +1,12 @@
 <script lang="ts">
+  type NumericRange = { readonly min: number; readonly max: number }
+
+  type SecuritySignalDefinition = { readonly id: number; readonly label: string; readonly slot: number }
+
+  type ScheduledSecurityCallback = { readonly callback: () => void; readonly delay: number }
+
+  type SecuritySignalSchedule = { readonly item: Signal; readonly initial: boolean }
+
   import { onMount } from 'svelte'
 
   let { compact = false }: { compact?: boolean } = $props()
@@ -34,11 +42,11 @@
     (() => { const signalArgs3: Parameters<typeof signal>[0] = { id: 2, label: 'KDF', slot: 4 }; return signal(signalArgs3); })(),
   ])
 
-  function randomBetween({ min, max }: { readonly min: number; readonly max: number }) {
+  function randomBetween({ min, max }: NumericRange) {
     return min + Math.random() * (max - min)
   }
 
-  function signal({ id, label, slot }: { readonly id: number; readonly label: string; readonly slot: number }): Signal {
+  function signal({ id, label, slot }: SecuritySignalDefinition): Signal {
     return {
       id,
       label,
@@ -72,7 +80,7 @@
 
     const timers: number[] = []
 
-    function later({ callback, delay }: { readonly callback: () => void; readonly delay: number }) {
+    function later({ callback, delay }: ScheduledSecurityCallback) {
       const timeout = window.setTimeout(() => {
         const index = timers.indexOf(timeout)
         if (index >= 0) timers.splice(index, 1)
@@ -81,7 +89,7 @@
       timers.push(timeout)
     }
 
-    function schedule({ item, initial }: { readonly item: Signal; readonly initial: boolean }) {
+    function schedule({ item, initial }: SecuritySignalSchedule) {
       const laterArgs: Parameters<typeof later>[0] = {
         callback: () => rotate(item),
         delay: initial

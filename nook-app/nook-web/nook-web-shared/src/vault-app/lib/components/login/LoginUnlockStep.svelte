@@ -1,4 +1,6 @@
 <script lang="ts">
+  type VaultPasswordUnlock = { readonly entryId: string; readonly password: string }
+
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     SentinelVaultUnlockState,
@@ -55,7 +57,7 @@
     isUnlocking?: boolean
     onUnlock: () => void | Promise<void>
     onUnlockWithPassword: (
-      args: { readonly entryId: string; readonly password: string },
+      args: VaultPasswordUnlock,
     ) => void | Promise<void>
     onSelectPasswordEntry: (selection: PasswordEntrySelection) => void
     onSwitchVault: () => void | Promise<void>

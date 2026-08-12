@@ -1,3 +1,90 @@
+type AccessDateFormatting = {
+  readonly vault: VaultState;
+  readonly value: string;
+};
+
+type LastUsedLabelRequest = {
+  readonly vault: VaultState;
+  readonly value: DashboardTimestamp;
+};
+
+type DeviceProtectionLabelRequest = {
+  readonly vault: VaultState;
+  readonly protection: DeviceAccessProtectionKind;
+};
+
+type IdentityStateLabelRequest = {
+  readonly vault: VaultState;
+  readonly state: DeviceAccessIdentityState;
+};
+
+type AccessChainStageLabelRequest = {
+  readonly vault: VaultState;
+  readonly stage: AccessChainStage;
+  readonly protection: DeviceAccessProtectionKind;
+};
+
+type DeviceKeyTitleRequest = {
+  readonly vault: VaultState;
+  readonly protection: DeviceAccessProtectionKind;
+};
+
+type AccessPanelTitleRequest = {
+  readonly vault: VaultState;
+  readonly stage: AccessChainStage;
+  readonly protection: DeviceAccessProtectionKind;
+};
+
+type DeviceKeyDescriptionRequest = {
+  readonly vault: VaultState;
+  readonly protection: DeviceAccessProtectionKind;
+};
+
+type AccessPanelDescriptionRequest = {
+  readonly vault: VaultState;
+  readonly stage: AccessChainStage;
+  readonly protection: DeviceAccessProtectionKind;
+};
+
+type VerifiedVaultsLabelRequest = {
+  readonly vault: VaultState;
+  readonly vaults: readonly VaultAccessView[];
+};
+
+type VerifiedVaultsSummaryRequest = {
+  readonly vault: VaultState;
+  readonly vaults: readonly VaultAccessView[];
+};
+
+type UnlockNodeTitleRequest = {
+  readonly vault: VaultState;
+  readonly protection: DeviceAccessProtectionKind;
+  readonly passkeyName: DashboardText;
+};
+
+type AccessChainNodeCollection = {
+  readonly vault: VaultState;
+  readonly input: {
+    protection: DeviceAccessProtectionKind;
+    passkeyName: DashboardText;
+    credentialId: DashboardText;
+    deviceId: DashboardText;
+    vaults: readonly VaultAccessView[];
+  };
+};
+
+type VaultAccessNodeRequest = {
+  readonly vault: VaultState;
+  readonly protection: DeviceAccessProtectionKind;
+  readonly vaults: readonly VaultAccessView[];
+};
+
+type VaultAccessNodeTitleRequest = {
+  readonly vault: VaultState;
+  readonly vaults: readonly VaultAccessView[];
+  readonly verified: readonly VaultAccessView[];
+};
+
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import {
   DeviceAccessIdentityState,
@@ -97,10 +184,7 @@ export function textValue(value: DashboardText): string {
 export function formatAccessDate({
   vault,
   value,
-}: {
-  readonly vault: VaultState;
-  readonly value: string;
-}): string {
+}: AccessDateFormatting): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return vault.t(I18N_KEYS.DevicesAccessUnknown);
@@ -114,13 +198,7 @@ export function formatAccessDate({
   return new Intl.DateTimeFormat(vault.locale, DateTimeFormatArgs).format(date);
 }
 
-export function lastUsedLabel({
-  vault,
-  value,
-}: {
-  readonly vault: VaultState;
-  readonly value: DashboardTimestamp;
-}): string {
+export function lastUsedLabel({ vault, value }: LastUsedLabelRequest): string {
   if (value.kind === DashboardTimestampKind.Known) {
     const formatAccessDateArgs: Parameters<typeof formatAccessDate>[0] = {
       vault,
@@ -145,10 +223,7 @@ export function isPasskeyProtection(
 export function protectionLabel({
   vault,
   protection,
-}: {
-  readonly vault: VaultState;
-  readonly protection: DeviceAccessProtectionKind;
-}): string {
+}: DeviceProtectionLabelRequest): string {
   if (protection === DeviceAccessProtectionKind.PasskeyStandard) {
     return vault.t(I18N_KEYS.DevicesAccessPasskeyStandard);
   }
@@ -167,10 +242,7 @@ export function protectionLabel({
 export function identityStateLabel({
   vault,
   state,
-}: {
-  readonly vault: VaultState;
-  readonly state: DeviceAccessIdentityState;
-}): string {
+}: IdentityStateLabelRequest): string {
   if (state === DeviceAccessIdentityState.Unlocked) {
     return vault.t(I18N_KEYS.DevicesAccessIdentityUnlocked);
   }
@@ -189,11 +261,7 @@ export function stageLabel({
   vault,
   stage,
   protection,
-}: {
-  readonly vault: VaultState;
-  readonly stage: AccessChainStage;
-  readonly protection: DeviceAccessProtectionKind;
-}): string {
+}: AccessChainStageLabelRequest): string {
   if (stage === AccessChainStage.DeviceKey) {
     return vault.t(I18N_KEYS.DevicesAccessStageDeviceKey);
   }
@@ -215,10 +283,7 @@ export function stageLabel({
 export function deviceKeyTitle({
   vault,
   protection,
-}: {
-  readonly vault: VaultState;
-  readonly protection: DeviceAccessProtectionKind;
-}): string {
+}: DeviceKeyTitleRequest): string {
   return protection === DeviceAccessProtectionKind.CompanionSession
     ? vault.t(I18N_KEYS.DevicesAccessCompanionIdentity)
     : vault.t(I18N_KEYS.DevicesAccessThisDevice);
@@ -228,11 +293,7 @@ export function panelTitle({
   vault,
   stage,
   protection,
-}: {
-  readonly vault: VaultState;
-  readonly stage: AccessChainStage;
-  readonly protection: DeviceAccessProtectionKind;
-}): string {
+}: AccessPanelTitleRequest): string {
   if (stage === AccessChainStage.DeviceKey) {
     return protection === DeviceAccessProtectionKind.CompanionSession
       ? vault.t(I18N_KEYS.DevicesAccessCompanionIdentity)
@@ -259,10 +320,7 @@ export function panelTitle({
 function deviceKeyDescription({
   vault,
   protection,
-}: {
-  readonly vault: VaultState;
-  readonly protection: DeviceAccessProtectionKind;
-}): string {
+}: DeviceKeyDescriptionRequest): string {
   if (protection === DeviceAccessProtectionKind.CompanionSession) {
     return vault.t(I18N_KEYS.DevicesAccessThisBrowserCompanionDesc);
   }
@@ -275,11 +333,7 @@ export function panelDescription({
   vault,
   stage,
   protection,
-}: {
-  readonly vault: VaultState;
-  readonly stage: AccessChainStage;
-  readonly protection: DeviceAccessProtectionKind;
-}): string {
+}: AccessPanelDescriptionRequest): string {
   if (stage === AccessChainStage.DeviceKey) {
     const deviceKeyDescriptionArgs: Parameters<typeof deviceKeyDescription>[0] =
       { vault, protection };
@@ -299,10 +353,7 @@ export function panelDescription({
 export function verifiedVaultsLabel({
   vault,
   vaults,
-}: {
-  readonly vault: VaultState;
-  readonly vaults: readonly VaultAccessView[];
-}): string {
+}: VerifiedVaultsLabelRequest): string {
   const tArgs: Parameters<typeof vault.t>[0] = {
     key: I18N_KEYS.DevicesAccessVerifiedOfTotal,
     replacements: {
@@ -316,10 +367,7 @@ export function verifiedVaultsLabel({
 function verifiedVaultsSummary({
   vault,
   vaults,
-}: {
-  readonly vault: VaultState;
-  readonly vaults: readonly VaultAccessView[];
-}): string {
+}: VerifiedVaultsSummaryRequest): string {
   const tArgs2: Parameters<typeof vault.t>[0] = {
     key: I18N_KEYS.DevicesAccessVerifiedSummary,
     replacements: {
@@ -345,11 +393,7 @@ function unlockNodeTitle({
   vault,
   protection,
   passkeyName,
-}: {
-  readonly vault: VaultState;
-  readonly protection: DeviceAccessProtectionKind;
-  readonly passkeyName: DashboardText;
-}): string {
+}: UnlockNodeTitleRequest): string {
   if (protection === DeviceAccessProtectionKind.PinOrPassphrase) {
     return vault.t(I18N_KEYS.DevicesAccessPinNodeTitle);
   }
@@ -371,16 +415,7 @@ function unlockNodeTitle({
 export function buildAccessChainNodes({
   vault,
   input,
-}: {
-  readonly vault: VaultState;
-  readonly input: {
-    protection: DeviceAccessProtectionKind;
-    passkeyName: DashboardText;
-    credentialId: DashboardText;
-    deviceId: DashboardText;
-    vaults: readonly VaultAccessView[];
-  };
-}): AccessChainNode[] {
+}: AccessChainNodeCollection): AccessChainNode[] {
   return [
     {
       stage: AccessChainStage.Unlock,
@@ -449,11 +484,7 @@ function vaultsNode({
   vault,
   protection,
   vaults,
-}: {
-  readonly vault: VaultState;
-  readonly protection: DeviceAccessProtectionKind;
-  readonly vaults: readonly VaultAccessView[];
-}): AccessChainNode {
+}: VaultAccessNodeRequest): AccessChainNode {
   const verified = vaults.filter((entry) => entry.verified);
   return {
     stage: AccessChainStage.Vaults,
@@ -501,11 +532,7 @@ function vaultsNodeTitle({
   vault,
   vaults,
   verified,
-}: {
-  readonly vault: VaultState;
-  readonly vaults: readonly VaultAccessView[];
-  readonly verified: readonly VaultAccessView[];
-}): string {
+}: VaultAccessNodeTitleRequest): string {
   if (vaults.length === 0) {
     return vault.t(I18N_KEYS.DevicesAccessNoVaultsShort);
   }

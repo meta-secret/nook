@@ -1,3 +1,18 @@
+type SentinelGenesisWorkspaceLink = {
+  readonly enrollmentLinkBase: string;
+  readonly currentLocation: string;
+};
+
+type SentinelGenesisRequestLink = {
+  readonly requestJson: string;
+  readonly baseUrl?: string;
+};
+
+type SentinelGenesisParticipantResponseLink = {
+  readonly responseJson: string;
+  readonly baseUrl?: string;
+};
+
 import { getEnrollmentLinkBase } from "$lib/enrollment/code";
 import {
   WorkspaceRoute,
@@ -31,10 +46,7 @@ function sentinelGenesisLinkBase(): string {
 export function sentinelGenesisLinkBaseForWorkspace({
   enrollmentLinkBase,
   currentLocation,
-}: {
-  readonly enrollmentLinkBase: string;
-  readonly currentLocation: string;
-}): string {
+}: SentinelGenesisWorkspaceLink): string {
   const url = new URL(enrollmentLinkBase);
   const workspace = new URL(currentLocation);
   // Workspace routing canonicalizes `/vault/` to `/vault`. Keep ceremony
@@ -54,10 +66,7 @@ export function sentinelGenesisLinkBaseForWorkspace({
 export function buildSentinelGenesisRequestLink({
   requestJson,
   baseUrl = sentinelGenesisLinkBase(),
-}: {
-  readonly requestJson: string;
-  readonly baseUrl?: string;
-}): string {
+}: SentinelGenesisRequestLink): string {
   if (!requestJson.trim()) return "";
   return build_sentinel_genesis_request_link(requestJson, baseUrl);
 }
@@ -65,10 +74,7 @@ export function buildSentinelGenesisRequestLink({
 export function buildSentinelGenesisParticipantResponseLink({
   responseJson,
   baseUrl = sentinelGenesisLinkBase(),
-}: {
-  readonly responseJson: string;
-  readonly baseUrl?: string;
-}): string {
+}: SentinelGenesisParticipantResponseLink): string {
   if (!responseJson.trim()) return "";
   return build_sentinel_genesis_participant_response_link(
     responseJson,

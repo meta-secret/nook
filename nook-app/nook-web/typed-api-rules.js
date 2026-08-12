@@ -6,51 +6,6 @@ export const typedApiSourceFiles = [
   "nook-vault-{simple,sentinel}/**/*.{ts,svelte}",
 ];
 
-// Expand this list only with source boundaries whose declarations and call
-// sites have completed the named semantic parameter migration.
-export const namedParameterContractFiles = [
-  "nook-web-extension/src/**/*.{ts,svelte}",
-  "nook-web-research/src/**/*.{ts,svelte}",
-  "nook-web-shared/src/vault-app/lib/app/**/*.{ts,svelte}",
-  "nook-web-shared/src/vault-app/lib/content/**/*.{ts,svelte}",
-  "nook-web-shared/src/vault-app/lib/runtime/**/*.{ts,svelte}",
-  "nook-web-shared/src/vault-app/lib/auth/**/*.{ts,svelte}",
-  "nook-web-shared/src/vault-app/lib/vault/state/**/*.{ts,svelte}",
-  "nook-web-shared/src/vault-app/lib/auth/icloud/auth-errors.ts",
-  "nook-web-shared/src/vault-app/lib/auth/icloud/cloudkit-runtime.ts",
-  "nook-web-shared/src/vault-app/lib/auth/provider-sync-status.ts",
-  "nook-web-shared/src/vault-app/lib/enrollment/qr.ts",
-  "nook-web-shared/src/vault-app/lib/extension/install.ts",
-  "nook-web-shared/src/vault-app/lib/vault/action-contexts.ts",
-  "nook-web-shared/src/vault-app/lib/vault/architecture.ts",
-  "nook-web-shared/src/vault-app/lib/vault/architecture-model.ts",
-  "nook-web-shared/src/vault-app/lib/vault/device-protection.svelte.ts",
-  "nook-web-shared/src/vault-app/lib/vault/existing-vault-provider.svelte.ts",
-  "nook-web-shared/src/vault-app/lib/vault/existing-vault-import.svelte.ts",
-  "nook-web-shared/src/vault-app/lib/vault/idle-session-tracker.ts",
-  "nook-web-shared/src/vault-app/lib/vault/lifecycle.ts",
-  "nook-web-shared/src/vault-app/lib/vault/local-login.ts",
-  "nook-web-shared/src/vault-app/lib/vault/locale.ts",
-  "nook-web-shared/src/vault-app/lib/vault/login-unlock-capabilities.ts",
-  "nook-web-shared/src/vault-app/lib/vault/multi-device.ts",
-  "nook-web-shared/src/vault-app/lib/vault/oauth.ts",
-  "nook-web-shared/src/vault-app/lib/vault/password-unlock.ts",
-  "nook-web-shared/src/vault-app/lib/vault/password-enrollment.ts",
-  "nook-web-shared/src/vault-app/lib/vault/password-enrollment-flow.ts",
-  "nook-web-shared/src/vault-app/lib/vault/password-enrollment-issue.ts",
-  "nook-web-shared/src/vault-app/lib/vault/provider-sync.svelte.ts",
-  "nook-web-shared/src/vault-app/lib/vault/providers.svelte.ts",
-  "nook-web-shared/src/vault-app/lib/vault/runtime-state.svelte.ts",
-  "nook-web-shared/src/vault-app/lib/vault/secret-exposure.ts",
-  "nook-web-shared/src/vault-app/lib/vault/sentinel-genesis.ts",
-  "nook-web-shared/src/vault-app/lib/vault/sentinel-unlock.ts",
-  "nook-web-shared/src/vault-app/lib/vault/session.ts",
-  "nook-web-shared/src/vault-app/lib/vault/sync-runtime.ts",
-  "nook-web-shared/src/vault-app/lib/vault/sync-resolution.ts",
-  "nook-web-shared/src/vault-app/lib/vault/ui.ts",
-  "nook-web-shared/src/vault-app/lib/vault/vault-discovery-timeout.ts",
-];
-
 export const untrustedInputAdapterFiles = [
   "nook-web-app/src/landing/github-stars-state.ts",
   "nook-web-extension/src/chrome.d.ts",
@@ -163,7 +118,7 @@ export const typedApiRules = {
   ],
   "nook-typed-api/no-raw-object-arguments": [
     "error",
-    { enforceNamedParameterContracts: false },
+    { enforceNamedParameterContracts: true },
   ],
 };
 

@@ -1,3 +1,10 @@
+type StoredVaultSynchronization = {
+  readonly manager: NookVaultManager;
+  readonly mode: string;
+  readonly pat: string;
+  readonly repo: string;
+};
+
 import type {
   NookImportResult,
   NookJoinRequest,
@@ -91,12 +98,7 @@ export function syncVaultFromStorage({
   mode,
   pat,
   repo,
-}: {
-  readonly manager: NookVaultManager;
-  readonly mode: string;
-  readonly pat: string;
-  readonly repo: string;
-}): Promise<NookVaultSyncResult> {
+}: StoredVaultSynchronization): Promise<NookVaultSyncResult> {
   return manager.sync_vault_from_storage(
     mode,
     pat,

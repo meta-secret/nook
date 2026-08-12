@@ -1,3 +1,13 @@
+type EnrollmentApplicationRoot = {
+  readonly siteRoot: string;
+  readonly appKind: VaultApplication;
+};
+
+type EnrollmentLinkRequest = {
+  readonly code: string;
+  readonly baseUrl: string;
+};
+
 import {
   build_enrollment_link,
   configured_vault_application,
@@ -32,10 +42,7 @@ type EnrollmentUrlCode =
 export function enrollmentAppRootUrl({
   siteRoot,
   appKind,
-}: {
-  readonly siteRoot: string;
-  readonly appKind: VaultApplication;
-}): string {
+}: EnrollmentApplicationRoot): string {
   const normalized = siteRoot.replace(/\/$/, "");
   if (
     appKind === VaultApplication.Simple ||
@@ -70,10 +77,7 @@ export function getEnrollmentLinkBase(): string {
 export function buildEnrollmentLink({
   code,
   baseUrl,
-}: {
-  readonly code: string;
-  readonly baseUrl: string;
-}): string {
+}: EnrollmentLinkRequest): string {
   return build_enrollment_link(code, baseUrl);
 }
 

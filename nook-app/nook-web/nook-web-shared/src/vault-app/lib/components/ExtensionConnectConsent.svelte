@@ -1,4 +1,8 @@
 <script lang="ts">
+  type IdentityTextTruncation = { readonly value: string; readonly head: number; readonly tail: number }
+
+  type ExtensionVaultGrant = { readonly providers: StorageProvider[]; readonly vaultStoreId: string; readonly vaultName: string; readonly eventLogRecords: ExtensionEventLogRecord[] }
+
   import {
     I18N_KEYS,
     type I18nKey,
@@ -66,7 +70,7 @@
       !approved,
   )
 
-  function truncate({ value, head, tail }: { readonly value: string; readonly head: number; readonly tail: number }) {
+  function truncate({ value, head, tail }: IdentityTextTruncation) {
     if (value.length <= head + tail + 3) return value
     return `${value.slice(0, head)}...${value.slice(-tail)}`
   }
@@ -83,7 +87,7 @@
   }
 
   function sendGrantToExtension(
-    { providers, vaultStoreId, vaultName, eventLogRecords }: { readonly providers: StorageProvider[]; readonly vaultStoreId: string; readonly vaultName: string; readonly eventLogRecords: ExtensionEventLogRecord[] },
+    { providers, vaultStoreId, vaultName, eventLogRecords }: ExtensionVaultGrant,
   ): Promise<void> {
     const message: ExtensionPairingApprovedMessage = {
       type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,

@@ -1,7 +1,7 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type {
   OpenAdminAccordion,
-  OpenSettingsArgs,
+  SettingsNavigationRequest,
   UiActionsContext,
 } from "$lib/vault/action-contexts";
 import {
@@ -16,7 +16,7 @@ import {
 } from "$lib/vault/state/ui.svelte";
 import { WorkspaceRoute, workspacePath } from "$lib/app/workspace-route";
 
-export type OpenSettingsRequest = OpenSettingsArgs & {
+export type OpenSettingsRequest = SettingsNavigationRequest & {
   readonly state: UiActionsContext;
 };
 

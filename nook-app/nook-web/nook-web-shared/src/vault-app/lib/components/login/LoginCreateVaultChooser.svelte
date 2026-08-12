@@ -1,4 +1,6 @@
 <script lang="ts">
+  type SentinelGenesisParticipation = { readonly payload: string; readonly participantLabel?: string }
+
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { tick } from 'svelte'
   import {
@@ -74,7 +76,7 @@
     onConnectStorage: () => void
     onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onAddSentinelGenesisParticipantResponse?: (
-      args: { readonly payload: string; readonly participantLabel?: string },
+      args: SentinelGenesisParticipation,
     ) => void | Promise<void>
     onFinalizeSentinelGenesis?: () => void | Promise<void>
     onCreateSentinelGenesisParticipantResponse?: (

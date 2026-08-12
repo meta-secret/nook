@@ -1,4 +1,6 @@
 <script lang="ts">
+  type MermaidDiagramRendering = { readonly src: string; readonly diagramTheme: MermaidTheme }
+
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { MermaidTheme, renderMermaidDiagram } from '$lib/content/mermaid-diagram'
   import type { VaultState } from '$lib/vault.svelte'
@@ -18,7 +20,7 @@
   let svgHtml = $state('')
   let renderError = $state('')
 
-  async function paintDiagram({ src, diagramTheme }: { readonly src: string; readonly diagramTheme: MermaidTheme }) {
+  async function paintDiagram({ src, diagramTheme }: MermaidDiagramRendering) {
     renderError = ''
     try {
       const renderMermaidDiagramArgs: Parameters<typeof renderMermaidDiagram>[0] = { source: src, theme: diagramTheme };

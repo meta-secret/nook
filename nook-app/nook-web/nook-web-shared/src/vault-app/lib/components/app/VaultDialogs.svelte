@@ -1,4 +1,6 @@
 <script lang="ts">
+  type SyncConflictReasonCollection = string[]
+
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     JoinEnrollmentState,
@@ -19,7 +21,7 @@
     return id.length > 18 ? `${id.slice(0, 18)}...` : id
   }
 
-  function conflictReasons(reasons: string[]): string {
+  function conflictReasons(reasons: SyncConflictReasonCollection): string {
     return reasons.length > 0 ? reasons.join(', ') : 'key epoch rotation'
   }
 </script>
