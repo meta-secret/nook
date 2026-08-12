@@ -1,6 +1,7 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 /** Provider actions that snapshot reactive Svelte state at WASM boundaries. */
 import type {
+  ActiveProviderCredentialsContext,
   ProviderActionsContext,
   ProviderSaveContext,
 } from "$lib/vault/action-contexts";
@@ -20,6 +21,7 @@ import {
   LocalFolderProviderConfigurationKind,
   localFolderConfigurationNotApplicable,
   isConfiguredOAuthFile,
+  isConfiguredLocalFolder,
   missingOAuthAccessToken,
   OAUTH_FILE_PROVIDER_TYPE,
   oauthAccessToken,
@@ -75,6 +77,7 @@ import {
   local_vault_storage_args,
   type NookStorageConnectArgs,
   type ActiveProviderCredentialsRequest,
+  type ActiveProviderLoginSetup,
   type ProviderSaveRequest,
 } from "$app-wasm";
 import { createLogger } from "$lib/runtime/log";
@@ -456,7 +459,9 @@ export async function promoteSessionVaultToLocalIfNeeded(
   }
 }
 
-export function applyActiveProviderCredentials(state: ProviderActionsContext) {
+export function applyActiveProviderCredentials(
+  state: ActiveProviderCredentialsContext,
+) {
   const currentOauthFile =
     state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? configuredOAuthFile($state.snapshot(state.oauthFileDraft.config))
@@ -465,13 +470,13 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
     state.localFolderDraft.kind === LocalFolderDraftKind.Configured
       ? configuredLocalFolder($state.snapshot(state.localFolderDraft.config))
       : localFolderConfigurationNotApplicable();
+  const loginSetup: ActiveProviderLoginSetup =
+    state.loginSetup.kind === LoginSetupKind.Active
+      ? { state: "active", providerType: state.loginSetup.providerType }
+      : { state: "inactive" };
   const projectionArgs: ActiveProviderCredentialsRequest = {
     localVaultPresent: state.localVaultPresent,
-    loginSetupActive: state.loginSetup.kind === LoginSetupKind.Active,
-    loginSetupProviderType:
-      state.loginSetup.kind === LoginSetupKind.Active
-        ? state.loginSetup.providerType
-        : state.storageMode,
+    loginSetup,
     syncProviders: $state.snapshot(state.syncProviders),
     currentStorageMode: state.storageMode,
     currentGithubPat: state.githubPat,
@@ -489,7 +494,7 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
   } else {
     state.clearOauthFile();
   }
-  if (projection.localFolder.state === "configured") {
+  if (isConfiguredLocalFolder(projection.localFolder)) {
     state.configureLocalFolder(projection.localFolder.config);
   } else {
     state.clearLocalFolder();

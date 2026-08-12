@@ -140,6 +140,22 @@ export type ProviderActionsContext = ProviderStateFields &
   ProviderActionPorts &
   Pick<VaultSyncState, "localFolderHealth">;
 
+export type ActiveProviderCredentialsContext = Pick<
+  ProviderActionsContext,
+  | "clearLocalFolder"
+  | "clearOauthFile"
+  | "configureLocalFolder"
+  | "configureOauthFile"
+  | "githubPat"
+  | "githubRepo"
+  | "localFolderDraft"
+  | "localVaultPresent"
+  | "loginSetup"
+  | "oauthFileDraft"
+  | "storageMode"
+  | "syncProviders"
+>;
+
 export type ProviderSaveContext = Pick<
   ProviderActionsContext,
   | "activeVault"

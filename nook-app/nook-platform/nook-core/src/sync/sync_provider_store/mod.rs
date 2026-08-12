@@ -30,7 +30,7 @@ mod sync_metadata;
 
 pub use active_credentials::{
     ActiveProviderCredentialsProjection, ActiveProviderCredentialsRequest,
-    active_provider_credentials_projection,
+    ActiveProviderLoginSetup, active_provider_credentials_projection,
 };
 pub use catalog::{
     ensure_local_provider_row, find_duplicate_sync_provider, localize_provider_label,

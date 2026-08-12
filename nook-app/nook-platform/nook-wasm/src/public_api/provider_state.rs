@@ -25,6 +25,29 @@ pub fn stored_oauth_file_configuration_state(
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookStoredLocalFolderConfigurationState {
+    NotApplicable,
+    Configured,
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn stored_local_folder_configuration_state(
+    configuration: nook_core::StoredLocalFolderConfiguration,
+) -> NookStoredLocalFolderConfigurationState {
+    match configuration {
+        nook_core::StoredLocalFolderConfiguration::NotApplicable => {
+            NookStoredLocalFolderConfigurationState::NotApplicable
+        }
+        nook_core::StoredLocalFolderConfiguration::Configured(_) => {
+            NookStoredLocalFolderConfigurationState::Configured
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookExistingVaultProviderReadiness {
     Ready,
     MissingOauthFile,

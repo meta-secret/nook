@@ -4,13 +4,20 @@ use tsify::Tsify;
 use super::{StorageProviderData, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration};
 use crate::{DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, StorageProviderType};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(tag = "state", content = "providerType", rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
+pub enum ActiveProviderLoginSetup {
+    Inactive,
+    Active(StorageProviderType),
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(from_wasm_abi)]
 pub struct ActiveProviderCredentialsRequest {
     pub local_vault_present: bool,
-    pub login_setup_active: bool,
-    pub login_setup_provider_type: StorageProviderType,
+    pub login_setup: ActiveProviderLoginSetup,
     pub sync_providers: Vec<StorageProviderData>,
     pub current_storage_mode: StorageProviderType,
     pub current_github_pat: String,
@@ -65,9 +72,9 @@ pub fn active_provider_credentials_projection(
         return projection;
     }
 
-    if request.login_setup_active {
+    if let ActiveProviderLoginSetup::Active(provider_type) = request.login_setup {
         projection.apply = true;
-        projection.storage_mode = request.login_setup_provider_type;
+        projection.storage_mode = provider_type;
         if projection.storage_mode != StorageProviderType::Github {
             projection.github_pat.clear();
         }
@@ -135,8 +142,7 @@ mod tests {
     fn request() -> ActiveProviderCredentialsRequest {
         ActiveProviderCredentialsRequest {
             local_vault_present: false,
-            login_setup_active: false,
-            login_setup_provider_type: StorageProviderType::Local,
+            login_setup: ActiveProviderLoginSetup::Inactive,
             sync_providers: Vec::new(),
             current_storage_mode: StorageProviderType::Github,
             current_github_pat: "current-pat".to_owned(),
@@ -189,8 +195,7 @@ mod tests {
     #[test]
     fn login_setup_preserves_only_the_selected_provider_credentials() {
         let mut request = request();
-        request.login_setup_active = true;
-        request.login_setup_provider_type = StorageProviderType::OauthFile;
+        request.login_setup = ActiveProviderLoginSetup::Active(StorageProviderType::OauthFile);
 
         let projection = active_provider_credentials_projection(&request);
 

@@ -1,5 +1,9 @@
 import { expect, test } from '../fixtures'
 import {
+  LOCAL_PROVIDER_TYPE,
+  type StorageProviderType,
+} from '../../../nook-web-shared/src/vault-app/lib/auth/providers'
+import {
   clearBrowserVault,
   connectLocalVault,
   flushNookLogPersistQueue,
@@ -10,8 +14,8 @@ import {
 const DEMO_BEAT_MS = 700
 
 type DemoVaultWindow = Window & {
-  __nookVault?: {
-    storageMode: string
+  __nookVault: {
+    storageMode: StorageProviderType
   }
 }
 
@@ -34,13 +38,14 @@ test('open a new local vault without an empty-device sync error', async ({
   await expect(page.getByTestId('join-enrollment-dialog')).toHaveCount(0)
   await expect(page.getByTestId('login-password-entry-list')).toHaveCount(0)
   await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const vault = (window as DemoVaultWindow).__nookVault
-        return vault?.storageMode
-      }),
-    )
-    .toBe('local')
+    .poll(() => page.evaluate(() => '__nookVault' in window), {
+      timeout: UI_TIMEOUT_MS,
+    })
+    .toBe(true)
+  const storageMode = await page.evaluate(
+    () => (window as DemoVaultWindow).__nookVault.storageMode,
+  )
+  expect(storageMode).toBe(LOCAL_PROVIDER_TYPE)
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   const languageSelect = page.getByTestId('header-language-select')
