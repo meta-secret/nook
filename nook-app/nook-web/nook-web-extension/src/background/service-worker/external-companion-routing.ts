@@ -25,10 +25,20 @@ type ExternalCompanionRoutingArgs = {
   sendResponse: Parameters<ChromeMessageListener>[2]
 }
 
-const forbiddenSenderResponse = { ok: false, reason: 'forbidden-sender' }
-const successResponse = { ok: true }
-const launcherFailureResponse = { ok: false, reason: 'launcher-failed' }
-const invalidPairingGrantResponse = {
+type MessageResponse = Parameters<
+  ExternalCompanionRoutingArgs['sendResponse']
+>[0]
+
+const forbiddenSenderResponse: MessageResponse = {
+  ok: false,
+  reason: 'forbidden-sender',
+}
+const successResponse: MessageResponse = { ok: true }
+const launcherFailureResponse: MessageResponse = {
+  ok: false,
+  reason: 'launcher-failed',
+}
+const invalidPairingGrantResponse: MessageResponse = {
   ok: false,
   reason: 'invalid-pairing-grant',
 }
@@ -66,7 +76,7 @@ export function routeExternalCompanionMessage({
     void requestPairedVaultUnlock(message)
       .then(sendResponse)
       .catch(() => {
-        const unlockFailureResponse = {
+        const unlockFailureResponse: Parameters<typeof sendResponse>[0] = {
           ok: false,
           requestId: message.payload.requestId,
           vaultStoreId: message.payload.vaultStoreId,

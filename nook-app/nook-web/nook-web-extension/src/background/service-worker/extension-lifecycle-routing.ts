@@ -42,15 +42,28 @@ type ExtensionLifecycleRoutingArgs = {
   sendResponse: Parameters<ChromeMessageListener>[2]
 }
 
-const forbiddenSenderResponse = { ok: false, reason: 'forbidden-sender' }
-const successResponse = { ok: true }
-const sessionRuntimeFailureResponse = {
+type MessageResponse = Parameters<
+  ExtensionLifecycleRoutingArgs['sendResponse']
+>[0]
+
+const forbiddenSenderResponse: MessageResponse = {
+  ok: false,
+  reason: 'forbidden-sender',
+}
+const successResponse: MessageResponse = { ok: true }
+const sessionRuntimeFailureResponse: MessageResponse = {
   ok: false,
   reason: 'session-runtime-failed',
 }
-const sessionLockFailureResponse = { ok: false, reason: 'session-lock-failed' }
-const launcherFailureResponse = { ok: false, reason: 'launcher-failed' }
-const pairingLaunchFailureResponse = {
+const sessionLockFailureResponse: MessageResponse = {
+  ok: false,
+  reason: 'session-lock-failed',
+}
+const launcherFailureResponse: MessageResponse = {
+  ok: false,
+  reason: 'launcher-failed',
+}
+const pairingLaunchFailureResponse: MessageResponse = {
   ok: false,
   reason: 'pairing-launch-failed',
 }
@@ -142,10 +155,10 @@ export function routeExtensionLifecycleMessage({
     void queryActiveTabLoginDetection()
       .then(sendResponse)
       .catch(() => {
-        const response = {
+        const response: LoginDetectionResponse = {
           ok: true,
           status: LoginDetectionStatus.Unavailable,
-        } satisfies LoginDetectionResponse
+        }
         return sendResponse(response)
       })
     return true
