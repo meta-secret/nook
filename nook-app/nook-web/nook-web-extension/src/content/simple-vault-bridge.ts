@@ -1,4 +1,4 @@
-import { isExtensionLocalEventLogUpdatedMessage } from '../../../nook-web-shared/src/extension/runtime-messages'
+import { isExtensionLocalEventLogUpdatedMessage } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 
 const extensionRuntimeIdAttribute = 'data-nook-extension-runtime-id'
 

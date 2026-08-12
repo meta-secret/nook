@@ -1,9 +1,9 @@
 import {
   isBeginExtensionPairingMessage,
   isExtensionLocalEventLogUpdatedMessage,
-  isOpenCompanionLauncherMessage,
   isOpenSimpleVaultMessage,
-} from '../../../../nook-web-shared/src/extension/runtime-messages'
+} from '../../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+import { isOpenCompanionLauncherMessage } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { isExtensionRuntimeSender, isNokeySender } from './routing-trust'
 import type * as PairingState from '../../lib/pairing-state'
 import type * as PairingIdentity from './pairing-identity'

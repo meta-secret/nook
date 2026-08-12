@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { OpenCompanionLauncherMessageType } from '../../nook-web-shared/src/extension/companion-launcher-message'
-import { ExtensionSessionRuntimeMessageType } from '../src/background/service-worker/session-runtime-messages'
+import { isOpenCompanionLauncherMessage } from '../../nook-web-shared/src/extension/companion-launcher-message'
+import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 import type { ExtensionLifecycleRoutingDependencies } from '../src/background/service-worker/extension-lifecycle-routing'
 import type { ExternalCompanionRoutingDependencies } from '../src/background/service-worker/external-companion-routing'
 
@@ -33,7 +34,7 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === ExtensionSessionRuntimeMessageType.Ensure,
+    message.type === ExtensionRuntimeRequestType.EnsureRuntime,
   isExtensionSessionExpiryMessage: mock(() => false),
   isExtensionSessionLockMessage: mock(() => false),
   openCompanionLauncher,
@@ -47,6 +48,11 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
   discoverPairedVaultIdentity: unusedAsyncDependency,
   hasPairingApprovedType: mock(() => false),
   importPairingAfterCompanionReady: unusedAsyncDependency,
+  isExtensionIdentityHandoffRequestMessage: mock(() => false),
+  isExtensionPairedVaultIdentityDiscoveryMessage: mock(() => false),
+  isExtensionPairedVaultIdentityHandoffRequestMessage: mock(() => false),
+  isExtensionPairedVaultUnlockRequestMessage: mock(() => false),
+  isOpenCompanionLauncherMessage,
   openCompanionLauncher,
   requestPairedVaultUnlock: unusedAsyncDependency,
 }
@@ -63,7 +69,7 @@ describe('service worker routing', () => {
     const sendResponse = mock(() => {})
     const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
       dependencies: lifecycleDependencies,
-      message: { type: ExtensionSessionRuntimeMessageType.Ensure },
+      message: { type: ExtensionRuntimeRequestType.EnsureRuntime },
       sender: { id: 'foreign-extension' },
       sendResponse,
     }
@@ -82,7 +88,7 @@ describe('service worker routing', () => {
     const sendResponse = mock(() => {})
     const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
       dependencies: lifecycleDependencies,
-      message: { type: ExtensionSessionRuntimeMessageType.Ensure },
+      message: { type: ExtensionRuntimeRequestType.EnsureRuntime },
       sender: { id: 'nook-extension' },
       sendResponse,
     }

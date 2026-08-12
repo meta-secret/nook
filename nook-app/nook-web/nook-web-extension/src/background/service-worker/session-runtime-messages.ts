@@ -1,11 +1,12 @@
-export enum ExtensionSessionRuntimeMessageType {
-  Ensure = 'nook:ensure-extension-session-runtime',
-  Expired = 'nook:extension-session-expired',
-  Lock = 'nook:extension-session-lock',
-}
+import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
+import { ExtensionSessionLifecycleMessageType } from '../../lib/extension-session-lifecycle-message-type'
+import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 
 type ExtensionSessionRuntimeMessage = {
-  type: ExtensionSessionRuntimeMessageType
+  type:
+    | ExtensionRuntimeRequestType.EnsureRuntime
+    | ExtensionSessionLifecycleMessageType.Expired
+    | ExtensionSessionMessageType.Lock
 }
 
 type ChromeMessageListener = Parameters<
@@ -20,7 +21,7 @@ export function isExtensionSessionEnsureMessage(
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === ExtensionSessionRuntimeMessageType.Ensure
+    message.type === ExtensionRuntimeRequestType.EnsureRuntime
   )
 }
 
@@ -31,7 +32,7 @@ export function isExtensionSessionExpiryMessage(
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === ExtensionSessionRuntimeMessageType.Expired
+    message.type === ExtensionSessionLifecycleMessageType.Expired
   )
 }
 
@@ -42,6 +43,6 @@ export function isExtensionSessionLockMessage(
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === ExtensionSessionRuntimeMessageType.Lock
+    message.type === ExtensionSessionMessageType.Lock
   )
 }

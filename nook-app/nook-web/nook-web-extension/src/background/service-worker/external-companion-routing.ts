@@ -1,11 +1,5 @@
-import {
-  isExtensionIdentityHandoffRequestMessage,
-  isExtensionPairedVaultIdentityDiscoveryMessage,
-  isExtensionPairedVaultIdentityHandoffRequestMessage,
-  isExtensionPairedVaultUnlockRequestMessage,
-  isOpenCompanionLauncherMessage,
-} from '../../../../nook-web-shared/src/extension/runtime-messages'
 import { isNokeySender } from './routing-trust'
+import type * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
 import type * as SessionLifecycle from './session-lifecycle'
@@ -26,6 +20,11 @@ export type ExternalCompanionRoutingDependencies = {
   discoverPairedVaultIdentity: typeof PairingIdentity.discoverPairedVaultIdentity
   hasPairingApprovedType: typeof PairingIdentity.hasPairingApprovedType
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
+  isExtensionIdentityHandoffRequestMessage: typeof RuntimeMessages.isExtensionIdentityHandoffRequestMessage
+  isExtensionPairedVaultIdentityDiscoveryMessage: typeof RuntimeMessages.isExtensionPairedVaultIdentityDiscoveryMessage
+  isExtensionPairedVaultIdentityHandoffRequestMessage: typeof RuntimeMessages.isExtensionPairedVaultIdentityHandoffRequestMessage
+  isExtensionPairedVaultUnlockRequestMessage: typeof RuntimeMessages.isExtensionPairedVaultUnlockRequestMessage
+  isOpenCompanionLauncherMessage: typeof RuntimeMessages.isOpenCompanionLauncherMessage
   openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
   requestPairedVaultUnlock: typeof PairingIdentity.requestPairedVaultUnlock
 }
@@ -59,6 +58,11 @@ export function routeExternalCompanionMessage({
     discoverPairedVaultIdentity,
     hasPairingApprovedType,
     importPairingAfterCompanionReady,
+    isExtensionIdentityHandoffRequestMessage,
+    isExtensionPairedVaultIdentityDiscoveryMessage,
+    isExtensionPairedVaultIdentityHandoffRequestMessage,
+    isExtensionPairedVaultUnlockRequestMessage,
+    isOpenCompanionLauncherMessage,
     openCompanionLauncher,
     requestPairedVaultUnlock,
   } = dependencies

@@ -2,7 +2,7 @@ import {
   ExtensionLocalEventLogUpdatedMessageType,
   type ExtensionEventLogRecord,
   type ExtensionLocalEventLogUpdatedMessage,
-} from "./runtime-messages";
+} from "./lifecycle-runtime-messages";
 
 /** Publish encrypted event-log records for the extension's isolated content
  * bridge. No private key or decrypted vault value crosses the page boundary. */
