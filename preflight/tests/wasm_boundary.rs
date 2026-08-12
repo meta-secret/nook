@@ -82,6 +82,9 @@ pub struct NookVaultArchitecture;
 pub struct NookVaultManager;
 
 #[export_wasm]
+pub struct NookDeviceAccessSnapshotRequest;
+
+#[export_wasm]
 impl NookVaultArchitecture {
     pub fn simple() {}
     pub fn connect() {}
@@ -90,6 +93,12 @@ impl NookVaultArchitecture {
 #[export_wasm]
 impl NookVaultManager {
     pub fn connect() {}
+    pub fn device_access_snapshot_request(&self) -> Result<NookDeviceAccessSnapshotRequest, ()> { todo!() }
+}
+
+#[export_wasm]
+impl NookDeviceAccessSnapshotRequest {
+    pub fn resolve() {}
 }
 "
 }
@@ -207,7 +216,8 @@ const connectVault = bridge.connect;"#,
         ),
         (
             "namespace-export-bridge.ts",
-            r#"export * as wasm from "$app-wasm";"#,
+            r#"export * as wasm from "$app-wasm";
+export { connect } from "socket-lib";"#,
         ),
         (
             "namespace-export-consumer.ts",
@@ -281,6 +291,53 @@ const openSocket = manager.connect;"#,
   const generateSecretId = wasm.generate_secret_id;
 }"#,
         ),
+        (
+            "namespace-symbol-false-positive.ts",
+            r#"import { connect as openSocket } from "./namespace-export-bridge";"#,
+        ),
+        (
+            "template-event.svelte",
+            r#"<script lang="ts">import * as wasm from "$app-wasm";</script>
+<button onclick={() => {
+  const generateSecretId = wasm.generate_secret_id;
+  generateSecretId();
+}}>Create</button>"#,
+        ),
+        (
+            "generic-factory-false-positive.ts",
+            r#"import { NookVaultManager } from "$app-wasm";
+function makeSocket(): SocketEnvelope<NookVaultManager> { throw new Error(); }
+const socket = makeSocket();
+const openSocket = socket.connect;"#,
+        ),
+        (
+            "callback-namespace.ts",
+            r#"import("$app-wasm").then((wasm) => {
+  const generateSecretId = wasm.generate_secret_id;
+});"#,
+        ),
+        (
+            "class-copy.ts",
+            r#"import { NookVaultManager } from "$app-wasm";
+const Vault = NookVaultManager;
+const manager = new Vault();
+const connectVault = manager.connect;"#,
+        ),
+        (
+            "exported-declaration-bridge.ts",
+            r#"import * as wasm from "$app-wasm";
+export const generate_secret_id = wasm.generate_secret_id;"#,
+        ),
+        (
+            "exported-declaration-consumer.ts",
+            r#"import { generate_secret_id as generateSecretId } from "./exported-declaration-bridge";"#,
+        ),
+        (
+            "method-return.ts",
+            r#"import { NookVaultManager } from "$app-wasm";
+const manager = new NookVaultManager();
+const finish = manager.device_access_snapshot_request().resolve;"#,
+        ),
     ]
 }
 
@@ -308,6 +365,11 @@ fn expected_wasm_callable_alias_locations() -> Vec<(PathBuf, usize)> {
         ("assigned-factory-consumer.ts", 4),
         ("escaped-identifier.ts", 2),
         ("var-namespace.ts", 3),
+        ("template-event.svelte", 3),
+        ("callback-namespace.ts", 2),
+        ("class-copy.ts", 4),
+        ("exported-declaration-consumer.ts", 1),
+        ("method-return.ts", 3),
     ]
     .into_iter()
     .map(|(name, line)| (Path::new("nook-app/nook-web").join(name), line))

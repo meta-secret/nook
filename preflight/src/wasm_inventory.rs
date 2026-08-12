@@ -2,6 +2,12 @@ use std::collections::{HashMap, HashSet};
 
 use syn::{Attribute, ImplItem, Item};
 
+#[derive(Default)]
+pub(super) struct WasmTypeInventory {
+    pub(super) methods: HashMap<String, HashSet<String>>,
+    pub(super) returns: HashMap<(String, String), String>,
+}
+
 fn has_wasm_bindgen(attributes: &[Attribute], aliases: &HashSet<String>) -> bool {
     attributes.iter().any(|attribute| {
         super::rust_wasm_attributes::attribute_has_wasm_bindgen_with_aliases(attribute, aliases)
@@ -20,7 +26,7 @@ pub(super) fn collect_wasm_inventory(
     inherited_aliases: &HashSet<String>,
     callable_names: &mut HashSet<String>,
     type_names: &mut HashSet<String>,
-    methods_by_type: &mut HashMap<String, HashSet<String>>,
+    types: &mut WasmTypeInventory,
 ) {
     let mut aliases = inherited_aliases.clone();
     aliases.extend(super::rust_wasm_attributes::collect_wasm_bindgen_attribute_aliases(items));
@@ -53,10 +59,14 @@ pub(super) fn collect_wasm_inventory(
                         let name = function.sig.ident.to_string();
                         callable_names.insert(name.clone());
                         if let Some(owner) = &owner {
-                            methods_by_type
+                            types
+                                .methods
                                 .entry(owner.clone())
                                 .or_default()
-                                .insert(name);
+                                .insert(name.clone());
+                            if let Some(returned) = wasm_return_type(&function.sig.output) {
+                                types.returns.insert((owner.clone(), name), returned);
+                            }
                         }
                     }
                 }
@@ -69,13 +79,37 @@ pub(super) fn collect_wasm_inventory(
                         &aliases,
                         callable_names,
                         type_names,
-                        methods_by_type,
+                        types,
                     );
                 }
             }
             _ => {}
         }
     }
+}
+
+fn wasm_return_type(output: &syn::ReturnType) -> Option<String> {
+    let syn::ReturnType::Type(_, ty) = output else {
+        return None;
+    };
+    let syn::Type::Path(path) = ty.as_ref() else {
+        return None;
+    };
+    let segment = path.path.segments.last()?;
+    if matches!(
+        segment.ident.to_string().as_str(),
+        "Result" | "Option" | "Promise"
+    ) && let syn::PathArguments::AngleBracketed(arguments) = &segment.arguments
+    {
+        return arguments.args.iter().find_map(|argument| match argument {
+            syn::GenericArgument::Type(ty) => wasm_return_type(&syn::ReturnType::Type(
+                syn::token::RArrow::default(),
+                Box::new(ty.clone()),
+            )),
+            _ => None,
+        });
+    }
+    Some(segment.ident.to_string())
 }
 
 fn implementation_type_name(ty: &syn::Type) -> Option<String> {
@@ -90,9 +124,9 @@ fn implementation_type_name(ty: &syn::Type) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
 
-    use super::collect_wasm_inventory;
+    use super::{WasmTypeInventory, collect_wasm_inventory};
 
     #[test]
     fn inventories_callables_but_excludes_accessors() -> Result<(), syn::Error> {
@@ -111,21 +145,21 @@ impl VaultManager {
 ",
         )?;
         let mut names = HashSet::new();
-        let mut methods = HashMap::new();
+        let mut types = WasmTypeInventory::default();
         collect_wasm_inventory(
             &syntax.items,
             false,
             &HashSet::new(),
             &mut names,
             &mut HashSet::new(),
-            &mut methods,
+            &mut types,
         );
         assert_eq!(
             names,
             HashSet::from(["connect".to_owned(), "generate_secret_id".to_owned()])
         );
         assert_eq!(
-            methods.get("VaultManager"),
+            types.methods.get("VaultManager"),
             Some(&HashSet::from(["generate_secret_id".to_owned()]))
         );
         Ok(())
@@ -148,7 +182,7 @@ pub fn generate_secret_id() {}
             &HashSet::new(),
             &mut names,
             &mut HashSet::new(),
-            &mut HashMap::new(),
+            &mut WasmTypeInventory::default(),
         );
         assert_eq!(names, HashSet::from(["generate_secret_id".to_owned()]));
         Ok(())

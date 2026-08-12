@@ -202,15 +202,14 @@ fn referenced_wasm_class(
     source: &str,
     wasm_class_bindings: &HashMap<String, String>,
 ) -> Option<String> {
-    if node.kind() == "type_identifier"
-        && let Ok(name) = node.utf8_text(source.as_bytes())
-        && let Some(wasm_type) = wasm_class_bindings.get(name)
-    {
-        return Some(wasm_type.clone());
-    }
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor)
-        .find_map(|child| referenced_wasm_class(child, source, wasm_class_bindings))
+    let annotation = node.utf8_text(source.as_bytes()).ok()?.trim();
+    let actual = annotation.strip_prefix(':').unwrap_or(annotation).trim();
+    let actual = actual
+        .strip_prefix("Promise<")
+        .and_then(|inner| inner.strip_suffix('>'))
+        .unwrap_or(actual)
+        .trim();
+    wasm_class_bindings.get(actual).cloned()
 }
 
 fn node_is_type_only_import(node: tree_sitter::Node<'_>, source: &str) -> bool {

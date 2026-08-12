@@ -7,6 +7,7 @@ use crate::wasm_dynamic_aliases::{
     loaded_module_specifier, scoped_wasm_module_visible, scoped_wasm_type_visible,
     unwrap_transparent_expression, wasm_module_specifier,
 };
+use crate::wasm_inventory::WasmTypeInventory;
 use crate::wasm_module_sources::{is_wasm_callable_export, is_wasm_export};
 
 #[allow(clippy::too_many_arguments)]
@@ -18,7 +19,7 @@ pub(super) fn collect_destructuring_aliases(
     first_line: usize,
     callable_names: &HashSet<String>,
     wasm_type_names: &HashSet<String>,
-    wasm_methods_by_type: &HashMap<String, HashSet<String>>,
+    wasm_types: &WasmTypeInventory,
     wasm_namespace_bindings: &HashMap<String, String>,
     wasm_class_bindings: &HashMap<String, String>,
     wasm_instance_bindings: &HashMap<String, String>,
@@ -57,6 +58,7 @@ pub(super) fn collect_destructuring_aliases(
         wasm_namespace_bindings,
         wasm_class_bindings,
         wasm_instance_bindings,
+        wasm_types,
         scoped_wasm_namespaces,
         scoped_wasm_instances,
     ) else {
@@ -67,7 +69,7 @@ pub(super) fn collect_destructuring_aliases(
         source,
         first_line,
         &wasm_type,
-        wasm_methods_by_type,
+        wasm_types,
         imported_callable_bindings,
         lines,
     );
@@ -120,7 +122,7 @@ pub(super) fn collect_namespace_member_alias(
     first_line: usize,
     callable_names: &HashSet<String>,
     wasm_type_names: &HashSet<String>,
-    wasm_methods_by_type: &HashMap<String, HashSet<String>>,
+    wasm_types: &WasmTypeInventory,
     wasm_namespace_bindings: &HashMap<String, String>,
     wasm_class_bindings: &HashMap<String, String>,
     wasm_instance_bindings: &HashMap<String, String>,
@@ -145,7 +147,7 @@ pub(super) fn collect_namespace_member_alias(
         source_path,
         callable_names,
         wasm_type_names,
-        wasm_methods_by_type,
+        wasm_types,
         wasm_namespace_bindings,
         wasm_class_bindings,
         wasm_instance_bindings,
@@ -170,11 +172,11 @@ pub(super) fn collect_type_pattern_aliases(
     source: &str,
     first_line: usize,
     wasm_type: &str,
-    wasm_methods_by_type: &HashMap<String, HashSet<String>>,
+    wasm_types: &WasmTypeInventory,
     imported_callable_bindings: &mut HashSet<String>,
     lines: &mut Vec<usize>,
 ) {
-    let Some(methods) = wasm_methods_by_type.get(wasm_type) else {
+    let Some(methods) = wasm_types.methods.get(wasm_type) else {
         return;
     };
     let mut cursor = pattern.walk();
@@ -207,7 +209,7 @@ pub(super) fn collect_object_literal_aliases(
     first_line: usize,
     callable_names: &HashSet<String>,
     wasm_type_names: &HashSet<String>,
-    wasm_methods_by_type: &HashMap<String, HashSet<String>>,
+    wasm_types: &WasmTypeInventory,
     wasm_namespace_bindings: &HashMap<String, String>,
     wasm_class_bindings: &HashMap<String, String>,
     wasm_instance_bindings: &HashMap<String, String>,
@@ -229,7 +231,7 @@ pub(super) fn collect_object_literal_aliases(
                 source_path,
                 callable_names,
                 wasm_type_names,
-                wasm_methods_by_type,
+                wasm_types,
                 wasm_namespace_bindings,
                 wasm_class_bindings,
                 wasm_instance_bindings,
@@ -250,7 +252,7 @@ fn wasm_callable_member_name(
     source_path: &Path,
     callable_names: &HashSet<String>,
     wasm_type_names: &HashSet<String>,
-    wasm_methods_by_type: &HashMap<String, HashSet<String>>,
+    wasm_types: &WasmTypeInventory,
     wasm_namespace_bindings: &HashMap<String, String>,
     wasm_class_bindings: &HashMap<String, String>,
     wasm_instance_bindings: &HashMap<String, String>,
@@ -276,6 +278,7 @@ fn wasm_callable_member_name(
         wasm_namespace_bindings,
         wasm_class_bindings,
         wasm_instance_bindings,
+        wasm_types,
         scoped_wasm_namespaces,
         scoped_wasm_instances,
     );
@@ -288,7 +291,8 @@ fn wasm_callable_member_name(
         .or_else(|| scoped_wasm_module_visible(namespace, name, source, scoped_wasm_namespaces))
     });
     let is_callable = receiver_type.as_ref().is_some_and(|wasm_type| {
-        wasm_methods_by_type
+        wasm_types
+            .methods
             .get(wasm_type)
             .is_some_and(|methods| methods.contains(&callable_name))
     }) || direct_module
@@ -310,10 +314,39 @@ pub(super) fn wasm_receiver_type(
     wasm_namespace_bindings: &HashMap<String, String>,
     wasm_class_bindings: &HashMap<String, String>,
     wasm_instance_bindings: &HashMap<String, String>,
+    wasm_types: &WasmTypeInventory,
     scoped_wasm_namespaces: &[ScopedBinding],
     scoped_wasm_instances: &[ScopedBinding],
 ) -> Option<String> {
     let receiver = unwrap_transparent_expression(receiver);
+    if receiver.kind() == "call_expression"
+        && let Some(function) = receiver.child_by_field_name("function")
+        && matches!(
+            function.kind(),
+            "member_expression" | "subscript_expression"
+        )
+        && let Some(object) = function.child_by_field_name("object")
+        && let Some(owner) = wasm_receiver_type(
+            object,
+            source,
+            source_path,
+            wasm_type_names,
+            wasm_namespace_bindings,
+            wasm_class_bindings,
+            wasm_instance_bindings,
+            wasm_types,
+            scoped_wasm_namespaces,
+            scoped_wasm_instances,
+        )
+        && let Some(method) = function
+            .child_by_field_name("property")
+            .or_else(|| function.child_by_field_name("index"))
+            .and_then(|node| semantic_node_name(node, source))
+        && let Some(returned) = wasm_types.returns.get(&(owner, method))
+        && wasm_type_names.contains(returned)
+    {
+        return Some(returned.clone());
+    }
     let receiver_name = receiver.utf8_text(source.as_bytes()).ok();
     receiver_name
         .and_then(|name| {

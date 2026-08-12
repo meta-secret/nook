@@ -60,11 +60,11 @@ pub(super) fn is_wasm_export(module: &str, exported_name: &str, source_path: &Pa
     module_reexports_wasm_symbol(module, exported_name, source_path, &mut visited)
 }
 
-pub(super) fn is_wasm_namespace_export(
+pub(super) fn wasm_namespace_export_source(
     module: &str,
     exported_name: &str,
     source_path: &Path,
-) -> bool {
+) -> Option<String> {
     let mut visited = HashSet::new();
     module_exports_wasm_namespace(module, exported_name, source_path, &mut visited)
 }
@@ -74,31 +74,32 @@ fn module_exports_wasm_namespace(
     exported_name: &str,
     source_path: &Path,
     visited: &mut HashSet<(PathBuf, String)>,
-) -> bool {
-    let Some(resolved) = resolve_module(module, source_path) else {
-        return false;
-    };
+) -> Option<String> {
+    let resolved = resolve_module(module, source_path)?;
     if !visited.insert((resolved.clone(), exported_name.to_owned())) {
-        return false;
+        return None;
     }
-    local_forwarded_exports(&resolved).is_some_and(|exports| {
-        exports.iter().any(|export| match export {
+    local_forwarded_exports(&resolved)?
+        .into_iter()
+        .find_map(|export| match export {
             ForwardedExport::Namespace { exported, module } if exported == exported_name => {
-                module_reexports_any_wasm(module, &resolved, &mut HashSet::new())
+                module_reexports_any_wasm(&module, &resolved, &mut HashSet::new()).then(|| {
+                    resolve_module(&module, &resolved)
+                        .map_or(module, |path| path.to_string_lossy().into_owned())
+                })
             }
             ForwardedExport::Named {
                 exported,
                 imported,
                 module,
             } if exported == exported_name => {
-                module_exports_wasm_namespace(module, imported, &resolved, visited)
+                module_exports_wasm_namespace(&module, &imported, &resolved, visited)
             }
             ForwardedExport::All { module } => {
-                module_exports_wasm_namespace(module, exported_name, &resolved, visited)
+                module_exports_wasm_namespace(&module, exported_name, &resolved, visited)
             }
-            ForwardedExport::Named { .. } | ForwardedExport::Namespace { .. } => false,
+            ForwardedExport::Named { .. } | ForwardedExport::Namespace { .. } => None,
         })
-    })
 }
 
 pub(super) fn wasm_factory_return_type(
@@ -252,28 +253,21 @@ fn referenced_wasm_type(
     wasm_type_names: &HashSet<String>,
     imported_bindings: &HashMap<String, (String, String)>,
 ) -> Option<String> {
-    if node.kind() == "type_identifier"
-        && let Some(local_name) = semantic_node_name(node, source)
-    {
-        if let Some((module, imported_name)) = imported_bindings.get(&local_name) {
-            return (wasm_type_names.contains(imported_name)
-                && is_wasm_export(module, imported_name, source_path))
-            .then(|| imported_name.clone());
-        }
-        if wasm_type_names.contains(&local_name) {
-            return Some(local_name);
-        }
+    let annotation = node.utf8_text(source.as_bytes()).ok()?.trim();
+    let actual = annotation.strip_prefix(':').unwrap_or(annotation).trim();
+    let local_name = actual
+        .strip_prefix("Promise<")
+        .and_then(|inner| inner.strip_suffix('>'))
+        .unwrap_or(actual)
+        .trim();
+    if let Some((module, imported_name)) = imported_bindings.get(local_name) {
+        return (wasm_type_names.contains(imported_name)
+            && is_wasm_export(module, imported_name, source_path))
+        .then(|| imported_name.clone());
     }
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor).find_map(|child| {
-        referenced_wasm_type(
-            child,
-            source,
-            source_path,
-            wasm_type_names,
-            imported_bindings,
-        )
-    })
+    wasm_type_names
+        .contains(local_name)
+        .then(|| local_name.to_owned())
 }
 
 fn module_reexports_any_wasm(
@@ -332,15 +326,18 @@ fn module_reexports_wasm_symbol(
             } if exported == exported_name => {
                 module_reexports_wasm_symbol(module, imported, &resolved, visited)
             }
-            ForwardedExport::Named { .. } => false,
-            ForwardedExport::All { module } | ForwardedExport::Namespace { module, .. } => {
+            ForwardedExport::All { module } => {
                 module_reexports_wasm_symbol(module, exported_name, &resolved, visited)
             }
+            ForwardedExport::Named { .. } | ForwardedExport::Namespace { .. } => false,
         })
     })
 }
 
 fn resolve_module(module: &str, source_path: &Path) -> Option<PathBuf> {
+    if Path::new(module).is_absolute() {
+        return resolve_local_module(Path::new(module));
+    }
     if !module.starts_with('.') {
         return None;
     }
@@ -429,6 +426,16 @@ fn collect_import_specifiers(
     module: &str,
     bindings: &mut HashMap<String, (String, String)>,
 ) {
+    if node.kind() == "namespace_import" {
+        let mut cursor = node.walk();
+        if let Some(local) = node
+            .named_children(&mut cursor)
+            .find_map(|child| semantic_node_name(child, source))
+        {
+            bindings.insert(local, (module.to_owned(), "*".to_owned()));
+        }
+        return;
+    }
     if node.kind() == "import_specifier"
         && let Some(imported_node) = node.child_by_field_name("name")
         && let Some(imported) = semantic_node_name(imported_node, source)
@@ -484,6 +491,11 @@ fn collect_export_statement(
         });
         return;
     }
+    if direct_module.is_none()
+        && let Some(forwarded) = exported_callable_declaration(node, source, imported_bindings)
+    {
+        exports.push(forwarded);
+    }
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
         if child.kind() != "export_clause" {
@@ -523,6 +535,38 @@ fn collect_export_statement(
     if !saw_specifier && let Some(module) = direct_module {
         exports.push(ForwardedExport::All { module });
     }
+}
+
+fn exported_callable_declaration(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    imports: &HashMap<String, (String, String)>,
+) -> Option<ForwardedExport> {
+    let mut cursor = node.walk();
+    let declaration = node
+        .named_children(&mut cursor)
+        .find(|child| matches!(child.kind(), "lexical_declaration" | "variable_declaration"))?;
+    let mut cursor = declaration.walk();
+    let declarator = declaration
+        .named_children(&mut cursor)
+        .find(|child| child.kind() == "variable_declarator")?;
+    let exported = semantic_node_name(declarator.child_by_field_name("name")?, source)?;
+    let value = declarator.child_by_field_name("value")?;
+    let namespace = value.child_by_field_name("object")?;
+    let namespace_name = semantic_node_name(namespace, source)?;
+    let (module, imported_namespace) = imports.get(&namespace_name)?;
+    if imported_namespace != "*" {
+        return None;
+    }
+    let imported = value
+        .child_by_field_name("property")
+        .or_else(|| value.child_by_field_name("index"))
+        .and_then(|property| semantic_node_name(property, source))?;
+    Some(ForwardedExport::Named {
+        exported,
+        imported,
+        module: module.clone(),
+    })
 }
 
 fn namespace_export_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {

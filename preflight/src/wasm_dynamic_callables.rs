@@ -13,7 +13,7 @@ pub(super) fn collect_scoped_dynamic_callable_bindings(
     source_path: &Path,
     callable_names: &HashSet<String>,
     wasm_namespace_bindings: &HashMap<String, String>,
-    scoped_wasm_namespaces: &[ScopedBinding],
+    scoped_wasm_namespaces: &mut Vec<ScopedBinding>,
     bindings: &mut Vec<ScopedBinding>,
     lines: &mut Vec<usize>,
     first_line: usize,
@@ -34,6 +34,7 @@ pub(super) fn collect_scoped_dynamic_callable_bindings(
         source,
         source_path,
         callable_names,
+        scoped_wasm_namespaces,
         bindings,
         lines,
         first_line,
@@ -106,6 +107,7 @@ fn collect_import_callback_pattern(
     source: &str,
     source_path: &Path,
     callable_names: &HashSet<String>,
+    scoped_wasm_namespaces: &mut Vec<ScopedBinding>,
     bindings: &mut Vec<ScopedBinding>,
     lines: &mut Vec<usize>,
     first_line: usize,
@@ -153,6 +155,11 @@ fn collect_import_callback_pattern(
                 .unwrap_or(parameter);
             if pattern.kind() == "object_pattern" {
                 record_callable_pattern_bindings(pattern, &context, bindings, lines);
+            } else if pattern.kind() == "identifier"
+                && let Some(namespace) =
+                    scoped_parameter_binding(pattern, source, Some(module.clone()))
+            {
+                scoped_wasm_namespaces.push(namespace);
             }
         }
     }
@@ -193,7 +200,7 @@ fn record_callable_pattern_bindings(
             lines.push(context.first_line + authored.start_position().row);
         }
         let scoped = if context.is_parameter {
-            scoped_parameter_binding(binding, context.source)
+            scoped_parameter_binding(binding, context.source, None)
         } else {
             scoped_binding(binding, context.source, None, None)
         };
@@ -218,7 +225,11 @@ fn pattern_pair(
     (None, None)
 }
 
-fn scoped_parameter_binding(binding: tree_sitter::Node<'_>, source: &str) -> Option<ScopedBinding> {
+fn scoped_parameter_binding(
+    binding: tree_sitter::Node<'_>,
+    source: &str,
+    wasm_module: Option<String>,
+) -> Option<ScopedBinding> {
     let name = binding.utf8_text(source.as_bytes()).ok()?.to_owned();
     let mut ancestor = binding.parent();
     while let Some(function) = ancestor {
@@ -233,7 +244,7 @@ fn scoped_parameter_binding(binding: tree_sitter::Node<'_>, source: &str) -> Opt
                 scope_end: body.end_byte(),
                 declaration_end: body.start_byte(),
                 wasm_type: None,
-                wasm_module: None,
+                wasm_module,
             });
         }
         ancestor = function.parent();

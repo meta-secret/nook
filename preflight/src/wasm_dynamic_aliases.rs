@@ -13,11 +13,12 @@ use crate::wasm_factories::{
     collect_factory_calls_for_receivers, collect_imported_wasm_instance_factories,
     collect_member_alias_receiver_names, collect_wasm_instance_factories,
 };
+use crate::wasm_inventory::WasmTypeInventory;
 use crate::wasm_member_aliases::{
     collect_destructuring_aliases, collect_namespace_member_alias, collect_object_literal_aliases,
 };
 use crate::wasm_module_sources::{
-    is_wasm_callable_source, is_wasm_export, is_wasm_namespace_export,
+    is_wasm_callable_source, is_wasm_export, wasm_namespace_export_source,
 };
 
 const WASM_MANAGER_ACCESSOR: &str = "requireManager";
@@ -45,11 +46,12 @@ pub(super) fn collect_namespace_import_bindings(
         && !node_is_type_only_import(node, source)
         && let Some(imported) = node.child_by_field_name("name")
         && let Some(imported_name) = semantic_node_name(imported, source)
-        && is_wasm_namespace_export(module, &imported_name, source_path)
+        && let Some(namespace_source) =
+            wasm_namespace_export_source(module, &imported_name, source_path)
     {
         let binding = node.child_by_field_name("alias").unwrap_or(imported);
         if let Ok(binding_name) = binding.utf8_text(source.as_bytes()) {
-            wasm_namespace_bindings.insert(binding_name.to_owned(), module.to_owned());
+            wasm_namespace_bindings.insert(binding_name.to_owned(), namespace_source);
         }
         return;
     }
@@ -169,7 +171,7 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
     first_line: usize,
     callable_names: &HashSet<String>,
     wasm_type_names: &HashSet<String>,
-    wasm_methods_by_type: &HashMap<String, HashSet<String>>,
+    wasm_types: &WasmTypeInventory,
     wasm_namespace_bindings: &mut HashMap<String, String>,
     wasm_class_bindings: &HashMap<String, String>,
     wasm_instance_bindings: &mut HashMap<String, String>,
@@ -212,7 +214,7 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         source_path,
         callable_names,
         wasm_namespace_bindings,
-        &scoped_wasm_namespaces,
+        &mut scoped_wasm_namespaces,
         &mut scoped_wasm_callables,
         lines,
         first_line,
@@ -224,7 +226,7 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         first_line,
         callable_names,
         wasm_type_names,
-        wasm_methods_by_type,
+        wasm_types,
         wasm_namespace_bindings,
         wasm_class_bindings,
         wasm_instance_bindings,
@@ -244,7 +246,7 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         first_line,
         callable_names,
         wasm_type_names,
-        wasm_methods_by_type,
+        wasm_types,
         wasm_namespace_bindings,
         wasm_class_bindings,
         wasm_instance_bindings,
@@ -267,7 +269,7 @@ fn collect_dynamic_wasm_aliases(
     first_line: usize,
     callable_names: &HashSet<String>,
     wasm_type_names: &HashSet<String>,
-    wasm_methods_by_type: &HashMap<String, HashSet<String>>,
+    wasm_types: &WasmTypeInventory,
     wasm_namespace_bindings: &mut HashMap<String, String>,
     wasm_class_bindings: &HashMap<String, String>,
     wasm_instance_bindings: &mut HashMap<String, String>,
@@ -300,7 +302,7 @@ fn collect_dynamic_wasm_aliases(
             first_line,
             callable_names,
             wasm_type_names,
-            wasm_methods_by_type,
+            wasm_types,
             wasm_namespace_bindings,
             wasm_class_bindings,
             wasm_instance_bindings,
@@ -329,7 +331,7 @@ fn collect_dynamic_wasm_aliases(
             first_line,
             callable_names,
             wasm_type_names,
-            wasm_methods_by_type,
+            wasm_types,
             wasm_namespace_bindings,
             wasm_class_bindings,
             wasm_instance_bindings,
@@ -356,7 +358,7 @@ fn collect_dynamic_wasm_aliases(
             first_line,
             callable_names,
             wasm_type_names,
-            wasm_methods_by_type,
+            wasm_types,
             wasm_namespace_bindings,
             wasm_class_bindings,
             wasm_instance_bindings,
@@ -398,7 +400,7 @@ fn collect_binding_aliases(
     first_line: usize,
     callable_names: &HashSet<String>,
     wasm_type_names: &HashSet<String>,
-    wasm_methods_by_type: &HashMap<String, HashSet<String>>,
+    wasm_types: &WasmTypeInventory,
     wasm_namespace_bindings: &HashMap<String, String>,
     wasm_class_bindings: &HashMap<String, String>,
     wasm_instance_bindings: &HashMap<String, String>,
@@ -448,7 +450,7 @@ fn collect_binding_aliases(
             first_line,
             callable_names,
             wasm_type_names,
-            wasm_methods_by_type,
+            wasm_types,
             wasm_namespace_bindings,
             wasm_class_bindings,
             wasm_instance_bindings,
@@ -468,7 +470,7 @@ fn collect_binding_aliases(
             first_line,
             callable_names,
             wasm_type_names,
-            wasm_methods_by_type,
+            wasm_types,
             wasm_namespace_bindings,
             wasm_class_bindings,
             wasm_instance_bindings,
@@ -485,7 +487,7 @@ fn collect_binding_aliases(
         first_line,
         callable_names,
         wasm_type_names,
-        wasm_methods_by_type,
+        wasm_types,
         wasm_namespace_bindings,
         wasm_class_bindings,
         wasm_instance_bindings,
@@ -655,10 +657,16 @@ fn constructor_wasm_class(
 ) -> Option<String> {
     if constructor.kind() == "identifier" {
         let name = constructor.utf8_text(source.as_bytes()).ok()?;
-        if !root_binding_is_visible(constructor, name, source) {
-            return None;
+        if root_binding_is_visible(constructor, name, source)
+            && let Some(wasm_type) = wasm_class_bindings.get(name)
+        {
+            return Some(wasm_type.clone());
         }
-        return wasm_class_bindings.get(name).cloned();
+        let mut root = constructor;
+        while let Some(parent) = root.parent() {
+            root = parent;
+        }
+        return copied_wasm_class(root, constructor, name, source, wasm_class_bindings);
     }
     if constructor.kind() != "member_expression" {
         return None;
@@ -672,6 +680,32 @@ fn constructor_wasm_class(
         && root_binding_is_visible(namespace, namespace_name, source)
         && wasm_type_names.contains(&class_name))
     .then_some(class_name)
+}
+
+fn copied_wasm_class(
+    node: tree_sitter::Node<'_>,
+    reference: tree_sitter::Node<'_>,
+    name: &str,
+    source: &str,
+    classes: &HashMap<String, String>,
+) -> Option<String> {
+    if node.kind() == "variable_declarator"
+        && let (Some(binding), Some(value)) = (
+            node.child_by_field_name("name"),
+            node.child_by_field_name("value"),
+        )
+        && semantic_node_name(binding, source).as_deref() == Some(name)
+        && let Some(source_name) = semantic_node_name(value, source)
+        && root_binding_is_visible(value, &source_name, source)
+        && let Some(wasm_type) = classes.get(&source_name)
+        && let Some(scoped) = scoped_binding(binding, source, Some(wasm_type.clone()), None)
+        && scoped_binding_is_visible(reference, name, source, &[scoped])
+    {
+        return Some(wasm_type.clone());
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .find_map(|child| copied_wasm_class(child, reference, name, source, classes))
 }
 
 pub(super) fn unwrap_transparent_expression(

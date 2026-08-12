@@ -1,14 +1,15 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::Path;
 
 use crate::rust_wasm_names::typescript_wasm_import_alias_lines_at_path;
+use crate::wasm_inventory::WasmTypeInventory;
 
 pub(super) fn svelte_wasm_import_alias_lines(
     source: &str,
     source_path: &Path,
     callable_names: &HashSet<String>,
     wasm_type_names: &HashSet<String>,
-    wasm_methods_by_type: &HashMap<String, HashSet<String>>,
+    wasm_types: &WasmTypeInventory,
 ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
@@ -27,7 +28,7 @@ pub(super) fn svelte_wasm_import_alias_lines(
         1,
         callable_names,
         wasm_type_names,
-        wasm_methods_by_type,
+        wasm_types,
     )?;
     lines.sort_unstable();
     lines.dedup();
@@ -48,6 +49,10 @@ fn collect_svelte_typescript(node: tree_sitter::Node<'_>, source: &str, composit
         let end = node.end_byte() - 1;
         composite[start..end].copy_from_slice(&source.as_bytes()[start..end]);
         composite[end] = b';';
+        return;
+    }
+    if node.kind() == "expression" {
+        composite[node.byte_range()].copy_from_slice(&source.as_bytes()[node.byte_range()]);
         return;
     }
 

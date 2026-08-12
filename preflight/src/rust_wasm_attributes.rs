@@ -129,11 +129,6 @@ fn collect_callable_attributes(
     }
 }
 
-#[cfg(test)]
-pub(super) fn wasm_bindgen_callable_has_js_name(attribute: &Attribute) -> bool {
-    wasm_bindgen_callable_has_js_name_with_aliases(attribute, &HashSet::new())
-}
-
 pub(super) fn wasm_bindgen_callable_has_js_name_with_aliases(
     attribute: &Attribute,
     wasm_bindgen_aliases: &HashSet<String>,

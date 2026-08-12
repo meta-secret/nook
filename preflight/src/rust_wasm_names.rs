@@ -9,7 +9,7 @@ use crate::rust_wasm_attributes::{
 };
 use crate::wasm_direct_aliases::collect_direct_wasm_aliases_and_bindings;
 use crate::wasm_dynamic_aliases::collect_dynamic_wasm_aliases_and_bindings;
-use crate::wasm_inventory::collect_wasm_inventory;
+use crate::wasm_inventory::{WasmTypeInventory, collect_wasm_inventory};
 use crate::wasm_local_reexports::collect_local_wasm_reexport_aliases;
 use crate::wasm_svelte_sources::svelte_wasm_import_alias_lines;
 use crate::wasm_web_sources::collect_web_source_files;
@@ -29,7 +29,7 @@ pub fn rust_wasm_callable_name_overrides(root: &Path) -> io::Result<Vec<Violatio
     let mut violations = Vec::new();
     let mut callable_names = HashSet::new();
     let mut wasm_type_names = HashSet::new();
-    let mut wasm_methods_by_type = HashMap::new();
+    let mut wasm_types = WasmTypeInventory::default();
     for path in files {
         let source = fs::read_to_string(&path)?;
         let syntax = syn::parse_file(&source).map_err(io::Error::other)?;
@@ -50,7 +50,7 @@ pub fn rust_wasm_callable_name_overrides(root: &Path) -> io::Result<Vec<Violatio
                 &HashSet::new(),
                 &mut callable_names,
                 &mut wasm_type_names,
-                &mut wasm_methods_by_type,
+                &mut wasm_types,
             );
         }
     }
@@ -68,7 +68,7 @@ pub fn rust_wasm_callable_name_overrides(root: &Path) -> io::Result<Vec<Violatio
                 &path,
                 &callable_names,
                 &wasm_type_names,
-                &wasm_methods_by_type,
+                &wasm_types,
             )
             .map_err(io::Error::other)?
         } else if path
@@ -81,7 +81,7 @@ pub fn rust_wasm_callable_name_overrides(root: &Path) -> io::Result<Vec<Violatio
                 1,
                 &callable_names,
                 &wasm_type_names,
-                &wasm_methods_by_type,
+                &wasm_types,
             )
             .map_err(io::Error::other)?
         } else {
@@ -91,7 +91,7 @@ pub fn rust_wasm_callable_name_overrides(root: &Path) -> io::Result<Vec<Violatio
                 1,
                 &callable_names,
                 &wasm_type_names,
-                &wasm_methods_by_type,
+                &wasm_types,
             )
             .map_err(io::Error::other)?
         };
@@ -117,14 +117,14 @@ fn typescript_wasm_import_alias_lines(
         "NookVaultArchitecture".to_owned(),
         "NookVaultManager".to_owned(),
     ]);
-    let wasm_methods_by_type = test_wasm_methods_by_type();
+    let wasm_types = test_wasm_methods_by_type();
     typescript_wasm_import_alias_lines_at_path(
         source,
         Path::new("nook-app/nook-web/test.ts"),
         first_line,
         callable_names,
         &wasm_type_names,
-        &wasm_methods_by_type,
+        &wasm_types,
     )
 }
 
@@ -134,7 +134,7 @@ pub(super) fn typescript_wasm_import_alias_lines_at_path(
     first_line: usize,
     callable_names: &HashSet<String>,
     wasm_type_names: &HashSet<String>,
-    wasm_methods_by_type: &HashMap<String, HashSet<String>>,
+    wasm_types: &WasmTypeInventory,
 ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     script_wasm_import_alias_lines(
         source,
@@ -142,7 +142,7 @@ pub(super) fn typescript_wasm_import_alias_lines_at_path(
         first_line,
         callable_names,
         wasm_type_names,
-        wasm_methods_by_type,
+        wasm_types,
         &tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
     )
 }
@@ -153,7 +153,7 @@ fn tsx_wasm_import_alias_lines(
     first_line: usize,
     callable_names: &HashSet<String>,
     wasm_type_names: &HashSet<String>,
-    wasm_methods_by_type: &HashMap<String, HashSet<String>>,
+    wasm_types: &WasmTypeInventory,
 ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     script_wasm_import_alias_lines(
         source,
@@ -161,7 +161,7 @@ fn tsx_wasm_import_alias_lines(
         first_line,
         callable_names,
         wasm_type_names,
-        wasm_methods_by_type,
+        wasm_types,
         &tree_sitter_typescript::LANGUAGE_TSX.into(),
     )
 }
@@ -172,7 +172,7 @@ fn script_wasm_import_alias_lines(
     first_line: usize,
     callable_names: &HashSet<String>,
     wasm_type_names: &HashSet<String>,
-    wasm_methods_by_type: &HashMap<String, HashSet<String>>,
+    wasm_types: &WasmTypeInventory,
     language: &tree_sitter::Language,
 ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
@@ -204,7 +204,7 @@ fn script_wasm_import_alias_lines(
         first_line,
         callable_names,
         wasm_type_names,
-        wasm_methods_by_type,
+        wasm_types,
         &mut wasm_namespace_bindings,
         &wasm_class_bindings,
         &mut wasm_instance_bindings,
@@ -224,760 +224,35 @@ fn script_wasm_import_alias_lines(
 }
 
 #[cfg(test)]
-fn test_wasm_methods_by_type() -> HashMap<String, HashSet<String>> {
-    HashMap::from([
-        (
-            "NookVaultManager".to_owned(),
-            HashSet::from(["connect".to_owned(), "generate_secret_id".to_owned()]),
-        ),
-        (
-            "NookVaultArchitecture".to_owned(),
-            HashSet::from(["simple".to_owned()]),
-        ),
-    ])
+fn test_wasm_methods_by_type() -> WasmTypeInventory {
+    WasmTypeInventory {
+        methods: HashMap::from([
+            (
+                "NookVaultManager".to_owned(),
+                HashSet::from(["connect".to_owned(), "generate_secret_id".to_owned()]),
+            ),
+            (
+                "NookVaultArchitecture".to_owned(),
+                HashSet::from(["simple".to_owned()]),
+            ),
+        ]),
+        returns: HashMap::new(),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
-    use std::path::Path;
+    use std::collections::HashSet;
 
-    use crate::rust_wasm_attributes::{
-        collect_wasm_bindgen_attribute_aliases, wasm_bindgen_callable_has_js_name,
-        wasm_bindgen_callable_has_js_name_with_aliases,
-    };
-    use crate::wasm_web_sources::is_supported_web_source_extension;
-
-    use super::{
-        test_wasm_methods_by_type, tsx_wasm_import_alias_lines, typescript_wasm_import_alias_lines,
-        typescript_wasm_import_alias_lines_at_path,
-    };
-
-    fn callable_names() -> HashSet<String> {
-        [
-            "build_enrollment_link",
-            "connect",
-            "generate_secret_id",
-            "is_cloudflare_pr_preview_host",
-            "simple",
-        ]
-        .into_iter()
-        .map(str::to_owned)
-        .collect()
-    }
-
-    fn first_attribute(source: &str) -> Result<syn::Attribute, syn::Error> {
-        let function: syn::ItemFn = syn::parse_str(source)?;
-        function.attrs.into_iter().next().ok_or_else(|| {
-            syn::Error::new(proc_macro2::Span::call_site(), "missing test attribute")
-        })
-    }
+    use super::typescript_wasm_import_alias_lines;
 
     #[test]
-    fn rejects_exported_callable_name_override() -> Result<(), syn::Error> {
-        let attribute = first_attribute(
-            "#[wasm_bindgen(js_name = classifyExtensionPersistenceDatabases)] pub fn classify_extension_persistence_databases() {}",
-        )?;
-        assert!(wasm_bindgen_callable_has_js_name(&attribute));
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_callable_rename_with_other_value_bearing_options() -> Result<(), syn::Error> {
-        let attribute = first_attribute(
-            "#[wasm_bindgen(js_name = renamed, unchecked_return_type = \"string\")] pub fn authored() {}",
-        )?;
-        assert!(wasm_bindgen_callable_has_js_name(&attribute));
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_fully_qualified_callable_name_override() -> Result<(), syn::Error> {
-        let attribute = first_attribute(
-            "#[wasm_bindgen::prelude::wasm_bindgen(js_name = renamed)] pub fn authored() {}",
-        )?;
-        assert!(wasm_bindgen_callable_has_js_name(&attribute));
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_callable_name_override_through_renamed_attribute_import() -> Result<(), syn::Error> {
-        let syntax = syn::parse_file(
-            r"use wasm_bindgen::prelude::wasm_bindgen as export_wasm;
-#[export_wasm(js_name = generateSecretId)]
-pub fn generate_secret_id() {}",
-        )?;
-        let aliases = collect_wasm_bindgen_attribute_aliases(&syntax.items);
-        let Some(syn::Item::Fn(function)) = syntax.items.last() else {
-            return Err(syn::Error::new(
-                proc_macro2::Span::call_site(),
-                "missing test function",
-            ));
-        };
-        assert!(wasm_bindgen_callable_has_js_name_with_aliases(
-            &function.attrs[0],
-            &aliases,
-        ));
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_callable_name_override_nested_in_cfg_attr() -> Result<(), syn::Error> {
-        let attribute = first_attribute(
-            "#[cfg_attr(target_arch = \"wasm32\", wasm_bindgen(js_name = renamed))] pub fn authored() {}",
-        )?;
-        assert!(wasm_bindgen_callable_has_js_name(&attribute));
-        Ok(())
-    }
-
-    #[test]
-    fn permits_property_name_override_nested_in_cfg_attr() -> Result<(), syn::Error> {
-        let attribute = first_attribute(
-            "#[cfg_attr(target_arch = \"wasm32\", wasm_bindgen(getter, js_name = databaseName))] pub fn database_name() {}",
-        )?;
-        assert!(!wasm_bindgen_callable_has_js_name(&attribute));
-        Ok(())
-    }
-
-    #[test]
-    fn permits_property_name_override() -> Result<(), syn::Error> {
-        let attribute = first_attribute(
-            "#[wasm_bindgen(getter, js_name = databaseName)] pub fn database_name() {}",
-        )?;
-        assert!(!wasm_bindgen_callable_has_js_name(&attribute));
-        Ok(())
-    }
-
-    #[test]
-    fn permits_direct_export_name() -> Result<(), syn::Error> {
-        let attribute = first_attribute("#[wasm_bindgen] pub fn classify_databases() {}")?;
-        assert!(!wasm_bindgen_callable_has_js_name(&attribute));
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_typescript_alias_for_generated_wasm_callable()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import {
-  build_enrollment_link as buildEnrollmentLinkCore,
-} from "$app-wasm";
-buildEnrollmentLinkCore();"#;
+    fn rejects_direct_typescript_alias() -> Result<(), tree_sitter::LanguageError> {
+        let source = "import { generate_secret_id as generateSecretId } from \"$app-wasm\";";
+        let names = HashSet::from(["generate_secret_id".to_owned()]);
         assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![2]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_reexport_alias_for_generated_wasm_callable() -> Result<(), tree_sitter::LanguageError>
-    {
-        let source = r#"export { is_cloudflare_pr_preview_host as isCloudflarePrPreviewHost } from "$app-wasm";"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
+            typescript_wasm_import_alias_lines(source, 1, &names)?,
             vec![1]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_for_generated_wasm_callable_through_facade()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import {
-  generate_secret_id as generateSecretId,
-} from "$lib/nook";"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![2]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_for_single_word_generated_wasm_callable()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { connect as connectVault } from "$app-wasm";"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![1]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_with_comment_trivia_before_as() -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import {
-  generate_secret_id /* preserve local name */ as generateSecretId,
-} from "$app-wasm";"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![2]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_in_local_reexport_of_wasm_callable() -> Result<(), tree_sitter::LanguageError>
-    {
-        let source = r#"import { generate_secret_id } from "$app-wasm";
-export { generate_secret_id as generateSecretId };"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![2]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn permits_alias_when_unrelated_module_contains_wasm_substring()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { connect as openSocket } from "third-party/nook_wasm_adapter";"#;
-        assert!(typescript_wasm_import_alias_lines(source, 1, &callable_names())?.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn permits_alias_from_unrelated_scoped_package_named_nook_wasm()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { connect as openSocket } from "@vendor/nook-wasm";"#;
-        assert!(typescript_wasm_import_alias_lines(source, 1, &callable_names())?.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_for_string_literal_wasm_import_name() -> Result<(), tree_sitter::LanguageError>
-    {
-        let source = r#"import { "generate_secret_id" as generateSecretId } from "$app-wasm";"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![1]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_from_dynamic_wasm_import() -> Result<(), tree_sitter::LanguageError> {
-        let source =
-            r#"const { generate_secret_id: generateSecretId } = await import("$app-wasm");"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![1]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_from_wasm_namespace_destructuring() -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import * as wasm from "$app-wasm";
-const { generate_secret_id: generateSecretId } = wasm;"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![2]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_from_wasm_namespace_member_assignment()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import * as wasm from "$app-wasm";
-const generateSecretId = wasm.generate_secret_id;"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![2]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_copied_from_named_wasm_import() -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { generate_secret_id } from "$app-wasm";
-const generateSecretId = generate_secret_id;"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![2]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn permits_alias_from_shadowed_wasm_namespace_parameter()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import * as wasm from "$app-wasm";
-function inspect(wasm: ThirdPartyClient) {
-  const { connect: openSocket } = wasm;
-}"#;
-        assert!(typescript_wasm_import_alias_lines(source, 1, &callable_names())?.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_assignment_alias_copied_from_named_wasm_import()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { generate_secret_id } from "$app-wasm";
-let generateSecretId;
-generateSecretId = generate_secret_id;"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![3]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_assignment_alias_copied_from_wasm_namespace()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import * as wasm from "$app-wasm";
-let generateSecretId;
-generateSecretId = wasm.generate_secret_id;"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![3]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_destructuring_assignment_alias_from_wasm_namespace()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import * as wasm from "$app-wasm";
-let generateSecretId;
-({ generate_secret_id: generateSecretId } = wasm);"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![3]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_of_generated_static_class_method() -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { NookVaultArchitecture } from "$app-wasm";
-const simpleVault = NookVaultArchitecture.simple;"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![2]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_of_generated_instance_method() -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { NookVaultManager } from "$app-wasm";
-const manager = new NookVaultManager();
-const connectVault = manager.connect;"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![3]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_of_namespace_constructed_generated_instance_method()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import * as wasm from "$app-wasm";
-const manager = new wasm.NookVaultManager();
-const connectVault = manager.connect;"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![3]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_wrapped_in_transparent_typescript_expressions()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import * as wasm from "$app-wasm";
-const first = (wasm.generate_secret_id);
-const second = wasm.generate_secret_id as typeof wasm.generate_secret_id;
-const third = wasm.generate_secret_id!;"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![2, 3, 4]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn permits_loop_scoped_shadow_of_named_wasm_callable() -> Result<(), tree_sitter::LanguageError>
-    {
-        let source = r#"import { connect } from "$app-wasm";
-for (const connect of clients) {
-  const openSocket = connect;
-}"#;
-        assert!(typescript_wasm_import_alias_lines(source, 1, &callable_names())?.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_from_dynamic_import_namespace() -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"const wasm = await import("$app-wasm");
-const generateSecretId = wasm.generate_secret_id;"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![2]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_function_local_dynamic_import_namespace() -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"async function load() {
-  const wasm = await import("$app-wasm");
-  const generateSecretId = wasm.generate_secret_id;
-}"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![3]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_callable_member_loaded_directly_with_require()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"const generateSecretId = require("nook-wasm").generate_secret_id;"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![1]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_computed_wasm_callable_member_alias() -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import * as wasm from "$app-wasm";
-const generateSecretId = wasm["generate_secret_id"];"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![2]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_function_local_generated_instance_method_alias()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { NookVaultManager } from "$app-wasm";
-function load() {
-  const manager = new NookVaultManager();
-  const connectVault = manager.connect;
-}"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![4]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn permits_redundant_direct_wasm_alias() -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { generate_secret_id as generate_secret_id } from "$app-wasm";"#;
-        assert!(typescript_wasm_import_alias_lines(source, 1, &callable_names())?.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn permits_redundant_dynamic_wasm_alias() -> Result<(), tree_sitter::LanguageError> {
-        let source =
-            r#"const { generate_secret_id: generate_secret_id } = await import("$app-wasm");"#;
-        assert!(typescript_wasm_import_alias_lines(source, 1, &callable_names())?.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_from_escaped_wasm_module_specifier() -> Result<(), tree_sitter::LanguageError>
-    {
-        let source = r#"import { generate_secret_id as generateSecretId } from "\u0024app-wasm";"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![1]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_from_single_quoted_escaped_wasm_module_specifier()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r"import { generate_secret_id as generateSecretId } from '\u0024app-wasm';";
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![1]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_from_commonjs_wasm_require() -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"const { generate_secret_id: generateSecretId } = require("nook-wasm");"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![1]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_from_static_template_wasm_import() -> Result<(), tree_sitter::LanguageError> {
-        let source = r"const { generate_secret_id: generateSecretId } = await import(`$app-wasm`);";
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![1]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_in_tsx_consumer() -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { connect as connectVault } from "$app-wasm";
-export const View = () => <div>{connectVault()}</div>;"#;
-        assert_eq!(
-            tsx_wasm_import_alias_lines(
-                source,
-                Path::new("nook-app/nook-web/view.tsx"),
-                1,
-                &callable_names(),
-                &HashSet::new(),
-                &test_wasm_methods_by_type(),
-            )?,
-            vec![1]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_from_relative_wasm_facade_import() -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { generate_secret_id as generateSecretId } from "../nook";"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines_at_path(
-                source,
-                Path::new("nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/consumer.ts",),
-                1,
-                &callable_names(),
-                &HashSet::new(),
-                &test_wasm_methods_by_type(),
-            )?,
-            vec![1]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn checks_mixed_facade_aliases_by_exported_symbol() -> Result<(), Box<dyn std::error::Error>> {
-        let root = std::env::temp_dir().join(format!(
-            "nook-mixed-wasm-facade-consumer-{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&root)?;
-        std::fs::write(
-            root.join("facade.ts"),
-            "export { generate_secret_id } from '$app-wasm'; export { connect } from 'socket-lib';",
-        )?;
-        let consumer = root.join("consumer.ts");
-        let source = r#"import { generate_secret_id as generateSecretId, connect as openSocket } from "./facade";
-import * as facade from "./facade";
-const { connect: secondSocket } = facade;
-const thirdSocket = facade.connect;"#;
-        std::fs::write(&consumer, source)?;
-        assert_eq!(
-            typescript_wasm_import_alias_lines_at_path(
-                source,
-                &consumer,
-                1,
-                &callable_names(),
-                &HashSet::new(),
-                &test_wasm_methods_by_type(),
-            )?,
-            vec![1]
-        );
-        std::fs::remove_dir_all(root)?;
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_through_commonjs_wasm_facade() -> Result<(), Box<dyn std::error::Error>> {
-        let root = std::env::temp_dir().join(format!(
-            "nook-commonjs-wasm-facade-consumer-{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&root)?;
-        std::fs::write(
-            root.join("facade.cjs"),
-            "module.exports = require('nook-wasm');",
-        )?;
-        let consumer = root.join("consumer.ts");
-        let source = r#"const { generate_secret_id: generateSecretId } = require("./facade.cjs");"#;
-        std::fs::write(&consumer, source)?;
-        assert_eq!(
-            typescript_wasm_import_alias_lines_at_path(
-                source,
-                &consumer,
-                1,
-                &callable_names(),
-                &HashSet::new(),
-                &test_wasm_methods_by_type(),
-            )?,
-            vec![1]
-        );
-        std::fs::remove_dir_all(root)?;
-        Ok(())
-    }
-
-    #[test]
-    fn supports_standard_javascript_and_typescript_module_extensions() {
-        for extension in ["cjs", "cts", "js", "jsx", "mjs", "mts", "ts", "tsx"] {
-            assert!(is_supported_web_source_extension(extension));
-        }
-    }
-
-    #[test]
-    fn permits_alias_for_unrelated_javascript_api() -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { snake_case as snakeCase } from "third-party";"#;
-        assert!(typescript_wasm_import_alias_lines(source, 1, &callable_names())?.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn permits_generated_wasm_type_alias_and_direct_callable()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import {
-  build_enrollment_link,
-  type ExtensionConnectScope as RustExtensionConnectScope,
-} from "./nook_companion_wasm.js";"#;
-        assert!(typescript_wasm_import_alias_lines(source, 1, &callable_names())?.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_namespace_introduced_by_later_assignment() -> Result<(), tree_sitter::LanguageError>
-    {
-        let source = r#"let wasm;
-wasm = await import("$app-wasm");
-const generateSecretId = wasm.generate_secret_id;"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![3]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_from_factory_and_runtime_accessor_instances()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { NookVaultManager } from "$app-wasm";
-function createManager(): NookVaultManager { throw new Error(); }
-const fromFactory = createManager();
-const factoryAlias = fromFactory.generate_secret_id;
-const vault = (window as { __nookVault: { requireManager(): NookVaultManager } }).__nookVault;
-const fromAccessor = vault.requireManager();
-const accessorAlias = fromAccessor.generate_secret_id;"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![4, 7]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_alias_from_imported_typed_wasm_factory() -> Result<(), Box<dyn std::error::Error>> {
-        let root =
-            std::env::temp_dir().join(format!("nook-imported-wasm-factory-{}", std::process::id()));
-        std::fs::create_dir_all(&root)?;
-        std::fs::write(
-            root.join("factory.ts"),
-            r#"import type { NookVaultManager } from "$app-wasm";
-export async function getVaultManager(): Promise<NookVaultManager> { throw new Error(); }"#,
-        )?;
-        let consumer = root.join("consumer.ts");
-        let source = r#"import { getVaultManager } from "./factory";
-const manager = await getVaultManager();
-const connectVault = manager.connect;"#;
-        std::fs::write(&consumer, source)?;
-        let type_names = HashSet::from(["NookVaultManager".to_owned()]);
-        let methods = HashMap::from([(
-            "NookVaultManager".to_owned(),
-            HashSet::from(["connect".to_owned()]),
-        )]);
-        assert_eq!(
-            typescript_wasm_import_alias_lines_at_path(
-                source,
-                &consumer,
-                1,
-                &callable_names(),
-                &type_names,
-                &methods,
-            )?,
-            vec![3]
-        );
-        std::fs::remove_dir_all(root)?;
-        Ok(())
-    }
-
-    #[test]
-    fn permits_runtime_value_shadowing_type_only_wasm_import()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import type { NookVaultManager } from "$app-wasm";
-const NookVaultManager = ThirdPartyManager;
-const manager = new NookVaultManager();
-const generateSecretId = manager.generate_secret_id;"#;
-        assert!(typescript_wasm_import_alias_lines(source, 1, &callable_names())?.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn permits_same_named_accessor_on_unrelated_receiver() -> Result<(), tree_sitter::LanguageError>
-    {
-        let source = r"const manager = sdk.requireManager();
-const openSocket = manager.connect;";
-        assert!(typescript_wasm_import_alias_lines(source, 1, &callable_names())?.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn permits_accessor_colliding_with_method_on_another_wasm_type()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import { NookOAuthAccessToken } from "$app-wasm";
-const accessToken = new NookOAuthAccessToken();
-const tokenLabel = accessToken.token;"#;
-        let callable_names = HashSet::from(["token".to_owned()]);
-        let type_names = HashSet::from(["NookOAuthAccessToken".to_owned()]);
-        assert!(
-            typescript_wasm_import_alias_lines_at_path(
-                source,
-                Path::new("nook-app/nook-web/test.ts"),
-                1,
-                &callable_names,
-                &type_names,
-                &HashMap::new(),
-            )?
-            .is_empty()
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn permits_same_named_method_factory_on_unrelated_receiver()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"import type { NookVaultManager } from "$app-wasm";
-class LocalFactory { create(): NookVaultManager { throw new Error(); } }
-const socket = sdk.create();
-const openSocket = socket.connect;"#;
-        assert!(typescript_wasm_import_alias_lines(source, 1, &callable_names())?.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_destructuring_from_scoped_dynamic_namespace()
-    -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"function load() {
-  const wasm = await import("$app-wasm");
-  const { generate_secret_id: generateSecretId } = wasm;
-}"#;
-        assert_eq!(
-            typescript_wasm_import_alias_lines(source, 1, &callable_names())?,
-            vec![3]
         );
         Ok(())
     }
