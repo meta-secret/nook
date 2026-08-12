@@ -21,7 +21,7 @@ pub(super) fn semantic_javascript_name(
     source: &str,
 ) -> Option<String> {
     let text = node.utf8_text(source.as_bytes()).ok()?;
-    if node.kind() == "string" {
+    if matches!(node.kind(), "string" | "template_string") {
         static_javascript_string(node, source)
     } else {
         Some(text.to_owned())

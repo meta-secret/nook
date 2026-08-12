@@ -13,6 +13,7 @@ mod typescript_domain_boundary;
 mod typescript_state;
 mod wasm_direct_aliases;
 mod wasm_dynamic_aliases;
+mod wasm_dynamic_callables;
 mod wasm_factories;
 mod wasm_inventory;
 mod wasm_local_reexports;

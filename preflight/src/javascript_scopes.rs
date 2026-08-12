@@ -15,11 +15,37 @@ pub(super) fn visible_scoped_binding<'a>(
 ) -> Option<&'a ScopedBinding> {
     bindings.iter().find(|binding| {
         binding.name == name
-            && binding.declaration_end <= reference.start_byte()
+            && (binding.declaration_end <= reference.start_byte()
+                || reference_may_capture_later_binding(reference, binding))
             && binding.scope_start <= reference.start_byte()
             && reference.end_byte() <= binding.scope_end
             && !nested_scope_shadows(reference, binding, name, source)
     })
+}
+
+fn reference_may_capture_later_binding(
+    reference: tree_sitter::Node<'_>,
+    binding: &ScopedBinding,
+) -> bool {
+    let mut ancestor = reference.parent();
+    while let Some(node) = ancestor {
+        if node.start_byte() == binding.scope_start && node.end_byte() == binding.scope_end {
+            return false;
+        }
+        if matches!(
+            node.kind(),
+            "function_declaration"
+                | "function_expression"
+                | "generator_function_declaration"
+                | "generator_function"
+                | "arrow_function"
+                | "method_definition"
+        ) {
+            return true;
+        }
+        ancestor = node.parent();
+    }
+    false
 }
 
 pub(super) fn scoped_binding_is_visible(

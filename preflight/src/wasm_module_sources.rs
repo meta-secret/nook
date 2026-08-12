@@ -35,6 +35,10 @@ enum ForwardedExport {
         imported: String,
         module: String,
     },
+    Namespace {
+        exported: String,
+        module: String,
+    },
 }
 
 pub(super) fn is_wasm_callable_source(module: &str, source_path: &Path) -> bool {
@@ -54,6 +58,47 @@ pub(super) fn is_wasm_callable_export(
 pub(super) fn is_wasm_export(module: &str, exported_name: &str, source_path: &Path) -> bool {
     let mut visited = HashSet::new();
     module_reexports_wasm_symbol(module, exported_name, source_path, &mut visited)
+}
+
+pub(super) fn is_wasm_namespace_export(
+    module: &str,
+    exported_name: &str,
+    source_path: &Path,
+) -> bool {
+    let mut visited = HashSet::new();
+    module_exports_wasm_namespace(module, exported_name, source_path, &mut visited)
+}
+
+fn module_exports_wasm_namespace(
+    module: &str,
+    exported_name: &str,
+    source_path: &Path,
+    visited: &mut HashSet<(PathBuf, String)>,
+) -> bool {
+    let Some(resolved) = resolve_module(module, source_path) else {
+        return false;
+    };
+    if !visited.insert((resolved.clone(), exported_name.to_owned())) {
+        return false;
+    }
+    local_forwarded_exports(&resolved).is_some_and(|exports| {
+        exports.iter().any(|export| match export {
+            ForwardedExport::Namespace { exported, module } if exported == exported_name => {
+                module_reexports_any_wasm(module, &resolved, &mut HashSet::new())
+            }
+            ForwardedExport::Named {
+                exported,
+                imported,
+                module,
+            } if exported == exported_name => {
+                module_exports_wasm_namespace(module, imported, &resolved, visited)
+            }
+            ForwardedExport::All { module } => {
+                module_exports_wasm_namespace(module, exported_name, &resolved, visited)
+            }
+            ForwardedExport::Named { .. } | ForwardedExport::Namespace { .. } => false,
+        })
+    })
 }
 
 pub(super) fn wasm_factory_return_type(
@@ -112,7 +157,7 @@ fn module_factory_return_type(
                     visited,
                 );
             }
-            ForwardedExport::Named { .. } => {}
+            ForwardedExport::Named { .. } | ForwardedExport::Namespace { .. } => {}
         }
     }
     None
@@ -251,7 +296,9 @@ fn module_reexports_any_wasm(
     local_forwarded_exports(&resolved).is_some_and(|exports| {
         exports.iter().any(|export| {
             let module = match export {
-                ForwardedExport::All { module } | ForwardedExport::Named { module, .. } => module,
+                ForwardedExport::All { module }
+                | ForwardedExport::Named { module, .. }
+                | ForwardedExport::Namespace { module, .. } => module,
             };
             module_reexports_any_wasm(module, &resolved, visited)
         })
@@ -278,9 +325,6 @@ fn module_reexports_wasm_symbol(
     }
     local_forwarded_exports(&resolved).is_some_and(|exports| {
         exports.iter().any(|export| match export {
-            ForwardedExport::All { module } => {
-                module_reexports_wasm_symbol(module, exported_name, &resolved, visited)
-            }
             ForwardedExport::Named {
                 exported,
                 imported,
@@ -289,6 +333,9 @@ fn module_reexports_wasm_symbol(
                 module_reexports_wasm_symbol(module, imported, &resolved, visited)
             }
             ForwardedExport::Named { .. } => false,
+            ForwardedExport::All { module } | ForwardedExport::Namespace { module, .. } => {
+                module_reexports_wasm_symbol(module, exported_name, &resolved, visited)
+            }
         })
     })
 }
@@ -428,6 +475,15 @@ fn collect_export_statement(
         .child_by_field_name("source")
         .and_then(|source_node| static_javascript_string(source_node, source));
     let mut saw_specifier = false;
+    if let Some(module) = &direct_module
+        && let Some(exported) = namespace_export_name(node, source)
+    {
+        exports.push(ForwardedExport::Namespace {
+            exported,
+            module: module.clone(),
+        });
+        return;
+    }
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
         if child.kind() != "export_clause" {
@@ -467,6 +523,16 @@ fn collect_export_statement(
     if !saw_specifier && let Some(module) = direct_module {
         exports.push(ForwardedExport::All { module });
     }
+}
+
+fn namespace_export_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
+    let text = node.utf8_text(source.as_bytes()).ok()?.trim_start();
+    if !text.starts_with("export * as ") {
+        return None;
+    }
+    let remainder = text.strip_prefix("export * as ")?;
+    let exported = remainder.split_whitespace().next()?;
+    (!exported.is_empty()).then(|| exported.to_owned())
 }
 
 fn collect_commonjs_export(

@@ -23,7 +23,13 @@ pub(super) fn collect_direct_wasm_aliases_and_bindings(
     if matches!(node.kind(), "import_statement" | "export_statement") {
         if let Some(module) = module_specifier(node, source) {
             if node.kind() == "import_statement" && is_wasm_callable_source(&module, source_path) {
-                collect_namespace_import_bindings(node, source, &module, wasm_namespace_bindings);
+                collect_namespace_import_bindings(
+                    node,
+                    source,
+                    source_path,
+                    &module,
+                    wasm_namespace_bindings,
+                );
                 collect_wasm_type_import_bindings(
                     node,
                     source,

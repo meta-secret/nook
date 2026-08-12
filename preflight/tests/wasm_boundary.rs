@@ -94,6 +94,7 @@ impl NookVaultManager {
 "
 }
 
+#[allow(clippy::too_many_lines)]
 fn wasm_callable_web_fixtures() -> Vec<(&'static str, &'static str)> {
     vec![
         (
@@ -190,11 +191,51 @@ const generateSecretId = bridge.generate_secret_id;"#,
 const manager = new NookVaultManager();
 const connectVault = (manager as NookVaultManager).connect;"#,
         ),
+        (
+            "instance-copy.ts",
+            r#"import { NookVaultManager } from "$app-wasm";
+const manager = new NookVaultManager();
+const bridge = manager;
+const connectVault = bridge.connect;"#,
+        ),
+        (
+            "scoped-dynamic-destructuring.ts",
+            r#"{
+  const { generate_secret_id } = await import("$app-wasm");
+  const generateSecretId = generate_secret_id;
+}"#,
+        ),
+        (
+            "namespace-export-bridge.ts",
+            r#"export * as wasm from "$app-wasm";"#,
+        ),
+        (
+            "namespace-export-consumer.ts",
+            r#"import { wasm } from "./namespace-export-bridge";
+const generateSecretId = wasm.generate_secret_id;"#,
+        ),
+        (
+            "template-member.ts",
+            r#"import * as wasm from "$app-wasm";
+const generateSecretId = wasm[`generate_secret_id`];"#,
+        ),
+        (
+            "forward-closure.ts",
+            r#"const invoke = () => {
+  const generateSecretId = wasm.generate_secret_id;
+};
+const wasm = await import("$app-wasm");
+invoke();"#,
+        ),
+        (
+            "dynamic-import-callback.ts",
+            r#"import("$app-wasm").then(({ generate_secret_id: generateSecretId }) => generateSecretId());"#,
+        ),
     ]
 }
 
 fn expected_wasm_callable_alias_locations() -> Vec<(PathBuf, usize)> {
-    [
+    let mut locations = [
         ("aliased-attribute.ts", 1),
         ("commonjs-consumer.ts", 1),
         ("commonjs-module-consumer.ts", 1),
@@ -206,10 +247,18 @@ fn expected_wasm_callable_alias_locations() -> Vec<(PathBuf, usize)> {
         ("namespace-static.ts", 2),
         ("object-property.ts", 2),
         ("wrapped-receiver.ts", 3),
+        ("instance-copy.ts", 4),
+        ("scoped-dynamic-destructuring.ts", 3),
+        ("namespace-export-consumer.ts", 2),
+        ("template-member.ts", 2),
+        ("forward-closure.ts", 2),
+        ("dynamic-import-callback.ts", 1),
     ]
     .into_iter()
     .map(|(name, line)| (Path::new("nook-app/nook-web").join(name), line))
-    .collect()
+    .collect::<Vec<_>>();
+    locations.sort();
+    locations
 }
 
 fn write_web_source(root: &Path, name: &str, source: &str) -> anyhow::Result<()> {
