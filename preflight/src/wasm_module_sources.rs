@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::javascript_literals::{
     semantic_javascript_name as semantic_node_name, static_javascript_string,
 };
-use crate::javascript_scopes::root_binding_is_visible;
+use crate::javascript_scopes::{declaration_is_in_program_scope, root_binding_is_visible};
 
 const WASM_MODULE_ALIASES: &[&str] = &[
     "$app-wasm",
@@ -506,15 +506,10 @@ fn local_forwarded_exports(path: &Path) -> Option<Vec<ForwardedExport>> {
     Some(exports)
 }
 
-fn collect_imported_bindings(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    bindings: &mut HashMap<String, (String, String)>,
-) {
+#[rustfmt::skip]
+fn collect_imported_bindings(node: tree_sitter::Node<'_>, source: &str, bindings: &mut HashMap<String, (String, String)>) {
     if node.kind() == "import_statement" {
-        let Some(module) = node
-            .child_by_field_name("source")
-            .and_then(|source_node| static_javascript_string(source_node, source))
+        let Some(module) = node.child_by_field_name("source").and_then(|source_node| static_javascript_string(source_node, source))
         else {
             return;
         };
@@ -522,25 +517,16 @@ fn collect_imported_bindings(
         return;
     }
     if node.kind() == "variable_declarator"
-        && let Some(local) = node
-            .child_by_field_name("name")
-            .and_then(|binding| semantic_node_name(binding, source))
-        && let Some(module) = node
-            .child_by_field_name("value")
-            .and_then(|value| required_module(value, source))
+        && let Some(local) = node.child_by_field_name("name").and_then(|binding| semantic_node_name(binding, source))
+        && node.child_by_field_name("name").is_some_and(declaration_is_in_program_scope)
+        && let Some(module) = node.child_by_field_name("value").and_then(|value| required_module(value, source))
     {
         bindings.insert(local, (module, "*".to_owned()));
         return;
     }
     if node.kind() == "variable_declarator"
-        && let (Some(local), Some(value)) = (
-            node.child_by_field_name("name")
-                .and_then(|binding| semantic_node_name(binding, source)),
-            node.child_by_field_name("value"),
-        )
-        && let Some(ForwardedExport::Named {
-            imported, module, ..
-        }) = forwarded_namespace_member(local.clone(), value, source, bindings)
+        && let (Some(local), Some(value)) = (node.child_by_field_name("name").and_then(|binding| semantic_node_name(binding, source)), node.child_by_field_name("value"))
+        && let Some(ForwardedExport::Named { imported, module, .. }) = forwarded_namespace_member(local.clone(), value, source, bindings)
     {
         bindings.insert(local, (module, imported));
         return;
@@ -607,6 +593,13 @@ fn collect_forwarded_exports(
 fn collect_export_statement(node: tree_sitter::Node<'_>, source: &str, imported_bindings: &HashMap<String, (String, String)>, exports: &mut Vec<ForwardedExport>) {
     let direct_module = node.child_by_field_name("source").and_then(|source_node| static_javascript_string(source_node, source));
     let mut saw_specifier = false;
+    if node.utf8_text(source.as_bytes()).is_ok_and(|text| text.trim_start().starts_with("export = "))
+        && let Some(value) = node.named_child(0)
+        && let Some(module) = forwarded_namespace_identifier(value, source, imported_bindings)
+    {
+        exports.push(ForwardedExport::All { module });
+        return;
+    }
     if let Some(module) = &direct_module
         && let Some(exported) = namespace_export_name(node, source)
     {
@@ -741,12 +734,8 @@ fn namespace_export_name(node: tree_sitter::Node<'_>, source: &str) -> Option<St
     (!exported.is_empty()).then(|| exported.to_owned())
 }
 
-fn collect_commonjs_export(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    imported_bindings: &HashMap<String, (String, String)>,
-    exports: &mut Vec<ForwardedExport>,
-) {
+#[rustfmt::skip]
+fn collect_commonjs_export(node: tree_sitter::Node<'_>, source: &str, imported_bindings: &HashMap<String, (String, String)>, exports: &mut Vec<ForwardedExport>) {
     let Some(left) = node.child_by_field_name("left") else {
         return;
     };
@@ -762,14 +751,11 @@ fn collect_commonjs_export(
             exports.extend(right.named_children(&mut cursor).filter_map(|property| {
                 forwarded_commonjs_object_property(property, source, imported_bindings)
             }));
-        } else if let Some((module, imported)) = forwarded_member(right, source, imported_bindings)
-        {
-            exports.push(ForwardedExport::Named {
-                exported: "default".to_owned(),
-                imported,
-                module,
-            });
+        } else if let Some((module, imported)) = forwarded_member(right, source, imported_bindings) {
+            exports.push(ForwardedExport::Named { exported: "default".to_owned(), imported, module });
         } else if let Some(module) = required_module(right, source) {
+            exports.push(ForwardedExport::All { module });
+        } else if let Some(module) = forwarded_namespace_identifier(right, source, imported_bindings) {
             exports.push(ForwardedExport::All { module });
         }
         return;
@@ -777,17 +763,18 @@ fn collect_commonjs_export(
     let Some(exported) = commonjs_named_export(left, source) else {
         return;
     };
-    let Some((module, imported)) = node
-        .child_by_field_name("right")
-        .and_then(|right| forwarded_member(right, source, imported_bindings))
+    let Some((module, imported)) = node.child_by_field_name("right").and_then(|right| forwarded_member(right, source, imported_bindings))
     else {
         return;
     };
-    exports.push(ForwardedExport::Named {
-        exported,
-        imported,
-        module,
-    });
+    exports.push(ForwardedExport::Named { exported, imported, module });
+}
+
+#[rustfmt::skip]
+fn forwarded_namespace_identifier(node: tree_sitter::Node<'_>, source: &str, imports: &HashMap<String, (String, String)>) -> Option<String> {
+    let name = semantic_node_name(node, source)?;
+    let (module, imported) = imports.get(&name)?;
+    (imported == "*" && root_binding_is_visible(node, &name, source)).then(|| module.clone())
 }
 
 fn forwarded_commonjs_object_property(

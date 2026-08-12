@@ -216,7 +216,9 @@ fn collect_dynamic_wasm_aliases(node: tree_sitter::Node<'_>, source: &str, sourc
         node.child_by_field_name("left"),
         node.child_by_field_name("right"),
     ) {
-        invalidate_reassigned_wasm_binding(binding, source, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings);
+        if !node.utf8_text(source.as_bytes()).is_ok_and(|text| text.contains("||=") || text.contains("??=")) {
+            invalidate_reassigned_wasm_binding(binding, source, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings);
+        }
         collect_binding_aliases(binding, value, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings, lines, true);
     }
 
