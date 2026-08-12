@@ -69,12 +69,12 @@ type GoogleTokenClientConfig = {
   callback: (response: GoogleTokenResponse) => void;
 };
 
-type GoogleTokenPromptRequest = {
-  readonly prompt?: string;
+export type GoogleTokenPromptRequest = {
+  readonly prompt: string;
 };
 
 type TokenClient = {
-  requestAccessToken: (request?: GoogleTokenPromptRequest) => void;
+  requestAccessToken: (request: GoogleTokenPromptRequest) => void;
 };
 
 export type GoogleAccessTokenRequest = {
@@ -291,14 +291,10 @@ export async function requestGoogleAccessToken(
           }
         },
       };
-      if (request.prompt !== GoogleOAuthPrompt.Default) {
-        const requestAccessTokenArgs: Parameters<
-          typeof slot.client.requestAccessToken
-        >[0] = { prompt: request.prompt };
-        slot.client.requestAccessToken(requestAccessTokenArgs);
-        return;
-      }
-      slot.client.requestAccessToken();
+      const tokenPromptRequest: GoogleTokenPromptRequest = {
+        prompt: request.prompt,
+      };
+      slot.client.requestAccessToken(tokenPromptRequest);
     },
   );
 }

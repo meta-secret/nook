@@ -12,6 +12,7 @@ import {
   type GoogleAccessTokenRequest,
   type GoogleOAuthConfigurationUpdate,
   type GoogleOAuthExpiryAssessment,
+  type GoogleTokenPromptRequest,
 } from '$lib/auth/google/oauth'
 import { oauthConfigurationNotApplicable } from '$lib/auth/providers'
 
@@ -87,6 +88,13 @@ describe('google-oauth', () => {
       expect(requests.get(DRIVE_APPDATA_SCOPE)).toHaveBeenCalledOnce()
       expect(requests.get(sharedScope)).toHaveBeenCalledOnce()
     })
+    const defaultPromptRequest: GoogleTokenPromptRequest = {
+      prompt: GoogleOAuthPrompt.Default,
+    }
+    expect(requests.get(DRIVE_APPDATA_SCOPE)).toHaveBeenCalledWith(
+      defaultPromptRequest,
+    )
+    expect(requests.get(sharedScope)).toHaveBeenCalledWith(defaultPromptRequest)
     callbacks.get(sharedScope)!({
       access_token: 'file-token',
       expires_in: 3600,
