@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::javascript_literals::static_javascript_string;
+use crate::javascript_literals::semantic_javascript_name as semantic_node_name;
 
 pub(super) fn collect_local_wasm_reexport_aliases(
     node: tree_sitter::Node<'_>,
@@ -57,14 +57,5 @@ fn collect_local_callable_alias_specifiers(
             imported_callable_bindings,
             lines,
         );
-    }
-}
-
-fn semantic_node_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
-    let text = node.utf8_text(source.as_bytes()).ok()?;
-    if node.kind() == "string" {
-        static_javascript_string(node, source)
-    } else {
-        Some(text.to_owned())
     }
 }

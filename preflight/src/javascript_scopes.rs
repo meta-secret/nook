@@ -197,6 +197,7 @@ fn nested_scope_shadows(
         }
         if function_parameters_declare(scope, name, source)
             || block_declares_name(scope, name, source)
+            || function_declares_var(scope, name, source)
             || catch_parameter_declares(scope, name, source)
             || loop_header_declares(scope, name, source)
         {
@@ -216,6 +217,7 @@ pub(super) fn root_binding_is_visible(
     while let Some(scope) = ancestor {
         if function_parameters_declare(scope, name, source)
             || block_declares_name(scope, name, source)
+            || function_declares_var(scope, name, source)
             || catch_parameter_declares(scope, name, source)
             || loop_header_declares(scope, name, source)
         {
@@ -284,6 +286,42 @@ fn block_declares_name(scope: tree_sitter::Node<'_>, name: &str, source: &str) -
         })
 }
 
+fn function_declares_var(scope: tree_sitter::Node<'_>, name: &str, source: &str) -> bool {
+    if !matches!(
+        scope.kind(),
+        "function_declaration"
+            | "function_expression"
+            | "generator_function_declaration"
+            | "generator_function"
+            | "arrow_function"
+            | "method_definition"
+    ) {
+        return false;
+    }
+    scope
+        .child_by_field_name("body")
+        .is_some_and(|body| subtree_declares_var(body, name, source))
+}
+
+fn subtree_declares_var(node: tree_sitter::Node<'_>, name: &str, source: &str) -> bool {
+    if node.kind() == "variable_declaration"
+        && node
+            .utf8_text(source.as_bytes())
+            .is_ok_and(|text| text.trim_start().starts_with("var "))
+    {
+        return declaration_declares(node, name, source);
+    }
+    if matches!(
+        node.kind(),
+        "function_declaration" | "function_expression" | "arrow_function" | "class_declaration"
+    ) {
+        return false;
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .any(|child| subtree_declares_var(child, name, source))
+}
+
 fn catch_parameter_declares(scope: tree_sitter::Node<'_>, name: &str, source: &str) -> bool {
     scope.kind() == "catch_clause"
         && scope
@@ -327,6 +365,16 @@ fn binding_pattern_declares(pattern: tree_sitter::Node<'_>, name: &str, source: 
     if pattern.kind() == "type_annotation" {
         return false;
     }
+    if pattern.kind() == "pair_pattern" {
+        return pattern
+            .child_by_field_name("value")
+            .is_some_and(|value| binding_pattern_declares(value, name, source));
+    }
+    if pattern.kind() == "object_assignment_pattern" {
+        return pattern
+            .child_by_field_name("left")
+            .is_some_and(|left| binding_pattern_declares(left, name, source));
+    }
     let mut cursor = pattern.walk();
     pattern
         .named_children(&mut cursor)
@@ -346,3 +394,78 @@ pub(super) fn declaration_is_in_program_scope(binding: tree_sitter::Node<'_>) ->
         .and_then(|declaration| declaration.parent())
         .is_some_and(|scope| scope.kind() == "program")
 }
+
+pub(super) fn deferred_assignment_executes(
+    reference: tree_sitter::Node<'_>,
+    binding: &ScopedBinding,
+    source: &str,
+) -> bool {
+    deferred_function(reference, binding, source)
+        .is_none_or(|function| deferred_function_call_end(function, source).is_some())
+}
+
+pub(super) fn deferred_invocation_end(
+    reference: tree_sitter::Node<'_>,
+    binding: &ScopedBinding,
+    source: &str,
+) -> Option<usize> {
+    deferred_function(reference, binding, source)
+        .and_then(|function| deferred_function_call_end(function, source))
+}
+
+fn deferred_function<'a>(
+    reference: tree_sitter::Node<'a>,
+    binding: &ScopedBinding,
+    source: &str,
+) -> Option<tree_sitter::Node<'a>> {
+    let mut ancestor = reference.parent();
+    while let Some(function) = ancestor {
+        if matches!(
+            function.kind(),
+            "function_declaration" | "function_expression" | "arrow_function"
+        ) && binding.scope_start < function.start_byte()
+            && function
+                .child_by_field_name("name")
+                .and_then(|node| semantic_javascript_name(node, source))
+                .is_some()
+        {
+            return Some(function);
+        }
+        ancestor = function.parent();
+    }
+    None
+}
+
+fn deferred_function_call_end(function: tree_sitter::Node<'_>, source: &str) -> Option<usize> {
+    let name = function
+        .child_by_field_name("name")
+        .and_then(|node| semantic_javascript_name(node, source))?;
+    let mut root = function;
+    while let Some(parent) = root.parent() {
+        root = parent;
+    }
+    function_call_after(root, &name, function.end_byte(), source)
+}
+
+fn function_call_after(
+    node: tree_sitter::Node<'_>,
+    name: &str,
+    after: usize,
+    source: &str,
+) -> Option<usize> {
+    if node.kind() == "call_expression"
+        && node.start_byte() >= after
+        && node
+            .child_by_field_name("function")
+            .and_then(|callee| semantic_javascript_name(callee, source))
+            .as_deref()
+            == Some(name)
+    {
+        return Some(node.end_byte());
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .filter_map(|child| function_call_after(child, name, after, source))
+        .min()
+}
+use crate::javascript_literals::semantic_javascript_name;

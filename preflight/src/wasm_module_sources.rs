@@ -204,6 +204,29 @@ fn find_factory_return_type(
     wasm_type_names: &HashSet<String>,
     imported_bindings: &HashMap<String, (String, String)>,
 ) -> Option<String> {
+    if exported_name == "default"
+        && node.kind() == "export_statement"
+        && node
+            .utf8_text(source.as_bytes())
+            .is_ok_and(|text| text.trim_start().starts_with("export default "))
+        && let Some(local) = node
+            .named_child(0)
+            .filter(|child| child.kind() == "identifier")
+            .and_then(|child| semantic_node_name(child, source))
+    {
+        let mut root = node;
+        while let Some(parent) = root.parent() {
+            root = parent;
+        }
+        return find_factory_return_type(
+            root,
+            source,
+            source_path,
+            &local,
+            wasm_type_names,
+            imported_bindings,
+        );
+    }
     if matches!(
         node.kind(),
         "function_declaration"
@@ -352,11 +375,8 @@ fn resolve_module(module: &str, source_path: &Path) -> Option<PathBuf> {
     if Path::new(module).is_absolute() {
         return resolve_local_module(Path::new(module));
     }
-    if let Some(suffix) = module.strip_prefix("$lib/") {
-        return resolve_local_module(&configured_lib_root(source_path)?.join(suffix));
-    }
     if !module.starts_with('.') {
-        return None;
+        return configured_alias_path(module, source_path);
     }
     let parent = source_path.parent()?;
     let unresolved = normalize_local_module_path(&parent.join(module));
@@ -367,10 +387,10 @@ fn resolve_module(module: &str, source_path: &Path) -> Option<PathBuf> {
     resolve_local_module(&unresolved)
 }
 
-fn configured_lib_root(source_path: &Path) -> Option<PathBuf> {
+fn configured_alias_path(module: &str, source_path: &Path) -> Option<PathBuf> {
     for ancestor in source_path.ancestors() {
-        if let Some(root) = tsconfig_lib_root(&ancestor.join("tsconfig.json")) {
-            return Some(root);
+        if let Some(path) = tsconfig_alias_path(&ancestor.join("tsconfig.json"), module) {
+            return resolve_local_module(&path);
         }
     }
     source_path.ancestors().find_map(|ancestor| {
@@ -378,23 +398,30 @@ fn configured_lib_root(source_path: &Path) -> Option<PathBuf> {
             .ok()?
             .filter_map(Result::ok)
             .find_map(|entry| {
-                let root = tsconfig_lib_root(&entry.path().join("tsconfig.json"))?;
-                source_path.starts_with(&root).then_some(root)
+                let config = entry.path().join("tsconfig.json");
+                let path = tsconfig_alias_path(&config, module)?;
+                resolve_local_module(&path)
             })
     })
 }
 
-fn tsconfig_lib_root(config: &Path) -> Option<PathBuf> {
+fn tsconfig_alias_path(config: &Path, module: &str) -> Option<PathBuf> {
     let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(config).ok()?).ok()?;
-    let paths = value.get("compilerOptions")?.get("paths")?;
-    let target = paths
-        .get("$lib/*")
-        .or_else(|| paths.get("$lib"))?
-        .as_array()?
-        .first()?
-        .as_str()?
-        .trim_end_matches("/*");
-    Some(normalize_local_module_path(&config.parent()?.join(target)))
+    let paths = value.get("compilerOptions")?.get("paths")?.as_object()?;
+    paths.iter().find_map(|(alias, targets)| {
+        let suffix = if let Some(prefix) = alias.strip_suffix('*') {
+            module.strip_prefix(prefix)?
+        } else if alias == module {
+            ""
+        } else {
+            return None;
+        };
+        let target = targets.as_array()?.first()?.as_str()?;
+        let target = target.strip_suffix('*').unwrap_or(target);
+        Some(normalize_local_module_path(
+            &config.parent()?.join(format!("{target}{suffix}")),
+        ))
+    })
 }
 
 fn is_known_wasm_path(path: &Path) -> bool {
@@ -710,6 +737,13 @@ fn collect_commonjs_export(
                     imported_bindings,
                 )
             }));
+        } else if let Some((module, imported)) = forwarded_member(right, source, imported_bindings)
+        {
+            exports.push(ForwardedExport::Named {
+                exported: "default".to_owned(),
+                imported,
+                module,
+            });
         } else if let Some(module) = required_module(right, source) {
             exports.push(ForwardedExport::All { module });
         }
@@ -718,22 +752,10 @@ fn collect_commonjs_export(
     let Some(exported) = commonjs_named_export(left, source) else {
         return;
     };
-    let Some((module, imported)) = node.child_by_field_name("right").and_then(|right| {
-        required_member(right, source).or_else(|| {
-            let object = right.child_by_field_name("object")?;
-            let name = semantic_node_name(object, source)?;
-            let (module, namespace) = imported_bindings.get(&name)?;
-            (namespace == "*")
-                .then(|| {
-                    let imported = right
-                        .child_by_field_name("property")
-                        .or_else(|| right.child_by_field_name("index"))
-                        .and_then(|property| semantic_node_name(property, source))?;
-                    Some((module.clone(), imported))
-                })
-                .flatten()
-        })
-    }) else {
+    let Some((module, imported)) = node
+        .child_by_field_name("right")
+        .and_then(|right| forwarded_member(right, source, imported_bindings))
+    else {
         return;
     };
     exports.push(ForwardedExport::Named {
@@ -741,6 +763,25 @@ fn collect_commonjs_export(
         imported,
         module,
     });
+}
+
+fn forwarded_member(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    imported_bindings: &HashMap<String, (String, String)>,
+) -> Option<(String, String)> {
+    required_member(node, source).or_else(|| {
+        let object = node.child_by_field_name("object")?;
+        let name = semantic_node_name(object, source)?;
+        let (module, namespace) = imported_bindings.get(&name)?;
+        (namespace == "*").then(|| {
+            let imported = node
+                .child_by_field_name("property")
+                .or_else(|| node.child_by_field_name("index"))
+                .and_then(|property| semantic_node_name(property, source))?;
+            Some((module.clone(), imported))
+        })?
+    })
 }
 
 fn commonjs_named_export(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {

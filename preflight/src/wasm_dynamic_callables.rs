@@ -223,6 +223,11 @@ fn pattern_pair(
     if child.kind() == "shorthand_property_identifier_pattern" {
         return (Some(child), Some(child));
     }
+    if child.kind() == "object_assignment_pattern"
+        && let Some(binding) = child.child_by_field_name("left")
+    {
+        return (Some(binding), Some(binding));
+    }
     (None, None)
 }
 

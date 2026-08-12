@@ -6,8 +6,9 @@ use crate::javascript_literals::{
     static_javascript_string,
 };
 use crate::javascript_scopes::{
-    ScopedBinding, declaration_is_in_program_scope, invalidate_visible_scoped_binding,
-    root_binding_is_visible, scoped_binding, scoped_binding_is_visible, visible_scoped_binding,
+    ScopedBinding, declaration_is_in_program_scope, deferred_assignment_executes,
+    deferred_invocation_end, invalidate_visible_scoped_binding, root_binding_is_visible,
+    scoped_binding, scoped_binding_is_visible, visible_scoped_binding,
 };
 use crate::wasm_dynamic_callables::collect_scoped_dynamic_callable_bindings;
 use crate::wasm_factories::{
@@ -20,7 +21,7 @@ use crate::wasm_member_aliases::{
     collect_object_literal_aliases_in_tree,
 };
 use crate::wasm_module_sources::{
-    is_wasm_callable_source, is_wasm_export, wasm_namespace_export_source,
+    is_wasm_callable_export, is_wasm_callable_source, is_wasm_export, wasm_namespace_export_source,
 };
 
 const WASM_MANAGER_ACCESSOR: &str = "requireManager";
@@ -78,6 +79,21 @@ pub(super) fn collect_wasm_type_import_bindings(
     wasm_type_names: &HashSet<String>,
     wasm_class_bindings: &mut HashMap<String, String>,
 ) {
+    if node.kind() == "namespace_import" {
+        let mut cursor = node.walk();
+        if let Some(namespace) = node
+            .named_children(&mut cursor)
+            .find_map(|child| semantic_node_name(child, source))
+        {
+            for wasm_type in wasm_type_names {
+                if is_wasm_export(module, wasm_type, source_path) {
+                    wasm_class_bindings
+                        .insert(format!("{namespace}.{wasm_type}"), wasm_type.clone());
+                }
+            }
+        }
+        return;
+    }
     if node.kind() == "import_specifier"
         && let Some(imported) = node.child_by_field_name("name")
         && let Some(imported_name) = semantic_node_name(imported, source)
@@ -447,6 +463,19 @@ fn collect_binding_aliases(
 ) -> bool {
     let binding = unwrap_transparent_expression(binding);
     let value = unwrap_transparent_expression(value);
+    if binding.kind() == "identifier"
+        && let Some(module) = loaded_module_specifier(value, source)
+        && is_wasm_callable_export(&module, "default", source_path)
+        && let Some(name) = semantic_node_name(binding, source)
+    {
+        lines.push(first_line + binding.start_position().row);
+        if let Some(scoped) = scoped_binding(binding, source, None, None) {
+            scoped_wasm_callables.push(scoped);
+        } else {
+            imported_callable_bindings.insert(name);
+        }
+        return true;
+    }
     if let Some(namespace_binding) = dynamic_namespace_binding(
         binding,
         value,
@@ -533,6 +562,7 @@ fn dynamic_namespace_binding(
     wasm_namespace_bindings: &HashMap<String, String>,
     scoped_wasm_namespaces: &[ScopedBinding],
 ) -> Option<ScopedBinding> {
+    let reference = binding;
     let binding = declared_binding(binding, source).unwrap_or(binding);
     if binding.kind() == "identifier"
         && let Some(module) = wasm_module_specifier(
@@ -543,7 +573,11 @@ fn dynamic_namespace_binding(
             scoped_wasm_namespaces,
         )
     {
-        return scoped_binding(binding, source, None, Some(module));
+        let mut scoped = scoped_binding(binding, source, None, Some(module))?;
+        if let Some(invocation_end) = deferred_invocation_end(reference, &scoped, source) {
+            scoped.declaration_end = invocation_end;
+        }
+        return Some(scoped);
     }
     None
 }
@@ -563,8 +597,12 @@ fn wasm_instance_binding(
     wasm_instance_bindings: &HashMap<String, String>,
     scoped_wasm_instances: &[ScopedBinding],
 ) -> Option<ScopedBinding> {
+    let reference = binding;
     let binding = declared_binding(binding, source).unwrap_or(binding);
-    if binding.kind() != "identifier" {
+    if !matches!(
+        binding.kind(),
+        "identifier" | "member_expression" | "subscript_expression"
+    ) {
         return None;
     }
     if let Some(wasm_type) = value_is_wasm_instance(
@@ -580,7 +618,11 @@ fn wasm_instance_binding(
         wasm_instance_bindings,
         scoped_wasm_instances,
     ) {
-        return scoped_binding(binding, source, Some(wasm_type), None);
+        let mut scoped = scoped_binding(binding, source, Some(wasm_type), None)?;
+        if let Some(invocation_end) = deferred_invocation_end(reference, &scoped, source) {
+            scoped.declaration_end = invocation_end;
+        }
+        return Some(scoped);
     }
     None
 }
@@ -618,56 +660,6 @@ fn find_declared_binding<'a>(
     let mut cursor = node.walk();
     node.named_children(&mut cursor)
         .find_map(|child| find_declared_binding(child, reference, name, source))
-}
-
-fn deferred_assignment_executes(
-    reference: tree_sitter::Node<'_>,
-    binding: &ScopedBinding,
-    source: &str,
-) -> bool {
-    let mut ancestor = reference.parent();
-    while let Some(function) = ancestor {
-        if matches!(
-            function.kind(),
-            "function_declaration" | "function_expression" | "arrow_function"
-        ) && binding.scope_start < function.start_byte()
-        {
-            let Some(name) = function
-                .child_by_field_name("name")
-                .and_then(|node| semantic_node_name(node, source))
-            else {
-                return false;
-            };
-            let mut root = function;
-            while let Some(parent) = root.parent() {
-                root = parent;
-            }
-            return function_call_after(root, &name, function.end_byte(), source);
-        }
-        ancestor = function.parent();
-    }
-    true
-}
-
-fn function_call_after(
-    node: tree_sitter::Node<'_>,
-    name: &str,
-    after: usize,
-    source: &str,
-) -> bool {
-    if node.kind() == "call_expression"
-        && node.start_byte() >= after
-        && node
-            .child_by_field_name("function")
-            .and_then(|callee| semantic_node_name(callee, source))
-            .as_deref()
-            == Some(name)
-    {
-        return true;
-    }
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor)
-        .any(|child| function_call_after(child, name, after, source))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -762,7 +754,7 @@ fn value_is_wasm_instance(
     None
 }
 
-fn constructor_wasm_class(
+pub(super) fn constructor_wasm_class(
     constructor: tree_sitter::Node<'_>,
     source: &str,
     wasm_class_bindings: &HashMap<String, String>,

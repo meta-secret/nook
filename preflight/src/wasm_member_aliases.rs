@@ -4,8 +4,8 @@ use std::path::Path;
 use crate::javascript_literals::semantic_javascript_name as semantic_node_name;
 use crate::javascript_scopes::{ScopedBinding, root_binding_is_visible, scoped_binding};
 use crate::wasm_dynamic_aliases::{
-    loaded_module_specifier, scoped_wasm_module_visible, scoped_wasm_type_visible,
-    unwrap_transparent_expression, wasm_module_specifier,
+    constructor_wasm_class, loaded_module_specifier, scoped_wasm_module_visible,
+    scoped_wasm_type_visible, unwrap_transparent_expression, wasm_module_specifier,
 };
 use crate::wasm_inventory::WasmTypeInventory;
 use crate::wasm_module_sources::{is_wasm_callable_export, is_wasm_export};
@@ -30,11 +30,11 @@ pub(super) fn collect_destructuring_aliases(
     lines: &mut Vec<usize>,
 ) -> bool {
     if binding.kind() == "array_pattern" && value.kind() == "array" {
-        let (mut bindings, mut values) = (binding.walk(), value.walk());
-        for (binding, value) in binding
-            .named_children(&mut bindings)
-            .zip(value.named_children(&mut values))
-        {
+        let values = array_elements(value);
+        for (index, binding) in array_elements(binding) {
+            let Some(value) = values.get(&index).copied() else {
+                continue;
+            };
             if let Some(callable) = wasm_callable_member_name(
                 value,
                 source,
@@ -105,6 +105,18 @@ pub(super) fn collect_destructuring_aliases(
         lines,
     );
     true
+}
+
+fn array_elements(node: tree_sitter::Node<'_>) -> HashMap<usize, tree_sitter::Node<'_>> {
+    let (mut elements, mut index, mut cursor) = (HashMap::new(), 0, node.walk());
+    for child in node.children(&mut cursor) {
+        if child.kind() == "," {
+            index += 1;
+        } else if child.is_named() {
+            elements.insert(index, child);
+        }
+    }
+    elements
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -430,6 +442,19 @@ pub(super) fn wasm_receiver_type(
     scoped_wasm_instances: &[ScopedBinding],
 ) -> Option<String> {
     let receiver = unwrap_transparent_expression(receiver);
+    if receiver.kind() == "new_expression"
+        && let Some(constructor) = receiver.child_by_field_name("constructor")
+        && let Some(wasm_type) = constructor_wasm_class(
+            constructor,
+            source,
+            wasm_class_bindings,
+            wasm_namespace_bindings,
+            scoped_wasm_namespaces,
+            wasm_type_names,
+        )
+    {
+        return Some(wasm_type);
+    }
     if receiver.kind() == "call_expression"
         && let Some(function) = receiver.child_by_field_name("function")
         && matches!(

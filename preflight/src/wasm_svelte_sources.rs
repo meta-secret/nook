@@ -96,15 +96,12 @@ fn preserve_block_scope(node: tree_sitter::Node<'_>, source: &str, composite: &m
         _ => None,
     };
     let Some(raw) = raw else { return };
-    let names = raw
-        .split(|character: char| !(character.is_alphanumeric() || matches!(character, '_' | '$')))
-        .filter(|name| !name.is_empty() && !name.chars().next().is_some_and(char::is_numeric))
-        .collect::<Vec<_>>()
-        .join(",");
-    if names.is_empty() {
+    let raw = raw.trim();
+    if raw.is_empty() {
         return;
     }
-    let declaration = format!("{{let {names};");
+    let initializer = matches!(raw.as_bytes().first(), Some(b'{' | b'[')).then_some("=0");
+    let declaration = format!("{{let {raw}{};", initializer.unwrap_or_default());
     if declaration.len() < node.end_byte() - node.start_byte() {
         composite[node.start_byte()..node.start_byte() + declaration.len()]
             .copy_from_slice(declaration.as_bytes());
