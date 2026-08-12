@@ -3,6 +3,8 @@ import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import {
   import_named_local_vault_blob,
   NookSyncConflictReviewState,
+  ProviderSyncFailureHandling,
+  ProviderSyncVisibility,
   RemoteVaultRecoveryState,
   set_active_vault,
   set_vault_session_locked,
@@ -197,7 +199,11 @@ async function resumeConnectAfterSyncConflict({
   if (state.isAuthenticated) {
     if (!pendingProvider) {
       const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[0] =
-        { providerId, options: { quiet: true } };
+        {
+          providerId,
+          visibility: ProviderSyncVisibility.Quiet,
+          failureHandling: ProviderSyncFailureHandling.Capture,
+        };
       await state.syncProviderById(syncProviderByIdArgs);
     }
     await state.hydrateMultiDeviceState();

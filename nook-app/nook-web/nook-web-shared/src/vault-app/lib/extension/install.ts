@@ -95,7 +95,7 @@ export function extensionInstallLandingUrl(): string {
 }
 
 export function browserSupportsExtensionInstallation(
-  environment: BrowserExtensionEnvironment = navigator,
+  environment: BrowserExtensionEnvironment,
 ): boolean {
   const userAgentData = environment.userAgentData;
   if (
@@ -121,13 +121,15 @@ export function browserSupportsExtensionInstallation(
   return !isDesktopModeIPad;
 }
 
+type ExtensionSetupOfferContext = {
+  readonly status: ExtensionSetupStatus;
+  readonly environment: BrowserExtensionEnvironment;
+};
+
 export function shouldOfferExtensionSetup({
   status,
   environment,
-}: {
-  readonly status: ExtensionSetupStatus;
-  readonly environment: BrowserExtensionEnvironment;
-}): boolean {
+}: ExtensionSetupOfferContext): boolean {
   return (
     status !== ExtensionSetupStatus.NotInstalled ||
     browserSupportsExtensionInstallation(environment)

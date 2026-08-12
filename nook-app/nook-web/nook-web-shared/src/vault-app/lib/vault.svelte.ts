@@ -7,7 +7,11 @@ import {
   type SecretType,
 } from "$lib/nook";
 import {
+  DeviceIdentityInitializationMode,
+  ExternalDeviceIdentityAuthorizationMode,
   is_vault_session_locked,
+  ProviderSyncFreshness,
+  ProviderSyncVisibility,
   RemoteVaultRecoveryState,
   SentinelVaultUnlockState,
   type NookPendingSyncConflict,
@@ -24,6 +28,8 @@ import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
   OpenSettingsArgs,
   ProviderActionsContext,
+  ProviderSyncRequest,
+  SyncFromProvidersRequest,
 } from "$lib/vault/action-contexts";
 import * as providersActions from "$lib/vault/providers.svelte";
 import * as localLoginActions from "$lib/vault/local-login";
@@ -53,6 +59,11 @@ export {
   type VaultEditRestriction,
 } from "$lib/vault/runtime-state.svelte";
 
+type ExternalDeviceIdentityAdoptionRequest = {
+  readonly adopt: (manager: NookVaultManager) => Promise<void>;
+  readonly mode: ExternalDeviceIdentityAuthorizationMode;
+};
+
 export class VaultState extends VaultRuntimeState {
   protected providerActionsContext(): ProviderActionsContext {
     return this;
@@ -74,23 +85,23 @@ export class VaultState extends VaultRuntimeState {
     return lifecycleActions.continueInitializationAfterDeviceUnlock(this);
   }
 
-  async initDeviceIdentity(options?: { allowPendingAuthorization?: boolean }) {
+  async initDeviceIdentity() {
     const initDeviceIdentityArgs: Parameters<
       typeof lifecycleActions.initDeviceIdentity
-    >[0] = { state: this, options };
+    >[0] = {
+      state: this,
+      mode: DeviceIdentityInitializationMode.RequireCompletedAuthorization,
+    };
     return lifecycleActions.initDeviceIdentity(initDeviceIdentityArgs);
   }
 
   async authorizeWithExternalDeviceIdentity({
     adopt,
-    options,
-  }: {
-    readonly adopt: (manager: NookVaultManager) => Promise<void>;
-    readonly options?: { deferInitialization?: boolean };
-  }): Promise<boolean> {
+    mode,
+  }: ExternalDeviceIdentityAdoptionRequest): Promise<boolean> {
     const authorizationArgs: Parameters<
       typeof lifecycleActions.authorizeWithExternalDeviceIdentity
-    >[0] = { state: this, adopt, options };
+    >[0] = { state: this, adopt, mode };
     return lifecycleActions.authorizeWithExternalDeviceIdentity(
       authorizationArgs,
     );
@@ -394,21 +405,20 @@ export class VaultState extends VaultRuntimeState {
     return syncActions.hydrateMultiDeviceState(this);
   }
 
-  async syncFromStorage(options?: { force?: boolean }) {
+  async syncFromStorage(freshness: ProviderSyncFreshness) {
     const syncFromStorageArgs: Parameters<
       typeof syncActions.syncFromStorage
-    >[0] = { state: this, options };
+    >[0] = { state: this, freshness };
     return syncActions.syncFromStorage(syncFromStorageArgs);
   }
 
   /** Pull local vault from every sync provider (background / manual refresh). */
-  async syncFromSyncProviders(options?: {
-    quiet?: boolean;
-    force?: boolean;
-  }): Promise<void> {
+  async syncFromSyncProviders(
+    request: SyncFromProvidersRequest,
+  ): Promise<void> {
     const syncFromSyncProvidersArgs: Parameters<
       typeof syncActions.syncFromSyncProviders
-    >[0] = { state: this, options };
+    >[0] = { state: this, ...request };
     return syncActions.syncFromSyncProviders(syncFromSyncProvidersArgs);
   }
 
@@ -417,32 +427,30 @@ export class VaultState extends VaultRuntimeState {
   }
 
   /** Sync local event log with one provider. */
-  async syncProviderById({
-    providerId,
-    options,
-  }: {
-    readonly providerId: string;
-    readonly options?: { quiet?: boolean; propagateError?: boolean };
-  }): Promise<void> {
+  async syncProviderById(request: ProviderSyncRequest): Promise<void> {
     const syncProviderArgs: Parameters<typeof syncActions.syncProviderById>[0] =
-      { state: this, providerId, options };
+      { state: this, ...request };
     return syncActions.syncProviderById(syncProviderArgs);
   }
 
   fanOutSyncChain: Promise<void> = Promise.resolve();
 
   /** Push the local vault to every connected sync provider (after CRUD or manual sync). */
-  async fanOutSyncToProviders(options?: { quiet?: boolean }): Promise<void> {
+  async fanOutSyncToProviders(
+    visibility: ProviderSyncVisibility,
+  ): Promise<void> {
     const fanOutSyncToProvidersArgs: Parameters<
       typeof syncActions.fanOutSyncToProviders
-    >[0] = { state: this, options };
+    >[0] = { state: this, visibility };
     return syncActions.fanOutSyncToProviders(fanOutSyncToProvidersArgs);
   }
 
-  async runFanOutSyncToProviders(options?: { quiet?: boolean }): Promise<void> {
+  async runFanOutSyncToProviders(
+    visibility: ProviderSyncVisibility,
+  ): Promise<void> {
     const runFanOutSyncToProvidersArgs: Parameters<
       typeof syncActions.runFanOutSyncToProviders
-    >[0] = { state: this, options };
+    >[0] = { state: this, visibility };
     return syncActions.runFanOutSyncToProviders(runFanOutSyncToProvidersArgs);
   }
 

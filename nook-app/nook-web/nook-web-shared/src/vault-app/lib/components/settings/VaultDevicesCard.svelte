@@ -221,8 +221,11 @@
   }
 
   async function saveRename(member: VaultMember) {
-    const onRenameDeviceArgs: Parameters<typeof onRenameDevice>[0] = { authId: member.authId, label: renameLabel };
-    await onRenameDevice(onRenameDeviceArgs)
+    const deviceRename: Parameters<typeof onRenameDevice>[0] = {
+      authId: member.authId,
+      label: renameLabel,
+    }
+    await onRenameDevice(deviceRename)
     renameAuthId = { kind: MemberRenameKind.Idle }
     renameLabel = ''
   }

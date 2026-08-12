@@ -4,12 +4,12 @@ import { is_vault_session_locked } from "$app-wasm";
 
 const log = createLogger("vault-sync");
 
-export function syncError({
-  context,
-}: {
+type SyncFailureContext = {
   readonly context: string;
   readonly failure: RuntimeFailure;
-}): void {
+};
+
+export function syncError({ context }: SyncFailureContext): void {
   log.warn(`${context} failed`);
 }
 

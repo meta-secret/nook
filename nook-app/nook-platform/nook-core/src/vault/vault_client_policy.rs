@@ -22,6 +22,41 @@ pub enum DeviceProtectionStatus {
     Error,
 }
 
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeviceIdentityInitializationMode {
+    RequireCompletedAuthorization,
+    AllowPendingAuthorization,
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExternalDeviceIdentityAuthorizationMode {
+    ContinueInitialization,
+    DeferInitialization,
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProviderSyncVisibility {
+    Visible,
+    Quiet,
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProviderSyncFailureHandling {
+    Capture,
+    Propagate,
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProviderSyncFreshness {
+    Scheduled,
+    Forced,
+}
+
 impl DeviceProtectionStatus {
     #[must_use]
     pub fn from_persisted(value: &str) -> Option<Self> {

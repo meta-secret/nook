@@ -69,8 +69,10 @@ function cloudKitRedirectDetails(
   }
 }
 
+type CloudKitDiagnosticStrings = CloudKitDiagnosticString[];
+
 function firstDiagnosticString(
-  values: CloudKitDiagnosticString[],
+  values: CloudKitDiagnosticStrings,
 ): CloudKitDiagnosticString {
   return (
     values.find(
@@ -154,13 +156,12 @@ export function cloudKitAuthErrorDetails(
   return {};
 }
 
-function hasErrorToken({
-  details,
-  predicate,
-}: {
+type ErrorTokenSearch = {
   readonly details: CloudKitAuthErrorDetails;
   readonly predicate: (value: string) => boolean;
-}): boolean {
+};
+
+function hasErrorToken({ details, predicate }: ErrorTokenSearch): boolean {
   return [details.code, details.message, details.reason, details.statusText]
     .filter((value): value is string => Boolean(value))
     .some((value) => predicate(value.toUpperCase()));
@@ -182,13 +183,15 @@ function isAuthRequiredCloudKitError(
   return hasErrorToken(hasErrorTokenArgs);
 }
 
+type ExpectedCloudKitSignInFailureCheck = {
+  readonly error: unknown;
+  readonly hasSignInControl: boolean;
+};
+
 export function isExpectedCloudKitSignInSetupFailure({
   error,
   hasSignInControl,
-}: {
-  readonly error: unknown;
-  readonly hasSignInControl: boolean;
-}): boolean {
+}: ExpectedCloudKitSignInFailureCheck): boolean {
   const details = cloudKitAuthErrorDetails(error);
   if (isAuthRequiredCloudKitError(details)) return hasSignInControl;
   const hasErrorTokenArgs2: Parameters<typeof hasErrorToken>[0] = {

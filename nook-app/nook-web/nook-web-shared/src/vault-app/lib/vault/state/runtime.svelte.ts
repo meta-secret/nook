@@ -25,7 +25,7 @@ export class VaultRuntimeState {
   isSaving = $state(false);
   isInitializing = $state(true);
 
-  constructor(browserLocale = new NookBrowserLocale()) {
+  constructor(browserLocale: NookBrowserLocale) {
     this.browserLocale = browserLocale;
   }
 }

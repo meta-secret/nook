@@ -1,6 +1,9 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 /** Sync actions that snapshot reactive Svelte state at WASM boundaries. */
-import type { SyncActionsContext } from "$lib/vault/action-contexts";
+import type {
+  ProviderSyncRequest,
+  SyncActionsContext,
+} from "$lib/vault/action-contexts";
 import { createLogger, runtimeFailure } from "$lib/runtime/log";
 import { syncVaultFromStorage, type NookVaultSyncResult } from "$lib/nook";
 import {
@@ -9,6 +12,8 @@ import {
   NookManualProviderSyncState,
   NookPendingSyncConflict,
   NookProviderSyncRevision,
+  ProviderSyncFailureHandling,
+  ProviderSyncVisibility,
   read_local_vault_yaml,
 } from "$app-wasm";
 import {
@@ -130,15 +135,16 @@ function stageLocalFolderMultipleVaultsIssue({
   state.reportLocalFolderMultipleVaults(issue);
 }
 
+type ProviderSyncExecution = ProviderSyncRequest & {
+  readonly state: SyncActionsContext;
+};
+
 export async function syncProviderById({
   state,
   providerId,
-  options,
-}: {
-  readonly state: SyncActionsContext;
-  readonly providerId: string;
-  readonly options?: { quiet?: boolean; propagateError?: boolean };
-}): Promise<void> {
+  visibility,
+  failureHandling,
+}: ProviderSyncExecution): Promise<void> {
   if (!state.hasManager) return;
   if (state.syncBlocked) return;
   // A foreground password op (verify/enroll/rotate) borrows the wasm manager;
@@ -158,7 +164,7 @@ export async function syncProviderById({
     return;
 
   state.beginManualProviderSync(providerId);
-  if (!options?.quiet) {
+  if (visibility === ProviderSyncVisibility.Visible) {
     state.errorMsg = "";
   }
   log.debug("provider sync started");
@@ -262,7 +268,7 @@ export async function syncProviderById({
         stageLocalFolderMultipleVaultsIssueArgs,
       );
     }
-    if (!options?.quiet) {
+    if (visibility === ProviderSyncVisibility.Visible) {
       state.errorMsg = stagedStoreMismatch
         ? (() => {
             const tArgs: Parameters<typeof state.t>[0] = {
@@ -280,7 +286,10 @@ export async function syncProviderById({
             ? e.message
             : "Sync failed for state provider.";
     }
-    if (options?.propagateError && !stagedStoreMismatch) {
+    if (
+      failureHandling === ProviderSyncFailureHandling.Propagate &&
+      !stagedStoreMismatch
+    ) {
       throw e;
     }
   } finally {

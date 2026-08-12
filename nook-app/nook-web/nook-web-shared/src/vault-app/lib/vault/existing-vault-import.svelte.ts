@@ -22,6 +22,11 @@ import {
 } from "$lib/vault/state/provider.svelte";
 
 /** Browser orchestration for an existing-vault import retained across device unlock. */
+type ExistingVaultPasswordUnlock = {
+  readonly entryId: string;
+  readonly password: string;
+};
+
 export class ExistingVaultImportLifecycle {
   queue = $state<ExistingVaultImportQueue>({
     kind: ExistingVaultImportQueueKind.Idle,
@@ -141,10 +146,7 @@ export class ExistingVaultImportLifecycle {
   async unlockWithPassword({
     entryId,
     password,
-  }: {
-    readonly entryId: string;
-    readonly password: string;
-  }): Promise<void> {
+  }: ExistingVaultPasswordUnlock): Promise<void> {
     const unlockRequest: Parameters<typeof this.vault.unlockWithPassword>[0] = {
       entryId,
       password,

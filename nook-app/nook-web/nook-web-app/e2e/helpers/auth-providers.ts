@@ -51,10 +51,8 @@ export function activeAuthProviderSeedScope(
 
 type AuthProviderBrowserHooks = {
   activeVaultScope(storeId: string): ActiveVaultScope
-  load_auth_providers_snapshot: () => Promise<AuthProvidersSnapshot>
-  save_auth_providers_snapshot: (
-    snapshot: AuthProvidersSnapshot,
-  ) => Promise<void>
+  loadAuthProviders: () => Promise<AuthProvidersSnapshot>
+  saveAuthProviders: (snapshot: AuthProvidersSnapshot) => Promise<void>
   unselectedVaultScope(): ActiveVaultScope
 }
 
@@ -205,9 +203,9 @@ async function appendSealedAuthProviders(
         }
       ).__nookAuthProviders
       if (!hook) throw new Error('E2E auth provider hooks are unavailable')
-      const snapshot = await hook.load_auth_providers_snapshot()
+      const snapshot = await hook.loadAuthProviders()
       snapshot.providers.push(...additions)
-      await hook.save_auth_providers_snapshot(snapshot)
+      await hook.saveAuthProviders(snapshot)
     },
     {
       providers: storedAdditions,
@@ -404,16 +402,11 @@ export async function loadDecryptedAuthProvidersInBrowser(page: Page) {
   return page.evaluate(async () => {
     const hook = (
       window as Window & {
-        __nookAuthProviders?: {
-          load_auth_providers_snapshot: () => Promise<{
-            providers: StorageProvider[]
-            activeVaultStoreId: ActiveVaultScope
-          }>
-        }
+        __nookAuthProviders?: AuthProviderBrowserHooks
       }
     ).__nookAuthProviders
-    if (hook?.load_auth_providers_snapshot) {
-      return hook.load_auth_providers_snapshot()
+    if (hook?.loadAuthProviders) {
+      return hook.loadAuthProviders()
     }
     throw new Error('E2E auth provider hooks are unavailable')
   })
@@ -440,7 +433,11 @@ export async function saveAuthProvidersInBrowser(
         seedScope.kind === activeVaultKind
           ? hook.activeVaultScope(seedScope.storeId)
           : hook.unselectedVaultScope()
-      await hook.save_auth_providers_snapshot({ providers, activeVaultStoreId })
+      const authProvidersSnapshot: AuthProvidersSnapshot = {
+        providers,
+        activeVaultStoreId,
+      }
+      await hook.saveAuthProviders(authProvidersSnapshot)
     },
     {
       providers,

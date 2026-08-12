@@ -43,7 +43,9 @@ type LocalDataResetReady = {
 type LocalDataResetMessage =
   LocalDataResetRequest | LocalDataResetSeen | LocalDataResetReady;
 
-function combineErrors(errors: Error[]): Error {
+type BrowserDataDeletionErrors = Error[];
+
+function combineErrors(errors: BrowserDataDeletionErrors): Error {
   return new Error(errors.map((error) => error.message).join("; "));
 }
 
