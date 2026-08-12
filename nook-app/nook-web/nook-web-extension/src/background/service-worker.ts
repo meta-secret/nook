@@ -66,7 +66,19 @@ import {
   websiteLoginSaveOffer,
   websiteLoginSavePending,
 } from './service-worker/login-operations'
-import { isAuthorizedWebsiteSender } from './service-worker/pairing-identity'
+import {
+  createIdentityHandoff,
+  discoverPairedVaultIdentity,
+  hasPairingApprovedType,
+  isAuthorizedWebsiteSender,
+  openExtensionPairing,
+  requestPairedVaultUnlock,
+} from './service-worker/pairing-identity'
+import {
+  importLocalEventLogUpdate,
+  importPairingAfterCompanionReady,
+} from './service-worker/pairing-import'
+import { handlePairingStateQuery } from './service-worker/pairing-state-query'
 import {
   cancelWebsitePasskey,
   matchingPasskeyAccountCountForOriginSafe,
@@ -79,11 +91,52 @@ import {
 } from './service-worker/extension-lifecycle-routing'
 import { routeExternalCompanionMessage } from './service-worker/external-companion-routing'
 import {
+  closeExtensionSessionDocument,
+  ensureExtensionSessionDocument,
+  extensionSessionDocument,
+  isExtensionSessionEnsureMessage,
+  isExtensionSessionExpiryMessage,
+  isExtensionSessionLockMessage,
+  openCompanionLauncher,
+  openSimpleVault,
+  queryActiveTabLoginDetection,
+} from './service-worker/session-lifecycle'
+import {
   AuthenticationWorkflowSnapshotKind,
   authenticationWorkflowSnapshot,
   classifyAuthenticationOutcome,
   generateSuggestedPassword,
 } from './vault-runtime'
+
+const extensionLifecycleRoutingDependencies: Parameters<
+  typeof routeExtensionLifecycleMessage
+>[0]['dependencies'] = {
+  closeExtensionSessionDocument,
+  ensureExtensionSessionDocument,
+  extensionSessionDocument,
+  handlePairingStateQuery,
+  hasPairingApprovedType,
+  importLocalEventLogUpdate,
+  importPairingAfterCompanionReady,
+  isExtensionSessionEnsureMessage,
+  isExtensionSessionExpiryMessage,
+  isExtensionSessionLockMessage,
+  openCompanionLauncher,
+  openExtensionPairing,
+  openSimpleVault,
+  queryActiveTabLoginDetection,
+}
+
+const externalCompanionRoutingDependencies: Parameters<
+  typeof routeExternalCompanionMessage
+>[0]['dependencies'] = {
+  createIdentityHandoff,
+  discoverPairedVaultIdentity,
+  hasPairingApprovedType,
+  importPairingAfterCompanionReady,
+  openCompanionLauncher,
+  requestPairedVaultUnlock,
+}
 
 // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
 chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
@@ -92,6 +145,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   const lifecycleRoutingArgs: Parameters<
     typeof routeExtensionLifecycleMessage
   >[0] = {
+    dependencies: extensionLifecycleRoutingDependencies,
     message,
     sender,
     sendResponse,
@@ -663,7 +717,12 @@ chrome.runtime.onMessageExternal.addListener(
     const message = runtimeMessage
     const externalRoutingArgs: Parameters<
       typeof routeExternalCompanionMessage
-    >[0] = { message, sender, sendResponse }
+    >[0] = {
+      dependencies: externalCompanionRoutingDependencies,
+      message,
+      sender,
+      sendResponse,
+    }
     return routeExternalCompanionMessage(externalRoutingArgs)
   },
 )

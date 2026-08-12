@@ -5,27 +5,11 @@ import {
   isOpenSimpleVaultMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import { isExtensionPairingStateQueryMessage } from '../../lib/pairing-state'
-import {
-  importLocalEventLogUpdate,
-  importPairingAfterCompanionReady,
-} from './pairing-import'
-import {
-  hasPairingApprovedType,
-  openExtensionPairing,
-} from './pairing-identity'
 import { isExtensionRuntimeSender, isNokeySender } from './routing-trust'
-import { handlePairingStateQuery } from './pairing-state-query'
-import {
-  closeExtensionSessionDocument,
-  ensureExtensionSessionDocument,
-  extensionSessionDocument,
-  isExtensionSessionEnsureMessage,
-  isExtensionSessionExpiryMessage,
-  isExtensionSessionLockMessage,
-  openCompanionLauncher,
-  openSimpleVault,
-  queryActiveTabLoginDetection,
-} from './session-lifecycle'
+import type * as PairingIdentity from './pairing-identity'
+import type * as PairingImport from './pairing-import'
+import type * as PairingStateQuery from './pairing-state-query'
+import type * as SessionLifecycle from './session-lifecycle'
 import {
   LoginDetectionStatus,
   isQueryActiveTabLoginDetectionMessage,
@@ -37,9 +21,27 @@ type ChromeMessageListener = Parameters<
 >[0]
 
 type ExtensionLifecycleRoutingArgs = {
+  dependencies: ExtensionLifecycleRoutingDependencies
   message: Parameters<ChromeMessageListener>[0]
   sender: chrome.runtime.MessageSender
   sendResponse: Parameters<ChromeMessageListener>[2]
+}
+
+export type ExtensionLifecycleRoutingDependencies = {
+  closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
+  ensureExtensionSessionDocument: typeof SessionLifecycle.ensureExtensionSessionDocument
+  extensionSessionDocument: typeof SessionLifecycle.extensionSessionDocument
+  handlePairingStateQuery: typeof PairingStateQuery.handlePairingStateQuery
+  hasPairingApprovedType: typeof PairingIdentity.hasPairingApprovedType
+  importLocalEventLogUpdate: typeof PairingImport.importLocalEventLogUpdate
+  importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
+  isExtensionSessionEnsureMessage: typeof SessionLifecycle.isExtensionSessionEnsureMessage
+  isExtensionSessionExpiryMessage: typeof SessionLifecycle.isExtensionSessionExpiryMessage
+  isExtensionSessionLockMessage: typeof SessionLifecycle.isExtensionSessionLockMessage
+  openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
+  openExtensionPairing: typeof PairingIdentity.openExtensionPairing
+  openSimpleVault: typeof SessionLifecycle.openSimpleVault
+  queryActiveTabLoginDetection: typeof SessionLifecycle.queryActiveTabLoginDetection
 }
 
 type MessageResponse = Parameters<
@@ -73,10 +75,27 @@ export enum ExtensionLifecycleRoutingResult {
 }
 
 export function routeExtensionLifecycleMessage({
+  dependencies,
   message,
   sender,
   sendResponse,
 }: ExtensionLifecycleRoutingArgs): boolean | ExtensionLifecycleRoutingResult {
+  const {
+    closeExtensionSessionDocument,
+    ensureExtensionSessionDocument,
+    extensionSessionDocument,
+    handlePairingStateQuery,
+    hasPairingApprovedType,
+    importLocalEventLogUpdate,
+    importPairingAfterCompanionReady,
+    isExtensionSessionEnsureMessage,
+    isExtensionSessionExpiryMessage,
+    isExtensionSessionLockMessage,
+    openCompanionLauncher,
+    openExtensionPairing,
+    openSimpleVault,
+    queryActiveTabLoginDetection,
+  } = dependencies
   if (isExtensionPairingStateQueryMessage(message)) {
     const queryContext: Parameters<typeof handlePairingStateQuery>[0] = {
       sender,

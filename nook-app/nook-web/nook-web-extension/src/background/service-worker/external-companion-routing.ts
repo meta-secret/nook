@@ -5,24 +5,29 @@ import {
   isExtensionPairedVaultUnlockRequestMessage,
   isOpenCompanionLauncherMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { importPairingAfterCompanionReady } from './pairing-import'
-import {
-  createIdentityHandoff,
-  discoverPairedVaultIdentity,
-  hasPairingApprovedType,
-  requestPairedVaultUnlock,
-} from './pairing-identity'
 import { isNokeySender } from './routing-trust'
-import { openCompanionLauncher } from './session-lifecycle'
+import type * as PairingIdentity from './pairing-identity'
+import type * as PairingImport from './pairing-import'
+import type * as SessionLifecycle from './session-lifecycle'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessageExternal.addListener
 >[0]
 
 type ExternalCompanionRoutingArgs = {
+  dependencies: ExternalCompanionRoutingDependencies
   message: Parameters<ChromeMessageListener>[0]
   sender: chrome.runtime.MessageSender
   sendResponse: Parameters<ChromeMessageListener>[2]
+}
+
+export type ExternalCompanionRoutingDependencies = {
+  createIdentityHandoff: typeof PairingIdentity.createIdentityHandoff
+  discoverPairedVaultIdentity: typeof PairingIdentity.discoverPairedVaultIdentity
+  hasPairingApprovedType: typeof PairingIdentity.hasPairingApprovedType
+  importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
+  openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
+  requestPairedVaultUnlock: typeof PairingIdentity.requestPairedVaultUnlock
 }
 
 type MessageResponse = Parameters<
@@ -44,10 +49,19 @@ const invalidPairingGrantResponse: MessageResponse = {
 }
 
 export function routeExternalCompanionMessage({
+  dependencies,
   message,
   sender,
   sendResponse,
 }: ExternalCompanionRoutingArgs): boolean {
+  const {
+    createIdentityHandoff,
+    discoverPairedVaultIdentity,
+    hasPairingApprovedType,
+    importPairingAfterCompanionReady,
+    openCompanionLauncher,
+    requestPairedVaultUnlock,
+  } = dependencies
   if (isOpenCompanionLauncherMessage(message)) {
     if (!isNokeySender(sender)) {
       sendResponse(forbiddenSenderResponse)
