@@ -29,8 +29,9 @@ mod storage_args;
 mod sync_metadata;
 
 pub use active_credentials::{
-    ActiveProviderCredentialsProjection, ActiveProviderCredentialsRequest,
-    ActiveProviderLoginSetup, active_provider_credentials_projection,
+    ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,
+    ActiveProviderCredentialsRequest, ActiveProviderLoginSetup,
+    active_provider_credentials_projection,
 };
 pub use catalog::{
     ensure_local_provider_row, find_duplicate_sync_provider, localize_provider_label,

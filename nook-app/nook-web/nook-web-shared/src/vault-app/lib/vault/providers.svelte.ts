@@ -485,17 +485,18 @@ export function applyActiveProviderCredentials(
     currentLocalFolder,
   };
   const projection = active_provider_credentials_projection(projectionArgs);
-  if (!projection.apply) return;
-  state.storageMode = projection.storageMode;
-  state.githubPat = projection.githubPat;
-  state.githubRepo = projection.githubRepo;
-  if (isConfiguredOAuthFile(projection.oauthFile)) {
-    state.configureOauthFile(projection.oauthFile.config);
+  if (projection.state === "unchanged") return;
+  const { draft } = projection;
+  state.storageMode = draft.storageMode;
+  state.githubPat = draft.githubPat;
+  state.githubRepo = draft.githubRepo;
+  if (isConfiguredOAuthFile(draft.oauthFile)) {
+    state.configureOauthFile(draft.oauthFile.config);
   } else {
     state.clearOauthFile();
   }
-  if (isConfiguredLocalFolder(projection.localFolder)) {
-    state.configureLocalFolder(projection.localFolder.config);
+  if (isConfiguredLocalFolder(draft.localFolder)) {
+    state.configureLocalFolder(draft.localFolder.config);
   } else {
     state.clearLocalFolder();
   }

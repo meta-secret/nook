@@ -29,8 +29,7 @@ pub struct ActiveProviderCredentialsRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi)]
-pub struct ActiveProviderCredentialsProjection {
-    pub apply: bool,
+pub struct ActiveProviderCredentialDraft {
     pub storage_mode: StorageProviderType,
     pub github_pat: String,
     pub github_repo: String,
@@ -38,10 +37,9 @@ pub struct ActiveProviderCredentialsProjection {
     pub local_folder: StoredLocalFolderConfiguration,
 }
 
-impl ActiveProviderCredentialsProjection {
+impl ActiveProviderCredentialDraft {
     fn current(request: &ActiveProviderCredentialsRequest) -> Self {
         Self {
-            apply: false,
             storage_mode: request.current_storage_mode,
             github_pat: request.current_github_pat.clone(),
             github_repo: request.current_github_repo.clone(),
@@ -49,6 +47,14 @@ impl ActiveProviderCredentialsProjection {
             local_folder: request.current_local_folder.clone(),
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[serde(tag = "state", content = "draft", rename_all = "camelCase")]
+#[tsify(into_wasm_abi)]
+pub enum ActiveProviderCredentialsProjection {
+    Unchanged,
+    Apply(Box<ActiveProviderCredentialDraft>),
 }
 
 fn non_empty(value: &str) -> Option<&str> {
@@ -62,59 +68,56 @@ fn non_empty(value: &str) -> Option<&str> {
 pub fn active_provider_credentials_projection(
     request: &ActiveProviderCredentialsRequest,
 ) -> ActiveProviderCredentialsProjection {
-    let mut projection = ActiveProviderCredentialsProjection::current(request);
+    let mut draft = ActiveProviderCredentialDraft::current(request);
     if request.local_vault_present {
-        projection.apply = true;
-        projection.storage_mode = StorageProviderType::Local;
-        projection.github_pat.clear();
-        projection.oauth_file = StoredOAuthFileConfiguration::NotApplicable;
-        projection.local_folder = StoredLocalFolderConfiguration::NotApplicable;
-        return projection;
+        draft.storage_mode = StorageProviderType::Local;
+        draft.github_pat.clear();
+        draft.oauth_file = StoredOAuthFileConfiguration::NotApplicable;
+        draft.local_folder = StoredLocalFolderConfiguration::NotApplicable;
+        return ActiveProviderCredentialsProjection::Apply(Box::new(draft));
     }
 
     if let ActiveProviderLoginSetup::Active(provider_type) = request.login_setup {
-        projection.apply = true;
-        projection.storage_mode = provider_type;
-        if projection.storage_mode != StorageProviderType::Github {
-            projection.github_pat.clear();
+        draft.storage_mode = provider_type;
+        if draft.storage_mode != StorageProviderType::Github {
+            draft.github_pat.clear();
         }
-        if projection.storage_mode != StorageProviderType::OauthFile {
-            projection.oauth_file = StoredOAuthFileConfiguration::NotApplicable;
+        if draft.storage_mode != StorageProviderType::OauthFile {
+            draft.oauth_file = StoredOAuthFileConfiguration::NotApplicable;
         }
-        if projection.storage_mode != StorageProviderType::LocalFolder {
-            projection.local_folder = StoredLocalFolderConfiguration::NotApplicable;
+        if draft.storage_mode != StorageProviderType::LocalFolder {
+            draft.local_folder = StoredLocalFolderConfiguration::NotApplicable;
         }
-        return projection;
+        return ActiveProviderCredentialsProjection::Apply(Box::new(draft));
     }
 
     let Some(provider) = request.sync_providers.first() else {
-        return projection;
+        return ActiveProviderCredentialsProjection::Unchanged;
     };
-    projection.apply = true;
-    projection.storage_mode = provider.provider_type;
+    draft.storage_mode = provider.provider_type;
     provider
         .github_pat
         .as_deref()
         .map(str::trim)
         .unwrap_or_default()
-        .clone_into(&mut projection.github_pat);
+        .clone_into(&mut draft.github_pat);
 
     match provider.provider_type {
         StorageProviderType::OauthFile => {
-            projection.oauth_file = provider.oauth_file.clone();
-            projection.local_folder = StoredLocalFolderConfiguration::NotApplicable;
+            draft.oauth_file = provider.oauth_file.clone();
+            draft.local_folder = StoredLocalFolderConfiguration::NotApplicable;
             provider
                 .oauth_file
                 .as_ref()
                 .and_then(|config| config.file_name.as_deref())
                 .and_then(non_empty)
                 .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME)
-                .clone_into(&mut projection.github_repo);
+                .clone_into(&mut draft.github_repo);
         }
         StorageProviderType::LocalFolder => {
-            DEFAULT_GITHUB_REPO_NAME.clone_into(&mut projection.github_repo);
-            projection.oauth_file = StoredOAuthFileConfiguration::NotApplicable;
-            projection.local_folder = provider.local_folder.clone();
+            DEFAULT_GITHUB_REPO_NAME.clone_into(&mut draft.github_repo);
+            draft.oauth_file = StoredOAuthFileConfiguration::NotApplicable;
+            draft.local_folder = provider.local_folder.clone();
         }
         StorageProviderType::Local | StorageProviderType::Github => {
             provider
@@ -122,12 +125,12 @@ pub fn active_provider_credentials_projection(
                 .as_deref()
                 .and_then(non_empty)
                 .unwrap_or(DEFAULT_GITHUB_REPO_NAME)
-                .clone_into(&mut projection.github_repo);
-            projection.oauth_file = StoredOAuthFileConfiguration::NotApplicable;
-            projection.local_folder = StoredLocalFolderConfiguration::NotApplicable;
+                .clone_into(&mut draft.github_repo);
+            draft.oauth_file = StoredOAuthFileConfiguration::NotApplicable;
+            draft.local_folder = StoredLocalFolderConfiguration::NotApplicable;
         }
     }
-    projection
+    ActiveProviderCredentialsProjection::Apply(Box::new(draft))
 }
 
 #[cfg(test)]
@@ -171,14 +174,20 @@ mod tests {
         }
     }
 
+    fn applied(projection: ActiveProviderCredentialsProjection) -> ActiveProviderCredentialDraft {
+        let ActiveProviderCredentialsProjection::Apply(draft) = projection else {
+            panic!("expected an applied credential draft");
+        };
+        *draft
+    }
+
     #[test]
     fn local_vault_clears_remote_credentials_but_preserves_repository_draft() {
         let mut request = request();
         request.local_vault_present = true;
 
-        let projection = active_provider_credentials_projection(&request);
+        let projection = applied(active_provider_credentials_projection(&request));
 
-        assert!(projection.apply);
         assert_eq!(projection.storage_mode, StorageProviderType::Local);
         assert!(projection.github_pat.is_empty());
         assert_eq!(projection.github_repo, "current/repo");
@@ -197,9 +206,8 @@ mod tests {
         let mut request = request();
         request.login_setup = ActiveProviderLoginSetup::Active(StorageProviderType::OauthFile);
 
-        let projection = active_provider_credentials_projection(&request);
+        let projection = applied(active_provider_credentials_projection(&request));
 
-        assert!(projection.apply);
         assert_eq!(projection.storage_mode, StorageProviderType::OauthFile);
         assert!(projection.github_pat.is_empty());
         assert_eq!(projection.github_repo, "current/repo");
@@ -218,11 +226,7 @@ mod tests {
         let request = request();
         let projection = active_provider_credentials_projection(&request);
 
-        assert!(!projection.apply);
-        assert_eq!(
-            projection,
-            ActiveProviderCredentialsProjection::current(&request)
-        );
+        assert_eq!(projection, ActiveProviderCredentialsProjection::Unchanged);
     }
 
     #[test]
@@ -230,9 +234,8 @@ mod tests {
         let mut request = request();
         request.sync_providers = vec![provider(StorageProviderType::Github)];
 
-        let projection = active_provider_credentials_projection(&request);
+        let projection = applied(active_provider_credentials_projection(&request));
 
-        assert!(projection.apply);
         assert_eq!(projection.storage_mode, StorageProviderType::Github);
         assert_eq!(projection.github_pat, "provider-pat");
         assert_eq!(projection.github_repo, "owner/repo");
@@ -257,7 +260,7 @@ mod tests {
         let mut request = request();
         request.sync_providers = vec![provider];
 
-        let projection = active_provider_credentials_projection(&request);
+        let projection = applied(active_provider_credentials_projection(&request));
 
         assert_eq!(projection.storage_mode, StorageProviderType::OauthFile);
         assert_eq!(projection.github_repo, "vault.yaml");
@@ -282,7 +285,7 @@ mod tests {
         let mut request = request();
         request.sync_providers = vec![provider];
 
-        let projection = active_provider_credentials_projection(&request);
+        let projection = applied(active_provider_credentials_projection(&request));
 
         assert_eq!(projection.storage_mode, StorageProviderType::LocalFolder);
         assert_eq!(projection.github_repo, DEFAULT_GITHUB_REPO_NAME);
