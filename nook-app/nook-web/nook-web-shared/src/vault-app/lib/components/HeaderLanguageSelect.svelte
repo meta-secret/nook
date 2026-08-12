@@ -16,6 +16,7 @@
   function selectLocale(locale: NookAppLocale) {
     const localeRequest: Parameters<typeof vault.updateLocale>[0] = {
       newLocale: locale,
+      preferWasm: vault.hasManager,
     }
     void vault.updateLocale(localeRequest)
     open = false

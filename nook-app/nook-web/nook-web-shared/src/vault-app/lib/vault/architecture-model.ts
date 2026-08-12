@@ -162,15 +162,17 @@ export type CompatibleProviderPreference =
       providerId: string;
     };
 
+export type CompatibleProviderSearch = {
+  readonly providers: StorageProvider[];
+  readonly replicationType: ReplicationType;
+  readonly preference: CompatibleProviderPreference;
+};
+
 export function firstCompatibleProvider({
   providers,
   replicationType,
   preference,
-}: {
-  readonly providers: StorageProvider[];
-  readonly replicationType: ReplicationType;
-  readonly preference: CompatibleProviderPreference;
-}): CompatibleProviderSelection {
+}: CompatibleProviderSearch): CompatibleProviderSelection {
   const snapshot: Parameters<typeof first_compatible_provider_id>[0] = {
     providers,
     activeVaultStoreId: unselectedVaultScope(),

@@ -54,17 +54,19 @@ type CatalogVaultLabel =
 
 const log = createLogger("vault-password");
 
+export type EnrollmentCodeIssueRequest = {
+  readonly state: VaultState;
+  readonly entryId: string;
+  readonly password: string;
+  readonly providerId: string;
+};
+
 export async function issueEnrollmentCode({
   state,
   entryId,
   password,
   providerId,
-}: {
-  readonly state: VaultState;
-  readonly entryId: string;
-  readonly password: string;
-  readonly providerId: string;
-}): Promise<string> {
+}: EnrollmentCodeIssueRequest): Promise<string> {
   if (!state.hasManager) {
     throw new Error("Vault engine is not available.");
   }

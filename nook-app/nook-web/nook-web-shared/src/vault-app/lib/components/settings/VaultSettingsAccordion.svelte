@@ -116,6 +116,7 @@
         onchange={(e) => {
           const localeRequest: Parameters<typeof vault.updateLocale>[0] = {
             newLocale: e.currentTarget.value as NookAppLocale,
+            preferWasm: vault.hasManager,
           }
           void vault.updateLocale(localeRequest)
         }}
