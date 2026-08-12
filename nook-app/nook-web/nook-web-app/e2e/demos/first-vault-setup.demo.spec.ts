@@ -25,6 +25,8 @@ test('open a new local vault without an empty-device sync error', async ({
     timeout: UI_TIMEOUT_MS,
   })
   await expect(page.getByTestId('header-lock-vault-btn')).toBeEnabled()
+  await expect(page.getByTestId('join-enrollment-dialog')).toHaveCount(0)
+  await expect(page.getByTestId('login-password-entry-list')).toHaveCount(0)
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   const languageSelect = page.getByTestId('header-language-select')
