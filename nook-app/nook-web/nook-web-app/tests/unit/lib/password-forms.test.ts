@@ -271,27 +271,29 @@ describe('website one-time-code fields', () => {
     }
   })
 
-  test('fills username-only then advances a Next control on multi-step login', () => {
-    document.body.innerHTML = `
-      <form id="login-form">
-        <input autocomplete="username" name="email" type="email" />
-        <button id="next" type="button">Next</button>
-      </form>
-    `
-    let advanced = false
-    document.querySelector('#next')?.addEventListener('click', () => {
-      advanced = true
-    })
+  test('fills username-only then advances common multi-step login controls', () => {
+    for (const label of ['Next', 'Login', 'signin', 'Sign   In', 'Log\tin']) {
+      document.body.innerHTML = `
+        <form id="login-form">
+          <input autocomplete="username" name="email" type="email" />
+          <button id="next" type="button">${label}</button>
+        </form>
+      `
+      let advanced = false
+      document.querySelector('#next')?.addEventListener('click', () => {
+        advanced = true
+      })
 
-    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'pilot@nook.test', password: '' },
+      const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+        credentials: { username: 'pilot@nook.test', password: '' },
+      }
+      expect(fillLoginCredentials(loginFillArgs)).toBe(true)
+      expect(submitLoginForm()).toBe(true)
+      expect(advanced).toBe(true)
+      expect(
+        document.querySelector<HTMLInputElement>('[name="email"]')?.value,
+      ).toBe('pilot@nook.test')
     }
-    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
-    expect(submitLoginForm()).toBe(true)
-    expect(advanced).toBe(true)
-    expect(
-      document.querySelector<HTMLInputElement>('[name="email"]')?.value,
-    ).toBe('pilot@nook.test')
   })
 
   test('groups externally associated controls with their form owner', () => {

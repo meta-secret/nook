@@ -14,6 +14,10 @@ Continues [mobile-core-reuse.md](mobile-core-reuse.md).
       `nook-companion-core` (re-exported from `nook-core`) with WASM exports.
 - [x] Portable auth field-role classification in `nook-companion-core` with
       structured `LoginContextObservation` / `PageInputFieldObservation` inputs.
+- [x] Portable password-form priority and login advance-control label policy in
+      `nook-companion-core`.
+- [x] DOM scoping, visibility, fill, focus, and submit mechanics remain in the
+      browser adapter.
 - [x] OAuth authorized-origin policy in `nook-companion-core`; web adapter uses
       generated WASM enums (no TypeScript enum mirrors).
 - [x] Simple/Sentinel vault host policy in `nook-companion-core`.
@@ -23,8 +27,9 @@ Continues [mobile-core-reuse.md](mobile-core-reuse.md).
       `AuthenticationOutcomeVerdict`; observation bags stay message envelopes.
 - [x] Tiny `nook-companion-wasm` package for content scripts / Manifest host
       policy (~300KB class, not full vault `nook-wasm`).
-- [x] Content adapters call companion WASM for backup-code candidates, field-role
-      heuristics, and vault host matching; DOM query/fill stays in TypeScript.
+- [x] Content adapters call companion WASM for backup-code candidates,
+      field-role and form-priority policy, advance-control labels, and vault
+      host matching. DOM query and mutation stay in TypeScript.
 - [x] Shared vault sync state variants and their payloads live in `nook-core`
       with typed `nook-wasm` wrappers; Svelte retains only reactive storage and
       host orchestration.

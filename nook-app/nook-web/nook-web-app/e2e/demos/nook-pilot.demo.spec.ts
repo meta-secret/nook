@@ -265,7 +265,7 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
   await demoBeat(page)
 })
 
-test('detect a Microsoft-like email-first login through Nook Pilot', async ({
+test('advance a Microsoft-like email-first Login control through Nook Pilot', async ({
   page,
 }) => {
   const messages = await loadPilotMessages()
@@ -331,12 +331,19 @@ test('detect a Microsoft-like email-first login through Nook Pilot', async ({
               placeholder="Email, phone, or Skype"
               aria-label="Enter your email, phone, or Skype."
             />
-            <button type="submit" id="idSIButton9">Next</button>
+            <button type="button" id="idSIButton9">Login</button>
           </form>
+          <p data-testid="advance-status"></p>
         </main>
       </body>
     </html>`)
   await page.evaluate(installDemoChromeStub, loginPilotStubArgs(messages))
+  await page.evaluate(() => {
+    document.querySelector('#idSIButton9')?.addEventListener('click', () => {
+      const status = document.querySelector('[data-testid="advance-status"]')
+      if (status) status.textContent = 'Email-first login advanced'
+    })
+  })
   await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
@@ -346,6 +353,21 @@ test('detect a Microsoft-like email-first login through Nook Pilot', async ({
     widget.getByRole('button', { name: 'Continue with Nook' }),
   ).toBeVisible()
   await expect(page.locator('[name="loginfmt"]')).toBeVisible()
+  await demoBeat(page)
+
+  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await expect(
+    widget.getByText(
+      'Unlock Nook in the companion window, then click Continue with Nook again.',
+    ),
+  ).toBeVisible()
+  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await expect(page.locator('[name="loginfmt"]')).toHaveValue(
+    'pilot@example.test',
+  )
+  await expect(page.getByTestId('advance-status')).toHaveText(
+    'Email-first login advanced',
+  )
   await demoBeat(page)
 })
 
