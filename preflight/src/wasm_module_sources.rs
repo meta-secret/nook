@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::javascript_literals::static_javascript_string;
+use crate::javascript_literals::{
+    semantic_javascript_name as semantic_node_name, static_javascript_string,
+};
 
 const WASM_MODULE_ALIASES: &[&str] = &[
     "$app-wasm",
@@ -209,7 +211,14 @@ fn find_factory_return_type(
             | "function_expression"
             | "generator_function"
             | "arrow_function"
-    ) && callable_name(node, source).is_some_and(|name| name == exported_name)
+    ) && (callable_name(node, source).is_some_and(|name| name == exported_name)
+        || (exported_name == "default"
+            && node.parent().is_some_and(|parent| {
+                parent.kind() == "export_statement"
+                    && parent
+                        .utf8_text(source.as_bytes())
+                        .is_ok_and(|text| text.trim_start().starts_with("export default "))
+            })))
         && let Some(return_type) = node.child_by_field_name("return_type")
         && let Some(wasm_type) = referenced_wasm_type(
             return_type,
@@ -318,6 +327,9 @@ fn module_reexports_wasm_symbol(
         return false;
     }
     local_forwarded_exports(&resolved).is_some_and(|exports| {
+        let has_explicit = exports.iter().any(|export| {
+            matches!(export, ForwardedExport::Named { exported, .. } if exported == exported_name)
+        });
         exports.iter().any(|export| match export {
             ForwardedExport::Named {
                 exported,
@@ -326,10 +338,12 @@ fn module_reexports_wasm_symbol(
             } if exported == exported_name => {
                 module_reexports_wasm_symbol(module, imported, &resolved, visited)
             }
-            ForwardedExport::All { module } => {
+            ForwardedExport::All { module } if !has_explicit => {
                 module_reexports_wasm_symbol(module, exported_name, &resolved, visited)
             }
-            ForwardedExport::Named { .. } | ForwardedExport::Namespace { .. } => false,
+            ForwardedExport::All { .. }
+            | ForwardedExport::Named { .. }
+            | ForwardedExport::Namespace { .. } => false,
         })
     })
 }
@@ -339,10 +353,7 @@ fn resolve_module(module: &str, source_path: &Path) -> Option<PathBuf> {
         return resolve_local_module(Path::new(module));
     }
     if let Some(suffix) = module.strip_prefix("$lib/") {
-        let source_root = source_path
-            .ancestors()
-            .find(|ancestor| ancestor.file_name().is_some_and(|name| name == "src"))?;
-        return resolve_local_module(&source_root.join("lib").join(suffix));
+        return resolve_local_module(&configured_lib_root(source_path)?.join(suffix));
     }
     if !module.starts_with('.') {
         return None;
@@ -354,6 +365,36 @@ fn resolve_module(module: &str, source_path: &Path) -> Option<PathBuf> {
         return Some(unresolved);
     }
     resolve_local_module(&unresolved)
+}
+
+fn configured_lib_root(source_path: &Path) -> Option<PathBuf> {
+    for ancestor in source_path.ancestors() {
+        if let Some(root) = tsconfig_lib_root(&ancestor.join("tsconfig.json")) {
+            return Some(root);
+        }
+    }
+    source_path.ancestors().find_map(|ancestor| {
+        fs::read_dir(ancestor)
+            .ok()?
+            .filter_map(Result::ok)
+            .find_map(|entry| {
+                let root = tsconfig_lib_root(&entry.path().join("tsconfig.json"))?;
+                source_path.starts_with(&root).then_some(root)
+            })
+    })
+}
+
+fn tsconfig_lib_root(config: &Path) -> Option<PathBuf> {
+    let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(config).ok()?).ok()?;
+    let paths = value.get("compilerOptions")?.get("paths")?;
+    let target = paths
+        .get("$lib/*")
+        .or_else(|| paths.get("$lib"))?
+        .as_array()?
+        .first()?
+        .as_str()?
+        .trim_end_matches("/*");
+    Some(normalize_local_module_path(&config.parent()?.join(target)))
 }
 
 fn is_known_wasm_path(path: &Path) -> bool {
@@ -508,10 +549,12 @@ fn collect_export_statement(
         });
         return;
     }
-    if direct_module.is_none()
-        && let Some(forwarded) = exported_callable_declaration(node, source, imported_bindings)
-    {
-        exports.push(forwarded);
+    if direct_module.is_none() {
+        exports.extend(exported_callable_declaration(
+            node,
+            source,
+            imported_bindings,
+        ));
     }
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
@@ -558,7 +601,7 @@ fn exported_callable_declaration(
     node: tree_sitter::Node<'_>,
     source: &str,
     imports: &HashMap<String, (String, String)>,
-) -> Option<ForwardedExport> {
+) -> Vec<ForwardedExport> {
     if node
         .utf8_text(source.as_bytes())
         .is_ok_and(|text| text.trim_start().starts_with("export default "))
@@ -571,32 +614,41 @@ fn exported_callable_declaration(
             .and_then(|child| semantic_node_name(*child, source))
             && let Some((module, imported)) = imports.get(&local)
         {
-            return Some(ForwardedExport::Named {
+            return vec![ForwardedExport::Named {
                 exported: "default".to_owned(),
                 imported: imported.clone(),
                 module: module.clone(),
-            });
+            }];
         }
-        let value = children
+        return children
             .into_iter()
-            .find(|child| matches!(child.kind(), "member_expression" | "subscript_expression"))?;
-        return forwarded_namespace_member("default".to_owned(), value, source, imports);
+            .find(|child| matches!(child.kind(), "member_expression" | "subscript_expression"))
+            .and_then(|value| {
+                forwarded_namespace_member("default".to_owned(), value, source, imports)
+            })
+            .into_iter()
+            .collect();
     }
     let mut cursor = node.walk();
-    let declaration = node
+    let Some(declaration) = node
         .named_children(&mut cursor)
-        .find(|child| matches!(child.kind(), "lexical_declaration" | "variable_declaration"))?;
+        .find(|child| matches!(child.kind(), "lexical_declaration" | "variable_declaration"))
+    else {
+        return Vec::new();
+    };
     let mut cursor = declaration.walk();
-    let declarator = declaration
+    declaration
         .named_children(&mut cursor)
-        .find(|child| child.kind() == "variable_declarator")?;
-    let exported = semantic_node_name(declarator.child_by_field_name("name")?, source)?;
-    forwarded_namespace_member(
-        exported,
-        declarator.child_by_field_name("value")?,
-        source,
-        imports,
-    )
+        .filter(|child| child.kind() == "variable_declarator")
+        .filter_map(|declarator| {
+            forwarded_namespace_member(
+                semantic_node_name(declarator.child_by_field_name("name")?, source)?,
+                declarator.child_by_field_name("value")?,
+                source,
+                imports,
+            )
+        })
+        .collect()
 }
 
 fn forwarded_namespace_member(
@@ -720,15 +772,6 @@ fn required_module(node: tree_sitter::Node<'_>, source: &str) -> Option<String> 
     arguments
         .named_children(&mut cursor)
         .find_map(|argument| static_javascript_string(argument, source))
-}
-
-fn semantic_node_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
-    let text = node.utf8_text(source.as_bytes()).ok()?;
-    if node.kind() == "string" {
-        static_javascript_string(node, source)
-    } else {
-        Some(text.to_owned())
-    }
 }
 
 fn strip_module_extension(mut path: PathBuf) -> PathBuf {

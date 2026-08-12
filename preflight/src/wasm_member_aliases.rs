@@ -84,7 +84,7 @@ pub(super) fn collect_object_pattern_aliases(
     callable_names: &HashSet<String>,
     module: &str,
     source_path: &Path,
-    imported_callable_bindings: &mut HashSet<String>,
+    _imported_callable_bindings: &mut HashSet<String>,
     lines: &mut Vec<usize>,
 ) {
     let mut cursor = pattern.walk();
@@ -95,20 +95,9 @@ pub(super) fn collect_object_pattern_aliases(
             && callable_names.contains(&name)
             && is_wasm_callable_export(module, &name, source_path)
             && let Some(binding) = child.child_by_field_name("value")
+            && semantic_node_name(binding, source).is_some_and(|binding_name| binding_name != name)
         {
-            if semantic_node_name(binding, source).is_some_and(|binding_name| binding_name != name)
-            {
-                lines.push(first_line + authored_name.start_position().row);
-            }
-            if let Ok(binding_name) = binding.utf8_text(source.as_bytes()) {
-                imported_callable_bindings.insert(binding_name.to_owned());
-            }
-        } else if child.kind() == "shorthand_property_identifier_pattern"
-            && let Ok(name) = child.utf8_text(source.as_bytes())
-            && callable_names.contains(name)
-            && is_wasm_callable_export(module, name, source_path)
-        {
-            imported_callable_bindings.insert(name.to_owned());
+            lines.push(first_line + authored_name.start_position().row);
         }
     }
 }
@@ -242,6 +231,59 @@ pub(super) fn collect_object_literal_aliases(
         {
             lines.push(first_line + key.start_position().row);
         }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn collect_object_literal_aliases_in_tree(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    source_path: &Path,
+    first_line: usize,
+    callable_names: &HashSet<String>,
+    wasm_type_names: &HashSet<String>,
+    wasm_types: &WasmTypeInventory,
+    wasm_namespace_bindings: &HashMap<String, String>,
+    wasm_class_bindings: &HashMap<String, String>,
+    wasm_instance_bindings: &HashMap<String, String>,
+    scoped_wasm_namespaces: &[ScopedBinding],
+    scoped_wasm_instances: &[ScopedBinding],
+    lines: &mut Vec<usize>,
+) {
+    if node.kind() == "object" {
+        collect_object_literal_aliases(
+            node,
+            source,
+            source_path,
+            first_line,
+            callable_names,
+            wasm_type_names,
+            wasm_types,
+            wasm_namespace_bindings,
+            wasm_class_bindings,
+            wasm_instance_bindings,
+            scoped_wasm_namespaces,
+            scoped_wasm_instances,
+            lines,
+        );
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_object_literal_aliases_in_tree(
+            child,
+            source,
+            source_path,
+            first_line,
+            callable_names,
+            wasm_type_names,
+            wasm_types,
+            wasm_namespace_bindings,
+            wasm_class_bindings,
+            wasm_instance_bindings,
+            scoped_wasm_namespaces,
+            scoped_wasm_instances,
+            lines,
+        );
     }
 }
 

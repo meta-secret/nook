@@ -135,7 +135,7 @@ pub(super) fn invalidate_visible_scoped_binding(
     name: &str,
     source: &str,
     bindings: &mut [ScopedBinding],
-) {
+) -> bool {
     if let Some(binding) = bindings.iter_mut().find(|binding| {
         binding.name == name
             && binding.declaration_end <= reference.start_byte()
@@ -145,7 +145,9 @@ pub(super) fn invalidate_visible_scoped_binding(
     }) && reassignment_is_unconditional(reference, binding)
     {
         binding.scope_end = reference.start_byte();
+        return true;
     }
+    false
 }
 
 fn reassignment_is_unconditional(

@@ -15,7 +15,8 @@ use crate::wasm_factories::{
 };
 use crate::wasm_inventory::WasmTypeInventory;
 use crate::wasm_member_aliases::{
-    collect_destructuring_aliases, collect_namespace_member_alias, collect_object_literal_aliases,
+    collect_destructuring_aliases, collect_namespace_member_alias,
+    collect_object_literal_aliases_in_tree,
 };
 use crate::wasm_module_sources::{
     is_wasm_callable_source, is_wasm_export, wasm_namespace_export_source,
@@ -177,10 +178,8 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
     imported_callable_bindings: &mut HashSet<String>,
     lines: &mut Vec<usize>,
 ) {
-    let mut scoped_wasm_namespaces = Vec::new();
-    let mut scoped_wasm_instances = Vec::new();
-    let mut scoped_wasm_callables = Vec::new();
-    let mut scoped_wasm_runtime_receivers = Vec::new();
+    let (mut scoped_wasm_namespaces, mut scoped_wasm_instances) = (Vec::new(), Vec::new());
+    let (mut scoped_wasm_callables, mut scoped_wasm_runtime_receivers) = (Vec::new(), Vec::new());
     let mut scoped_wasm_factories = Vec::new();
     let mut imported_wasm_factories = HashMap::new();
     let mut member_alias_receivers = HashSet::new();
@@ -240,7 +239,7 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         &scoped_wasm_runtime_receivers,
         &mut scoped_wasm_namespaces,
         &mut scoped_wasm_instances,
-        &scoped_wasm_callables,
+        &mut scoped_wasm_callables,
         imported_callable_bindings,
         lines,
     );
@@ -260,8 +259,23 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         &scoped_wasm_runtime_receivers,
         &mut scoped_wasm_namespaces,
         &mut scoped_wasm_instances,
-        &scoped_wasm_callables,
+        &mut scoped_wasm_callables,
         imported_callable_bindings,
+        lines,
+    );
+    collect_object_literal_aliases_in_tree(
+        node,
+        source,
+        source_path,
+        first_line,
+        callable_names,
+        wasm_type_names,
+        wasm_types,
+        wasm_namespace_bindings,
+        wasm_class_bindings,
+        wasm_instance_bindings,
+        &scoped_wasm_namespaces,
+        &scoped_wasm_instances,
         lines,
     );
 }
@@ -283,7 +297,7 @@ fn collect_dynamic_wasm_aliases(
     scoped_wasm_runtime_receivers: &[ScopedBinding],
     scoped_wasm_namespaces: &mut Vec<ScopedBinding>,
     scoped_wasm_instances: &mut Vec<ScopedBinding>,
-    scoped_wasm_callables: &[ScopedBinding],
+    scoped_wasm_callables: &mut [ScopedBinding],
     imported_callable_bindings: &mut HashSet<String>,
     lines: &mut Vec<usize>,
 ) {
@@ -298,6 +312,8 @@ fn collect_dynamic_wasm_aliases(
             source,
             scoped_wasm_namespaces,
             scoped_wasm_instances,
+            scoped_wasm_callables,
+            imported_callable_bindings,
         );
         collect_binding_aliases(
             binding,
@@ -388,6 +404,8 @@ fn invalidate_reassigned_wasm_binding(
     source: &str,
     scoped_wasm_namespaces: &mut [ScopedBinding],
     scoped_wasm_instances: &mut [ScopedBinding],
+    scoped_wasm_callables: &mut [ScopedBinding],
+    imported_callable_bindings: &mut HashSet<String>,
 ) {
     let binding = unwrap_transparent_expression(binding);
     if binding.kind() != "identifier" {
@@ -398,6 +416,9 @@ fn invalidate_reassigned_wasm_binding(
     };
     invalidate_visible_scoped_binding(binding, name, source, scoped_wasm_namespaces);
     invalidate_visible_scoped_binding(binding, name, source, scoped_wasm_instances);
+    if invalidate_visible_scoped_binding(binding, name, source, scoped_wasm_callables) {
+        imported_callable_bindings.remove(name);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -470,23 +491,6 @@ fn collect_binding_aliases(
         )
     {
         return true;
-    }
-    if value.kind() == "object" {
-        collect_object_literal_aliases(
-            value,
-            source,
-            source_path,
-            first_line,
-            callable_names,
-            wasm_type_names,
-            wasm_types,
-            wasm_namespace_bindings,
-            wasm_class_bindings,
-            wasm_instance_bindings,
-            scoped_wasm_namespaces,
-            scoped_wasm_instances,
-            lines,
-        );
     }
     collect_namespace_member_alias(
         binding,

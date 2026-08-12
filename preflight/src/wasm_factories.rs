@@ -54,6 +54,13 @@ pub(super) fn collect_imported_wasm_instance_factories(
             .child_by_field_name("source")
             .and_then(|source_node| static_javascript_string(source_node, source))
     {
+        if let Some(local) = default_import_binding(node, source)
+            && called_bindings.contains(&local)
+            && let Some(wasm_type) =
+                wasm_factory_return_type(&module, "default", source_path, wasm_type_names)
+        {
+            factories.insert(local, wasm_type);
+        }
         collect_imported_factory_specifiers(
             node,
             source,
@@ -76,6 +83,16 @@ pub(super) fn collect_imported_wasm_instance_factories(
             factories,
         );
     }
+}
+
+fn default_import_binding(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
+    let clause = node
+        .utf8_text(source.as_bytes())
+        .ok()?
+        .trim_start()
+        .strip_prefix("import ")?;
+    let binding = clause.split_whitespace().next()?.trim_end_matches(',');
+    (!matches!(binding, "type" | "{" | "*")).then(|| binding.to_owned())
 }
 
 #[allow(clippy::too_many_arguments)]
