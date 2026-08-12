@@ -338,6 +338,12 @@ fn resolve_module(module: &str, source_path: &Path) -> Option<PathBuf> {
     if Path::new(module).is_absolute() {
         return resolve_local_module(Path::new(module));
     }
+    if let Some(suffix) = module.strip_prefix("$lib/") {
+        let source_root = source_path
+            .ancestors()
+            .find(|ancestor| ancestor.file_name().is_some_and(|name| name == "src"))?;
+        return resolve_local_module(&source_root.join("lib").join(suffix));
+    }
     if !module.starts_with('.') {
         return None;
     }
@@ -542,6 +548,16 @@ fn exported_callable_declaration(
     source: &str,
     imports: &HashMap<String, (String, String)>,
 ) -> Option<ForwardedExport> {
+    if node
+        .utf8_text(source.as_bytes())
+        .is_ok_and(|text| text.trim_start().starts_with("export default "))
+    {
+        let mut cursor = node.walk();
+        let value = node
+            .named_children(&mut cursor)
+            .find(|child| matches!(child.kind(), "member_expression" | "subscript_expression"))?;
+        return forwarded_namespace_member("default".to_owned(), value, source, imports);
+    }
     let mut cursor = node.walk();
     let declaration = node
         .named_children(&mut cursor)
@@ -551,7 +567,20 @@ fn exported_callable_declaration(
         .named_children(&mut cursor)
         .find(|child| child.kind() == "variable_declarator")?;
     let exported = semantic_node_name(declarator.child_by_field_name("name")?, source)?;
-    let value = declarator.child_by_field_name("value")?;
+    forwarded_namespace_member(
+        exported,
+        declarator.child_by_field_name("value")?,
+        source,
+        imports,
+    )
+}
+
+fn forwarded_namespace_member(
+    exported: String,
+    value: tree_sitter::Node<'_>,
+    source: &str,
+    imports: &HashMap<String, (String, String)>,
+) -> Option<ForwardedExport> {
     let namespace = value.child_by_field_name("object")?;
     let namespace_name = semantic_node_name(namespace, source)?;
     let (module, imported_namespace) = imports.get(&namespace_name)?;

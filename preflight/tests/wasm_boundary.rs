@@ -338,6 +338,52 @@ export const generate_secret_id = wasm.generate_secret_id;"#,
 const manager = new NookVaultManager();
 const finish = manager.device_access_snapshot_request().resolve;"#,
         ),
+        (
+            "svelte-each-shadow.svelte",
+            r#"<script lang="ts">import * as wasm from "$app-wasm";</script>
+{#each socketApis as wasm}
+  {@const openSocket = wasm.connect}
+{/each}"#,
+        ),
+        (
+            "outer-assignment.ts",
+            r#"let wasm;
+async function load() { wasm = await import("$app-wasm"); }
+await load();
+const generateSecretId = wasm.generate_secret_id;"#,
+        ),
+        (
+            "default-bridge.ts",
+            r#"import * as wasm from "$app-wasm";
+export default wasm.generate_secret_id;"#,
+        ),
+        (
+            "default-consumer.ts",
+            r#"import generateSecretId from "./default-bridge";"#,
+        ),
+        (
+            "escaped-import.ts",
+            "import { generate_\\u0073ecret_id as generateSecretId } from \"$app-wasm\";",
+        ),
+        (
+            "bound-method.ts",
+            r#"import { NookVaultManager } from "$app-wasm";
+const manager = new NookVaultManager();
+const connectVault = manager.connect.bind(manager);"#,
+        ),
+        (
+            "class-field.ts",
+            r#"import * as wasm from "$app-wasm";
+class Api { generateSecretId = wasm.generate_secret_id; }"#,
+        ),
+        (
+            "project/src/lib/wasm-bridge.ts",
+            r#"export { generate_secret_id } from "$app-wasm";"#,
+        ),
+        (
+            "project/src/routes/consumer.ts",
+            r#"import { generate_secret_id as generateSecretId } from "$lib/wasm-bridge";"#,
+        ),
     ]
 }
 
@@ -370,6 +416,12 @@ fn expected_wasm_callable_alias_locations() -> Vec<(PathBuf, usize)> {
         ("class-copy.ts", 4),
         ("exported-declaration-consumer.ts", 1),
         ("method-return.ts", 3),
+        ("outer-assignment.ts", 4),
+        ("default-consumer.ts", 1),
+        ("escaped-import.ts", 1),
+        ("bound-method.ts", 3),
+        ("class-field.ts", 2),
+        ("project/src/routes/consumer.ts", 1),
     ]
     .into_iter()
     .map(|(name, line)| (Path::new("nook-app/nook-web").join(name), line))
@@ -379,6 +431,10 @@ fn expected_wasm_callable_alias_locations() -> Vec<(PathBuf, usize)> {
 }
 
 fn write_web_source(root: &Path, name: &str, source: &str) -> anyhow::Result<()> {
-    fs::write(root.join(name), source)?;
+    let path = root.join(name);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, source)?;
     Ok(())
 }

@@ -36,6 +36,7 @@ pub(super) fn svelte_wasm_import_alias_lines(
 }
 
 fn collect_svelte_typescript(node: tree_sitter::Node<'_>, source: &str, composite: &mut [u8]) {
+    preserve_block_scope(node, source, composite);
     if node.kind() == "raw_text"
         && node
             .parent()
@@ -59,5 +60,40 @@ fn collect_svelte_typescript(node: tree_sitter::Node<'_>, source: &str, composit
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         collect_svelte_typescript(child, source, composite);
+    }
+}
+
+fn preserve_block_scope(node: tree_sitter::Node<'_>, source: &str, composite: &mut [u8]) {
+    let text = node.utf8_text(source.as_bytes()).unwrap_or_default();
+    let header = text.split('}').next().unwrap_or_default();
+    let raw = match node.kind() {
+        "each_statement" => header.split_once(" as ").map(|(_, value)| value),
+        "snippet_statement" => header
+            .split_once('(')
+            .and_then(|(_, value)| value.split_once(')').map(|(parameters, _)| parameters)),
+        "then_block" | "catch_block" => header.split_once(' ').map(|(_, value)| value),
+        _ => None,
+    };
+    let Some(raw) = raw else { return };
+    let names = raw
+        .split(',')
+        .filter_map(|part| {
+            let name = part.trim().split([':', '=', ' ', ')', '(']).next()?;
+            (!name.is_empty()
+                && name
+                    .chars()
+                    .all(|character| character.is_alphanumeric() || matches!(character, '_' | '$')))
+            .then_some(name)
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    if names.is_empty() {
+        return;
+    }
+    let declaration = format!("{{let {names};");
+    if declaration.len() < node.end_byte() - node.start_byte() {
+        composite[node.start_byte()..node.start_byte() + declaration.len()]
+            .copy_from_slice(declaration.as_bytes());
+        composite[node.end_byte() - 1] = b'}';
     }
 }

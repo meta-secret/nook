@@ -133,7 +133,7 @@ pub(super) fn collect_namespace_member_alias(
 ) {
     let value = unwrap_transparent_expression(value);
     let binding_name_node = match binding.kind() {
-        "identifier" => Some(binding),
+        "identifier" | "property_identifier" | "private_property_identifier" => Some(binding),
         "member_expression" => binding.child_by_field_name("property"),
         "subscript_expression" => binding.child_by_field_name("index"),
         _ => None,
@@ -259,7 +259,22 @@ fn wasm_callable_member_name(
     scoped_wasm_namespaces: &[ScopedBinding],
     scoped_wasm_instances: &[ScopedBinding],
 ) -> Option<String> {
-    let value = unwrap_transparent_expression(value);
+    let mut value = unwrap_transparent_expression(value);
+    if value.kind() == "call_expression"
+        && let Some(function) = value.child_by_field_name("function")
+        && matches!(
+            function.kind(),
+            "member_expression" | "subscript_expression"
+        )
+        && function
+            .child_by_field_name("property")
+            .or_else(|| function.child_by_field_name("index"))
+            .and_then(|property| semantic_node_name(property, source))
+            .is_some_and(|name| name == "bind")
+        && let Some(bound) = function.child_by_field_name("object")
+    {
+        value = unwrap_transparent_expression(bound);
+    }
     if !matches!(value.kind(), "member_expression" | "subscript_expression") {
         return None;
     }

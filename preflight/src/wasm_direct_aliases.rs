@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use crate::javascript_literals::static_javascript_string;
+use crate::javascript_literals::{semantic_javascript_name, static_javascript_string};
 use crate::wasm_dynamic_aliases::{
     collect_namespace_import_bindings, collect_wasm_type_import_bindings,
 };
@@ -29,6 +29,15 @@ pub(super) fn collect_direct_wasm_aliases_and_bindings(
                     source_path,
                     &module,
                     wasm_namespace_bindings,
+                );
+                collect_default_callable_import(
+                    node,
+                    source,
+                    source_path,
+                    &module,
+                    first_line,
+                    imported_callable_bindings,
+                    lines,
                 );
                 collect_wasm_type_import_bindings(
                     node,
@@ -70,6 +79,37 @@ pub(super) fn collect_direct_wasm_aliases_and_bindings(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn collect_default_callable_import(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    source_path: &Path,
+    module: &str,
+    first_line: usize,
+    bindings: &mut HashSet<String>,
+    lines: &mut Vec<usize>,
+) {
+    if !is_wasm_callable_export(module, "default", source_path) {
+        return;
+    }
+    let Ok(text) = node.utf8_text(source.as_bytes()) else {
+        return;
+    };
+    let Some(clause) = text.trim_start().strip_prefix("import ") else {
+        return;
+    };
+    let binding = clause
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(',');
+    if binding.is_empty() || matches!(binding, "type" | "{" | "*") {
+        return;
+    }
+    bindings.insert(binding.to_owned());
+    lines.push(first_line + node.start_position().row);
+}
+
 fn module_specifier(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
     let source_node = node.child_by_field_name("source")?;
     static_javascript_string(source_node, source)
@@ -88,13 +128,13 @@ fn collect_callable_alias_specifiers(
 ) {
     if matches!(node.kind(), "import_specifier" | "export_specifier")
         && let Some(authored_name_node) = node.child_by_field_name("name")
-        && let Some(authored_name) = semantic_node_name(authored_name_node, source)
+        && let Some(authored_name) = semantic_javascript_name(authored_name_node, source)
         && callable_names.contains(&authored_name)
         && is_wasm_callable_export(module, &authored_name, source_path)
     {
         let alias = node.child_by_field_name("alias");
         if alias
-            .and_then(|alias| semantic_node_name(alias, source))
+            .and_then(|alias| semantic_javascript_name(alias, source))
             .is_some_and(|alias| alias != authored_name)
         {
             lines.push(first_line + authored_name_node.start_position().row);
@@ -121,14 +161,5 @@ fn collect_callable_alias_specifiers(
             imported_callable_bindings,
             lines,
         );
-    }
-}
-
-fn semantic_node_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
-    let text = node.utf8_text(source.as_bytes()).ok()?;
-    if node.kind() == "string" {
-        static_javascript_string(node, source)
-    } else {
-        Some(text.to_owned())
     }
 }

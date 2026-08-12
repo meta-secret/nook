@@ -318,34 +318,34 @@ fn collect_dynamic_wasm_aliases(
         );
     }
 
-    if node.kind() == "variable_declarator"
-        && let (Some(binding), Some(value)) = (
-            node.child_by_field_name("name"),
-            node.child_by_field_name("value"),
-        )
-        && collect_binding_aliases(
-            binding,
-            value,
-            source,
-            source_path,
-            first_line,
-            callable_names,
-            wasm_type_names,
-            wasm_types,
-            wasm_namespace_bindings,
-            wasm_class_bindings,
-            wasm_instance_bindings,
-            wasm_instance_factories,
-            scoped_wasm_factories,
-            scoped_wasm_runtime_receivers,
-            scoped_wasm_namespaces,
-            scoped_wasm_instances,
-            scoped_wasm_callables,
-            imported_callable_bindings,
-            lines,
-            true,
-        )
-    {
+    if matches!(
+        node.kind(),
+        "variable_declarator" | "public_field_definition"
+    ) && let (Some(binding), Some(value)) = (
+        node.child_by_field_name("name"),
+        node.child_by_field_name("value"),
+    ) && collect_binding_aliases(
+        binding,
+        value,
+        source,
+        source_path,
+        first_line,
+        callable_names,
+        wasm_type_names,
+        wasm_types,
+        wasm_namespace_bindings,
+        wasm_class_bindings,
+        wasm_instance_bindings,
+        wasm_instance_factories,
+        scoped_wasm_factories,
+        scoped_wasm_runtime_receivers,
+        scoped_wasm_namespaces,
+        scoped_wasm_instances,
+        scoped_wasm_callables,
+        imported_callable_bindings,
+        lines,
+        true,
+    ) {
         return;
     }
 
@@ -516,6 +516,7 @@ fn dynamic_namespace_binding(
     wasm_namespace_bindings: &HashMap<String, String>,
     scoped_wasm_namespaces: &[ScopedBinding],
 ) -> Option<ScopedBinding> {
+    let binding = declared_binding(binding, source).unwrap_or(binding);
     if binding.kind() == "identifier"
         && let Some(module) = wasm_module_specifier(
             value,
@@ -544,6 +545,7 @@ fn wasm_instance_binding(
     wasm_instance_bindings: &HashMap<String, String>,
     scoped_wasm_instances: &[ScopedBinding],
 ) -> Option<ScopedBinding> {
+    let binding = declared_binding(binding, source).unwrap_or(binding);
     if binding.kind() != "identifier" {
         return None;
     }
@@ -562,6 +564,40 @@ fn wasm_instance_binding(
         return scoped_binding(binding, source, Some(wasm_type), None);
     }
     None
+}
+
+fn declared_binding<'a>(
+    reference: tree_sitter::Node<'a>,
+    source: &str,
+) -> Option<tree_sitter::Node<'a>> {
+    if reference.kind() != "identifier" {
+        return None;
+    }
+    let name = semantic_node_name(reference, source)?;
+    let mut root = reference;
+    while let Some(parent) = root.parent() {
+        root = parent;
+    }
+    find_declared_binding(root, reference, &name, source)
+}
+
+fn find_declared_binding<'a>(
+    node: tree_sitter::Node<'a>,
+    reference: tree_sitter::Node<'_>,
+    name: &str,
+    source: &str,
+) -> Option<tree_sitter::Node<'a>> {
+    if node.kind() == "variable_declarator"
+        && let Some(binding) = node.child_by_field_name("name")
+        && semantic_node_name(binding, source).as_deref() == Some(name)
+        && let Some(scoped) = scoped_binding(binding, source, None, None)
+        && scoped_binding_is_visible(reference, name, source, &[scoped])
+    {
+        return Some(binding);
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .find_map(|child| find_declared_binding(child, reference, name, source))
 }
 
 #[allow(clippy::too_many_arguments)]
