@@ -6,6 +6,8 @@ import {
   NookVaultSwitchState,
   UnauthenticatedSyncDecision,
   VaultAccessStatus,
+  VaultConnectGateDecision,
+  VaultConnectProbeDecision,
   active_vault_providers,
   providers_visible_while_device_locked,
   staged_oauth_remote_storage_args,
@@ -81,6 +83,46 @@ describe('portable vault client policy', () => {
           false,
         ),
       ).toBe(UnauthenticatedSyncDecision.Approved)
+      expect(
+        policy.vault_connect_probe_decision(
+          VaultAccessStatus.JoinPending,
+          false,
+          1,
+        ),
+      ).toBe(VaultConnectProbeDecision.ReassessFirstSyncProvider)
+      expect(
+        policy.vault_connect_probe_decision(
+          VaultAccessStatus.JoinPending,
+          true,
+          1,
+        ),
+      ).toBe(VaultConnectProbeDecision.UseConfiguredStorage)
+      expect(
+        policy.vault_connect_gate_decision(
+          VaultAccessStatus.NeedsEnrollment,
+          1,
+        ),
+      ).toBe(VaultConnectGateDecision.PromptForPassword)
+      expect(
+        policy.vault_connect_gate_decision(VaultAccessStatus.JoinPending, 0),
+      ).toBe(VaultConnectGateDecision.AwaitJoinApproval)
+      expect(
+        policy.vault_connect_gate_decision(
+          VaultAccessStatus.NeedsEnrollment,
+          0,
+        ),
+      ).toBe(VaultConnectGateDecision.RequestEnrollment)
+      expect(
+        policy.vault_connect_gate_decision(VaultAccessStatus.Ready, 0),
+      ).toBe(VaultConnectGateDecision.Connect)
+      expect(
+        policy.vault_connect_password_lookup_required(
+          VaultAccessStatus.JoinPending,
+        ),
+      ).toBe(true)
+      expect(
+        policy.vault_connect_password_lookup_required(VaultAccessStatus.Ready),
+      ).toBe(false)
       const switchVault = policy.vault_switch_target(
         ' store-b ',
         true,

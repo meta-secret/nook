@@ -245,7 +245,7 @@ fn rust_wasm_domain_boundary_stays_real_and_typed() -> anyhow::Result<()> {
 fn remote_vault_recovery_requires_core_confirmed_connect_state() -> anyhow::Result<()> {
     let source = fs::read_to_string(
         repository_root()
-            .join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/secrets.ts"),
+            .join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/connection.ts"),
     )?;
     assert!(
         source.contains("remote_recovery_connect_confirmed("),
