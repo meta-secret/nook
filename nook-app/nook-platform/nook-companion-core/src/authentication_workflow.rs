@@ -4,8 +4,13 @@
 //! module owns the product decision about which workflow is present, where the
 //! user is in it, and which action Nook may offer next.
 
+mod observation_validation;
 mod vocabulary;
 
+pub use observation_validation::{
+    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    authentication_page_observations_are_valid,
+};
 pub use vocabulary::{
     AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowStage,
 };

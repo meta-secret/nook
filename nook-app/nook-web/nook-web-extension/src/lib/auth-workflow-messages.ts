@@ -1,9 +1,6 @@
 import type { PasswordFormSummary } from '../../../nook-web-shared/src/extension/password-forms'
 import type { AuthenticationWorkflowSnapshot } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
-const MAX_OBSERVED_FIELD_COUNT = 100
-const MAX_WORKFLOW_OBSERVATIONS = 20
-
 export type AuthenticationPageObservationView = Pick<
   PasswordFormSummary,
   | 'usernameFieldCount'
@@ -33,15 +30,6 @@ export type AuthenticationWorkflowSnapshotMessage = {
   }
 }
 
-function isBoundedCount(value: number): value is number {
-  return (
-    typeof value === 'number' &&
-    Number.isInteger(value) &&
-    value >= 0 &&
-    value <= MAX_OBSERVED_FIELD_COUNT
-  )
-}
-
 export function isAuthenticationWorkflowSnapshotMessage(
   message: unknown,
 ): message is AuthenticationWorkflowSnapshotMessage {
@@ -58,8 +46,7 @@ export function isAuthenticationWorkflowSnapshotMessage(
     typeof message.payload.origin !== 'string' ||
     !('observations' in message.payload) ||
     !Array.isArray(message.payload.observations) ||
-    message.payload.observations.length === 0 ||
-    message.payload.observations.length > MAX_WORKFLOW_OBSERVATIONS
+    message.payload.observations.length === 0
   ) {
     return false
   }
@@ -73,12 +60,17 @@ export function isAuthenticationWorkflowSnapshotMessage(
         observation.newPasswordFieldCount,
         observation.genericPasswordFieldCount,
         observation.oneTimeCodeFieldCount,
-      ].every(isBoundedCount) &&
+      ].every(
+        (count) =>
+          typeof count === 'number' && Number.isInteger(count) && count >= 0,
+      ) &&
       typeof observation.manualCheckpointPresent === 'boolean' &&
       typeof observation.authenticatorSetupHint === 'boolean' &&
       typeof observation.backupCodesHint === 'boolean' &&
       typeof observation.passkeyControlPresent === 'boolean' &&
-      isBoundedCount(observation.matchingPasskeyAccountCount)
+      typeof observation.matchingPasskeyAccountCount === 'number' &&
+      Number.isInteger(observation.matchingPasskeyAccountCount) &&
+      observation.matchingPasskeyAccountCount >= 0
     )
   })
 }
