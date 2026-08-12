@@ -112,54 +112,6 @@ export function closeExtensionSessionDocument(): Promise<void> {
   return closure
 }
 
-export enum IsExtensionSessionExpiryMessageResultType {
-  NookExtensionSessionExpired = 'nook:extension-session-expired',
-}
-
-export function isExtensionSessionExpiryMessage(message: unknown): message is {
-  type: IsExtensionSessionExpiryMessageResultType.NookExtensionSessionExpired
-} {
-  return (
-    !!message &&
-    typeof message === 'object' &&
-    'type' in message &&
-    message.type ===
-      IsExtensionSessionExpiryMessageResultType.NookExtensionSessionExpired
-  )
-}
-
-export enum IsExtensionSessionLockMessageResultType {
-  NookExtensionSessionLock = 'nook:extension-session-lock',
-}
-
-export function isExtensionSessionLockMessage(message: unknown): message is {
-  type: IsExtensionSessionLockMessageResultType.NookExtensionSessionLock
-} {
-  return (
-    !!message &&
-    typeof message === 'object' &&
-    'type' in message &&
-    message.type ===
-      IsExtensionSessionLockMessageResultType.NookExtensionSessionLock
-  )
-}
-
-export enum IsExtensionSessionEnsureMessageResultType {
-  NookEnsureExtensionSessionRuntime = 'nook:ensure-extension-session-runtime',
-}
-
-export function isExtensionSessionEnsureMessage(message: unknown): message is {
-  type: IsExtensionSessionEnsureMessageResultType.NookEnsureExtensionSessionRuntime
-} {
-  return (
-    !!message &&
-    typeof message === 'object' &&
-    'type' in message &&
-    message.type ===
-      IsExtensionSessionEnsureMessageResultType.NookEnsureExtensionSessionRuntime
-  )
-}
-
 export function isUnlockedSessionStatus(status: unknown): boolean {
   return Boolean(
     status &&

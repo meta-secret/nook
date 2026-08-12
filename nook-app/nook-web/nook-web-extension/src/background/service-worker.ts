@@ -79,6 +79,7 @@ import {
   importPairingAfterCompanionReady,
 } from './service-worker/pairing-import'
 import { handlePairingStateQuery } from './service-worker/pairing-state-query'
+import { isExtensionPairingStateQueryMessage } from '../lib/pairing-state'
 import {
   cancelWebsitePasskey,
   matchingPasskeyAccountCountForOriginSafe,
@@ -94,13 +95,15 @@ import {
   closeExtensionSessionDocument,
   ensureExtensionSessionDocument,
   extensionSessionDocument,
-  isExtensionSessionEnsureMessage,
-  isExtensionSessionExpiryMessage,
-  isExtensionSessionLockMessage,
   openCompanionLauncher,
   openSimpleVault,
   queryActiveTabLoginDetection,
 } from './service-worker/session-lifecycle'
+import {
+  isExtensionSessionEnsureMessage,
+  isExtensionSessionExpiryMessage,
+  isExtensionSessionLockMessage,
+} from './service-worker/session-runtime-messages'
 import {
   AuthenticationWorkflowSnapshotKind,
   authenticationWorkflowSnapshot,
@@ -118,6 +121,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
   hasPairingApprovedType,
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
+  isExtensionPairingStateQueryMessage,
   isExtensionSessionEnsureMessage,
   isExtensionSessionExpiryMessage,
   isExtensionSessionLockMessage,

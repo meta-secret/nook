@@ -1,4 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test'
+import { OpenCompanionLauncherMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
+import { ExtensionSessionRuntimeMessageType } from '../src/background/service-worker/session-runtime-messages'
 import {
   routeExtensionLifecycleMessage,
   type ExtensionLifecycleRoutingDependencies,
@@ -32,11 +34,12 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   hasPairingApprovedType: mock(() => false),
   importLocalEventLogUpdate: unusedAsyncDependency,
   importPairingAfterCompanionReady: unusedAsyncDependency,
+  isExtensionPairingStateQueryMessage: mock(() => false),
   isExtensionSessionEnsureMessage: (message) =>
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:ensure-extension-session-runtime',
+    message.type === ExtensionSessionRuntimeMessageType.Ensure,
   isExtensionSessionExpiryMessage: mock(() => false),
   isExtensionSessionLockMessage: mock(() => false),
   openCompanionLauncher,
@@ -64,7 +67,7 @@ describe('service worker routing', () => {
     const sendResponse = mock(() => {})
     const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
       dependencies: lifecycleDependencies,
-      message: { type: 'nook:ensure-extension-session-runtime' },
+      message: { type: ExtensionSessionRuntimeMessageType.Ensure },
       sender: { id: 'foreign-extension' },
       sendResponse,
     }
@@ -81,7 +84,7 @@ describe('service worker routing', () => {
     const sendResponse = mock(() => {})
     const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
       dependencies: lifecycleDependencies,
-      message: { type: 'nook:ensure-extension-session-runtime' },
+      message: { type: ExtensionSessionRuntimeMessageType.Ensure },
       sender: { id: 'nook-extension' },
       sendResponse,
     }
@@ -96,7 +99,9 @@ describe('service worker routing', () => {
     const sendResponse = mock(() => {})
     const routingArgs: Parameters<typeof routeExternalCompanionMessage>[0] = {
       dependencies: externalDependencies,
-      message: { type: 'nook:open-companion-launcher' },
+      message: {
+        type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+      },
       sender: {
         id: 'foreign-extension',
         url: 'https://example.com',
@@ -116,7 +121,9 @@ describe('service worker routing', () => {
     const sendResponse = mock(() => {})
     const routingArgs: Parameters<typeof routeExternalCompanionMessage>[0] = {
       dependencies: externalDependencies,
-      message: { type: 'nook:open-companion-launcher' },
+      message: {
+        type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
+      },
       sender: {
         id: 'simple-vault',
         url: 'https://simple.example.test/',

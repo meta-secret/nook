@@ -4,12 +4,13 @@ import {
   isOpenCompanionLauncherMessage,
   isOpenSimpleVaultMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { isExtensionPairingStateQueryMessage } from '../../lib/pairing-state'
 import { isExtensionRuntimeSender, isNokeySender } from './routing-trust'
+import type * as PairingState from '../../lib/pairing-state'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
 import type * as PairingStateQuery from './pairing-state-query'
 import type * as SessionLifecycle from './session-lifecycle'
+import type * as SessionRuntimeMessages from './session-runtime-messages'
 import {
   LoginDetectionStatus,
   isQueryActiveTabLoginDetectionMessage,
@@ -35,9 +36,10 @@ export type ExtensionLifecycleRoutingDependencies = {
   hasPairingApprovedType: typeof PairingIdentity.hasPairingApprovedType
   importLocalEventLogUpdate: typeof PairingImport.importLocalEventLogUpdate
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
-  isExtensionSessionEnsureMessage: typeof SessionLifecycle.isExtensionSessionEnsureMessage
-  isExtensionSessionExpiryMessage: typeof SessionLifecycle.isExtensionSessionExpiryMessage
-  isExtensionSessionLockMessage: typeof SessionLifecycle.isExtensionSessionLockMessage
+  isExtensionPairingStateQueryMessage: typeof PairingState.isExtensionPairingStateQueryMessage
+  isExtensionSessionEnsureMessage: typeof SessionRuntimeMessages.isExtensionSessionEnsureMessage
+  isExtensionSessionExpiryMessage: typeof SessionRuntimeMessages.isExtensionSessionExpiryMessage
+  isExtensionSessionLockMessage: typeof SessionRuntimeMessages.isExtensionSessionLockMessage
   openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
   openExtensionPairing: typeof PairingIdentity.openExtensionPairing
   openSimpleVault: typeof SessionLifecycle.openSimpleVault
@@ -88,6 +90,7 @@ export function routeExtensionLifecycleMessage({
     hasPairingApprovedType,
     importLocalEventLogUpdate,
     importPairingAfterCompanionReady,
+    isExtensionPairingStateQueryMessage,
     isExtensionSessionEnsureMessage,
     isExtensionSessionExpiryMessage,
     isExtensionSessionLockMessage,
