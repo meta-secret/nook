@@ -212,6 +212,33 @@ pub fn classify_companion_authentication_workflow(
 }
 
 #[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompanionAuthenticationWorkflowMatchKind {
+    NoMatch,
+    Rejected,
+    Matched,
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn companion_authentication_workflow_match_kind(
+    workflow_match: nook_companion_core::AuthenticationWorkflowMatch,
+) -> CompanionAuthenticationWorkflowMatchKind {
+    match workflow_match {
+        nook_companion_core::AuthenticationWorkflowMatch::NoMatch => {
+            CompanionAuthenticationWorkflowMatchKind::NoMatch
+        }
+        nook_companion_core::AuthenticationWorkflowMatch::Rejected => {
+            CompanionAuthenticationWorkflowMatchKind::Rejected
+        }
+        nook_companion_core::AuthenticationWorkflowMatch::Matched(_) => {
+            CompanionAuthenticationWorkflowMatchKind::Matched
+        }
+    }
+}
+
+#[wasm_bindgen]
 #[must_use]
 pub fn classify_companion_authentication_outcome(
     input: nook_companion_core::AuthenticationOutcomeClassification,
@@ -615,8 +642,10 @@ mod tests {
             }],
         };
         assert_eq!(
-            classify_companion_authentication_workflow(input),
-            nook_companion_core::AuthenticationWorkflowMatch::Rejected
+            companion_authentication_workflow_match_kind(
+                classify_companion_authentication_workflow(input)
+            ),
+            CompanionAuthenticationWorkflowMatchKind::Rejected
         );
     }
 }

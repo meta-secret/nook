@@ -1,14 +1,8 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { OpenCompanionLauncherMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
+import { OpenCompanionLauncherMessageType } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionSessionRuntimeMessageType } from '../src/background/service-worker/session-runtime-messages'
-import {
-  routeExtensionLifecycleMessage,
-  type ExtensionLifecycleRoutingDependencies,
-} from '../src/background/service-worker/extension-lifecycle-routing'
-import {
-  routeExternalCompanionMessage,
-  type ExternalCompanionRoutingDependencies,
-} from '../src/background/service-worker/external-companion-routing'
+import type { ExtensionLifecycleRoutingDependencies } from '../src/background/service-worker/extension-lifecycle-routing'
+import type { ExternalCompanionRoutingDependencies } from '../src/background/service-worker/external-companion-routing'
 
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
@@ -63,7 +57,9 @@ async function flushResponses(): Promise<void> {
 }
 
 describe('service worker routing', () => {
-  test('rejects an internal session command from a foreign sender synchronously', () => {
+  test('rejects an internal session command from a foreign sender synchronously', async () => {
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
     const sendResponse = mock(() => {})
     const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
       dependencies: lifecycleDependencies,
@@ -81,6 +77,8 @@ describe('service worker routing', () => {
   })
 
   test('keeps an authorized lifecycle response channel open', async () => {
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
     const sendResponse = mock(() => {})
     const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
       dependencies: lifecycleDependencies,
@@ -95,7 +93,9 @@ describe('service worker routing', () => {
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
 
-  test('rejects a companion launcher request from an unauthorized external sender', () => {
+  test('rejects a companion launcher request from an unauthorized external sender', async () => {
+    const { routeExternalCompanionMessage } =
+      await import('../src/background/service-worker/external-companion-routing')
     const sendResponse = mock(() => {})
     const routingArgs: Parameters<typeof routeExternalCompanionMessage>[0] = {
       dependencies: externalDependencies,
@@ -118,6 +118,8 @@ describe('service worker routing', () => {
   })
 
   test('keeps an authorized external launcher response channel open', async () => {
+    const { routeExternalCompanionMessage } =
+      await import('../src/background/service-worker/external-companion-routing')
     const sendResponse = mock(() => {})
     const routingArgs: Parameters<typeof routeExternalCompanionMessage>[0] = {
       dependencies: externalDependencies,

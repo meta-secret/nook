@@ -29,7 +29,10 @@ pub fn authentication_page_observations_are_valid(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AuthenticationWorkflowMatch, classify_authentication_workflow_candidates};
+    use crate::{
+        AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshotError,
+        classify_authentication_workflow_candidates,
+    };
 
     #[test]
     fn validates_bounded_authentication_observation_envelopes() {
@@ -64,9 +67,11 @@ mod tests {
             current_password_field_count: 1,
             ..Default::default()
         }];
+        let rejected = classify_authentication_workflow_candidates(&excessive_field_count);
+        assert_eq!(rejected, AuthenticationWorkflowMatch::Rejected);
         assert_eq!(
-            classify_authentication_workflow_candidates(&excessive_field_count),
-            AuthenticationWorkflowMatch::Rejected
+            rejected.snapshot(),
+            Err(AuthenticationWorkflowSnapshotError::Rejected)
         );
 
         let excessive_pages = vec![

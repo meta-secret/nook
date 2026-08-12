@@ -4,6 +4,15 @@ import {
 } from "./extension-connect-scope";
 import type { ExtensionVaultEventPayload } from "./nook-companion-wasm/nook_companion_wasm";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "./paired-vault-identity-status";
+import {
+  OpenCompanionLauncherMessageType,
+  type OpenCompanionLauncherMessage,
+} from "./companion-launcher-message";
+
+export {
+  OpenCompanionLauncherMessageType,
+  type OpenCompanionLauncherMessage,
+};
 
 export { ExtensionPairedVaultIdentityStatusMessageStatus };
 
@@ -27,17 +36,6 @@ export type GeneratePasswordRequest = {
 
 export type OpenSimpleVaultMessage = {
   type: OpenSimpleVaultMessageType.NookOpenSimpleVault;
-};
-
-export enum OpenCompanionLauncherMessageType {
-  NookOpenCompanionLauncher = "nook:open-companion-launcher",
-}
-
-export type OpenCompanionLauncherMessage = {
-  type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher;
-  payload?: {
-    intent: "pair";
-  };
 };
 
 export enum BeginExtensionPairingMessageType {

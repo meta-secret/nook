@@ -39,8 +39,8 @@ pub use authentication_outcome_response::{
 };
 pub use authentication_workflow::{
     AuthenticationPageObservation, AuthenticationPageObservations, AuthenticationWorkflowAction,
-    AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowNotDetected,
-    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
+    AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
+    AuthenticationWorkflowSnapshotError, AuthenticationWorkflowStage,
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     authentication_form_observation_priority, authentication_page_observations_are_valid,
     classify_authentication_workflow, classify_authentication_workflow_candidates,

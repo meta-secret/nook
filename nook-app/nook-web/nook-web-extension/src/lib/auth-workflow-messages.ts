@@ -22,6 +22,8 @@ export enum AuthenticationWorkflowSnapshotMessageType {
   NookAuthenticationWorkflowSnapshot = 'nook:authentication-workflow-snapshot',
 }
 
+const MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS = 64
+
 export type AuthenticationWorkflowSnapshotMessage = {
   type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot
   payload: {
@@ -46,7 +48,9 @@ export function isAuthenticationWorkflowSnapshotMessage(
     typeof message.payload.origin !== 'string' ||
     !('observations' in message.payload) ||
     !Array.isArray(message.payload.observations) ||
-    message.payload.observations.length === 0
+    message.payload.observations.length === 0 ||
+    message.payload.observations.length >
+      MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS
   ) {
     return false
   }

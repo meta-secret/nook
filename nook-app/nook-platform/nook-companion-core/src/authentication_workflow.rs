@@ -93,17 +93,22 @@ pub struct AuthenticationPageObservations {
 impl AuthenticationWorkflowMatch {
     pub const fn snapshot(
         self,
-    ) -> Result<AuthenticationWorkflowSnapshot, AuthenticationWorkflowNotDetected> {
+    ) -> Result<AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError> {
         match self {
-            Self::NoMatch | Self::Rejected => Err(AuthenticationWorkflowNotDetected),
+            Self::NoMatch => Err(AuthenticationWorkflowSnapshotError::NotDetected),
+            Self::Rejected => Err(AuthenticationWorkflowSnapshotError::Rejected),
             Self::Matched(snapshot) => Ok(snapshot),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[error("authentication workflow was not detected")]
-pub struct AuthenticationWorkflowNotDetected;
+pub enum AuthenticationWorkflowSnapshotError {
+    #[error("authentication workflow was not detected")]
+    NotDetected,
+    #[error("authentication workflow observations were rejected")]
+    Rejected,
+}
 
 impl AuthenticationWorkflowSnapshot {
     const fn new(
