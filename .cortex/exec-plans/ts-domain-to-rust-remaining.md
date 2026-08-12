@@ -15,8 +15,9 @@ Continues [mobile-core-reuse.md](mobile-core-reuse.md).
 - [x] Portable auth field-role classification in `nook-companion-core` with
       structured `LoginContextObservation` / `PageInputFieldObservation` inputs.
 - [x] Portable password-form priority and login advance-control label policy in
-      `nook-companion-core`; DOM scoping, visibility, fill, focus, and submit
-      mechanics remain in the browser adapter.
+      `nook-companion-core`.
+- [x] DOM scoping, visibility, fill, focus, and submit mechanics remain in the
+      browser adapter.
 - [x] OAuth authorized-origin policy in `nook-companion-core`; web adapter uses
       generated WASM enums (no TypeScript enum mirrors).
 - [x] Simple/Sentinel vault host policy in `nook-companion-core`.

@@ -67,7 +67,11 @@ pub fn expand_identity_text(value: &str) -> String {
             with_breaks.push(*c);
         }
     }
-    with_breaks.to_ascii_lowercase()
+    with_breaks
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase()
 }
 
 /// Browser-collected login-surface identity text without DOM handles.
@@ -85,7 +89,7 @@ const LOGIN_SURFACE_WORDS: &[&str] = &[
 ];
 
 const LOGIN_ADVANCE_WORDS: &[&str] = &[
-    "next", "continue", "sign-in", "sign in", "log-in", "log in", "verify",
+    "next", "continue", "signin", "sign-in", "sign in", "login", "log-in", "log in", "verify",
 ];
 
 const LOGIN_PATH_WORDS: &[&str] = &[
@@ -458,6 +462,10 @@ mod tests {
     fn login_advance_labels_require_authentication_words() {
         assert!(looks_like_login_advance_control_label("Next"));
         assert!(looks_like_login_advance_control_label("SignIn"));
+        assert!(looks_like_login_advance_control_label("signin"));
+        assert!(looks_like_login_advance_control_label("Sign   In"));
+        assert!(looks_like_login_advance_control_label("Login"));
+        assert!(looks_like_login_advance_control_label("Log\tin"));
         assert!(looks_like_login_advance_control_label("Submit"));
         assert!(!looks_like_login_advance_control_label("Learn more"));
         assert!(!looks_like_login_advance_control_label("Subscribe"));

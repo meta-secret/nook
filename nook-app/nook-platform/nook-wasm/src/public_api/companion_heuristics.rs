@@ -1,5 +1,6 @@
 //! Thin WASM exports for portable auth-companion heuristics and host policy.
 
+use crate::NookAuthenticationPageObservation;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -113,6 +114,20 @@ pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
 #[must_use]
 pub fn looks_like_email_verification_body(body: &str) -> bool {
     nook_core::looks_like_email_verification_body(body)
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn looks_like_login_advance_control_label(label: &str) -> bool {
+    nook_core::looks_like_login_advance_control_label(label)
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn authentication_form_observation_priority(
+    observation: &NookAuthenticationPageObservation,
+) -> u8 {
+    nook_core::authentication_form_observation_priority(observation.to_core())
 }
 
 #[wasm_bindgen]
@@ -314,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn page_field_wasm_exports_classify_otp_and_username() {
+    fn page_form_wasm_exports_match_core_policy() {
         let otp = NookPageInputFieldObservation::new(
             nook_core::PageInputType::Text,
             false,
@@ -334,5 +349,10 @@ mod tests {
             false,
         );
         assert!(looks_like_username_field(&username));
+        assert!(looks_like_login_advance_control_label("signin"));
+
+        let login =
+            NookAuthenticationPageObservation::new(1, 1, 0, 0, 0, false, false, false, false, 0);
+        assert_eq!(authentication_form_observation_priority(&login), 4);
     }
 }
