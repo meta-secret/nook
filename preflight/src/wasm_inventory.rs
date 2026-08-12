@@ -6,6 +6,7 @@ use syn::{Attribute, ImplItem, Item};
 pub(super) struct WasmTypeInventory {
     pub(super) methods: HashMap<String, HashSet<String>>,
     pub(super) returns: HashMap<(String, String), String>,
+    pub(super) free_returns: HashMap<String, String>,
 }
 
 fn has_wasm_bindgen(attributes: &[Attribute], aliases: &HashSet<String>) -> bool {
@@ -37,7 +38,11 @@ pub(super) fn collect_wasm_inventory(
                     && has_wasm_bindgen(&function.attrs, &aliases)
                     && !is_wasm_accessor(&function.attrs, &aliases)
                 {
-                    callable_names.insert(function.sig.ident.to_string());
+                    let name = function.sig.ident.to_string();
+                    callable_names.insert(name.clone());
+                    if let Some(returned) = wasm_return_type(&function.sig.output) {
+                        types.free_returns.insert(name, returned);
+                    }
                 }
             }
             Item::Struct(item) if has_wasm_bindgen(&item.attrs, &aliases) => {

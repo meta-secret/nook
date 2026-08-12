@@ -43,6 +43,7 @@ pub(super) fn collect_direct_wasm_aliases_and_bindings(
                     source_path,
                     &module,
                     first_line,
+                    callable_names,
                     imported_callable_bindings,
                     lines,
                 );
@@ -107,12 +108,18 @@ fn collect_default_callable_import(
     source_path: &Path,
     module: &str,
     first_line: usize,
+    callable_names: &HashSet<String>,
     bindings: &mut HashSet<String>,
     lines: &mut Vec<usize>,
 ) {
-    if !is_wasm_callable_export(module, "default", source_path) {
+    let Some(authored_name) = crate::wasm_module_sources::wasm_callable_export_name(
+        module,
+        "default",
+        source_path,
+        callable_names,
+    ) else {
         return;
-    }
+    };
     let Ok(text) = node.utf8_text(source.as_bytes()) else {
         return;
     };
@@ -128,7 +135,9 @@ fn collect_default_callable_import(
         return;
     }
     bindings.insert(binding.to_owned());
-    lines.push(first_line + node.start_position().row);
+    if binding != authored_name {
+        lines.push(first_line + node.start_position().row);
+    }
 }
 
 fn module_specifier(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {

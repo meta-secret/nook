@@ -256,8 +256,18 @@ fn function_parameters_declare(scope: tree_sitter::Node<'_>, name: &str, source:
             | "generator_function_declaration"
             | "generator_function"
             | "method_definition"
+            | "class"
     ) {
         return false;
+    }
+    if matches!(
+        scope.kind(),
+        "function_expression" | "generator_function" | "class"
+    ) && scope
+        .child_by_field_name("name")
+        .is_some_and(|binding| binding_matches(binding, name, source))
+    {
+        return true;
     }
     scope
         .child_by_field_name("parameters")

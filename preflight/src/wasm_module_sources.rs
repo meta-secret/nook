@@ -58,6 +58,39 @@ pub(super) fn is_wasm_callable_export(
     module_reexports_wasm_symbol(module, exported_name, source_path, &mut visited)
 }
 
+#[rustfmt::skip]
+pub(super) fn wasm_callable_export_name(module: &str, exported_name: &str, source_path: &Path, callable_names: &HashSet<String>) -> Option<String> {
+    let mut visited = HashSet::new();
+    module_wasm_callable_name(module, exported_name, source_path, callable_names, &mut visited)
+}
+
+#[rustfmt::skip]
+fn module_wasm_callable_name(module: &str, exported_name: &str, source_path: &Path, callable_names: &HashSet<String>, visited: &mut HashSet<(PathBuf, String)>) -> Option<String> {
+    if WASM_MODULE_ALIASES.contains(&module) {
+        return callable_names.contains(exported_name).then(|| exported_name.to_owned());
+    }
+    let resolved = resolve_module(module, source_path)?;
+    if is_known_wasm_path(&strip_module_extension(resolved.clone())) {
+        return callable_names.contains(exported_name).then(|| exported_name.to_owned());
+    }
+    if !visited.insert((resolved.clone(), exported_name.to_owned())) {
+        return None;
+    }
+    let exports = local_forwarded_exports(&resolved)?;
+    let has_explicit = exports.iter().any(|export| matches!(export, ForwardedExport::Named { exported, .. } if exported == exported_name));
+    exports.into_iter().find_map(|export| match export {
+        ForwardedExport::Named {
+            exported,
+            imported,
+            module,
+        } if exported == exported_name => module_wasm_callable_name(&module, &imported, &resolved, callable_names, visited),
+        ForwardedExport::All { module } if !has_explicit => module_wasm_callable_name(&module, exported_name, &resolved, callable_names, visited),
+        ForwardedExport::All { .. }
+        | ForwardedExport::Named { .. }
+        | ForwardedExport::Namespace { .. } => None,
+    })
+}
+
 pub(super) fn is_wasm_export(module: &str, exported_name: &str, source_path: &Path) -> bool {
     let mut visited = HashSet::new();
     module_reexports_wasm_symbol(module, exported_name, source_path, &mut visited)
@@ -498,6 +531,19 @@ fn collect_imported_bindings(
             .and_then(|value| required_module(value, source))
     {
         bindings.insert(local, (module, "*".to_owned()));
+        return;
+    }
+    if node.kind() == "variable_declarator"
+        && let (Some(local), Some(value)) = (
+            node.child_by_field_name("name")
+                .and_then(|binding| semantic_node_name(binding, source)),
+            node.child_by_field_name("value"),
+        )
+        && let Some(ForwardedExport::Named {
+            imported, module, ..
+        }) = forwarded_namespace_member(local.clone(), value, source, bindings)
+    {
+        bindings.insert(local, (module, imported));
         return;
     }
     let mut cursor = node.walk();

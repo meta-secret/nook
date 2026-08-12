@@ -258,6 +258,12 @@ pub(super) fn collect_factory_calls_for_receivers(
     receivers: &HashSet<String>,
     called_bindings: &mut HashSet<String>,
 ) {
+    if matches!(node.kind(), "member_expression" | "subscript_expression")
+        && let Some(object) = node.child_by_field_name("object")
+        && let Some(factory_name) = called_identifier(object, source)
+    {
+        called_bindings.insert(factory_name);
+    }
     if matches!(node.kind(), "variable_declarator" | "assignment_expression")
         && let Some(binding) = node
             .child_by_field_name("name")

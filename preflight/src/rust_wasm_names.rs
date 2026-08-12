@@ -237,6 +237,7 @@ fn test_wasm_methods_by_type() -> WasmTypeInventory {
             ),
         ]),
         returns: HashMap::new(),
+        free_returns: HashMap::new(),
     }
 }
 

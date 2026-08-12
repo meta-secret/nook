@@ -411,6 +411,11 @@ fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_
             wasm_callable_member_name(result, source, source_path, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, scoped_wasm_namespaces, scoped_wasm_instances)
         });
     }
+    if value.kind() == "assignment_expression" {
+        return value.child_by_field_name("right").and_then(|result| {
+            wasm_callable_member_name(result, source, source_path, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, scoped_wasm_namespaces, scoped_wasm_instances)
+        });
+    }
     if matches!(value.kind(), "ternary_expression" | "binary_expression") {
         let mut cursor = value.walk();
         return value.named_children(&mut cursor).find_map(|branch| {
@@ -515,6 +520,30 @@ pub(super) fn wasm_receiver_type(
         )
     {
         return Some(wasm_type);
+    }
+    if receiver.kind() == "call_expression"
+        && let Some(function) = receiver.child_by_field_name("function")
+        && matches!(
+            function.kind(),
+            "member_expression" | "subscript_expression"
+        )
+        && let Some(object) = function.child_by_field_name("object")
+        && let Some(name) = function
+            .child_by_field_name("property")
+            .or_else(|| function.child_by_field_name("index"))
+            .and_then(|node| semantic_node_name(node, source))
+        && wasm_module_specifier(
+            object,
+            source,
+            source_path,
+            wasm_namespace_bindings,
+            scoped_wasm_namespaces,
+        )
+        .is_some_and(|module| is_wasm_callable_export(&module, &name, source_path))
+        && let Some(returned) = wasm_types.free_returns.get(&name)
+        && wasm_type_names.contains(returned)
+    {
+        return Some(returned.clone());
     }
     if receiver.kind() == "call_expression"
         && let Some(function) = receiver.child_by_field_name("function")

@@ -151,7 +151,7 @@ fn collect_wasm_runtime_receivers(
             node.child_by_field_name("value"),
         )
         && binding.kind() == "identifier"
-        && expression_contains_property(value, source, WASM_RUNTIME_RECEIVER_PROPERTY)
+        && trusted_runtime_receiver(value, source)
         && let Some(receiver) = scoped_binding(binding, source, None, None)
     {
         receivers.push(receiver);
@@ -162,41 +162,32 @@ fn collect_wasm_runtime_receivers(
     }
 }
 
-fn expression_contains_property(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    property_name: &str,
-) -> bool {
+fn trusted_runtime_receiver(node: tree_sitter::Node<'_>, source: &str) -> bool {
     let node = unwrap_transparent_expression(node);
     if matches!(node.kind(), "member_expression" | "subscript_expression") {
+        let Some(object) = node.child_by_field_name("object") else {
+            return false;
+        };
+        let object = unwrap_transparent_expression(object);
         let property = if node.kind() == "subscript_expression" {
             node.child_by_field_name("index")
         } else {
             node.child_by_field_name("property")
         };
-        return property
-            .and_then(|property| semantic_node_name(property, source))
-            .is_some_and(|property| property == property_name);
+        return object
+            .utf8_text(source.as_bytes())
+            .is_ok_and(|owner| matches!(owner, "window" | "globalThis"))
+            && property
+                .and_then(|property| semantic_node_name(property, source))
+                .is_some_and(|property| property == WASM_RUNTIME_RECEIVER_PROPERTY);
     }
     false
 }
 
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_lines)]
-pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    source_path: &Path,
-    first_line: usize,
-    callable_names: &HashSet<String>,
-    wasm_type_names: &HashSet<String>,
-    wasm_types: &WasmTypeInventory,
-    wasm_namespace_bindings: &mut HashMap<String, String>,
-    wasm_class_bindings: &HashMap<String, String>,
-    wasm_instance_bindings: &mut HashMap<String, String>,
-    imported_callable_bindings: &mut HashSet<String>,
-    lines: &mut Vec<usize>,
-) {
+#[rustfmt::skip]
+pub(super) fn collect_dynamic_wasm_aliases_and_bindings(node: tree_sitter::Node<'_>, source: &str, source_path: &Path, first_line: usize, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &mut HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &mut HashMap<String, String>, imported_callable_bindings: &mut HashSet<String>, lines: &mut Vec<usize>) {
     let (mut scoped_wasm_namespaces, mut scoped_wasm_instances) = (Vec::new(), Vec::new());
     let (mut scoped_wasm_callables, mut scoped_wasm_runtime_receivers) = (Vec::new(), Vec::new());
     let mut scoped_wasm_factories = Vec::new();
@@ -204,124 +195,20 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
     let mut member_alias_receivers = HashSet::new();
     let mut called_bindings = HashSet::new();
     collect_member_alias_receiver_names(node, source, callable_names, &mut member_alias_receivers);
-    collect_factory_calls_for_receivers(
-        node,
-        source,
-        &member_alias_receivers,
-        &mut called_bindings,
-    );
-    collect_wasm_instance_factories(
-        node,
-        source,
-        wasm_class_bindings,
-        &mut scoped_wasm_factories,
-    );
-    collect_imported_wasm_instance_factories(
-        node,
-        source,
-        source_path,
-        wasm_type_names,
-        &called_bindings,
-        &mut imported_wasm_factories,
-    );
+    collect_factory_calls_for_receivers(node, source, &member_alias_receivers, &mut called_bindings);
+    collect_wasm_instance_factories(node, source, wasm_class_bindings, &mut scoped_wasm_factories);
+    collect_imported_wasm_instance_factories(node, source, source_path, wasm_type_names, &called_bindings, &mut imported_wasm_factories);
     collect_wasm_runtime_receivers(node, source, &mut scoped_wasm_runtime_receivers);
-    collect_typed_wasm_instances(
-        node,
-        source,
-        wasm_class_bindings,
-        &mut scoped_wasm_instances,
-    );
-    collect_scoped_dynamic_callable_bindings(
-        node,
-        source,
-        source_path,
-        callable_names,
-        wasm_namespace_bindings,
-        &mut scoped_wasm_namespaces,
-        &mut scoped_wasm_callables,
-        lines,
-        first_line,
-    );
-    collect_dynamic_wasm_aliases(
-        node,
-        source,
-        source_path,
-        first_line,
-        callable_names,
-        wasm_type_names,
-        wasm_types,
-        wasm_namespace_bindings,
-        wasm_class_bindings,
-        wasm_instance_bindings,
-        &imported_wasm_factories,
-        &scoped_wasm_factories,
-        &scoped_wasm_runtime_receivers,
-        &mut scoped_wasm_namespaces,
-        &mut scoped_wasm_instances,
-        &mut scoped_wasm_callables,
-        imported_callable_bindings,
-        lines,
-    );
-    collect_object_literal_aliases_in_tree(
-        node,
-        source,
-        source_path,
-        first_line,
-        callable_names,
-        wasm_type_names,
-        wasm_types,
-        wasm_namespace_bindings,
-        wasm_class_bindings,
-        wasm_instance_bindings,
-        &scoped_wasm_namespaces,
-        &scoped_wasm_instances,
-        &mut scoped_wasm_callables,
-        imported_callable_bindings,
-        lines,
-    );
-    collect_dynamic_wasm_aliases(
-        node,
-        source,
-        source_path,
-        first_line,
-        callable_names,
-        wasm_type_names,
-        wasm_types,
-        wasm_namespace_bindings,
-        wasm_class_bindings,
-        wasm_instance_bindings,
-        &imported_wasm_factories,
-        &scoped_wasm_factories,
-        &scoped_wasm_runtime_receivers,
-        &mut scoped_wasm_namespaces,
-        &mut scoped_wasm_instances,
-        &mut scoped_wasm_callables,
-        imported_callable_bindings,
-        lines,
-    );
+    collect_typed_wasm_instances(node, source, wasm_class_bindings, &mut scoped_wasm_instances);
+    collect_scoped_dynamic_callable_bindings(node, source, source_path, callable_names, wasm_namespace_bindings, &mut scoped_wasm_namespaces, &mut scoped_wasm_callables, lines, first_line);
+    collect_dynamic_wasm_aliases(node, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, &imported_wasm_factories, &scoped_wasm_factories, &scoped_wasm_runtime_receivers, &mut scoped_wasm_namespaces, &mut scoped_wasm_instances, &mut scoped_wasm_callables, imported_callable_bindings, lines);
+    collect_object_literal_aliases_in_tree(node, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, &scoped_wasm_namespaces, &scoped_wasm_instances, &mut scoped_wasm_callables, imported_callable_bindings, lines);
+    collect_dynamic_wasm_aliases(node, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, &imported_wasm_factories, &scoped_wasm_factories, &scoped_wasm_runtime_receivers, &mut scoped_wasm_namespaces, &mut scoped_wasm_instances, &mut scoped_wasm_callables, imported_callable_bindings, lines);
 }
 
 #[allow(clippy::too_many_arguments)]
-fn collect_dynamic_wasm_aliases(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    source_path: &Path,
-    first_line: usize,
-    callable_names: &HashSet<String>,
-    wasm_type_names: &HashSet<String>,
-    wasm_types: &WasmTypeInventory,
-    wasm_namespace_bindings: &mut HashMap<String, String>,
-    wasm_class_bindings: &HashMap<String, String>,
-    wasm_instance_bindings: &mut HashMap<String, String>,
-    wasm_instance_factories: &HashMap<String, String>,
-    scoped_wasm_factories: &[ScopedBinding],
-    scoped_wasm_runtime_receivers: &[ScopedBinding],
-    scoped_wasm_namespaces: &mut Vec<ScopedBinding>,
-    scoped_wasm_instances: &mut Vec<ScopedBinding>,
-    scoped_wasm_callables: &mut Vec<ScopedBinding>,
-    imported_callable_bindings: &mut HashSet<String>,
-    lines: &mut Vec<usize>,
-) {
+#[rustfmt::skip]
+fn collect_dynamic_wasm_aliases(node: tree_sitter::Node<'_>, source: &str, source_path: &Path, first_line: usize, callable_names: &HashSet<String>, wasm_type_names: &HashSet<String>, wasm_types: &WasmTypeInventory, wasm_namespace_bindings: &mut HashMap<String, String>, wasm_class_bindings: &HashMap<String, String>, wasm_instance_bindings: &mut HashMap<String, String>, wasm_instance_factories: &HashMap<String, String>, scoped_wasm_factories: &[ScopedBinding], scoped_wasm_runtime_receivers: &[ScopedBinding], scoped_wasm_namespaces: &mut Vec<ScopedBinding>, scoped_wasm_instances: &mut Vec<ScopedBinding>, scoped_wasm_callables: &mut Vec<ScopedBinding>, imported_callable_bindings: &mut HashSet<String>, lines: &mut Vec<usize>) {
     if matches!(
         node.kind(),
         "assignment_expression" | "augmented_assignment_expression"
@@ -329,36 +216,8 @@ fn collect_dynamic_wasm_aliases(
         node.child_by_field_name("left"),
         node.child_by_field_name("right"),
     ) {
-        invalidate_reassigned_wasm_binding(
-            binding,
-            source,
-            scoped_wasm_namespaces,
-            scoped_wasm_instances,
-            scoped_wasm_callables,
-            imported_callable_bindings,
-        );
-        collect_binding_aliases(
-            binding,
-            value,
-            source,
-            source_path,
-            first_line,
-            callable_names,
-            wasm_type_names,
-            wasm_types,
-            wasm_namespace_bindings,
-            wasm_class_bindings,
-            wasm_instance_bindings,
-            wasm_instance_factories,
-            scoped_wasm_factories,
-            scoped_wasm_runtime_receivers,
-            scoped_wasm_namespaces,
-            scoped_wasm_instances,
-            scoped_wasm_callables,
-            imported_callable_bindings,
-            lines,
-            true,
-        );
+        invalidate_reassigned_wasm_binding(binding, source, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings);
+        collect_binding_aliases(binding, value, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings, lines, true);
     }
 
     if matches!(
@@ -371,53 +230,13 @@ fn collect_dynamic_wasm_aliases(
         node.child_by_field_name("name")
             .or_else(|| node.child_by_field_name("pattern")),
         node.child_by_field_name("value"),
-    ) && collect_binding_aliases(
-        binding,
-        value,
-        source,
-        source_path,
-        first_line,
-        callable_names,
-        wasm_type_names,
-        wasm_types,
-        wasm_namespace_bindings,
-        wasm_class_bindings,
-        wasm_instance_bindings,
-        wasm_instance_factories,
-        scoped_wasm_factories,
-        scoped_wasm_runtime_receivers,
-        scoped_wasm_namespaces,
-        scoped_wasm_instances,
-        scoped_wasm_callables,
-        imported_callable_bindings,
-        lines,
-        true,
-    ) {
+    ) && collect_binding_aliases(binding, value, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings, lines, true) {
         return;
     }
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_dynamic_wasm_aliases(
-            child,
-            source,
-            source_path,
-            first_line,
-            callable_names,
-            wasm_type_names,
-            wasm_types,
-            wasm_namespace_bindings,
-            wasm_class_bindings,
-            wasm_instance_bindings,
-            wasm_instance_factories,
-            scoped_wasm_factories,
-            scoped_wasm_runtime_receivers,
-            scoped_wasm_namespaces,
-            scoped_wasm_instances,
-            scoped_wasm_callables,
-            imported_callable_bindings,
-            lines,
-        );
+        collect_dynamic_wasm_aliases(child, source, source_path, first_line, callable_names, wasm_type_names, wasm_types, wasm_namespace_bindings, wasm_class_bindings, wasm_instance_bindings, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, scoped_wasm_namespaces, scoped_wasm_instances, scoped_wasm_callables, imported_callable_bindings, lines);
     }
 }
 
@@ -443,7 +262,7 @@ fn invalidate_reassigned_wasm_binding(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn collect_binding_aliases(
     binding: tree_sitter::Node<'_>,
     value: tree_sitter::Node<'_>,
@@ -495,6 +314,8 @@ fn collect_binding_aliases(
         binding,
         value,
         source,
+        source_path,
+        wasm_types,
         wasm_class_bindings,
         wasm_namespace_bindings,
         scoped_wasm_namespaces,
@@ -529,6 +350,20 @@ fn collect_binding_aliases(
     {
         return true;
     }
+    if collect_factory_result_member_alias(
+        binding,
+        value,
+        source,
+        first_line,
+        wasm_types,
+        wasm_instance_factories,
+        scoped_wasm_factories,
+        scoped_wasm_callables,
+        imported_callable_bindings,
+        lines,
+    ) {
+        return true;
+    }
     collect_namespace_member_alias(
         binding,
         value,
@@ -557,6 +392,49 @@ fn collect_binding_aliases(
         lines,
     );
     false
+}
+
+#[allow(clippy::too_many_arguments)]
+#[rustfmt::skip]
+fn collect_factory_result_member_alias(binding: tree_sitter::Node<'_>, value: tree_sitter::Node<'_>, source: &str, first_line: usize, wasm_types: &WasmTypeInventory, factories: &HashMap<String, String>, scoped_factories: &[ScopedBinding], scoped_callables: &mut Vec<ScopedBinding>, root_callables: &mut HashSet<String>, lines: &mut Vec<usize>) -> bool {
+    if !matches!(value.kind(), "member_expression" | "subscript_expression") {
+        return false;
+    }
+    let Some(receiver) = value.child_by_field_name("object") else {
+        return false;
+    };
+    let receiver = unwrap_transparent_expression(receiver);
+    if receiver.kind() != "call_expression" {
+        return false;
+    }
+    let Some(function) = receiver.child_by_field_name("function") else {
+        return false;
+    };
+    let Some(factory_name) = callable_expression_name(function, source) else {
+        return false;
+    };
+    let wasm_type = function.utf8_text(source.as_bytes()).ok().filter(|_| callable_binding_is_visible(function, source)).and_then(|name| factories.get(name).cloned()).or_else(|| scoped_wasm_type_visible(function, &factory_name, source, scoped_factories));
+    let Some(callable) = wasm_type
+        .and_then(|owner| wasm_types.methods.get(&owner))
+        .and_then(|methods| {
+            value.child_by_field_name("property").or_else(|| value.child_by_field_name("index")).and_then(|property| semantic_node_name(property, source)).filter(|name| methods.contains(name))
+        })
+    else {
+        return false;
+    };
+    let binding_node = binding.child_by_field_name("property").or_else(|| binding.child_by_field_name("index")).unwrap_or(binding);
+    let Some(binding_name) = semantic_node_name(binding_node, source) else {
+        return false;
+    };
+    if binding_name != callable {
+        lines.push(first_line + binding_node.start_position().row);
+    }
+    if let Some(scoped) = scoped_binding(binding_node, source, None, None) {
+        scoped_callables.push(scoped);
+    } else {
+        root_callables.insert(binding_name);
+    }
+    true
 }
 
 fn dynamic_namespace_binding(
@@ -588,20 +466,8 @@ fn dynamic_namespace_binding(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn wasm_instance_binding(
-    binding: tree_sitter::Node<'_>,
-    value: tree_sitter::Node<'_>,
-    source: &str,
-    wasm_class_bindings: &HashMap<String, String>,
-    wasm_namespace_bindings: &HashMap<String, String>,
-    scoped_wasm_namespaces: &[ScopedBinding],
-    wasm_type_names: &HashSet<String>,
-    wasm_instance_factories: &HashMap<String, String>,
-    scoped_wasm_factories: &[ScopedBinding],
-    scoped_wasm_runtime_receivers: &[ScopedBinding],
-    wasm_instance_bindings: &HashMap<String, String>,
-    scoped_wasm_instances: &[ScopedBinding],
-) -> Option<ScopedBinding> {
+#[rustfmt::skip]
+fn wasm_instance_binding(binding: tree_sitter::Node<'_>, value: tree_sitter::Node<'_>, source: &str, source_path: &Path, wasm_types: &WasmTypeInventory, wasm_class_bindings: &HashMap<String, String>, wasm_namespace_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], wasm_type_names: &HashSet<String>, wasm_instance_factories: &HashMap<String, String>, scoped_wasm_factories: &[ScopedBinding], scoped_wasm_runtime_receivers: &[ScopedBinding], wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_instances: &[ScopedBinding]) -> Option<ScopedBinding> {
     let reference = binding;
     let binding = declared_binding(binding, source).unwrap_or(binding);
     if !matches!(
@@ -610,19 +476,7 @@ fn wasm_instance_binding(
     ) {
         return None;
     }
-    if let Some(wasm_type) = value_is_wasm_instance(
-        value,
-        source,
-        wasm_class_bindings,
-        wasm_namespace_bindings,
-        scoped_wasm_namespaces,
-        wasm_type_names,
-        wasm_instance_factories,
-        scoped_wasm_factories,
-        scoped_wasm_runtime_receivers,
-        wasm_instance_bindings,
-        scoped_wasm_instances,
-    ) {
+    if let Some(wasm_type) = value_is_wasm_instance(value, source, source_path, wasm_types, wasm_class_bindings, wasm_namespace_bindings, scoped_wasm_namespaces, wasm_type_names, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, wasm_instance_bindings, scoped_wasm_instances) {
         let mut scoped = scoped_binding(binding, source, Some(wasm_type), None)?;
         if let Some(invocation_end) = deferred_invocation_end(reference, &scoped, source) {
             scoped.declaration_end = invocation_end;
@@ -668,19 +522,8 @@ fn find_declared_binding<'a>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn value_is_wasm_instance(
-    value: tree_sitter::Node<'_>,
-    source: &str,
-    wasm_class_bindings: &HashMap<String, String>,
-    wasm_namespace_bindings: &HashMap<String, String>,
-    scoped_wasm_namespaces: &[ScopedBinding],
-    wasm_type_names: &HashSet<String>,
-    wasm_instance_factories: &HashMap<String, String>,
-    scoped_wasm_factories: &[ScopedBinding],
-    scoped_wasm_runtime_receivers: &[ScopedBinding],
-    wasm_instance_bindings: &HashMap<String, String>,
-    scoped_wasm_instances: &[ScopedBinding],
-) -> Option<String> {
+#[rustfmt::skip]
+fn value_is_wasm_instance(value: tree_sitter::Node<'_>, source: &str, source_path: &Path, wasm_types: &WasmTypeInventory, wasm_class_bindings: &HashMap<String, String>, wasm_namespace_bindings: &HashMap<String, String>, scoped_wasm_namespaces: &[ScopedBinding], wasm_type_names: &HashSet<String>, wasm_instance_factories: &HashMap<String, String>, scoped_wasm_factories: &[ScopedBinding], scoped_wasm_runtime_receivers: &[ScopedBinding], wasm_instance_bindings: &HashMap<String, String>, scoped_wasm_instances: &[ScopedBinding]) -> Option<String> {
     let value = unwrap_transparent_expression(value);
     if value.kind() == "identifier"
         && let Ok(name) = value.utf8_text(source.as_bytes())
@@ -713,7 +556,17 @@ fn value_is_wasm_instance(
         && let Some(function) = value.child_by_field_name("function")
         && let Some(name) = callable_expression_name(function, source)
     {
-        if let Ok(full_name) = function.utf8_text(source.as_bytes())
+        if matches!(
+            function.kind(),
+            "member_expression" | "subscript_expression"
+        ) && let Some(object) = function.child_by_field_name("object")
+            && wasm_module_specifier(object, source, source_path, wasm_namespace_bindings, scoped_wasm_namespaces).is_some_and(|module| is_wasm_callable_export(&module, &name, source_path))
+            && let Some(wasm_type) = wasm_types.free_returns.get(&name)
+        {
+            return Some(wasm_type.clone());
+        }
+        if callable_binding_is_visible(function, source)
+            && let Ok(full_name) = function.utf8_text(source.as_bytes())
             && let Some(wasm_type) = wasm_instance_factories.get(full_name)
         {
             return Some(wasm_type.clone());
@@ -740,21 +593,7 @@ fn value_is_wasm_instance(
     }
     if value.kind() == "await_expression" {
         let mut cursor = value.walk();
-        return value.named_children(&mut cursor).find_map(|child| {
-            value_is_wasm_instance(
-                child,
-                source,
-                wasm_class_bindings,
-                wasm_namespace_bindings,
-                scoped_wasm_namespaces,
-                wasm_type_names,
-                wasm_instance_factories,
-                scoped_wasm_factories,
-                scoped_wasm_runtime_receivers,
-                wasm_instance_bindings,
-                scoped_wasm_instances,
-            )
-        });
+        return value.named_children(&mut cursor).find_map(|child| value_is_wasm_instance(child, source, source_path, wasm_types, wasm_class_bindings, wasm_namespace_bindings, scoped_wasm_namespaces, wasm_type_names, wasm_instance_factories, scoped_wasm_factories, scoped_wasm_runtime_receivers, wasm_instance_bindings, scoped_wasm_instances));
     }
     None
 }
@@ -802,16 +641,22 @@ fn copied_wasm_class(
     source: &str,
     classes: &HashMap<String, String>,
 ) -> Option<String> {
-    if node.kind() == "variable_declarator"
+    if matches!(node.kind(), "variable_declarator" | "assignment_expression")
         && let (Some(binding), Some(value)) = (
-            node.child_by_field_name("name"),
-            node.child_by_field_name("value"),
+            node.child_by_field_name("name")
+                .or_else(|| node.child_by_field_name("left")),
+            node.child_by_field_name("value")
+                .or_else(|| node.child_by_field_name("right")),
         )
         && semantic_node_name(binding, source).as_deref() == Some(name)
         && let Some(source_name) = semantic_node_name(value, source)
         && root_binding_is_visible(value, &source_name, source)
         && let Some(wasm_type) = classes.get(&source_name)
-        && let Some(scoped) = scoped_binding(binding, source, Some(wasm_type.clone()), None)
+        && let Some(mut scoped) = scoped_binding(binding, source, Some(wasm_type.clone()), None)
+        && {
+            scoped.declaration_end = node.end_byte();
+            true
+        }
         && scoped_binding_is_visible(reference, name, source, &[scoped])
     {
         return Some(wasm_type.clone());
@@ -852,7 +697,7 @@ fn wasm_runtime_accessor_receiver_is_visible(
     let Some(receiver) = function.child_by_field_name("object") else {
         return false;
     };
-    if expression_contains_property(receiver, source, WASM_RUNTIME_RECEIVER_PROPERTY) {
+    if trusted_runtime_receiver(receiver, source) {
         return true;
     }
     receiver.utf8_text(source.as_bytes()).is_ok_and(|name| {
@@ -885,9 +730,10 @@ pub(super) fn loaded_module_specifier(node: tree_sitter::Node<'_>, source: &str)
     if node.kind() == "call_expression"
         && let Some(function) = node.child_by_field_name("function")
         && (function.kind() == "import"
-            || function
+            || (function
                 .utf8_text(source.as_bytes())
-                .is_ok_and(|name| name == "require"))
+                .is_ok_and(|name| name == "require")
+                && root_binding_is_visible(function, "require", source)))
     {
         let arguments = node.child_by_field_name("arguments")?;
         let mut cursor = arguments.walk();
@@ -908,6 +754,25 @@ pub(super) fn loaded_module_specifier(node: tree_sitter::Node<'_>, source: &str)
     }
 
     None
+}
+
+fn callable_binding_is_visible(function: tree_sitter::Node<'_>, source: &str) -> bool {
+    let binding = if function.kind() == "identifier" {
+        function
+    } else if matches!(
+        function.kind(),
+        "member_expression" | "subscript_expression"
+    ) {
+        let Some(object) = function.child_by_field_name("object") else {
+            return false;
+        };
+        object
+    } else {
+        return false;
+    };
+    binding
+        .utf8_text(source.as_bytes())
+        .is_ok_and(|name| root_binding_is_visible(binding, name, source))
 }
 
 pub(super) fn scoped_wasm_type_visible(
