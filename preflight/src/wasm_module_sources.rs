@@ -141,6 +141,7 @@ fn local_factory_return_type(
     find_factory_return_type(
         tree.root_node(),
         &source,
+        path,
         exported_name,
         wasm_type_names,
         &imported_bindings,
@@ -150,6 +151,7 @@ fn local_factory_return_type(
 fn find_factory_return_type(
     node: tree_sitter::Node<'_>,
     source: &str,
+    source_path: &Path,
     exported_name: &str,
     wasm_type_names: &HashSet<String>,
     imported_bindings: &HashMap<String, (String, String)>,
@@ -163,8 +165,13 @@ fn find_factory_return_type(
             | "arrow_function"
     ) && callable_name(node, source).is_some_and(|name| name == exported_name)
         && let Some(return_type) = node.child_by_field_name("return_type")
-        && let Some(wasm_type) =
-            referenced_wasm_type(return_type, source, wasm_type_names, imported_bindings)
+        && let Some(wasm_type) = referenced_wasm_type(
+            return_type,
+            source,
+            source_path,
+            wasm_type_names,
+            imported_bindings,
+        )
     {
         return Some(wasm_type);
     }
@@ -173,6 +180,7 @@ fn find_factory_return_type(
         find_factory_return_type(
             child,
             source,
+            source_path,
             exported_name,
             wasm_type_names,
             imported_bindings,
@@ -195,24 +203,32 @@ fn callable_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
 fn referenced_wasm_type(
     node: tree_sitter::Node<'_>,
     source: &str,
+    source_path: &Path,
     wasm_type_names: &HashSet<String>,
     imported_bindings: &HashMap<String, (String, String)>,
 ) -> Option<String> {
     if node.kind() == "type_identifier"
         && let Some(local_name) = semantic_node_name(node, source)
     {
+        if let Some((module, imported_name)) = imported_bindings.get(&local_name) {
+            return (wasm_type_names.contains(imported_name)
+                && is_wasm_export(module, imported_name, source_path))
+            .then(|| imported_name.clone());
+        }
         if wasm_type_names.contains(&local_name) {
             return Some(local_name);
         }
-        if let Some((_, imported_name)) = imported_bindings.get(&local_name)
-            && wasm_type_names.contains(imported_name)
-        {
-            return Some(imported_name.clone());
-        }
     }
     let mut cursor = node.walk();
-    node.named_children(&mut cursor)
-        .find_map(|child| referenced_wasm_type(child, source, wasm_type_names, imported_bindings))
+    node.named_children(&mut cursor).find_map(|child| {
+        referenced_wasm_type(
+            child,
+            source,
+            source_path,
+            wasm_type_names,
+            imported_bindings,
+        )
+    })
 }
 
 fn module_reexports_any_wasm(
@@ -469,7 +485,49 @@ fn collect_commonjs_export(
             .and_then(|right| required_module(right, source))
     {
         exports.push(ForwardedExport::All { module });
+        return;
     }
+    let Some(exported) = commonjs_named_export(left, source) else {
+        return;
+    };
+    let Some((module, imported)) = node
+        .child_by_field_name("right")
+        .and_then(|right| required_member(right, source))
+    else {
+        return;
+    };
+    exports.push(ForwardedExport::Named {
+        exported,
+        imported,
+        module,
+    });
+}
+
+fn commonjs_named_export(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
+    if !matches!(node.kind(), "member_expression" | "subscript_expression") {
+        return None;
+    }
+    let object = node.child_by_field_name("object")?;
+    let object_text = object.utf8_text(source.as_bytes()).ok()?.trim();
+    if !matches!(object_text, "exports" | "module.exports") {
+        return None;
+    }
+    node.child_by_field_name("property")
+        .or_else(|| node.child_by_field_name("index"))
+        .and_then(|property| semantic_node_name(property, source))
+}
+
+fn required_member(node: tree_sitter::Node<'_>, source: &str) -> Option<(String, String)> {
+    if !matches!(node.kind(), "member_expression" | "subscript_expression") {
+        return None;
+    }
+    let object = node.child_by_field_name("object")?;
+    let module = required_module(object, source)?;
+    let imported = node
+        .child_by_field_name("property")
+        .or_else(|| node.child_by_field_name("index"))
+        .and_then(|property| semantic_node_name(property, source))?;
+    Some((module, imported))
 }
 
 fn required_module(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {

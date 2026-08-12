@@ -16,6 +16,7 @@ mod wasm_dynamic_aliases;
 mod wasm_factories;
 mod wasm_inventory;
 mod wasm_local_reexports;
+mod wasm_member_aliases;
 mod wasm_module_sources;
 mod wasm_svelte_sources;
 mod wasm_web_sources;

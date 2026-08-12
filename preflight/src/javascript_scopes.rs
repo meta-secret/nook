@@ -43,9 +43,44 @@ pub(super) fn invalidate_visible_scoped_binding(
             && binding.scope_start <= reference.start_byte()
             && reference.end_byte() <= binding.scope_end
             && !nested_scope_shadows(reference, binding, name, source)
-    }) {
+    }) && reassignment_is_unconditional(reference, binding)
+    {
         binding.scope_end = reference.start_byte();
     }
+}
+
+fn reassignment_is_unconditional(
+    reference: tree_sitter::Node<'_>,
+    binding: &ScopedBinding,
+) -> bool {
+    let mut ancestor = reference.parent();
+    while let Some(node) = ancestor {
+        if node.start_byte() == binding.scope_start && node.end_byte() == binding.scope_end {
+            return true;
+        }
+        if matches!(
+            node.kind(),
+            "if_statement"
+                | "switch_statement"
+                | "ternary_expression"
+                | "for_statement"
+                | "for_in_statement"
+                | "while_statement"
+                | "do_statement"
+                | "try_statement"
+                | "catch_clause"
+                | "function_declaration"
+                | "function_expression"
+                | "generator_function_declaration"
+                | "generator_function"
+                | "arrow_function"
+                | "method_definition"
+        ) {
+            return false;
+        }
+        ancestor = node.parent();
+    }
+    false
 }
 
 fn nested_scope_shadows(
