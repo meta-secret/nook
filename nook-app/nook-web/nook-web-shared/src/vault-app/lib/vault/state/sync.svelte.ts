@@ -11,6 +11,28 @@ import {
   NookVaultLastSync,
 } from "$app-wasm";
 
+type ProjectionConflictReplacement = {
+  readonly replacementConflicts: NookReplacementConflict[];
+  readonly securityConflicts: NookSecurityConflict[];
+};
+
+type SecurityConflictStaging = {
+  readonly events: string[];
+  readonly reasons: string[];
+};
+
+type ContentSyncConflictStaging = {
+  readonly providerLabel: string;
+  readonly localVersion: number;
+  readonly remoteVersion: number;
+};
+
+type StoreIdSyncConflictStaging = {
+  readonly providerLabel: string;
+  readonly localStoreId: string;
+  readonly remoteStoreId: string;
+};
+
 export class VaultSyncState {
   private lastSyncedState = $state(NookVaultLastSync.never_synced());
   get lastSync(): NookVaultLastSync {
@@ -57,10 +79,7 @@ export class VaultSyncState {
   replaceProjectionConflicts({
     replacementConflicts,
     securityConflicts,
-  }: {
-    readonly replacementConflicts: NookReplacementConflict[];
-    readonly securityConflicts: NookSecurityConflict[];
-  }): void {
+  }: ProjectionConflictReplacement): void {
     for (const conflict of this.replacementConflictState) conflict.free();
     for (const conflict of this.securityConflictState) conflict.free();
     this.replacementConflictState = replacementConflicts;
@@ -76,10 +95,7 @@ export class VaultSyncState {
   stageSecurityConflictForTesting({
     events,
     reasons,
-  }: {
-    readonly events: string[];
-    readonly reasons: string[];
-  }): void {
+  }: SecurityConflictStaging): void {
     for (const conflict of this.securityConflictState) conflict.free();
     this.securityConflictState = [
       NookSecurityConflict.from_display_parts(events, reasons),
@@ -90,11 +106,7 @@ export class VaultSyncState {
     providerLabel,
     localVersion,
     remoteVersion,
-  }: {
-    readonly providerLabel: string;
-    readonly localVersion: number;
-    readonly remoteVersion: number;
-  }): void {
+  }: ContentSyncConflictStaging): void {
     this.stageSyncConflict(
       NookPendingSyncConflict.for_testing_content(
         providerLabel,
@@ -108,11 +120,7 @@ export class VaultSyncState {
     providerLabel,
     localStoreId,
     remoteStoreId,
-  }: {
-    readonly providerLabel: string;
-    readonly localStoreId: string;
-    readonly remoteStoreId: string;
-  }): void {
+  }: StoreIdSyncConflictStaging): void {
     this.stageSyncConflict(
       NookPendingSyncConflict.for_testing_store_id(
         providerLabel,

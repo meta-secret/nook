@@ -12,13 +12,15 @@ import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
 
 const log = createLogger("vault-session");
 
+type VaultSessionReset = {
+  readonly state: SessionActionsContext;
+  readonly resetManager: boolean;
+};
+
 export function resetVaultSessionState({
   state,
   resetManager,
-}: {
-  readonly state: SessionActionsContext;
-  readonly resetManager: boolean;
-}): void {
+}: VaultSessionReset): void {
   if (resetManager && state.hasManager) {
     void state
       .enqueueStorage(() => state.requireManager().reset_vault_session())
@@ -61,13 +63,15 @@ export function markVaultUnlocked(state: SessionActionsContext): void {
   void state.publishExtensionEventLogUpdate();
 }
 
+type UnlockedSessionClearRequest = {
+  readonly state: SessionActionsContext;
+  readonly resetManager: boolean;
+};
+
 export function clearUnlockedSession({
   state,
   resetManager,
-}: {
-  readonly state: SessionActionsContext;
-  readonly resetManager: boolean;
-}): void {
+}: UnlockedSessionClearRequest): void {
   state.localLoginPreparation = LocalLoginPreparationState.Idle;
   state.secretPageGeneration += 1;
   state.stopIdleSessionTracking();

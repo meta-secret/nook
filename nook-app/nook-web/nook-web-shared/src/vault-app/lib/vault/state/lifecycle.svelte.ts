@@ -1,9 +1,11 @@
+import { NookBrowserLocale } from "$app-wasm";
 import {
   EnrollmentLocationKind,
   consumeEnrollmentFromLocation,
 } from "$lib/enrollment/code";
 import type { VaultIdleSessionTracker } from "$lib/vault/idle-session-tracker";
 import { VaultStateSlices } from "$lib/vault/state/index.svelte";
+import { VaultRuntimeState as VaultRuntimeSliceState } from "$lib/vault/state/runtime.svelte";
 
 enum SuccessDismissScheduleKind {
   Stopped = "stopped",
@@ -57,7 +59,16 @@ function initialEnrollmentLink(): EnrollmentLink {
     : { kind: EnrollmentLinkKind.Absent };
 }
 
+type LifecycleSyncSchedule = {
+  readonly callback: () => void;
+  readonly intervalMs: number;
+};
+
 export class VaultLifecycleState extends VaultStateSlices {
+  constructor() {
+    super(new VaultRuntimeSliceState(new NookBrowserLocale()));
+  }
+
   private successDismissSchedule: SuccessDismissSchedule = {
     kind: SuccessDismissScheduleKind.Stopped,
   };
@@ -127,13 +138,7 @@ export class VaultLifecycleState extends VaultStateSlices {
     return this.syncSchedule.kind === SyncScheduleKind.Scheduled;
   }
 
-  scheduleSync({
-    callback,
-    intervalMs,
-  }: {
-    readonly callback: () => void;
-    readonly intervalMs: number;
-  }): void {
+  scheduleSync({ callback, intervalMs }: LifecycleSyncSchedule): void {
     this.stopScheduledSync();
     this.syncSchedule = {
       kind: SyncScheduleKind.Scheduled,

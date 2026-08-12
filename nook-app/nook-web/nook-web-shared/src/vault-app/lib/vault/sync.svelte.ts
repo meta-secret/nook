@@ -1,6 +1,10 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 /** Sync actions that snapshot reactive Svelte state at WASM boundaries. */
-import type { SyncActionsContext } from "$lib/vault/action-contexts";
+import type {
+  ProviderSyncRequest,
+  SyncActionsContext,
+  SyncFromProvidersRequest,
+} from "$lib/vault/action-contexts";
 import { createLogger, runtimeFailure } from "$lib/runtime/log";
 import {
   isoTimestamp,
@@ -19,6 +23,9 @@ import {
   NookProviderSyncRevision,
   NookSyncConflictReview,
   NookVaultSyncAccessState,
+  ProviderSyncFailureHandling,
+  ProviderSyncFreshness,
+  ProviderSyncVisibility,
   read_local_vault_yaml,
   UnauthenticatedSyncDecision,
   update_provider_sync_metadata,
@@ -158,18 +165,20 @@ export async function hydrateMultiDeviceState(
   }
 }
 
+type SyncFromProvidersExecution = SyncFromProvidersRequest & {
+  readonly state: SyncActionsContext;
+};
+
 export async function syncFromSyncProviders({
   state,
-  options,
-}: {
-  readonly state: SyncActionsContext;
-  readonly options?: { quiet?: boolean; force?: boolean };
-}): Promise<void> {
+  visibility,
+  freshness,
+}: SyncFromProvidersExecution): Promise<void> {
   if (!state.hasManager) return;
   if (
     !state.clientPolicy.should_sync_from_providers(
       state.syncBlocked,
-      options?.force ?? false,
+      freshness === ProviderSyncFreshness.Forced,
       state.isVerifying,
       state.isSaving,
       state.isPasswordBusy,
@@ -184,11 +193,11 @@ export async function syncFromSyncProviders({
   try {
     for (const provider of state.syncProviders) {
       if (state.syncBlocked) break;
-      const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[0] =
-        {
-          providerId: provider.id,
-          options: { quiet: options?.quiet ?? true },
-        };
+      const syncProviderByIdArgs: ProviderSyncRequest = {
+        providerId: provider.id,
+        visibility,
+        failureHandling: ProviderSyncFailureHandling.Capture,
+      };
       await state.syncProviderById(syncProviderByIdArgs);
     }
     if (state.isAuthenticated) {
@@ -203,23 +212,24 @@ export async function syncFromSyncProviders({
   }
 }
 
+type FanOutSyncExecution = {
+  readonly state: SyncActionsContext;
+  readonly visibility: ProviderSyncVisibility;
+};
+
 export async function runFanOutSyncToProviders({
   state,
-  options,
-}: {
-  readonly state: SyncActionsContext;
-  readonly options?: { quiet?: boolean };
-}): Promise<void> {
+  visibility,
+}: FanOutSyncExecution): Promise<void> {
   if (state.isFanOutSyncing) return;
   state.isFanOutSyncing = true;
   try {
     for (const provider of state.syncProviders) {
       if (state.syncBlocked) break;
-      const syncProviderByIdArgs2: Parameters<
-        typeof state.syncProviderById
-      >[0] = {
+      const syncProviderByIdArgs2: ProviderSyncRequest = {
         providerId: provider.id,
-        options: { quiet: options?.quiet ?? true },
+        visibility,
+        failureHandling: ProviderSyncFailureHandling.Capture,
       };
       await state.syncProviderById(syncProviderByIdArgs2);
     }
@@ -518,7 +528,7 @@ export function startVaultSync(state: SyncActionsContext) {
   }
   log.info("vault sync timer started");
   if (state.isAuthenticated) {
-    void state.syncFromStorage();
+    void state.syncFromStorage(ProviderSyncFreshness.Scheduled);
   }
   const scheduleSyncArgs: Parameters<typeof state.scheduleSync>[0] = {
     callback: () => {
@@ -547,7 +557,7 @@ export function startVaultSync(state: SyncActionsContext) {
       ) {
         return;
       }
-      void state.syncFromStorage();
+      void state.syncFromStorage(ProviderSyncFreshness.Scheduled);
     },
     intervalMs,
   };
@@ -560,19 +570,22 @@ export function stopVaultSync(state: SyncActionsContext) {
   }
 }
 
+type StorageSyncExecution = {
+  readonly state: SyncActionsContext;
+  readonly freshness: ProviderSyncFreshness;
+};
+
 export async function syncFromStorage({
   state,
-  options,
-}: {
-  readonly state: SyncActionsContext;
-  readonly options?: { force?: boolean };
-}) {
+  freshness,
+}: StorageSyncExecution) {
   if (!state.hasManager) return;
   if (state.syncBlocked) return;
-  if (!options?.force && state.isVerifying) return;
-  if (!options?.force && state.isSaving) return;
-  if (!options?.force && state.isPasswordBusy) return;
-  if (!options?.force && state.isSyncing) return;
+  const forced = freshness === ProviderSyncFreshness.Forced;
+  if (!forced && state.isVerifying) return;
+  if (!forced && state.isSaving) return;
+  if (!forced && state.isPasswordBusy) return;
+  if (!forced && state.isSyncing) return;
 
   if (!state.isAuthenticated && state.syncProviders.length > 0) {
     state.isSyncing = true;
@@ -617,9 +630,10 @@ export async function syncFromStorage({
     state.localVaultPresent &&
     state.syncProviders.length > 0
   ) {
-    const syncFromSyncProvidersArgs: Parameters<
-      typeof state.syncFromSyncProviders
-    >[0] = { quiet: true, force: options?.force };
+    const syncFromSyncProvidersArgs: SyncFromProvidersRequest = {
+      visibility: ProviderSyncVisibility.Quiet,
+      freshness,
+    };
     await state.syncFromSyncProviders(syncFromSyncProvidersArgs);
     return;
   }
@@ -678,9 +692,7 @@ export async function manualSync(state: SyncActionsContext) {
     await state.initDeviceIdentity();
     if (state.syncProviders.length === 0) {
       if (state.hasRemoteCredentials()) {
-        const syncFromStorageArgs: Parameters<typeof state.syncFromStorage>[0] =
-          { force: true };
-        await state.syncFromStorage(syncFromStorageArgs);
+        await state.syncFromStorage(ProviderSyncFreshness.Forced);
       } else {
         state.pendingJoins = [];
         state.vaultMembers = [];
@@ -688,8 +700,10 @@ export async function manualSync(state: SyncActionsContext) {
       return;
     }
     for (const provider of state.syncProviders) {
-      const syncRequest: Parameters<typeof state.syncProviderById>[0] = {
+      const syncRequest: ProviderSyncRequest = {
         providerId: provider.id,
+        visibility: ProviderSyncVisibility.Visible,
+        failureHandling: ProviderSyncFailureHandling.Capture,
       };
       await state.syncProviderById(syncRequest);
     }
@@ -713,17 +727,14 @@ export async function manualSync(state: SyncActionsContext) {
 
 export async function fanOutSyncToProviders({
   state,
-  options,
-}: {
-  readonly state: SyncActionsContext;
-  readonly options?: { quiet?: boolean };
-}): Promise<void> {
+  visibility,
+}: FanOutSyncExecution): Promise<void> {
   if (!state.hasManager || !state.isAuthenticated) return;
   if (state.syncBlocked) return;
   if (state.syncProviders.length === 0) return;
   log.debug("fan-out sync queued");
   const run = state.fanOutSyncChain.then(() =>
-    state.runFanOutSyncToProviders(options),
+    state.runFanOutSyncToProviders(visibility),
   );
   state.fanOutSyncChain = run.catch(() => {});
   return run;

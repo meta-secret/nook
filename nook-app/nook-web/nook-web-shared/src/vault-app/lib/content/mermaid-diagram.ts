@@ -27,13 +27,15 @@ async function loadMermaid() {
   return loaded.default;
 }
 
+type MermaidDiagramRendering = {
+  readonly source: string;
+  readonly theme: MermaidTheme;
+};
+
 export async function renderMermaidDiagram({
   source,
   theme,
-}: {
-  readonly source: string;
-  readonly theme: MermaidTheme;
-}): Promise<string> {
+}: MermaidDiagramRendering): Promise<string> {
   const mermaid = await loadMermaid();
   const initializeArgs: Parameters<typeof mermaid.initialize>[0] = {
     startOnLoad: false,

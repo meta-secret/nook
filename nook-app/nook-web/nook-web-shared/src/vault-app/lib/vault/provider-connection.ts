@@ -6,7 +6,11 @@ import {
   LocalFolderHandleKind,
   type LocalFolderHandle,
 } from "$lib/auth/providers";
-import { NookLocalFolderHealthState } from "$app-wasm";
+import {
+  NookLocalFolderHealthState,
+  ProviderSyncFailureHandling,
+  ProviderSyncVisibility,
+} from "$app-wasm";
 import {
   LocalFolderDraftKind,
   LoginSetupKind,
@@ -139,10 +143,8 @@ export async function connectAndSyncStagedProvider(
     await state.flushRemoteEventOutboxNow(request);
     const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[0] = {
       providerId: provider.id,
-      options: {
-        quiet: true,
-        propagateError: true,
-      },
+      visibility: ProviderSyncVisibility.Quiet,
+      failureHandling: ProviderSyncFailureHandling.Propagate,
     };
     await state.syncProviderById(syncProviderByIdArgs);
     state.clearLoginSetup();

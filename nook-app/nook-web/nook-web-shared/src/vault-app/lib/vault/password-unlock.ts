@@ -32,15 +32,17 @@ type E2ePasswordManager = {
   ) => Promise<void>;
 };
 
+type VaultPasswordCreation = {
+  readonly state: VaultState;
+  readonly label: string;
+  readonly password: string;
+};
+
 export async function addVaultPassword({
   state,
   label,
   password,
-}: {
-  readonly state: VaultState;
-  readonly label: string;
-  readonly password: string;
-}): Promise<void> {
+}: VaultPasswordCreation): Promise<void> {
   if (!state.hasManager) {
     state.passwordError = "Vault engine is not available.";
     return;
@@ -83,15 +85,17 @@ export async function addVaultPassword({
   }
 }
 
+type VaultPasswordUpdate = {
+  readonly state: VaultState;
+  readonly entryId: string;
+  readonly password: string;
+};
+
 export async function updateVaultPasswordEntry({
   state,
   entryId,
   password,
-}: {
-  readonly state: VaultState;
-  readonly entryId: string;
-  readonly password: string;
-}): Promise<void> {
+}: VaultPasswordUpdate): Promise<void> {
   if (!state.hasManager) {
     state.passwordError = "Vault engine is not available.";
     return;
@@ -125,13 +129,15 @@ export async function updateVaultPasswordEntry({
   }
 }
 
+type VaultPasswordRemoval = {
+  readonly state: VaultState;
+  readonly entryId: string;
+};
+
 export async function removeVaultPasswordEntry({
   state,
   entryId,
-}: {
-  readonly state: VaultState;
-  readonly entryId: string;
-}): Promise<void> {
+}: VaultPasswordRemoval): Promise<void> {
   if (!state.hasManager) return;
   state.passwordError = "";
   state.isPasswordBusy = true;
@@ -158,15 +164,17 @@ export async function removeVaultPasswordEntry({
   }
 }
 
+type PasswordUnlockRequest = {
+  readonly state: VaultState;
+  readonly entryId: string;
+  readonly password: string;
+};
+
 export async function unlockWithPassword({
   state,
   entryId,
   password,
-}: {
-  readonly state: VaultState;
-  readonly entryId: string;
-  readonly password: string;
-}): Promise<void> {
+}: PasswordUnlockRequest): Promise<void> {
   if (!state.hasManager) {
     state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
     return;

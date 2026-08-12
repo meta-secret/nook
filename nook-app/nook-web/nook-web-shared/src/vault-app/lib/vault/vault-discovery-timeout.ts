@@ -5,13 +5,15 @@ export type VaultDiscoveryTimeout = {
   cancel(): void;
 };
 
+type VaultDiscoveryTimeoutSchedule = {
+  readonly message: string;
+  readonly timeoutMs: number;
+};
+
 export function startVaultDiscoveryTimeout({
   message,
   timeoutMs,
-}: {
-  readonly message: string;
-  readonly timeoutMs: number;
-}): VaultDiscoveryTimeout {
+}: VaultDiscoveryTimeoutSchedule): VaultDiscoveryTimeout {
   const controller = new AbortController();
   // eslint-disable-next-line max-params -- Promise owns this positional executor signature.
   const completion = new Promise<never>((_, reject) => {

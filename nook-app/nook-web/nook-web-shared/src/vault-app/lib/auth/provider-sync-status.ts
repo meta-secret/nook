@@ -6,15 +6,17 @@ type ProviderSyncStatusLabels = {
 };
 
 /** Format persisted provider sync metadata for the settings provider row. */
+type ProviderSyncStatusPresentation = {
+  readonly provider: Pick<StorageProvider, "syncCheckpoint">;
+  readonly locale: string;
+  readonly labels: ProviderSyncStatusLabels;
+};
+
 export function formatProviderSyncStatus({
   provider,
   locale,
   labels,
-}: {
-  readonly provider: Pick<StorageProvider, "syncCheckpoint">;
-  readonly locale: string;
-  readonly labels: ProviderSyncStatusLabels;
-}): string {
+}: ProviderSyncStatusPresentation): string {
   if (provider.syncCheckpoint?.state !== "synced") {
     return labels.notSyncedYet;
   }

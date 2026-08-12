@@ -30,21 +30,38 @@ export const PUBLIC_SITEMAP_ENTRIES: SitemapEntry[] = [
   },
 ];
 
-export function siteUrlFromEnv(env: typeof process.env = process.env): string {
-  const trimmed = env.VITE_SITE_URL?.trim();
+export class DefaultSiteUrlEnvironment {
+  readonly siteUrl = DEFAULT_SITE_URL;
+}
+
+export class ConfiguredSiteUrlEnvironment {
+  readonly siteUrl: string;
+
+  constructor(siteUrl: string) {
+    this.siteUrl = siteUrl;
+  }
+}
+
+export type SiteUrlEnvironment =
+  DefaultSiteUrlEnvironment | ConfiguredSiteUrlEnvironment;
+
+export function siteUrlFromEnv(environment: SiteUrlEnvironment): string {
+  const trimmed = environment.siteUrl.trim();
   if (trimmed) {
     return trimmed.replace(/\/$/, "");
   }
   return DEFAULT_SITE_URL;
 }
 
+type AbsoluteSiteUrlRequest = {
+  readonly siteUrl: string;
+  readonly path: string;
+};
+
 export function absoluteSiteUrl({
   siteUrl,
   path,
-}: {
-  readonly siteUrl: string;
-  readonly path: string;
-}): string {
+}: AbsoluteSiteUrlRequest): string {
   const base = siteUrl.replace(/\/$/, "");
   if (path === "/") {
     return `${base}/`;
@@ -60,13 +77,15 @@ function escapeXml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+type SitemapXmlDocument = {
+  readonly siteUrl: string;
+  readonly lastmod: Date;
+};
+
 export function buildSitemapXml({
   siteUrl,
-  lastmod = new Date(),
-}: {
-  readonly siteUrl: string;
-  readonly lastmod?: Date;
-}): string {
+  lastmod,
+}: SitemapXmlDocument): string {
   const isoDate = lastmod.toISOString().slice(0, 10);
   const body = PUBLIC_SITEMAP_ENTRIES.map(
     (entry) => `  <url>

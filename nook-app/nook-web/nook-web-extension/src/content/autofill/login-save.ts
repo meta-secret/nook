@@ -83,7 +83,7 @@ function pageLooksLikeAuthPath(pathname: string): boolean {
   )
 }
 
-type CollectOutcomeObservationArgs = {
+type AuthenticationOutcomeObservationContext = {
   startedAt: number
   authPath: string
   sawMutation: boolean
@@ -93,7 +93,7 @@ function collectOutcomeObservation({
   startedAt,
   authPath,
   sawMutation,
-}: CollectOutcomeObservationArgs): AuthenticationOutcomeObservationView {
+}: AuthenticationOutcomeObservationContext): AuthenticationOutcomeObservationView {
   const successMarkerPresent = Boolean(
     document.querySelector(
       '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
@@ -155,12 +155,12 @@ async function classifyOutcomeEvidence(
 export async function evaluatePendingSaveEvidence(): Promise<void> {
   if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
   const { watch } = saveOfferState.watch
-  const nookTypedArgs0_0: Parameters<typeof collectOutcomeObservation>[0] = {
+  const observationContext: AuthenticationOutcomeObservationContext = {
     startedAt: watch.startedAt,
     authPath: watch.authPath,
     sawMutation: watch.sawMutation,
   }
-  const observation = collectOutcomeObservation(nookTypedArgs0_0)
+  const observation = collectOutcomeObservation(observationContext)
   const verdictRead = await classifyOutcomeEvidence(observation)
   if (
     verdictRead.kind === AuthenticationOutcomeReadKind.Unavailable ||
@@ -390,12 +390,12 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
     if (!isTrustedAuthAction(event.isTrusted) || widgetState.busy) return
     widgetState.busy = true
     saveButton.disabled = true
-    const nookTypedArgs0_4: Parameters<typeof collectOutcomeObservation>[0] = {
+    const commitObservationContext: AuthenticationOutcomeObservationContext = {
       startedAt: Date.now(),
       authPath: location.pathname,
       sawMutation: false,
     }
-    const evidence = collectOutcomeObservation(nookTypedArgs0_4)
+    const evidence = collectOutcomeObservation(commitObservationContext)
     // Commit re-checks the live page; require an explicit success marker now.
     evidence.successMarkerPresent = Boolean(
       document.querySelector(

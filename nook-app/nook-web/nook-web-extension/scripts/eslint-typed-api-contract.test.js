@@ -113,7 +113,7 @@ describe('typed API named arguments', () => {
 
   test('accepts named object parameter types', () => {
     const messages = lintParameterTypes(`
-      type CollectOutcomeObservationArgs = {
+      type AuthenticationOutcomeObservationContext = {
         startedAt: number
         authPath: string
         sawMutation: boolean
@@ -122,7 +122,7 @@ describe('typed API named arguments', () => {
         startedAt,
         authPath,
         sawMutation,
-      }: CollectOutcomeObservationArgs): void {
+      }: AuthenticationOutcomeObservationContext): void {
         void startedAt
         void authPath
         void sawMutation

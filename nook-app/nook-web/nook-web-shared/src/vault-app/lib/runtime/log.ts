@@ -135,7 +135,8 @@ const preInitQueue: PendingRecord[] = [];
  * print through these so patching never causes recursion or double-persist.
  */
 // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Console owns this variadic ingress boundary.
-type ConsoleMethod = (...args: unknown[]) => void;
+type ConsoleArguments = unknown[];
+type ConsoleMethod = (...args: ConsoleArguments) => void;
 enum ConsoleMethodKind {
   Error = "error",
   Warn = "warn",
@@ -188,8 +189,7 @@ function initialLevel(): LogLevel {
 }
 
 /** Render arbitrary `console.*` arguments into a single persisted message. */
-// eslint-disable-next-line @typescript-eslint/no-restricted-types -- Console arguments are stringified immediately at ingress.
-function stringifyArgs(args: unknown[]): string {
+function stringifyArgs(args: ConsoleArguments): string {
   return args
     .map((arg) => {
       if (typeof arg === "string") return arg;
@@ -209,14 +209,14 @@ function levelRank(level: LogLevel): number {
 }
 
 /** Local `YYYY-MM-DD HH:MM:SS.mmm` timestamp for console echo lines. */
-function formatTimestamp(date = new Date()): string {
-  const pad = ({
-    value,
-    size,
-  }: {
+function formatTimestamp(date: Date): string {
+  type TimestampPadding = {
     readonly value: number;
     readonly size: number;
-  }) => String(value).padStart(size, "0");
+  };
+
+  const pad = ({ value, size }: TimestampPadding) =>
+    String(value).padStart(size, "0");
   const y = date.getFullYear();
   const padArgs: Parameters<typeof pad>[0] = {
     value: date.getMonth() + 1,
@@ -262,14 +262,13 @@ function isEnabled(level: LogLevel): boolean {
  * entries. Shared by `createLogger` and Rust `tracing` events
  * (`window.__nookConsole.echo`).
  */
-function echo({
-  level,
-  text,
-}: {
+type LogEchoEvent = {
   readonly level: LogLevel;
   readonly text: string;
-}) {
-  const line = `${formatTimestamp()} ${text}`;
+};
+
+function echo({ level, text }: LogEchoEvent) {
+  const line = `${formatTimestamp(new Date())} ${text}`;
   switch (level) {
     case LogLevel.Error:
       originalConsole.error(line);
@@ -293,15 +292,13 @@ function hostEcho(level: LogLevel, text: string): void {
 }
 
 /** Persist one entry (no console echo). Queues until WASM is ready. */
-function persistMessage({
-  level,
-  scope,
-  message,
-}: {
+type LogMessagePersistence = {
   readonly level: LogLevel;
   readonly scope: string;
   readonly message: string;
-}) {
+};
+
+function persistMessage({ level, scope, message }: LogMessagePersistence) {
   if (!wasmReady) {
     if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
       const pushArgs: Parameters<typeof preInitQueue.push>[0] = {
@@ -322,17 +319,19 @@ function persistMessage({
 }
 
 /** Persist already-serialized adapter context without accepting a generic value bag. */
+type StructuredLogPersistence = {
+  readonly level: LogLevel;
+  readonly scope: string;
+  readonly message: string;
+  readonly serializedContext: string;
+};
+
 function persistStructured({
   level,
   scope,
   message,
   serializedContext,
-}: {
-  readonly level: LogLevel;
-  readonly scope: string;
-  readonly message: string;
-  readonly serializedContext: string;
-}): void {
+}: StructuredLogPersistence): void {
   if (!wasmReady) {
     if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
       const queued: PendingRecord = {
@@ -354,15 +353,13 @@ function persistStructured({
 }
 
 /** `createLogger` path: gate, echo once via originals, then persist. */
-function record({
-  level,
-  scope,
-  message,
-}: {
+type LogRecordRequest = {
   readonly level: LogLevel;
   readonly scope: string;
   readonly message: string;
-}) {
+};
+
+function record({ level, scope, message }: LogRecordRequest) {
   if (!isEnabled(level)) return;
   const echoArgs2: Parameters<typeof echo>[0] = {
     level,
@@ -410,15 +407,13 @@ function resolveFetchUrl(input: RequestInfo | URL): string {
 }
 
 /** Global `error` / `unhandledrejection` / non-OK `fetch` capture into app logs. */
-function captureDiagnostic({
-  level,
-  scope,
-  message,
-}: {
+type DiagnosticCapture = {
   readonly level: LogLevel;
   readonly scope: string;
   readonly message: string;
-}) {
+};
+
+function captureDiagnostic({ level, scope, message }: DiagnosticCapture) {
   const recordArgs: Parameters<typeof record>[0] = {
     level,
     scope,
@@ -607,11 +602,13 @@ export function getLogLevel(): LogLevel {
 }
 
 /** Read persisted entries (oldest first), optionally filtered/paginated. */
-export async function dumpLogs(options: {
+type LogQuery = {
   minLevel: LogLevel;
   limit: number;
   offset: number;
-}): Promise<LogEntry[]> {
+};
+
+export async function dumpLogs(options: LogQuery): Promise<LogEntry[]> {
   if (!wasmReady) return [];
   const entries = await log_dump_page(
     options.minLevel,
@@ -664,15 +661,13 @@ function patchConsole() {
   if (consolePatched || !("console" in globalThis)) return;
   consolePatched = true;
 
-  const wrap = ({
-    method,
-    level,
-  }: {
+  type ConsoleMethodWrap = {
     readonly method: ConsoleMethodKind;
     readonly level: LogLevel;
-  }) => {
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Console arguments are stringified immediately at ingress.
-    console[method] = (...args: unknown[]) => {
+  };
+
+  const wrap = ({ method, level }: ConsoleMethodWrap) => {
+    console[method] = (...args: ConsoleArguments) => {
       originalConsole[method](...args);
       if (isEnabled(level)) {
         const persistMessageArgs2: Parameters<typeof persistMessage>[0] = {

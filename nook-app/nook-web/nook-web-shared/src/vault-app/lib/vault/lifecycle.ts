@@ -5,8 +5,10 @@ import { getVaultManager } from "$lib/nook";
 import { createLogger } from "$lib/runtime/log";
 import {
   DeviceMode,
+  DeviceIdentityInitializationMode,
   DeviceProtectionDeviceModeState,
   DeviceProtectionStatus,
+  ExternalDeviceIdentityAuthorizationMode,
   configured_vault_application,
   has_active_local_vault,
   NookAppLocaleParse,
@@ -188,9 +190,11 @@ export async function continueInitializationAfterDeviceUnlock(
   state: VaultState,
 ): Promise<void> {
   if (!state.hasManager) return;
-  const initDeviceIdentityArgs: Parameters<typeof state.initDeviceIdentity>[0] =
-    { allowPendingAuthorization: true };
-  await state.initDeviceIdentity(initDeviceIdentityArgs);
+  const initialization: DeviceIdentityInitialization = {
+    state,
+    mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
+  };
+  await initDeviceIdentity(initialization);
   if (
     await state.enqueueStorage(() =>
       state.requireManager().has_pending_sentinel_genesis_finalization(),
@@ -262,18 +266,20 @@ export async function continueInitializationAfterDeviceUnlock(
   log.info("app init finished");
 }
 
+type DeviceIdentityInitialization = {
+  readonly state: VaultState;
+  readonly mode: DeviceIdentityInitializationMode;
+};
+
 export async function initDeviceIdentity({
   state,
-  options,
-}: {
-  readonly state: VaultState;
-  readonly options?: { allowPendingAuthorization?: boolean };
-}): Promise<void> {
+  mode,
+}: DeviceIdentityInitialization): Promise<void> {
   if (
     !state.hasManager ||
     (!state.deviceProtectionReady &&
       !state.deviceAuthorizationInProgress &&
-      !options?.allowPendingAuthorization)
+      mode !== DeviceIdentityInitializationMode.AllowPendingAuthorization)
   ) {
     throw new Error(
       state.t(I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired),
@@ -287,15 +293,17 @@ export async function initDeviceIdentity({
   state.devicePublicKey = identity.devicePublicKey;
 }
 
+type ExternalDeviceIdentityAuthorization = {
+  readonly state: VaultState;
+  readonly adopt: (manager: NookVaultManager) => Promise<void>;
+  readonly mode: ExternalDeviceIdentityAuthorizationMode;
+};
+
 export async function authorizeWithExternalDeviceIdentity({
   state,
   adopt,
-  options,
-}: {
-  readonly state: VaultState;
-  readonly adopt: (manager: NookVaultManager) => Promise<void>;
-  readonly options?: { deferInitialization?: boolean };
-}): Promise<boolean> {
+  mode,
+}: ExternalDeviceIdentityAuthorization): Promise<boolean> {
   if (!state.hasManager) return false;
   const priorDeviceProtectionStatus = state.deviceProtectionStatus;
   state.errorMsg = "";
@@ -303,12 +311,12 @@ export async function authorizeWithExternalDeviceIdentity({
   state.deviceAuthorizationInProgress = true;
   try {
     await state.enqueueStorage(() => adopt(state.requireManager()));
-    if (options?.deferInitialization) {
-      const initDeviceIdentityArgs: Parameters<typeof initDeviceIdentity>[0] = {
+    if (mode === ExternalDeviceIdentityAuthorizationMode.DeferInitialization) {
+      const initDeviceIdentityRequest: DeviceIdentityInitialization = {
         state,
-        options: { allowPendingAuthorization: true },
+        mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
       };
-      await initDeviceIdentity(initDeviceIdentityArgs);
+      await initDeviceIdentity(initDeviceIdentityRequest);
     } else {
       await continueInitializationAfterDeviceUnlock(state);
     }

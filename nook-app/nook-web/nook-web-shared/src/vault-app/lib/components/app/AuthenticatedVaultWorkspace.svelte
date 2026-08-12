@@ -5,7 +5,11 @@
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
   } from '$lib/app/extension-setup'
-  import { configured_vault_application_supports_extension } from '$app-wasm'
+  import {
+    configured_vault_application_supports_extension,
+    ProviderSyncFailureHandling,
+    ProviderSyncVisibility,
+  } from '$app-wasm'
   import { ExtensionSetupStatus } from '$lib/extension/install'
   import ExtensionInstallSetupCard from '$lib/components/ExtensionInstallSetupCard.svelte'
   import OnboardDevice from '$lib/components/OnboardDevice.svelte'
@@ -224,6 +228,8 @@
           onSyncProvider={(id) => {
             const syncRequest: Parameters<typeof vault.syncProviderById>[0] = {
               providerId: id,
+              visibility: ProviderSyncVisibility.Visible,
+              failureHandling: ProviderSyncFailureHandling.Capture,
             }
             return vault.syncProviderById(syncRequest)
           }}

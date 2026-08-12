@@ -65,21 +65,31 @@ export type CloudKitRecordInfosResponse = {
   results: CloudKitRecordInfo[];
 };
 
+type CloudKitRecordZones = CloudKitZoneID[];
+type CloudKitRecordBatch = CloudKitRecord | CloudKitRecord[];
+type CloudKitShareAccessOptions = CloudKitShareAccess[];
+type CloudKitSharePermissionOptions = CloudKitSharePermission[];
+type CloudKitShortIdentifiers = string[];
+
+type CloudKitRecordSaveOptions = { zoneID: string | CloudKitZoneID };
+
+type CloudKitSharePresentationOptions = {
+  record: CloudKitRecord;
+  zoneID: string | CloudKitZoneID;
+  shareTitle: string;
+  shareType: string;
+  supportedAccess: CloudKitShareAccessOptions;
+  supportedPermissions: CloudKitSharePermissionOptions;
+};
+
 export type CloudKitDatabase = {
-  saveRecordZones: (zones: CloudKitZoneID[]) => Promise<unknown>;
+  saveRecordZones: (zones: CloudKitRecordZones) => Promise<unknown>;
   // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
   saveRecords: (
-    records: CloudKitRecord | CloudKitRecord[],
-    options: { zoneID: string | CloudKitZoneID },
+    records: CloudKitRecordBatch,
+    options: CloudKitRecordSaveOptions,
   ) => Promise<CloudKitRecordsResponse>;
-  shareWithUI: (options: {
-    record: CloudKitRecord;
-    zoneID: string | CloudKitZoneID;
-    shareTitle: string;
-    shareType: string;
-    supportedAccess: CloudKitShareAccess[];
-    supportedPermissions: CloudKitSharePermission[];
-  }) => Promise<unknown>;
+  shareWithUI: (options: CloudKitSharePresentationOptions) => Promise<unknown>;
 };
 
 export type CloudKitAuthError = {
@@ -116,29 +126,35 @@ export type CloudKitAuthChallenge = {
   uuid?: string;
 };
 
+type CloudKitAuthSetupOptions = {
+  grabAuthToken: boolean;
+  persist: boolean;
+};
+
 export type CloudKitContainer = {
-  setUpAuth: (options?: {
-    grabAuthToken?: boolean;
-    persist?: boolean;
-  }) => Promise<CloudKitIdentity>;
+  setUpAuth: (options: CloudKitAuthSetupOptions) => Promise<CloudKitIdentity>;
   whenUserSignsIn: () => Promise<CloudKitUserIdentity>;
   fetchCurrentUserIdentity: () => Promise<CloudKitIdentity>;
-  acceptShares?: (shortGUIDs: string[]) => Promise<CloudKitRecordInfosResponse>;
+  acceptShares?: (
+    shortGUIDs: CloudKitShortIdentifiers,
+  ) => Promise<CloudKitRecordInfosResponse>;
   fetchRecordInfos?: (
-    shortGUIDs: string[],
+    shortGUIDs: CloudKitShortIdentifiers,
   ) => Promise<CloudKitRecordInfosResponse>;
   privateCloudDatabase?: CloudKitDatabase;
   sharedCloudDatabase?: CloudKitDatabase;
+};
+
+type ExternalCloudKitAuthSetupOptions = {
+  grabAuthToken?: boolean;
+  persist?: boolean;
 };
 
 type ExternalCloudKitContainer = Omit<
   CloudKitContainer,
   "setUpAuth" | "fetchCurrentUserIdentity"
 > & {
-  setUpAuth: (options?: {
-    grabAuthToken?: boolean;
-    persist?: boolean;
-  }) => Promise<unknown>;
+  setUpAuth: (options?: ExternalCloudKitAuthSetupOptions) => Promise<unknown>;
   fetchCurrentUserIdentity?: () => Promise<unknown>;
 };
 
@@ -191,10 +207,8 @@ export function getDefaultCloudKitContainer(): CloudKitContainer {
     // eslint-disable-next-line max-params -- Proxy owns this positional boundary callback.
     get(target, property, receiver) {
       if (property === "setUpAuth") {
-        return async (options?: {
-          grabAuthToken?: boolean;
-          persist?: boolean;
-        }) => cloudKitIdentityFromTransport(await target.setUpAuth(options));
+        return async (options: CloudKitAuthSetupOptions) =>
+          cloudKitIdentityFromTransport(await target.setUpAuth(options));
       }
       if (property === "fetchCurrentUserIdentity") {
         return async () => {
@@ -416,13 +430,15 @@ export function normalizeWebAuthToken(stored: unknown): WebAuthTokenLookup {
   return { kind: WebAuthTokenLookupKind.Unavailable };
 }
 
+type CloudKitWebAuthTokenPersistence = {
+  readonly containerIdentifier: string;
+  readonly authToken: unknown;
+};
+
 export function storeCloudKitWebAuthToken({
   containerIdentifier,
   authToken,
-}: {
-  readonly containerIdentifier: string;
-  readonly authToken: unknown;
-}): WebAuthTokenLookup {
+}: CloudKitWebAuthTokenPersistence): WebAuthTokenLookup {
   const key = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`;
   if (!authToken) {
     sessionStorage.removeItem(key);

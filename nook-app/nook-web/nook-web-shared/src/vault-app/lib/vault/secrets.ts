@@ -10,6 +10,9 @@ import { generate_secret_id, VaultAccessStatus } from "$lib/nook";
 import { createLogger, runtimeFailure } from "$lib/runtime/log";
 import {
   JoinEnrollmentState,
+  ProviderSyncFailureHandling,
+  ProviderSyncFreshness,
+  ProviderSyncVisibility,
   RemoteVaultRecoveryState,
   type NookSecretPage,
   type NookVaultManager,
@@ -87,7 +90,8 @@ export async function loadDb(state: VaultState) {
       const syncProviderRequest: Parameters<typeof state.syncProviderById>[0] =
         {
           providerId: state.syncProviders[0]!.id,
-          options: { quiet: true },
+          visibility: ProviderSyncVisibility.Quiet,
+          failureHandling: ProviderSyncFailureHandling.Capture,
         };
       await state.syncProviderById(syncProviderRequest);
     }
@@ -245,9 +249,7 @@ export async function loadDb(state: VaultState) {
   } finally {
     if (state.isAuthenticated) {
       try {
-        const syncFromStorageArgs: Parameters<typeof state.syncFromStorage>[0] =
-          { force: true };
-        await state.syncFromStorage(syncFromStorageArgs);
+        await state.syncFromStorage(ProviderSyncFreshness.Forced);
       } catch {
         // Post-unlock sync should not block the login gate.
       }
