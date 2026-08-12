@@ -4,23 +4,25 @@ import {
 } from "./extension-connect-scope";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "./paired-vault-identity-status";
 import {
-  isOpenCompanionLauncherMessage,
   OpenCompanionLauncherMessageType,
   type OpenCompanionLauncherMessage,
 } from "./companion-launcher-message";
+import { isOpenCompanionLauncherMessage } from "./companion-launcher-message-adapter";
 import {
   BeginExtensionPairingMessageType,
   ExtensionLocalEventLogUpdatedMessageType,
-  isBeginExtensionPairingMessage,
-  isExtensionLocalEventLogUpdatedMessage,
-  isOpenSimpleVaultMessage,
-  isRuntimeMessage,
   OpenSimpleVaultMessageType,
   type BeginExtensionPairingMessage,
   type ExtensionEventLogRecord,
   type ExtensionLocalEventLogUpdatedMessage,
   type OpenSimpleVaultMessage,
 } from "./lifecycle-runtime-messages";
+import {
+  isBeginExtensionPairingMessage,
+  isExtensionLocalEventLogUpdatedMessage,
+  isOpenSimpleVaultMessage,
+  isRuntimeMessage,
+} from "./lifecycle-runtime-message-adapter";
 
 export {
   BeginExtensionPairingMessageType,

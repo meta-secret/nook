@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { OpenCompanionLauncherMessageType } from '../../nook-web-shared/src/extension/companion-launcher-message'
-import { isOpenCompanionLauncherMessage } from '../../nook-web-shared/src/extension/companion-launcher-message'
+import { isOpenCompanionLauncherMessage } from '../../nook-web-shared/src/extension/companion-launcher-message-adapter'
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 import type { ExtensionLifecycleRoutingDependencies } from '../src/background/service-worker/extension-lifecycle-routing'
 import type { ExternalCompanionRoutingDependencies } from '../src/background/service-worker/external-companion-routing'
