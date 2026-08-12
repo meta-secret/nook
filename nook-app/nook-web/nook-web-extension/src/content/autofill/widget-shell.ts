@@ -24,6 +24,7 @@ import {
 import {
   applyWidgetPosition,
   attachPointerDrag,
+  PointerDragBehaviorKind,
   clampWidgetPosition,
 } from './widget-position'
 import type { PilotVaultConnection, WorkflowCopy } from './workflow-ui'
@@ -257,6 +258,15 @@ const WIDGET_PANEL_STYLES = `
     }
   `
 
+type BuildEnrollmentFlowHostArgs = {
+  panel: HTMLElement
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+  openVaultButton: HTMLButtonElement
+}
+
 export function buildEnrollmentFlowHost({
   panel,
   step,
@@ -264,14 +274,7 @@ export function buildEnrollmentFlowHost({
   description,
   continueButton,
   openVaultButton,
-}: {
-  panel: HTMLElement
-  step: HTMLParagraphElement
-  title: HTMLHeadingElement
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-  openVaultButton: HTMLButtonElement
-}): EnrollmentFlowHost {
+}: BuildEnrollmentFlowHostArgs): EnrollmentFlowHost {
   return {
     panel,
     step,
@@ -324,13 +327,15 @@ interface WidgetShell {
   collapsedLaunch: HTMLButtonElement
 }
 
+type CreateWidgetMarkArgs = {
+  className: string
+  size: number
+}
+
 export function createWidgetMark({
   className,
   size,
-}: {
-  className: string
-  size: number
-}): HTMLImageElement {
+}: CreateWidgetMarkArgs): HTMLImageElement {
   const mark = document.createElement('img')
   mark.className = className
   mark.src = chrome.runtime.getURL('icons/nook.png')
@@ -341,17 +346,19 @@ export function createWidgetMark({
   return mark
 }
 
+type CreateWidgetShellArgs = {
+  copy: WorkflowCopy
+  vaultConnection: PilotVaultConnection
+  currentStep: number
+  totalSteps: number
+}
+
 export function createWidgetShell({
   copy,
   vaultConnection,
   currentStep,
   totalSteps,
-}: {
-  copy: WorkflowCopy
-  vaultConnection: PilotVaultConnection
-  currentStep: number
-  totalSteps: number
-}): WidgetShell {
+}: CreateWidgetShellArgs): WidgetShell {
   const host = document.createElement('aside')
   host.id = WIDGET_HOST_ID
   host.setAttribute(
@@ -495,15 +502,17 @@ export function createWidgetShell({
   }
 }
 
+type MountWidgetShellArgs = {
+  shell: WidgetShell
+  workflowKey: string
+  workflowRoot: WidgetWorkflowRoot
+}
+
 export function mountWidgetShell({
   shell,
   workflowKey,
   workflowRoot,
-}: {
-  shell: WidgetShell
-  workflowKey: string
-  workflowRoot: WidgetWorkflowRoot
-}): void {
+}: MountWidgetShellArgs): void {
   const { host, panel, toolbar, body, collapseButton, collapsedLaunch } = shell
   const applyCollapsedState = (): void => {
     panel.classList.toggle('is-collapsed', widgetState.collapsed)
@@ -551,20 +560,21 @@ export function mountWidgetShell({
   const nookTypedArgs0_6: Parameters<typeof attachPointerDrag>[0] = {
     host,
     handle: toolbar,
+    behavior: { kind: PointerDragBehaviorKind.DragOnly },
   }
   attachPointerDrag(nookTypedArgs0_6)
-  const nookTypedArgs0_2: NonNullable<
-    Parameters<typeof attachPointerDrag>[0]['options']
-  > = {
-    onTap: () => {
-      widgetState.collapsed = false
-      applyCollapsedState()
-    },
-  }
+  const nookTypedArgs0_2: Parameters<typeof attachPointerDrag>[0]['behavior'] =
+    {
+      kind: PointerDragBehaviorKind.Tappable,
+      onTap: () => {
+        widgetState.collapsed = false
+        applyCollapsedState()
+      },
+    }
   const nookTypedArgs0_7: Parameters<typeof attachPointerDrag>[0] = {
     host,
     handle: collapsedLaunch,
-    options: nookTypedArgs0_2,
+    behavior: nookTypedArgs0_2,
   }
   attachPointerDrag(nookTypedArgs0_7)
   applyCollapsedState()

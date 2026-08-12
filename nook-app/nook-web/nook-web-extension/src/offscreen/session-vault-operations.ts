@@ -48,6 +48,16 @@ export type ImportExtensionVaultWithDependenciesArgs =
     dependencies: ImportExtensionVaultDependencies
   }
 
+export type OpenPasskeyVaultRequest = {
+  activeManager: NookVaultManager
+  grant: ExtensionVaultGrant
+}
+
+export type PasskeyEventProviderFlushRequest = {
+  activeManager: NookVaultManager
+  vaultStoreId: string
+}
+
 export function importExtensionVault(
   args: ImportExtensionVaultArgs,
 ): ReturnType<typeof importExtensionVaultWithDependencies> {
@@ -128,10 +138,7 @@ export async function importExtensionVaultWithDependencies({
 export async function openPasskeyVault({
   activeManager,
   grant,
-}: {
-  activeManager: NookVaultManager
-  grant: ExtensionVaultGrant
-}): Promise<void> {
+}: OpenPasskeyVaultRequest): Promise<void> {
   await activeManager.open_extension_passkey_vault_js(
     grant.vaultStoreId,
     grant.deviceId,
@@ -143,10 +150,7 @@ export async function openPasskeyVault({
 export async function flushPasskeyEventToProviders({
   activeManager,
   vaultStoreId,
-}: {
-  activeManager: NookVaultManager
-  vaultStoreId: string
-}): Promise<void> {
+}: PasskeyEventProviderFlushRequest): Promise<void> {
   const snapshot = await activeManager.load_auth_providers_snapshot()
   const providers = snapshot.providers.filter(
     (provider) =>

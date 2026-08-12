@@ -1,4 +1,14 @@
 <script lang="ts">
+  type RunDeviceActionArgs = {
+    action: () => Promise<ExtensionDeviceProtectionResult>
+    fallbackKey?: I18nKey
+  }
+
+  type ErrorMessageArgs = {
+    caught: unknown
+    fallbackKey: I18nKey
+  }
+
   import {
     I18N_KEYS,
     type I18nKey,
@@ -142,10 +152,7 @@
     refreshLoginDetection()
   })
 
-  function errorMessage(args: {
-    caught: unknown
-    fallbackKey: I18nKey
-  }): string {
+  function errorMessage(args: ErrorMessageArgs): string {
     const { caught, fallbackKey } = args
     if (!(caught instanceof Error)) return translatePlain(fallbackKey)
     if (caught.message.includes('PASSKEY_CEREMONY_NOT_ALLOWED')) {
@@ -212,10 +219,7 @@
     enterCompanionHome(activeSessionDevice.device)
   })
 
-  async function runDeviceAction(args: {
-    action: () => Promise<ExtensionDeviceProtectionResult>
-    fallbackKey?: I18nKey
-  }): Promise<void> {
+  async function runDeviceAction(args: RunDeviceActionArgs): Promise<void> {
     const { action, fallbackKey = I18N_KEYS.ExtensionSetupPasskeySetupFailed } =
       args
     busy = true

@@ -25,6 +25,7 @@ import {
   writeBindingPattern,
   writeExitsBeforeFollowingNode,
 } from './typed-api-analysis.js'
+import { namedParameterContractListeners } from './named-parameter-contract.js'
 
 const directObjectArgumentRunes = new Set(['$state', '$derived', '$bindable'])
 
@@ -48,10 +49,24 @@ function isDirectObjectArgumentRune(node) {
 export const noRawObjectArgumentsRule = {
   meta: {
     type: 'problem',
-    schema: [],
+    schema: [
+      {
+        type: 'object',
+        properties: {
+          enforceNamedParameterContracts: { type: 'boolean' },
+        },
+        additionalProperties: false,
+      },
+    ],
     messages: {
       namedArgument:
         'Nook web forbids raw object-literal call and constructor arguments, including nested TypeScript wrappers. Assign a named typed value first, then pass that name.',
+      namedParameterType:
+        'Nook web forbids inline object types in function and method parameters. Declare and reuse a named semantic type, interface, or Rust-generated type.',
+      namedParameterDefault:
+        'Nook web forbids object-valued parameter defaults. Apply defaults at the call site or inside the function body.',
+      semanticParameterType:
+        'Nook web forbids generic parameter contract names. Name the type or interface after its domain value or request.',
       typedArgument:
         'Nook web requires object-literal arguments to use an explicitly typed named declaration.',
     },
@@ -888,10 +903,14 @@ export const noRawObjectArgumentsRule = {
       }
       inspectArguments(node)
     }
+    const parameterContractListeners =
+      context.options[0]?.enforceNamedParameterContracts === false
+        ? {}
+        : namedParameterContractListeners(context)
     return {
+      ...parameterContractListeners,
       CallExpression: inspectCallArguments,
       NewExpression: inspectArguments,
     }
   },
 }
-

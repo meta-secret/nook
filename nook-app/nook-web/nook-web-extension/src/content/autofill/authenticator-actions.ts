@@ -1,6 +1,9 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
-import { fillOneTimeCode } from '../../../../nook-web-shared/src/extension/password-forms'
+import {
+  fillOneTimeCode,
+  PasswordFormQueryKind,
+} from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   AuthenticatorCodeResponseKind,
   AuthenticatorPickerOpenResponseKind,
@@ -21,6 +24,15 @@ import {
 import { AuthenticatorPickerKind, pickerState, widgetState } from './state'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
 
+type FillAuthenticatorCodeArgs = {
+  account: Pick<WebsiteAuthenticatorOption, 'vaultStoreId' | 'secretId'>
+  workflow: PasswordFormObservation
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+}
+
 export async function fillAuthenticatorCode({
   account,
   workflow,
@@ -28,14 +40,7 @@ export async function fillAuthenticatorCode({
   title,
   description,
   continueButton,
-}: {
-  account: Pick<WebsiteAuthenticatorOption, 'vaultStoreId' | 'secretId'>
-  workflow: PasswordFormObservation
-  step: HTMLParagraphElement
-  title: HTMLHeadingElement
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-}): Promise<boolean> {
+}: FillAuthenticatorCodeArgs): Promise<boolean> {
   const message: Parameters<typeof sendAuthenticatorCodeRuntimeMessage>[0] = {
     type: WebsiteAuthenticatorFillMessageType.NookWebsiteAuthenticatorFill,
     payload: {
@@ -94,6 +99,7 @@ export async function fillAuthenticatorCode({
   response.code = ''
   const nookTypedArgs0_4: Parameters<typeof fillOneTimeCode>[0] = {
     code: code.value,
+    kind: PasswordFormQueryKind.Scoped,
     root: workflow.root,
     formScope: workflow.formScope,
   }
@@ -134,19 +140,21 @@ export async function fillAuthenticatorCode({
   return true
 }
 
+type ContinueWithAuthenticatorArgs = {
+  workflow: PasswordFormObservation
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+}
+
 export async function continueWithAuthenticator({
   workflow,
   step,
   title,
   description,
   continueButton,
-}: {
-  workflow: PasswordFormObservation
-  step: HTMLParagraphElement
-  title: HTMLHeadingElement
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-}): Promise<void> {
+}: ContinueWithAuthenticatorArgs): Promise<void> {
   if (
     widgetState.busy ||
     pickerState.authenticator.kind === AuthenticatorPickerKind.Open

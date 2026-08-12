@@ -97,13 +97,15 @@ function serializeAssertion(
   }
 }
 
+type PublicCredentialArgs = {
+  ceremony: WebsitePasskeyCeremony
+  result: Record<string, unknown>
+}
+
 function publicCredential({
   ceremony,
   result,
-}: {
-  ceremony: WebsitePasskeyCeremony
-  result: Record<string, unknown>
-}): Credential {
+}: PublicCredentialArgs): Credential {
   const id = result.credentialId
   if (typeof id !== 'string')
     throw new DOMException('Invalid Nook response.', 'DataError')
@@ -148,15 +150,17 @@ function publicCredential({
   } as unknown as Credential
 }
 
+type ExtensionCeremonyArgs = {
+  ceremony: WebsitePasskeyCeremony
+  options: CredentialCreationOptions | CredentialRequestOptions
+  fallback: () => ReturnType<CredentialsContainer['get']>
+}
+
 async function extensionCeremony({
   ceremony,
   options,
   fallback,
-}: {
-  ceremony: WebsitePasskeyCeremony
-  options: CredentialCreationOptions | CredentialRequestOptions
-  fallback: () => ReturnType<CredentialsContainer['get']>
-}): ReturnType<CredentialsContainer['get']> {
+}: ExtensionCeremonyArgs): ReturnType<CredentialsContainer['get']> {
   if (!('publicKey' in options) || !options.publicKey) return fallback()
   if ('mediation' in options && options.mediation === 'conditional')
     return fallback()

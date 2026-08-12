@@ -131,19 +131,15 @@ function graphDevice(
   }
 }
 
-function graphNode({
-  id,
-  data,
-  x,
-  y,
-  width,
-}: {
+type GraphNodeArgs = {
   id: string
   data: BridgeGraphData
   x: number
   y: number
   width: number
-}): BridgeGraphNode {
+}
+
+function graphNode({ id, data, x, y, width }: GraphNodeArgs): BridgeGraphNode {
   return {
     id,
     type: BridgeGraphNodeType.Graph,
@@ -156,6 +152,15 @@ function graphNode({
   }
 }
 
+type StageNodeArgs = {
+  id: string
+  label: string
+  flow: BridgeGraphFlow
+  x: number
+  y: number
+  width: number
+}
+
 function stageNode({
   id,
   label,
@@ -163,14 +168,7 @@ function stageNode({
   x,
   y,
   width,
-}: {
-  id: string
-  label: string
-  flow: BridgeGraphFlow
-  x: number
-  y: number
-  width: number
-}): BridgeGraphNode {
+}: StageNodeArgs): BridgeGraphNode {
   return {
     id,
     type: BridgeGraphNodeType.Graph,
@@ -188,17 +186,19 @@ function stageNode({
   }
 }
 
+type GraphEdgeArgs = {
+  id: string
+  source: string
+  target: string
+  authorized: boolean
+}
+
 function graphEdge({
   id,
   source,
   target,
   authorized,
-}: {
-  id: string
-  source: string
-  target: string
-  authorized: boolean
-}): BridgeGraphEdge {
+}: GraphEdgeArgs): BridgeGraphEdge {
   const color = authorized ? '#ff6b3d' : '#777774'
   return {
     id,
@@ -214,17 +214,19 @@ function graphEdge({
   }
 }
 
+type CompactGrantEdgeArgs = {
+  id: string
+  source: string
+  target: string
+  sourceIndex: number
+}
+
 function compactGrantEdge({
   id,
   source,
   target,
   sourceIndex,
-}: {
-  id: string
-  source: string
-  target: string
-  sourceIndex: number
-}): BridgeGraphEdge {
+}: CompactGrantEdgeArgs): BridgeGraphEdge {
   const color = '#ff6b3d'
   return {
     id,
@@ -676,17 +678,19 @@ function buildCompactVaultGraph(vaultId: string): BridgeGraphDefinition {
   }
 }
 
+type BuildBridgeGraphArgs = {
+  perspective: BridgePerspective
+  identityId: string
+  vaultId: string
+  compact: boolean
+}
+
 export function buildBridgeGraph({
   perspective,
   identityId,
   vaultId,
   compact,
-}: {
-  perspective: BridgePerspective
-  identityId: string
-  vaultId: string
-  compact: boolean
-}): BridgeGraphDefinition {
+}: BuildBridgeGraphArgs): BridgeGraphDefinition {
   if (compact && perspective === BridgePerspective.Identities) {
     return buildCompactIdentityGraph(identityId)
   }

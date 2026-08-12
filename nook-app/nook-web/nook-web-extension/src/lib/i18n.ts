@@ -1,7 +1,7 @@
 import {
   getResolvedTranslationCatalog,
   parseStoredAppLocale,
-  resolveAppLocaleFromTags,
+  selectExtensionAppLocale,
   StoredAppLocaleInputKind,
   StoredAppLocaleParseKind,
   type StoredAppLocaleInput,
@@ -49,6 +49,8 @@ export type ExtensionI18n = {
   t: (request: ExtensionTranslationRequest) => string
 }
 
+type ExtensionLanguageTagCandidates = string[]
+
 function readSavedLocale(): StoredAppLocaleInput {
   try {
     const value = localStorage.getItem(NOOK_LOCALE_STORAGE_KEY)
@@ -79,7 +81,7 @@ function navigatorLanguages(): string[] {
   )
 }
 
-function uniqueLanguageTags(tags: string[]): string[] {
+function uniqueLanguageTags(tags: ExtensionLanguageTagCandidates): string[] {
   return [...new Set(tags)]
 }
 
@@ -89,9 +91,11 @@ export async function resolveExtensionLocale(): Promise<NookAppLocale> {
     return savedLocale.locale
   }
 
-  return resolveAppLocaleFromTags(
-    uniqueLanguageTags([...chromeUiLanguages(), ...navigatorLanguages()]),
-  )
+  const languageTagCandidates: ExtensionLanguageTagCandidates = [
+    ...chromeUiLanguages(),
+    ...navigatorLanguages(),
+  ]
+  return selectExtensionAppLocale(uniqueLanguageTags(languageTagCandidates))
 }
 
 export async function initializeExtensionI18n(): Promise<ExtensionI18n> {

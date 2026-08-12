@@ -147,8 +147,8 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
   if (!manifest.key) {
     throw new Error('Deployment extension manifest is missing its stable key.')
   }
-  const simpleVaultUrl = manifest.externally_connectable.matches[0]
-  if (!simpleVaultUrl) {
+  const simple_vault_url = manifest.externally_connectable.matches[0]
+  if (!simple_vault_url) {
     throw new Error('Deployment extension manifest has no Simple Vault target.')
   }
 
@@ -169,7 +169,7 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
     version,
     manifest_version: manifest.version,
     commit,
-    simple_vault_url: simpleVaultUrl.replace(/\*$/, ''),
+    simple_vault_url: simple_vault_url.replace(/\*$/, ''),
     extension_id: extensionId,
     archive,
     download_url: downloadUrl,

@@ -5,6 +5,7 @@ import {
   isExtensionPairedVaultIdentityDiscoveryMessage,
   OpenCompanionLauncherMessageType,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
+  type ExtensionPairedVaultIdentityStatusMessage,
   type OpenCompanionLauncherMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 
@@ -14,6 +15,21 @@ type ExtensionInstallDemoMessage =
 type ExtensionInstallDemoMessageTypes = {
   openCompanionLauncher: OpenCompanionLauncherMessageType
   pairedVaultIdentityDiscovery: ExtensionPairedVaultIdentityDiscoveryMessageType
+}
+
+type ExtensionInstallDemoResponse =
+  { ok: true } | { ok: false } | ExtensionPairedVaultIdentityStatusMessage
+
+type ExtensionInstallDemoChromeRuntime = {
+  sendMessage?: (
+    extensionId: string,
+    message: ExtensionInstallDemoMessage,
+    callback: (response?: ExtensionInstallDemoResponse) => void,
+  ) => void
+}
+
+type ExtensionInstallDemoBrowserGlobal = typeof globalThis & {
+  chrome?: { runtime?: ExtensionInstallDemoChromeRuntime }
 }
 
 const extensionInstallDemoMessageTypes: ExtensionInstallDemoMessageTypes = {
@@ -47,17 +63,7 @@ test('offer browser extension install on vault home and in Devices', async ({
   await demoBeat(page)
 
   await page.evaluate((messageTypes) => {
-    const browserGlobal = globalThis as typeof globalThis & {
-      chrome?: {
-        runtime?: {
-          sendMessage?: (
-            extensionId: string,
-            message: ExtensionInstallDemoMessage,
-            callback: (response?: unknown) => void,
-          ) => void
-        }
-      }
-    }
+    const browserGlobal = globalThis as ExtensionInstallDemoBrowserGlobal
     browserGlobal.chrome = {
       runtime: {
         sendMessage: (_extensionId, message, callback) => {

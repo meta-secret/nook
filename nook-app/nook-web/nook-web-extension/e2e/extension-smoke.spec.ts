@@ -3,8 +3,6 @@ import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import {
   advanceCreateVaultWizardToFinalStep,
-  belongsToSentinelVault,
-  belongsToSimpleVault,
   connectedSetupState,
   extensionDir,
   getServiceWorker,
@@ -19,13 +17,17 @@ import {
   setupPasskeyExtensionPopup,
   setupStorageKey,
   simpleVaultBaseUrl,
-  simpleVaultUrl,
   startLoginServer,
   syntheticEventLogRecords,
   waitForExtensionPairingReady,
   writeExtensionStorage,
   type ExtensionPairingApprovedMessage,
 } from './helpers/extension-smoke-runtime'
+import {
+  belongs_to_sentinel_vault,
+  belongs_to_simple_vault,
+  simple_vault_url,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { ExtensionPairingVaultType } from '../../nook-web-shared/src/extension/runtime-messages'
 import {
@@ -54,17 +56,13 @@ test('sets up the extension device first and sends its public keys to Simple Vau
 
   await context.route('**/*', (route) => {
     const url = route.request().url()
-    if (
-      belongsToSimpleVault({ baseUrl: simpleVaultBaseUrl, candidateUrl: url })
-    ) {
+    if (belongs_to_simple_vault(simpleVaultBaseUrl, url)) {
       return route.fulfill({
         contentType: 'text/html',
         body: '<!doctype html><html><body><h1>Simple Vault</h1></body></html>',
       })
     }
-    if (
-      belongsToSentinelVault({ baseUrl: simpleVaultBaseUrl, candidateUrl: url })
-    ) {
+    if (belongs_to_sentinel_vault(simpleVaultBaseUrl, url)) {
       return route.fulfill({
         contentType: 'text/html',
         body: '<form><input autocomplete="username"><input type="password"></form>',
@@ -125,10 +123,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const simplePage = await openedConnectPage
     await expect(simplePage).toHaveURL((url) => {
       const expected = new URL(
-        simpleVaultUrl({
-          baseUrl: simpleVaultBaseUrl,
-          path: 'extension-connect',
-        }),
+        simple_vault_url(simpleVaultBaseUrl, 'extension-connect'),
       )
       return (
         url.origin === expected.origin &&

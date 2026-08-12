@@ -8,6 +8,7 @@ import {
   fillLoginCredentials,
   findPasskeyControl,
   PasskeyControlLookupKind,
+  PasswordFormQueryKind,
   submitLoginForm,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
@@ -74,19 +75,30 @@ export type PasskeyWidgetAction =
   | AuthenticationWorkflowAction.UsePasskey
   | AuthenticationWorkflowAction.CreatePasskey
 
+type PasskeyWidgetStatusUpdate = {
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+  text: string
+  enableContinue: boolean
+}
+
 export function setStatus({
   description,
   continueButton,
   text,
   enableContinue,
-}: {
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-  text: string
-  enableContinue: boolean
-}): void {
+}: PasskeyWidgetStatusUpdate): void {
   description.textContent = text
   continueButton.disabled = !enableContinue || widgetState.busy
+}
+
+type FillAndSubmitAccountArgs = {
+  account: Pick<WebsiteLoginAccountOption, 'vaultStoreId' | 'secretId'>
+  workflow: PasswordFormObservation
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
 }
 
 export async function fillAndSubmitAccount({
@@ -96,14 +108,7 @@ export async function fillAndSubmitAccount({
   title,
   description,
   continueButton,
-}: {
-  account: Pick<WebsiteLoginAccountOption, 'vaultStoreId' | 'secretId'>
-  workflow: PasswordFormObservation
-  step: HTMLParagraphElement
-  title: HTMLHeadingElement
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-}): Promise<boolean> {
+}: FillAndSubmitAccountArgs): Promise<boolean> {
   const nookTypedArgs0_2: Parameters<typeof sendLoginFillMessage>[0] = {
     type: WebsiteLoginRevealMessageType.NookWebsiteLoginFill,
     payload: {
@@ -162,6 +167,7 @@ export async function fillAndSubmitAccount({
   response.password = ''
   const nookTypedArgs0_4: Parameters<typeof fillLoginCredentials>[0] = {
     credentials,
+    kind: PasswordFormQueryKind.Scoped,
     root: workflow.root,
     formScope: workflow.formScope,
   }
@@ -187,6 +193,7 @@ export async function fillAndSubmitAccount({
     return false
   }
   const nookTypedArgs0_7: Parameters<typeof submitLoginForm>[0] = {
+    kind: PasswordFormQueryKind.Scoped,
     root: workflow.root,
     formScope: workflow.formScope,
   }
@@ -220,19 +227,21 @@ export async function fillAndSubmitAccount({
   return true
 }
 
+type OpenLoginPickerArgs = {
+  workflow: PasswordFormObservation
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+}
+
 async function openLoginPicker({
   workflow,
   step,
   title,
   description,
   continueButton,
-}: {
-  workflow: PasswordFormObservation
-  step: HTMLParagraphElement
-  title: HTMLHeadingElement
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-}): Promise<void> {
+}: OpenLoginPickerArgs): Promise<void> {
   if (pickerState.login.kind === LoginPickerKind.Open) return
   const nookTypedArgs0_3: Parameters<
     typeof sendLoginPickerOpenRuntimeMessage
@@ -394,19 +403,21 @@ export function cancelPendingLoginPickerRequest(): void {
   cancelLoginPickerRequest(pending.requestId)
 }
 
+type GeneratePasswordWithNookArgs = {
+  workflow: PasswordFormObservation
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+}
+
 export async function generatePasswordWithNook({
   workflow,
   step,
   title,
   description,
   continueButton,
-}: {
-  workflow: PasswordFormObservation
-  step: HTMLParagraphElement
-  title: HTMLHeadingElement
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-}): Promise<void> {
+}: GeneratePasswordWithNookArgs): Promise<void> {
   if (widgetState.busy) return
   widgetState.busy = true
   continueButton.disabled = true
@@ -465,6 +476,7 @@ export async function generatePasswordWithNook({
     const password = response.password
     const nookTypedArgs0_25: Parameters<typeof fillGeneratedPassword>[0] = {
       password,
+      kind: PasswordFormQueryKind.Scoped,
       root: workflow.root,
       formScope: workflow.formScope,
     }
@@ -497,15 +509,17 @@ export async function generatePasswordWithNook({
   }
 }
 
+type ProposePasskeyWithNookArgs = {
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+  action: PasskeyWidgetAction
+}
+
 export async function proposePasskeyWithNook({
   description,
   continueButton,
   action,
-}: {
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-  action: PasskeyWidgetAction
-}): Promise<void> {
+}: ProposePasskeyWithNookArgs): Promise<void> {
   if (widgetState.busy) return
   widgetState.busy = true
   continueButton.disabled = true
@@ -566,19 +580,21 @@ function copyTitleForWorkflow(
   return BROWSER_MESSAGE_KEYS.WidgetLoginTitle
 }
 
+type ContinueWithNookArgs = {
+  step: HTMLParagraphElement
+  title: HTMLHeadingElement
+  description: HTMLParagraphElement
+  continueButton: HTMLButtonElement
+  workflow: PasswordFormObservation
+}
+
 export async function continueWithNook({
   step,
   title,
   description,
   continueButton,
   workflow,
-}: {
-  step: HTMLParagraphElement
-  title: HTMLHeadingElement
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-  workflow: PasswordFormObservation
-}): Promise<void> {
+}: ContinueWithNookArgs): Promise<void> {
   if (widgetState.busy || pickerState.login.kind === LoginPickerKind.Open)
     return
   widgetState.busy = true

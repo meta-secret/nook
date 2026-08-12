@@ -17,12 +17,12 @@ import {
 } from '../../../nook-web-app/e2e/helpers'
 import { installMockPasskeyRuntime } from '../../../nook-web-app/e2e/passkey-mock'
 import {
-  belongsToSentinelVault,
-  belongsToSimpleVault,
+  belongs_to_simple_vault,
+  normalize_simple_vault_base_url,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
   defaultSimpleVaultBaseUrl,
   sentinelVaultBaseUrl,
-  normalizeSimpleVaultBaseUrl,
-  simpleVaultUrl,
 } from '../../src/lib/simple-vault-target'
 import { startMockAuthServer } from '../mock-auth'
 import { waitForExtensionPairingReady } from './extension-approval'
@@ -36,14 +36,11 @@ import { lockExtensionSession } from './paired-pin-extension'
 
 export {
   attachNookLogsForTest,
-  belongsToSentinelVault,
-  belongsToSimpleVault,
   installMockPasskeyRuntime,
   lockExtensionSession,
   sentinelVaultBaseUrl,
   readPersistedAppLogs,
   readExtensionPersistenceSnapshot,
-  simpleVaultUrl,
   waitForExtensionPairingReady,
 }
 export type { ExtensionPairingApprovedMessage }
@@ -110,7 +107,7 @@ export const connectedSetupState = {
   eventLogHeads: ['event-e2e'],
   lastLocalSyncAt: '2026-07-07T00:00:00.000Z',
 }
-export const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
+export const simpleVaultBaseUrl = normalize_simple_vault_base_url(
   process.env.NOOK_SIMPLE_VAULT_URL || defaultSimpleVaultBaseUrl(),
 )
 
@@ -136,7 +133,9 @@ export async function startLoginServer() {
   return startMockAuthServer()
 }
 
-export async function registerWebsitePasskey(page: Page): Promise<string> {
+export async function registerWebsitePasskeyThroughExtension(
+  page: Page,
+): Promise<string> {
   const ceremony = page.evaluate(async () => {
     const credential = (await navigator.credentials.create({
       publicKey: {
@@ -162,10 +161,15 @@ export async function registerWebsitePasskey(page: Page): Promise<string> {
   return ceremony
 }
 
-export async function assertWebsitePasskey(
-  page: Page,
-  credentialId: string,
-): Promise<void> {
+export type WebsitePasskeyAssertionBrowserFlow = {
+  page: Page
+  credentialId: string
+}
+
+export async function assertWebsitePasskeyThroughExtension({
+  page,
+  credentialId,
+}: WebsitePasskeyAssertionBrowserFlow): Promise<void> {
   const ceremony = page.evaluate(async (id) => {
     const rawId = Uint8Array.from(
       atob(
@@ -243,10 +247,7 @@ export async function openSimpleVaultConnection(
   await popupPage.getByTestId('connect-simple-vault-btn').click()
   const simplePage = await openedConnectPage
   await expect(simplePage).toHaveURL((url) =>
-    belongsToSimpleVault({
-      baseUrl: simpleVaultBaseUrl,
-      candidateUrl: url.toString(),
-    }),
+    belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
   )
   return simplePage
 }

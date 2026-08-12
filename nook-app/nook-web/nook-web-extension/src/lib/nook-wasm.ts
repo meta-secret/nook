@@ -225,16 +225,20 @@ function runtimeMessage(
 }
 
 function extensionSessionRuntimeMessage<
-  Request extends ExtensionSessionRequest,
->(message: Request): Promise<ExtensionSessionRuntimeResponse<Request>> {
+  ExtensionSessionMessage extends ExtensionSessionRequest,
+>(
+  message: ExtensionSessionMessage,
+): Promise<ExtensionSessionRuntimeResponse<ExtensionSessionMessage>> {
   return runtimeMessage(message) as Promise<
-    ExtensionSessionRuntimeResponse<Request>
+    ExtensionSessionRuntimeResponse<ExtensionSessionMessage>
   >
 }
 
-async function sessionResponse<Request extends ExtensionSessionRequest>(
-  message: Request,
-): Promise<ExtensionSessionResponseByType[Request['type']]> {
+async function sessionResponse<
+  ExtensionSessionMessage extends ExtensionSessionRequest,
+>(
+  message: ExtensionSessionMessage,
+): Promise<ExtensionSessionResponseByType[ExtensionSessionMessage['type']]> {
   const runtimeRequest: ExtensionRuntimeRequest = {
     type: ExtensionRuntimeRequestType.EnsureRuntime,
   }
@@ -569,8 +573,10 @@ export async function parseStoredAppLocale(
       }
 }
 
-export async function resolveAppLocaleFromTags(
-  tags: string[],
+export type ExtensionAppLocaleCandidates = string[]
+
+export async function selectExtensionAppLocale(
+  tags: ExtensionAppLocaleCandidates,
 ): Promise<NookAppLocale> {
   await ensureNookWasm()
   return resolve_app_locale_from_tags(tags) as NookAppLocale

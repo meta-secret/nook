@@ -629,7 +629,9 @@ function countPlaywright(repoRoot: string): number {
   return matches.length;
 }
 
-function sumDurationSeconds(items: UntrustedYamlMap[]): number {
+type AgentStatisticsDurationEntries = UntrustedYamlMap[];
+
+function sumDurationSeconds(items: AgentStatisticsDurationEntries): number {
   let total = 0;
   for (const item of items) {
     const durationArgs: UntrustedYamlPropertyArgs = {

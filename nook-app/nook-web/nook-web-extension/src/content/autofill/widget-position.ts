@@ -2,17 +2,19 @@ import type { WidgetPosition } from './state'
 import { widgetState } from './state'
 import { DRAG_THRESHOLD_PX } from './workflow-ui'
 
+type ClampWidgetPositionArgs = {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
 export function clampWidgetPosition({
   left,
   top,
   width,
   height,
-}: {
-  left: number
-  top: number
-  width: number
-  height: number
-}): WidgetPosition {
+}: ClampWidgetPositionArgs): WidgetPosition {
   const margin = 8
   const maxLeft = Math.max(margin, window.innerWidth - width - margin)
   const maxTop = Math.max(margin, window.innerHeight - height - margin)
@@ -22,27 +24,40 @@ export function clampWidgetPosition({
   }
 }
 
+type ApplyWidgetPositionArgs = {
+  host: HTMLElement
+  position: WidgetPosition
+}
+
 export function applyWidgetPosition({
   host,
   position,
-}: {
-  host: HTMLElement
-  position: WidgetPosition
-}): void {
+}: ApplyWidgetPositionArgs): void {
   host.style.top = `${position.top}px`
   host.style.left = `${position.left}px`
   host.style.right = 'auto'
 }
 
+export enum PointerDragBehaviorKind {
+  DragOnly = 'drag-only',
+  Tappable = 'tappable',
+}
+
+export type PointerDragBehavior =
+  | { kind: PointerDragBehaviorKind.DragOnly }
+  | { kind: PointerDragBehaviorKind.Tappable; onTap: () => void }
+
+type AttachPointerDragRequest = {
+  host: HTMLElement
+  handle: HTMLElement
+  behavior: PointerDragBehavior
+}
+
 export function attachPointerDrag({
   host,
   handle,
-  options,
-}: {
-  host: HTMLElement
-  handle: HTMLElement
-  options?: { onTap?: () => void }
-}): void {
+  behavior,
+}: AttachPointerDragRequest): void {
   enum DragPointerStateKind {
     Released = 'released',
     Captured = 'captured',
@@ -121,7 +136,9 @@ export function attachPointerDrag({
     }
     pointer = { kind: DragPointerStateKind.Released }
     host.classList.remove('dragging')
-    if (!dragged) options?.onTap?.()
+    if (!dragged && behavior.kind === PointerDragBehaviorKind.Tappable) {
+      behavior.onTap()
+    }
   }
 
   handle.addEventListener('pointerup', endDrag)

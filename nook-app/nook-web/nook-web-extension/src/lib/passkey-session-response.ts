@@ -16,7 +16,9 @@ export type PasskeyUnlockResponse = {
   material: PasskeyUnlockMaterial
 }
 
-function byteArray(value: number[]): number[] {
+type PasskeyResponseByteSequence = number[]
+
+function byteArray(value: PasskeyResponseByteSequence): number[] {
   if (
     !Array.isArray(value) ||
     !value.every(

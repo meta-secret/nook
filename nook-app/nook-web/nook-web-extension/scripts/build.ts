@@ -11,10 +11,8 @@ import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import packageJson from '../package.json'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
-import {
-  defaultSimpleVaultBaseUrl,
-  normalizeSimpleVaultBaseUrl,
-} from '../src/lib/simple-vault-target'
+import { defaultSimpleVaultBaseUrl } from '../src/lib/simple-vault-target'
+import { normalize_simple_vault_base_url } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   createManifest,
   type CreateExtensionManifestArgs,
@@ -37,7 +35,7 @@ const appCommonLocalesRoot = join(
 )
 const distDir = join(projectRoot, 'dist')
 const requireFromWeb = createRequire(join(webRoot, 'package.json'))
-const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
+const simpleVaultBaseUrl = normalize_simple_vault_base_url(
   process.env.NOOK_SIMPLE_VAULT_URL?.trim() || defaultSimpleVaultBaseUrl(),
 )
 const simpleVaultDefine = {

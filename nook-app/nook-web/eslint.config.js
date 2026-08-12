@@ -6,6 +6,7 @@ import ts from 'typescript-eslint'
 import { typedApiRules } from './typed-api-rules.js'
 import {
   concreteObjectTypeRules,
+  namedParameterContractFiles,
   typedApiSourceFiles,
   untrustedInputAdapterFiles,
   untrustedInputAdapterRules,
@@ -117,6 +118,15 @@ export default [
       'nook-typed-api': nookTypedApiPlugin,
     },
     rules: typedApiRules,
+  },
+  {
+    files: namedParameterContractFiles,
+    rules: {
+      'nook-typed-api/no-raw-object-arguments': [
+        'error',
+        { enforceNamedParameterContracts: true },
+      ],
+    },
   },
   {
     files: untrustedInputAdapterFiles,

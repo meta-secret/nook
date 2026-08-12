@@ -24,9 +24,40 @@ const config = {
 }
 
 function lint(source) {
-  return new Linter().verify(source, config)
+  return new Linter()
+    .verify(source, config)
+    .filter(
+      (message) =>
+        ![
+          'namedParameterDefault',
+          'namedParameterType',
+          'semanticParameterType',
+        ].includes(message.messageId),
+    )
 }
 
+function lintParameterTypes(source) {
+  return new Linter()
+    .verify(source, config)
+    .filter((message) =>
+      ['namedParameterType', 'semanticParameterType'].includes(
+        message.messageId,
+      ),
+    )
+}
+
+function lintWithoutParameterContractEnforcement(source) {
+  const migrationConfig = {
+    ...config,
+    rules: {
+      'nook-typed-api/no-raw-object-arguments': [
+        'error',
+        { enforceNamedParameterContracts: false },
+      ],
+    },
+  }
+  return new Linter().verify(source, migrationConfig)
+}
 describe('typed API named arguments', () => {
   test('rejects a named object literal without an explicit type', () => {
     const messages = lint(`
@@ -34,12 +65,10 @@ describe('typed API named arguments', () => {
       const args = { name: 'Nook' }
       consume(args)
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])
   })
-
   test('accepts an explicitly typed named object argument', () => {
     const messages = lint(`
       type ConsumeArgs = { name: string }
@@ -47,10 +76,171 @@ describe('typed API named arguments', () => {
       const args: ConsumeArgs = { name: 'Nook' }
       consume(args)
     `)
-
     expect(messages).toEqual([])
   })
+  test('rejects inline object parameter types', () => {
+    const messages = lintParameterTypes(`
+      function collectOutcomeObservation({
+        startedAt,
+        authPath,
+        sawMutation,
+      }: {
+        startedAt: number
+        authPath: string
+        sawMutation: boolean
+      }): void {
+        void startedAt
+        void authPath
+        void sawMutation
+      }
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedParameterType',
+    ])
+  })
 
+  test('can retain raw-call checks while a source slice migrates parameter contracts', () => {
+    const messages = lintWithoutParameterContractEnforcement(`
+      declare function consume(value: { name: string }): void
+      function collectOutcomeObservation(value: { name: string }): void {
+        consume({ name: value.name })
+      }
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedArgument',
+    ])
+  })
+
+  test('accepts named object parameter types', () => {
+    const messages = lintParameterTypes(`
+      type CollectOutcomeObservationArgs = {
+        startedAt: number
+        authPath: string
+        sawMutation: boolean
+      }
+      function collectOutcomeObservation({
+        startedAt,
+        authPath,
+        sawMutation,
+      }: CollectOutcomeObservationArgs): void {
+        void startedAt
+        void authPath
+        void sawMutation
+      }
+    `)
+    expect(messages).toEqual([])
+  })
+  test('rejects generic referenced parameter contract names', () => {
+    const messages = lintParameterTypes(`
+      type Base = { value: string; other: string }
+      type Args = Record<string, string>
+      type WriteArgs = Map<string, string>
+      type PickArgs = Pick<Base, 'value'>
+      type MergeArgs = Set<string>
+      type PutArgs = Omit<Base, 'other'>
+      type HitsArgs = { value: string }
+      type ColumnsArgs = { value: string }
+      type BranchArgs = { value: string }
+      function consume(args: Args): void { void args }
+      function write(args: WriteArgs): void { void args }
+      function pick(args: PickArgs): void { void args }
+      function merge(args: MergeArgs): void { void args }
+      function put(args: PutArgs): void { void args }
+      function hits(args: HitsArgs): void { void args }
+      function columns(args: ColumnsArgs): void { void args }
+      function branch(args: BranchArgs): void { void args }
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'semanticParameterType',
+      'semanticParameterType',
+      'semanticParameterType',
+      'semanticParameterType',
+      'semanticParameterType',
+      'semanticParameterType',
+      'semanticParameterType',
+      'semanticParameterType',
+    ])
+  })
+  test('rejects wrapped and qualified generic parameter contract names', () => {
+    const messages = lintParameterTypes(`
+      type Args = { value: string }
+      namespace Contracts { export type Args = { value: string } }
+      type Marker = { readonly marker: true }
+      function wrapped(args: Readonly<Args>): void { void args }
+      function qualified(args: Contracts.Args): void { void args }
+      function union(args: Args | string): void { void args }
+      function intersection(args: Args & Marker): void { void args }
+      function imported(args: import('./contracts').Args): void { void args }
+      const defaults = { value: 'Nook' }
+      function derived(args: typeof defaults): void { void args }
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'semanticParameterType',
+      'semanticParameterType',
+      'semanticParameterType',
+      'semanticParameterType',
+      'semanticParameterType',
+      'namedParameterType',
+    ])
+  })
+  test('accepts generic-looking scalar aliases and enums', () => {
+    const messages = lintParameterTypes(`
+      type Result = string
+      enum State { Ready = 'ready' }
+      function consume(result: Result): void { void result }
+      function transition(state: State): void { void state }
+    `)
+    expect(messages).toEqual([])
+  })
+  test('accepts a domain-specific referenced parameter contract name', () => {
+    const messages = lintParameterTypes(`
+      type PersistExtensionPairingItemsRequest = { value: string }
+      function persist(args: PersistExtensionPairingItemsRequest): void {
+        void args
+      }
+    `)
+    expect(messages).toEqual([])
+  })
+  test('rejects every inline object-shaped parameter form', () => {
+    const messages = lintParameterTypes(`
+      function collectMappedValues<T>(args: { [K in keyof T]: T[K] }): void {
+        void args
+      }
+      function collectTags(tags: string[]): void { void tags }
+      function collectPair(pair: [string, number]): void { void pair }
+      function collectGenericTags(tags: Array<string>): void { void tags }
+      function inspectTags(tags: ReadonlyArray<string>): void { void tags }
+      import type { Args } from './contracts'
+      function collectLabels(labels: Record<string, string>): void {
+        void labels
+      }
+      type Account = { id: string; secret: string }
+      function pickAccount(account: Pick<Account, 'id'>): void { void account }
+      function omitSecret(account: Omit<Account, 'secret'>): void { void account }
+      function consume(args: Args): void { void args }
+      function scalarKey(key: keyof { name: string }): void { void key }
+      function scalarIndexed(value: { name: string }['name']): void { void value }
+    `)
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedParameterType',
+      'namedParameterType',
+      'namedParameterType',
+      'namedParameterType',
+      'namedParameterType',
+      'namedParameterType',
+      'namedParameterType',
+      'namedParameterType',
+      'semanticParameterType',
+    ])
+  })
+  test('accepts inline object return types from function-valued parameters', () => {
+    const messages = lintParameterTypes(`
+      type Builder = (name: string) => { name: string }
+      function consume(build: () => { name: string }): void { void build }
+      function consumeNamed(build: Builder): void { void build }
+    `)
+    expect(messages).toEqual([])
+  })
   test('allows direct object arguments only for placement-sensitive Svelte runes', () => {
     const messages = lint(`
       declare function $state<T>(value: T): T
@@ -62,10 +252,8 @@ describe('typed API named arguments', () => {
       $derived({ enabled: true })
       $bindable({ label: 'Nook' })
     `)
-
     expect(messages).toEqual([])
   })
-
   test('does not exempt unrelated state members or normal calls', () => {
     const messages = lint(`
       declare namespace $state { function snapshot<T>(value: T): T }
@@ -73,13 +261,11 @@ describe('typed API named arguments', () => {
       $state.snapshot({ count: 0 })
       consume({ count: 0 })
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
       'namedArgument',
     ])
   })
-
   test('rejects untyped names initialized by object-producing expressions', () => {
     const messages = lint(`
       declare const flag: boolean
@@ -91,14 +277,12 @@ describe('typed API named arguments', () => {
       consume(logicalArgs)
       consume(sequenceArgs)
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
       'typedArgument',
       'typedArgument',
     ])
   })
-
   test('rejects an untyped named argument that aliases an object', () => {
     const messages = lint(`
       declare function consume(value: { name: string }): void
@@ -107,12 +291,10 @@ describe('typed API named arguments', () => {
       const args = firstAlias
       consume(args)
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])
   })
-
   test('rejects an untyped named argument assigned after declaration', () => {
     const messages = lint(`
       declare function consume(value: { name: string }): void
@@ -120,41 +302,34 @@ describe('typed API named arguments', () => {
       args = { name: 'Nook' }
       consume(args)
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])
   })
-
   test('rejects object literals expanded from an inline spread array', () => {
     const messages = lint(`
       declare function consume(...values: { name: string }[]): void
       consume(...[{ name: 'Nook' }])
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
     ])
   })
-
   test('rejects object literals expanded from nested spread arrays', () => {
     const messages = lint(`
       declare function consume(...values: { name: string }[]): void
       consume(...[...[{ name: 'Nook' }]])
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
     ])
   })
-
   test('rejects object literals expanded from a named spread array', () => {
     const messages = lint(`
       declare function consume(...values: { name: string }[]): void
       const packed = [{ name: 'Nook' }]
       consume(...packed)
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
     ])
@@ -166,7 +341,6 @@ describe('typed API named arguments', () => {
       const args = { name: 'Nook' }
       consume(...[args])
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])
@@ -179,7 +353,6 @@ describe('typed API named arguments', () => {
       packed = [{ name: 'Nook' }]
       consume(...packed)
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
     ])
@@ -193,7 +366,6 @@ describe('typed API named arguments', () => {
       consume(flag && { name: 'Nook' })
       consume((flag, { name: 'Nook' }))
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
       'namedArgument',
@@ -209,7 +381,6 @@ describe('typed API named arguments', () => {
       let args: ConsumeArgs
       consume((args = { name: 'Nook' }))
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
     ])
@@ -228,7 +399,6 @@ describe('typed API named arguments', () => {
       consume([{ name: 'Nook' }]['0'])
       consume(container.picked)
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
       'namedArgument',
@@ -250,7 +420,6 @@ describe('typed API named arguments', () => {
       consumeCount(count)
       consumeArgs(picked)
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])
@@ -263,7 +432,6 @@ describe('typed API named arguments', () => {
       const { ...args } = source
       consume(args)
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])
@@ -280,7 +448,6 @@ describe('typed API named arguments', () => {
       consumeCount(count)
       consumeArgs(picked)
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])
@@ -294,7 +461,6 @@ describe('typed API named arguments', () => {
       consumeCount(value)
       value = { name: 'Nook' }
     `)
-
     expect(messages).toEqual([])
   })
 
@@ -308,7 +474,6 @@ describe('typed API named arguments', () => {
       }
       consumeCount(value)
     `)
-
     expect(messages).toEqual([])
   })
 
@@ -324,7 +489,6 @@ describe('typed API named arguments', () => {
         consumeCount(value)
       }
     `)
-
     expect(messages).toEqual([])
   })
 
@@ -342,7 +506,6 @@ describe('typed API named arguments', () => {
           break
       }
     `)
-
     expect(messages).toEqual([])
   })
 
@@ -370,22 +533,78 @@ describe('typed API named arguments', () => {
         consume(args)
       }
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
+    ])
+  })
+
+  test('rejects inferred object parameter defaults at the declaration', () => {
+    const messages = new Linter()
+      .verify(
+        `
+          function direct(args = { name: 'Nook' }): void { void args }
+          function destructured({ args = { name: 'Nook' } }): void {
+            void args
+          }
+        `,
+        config,
+      )
+      .filter((message) => message.messageId === 'namedParameterDefault')
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedParameterDefault',
+      'namedParameterDefault',
+    ])
+  })
+
+  test('rejects object defaults under a named parameter contract', () => {
+    const messages = new Linter()
+      .verify(
+        `
+          type DirectConsumeRequest = { name?: string }
+          type ForwardConsumeRequest = { args?: { name: string } }
+          function direct(args: DirectConsumeRequest = {}): void {
+            void args
+          }
+          function forward(
+            { args = { name: 'Nook' } }: ForwardConsumeRequest,
+          ): void {
+            void args
+          }
+          function constructed(args = new Map()): void { void args }
+          const defaults: DirectConsumeRequest = {}
+          function buildDefaults(): DirectConsumeRequest { return defaults }
+          function named(args = defaults): void { void args }
+          function factory(args = buildDefaults()): void { void args }
+          type DocumentQuery = { root?: ParentNode }
+          function global({ root = document }: DocumentQuery): void { void root }
+          const runtime = { defaults }
+          function member(args = runtime.defaults): void { void args }
+        `,
+        config,
+      )
+      .filter((message) => message.messageId === 'namedParameterDefault')
+
+    expect(messages.map((message) => message.messageId)).toEqual([
+      'namedParameterDefault',
+      'namedParameterDefault',
+      'namedParameterDefault',
+      'namedParameterDefault',
+      'namedParameterDefault',
+      'namedParameterDefault',
+      'namedParameterDefault',
     ])
   })
 
   test('accepts annotations on enclosing parameter patterns', () => {
     const messages = lint(`
       type ConsumeArgs = { name: string }
-      type Params = { args?: ConsumeArgs }
+      type ForwardConsumeRequest = { args?: ConsumeArgs }
       declare function consume(value: ConsumeArgs): void
-      function forward({ args = { name: 'Nook' } }: Params): void {
+      function forward({ args = { name: 'Nook' } }: ForwardConsumeRequest): void {
         consume(args)
       }
     `)
-
     expect(messages).toEqual([])
   })
 
@@ -396,7 +615,6 @@ describe('typed API named arguments', () => {
       const { [key]: args } = { picked: { name: 'Nook' } }
       consume(args)
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])
@@ -408,7 +626,6 @@ describe('typed API named arguments', () => {
       const values = [0]
       consume(([...values, ...values, { name: 'Nook' }])[2])
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
     ])
@@ -420,7 +637,6 @@ describe('typed API named arguments', () => {
       declare function consume(value: number | { name: string }): void
       consume(([...(flag ? [0] : []), { name: 'Nook' }])[0])
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
     ])
@@ -433,7 +649,6 @@ describe('typed API named arguments', () => {
         consume(([...values, { name: 'Nook' }])[0])
       }
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
     ])
@@ -463,7 +678,6 @@ describe('typed API named arguments', () => {
       const args = { name: 'Nook' }
       consume(flag ? typedArgs : args)
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])
@@ -478,7 +692,6 @@ describe('typed API named arguments', () => {
         consume(args)
       }
     `)
-
     expect(messages).toEqual([])
   })
 
@@ -490,7 +703,6 @@ describe('typed API named arguments', () => {
       const typedArgs: ConsumeArgs = { name: 'Vault' }
       consume((scratch = { name: 'Nook' }, typedArgs))
     `)
-
     expect(messages).toEqual([])
   })
 
@@ -502,7 +714,6 @@ describe('typed API named arguments', () => {
       const args = (target = { name: 'Nook' })
       consume(args)
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])
@@ -516,7 +727,6 @@ describe('typed API named arguments', () => {
         consume(await { name: 'Nook' })
       }
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'namedArgument',
     ])
@@ -531,7 +741,6 @@ describe('typed API named arguments', () => {
         consume(await args)
       }
     `)
-
     expect(messages.map((message) => message.messageId)).toEqual([
       'typedArgument',
     ])

@@ -24,7 +24,7 @@ export const ExtensionConnectScope = {
   },
 }
 
-export function isExtensionConnectScope(
+export function isExtensionConnectScopeValue(
   value: unknown,
 ): value is ExtensionConnectScope {
   return typeof value === 'string' && is_extension_connect_scope(value)

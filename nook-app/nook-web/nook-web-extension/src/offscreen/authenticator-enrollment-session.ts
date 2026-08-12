@@ -11,6 +11,7 @@ import {
   flushPasskeyEventToProviders,
   openPasskeyVault,
 } from './session-vault-operations'
+import type { ExtensionVaultGrantPayload } from './session-vault-grant'
 
 type AuthenticatorEnrollmentMessage = Extract<
   ExtensionSessionRequest,
@@ -26,21 +27,20 @@ type AuthenticatorEnrollmentMessage = Extract<
 type AuthenticatorEnrollmentSessionDependencies = {
   ensureWasm: () => ReturnType<typeof initNookWasm>
   getManager: () => Promise<NookVaultManager>
-  extensionVaultGrant: (payload: {
-    vaultStoreId: string
-    deviceId: string
-    devicePublicKey: string
-    deviceSigningPublicKey: string
-  }) => ExtensionVaultGrant
+  extensionVaultGrant: (
+    payload: ExtensionVaultGrantPayload,
+  ) => ExtensionVaultGrant
+}
+
+type AuthenticatorEnrollmentMessageHandlingRequest = {
+  message: AuthenticatorEnrollmentMessage
+  dependencies: AuthenticatorEnrollmentSessionDependencies
 }
 
 export async function handleAuthenticatorEnrollmentMessage({
   message,
   dependencies,
-}: {
-  message: AuthenticatorEnrollmentMessage
-  dependencies: AuthenticatorEnrollmentSessionDependencies
-}) {
+}: AuthenticatorEnrollmentMessageHandlingRequest) {
   switch (message.type) {
     case ExtensionSessionMessageType.AuthenticatorEnrollPreview: {
       const payload = message.payload

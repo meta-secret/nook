@@ -12,10 +12,10 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
         "nook-app/nook-web/nook-web-extension/src/lib/simple-vault-target.ts",
     );
     for required_contract in [
-        "nookVaultAppExcludeMatchPatterns(simpleVaultBaseUrl)",
+        "nook_vault_app_exclude_match_patterns(simpleVaultBaseUrl)",
         "exclude_matches: vaultAppExclusions",
-        "simpleVaultMatchPattern(simpleVaultBaseUrl)",
-        "sentinelVaultMatchPatterns(simpleVaultBaseUrl)",
+        "simple_vault_match_pattern(simpleVaultBaseUrl)",
+        "sentinel_vault_match_patterns(simpleVaultBaseUrl)",
         "externally_connectable: {",
         "matches: [simpleVaultMatch]",
     ] {

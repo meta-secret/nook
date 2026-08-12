@@ -29,7 +29,7 @@ function normalizeBaseUrl(value: string): URL {
   return url
 }
 
-function isSimpleVaultHostname(hostname: string): boolean {
+function isRuntimeSimpleVaultHostname(hostname: string): boolean {
   const host = hostname.toLowerCase()
   if (host === 'simple.nokey.sh') {
     return true
@@ -40,7 +40,7 @@ function isSimpleVaultHostname(hostname: string): boolean {
   return host.endsWith('.nokey-simple.pages.dev')
 }
 
-function isSentinelVaultHostname(hostname: string): boolean {
+function isRuntimeSentinelVaultHostname(hostname: string): boolean {
   const host = hostname.toLowerCase()
   if (host === 'sentinel.nokey.sh') {
     return true
@@ -112,8 +112,8 @@ export function isRuntimeNookVaultAppUrl(candidateUrl: string): boolean {
   try {
     const candidate = new URL(candidateUrl)
     if (
-      isSimpleVaultHostname(candidate.hostname) ||
-      isSentinelVaultHostname(candidate.hostname)
+      isRuntimeSimpleVaultHostname(candidate.hostname) ||
+      isRuntimeSentinelVaultHostname(candidate.hostname)
     ) {
       return true
     }

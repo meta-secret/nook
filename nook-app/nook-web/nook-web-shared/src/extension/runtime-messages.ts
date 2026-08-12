@@ -1,5 +1,5 @@
 import {
-  isExtensionConnectScope,
+  isExtensionConnectScopeValue,
   type ExtensionConnectScope,
 } from "./extension-connect-scope";
 import type { ExtensionVaultEventPayload } from "./nook-companion-wasm/nook_companion_wasm";
@@ -353,15 +353,17 @@ export function isExtensionIdentityHandoffRequestMessage(
   );
 }
 
-function isPairedVaultRequestMessage({
-  message,
-  type,
-}: {
+
+type IsPairedVaultRequestMessageArgs = {
   message: unknown;
   type:
     | ExtensionPairedVaultIdentityDiscoveryMessage["type"]
     | ExtensionPairedVaultUnlockRequestMessage["type"];
-}): boolean {
+}
+function isPairedVaultRequestMessage({
+  message,
+  type,
+}: IsPairedVaultRequestMessageArgs): boolean {
   if (
     !isRuntimeMessage(message) ||
     message.type !== type ||
@@ -512,7 +514,7 @@ export function isExtensionPairingApprovedGrant(
     typeof payload.vaultName === "string" &&
     typeof payload.approvedAt === "string" &&
     Array.isArray(payload.scopes) &&
-    payload.scopes.every(isExtensionConnectScope) &&
+    payload.scopes.every(isExtensionConnectScopeValue) &&
     Array.isArray(payload.providers) &&
     payload.providers.every(isExtensionStorageProviderPayload)
   );

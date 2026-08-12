@@ -44,11 +44,13 @@ export type DecodeOutcome<T> =
       readonly errors: readonly FieldError[];
     };
 
+export type DecodeFieldErrors = readonly FieldError[];
+
 export function decodeOk<T>(value: T): DecodeOutcome<T> {
   return { status: DecodeStatus.Ok, value };
 }
 
-export function decodeErr(errors: readonly FieldError[]): DecodeOutcome<never> {
+export function decodeErr(errors: DecodeFieldErrors): DecodeOutcome<never> {
   return { status: DecodeStatus.Failed, errors };
 }
 

@@ -21,6 +21,10 @@ type BarcodeDetectorConstructor = new (
   options: BarcodeDetectorOptions,
 ) => BarcodeDetectorLike
 
+type BarcodeDetectorGlobal = typeof globalThis & {
+  BarcodeDetector?: BarcodeDetectorConstructor
+}
+
 enum BarcodeDetectorAvailabilityKind {
   Unsupported = 'unsupported',
   Available = 'available',
@@ -43,13 +47,7 @@ type QrBitmapCapture =
   | { kind: QrBitmapCaptureKind.Unavailable }
 
 function barcodeDetectorConstructor(): BarcodeDetectorAvailability {
-  const candidate = (
-    globalThis as typeof globalThis & {
-      BarcodeDetector?: new (options: {
-        formats: string[]
-      }) => BarcodeDetectorLike
-    }
-  ).BarcodeDetector
+  const candidate = (globalThis as BarcodeDetectorGlobal).BarcodeDetector
   return typeof candidate === 'function'
     ? { kind: BarcodeDetectorAvailabilityKind.Available, Detector: candidate }
     : { kind: BarcodeDetectorAvailabilityKind.Unsupported }
@@ -184,7 +182,9 @@ export enum DecodeVisibleOtpauthCandidatesResultStatus {
   Ambiguous = 'ambiguous',
 }
 
-function finalizeOtpauthCandidates(candidates: DecodedOtpauthCandidate[]): {
+type DecodedOtpauthCandidates = DecodedOtpauthCandidate[]
+
+function finalizeOtpauthCandidates(candidates: DecodedOtpauthCandidates): {
   status:
     | DecodeVisibleOtpauthCandidatesResultStatus.Ready
     | DecodeVisibleOtpauthCandidatesResultStatus.Empty

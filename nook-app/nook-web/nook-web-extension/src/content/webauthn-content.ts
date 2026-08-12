@@ -57,25 +57,26 @@ type PasskeyOptionChoice =
   | { kind: PasskeyOptionChoiceKind.BrowserFallback }
   | { kind: PasskeyOptionChoiceKind.Selected; option: PasskeyOption }
 
-function t({
-  key,
-  fallback,
-}: {
+type BrowserMessageTranslationRequest = {
   key: BrowserMessageKey
   fallback: string
-}): string {
+}
+
+function t({ key, fallback }: BrowserMessageTranslationRequest): string {
   return chrome.i18n.getMessage(key) || fallback
+}
+
+type WebAuthnPageResponseDelivery = {
+  requestId: string
+  action: PageResponseAction
+  value?: unknown
 }
 
 function respond({
   requestId,
   action,
   value,
-}: {
-  requestId: string
-  action: PageResponseAction
-  value?: unknown
-}): void {
+}: WebAuthnPageResponseDelivery): void {
   const nookTypedArgs0_0: Parameters<typeof window.postMessage>[0] = {
     source: RESPONSE_SOURCE,
     requestId,
@@ -113,13 +114,15 @@ function removePrompt(requestId: string): void {
   prompts.delete(requestId)
 }
 
+type ChooseOptionArgs = {
+  request: PageRequest
+  options: PasskeyOption[]
+}
+
 function chooseOption({
   request,
   options,
-}: {
-  request: PageRequest
-  options: PasskeyOption[]
-}): Promise<PasskeyOptionChoice> {
+}: ChooseOptionArgs): Promise<PasskeyOptionChoice> {
   return new Promise((resolve) => {
     const host = document.createElement('aside')
     host.setAttribute('aria-label', 'Nook passkey')

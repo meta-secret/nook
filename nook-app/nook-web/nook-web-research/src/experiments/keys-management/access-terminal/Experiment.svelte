@@ -7,6 +7,13 @@ that open it. Other devices only ever print as existence: identifier, name, the
 vaults they touch.
 -->
 <script lang="ts">
+  type SegmentsOfArgs = {
+    line: string
+    here: string
+  }
+
+  type InkOfArgs = { text: string; here: string }
+
   import { tick } from 'svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import GraphSwitch from '../_shared/GraphSwitch.svelte'
@@ -151,7 +158,7 @@ vaults they touch.
     focusInput()
   }
 
-  function inkOf({ text, here }: { text: string; here: string }): Ink {
+  function inkOf({ text, here }: InkOfArgs): Ink {
     if (/^[0-9a-f]{6}$/.test(text)) {
       return text === here && here.length > 0 ? Ink.Mine : Ink.Id
     }
@@ -161,13 +168,7 @@ vaults they touch.
     return Ink.Warn
   }
 
-  function segmentsOf({
-    line,
-    here,
-  }: {
-    line: string
-    here: string
-  }): Segment[] {
+  function segmentsOf({ line, here }: SegmentsOfArgs): Segment[] {
     return [
       ...line
         .split(TOKEN)
