@@ -10,6 +10,7 @@ import {
   GithubPatDisplayKind,
   maskGithubPat,
   providerDefaultLabel,
+  providerLabelWithoutDetail,
   providerPersistenceDefaults,
   providerStorageDetail,
   storedGithubPat,
@@ -17,6 +18,11 @@ import {
   storedOAuthAccountEmail,
   storedOAuthCredential,
   storedOAuthRemoteFileName,
+  type GithubPatDisplay,
+  type GithubPatHintRequest,
+  type ProviderLabelRequest,
+  type ProviderLabelWithoutDetailRequest,
+  type ProviderStorageDescriptionRequest,
   type StorageProvider,
 } from '$lib/auth/providers'
 import { NookDuplicateSyncProviderState } from '$app-wasm'
@@ -37,35 +43,36 @@ function githubProvider(
   }
 }
 
+function githubPatHintRequest(state: GithubPatDisplay): GithubPatHintRequest {
+  return { state }
+}
+
+function providerStorageDescriptionRequest(
+  provider: StorageProvider,
+): ProviderStorageDescriptionRequest {
+  return { provider }
+}
+
 describe('maskGithubPat', () => {
   test('masks fine-grained tokens with github_pat_ prefix', () => {
-    expect(
-      maskGithubPat({
-        state: {
-          kind: GithubPatDisplayKind.Stored,
-          pat: 'github_pat_11AAAAAAAAAA',
-        },
-      }),
-    ).toBe('github_pat_11A…')
+    const display: GithubPatDisplay = {
+      kind: GithubPatDisplayKind.Stored,
+      pat: 'github_pat_11AAAAAAAAAA',
+    }
+    expect(maskGithubPat(githubPatHintRequest(display))).toBe('github_pat_11A…')
   })
 
   test('masks classic tokens with shorter prefix', () => {
-    expect(
-      maskGithubPat({
-        state: {
-          kind: GithubPatDisplayKind.Stored,
-          pat: 'ghp_1234567890ABCDEF',
-        },
-      }),
-    ).toBe('ghp_123456…')
+    const display: GithubPatDisplay = {
+      kind: GithubPatDisplayKind.Stored,
+      pat: 'ghp_1234567890ABCDEF',
+    }
+    expect(maskGithubPat(githubPatHintRequest(display))).toBe('ghp_123456…')
   })
 
   test('handles missing token', () => {
-    expect(
-      maskGithubPat({
-        state: { kind: GithubPatDisplayKind.NoToken },
-      }),
-    ).toBe('No token saved')
+    const display: GithubPatDisplay = { kind: GithubPatDisplayKind.NoToken }
+    expect(maskGithubPat(githubPatHintRequest(display))).toBe('No token saved')
   })
 })
 
@@ -84,22 +91,23 @@ describe('providerStorageDetail', () => {
       githubPat: storedGithubPat('github_pat_22CCCCdddd'),
     })
 
-    expect(providerStorageDetail({ provider: alpha })).toBe(
-      'alpha · github_pat_11A…',
-    )
-    expect(providerStorageDetail({ provider: beta })).toBe(
+    expect(
+      providerStorageDetail(providerStorageDescriptionRequest(alpha)),
+    ).toBe('alpha · github_pat_11A…')
+    expect(providerStorageDetail(providerStorageDescriptionRequest(beta))).toBe(
       'beta · github_pat_22C…',
     )
-    expect(providerStorageDetail({ provider: alpha })).not.toBe(
-      providerStorageDetail({ provider: beta }),
-    )
+    expect(
+      providerStorageDetail(providerStorageDescriptionRequest(alpha)),
+    ).not.toBe(providerStorageDetail(providerStorageDescriptionRequest(beta)))
   })
 
   test('never exposes the full token', () => {
     const pat = 'github_pat_11BBBBCCCCDDDDEEEEFFFF'
-    const detail = providerStorageDetail({
-      provider: githubProvider({ githubPat: storedGithubPat(pat) }),
-    })
+    const provider = githubProvider({ githubPat: storedGithubPat(pat) })
+    const detail = providerStorageDetail(
+      providerStorageDescriptionRequest(provider),
+    )
     expect(detail).not.toContain(pat)
     expect(detail).toContain('…')
   })
@@ -113,9 +121,9 @@ describe('providerStorageDetail', () => {
       syncCheckpoint: { state: 'neverSynced' },
       createdAt: '2026-06-24T00:00:00.000Z',
     }
-    expect(providerStorageDetail({ provider: local })).toBe(
-      'Vault in browser storage on this device',
-    )
+    expect(
+      providerStorageDetail(providerStorageDescriptionRequest(local)),
+    ).toBe('Vault in browser storage on this device')
   })
 
   test('distinguishes two Google Drive vault files', () => {
@@ -154,15 +162,15 @@ describe('providerStorageDetail', () => {
       createdAt: '2026-06-24T00:00:00.000Z',
     }
 
-    expect(providerStorageDetail({ provider: personal })).toBe(
-      'personal.yaml · me@example.com',
-    )
-    expect(providerStorageDetail({ provider: work })).toBe(
+    expect(
+      providerStorageDetail(providerStorageDescriptionRequest(personal)),
+    ).toBe('personal.yaml · me@example.com')
+    expect(providerStorageDetail(providerStorageDescriptionRequest(work))).toBe(
       'work.yaml · me@example.com',
     )
-    expect(providerStorageDetail({ provider: personal })).not.toBe(
-      providerStorageDetail({ provider: work }),
-    )
+    expect(
+      providerStorageDetail(providerStorageDescriptionRequest(personal)),
+    ).not.toBe(providerStorageDetail(providerStorageDescriptionRequest(work)))
   })
 })
 
@@ -203,42 +211,42 @@ describe('formatDriveStorageRef', () => {
 
 describe('providerDefaultLabel', () => {
   test('includes repo name for non-default GitHub repositories', () => {
-    expect(
-      providerDefaultLabel({
-        type: 'github',
-        options: { detail: 'team-vault' },
-      }),
-    ).toBe('GitHub · team-vault')
+    const request: ProviderLabelRequest = {
+      type: 'github',
+      detail: 'team-vault',
+      oauthPreset: 'google-drive',
+    }
+    expect(providerDefaultLabel(request)).toBe('GitHub · team-vault')
   })
 
   test('includes file name for non-default Google Drive vaults', () => {
-    expect(
-      providerDefaultLabel({
-        type: 'oauth-file',
-        options: { detail: 'work.yaml' },
-      }),
-    ).toBe('Google Drive · work.yaml')
-    expect(providerDefaultLabel({ type: 'oauth-file', options: {} })).toBe(
-      'Google Drive',
+    const detailedRequest: ProviderLabelRequest = {
+      type: 'oauth-file',
+      detail: 'work.yaml',
+      oauthPreset: 'google-drive',
+    }
+    expect(providerDefaultLabel(detailedRequest)).toBe(
+      'Google Drive · work.yaml',
     )
+    const defaultRequest: ProviderLabelWithoutDetailRequest = {
+      type: 'oauth-file',
+      oauthPreset: 'google-drive',
+    }
+    expect(providerLabelWithoutDetail(defaultRequest)).toBe('Google Drive')
   })
 
   test('includes file name for non-default iCloud vaults', () => {
-    expect(
-      providerDefaultLabel({
-        type: 'oauth-file',
-        options: {
-          detail: 'work.yaml',
-          oauthPreset: 'icloud',
-        },
-      }),
-    ).toBe('iCloud · work.yaml')
-    expect(
-      providerDefaultLabel({
-        type: 'oauth-file',
-        options: { oauthPreset: 'icloud' },
-      }),
-    ).toBe('iCloud')
+    const detailedRequest: ProviderLabelRequest = {
+      type: 'oauth-file',
+      detail: 'work.yaml',
+      oauthPreset: 'icloud',
+    }
+    expect(providerDefaultLabel(detailedRequest)).toBe('iCloud · work.yaml')
+    const defaultRequest: ProviderLabelWithoutDetailRequest = {
+      type: 'oauth-file',
+      oauthPreset: 'icloud',
+    }
+    expect(providerLabelWithoutDetail(defaultRequest)).toBe('iCloud')
   })
 })
 

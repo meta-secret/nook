@@ -15,8 +15,8 @@
   } from '$lib/auth/providers'
   import {
     GITHUB_PROVIDER_TYPE,
+    localizedProviderStorageDetail,
     localizeProviderLabel,
-    providerStorageDetail,
   } from '$lib/auth/providers'
   import { SentinelGenesisPhase } from '$app-wasm'
 
@@ -175,7 +175,7 @@
                   class="truncate text-xs text-muted-foreground"
                   data-testid="provider-detail-{provider.id}"
                 >
-                  {(() => { const providerStorageDetailArgs: Parameters<typeof providerStorageDetail>[0] = { provider, t: vault.t }; return providerStorageDetail(providerStorageDetailArgs); })()}
+                  {(() => { const localizedProviderStorageDetailRequest: Parameters<typeof localizedProviderStorageDetail>[0] = { provider, t: vault.t }; return localizedProviderStorageDetail(localizedProviderStorageDetailRequest); })()}
                 </div>
               </div>
               {#if onRemoveProvider}

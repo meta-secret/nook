@@ -508,14 +508,15 @@ export type AuthProviderPersistence = {
   readonly snapshot: AuthProvidersSnapshot;
 };
 
-export type ProviderLabelDetails = {
-  readonly detail?: string;
-  readonly oauthPreset?: OAuthFilePreset;
-};
-
 export type ProviderLabelRequest = {
   readonly type: StorageProviderType;
-  readonly options: ProviderLabelDetails;
+  readonly detail: string;
+  readonly oauthPreset: OAuthFilePreset;
+};
+
+export type ProviderLabelWithoutDetailRequest = {
+  readonly type: StorageProviderType;
+  readonly oauthPreset: OAuthFilePreset;
 };
 
 export type ProviderLabelLocalization = {
@@ -584,12 +585,17 @@ export async function saveAuthProviders({
 
 export function providerDefaultLabel({
   type,
-  options,
+  detail,
+  oauthPreset,
 }: ProviderLabelRequest): string {
-  const oauthPreset = options.oauthPreset ?? "google-drive";
-  return typeof options.detail === "string"
-    ? provider_default_label(type, options.detail, oauthPreset)
-    : provider_default_label_without_detail(type, oauthPreset);
+  return provider_default_label(type, detail, oauthPreset);
+}
+
+export function providerLabelWithoutDetail({
+  type,
+  oauthPreset,
+}: ProviderLabelWithoutDetailRequest): string {
+  return provider_default_label_without_detail(type, oauthPreset);
 }
 
 export function localizeProviderLabel({
@@ -618,45 +624,76 @@ export type GithubPatDisplay =
 
 export type GithubPatHintRequest = {
   readonly state: GithubPatDisplay;
-  readonly t?: (key: string) => string;
 };
 
-export type ProviderStorageDescription = {
+export type ProviderStorageDescriptionRequest = {
   readonly provider: StorageProvider;
-  readonly t?: (key: string) => string;
 };
 
-export function maskGithubPat({ state, t }: GithubPatHintRequest): string {
+export type LocalizedProviderStorageDescriptionRequest =
+  ProviderStorageDescriptionRequest & {
+    readonly t: (key: string) => string;
+  };
+
+type GithubPatHintRendering = {
+  readonly state: GithubPatDisplay;
+  readonly missingLabel: string;
+};
+
+function githubPatHint({
+  state,
+  missingLabel,
+}: GithubPatHintRendering): string {
   const hint = mask_github_pat_hint(
     state.kind === GithubPatDisplayKind.Stored
       ? storedGithubPat(state.pat)
       : missingGithubPat(),
   );
   try {
-    if (hint.state === NookGithubPatHintState.Missing) {
-      return t ? t(I18N_KEYS.AuthStorageNoTokenSaved) : "No token saved";
-    }
-    return hint.value;
+    return hint.state === NookGithubPatHintState.Missing
+      ? missingLabel
+      : hint.value;
   } finally {
     hint.free();
   }
 }
 
-/** Secondary line for provider rows in management / picker UIs. */
+export function maskGithubPat({ state }: GithubPatHintRequest): string {
+  const githubPatHintRequest: Parameters<typeof githubPatHint>[0] = {
+    state,
+    missingLabel: "No token saved",
+  };
+  return githubPatHint(githubPatHintRequest);
+}
+
 export function providerStorageDetail({
   provider,
-  t,
-}: ProviderStorageDescription): string {
+}: ProviderStorageDescriptionRequest): string {
   return provider_storage_detail(
     provider,
-    t
-      ? t(I18N_KEYS.ProviderPickerThisDeviceDesc)
-      : "Vault in browser storage on this device",
-    t ? t(I18N_KEYS.AuthStorageNoTokenSaved) : "No token saved",
-    t ? t(I18N_KEYS.AuthStorageGoogleSignedIn) : "Signed in with Google",
-    t ? t(I18N_KEYS.AuthStorageIcloudSignedIn) : "Signed in with iCloud",
-    t ? t(I18N_KEYS.AuthStorageGoogleNotSignedIn) : "Not signed in",
-    t ? t(I18N_KEYS.AuthStorageIcloudNotSignedIn) : "Not signed in with iCloud",
-    t ? t(I18N_KEYS.AuthStorageLocalFolderNeedsReconnect) : "Choose folder",
+    "Vault in browser storage on this device",
+    "No token saved",
+    "Signed in with Google",
+    "Signed in with iCloud",
+    "Not signed in",
+    "Not signed in with iCloud",
+    "Choose folder",
+  );
+}
+
+/** Secondary line for provider rows in management / picker UIs. */
+export function localizedProviderStorageDetail({
+  provider,
+  t,
+}: LocalizedProviderStorageDescriptionRequest): string {
+  return provider_storage_detail(
+    provider,
+    t(I18N_KEYS.ProviderPickerThisDeviceDesc),
+    t(I18N_KEYS.AuthStorageNoTokenSaved),
+    t(I18N_KEYS.AuthStorageGoogleSignedIn),
+    t(I18N_KEYS.AuthStorageIcloudSignedIn),
+    t(I18N_KEYS.AuthStorageGoogleNotSignedIn),
+    t(I18N_KEYS.AuthStorageIcloudNotSignedIn),
+    t(I18N_KEYS.AuthStorageLocalFolderNeedsReconnect),
   );
 }
