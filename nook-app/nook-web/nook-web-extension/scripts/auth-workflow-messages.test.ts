@@ -85,6 +85,20 @@ describe('authentication workflow snapshot messages', () => {
         ...validMessage,
         payload: {
           ...validMessage.payload,
+          observations: [
+            {
+              ...validMessage.payload.observations[0],
+              matchingPasskeyAccountCount: 101,
+            },
+          ],
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
           observations: Array.from(
             { length: 21 },
             () => validMessage.payload.observations[0],

@@ -99,7 +99,7 @@ async function matchingPasskeyAccountCountForOrigin({
     const response = await sendSessionMessage(nookTypedArgs0_1)
     count += passkeyAccountsFromSession(response).length
   }
-  return Math.min(count, 100)
+  return count
 }
 
 export /** Never fail a workflow snapshot on passkey lookup; slow/failed → 0. */
