@@ -73,7 +73,10 @@ import {
   performWebsitePasskey,
   websitePasskeyOptions,
 } from './service-worker/passkey-operations'
-import { routeExtensionLifecycleMessage } from './service-worker/extension-lifecycle-routing'
+import {
+  ExtensionLifecycleRoutingResult,
+  routeExtensionLifecycleMessage,
+} from './service-worker/extension-lifecycle-routing'
 import { routeExternalCompanionMessage } from './service-worker/external-companion-routing'
 import {
   AuthenticationWorkflowSnapshotKind,
@@ -94,7 +97,9 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     sendResponse,
   }
   const lifecycleResult = routeExtensionLifecycleMessage(lifecycleRoutingArgs)
-  if (lifecycleResult !== undefined) return lifecycleResult
+  if (lifecycleResult !== ExtensionLifecycleRoutingResult.Unhandled) {
+    return lifecycleResult
+  }
 
   if (isWebsiteLoginPickerOpenMessage(message)) {
     const nookTypedArgs0_0: Parameters<typeof openWebsiteLoginPicker>[0] = {

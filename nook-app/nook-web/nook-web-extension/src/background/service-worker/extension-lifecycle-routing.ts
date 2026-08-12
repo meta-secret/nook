@@ -55,11 +55,15 @@ const pairingLaunchFailureResponse = {
   reason: 'pairing-launch-failed',
 }
 
+export enum ExtensionLifecycleRoutingResult {
+  Unhandled = 'unhandled',
+}
+
 export function routeExtensionLifecycleMessage({
   message,
   sender,
   sendResponse,
-}: ExtensionLifecycleRoutingArgs): boolean | undefined {
+}: ExtensionLifecycleRoutingArgs): boolean | ExtensionLifecycleRoutingResult {
   if (isExtensionPairingStateQueryMessage(message)) {
     const queryContext: Parameters<typeof handlePairingStateQuery>[0] = {
       sender,
@@ -179,5 +183,5 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  return undefined
+  return ExtensionLifecycleRoutingResult.Unhandled
 }
