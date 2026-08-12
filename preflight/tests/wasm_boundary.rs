@@ -231,6 +231,56 @@ invoke();"#,
             "dynamic-import-callback.ts",
             r#"import("$app-wasm").then(({ generate_secret_id: generateSecretId }) => generateSecretId());"#,
         ),
+        (
+            "template-const.svelte",
+            r#"<script lang="ts">
+import * as wasm from "$app-wasm";
+</script>
+{#if ready}{@const generateSecretId = wasm.generate_secret_id}{generateSecretId()}{/if}"#,
+        ),
+        (
+            "destructuring-assignment.ts",
+            r#"let generate_secret_id;
+({ generate_secret_id } = await import("$app-wasm"));
+const generateSecretId = generate_secret_id;"#,
+        ),
+        (
+            "assigned-factory.ts",
+            r#"import { NookVaultManager } from "$app-wasm";
+export function getVaultManager(): NookVaultManager { throw new Error(); }"#,
+        ),
+        (
+            "assigned-factory-consumer.ts",
+            r#"import { getVaultManager } from "./assigned-factory";
+let manager;
+manager = await getVaultManager();
+const connectVault = manager.connect;"#,
+        ),
+        (
+            "runtime-receiver-false-positive.ts",
+            r"const receiver = (window.__nookVault, sdk);
+const manager = receiver.requireManager();
+const openSocket = manager.connect;",
+        ),
+        (
+            "escaped-identifier.ts",
+            "import * as wasm from \"$app-wasm\";\nconst generateSecretId = wasm.generate_\\u0073ecret_id;",
+        ),
+        (
+            "scoped-factory-false-positive.ts",
+            r#"import { create } from "third-party";
+import { NookVaultManager } from "$app-wasm";
+function nested() { function create(): NookVaultManager { throw new Error(); } }
+const manager = create();
+const openSocket = manager.connect;"#,
+        ),
+        (
+            "var-namespace.ts",
+            r#"async function load() {
+  { var wasm = await import("$app-wasm"); }
+  const generateSecretId = wasm.generate_secret_id;
+}"#,
+        ),
     ]
 }
 
@@ -253,6 +303,11 @@ fn expected_wasm_callable_alias_locations() -> Vec<(PathBuf, usize)> {
         ("template-member.ts", 2),
         ("forward-closure.ts", 2),
         ("dynamic-import-callback.ts", 1),
+        ("template-const.svelte", 4),
+        ("destructuring-assignment.ts", 3),
+        ("assigned-factory-consumer.ts", 4),
+        ("escaped-identifier.ts", 2),
+        ("var-namespace.ts", 3),
     ]
     .into_iter()
     .map(|(name, line)| (Path::new("nook-app/nook-web").join(name), line))

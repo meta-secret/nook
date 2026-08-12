@@ -18,7 +18,7 @@ pub(super) fn collect_scoped_dynamic_callable_bindings(
     lines: &mut Vec<usize>,
     first_line: usize,
 ) {
-    collect_variable_pattern(
+    collect_assigned_pattern(
         node,
         source,
         source_path,
@@ -55,7 +55,7 @@ pub(super) fn collect_scoped_dynamic_callable_bindings(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn collect_variable_pattern(
+fn collect_assigned_pattern(
     node: tree_sitter::Node<'_>,
     source: &str,
     source_path: &Path,
@@ -66,12 +66,14 @@ fn collect_variable_pattern(
     lines: &mut Vec<usize>,
     first_line: usize,
 ) {
-    if node.kind() != "variable_declarator" {
+    if !matches!(node.kind(), "variable_declarator" | "assignment_expression") {
         return;
     }
     let (Some(pattern), Some(value)) = (
-        node.child_by_field_name("name"),
-        node.child_by_field_name("value"),
+        node.child_by_field_name("name")
+            .or_else(|| node.child_by_field_name("left")),
+        node.child_by_field_name("value")
+            .or_else(|| node.child_by_field_name("right")),
     ) else {
         return;
     };

@@ -24,7 +24,7 @@ pub(super) fn semantic_javascript_name(
     if matches!(node.kind(), "string" | "template_string") {
         static_javascript_string(node, source)
     } else {
-        Some(text.to_owned())
+        decode_javascript_escapes(text)
     }
 }
 

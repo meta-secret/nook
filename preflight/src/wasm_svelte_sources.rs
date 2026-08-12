@@ -15,59 +15,44 @@ pub(super) fn svelte_wasm_import_alias_lines(
     let Some(tree) = parser.parse(source, None) else {
         return Ok(Vec::new());
     };
-    let mut lines = Vec::new();
-    collect_svelte_wasm_import_aliases(
-        tree.root_node(),
-        source,
+    let mut composite = source
+        .bytes()
+        .map(|byte| if byte == b'\n' { byte } else { b' ' })
+        .collect::<Vec<_>>();
+    collect_svelte_typescript(tree.root_node(), source, &mut composite);
+    let composite = String::from_utf8_lossy(&composite);
+    let mut lines = typescript_wasm_import_alias_lines_at_path(
+        &composite,
         source_path,
+        1,
         callable_names,
         wasm_type_names,
         wasm_methods_by_type,
-        &mut lines,
     )?;
     lines.sort_unstable();
     lines.dedup();
     Ok(lines)
 }
 
-fn collect_svelte_wasm_import_aliases(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    source_path: &Path,
-    callable_names: &HashSet<String>,
-    wasm_type_names: &HashSet<String>,
-    wasm_methods_by_type: &HashMap<String, HashSet<String>>,
-    lines: &mut Vec<usize>,
-) -> Result<(), tree_sitter::LanguageError> {
+fn collect_svelte_typescript(node: tree_sitter::Node<'_>, source: &str, composite: &mut [u8]) {
     if node.kind() == "raw_text"
         && node
             .parent()
             .is_some_and(|parent| parent.kind() == "script_element")
     {
-        if let Ok(fragment) = node.utf8_text(source.as_bytes()) {
-            lines.extend(typescript_wasm_import_alias_lines_at_path(
-                fragment,
-                source_path,
-                node.start_position().row + 1,
-                callable_names,
-                wasm_type_names,
-                wasm_methods_by_type,
-            )?);
-        }
-        return Ok(());
+        composite[node.byte_range()].copy_from_slice(&source.as_bytes()[node.byte_range()]);
+        return;
+    }
+    if node.kind() == "const_tag" {
+        let start = node.start_byte() + "{@const".len();
+        let end = node.end_byte() - 1;
+        composite[start..end].copy_from_slice(&source.as_bytes()[start..end]);
+        composite[end] = b';';
+        return;
     }
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_svelte_wasm_import_aliases(
-            child,
-            source,
-            source_path,
-            callable_names,
-            wasm_type_names,
-            wasm_methods_by_type,
-            lines,
-        )?;
+        collect_svelte_typescript(child, source, composite);
     }
-    Ok(())
 }

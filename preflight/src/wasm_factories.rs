@@ -4,13 +4,15 @@ use std::path::Path;
 use crate::javascript_literals::{
     semantic_javascript_name as semantic_node_name, static_javascript_string,
 };
+use crate::javascript_scopes::ScopedBinding;
+use crate::wasm_dynamic_aliases::scoped_binding;
 use crate::wasm_module_sources::wasm_factory_return_type;
 
 pub(super) fn collect_wasm_instance_factories(
     node: tree_sitter::Node<'_>,
     source: &str,
     wasm_class_bindings: &HashMap<String, String>,
-    factories: &mut HashMap<String, String>,
+    factories: &mut Vec<ScopedBinding>,
 ) {
     if matches!(
         node.kind(),
@@ -22,9 +24,16 @@ pub(super) fn collect_wasm_instance_factories(
     ) && let Some(wasm_type) = node
         .child_by_field_name("return_type")
         .and_then(|return_type| referenced_wasm_class(return_type, source, wasm_class_bindings))
-        && let Some(name) = callable_declaration_name(node, source)
+        && let Some(binding) = callable_declaration_binding(node)
+        && let Some(mut factory) = scoped_binding(binding, source, Some(wasm_type), None)
     {
-        factories.insert(name, wasm_type);
+        if matches!(
+            node.kind(),
+            "function_declaration" | "generator_function_declaration"
+        ) {
+            factory.declaration_end = factory.scope_start;
+        }
+        factories.push(factory);
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
@@ -143,11 +152,15 @@ pub(super) fn collect_factory_calls_for_receivers(
     receivers: &HashSet<String>,
     called_bindings: &mut HashSet<String>,
 ) {
-    if node.kind() == "variable_declarator"
-        && let Some(binding) = node.child_by_field_name("name")
+    if matches!(node.kind(), "variable_declarator" | "assignment_expression")
+        && let Some(binding) = node
+            .child_by_field_name("name")
+            .or_else(|| node.child_by_field_name("left"))
         && let Some(binding_name) = semantic_node_name(binding, source)
         && receivers.contains(&binding_name)
-        && let Some(value) = node.child_by_field_name("value")
+        && let Some(value) = node
+            .child_by_field_name("value")
+            .or_else(|| node.child_by_field_name("right"))
         && let Some(factory_name) = called_identifier(value, source)
     {
         called_bindings.insert(factory_name);
@@ -175,16 +188,13 @@ fn called_identifier(node: tree_sitter::Node<'_>, source: &str) -> Option<String
         .flatten()
 }
 
-fn callable_declaration_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
-    node.child_by_field_name("name")
-        .and_then(|name| semantic_node_name(name, source))
-        .or_else(|| {
-            let declarator = node.parent()?;
-            (declarator.kind() == "variable_declarator")
-                .then(|| declarator.child_by_field_name("name"))
-                .flatten()
-                .and_then(|name| semantic_node_name(name, source))
-        })
+fn callable_declaration_binding(node: tree_sitter::Node<'_>) -> Option<tree_sitter::Node<'_>> {
+    node.child_by_field_name("name").or_else(|| {
+        let declarator = node.parent()?;
+        (declarator.kind() == "variable_declarator")
+            .then(|| declarator.child_by_field_name("name"))
+            .flatten()
+    })
 }
 
 fn referenced_wasm_class(

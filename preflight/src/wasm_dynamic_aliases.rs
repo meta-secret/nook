@@ -147,22 +147,18 @@ fn expression_contains_property(
     source: &str,
     property_name: &str,
 ) -> bool {
+    let node = unwrap_transparent_expression(node);
     if matches!(node.kind(), "member_expression" | "subscript_expression") {
         let property = if node.kind() == "subscript_expression" {
             node.child_by_field_name("index")
         } else {
             node.child_by_field_name("property")
         };
-        if property
+        return property
             .and_then(|property| semantic_node_name(property, source))
-            .is_some_and(|property| property == property_name)
-        {
-            return true;
-        }
+            .is_some_and(|property| property == property_name);
     }
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor)
-        .any(|child| expression_contains_property(child, source, property_name))
+    false
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -184,7 +180,8 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
     let mut scoped_wasm_instances = Vec::new();
     let mut scoped_wasm_callables = Vec::new();
     let mut scoped_wasm_runtime_receivers = Vec::new();
-    let mut wasm_instance_factories = HashMap::new();
+    let mut scoped_wasm_factories = Vec::new();
+    let mut imported_wasm_factories = HashMap::new();
     let mut member_alias_receivers = HashSet::new();
     let mut called_bindings = HashSet::new();
     collect_member_alias_receiver_names(node, source, callable_names, &mut member_alias_receivers);
@@ -198,7 +195,7 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         node,
         source,
         wasm_class_bindings,
-        &mut wasm_instance_factories,
+        &mut scoped_wasm_factories,
     );
     collect_imported_wasm_instance_factories(
         node,
@@ -206,7 +203,7 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         source_path,
         wasm_type_names,
         &called_bindings,
-        &mut wasm_instance_factories,
+        &mut imported_wasm_factories,
     );
     collect_wasm_runtime_receivers(node, source, &mut scoped_wasm_runtime_receivers);
     collect_scoped_dynamic_callable_bindings(
@@ -231,7 +228,8 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         wasm_namespace_bindings,
         wasm_class_bindings,
         wasm_instance_bindings,
-        &wasm_instance_factories,
+        &imported_wasm_factories,
+        &scoped_wasm_factories,
         &scoped_wasm_runtime_receivers,
         &mut scoped_wasm_namespaces,
         &mut scoped_wasm_instances,
@@ -250,7 +248,8 @@ pub(super) fn collect_dynamic_wasm_aliases_and_bindings(
         wasm_namespace_bindings,
         wasm_class_bindings,
         wasm_instance_bindings,
-        &wasm_instance_factories,
+        &imported_wasm_factories,
+        &scoped_wasm_factories,
         &scoped_wasm_runtime_receivers,
         &mut scoped_wasm_namespaces,
         &mut scoped_wasm_instances,
@@ -273,6 +272,7 @@ fn collect_dynamic_wasm_aliases(
     wasm_class_bindings: &HashMap<String, String>,
     wasm_instance_bindings: &mut HashMap<String, String>,
     wasm_instance_factories: &HashMap<String, String>,
+    scoped_wasm_factories: &[ScopedBinding],
     scoped_wasm_runtime_receivers: &[ScopedBinding],
     scoped_wasm_namespaces: &mut Vec<ScopedBinding>,
     scoped_wasm_instances: &mut Vec<ScopedBinding>,
@@ -305,6 +305,7 @@ fn collect_dynamic_wasm_aliases(
             wasm_class_bindings,
             wasm_instance_bindings,
             wasm_instance_factories,
+            scoped_wasm_factories,
             scoped_wasm_runtime_receivers,
             scoped_wasm_namespaces,
             scoped_wasm_instances,
@@ -333,6 +334,7 @@ fn collect_dynamic_wasm_aliases(
             wasm_class_bindings,
             wasm_instance_bindings,
             wasm_instance_factories,
+            scoped_wasm_factories,
             scoped_wasm_runtime_receivers,
             scoped_wasm_namespaces,
             scoped_wasm_instances,
@@ -359,6 +361,7 @@ fn collect_dynamic_wasm_aliases(
             wasm_class_bindings,
             wasm_instance_bindings,
             wasm_instance_factories,
+            scoped_wasm_factories,
             scoped_wasm_runtime_receivers,
             scoped_wasm_namespaces,
             scoped_wasm_instances,
@@ -400,6 +403,7 @@ fn collect_binding_aliases(
     wasm_class_bindings: &HashMap<String, String>,
     wasm_instance_bindings: &HashMap<String, String>,
     wasm_instance_factories: &HashMap<String, String>,
+    scoped_wasm_factories: &[ScopedBinding],
     scoped_wasm_runtime_receivers: &[ScopedBinding],
     scoped_wasm_namespaces: &mut Vec<ScopedBinding>,
     scoped_wasm_instances: &mut Vec<ScopedBinding>,
@@ -428,6 +432,7 @@ fn collect_binding_aliases(
         wasm_namespace_bindings,
         wasm_type_names,
         wasm_instance_factories,
+        scoped_wasm_factories,
         scoped_wasm_runtime_receivers,
         wasm_instance_bindings,
         scoped_wasm_instances,
@@ -532,6 +537,7 @@ fn wasm_instance_binding(
     wasm_namespace_bindings: &HashMap<String, String>,
     wasm_type_names: &HashSet<String>,
     wasm_instance_factories: &HashMap<String, String>,
+    scoped_wasm_factories: &[ScopedBinding],
     scoped_wasm_runtime_receivers: &[ScopedBinding],
     wasm_instance_bindings: &HashMap<String, String>,
     scoped_wasm_instances: &[ScopedBinding],
@@ -546,6 +552,7 @@ fn wasm_instance_binding(
         wasm_namespace_bindings,
         wasm_type_names,
         wasm_instance_factories,
+        scoped_wasm_factories,
         scoped_wasm_runtime_receivers,
         wasm_instance_bindings,
         scoped_wasm_instances,
@@ -563,6 +570,7 @@ fn value_is_wasm_instance(
     wasm_namespace_bindings: &HashMap<String, String>,
     wasm_type_names: &HashSet<String>,
     wasm_instance_factories: &HashMap<String, String>,
+    scoped_wasm_factories: &[ScopedBinding],
     scoped_wasm_runtime_receivers: &[ScopedBinding],
     wasm_instance_bindings: &HashMap<String, String>,
     scoped_wasm_instances: &[ScopedBinding],
@@ -607,6 +615,11 @@ fn value_is_wasm_instance(
         {
             return Some("NookVaultManager".to_owned());
         }
+        if let Some(wasm_type) =
+            scoped_wasm_type_visible(function, &name, source, scoped_wasm_factories)
+        {
+            return Some(wasm_type);
+        }
         if root_binding_is_visible(function, &name, source)
             && let Some(wasm_type) = wasm_instance_factories.get(&name)
         {
@@ -623,6 +636,7 @@ fn value_is_wasm_instance(
                 wasm_namespace_bindings,
                 wasm_type_names,
                 wasm_instance_factories,
+                scoped_wasm_factories,
                 scoped_wasm_runtime_receivers,
                 wasm_instance_bindings,
                 scoped_wasm_instances,
@@ -719,10 +733,23 @@ pub(super) fn scoped_binding(
     wasm_module: Option<String>,
 ) -> Option<ScopedBinding> {
     let name = binding.utf8_text(source.as_bytes()).ok()?.to_owned();
+    let is_var = binding_is_var(binding, source);
     let mut ancestor = binding.parent();
     let scope = loop {
         let candidate = ancestor?;
-        if matches!(candidate.kind(), "statement_block" | "program") {
+        let function_body = candidate.kind() == "statement_block"
+            && candidate.parent().is_some_and(|parent| {
+                matches!(
+                    parent.kind(),
+                    "function_declaration"
+                        | "function_expression"
+                        | "generator_function"
+                        | "arrow_function"
+                )
+            });
+        if candidate.kind() == "program"
+            || (candidate.kind() == "statement_block" && (!is_var || function_body))
+        {
             break candidate;
         }
         ancestor = candidate.parent();
@@ -735,6 +762,19 @@ pub(super) fn scoped_binding(
         wasm_type,
         wasm_module,
     })
+}
+
+fn binding_is_var(binding: tree_sitter::Node<'_>, source: &str) -> bool {
+    let mut ancestor = binding.parent();
+    while let Some(node) = ancestor {
+        if matches!(node.kind(), "variable_declaration" | "lexical_declaration") {
+            return node
+                .utf8_text(source.as_bytes())
+                .is_ok_and(|text| text.trim_start().starts_with("var "));
+        }
+        ancestor = node.parent();
+    }
+    false
 }
 
 pub(super) fn wasm_module_specifier(
