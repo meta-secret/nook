@@ -30,6 +30,8 @@ import {
   NookDuplicateSyncProviderState,
   NookStoredOAuthFileConfigurationState,
   stored_oauth_file_configuration_state,
+  NookStoredLocalFolderConfigurationState,
+  stored_local_folder_configuration_state,
   NookOAuthAccessTokenKind as OAuthAccessTokenKind,
   type AuthProvidersSnapshot,
   type ActiveVaultScope,
@@ -453,6 +455,20 @@ export function isConfiguredOAuthFile(
   return (
     stored_oauth_file_configuration_state(configuration) ===
     NookStoredOAuthFileConfigurationState.Configured
+  );
+}
+
+export { NookStoredLocalFolderConfigurationState };
+
+export function isConfiguredLocalFolder(
+  configuration: StoredLocalFolderConfiguration,
+): configuration is Extract<
+  StoredLocalFolderConfiguration,
+  { config: LocalFolderConfig }
+> {
+  return (
+    stored_local_folder_configuration_state(configuration) ===
+    NookStoredLocalFolderConfigurationState.Configured
   );
 }
 

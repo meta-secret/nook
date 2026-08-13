@@ -1,6 +1,7 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 /** Provider actions that snapshot reactive Svelte state at WASM boundaries. */
 import type {
+  ActiveProviderCredentialsContext,
   ProviderActionsContext,
   ProviderSaveContext,
 } from "$lib/vault/action-contexts";
@@ -12,8 +13,6 @@ import {
   configuredLocalFolder,
   configuredOAuthFile,
   GITHUB_PROVIDER_TYPE,
-  githubPatValue,
-  githubRepositoryValue,
   LOCAL_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
   localFolderHandle,
@@ -22,6 +21,7 @@ import {
   LocalFolderProviderConfigurationKind,
   localFolderConfigurationNotApplicable,
   isConfiguredOAuthFile,
+  isConfiguredLocalFolder,
   missingOAuthAccessToken,
   OAUTH_FILE_PROVIDER_TYPE,
   oauthAccessToken,
@@ -42,13 +42,16 @@ import {
   unknownOAuthTokenExpiry,
   unresolvedOAuthRemoteFileId,
   type LocalFolderHandle,
-  type OAuthFileName,
   type ProviderSetupRequest,
   type StorageProvider,
   type StorageProviderType,
 } from "$lib/auth/providers";
 import {
   apply_provider_save_policy,
+  active_provider_login_setup,
+  active_provider_credentials_projection_draft,
+  active_provider_credentials_projection,
+  active_provider_credentials_projection_state,
   authenticated_vault_storage_args,
   draft_github_storage_args,
   draft_local_storage_args,
@@ -58,8 +61,10 @@ import {
   has_local_vault,
   has_local_folder_credentials,
   has_oauth_credentials,
+  inactive_provider_login_setup,
   new_provider_save_setup,
   NookProviderSaveOutcomeState,
+  NookActiveProviderCredentialsProjectionState,
   NookOAuthRemoteConfigurationUpdateState,
   NookStagedStorageArgsState,
   provider_wasm_args,
@@ -76,6 +81,7 @@ import {
   update_oauth_remote_ref,
   local_vault_storage_args,
   type NookStorageConnectArgs,
+  type ActiveProviderCredentialsRequest,
   type ProviderSaveRequest,
 } from "$app-wasm";
 import { createLogger } from "$lib/runtime/log";
@@ -457,71 +463,50 @@ export async function promoteSessionVaultToLocalIfNeeded(
   }
 }
 
-export function applyActiveProviderCredentials(state: ProviderActionsContext) {
-  if (state.localVaultPresent) {
-    state.storageMode = "local";
-    state.githubPat = "";
-    state.clearOauthFile();
-    state.clearLocalFolder();
+export function applyActiveProviderCredentials(
+  state: ActiveProviderCredentialsContext,
+) {
+  const currentOauthFile =
+    state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? configuredOAuthFile($state.snapshot(state.oauthFileDraft.config))
+      : oauthConfigurationNotApplicable();
+  const currentLocalFolder =
+    state.localFolderDraft.kind === LocalFolderDraftKind.Configured
+      ? configuredLocalFolder($state.snapshot(state.localFolderDraft.config))
+      : localFolderConfigurationNotApplicable();
+  const loginSetup =
+    state.loginSetup.kind === LoginSetupKind.Active
+      ? active_provider_login_setup(state.loginSetup.providerType)
+      : inactive_provider_login_setup();
+  const projectionArgs: ActiveProviderCredentialsRequest = {
+    localVaultPresent: state.localVaultPresent,
+    loginSetup,
+    syncProviders: $state.snapshot(state.syncProviders),
+    currentStorageMode: state.storageMode,
+    currentGithubPat: state.githubPat,
+    currentGithubRepo: state.githubRepo,
+    currentOauthFile,
+    currentLocalFolder,
+  };
+  const projection = active_provider_credentials_projection(projectionArgs);
+  if (
+    active_provider_credentials_projection_state(projection) ===
+    NookActiveProviderCredentialsProjectionState.Unchanged
+  ) {
     return;
   }
-
-  if (state.loginSetup.kind === LoginSetupKind.Active) {
-    const setupType = state.loginSetup.providerType;
-    state.storageMode = setupType;
-    if (setupType !== "github") {
-      state.githubPat = "";
-    }
-    if (setupType !== "oauth-file") {
-      state.clearOauthFile();
-    }
-    if (setupType !== "local-folder") {
-      state.clearLocalFolder();
-    }
-    return;
-  }
-
-  const syncProvider = state.syncProviders[0];
-  if (!syncProvider) {
-    return;
-  }
-
-  state.storageMode = syncProvider.type;
-  state.githubPat = githubPatValue(syncProvider.githubPat);
-  if (syncProvider.type === "oauth-file") {
-    const oauthConfiguration = syncProvider.oauthFile;
-    if (isConfiguredOAuthFile(oauthConfiguration)) {
-      state.configureOauthFile(oauthConfiguration.config);
-    } else {
-      state.clearOauthFile();
-    }
-    state.clearLocalFolder();
-    const remoteFileName: OAuthFileName = isConfiguredOAuthFile(
-      oauthConfiguration,
-    )
-      ? oauthFileName(oauthConfiguration.config)
-      : { kind: OAuthFileNameKind.Unresolved };
-    state.githubRepo =
-      remoteFileName.kind === OAuthFileNameKind.Resolved
-        ? remoteFileName.fileName
-        : DEFAULT_DRIVE_BACKUP_NAME;
-  } else if (syncProvider.type === "local-folder") {
-    const localFolderConfiguration =
-      localFolderProviderConfiguration(syncProvider);
-    if (
-      localFolderConfiguration.kind ===
-      LocalFolderProviderConfigurationKind.Configured
-    ) {
-      state.configureLocalFolder(localFolderConfiguration.config);
-    } else {
-      state.clearLocalFolder();
-    }
-    state.githubRepo = DEFAULT_GITHUB_REPO;
-    state.clearOauthFile();
+  const draft = active_provider_credentials_projection_draft(projection);
+  state.storageMode = draft.storageMode;
+  state.githubPat = draft.githubPat;
+  state.githubRepo = draft.githubRepo;
+  if (isConfiguredOAuthFile(draft.oauthFile)) {
+    state.configureOauthFile(draft.oauthFile.config);
   } else {
-    state.githubRepo =
-      githubRepositoryValue(syncProvider.githubRepo) || DEFAULT_GITHUB_REPO;
     state.clearOauthFile();
+  }
+  if (isConfiguredLocalFolder(draft.localFolder)) {
+    state.configureLocalFolder(draft.localFolder.config);
+  } else {
     state.clearLocalFolder();
   }
 }

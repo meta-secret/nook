@@ -3,16 +3,31 @@ import type { Mock } from 'vitest'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
   GITHUB_PROVIDER_TYPE,
+  LOCAL_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
+  OAUTH_FILE_PROVIDER_TYPE,
+  configuredLocalFolder,
+  configuredOAuthFile,
+  defaultOAuthFileConfig,
   providerPersistenceDefaults,
   scopedProviderVault,
   storedGithubPat,
   storedGithubRepository,
+  storedLocalFolderDirectory,
+  storedLocalFolderHandle,
+  type LocalFolderConfig,
+  type OAuthFileConfig,
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth/providers'
-import type { ProviderSaveContext } from '$lib/vault/action-contexts'
-import { ensureProviderSaved } from '$lib/vault/providers.svelte'
+import type {
+  ActiveProviderCredentialsContext,
+  ProviderSaveContext,
+} from '$lib/vault/action-contexts'
+import {
+  applyActiveProviderCredentials,
+  ensureProviderSaved,
+} from '$lib/vault/providers.svelte'
 import type { TranslationRequest } from '$lib/vault/translation'
 import {
   ActiveVaultKind,
@@ -77,7 +92,91 @@ function githubProvider(): StorageProvider {
   }
 }
 
+function projectionState(
+  provider: StorageProvider,
+): ActiveProviderCredentialsContext {
+  return {
+    localVaultPresent: false,
+    loginSetup: { kind: LoginSetupKind.Inactive },
+    syncProviders: [provider],
+    storageMode: LOCAL_PROVIDER_TYPE,
+    githubPat: '',
+    githubRepo: 'nook',
+    oauthFileDraft: { kind: OAuthFileDraftKind.NotConfigured },
+    localFolderDraft: { kind: LocalFolderDraftKind.NotConfigured },
+    configureOauthFile: vi.fn(),
+    clearOauthFile: vi.fn(),
+    configureLocalFolder: vi.fn(),
+    clearLocalFolder: vi.fn(),
+  }
+}
+
+function oauthProvider(config: OAuthFileConfig): StorageProvider {
+  return {
+    ...providerPersistenceDefaults(),
+    id: 'oauth-existing',
+    type: OAUTH_FILE_PROVIDER_TYPE,
+    label: 'Google Drive',
+    oauthFile: configuredOAuthFile(config),
+    storeId: scopedProviderVault('vault-1'),
+    createdAt: '2026-08-11T00:00:00Z',
+  }
+}
+
+function localFolderProvider(config: LocalFolderConfig): StorageProvider {
+  return {
+    ...providerPersistenceDefaults(),
+    id: 'folder-existing',
+    type: LOCAL_FOLDER_PROVIDER_TYPE,
+    label: 'Local folder',
+    localFolder: configuredLocalFolder(config),
+    storeId: scopedProviderVault('vault-1'),
+    createdAt: '2026-08-11T00:00:00Z',
+  }
+}
+
 describe('provider save web adapter', () => {
+  test('applies a saved GitHub provider through the portable projection', () => {
+    const state = projectionState(githubProvider())
+
+    applyActiveProviderCredentials(state)
+
+    expect(state.storageMode).toBe(GITHUB_PROVIDER_TYPE)
+    expect(state.githubPat).toBe('pat')
+    expect(state.githubRepo).toBe('owner/repo')
+    expect(state.clearOauthFile).toHaveBeenCalledOnce()
+    expect(state.clearLocalFolder).toHaveBeenCalledOnce()
+  })
+
+  test('applies a saved OAuth-file provider through the portable projection', () => {
+    const oauthFile = defaultOAuthFileConfig({
+      preset: 'google-drive',
+      fileName: 'portable-vault.yaml',
+    })
+    const state = projectionState(oauthProvider(oauthFile))
+
+    applyActiveProviderCredentials(state)
+
+    expect(state.storageMode).toBe(OAUTH_FILE_PROVIDER_TYPE)
+    expect(state.githubRepo).toBe('portable-vault.yaml')
+    expect(state.configureOauthFile).toHaveBeenCalledWith(oauthFile)
+    expect(state.clearLocalFolder).toHaveBeenCalledOnce()
+  })
+
+  test('applies a saved local-folder provider through the portable projection', () => {
+    const localFolder: LocalFolderConfig = {
+      directoryName: storedLocalFolderDirectory('Vaults'),
+      handleId: storedLocalFolderHandle('folder-handle'),
+    }
+    const state = projectionState(localFolderProvider(localFolder))
+
+    applyActiveProviderCredentials(state)
+
+    expect(state.storageMode).toBe(LOCAL_FOLDER_PROVIDER_TYPE)
+    expect(state.configureLocalFolder).toHaveBeenCalledWith(localFolder)
+    expect(state.clearOauthFile).toHaveBeenCalledOnce()
+  })
+
   test('maps an explicit duplicate to translated state without persistence', async () => {
     const state = providerState(GITHUB_PROVIDER_TYPE)
     state.providers = [githubProvider()]

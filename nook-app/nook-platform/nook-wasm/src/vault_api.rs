@@ -23,6 +23,20 @@ pub fn new_provider_save_setup(
 }
 
 #[wasm_bindgen]
+#[must_use]
+pub fn inactive_provider_login_setup() -> nook_core::ActiveProviderLoginSetup {
+    nook_core::ActiveProviderLoginSetup::Inactive
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn active_provider_login_setup(
+    provider_type: nook_core::StorageProviderType,
+) -> nook_core::ActiveProviderLoginSetup {
+    nook_core::ActiveProviderLoginSetup::Active(provider_type)
+}
+
+#[wasm_bindgen]
 pub struct NookProviderSaveOutcome(nook_core::ProviderSaveOutcome);
 
 #[wasm_bindgen]
@@ -71,6 +85,17 @@ pub fn apply_provider_save_policy(
     request: nook_core::ProviderSaveRequest,
 ) -> NookProviderSaveOutcome {
     NookProviderSaveOutcome(nook_core::apply_provider_save_policy(&request))
+}
+
+/// Project the active provider into a portable credential draft. Browser and
+/// reactive state updates remain in the web adapter.
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn active_provider_credentials_projection(
+    request: nook_core::ActiveProviderCredentialsRequest,
+) -> nook_core::ActiveProviderCredentialsProjection {
+    nook_core::active_provider_credentials_projection(&request)
 }
 
 #[wasm_bindgen]

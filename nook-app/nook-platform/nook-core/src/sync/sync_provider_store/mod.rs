@@ -17,6 +17,7 @@ use crate::{
     provider_replication_capability, storage_mode_for_provider, validate_provider_replication,
 };
 
+mod active_credentials;
 mod catalog;
 mod enrollment;
 mod legacy_storage;
@@ -27,6 +28,11 @@ mod state;
 mod storage_args;
 mod sync_metadata;
 
+pub use active_credentials::{
+    ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,
+    ActiveProviderCredentialsRequest, ActiveProviderLoginSetup,
+    active_provider_credentials_projection,
+};
 pub use catalog::{
     ensure_local_provider_row, find_duplicate_sync_provider, localize_provider_label,
     normalize_auth_snapshot, provider_storage_detail, provider_target_key,

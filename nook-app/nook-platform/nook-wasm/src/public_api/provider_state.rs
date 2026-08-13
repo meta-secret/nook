@@ -2,6 +2,42 @@ use super::{NookStorageConnectArgs, wasm_bindgen};
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookActiveProviderCredentialsProjectionState {
+    Unchanged,
+    Apply,
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn active_provider_credentials_projection_state(
+    projection: nook_core::ActiveProviderCredentialsProjection,
+) -> NookActiveProviderCredentialsProjectionState {
+    match projection {
+        nook_core::ActiveProviderCredentialsProjection::Unchanged => {
+            NookActiveProviderCredentialsProjectionState::Unchanged
+        }
+        nook_core::ActiveProviderCredentialsProjection::Apply(_) => {
+            NookActiveProviderCredentialsProjectionState::Apply
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+pub fn active_provider_credentials_projection_draft(
+    projection: nook_core::ActiveProviderCredentialsProjection,
+) -> Result<nook_core::ActiveProviderCredentialDraft, wasm_bindgen::JsError> {
+    match projection {
+        nook_core::ActiveProviderCredentialsProjection::Unchanged => Err(
+            wasm_bindgen::JsError::new("active provider credentials projection is unchanged"),
+        ),
+        nook_core::ActiveProviderCredentialsProjection::Apply(draft) => Ok(*draft),
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookStoredOAuthFileConfigurationState {
     NotApplicable,
     Configured,
@@ -19,6 +55,29 @@ pub fn stored_oauth_file_configuration_state(
         }
         nook_core::StoredOAuthFileConfiguration::Configured(_) => {
             NookStoredOAuthFileConfigurationState::Configured
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookStoredLocalFolderConfigurationState {
+    NotApplicable,
+    Configured,
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn stored_local_folder_configuration_state(
+    configuration: nook_core::StoredLocalFolderConfiguration,
+) -> NookStoredLocalFolderConfigurationState {
+    match configuration {
+        nook_core::StoredLocalFolderConfiguration::NotApplicable => {
+            NookStoredLocalFolderConfigurationState::NotApplicable
+        }
+        nook_core::StoredLocalFolderConfiguration::Configured(_) => {
+            NookStoredLocalFolderConfigurationState::Configured
         }
     }
 }
