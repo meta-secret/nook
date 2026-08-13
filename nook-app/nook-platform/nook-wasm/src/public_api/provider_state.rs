@@ -24,6 +24,19 @@ pub fn active_provider_credentials_projection_state(
 }
 
 #[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+pub fn active_provider_credentials_projection_draft(
+    projection: nook_core::ActiveProviderCredentialsProjection,
+) -> Result<nook_core::ActiveProviderCredentialDraft, wasm_bindgen::JsError> {
+    match projection {
+        nook_core::ActiveProviderCredentialsProjection::Unchanged => Err(
+            wasm_bindgen::JsError::new("active provider credentials projection is unchanged"),
+        ),
+        nook_core::ActiveProviderCredentialsProjection::Apply(draft) => Ok(*draft),
+    }
+}
+
+#[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookStoredOAuthFileConfigurationState {
     NotApplicable,

@@ -48,6 +48,7 @@ import {
 } from "$lib/auth/providers";
 import {
   apply_provider_save_policy,
+  active_provider_credentials_projection_draft,
   active_provider_credentials_projection,
   active_provider_credentials_projection_state,
   authenticated_vault_storage_args,
@@ -493,7 +494,7 @@ export function applyActiveProviderCredentials(
   ) {
     return;
   }
-  const { draft } = projection;
+  const draft = active_provider_credentials_projection_draft(projection);
   state.storageMode = draft.storageMode;
   state.githubPat = draft.githubPat;
   state.githubRepo = draft.githubRepo;
