@@ -215,24 +215,15 @@ impl IdentityRecord {
         secrets_envelope: AgeArmoredCiphertext,
         members_envelope: AgeArmoredCiphertext,
     ) -> MultiDeviceResult<()> {
-        if let Some(existing) = self
+        let existing = self
             .members
             .iter()
             .find(|member| member.app_id == *app_key.app_id())
-        {
-            if existing.auth_id != app_key.auth_id() || existing.public_key != app_key.public_key()
-            {
-                return Err(MultiDeviceError::InvalidDeviceIdentity(
-                    "existing app id has different key material".to_owned(),
-                ));
-            }
-        } else {
-            self.add_member(IdentityMember {
-                app_id: app_key.app_id().clone(),
-                auth_id: app_key.auth_id(),
-                public_key: app_key.public_key(),
-                label: None,
-            })?;
+            .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
+        if existing.auth_id != app_key.auth_id() || existing.public_key != app_key.public_key() {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "existing app id has different key material".to_owned(),
+            ));
         }
         let vault_dek = self
             .vault_deks

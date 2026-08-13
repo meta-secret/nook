@@ -5,6 +5,7 @@
 //! session-bound and encrypted to the requester.
 
 mod genesis_finalization;
+mod identity_association;
 
 use super::verified_access::VerifiedVaultAccessFlow;
 use super::{CeremonyState, NookVaultManager, VaultCryptoState};
@@ -19,16 +20,9 @@ use crate::{
     NookSecretRecord, NookSentinelGenesisStatus, NookSentinelStoredDeliverySummary,
     NookSentinelUnlockSessionStatus,
 };
-use serde::{Deserialize, Serialize};
+use identity_association::StoredSentinelGenesisDelivery;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct StoredSentinelGenesisDelivery {
-    request: nook_core::SentinelGenesisRequest,
-    delivery: nook_core::SentinelGenesisShareDelivery,
-}
 
 #[wasm_bindgen]
 impl NookVaultManager {
@@ -60,16 +54,25 @@ impl NookVaultManager {
     ) -> Result<String, JsError> {
         let package = nook_core::decode_sentinel_onboarding_package(&package_json)?;
         let identity = self.ensure_device_identity()?;
+        let identity_id =
+            identity_association::ensure_local_identity(&identity, "Personal").await?;
         let accepted = nook_core::accept_sentinel_onboarding_package(&package, &identity)?;
         let stored_json = serde_json::to_string(&StoredSentinelGenesisDelivery {
             request: package.request.clone(),
             delivery: package.delivery.clone(),
+            identity_id: Some(identity_id.clone()),
         })
         .map_err(|error| NookError::Serialization(error.to_string()))?;
         save_sentinel_genesis_share_delivery(
             package.delivery.store_id.as_str(),
             identity.device_id().as_str(),
             &stored_json,
+        )
+        .await?;
+        crate::storage::identity_record::associate_sentinel_vault_with_identity(
+            &identity_id,
+            &identity,
+            package.delivery.store_id.clone(),
         )
         .await?;
         save_auth_providers(&identity, &accepted.provider_snapshot).await?;
@@ -145,10 +148,13 @@ impl NookVaultManager {
         args.label = args.label.trim().to_owned();
         self.assign_vault_name(&args.label);
         let identity = self.ensure_device_identity()?;
+        let identity_id =
+            identity_association::ensure_local_identity(&identity, &args.label).await?;
         let signing = self.ensure_signing_identity().await?;
         let session = nook_core::start_sentinel_genesis(&identity, &signing, args)?;
         self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::from_session(&session);
         self.sentinel_genesis = CeremonyState::Active(session);
+        self.sentinel_genesis_identity_id = Some(identity_id);
         Ok(self.sentinel_genesis_status())
     }
 
@@ -408,6 +414,9 @@ impl NookVaultManager {
             .get("No Sentinel unlock ceremony is active.")?
             .clone();
         let keys = nook_core::finalize_sentinel_unlock(session, &identity)?;
+        let store_id = nook_core::StoreId::parse(&self.vault.store_id)
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        let identity_id = identity_association::identity_for_unlock(&identity, &store_id).await?;
         let records = self.stored_records_snapshot();
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
@@ -423,6 +432,12 @@ impl NookVaultManager {
                 &self.vault.store_id,
             )
             .await?;
+        crate::storage::identity_record::associate_sentinel_vault_with_identity(
+            &identity_id,
+            &identity,
+            store_id,
+        )
+        .await?;
         self.sentinel_unlock = CeremonyState::Inactive;
         Ok(records)
     }
@@ -442,11 +457,14 @@ impl NookVaultManager {
             .get("Paste the initiator request in the share section before accepting delivery.")?
             .clone();
         let identity = self.ensure_device_identity()?;
+        let identity_id =
+            identity_association::ensure_local_identity(&identity, "Personal").await?;
         let record =
             nook_core::accept_sentinel_genesis_share_delivery(&delivery, &request, &identity)?;
         let stored = StoredSentinelGenesisDelivery {
             request,
             delivery: delivery.clone(),
+            identity_id: Some(identity_id.clone()),
         };
         let stored_json = serde_json::to_string(&stored)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
@@ -454,6 +472,12 @@ impl NookVaultManager {
             delivery.store_id.as_str(),
             identity.device_id().as_str(),
             &stored_json,
+        )
+        .await?;
+        crate::storage::identity_record::associate_sentinel_vault_with_identity(
+            &identity_id,
+            &identity,
+            delivery.store_id.clone(),
         )
         .await?;
 

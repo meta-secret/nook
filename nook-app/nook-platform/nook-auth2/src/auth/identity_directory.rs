@@ -50,11 +50,24 @@ impl IdentityDirectory {
 
     pub fn validate(&self) -> MultiDeviceResult<()> {
         let mut ids = HashSet::with_capacity(self.identities.len());
+        let mut vaults = HashSet::new();
         for record in &self.identities {
             if !ids.insert(record.identity_id.clone()) {
                 return Err(MultiDeviceError::DuplicateIdentity {
                     identity_id: record.identity_id.to_string(),
                 });
+            }
+            for store_id in record
+                .vault_deks
+                .iter()
+                .map(|vault| &vault.store_id)
+                .chain(record.sentinel_vaults.iter())
+            {
+                if !vaults.insert(store_id) {
+                    return Err(MultiDeviceError::DuplicateVaultOwnership {
+                        store_id: store_id.to_string(),
+                    });
+                }
             }
         }
         match (&self.selection, self.identities.is_empty()) {
@@ -154,16 +167,39 @@ impl IdentityDirectory {
 
     pub fn associate_sentinel_vault(
         &mut self,
-        label: &str,
+        identity_id: &IdentityId,
         app_key: &AppKey,
         store_id: StoreId,
     ) -> MultiDeviceResult<IdentityId> {
-        if matches!(self.selection, IdentitySelection::Empty) {
-            self.create_identity(label, app_key, None)?;
+        if let Some(owner) = self
+            .identities
+            .iter()
+            .find(|record| record.owns_vault(&store_id))
+            && owner.identity_id != *identity_id
+        {
+            return Err(MultiDeviceError::DuplicateVaultOwnership {
+                store_id: store_id.to_string(),
+            });
         }
-        let selected = self.selected_mut()?;
-        selected.associate_sentinel_vault(store_id);
-        Ok(selected.identity_id.clone())
+        let identity = self
+            .identities
+            .iter_mut()
+            .find(|record| record.identity_id == *identity_id)
+            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                identity_id: identity_id.to_string(),
+            })?;
+        let member = identity
+            .members
+            .iter()
+            .find(|member| member.app_id == *app_key.app_id())
+            .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
+        if member.auth_id != app_key.auth_id() || member.public_key != app_key.public_key() {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "existing app id has different key material".to_owned(),
+            ));
+        }
+        identity.associate_sentinel_vault(store_id);
+        Ok(identity.identity_id.clone())
     }
 
     pub fn selected(&self) -> MultiDeviceResult<&IdentityRecord> {
@@ -305,6 +341,9 @@ mod tests {
         assert_eq!(same_id, imported_id);
         assert_eq!(directory.identities().len(), 2);
 
+        directory
+            .selected_mut()?
+            .generate_vault_dek(crate::generate_store_id()?)?;
         let recovered_app_key = AppKey::generate()?;
         let imported_vault = directory.selected()?.vault_deks[0].clone();
         let recovered_secrets_envelope = crate::encrypt_for_recipient(
@@ -315,37 +354,30 @@ mod tests {
             keys.members_key.as_str().as_bytes(),
             &recovered_app_key.public_key(),
         )?;
-        let reconciled_id = directory.import_legacy_vault(
+        let result = directory.import_legacy_vault(
             "Ignored",
             &recovered_app_key,
             imported_vault.store_id,
             recovered_secrets_envelope,
             recovered_members_envelope,
-        )?;
-        assert_eq!(reconciled_id, imported_id);
+        );
+        assert!(matches!(
+            result,
+            Err(MultiDeviceError::IdentityEnrollmentRequired)
+        ));
         let selected = directory.selected()?;
+        assert_eq!(selected.vault_deks.len(), 2);
         assert!(
-            selected
+            !selected
                 .members
                 .iter()
                 .any(|member| member.app_id == *recovered_app_key.app_id())
         );
         assert!(
-            selected.vault_deks[0]
+            !selected.vault_deks[0]
                 .secrets_envelopes
                 .iter()
                 .any(|entry| entry.app_id == *recovered_app_key.app_id())
-        );
-        let recovered_envelope = selected.vault_deks[0]
-            .secrets_envelopes
-            .iter()
-            .find(|entry| entry.app_id == *recovered_app_key.app_id())
-            .ok_or_else(|| anyhow::anyhow!("recovered app-key envelope missing"))?;
-        assert_eq!(
-            recovered_app_key
-                .decrypt_envelope(&recovered_envelope.envelope)?
-                .as_str(),
-            keys.secrets_key.as_str()
         );
         Ok(())
     }
@@ -355,11 +387,19 @@ mod tests {
         let app_key = AppKey::generate()?;
         let store_id = crate::generate_store_id()?;
         let mut directory = IdentityDirectory::empty();
-        directory.associate_sentinel_vault("Sentinel", &app_key, store_id.clone())?;
+        let identity_id = directory.create_identity("Sentinel", &app_key, None)?;
+        directory.associate_sentinel_vault(&identity_id, &app_key, store_id.clone())?;
         let selected = directory.selected()?;
         assert!(selected.owns_vault(&store_id));
         assert!(selected.vault_deks.is_empty());
         assert_eq!(selected.sentinel_vaults, vec![store_id]);
+        let owned_store_id = selected.sentinel_vaults[0].clone();
+
+        let other_id = directory.create_identity("Other", &app_key, None)?;
+        assert!(matches!(
+            directory.associate_sentinel_vault(&other_id, &app_key, owned_store_id,),
+            Err(MultiDeviceError::DuplicateVaultOwnership { .. })
+        ));
         Ok(())
     }
 }

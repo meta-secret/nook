@@ -171,14 +171,9 @@ pub(crate) async fn ensure_local_identity_for_app_key(
                 .iter()
                 .any(|member| member.app_id == *app_key.app_id())
             {
-                selected
-                    .add_member(nook_core::IdentityMember {
-                        app_id: app_key.app_id().clone(),
-                        auth_id: app_key.auth_id(),
-                        public_key: app_key.public_key(),
-                        label: None,
-                    })
-                    .map_err(|error| NookError::Database(error.to_string()))?;
+                return Err(NookError::Database(
+                    nook_core::MultiDeviceError::IdentityEnrollmentRequired.to_string(),
+                ));
             }
         }
         directory
@@ -257,16 +252,16 @@ pub(crate) async fn generate_vault_dek_for_selected_identity(
     .await
 }
 
-pub(crate) async fn associate_sentinel_vault_with_selected_identity(
+pub(crate) async fn associate_sentinel_vault_with_identity(
+    identity_id: &nook_core::IdentityId,
     app_key: &nook_core::AppKey,
-    label: &str,
     store_id: nook_core::StoreId,
 ) -> Result<(), NookError> {
+    let identity_id = identity_id.clone();
     let app_key = app_key.clone();
-    let label = label.to_owned();
     update_identity_directory(move |directory| {
         directory
-            .associate_sentinel_vault(&label, &app_key, store_id)
+            .associate_sentinel_vault(&identity_id, &app_key, store_id)
             .map_err(|error| NookError::Database(error.to_string()))?;
         Ok(())
     })

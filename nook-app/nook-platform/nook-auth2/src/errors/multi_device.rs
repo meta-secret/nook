@@ -36,6 +36,12 @@ pub enum MultiDeviceError {
     #[error("Identity {identity_id} was not found.")]
     IdentityNotFound { identity_id: String },
 
+    #[error("App key must be explicitly enrolled before it can join this identity.")]
+    IdentityEnrollmentRequired,
+
+    #[error("Vault {store_id} is already associated with another identity.")]
+    DuplicateVaultOwnership { store_id: String },
+
     #[error("Identity directory selection does not match its contents.")]
     InvalidIdentitySelection,
 
