@@ -292,7 +292,7 @@ impl NookVaultManager {
         &self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
-        if crate::storage::identity_record::load_identity_record()
+        if crate::storage::identity_record::load_selected_identity()
             .await?
             .is_some()
         {
@@ -486,7 +486,7 @@ impl NookVaultManager {
         let keys = identity_record
             .generate_vault_dek(store_id)
             .map_err(|error| NookError::Database(error.to_string()))?;
-        crate::storage::identity_record::save_identity_record(&identity_record).await?;
+        crate::storage::identity_record::save_selected_identity(identity_record).await?;
         self.apply_genesis_vault_keys(identity, &keys)
     }
 

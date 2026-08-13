@@ -27,6 +27,18 @@ pub enum MultiDeviceError {
     #[error("Invalid device identity: {0}")]
     InvalidDeviceIdentity(String),
 
+    #[error("Identity label is required.")]
+    IdentityLabelEmpty,
+
+    #[error("Identity directory contains duplicate identity id {identity_id}.")]
+    DuplicateIdentity { identity_id: String },
+
+    #[error("Identity {identity_id} was not found.")]
+    IdentityNotFound { identity_id: String },
+
+    #[error("Identity directory selection does not match its contents.")]
+    InvalidIdentitySelection,
+
     #[error("Provider credential is not age-encrypted.")]
     UnsealedProviderCredential,
 

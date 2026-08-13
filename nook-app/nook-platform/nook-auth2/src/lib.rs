@@ -47,6 +47,7 @@ pub use auth::identity::{
     IdentityId, IdentityMember, IdentityRecord, IdentityVaultDek, MemberDekEnvelope,
     identity_fingerprint,
 };
+pub use auth::identity_directory::{IdentityDirectory, IdentitySelection};
 #[cfg(any(test, feature = "mock-passkey"))]
 pub use auth::mock_passkey::{
     MemoryPasskeyAuthenticator, MockPasskeyAssertion, MockPasskeyAssertionRequest,

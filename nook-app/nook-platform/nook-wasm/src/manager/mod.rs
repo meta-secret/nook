@@ -23,6 +23,7 @@ mod connect;
 mod device_protection;
 mod diagnostics;
 mod event_log;
+mod identity;
 mod login_fill;
 mod login_save;
 mod multi_device;

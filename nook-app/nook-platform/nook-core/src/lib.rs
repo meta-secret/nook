@@ -210,8 +210,8 @@ pub use nook_auth2::{
 
 pub use multi_device::sentinel_member_records_from_public_roster;
 pub use nook_auth2::{
-    AppId, AppKey, IdentityId, IdentityMember, IdentityRecord, IdentityVaultDek, MemberDekEnvelope,
-    identity_fingerprint,
+    AppId, AppKey, IdentityDirectory, IdentityId, IdentityMember, IdentityRecord,
+    IdentitySelection, IdentityVaultDek, MemberDekEnvelope, identity_fingerprint,
 };
 
 pub use multi_device::{

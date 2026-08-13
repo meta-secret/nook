@@ -3,6 +3,7 @@
 pub mod device_key_protection;
 pub mod enrollment;
 pub mod identity;
+pub mod identity_directory;
 pub mod multi_device;
 pub mod password_envelope;
 pub mod sentinel_genesis;
