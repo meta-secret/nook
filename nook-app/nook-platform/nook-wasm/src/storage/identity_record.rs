@@ -331,6 +331,21 @@ pub(crate) async fn clear_pending_simple_genesis(
     })
 }
 
+pub(crate) async fn pending_simple_genesis_for_store(
+    store_id: &str,
+) -> Result<Option<PendingSimpleGenesis>, NookError> {
+    if store_id.is_empty() {
+        return Ok(None);
+    }
+    let store_id = nook_core::StoreId::parse(store_id)
+        .map_err(|error| NookError::Database(error.to_string()))?;
+    let Some(raw) = idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? else {
+        return Ok(None);
+    };
+    let pending = decode_pending_simple_genesis(&raw)?;
+    Ok((pending.store_id == store_id).then_some(pending))
+}
+
 pub(crate) async fn generate_vault_dek_for_identity(
     identity_id: &nook_core::IdentityId,
     app_key: &nook_core::AppKey,
@@ -370,6 +385,16 @@ pub(crate) async fn associate_sentinel_vault_with_identity(
         Ok(())
     })
     .await
+}
+
+pub(crate) async fn identity_for_sentinel_vault(
+    app_key: &nook_core::AppKey,
+    store_id: &nook_core::StoreId,
+) -> Result<Option<nook_core::IdentityId>, NookError> {
+    let directory = load_identity_directory().await?;
+    directory
+        .identity_for_vault(app_key, store_id)
+        .map_err(|error| NookError::Database(error.to_string()))
 }
 
 #[cfg(test)]
@@ -438,6 +463,12 @@ mod tests {
         let resumed = begin_or_resume_simple_genesis(&app_key, "Ignored").await?;
         assert_eq!(resumed.store_id, pending.store_id);
         assert_eq!(resumed.identity_id, pending.identity_id);
+        assert_eq!(
+            pending_simple_genesis_for_store(pending.store_id.as_str())
+                .await?
+                .map(|marker| marker.identity_id),
+            Some(pending.identity_id.clone())
+        );
 
         clear_pending_simple_genesis(&pending).await?;
         let replacement = begin_or_resume_simple_genesis(&app_key, "Work").await?;

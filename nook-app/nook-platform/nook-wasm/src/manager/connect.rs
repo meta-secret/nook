@@ -283,7 +283,22 @@ impl NookVaultManager {
                 &self.vault.store_id,
             )
             .await?;
-        if let Some(completed) = completed_genesis
+        let pending_cleanup = match match completed_genesis {
+            Some(completed) => Ok(Some(completed)),
+            None => {
+                crate::storage::identity_record::pending_simple_genesis_for_store(
+                    &self.vault.store_id,
+                )
+                .await
+            }
+        } {
+            Ok(pending) => pending,
+            Err(error) => {
+                self.reset_vault_session();
+                return Err(error.into());
+            }
+        };
+        if let Some(completed) = pending_cleanup
             && let Err(error) =
                 crate::storage::identity_record::clear_pending_simple_genesis(&completed).await
         {

@@ -268,6 +268,19 @@ impl IdentityDirectory {
         Ok(())
     }
 
+    pub fn identity_for_vault(
+        &self,
+        app_key: &AppKey,
+        store_id: &StoreId,
+    ) -> MultiDeviceResult<Option<IdentityId>> {
+        self.validate_vault_enrollment(app_key, store_id)?;
+        Ok(self
+            .identities
+            .iter()
+            .find(|record| record.owns_vault(store_id))
+            .map(|record| record.identity_id.clone()))
+    }
+
     pub fn identity_for_app_key(&self, app_key: &AppKey) -> MultiDeviceResult<Option<IdentityId>> {
         let mut matches = Vec::new();
         for identity in &self.identities {
@@ -522,6 +535,10 @@ mod tests {
         assert!(selected.vault_deks.is_empty());
         assert_eq!(selected.sentinel_vaults, vec![store_id]);
         let owned_store_id = selected.sentinel_vaults[0].clone();
+        assert_eq!(
+            directory.identity_for_vault(&app_key, &owned_store_id)?,
+            Some(identity_id)
+        );
 
         let other_id = directory.create_identity("Other", &app_key, None)?;
         assert!(matches!(

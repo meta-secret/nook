@@ -47,6 +47,11 @@ pub(super) async fn identity_for_unlock(
         persist_delivery_identity_binding(&stored, app_key).await?;
         return Ok(identity.identity_id);
     }
+    if let Some(identity_id) =
+        crate::storage::identity_record::identity_for_sentinel_vault(app_key, store_id).await?
+    {
+        return Ok(identity_id);
+    }
     ensure_local_identity(app_key, "Personal").await
 }
 

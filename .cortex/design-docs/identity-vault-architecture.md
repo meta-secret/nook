@@ -81,6 +81,16 @@ Verified connect completion removes the marker with a compare-and-delete
 transaction.
 An older tab cannot delete a newer genesis marker.
 
+Verified Sentinel delivery records use
+`sentinel_genesis_share:{store_id}:{device_id}`. New records include an
+`identityId` that names the directory owner of the Sentinel vault. Legacy
+records without this field are accepted only when their app key identifies one
+unambiguous local identity.
+A successful legacy read validates the relationship.
+It associates the vault and rewrites the delivery with `identityId`.
+If an association commits but delivery persistence is interrupted, retry
+recovers the validated owner from the directory before rewriting the delivery.
+
 The first directory read migrates `identity_record_v1` when present:
 
 1. decode the singleton record;
