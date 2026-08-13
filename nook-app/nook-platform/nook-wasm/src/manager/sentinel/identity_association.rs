@@ -47,13 +47,7 @@ pub(super) async fn identity_for_unlock(
         persist_delivery_identity_binding(&stored, app_key).await?;
         return Ok(identity.identity_id);
     }
-    Ok(
-        crate::storage::identity_record::ensure_unambiguous_identity_for_app_key(
-            app_key, "Personal",
-        )
-        .await?
-        .identity_id,
-    )
+    ensure_local_identity(app_key, "Personal").await
 }
 
 pub(super) async fn persist_delivery_identity_binding(

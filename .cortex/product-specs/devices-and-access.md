@@ -65,6 +65,11 @@ The local identity directory uses `identity_directory_v1`.
 Its selection is an explicit `Empty` or `Selected(identity_id)` state.
 Updates use one IndexedDB read-write transaction.
 
+Simple vault genesis uses `pending_simple_genesis_v1`.
+The record contains `storeId` and `identityId`.
+It is durable before DEK creation and survives reloads.
+Successful verified connect removes only the matching marker.
+
 On first read, the app migrates `identity_record_v1` into the directory.
 It deletes the legacy key only after the new directory is durable.
 Downgrading to a pre-directory build is unsupported after migration.

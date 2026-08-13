@@ -5,11 +5,9 @@ use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
 
+use super::indexed_db::{StringUpdateGuard, StringUpdateResult, idb_get_string, idb_update_string};
 #[cfg(test)]
-use super::indexed_db::idb_put_string;
-use super::indexed_db::{
-    StringUpdateGuard, StringUpdateResult, idb_delete_key, idb_get_string, idb_update_string,
-};
+use super::indexed_db::{idb_delete_key, idb_put_string};
 use crate::{NookError, storage::open_nook_database};
 
 const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
@@ -296,8 +294,41 @@ pub(crate) async fn begin_or_resume_simple_genesis(
     })
 }
 
-pub(crate) async fn clear_pending_simple_genesis() -> Result<(), NookError> {
-    idb_delete_key(PENDING_SIMPLE_GENESIS_KEY).await
+pub(crate) async fn clear_pending_simple_genesis(
+    completed: &PendingSimpleGenesis,
+) -> Result<(), NookError> {
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| {
+            NookError::IndexedDb(format!(
+                "Pending genesis cleanup transaction error: {error:?}"
+            ))
+        })?;
+    let store = transaction.store("vault").map_err(|error| {
+        NookError::IndexedDb(format!("Pending genesis cleanup store error: {error:?}"))
+    })?;
+    let id = serde_wasm_bindgen::to_value(PENDING_SIMPLE_GENESIS_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Pending genesis key error: {error:?}")))?;
+    let current = store.get(id.clone()).await.map_err(|error| {
+        NookError::IndexedDb(format!("Pending genesis cleanup read error: {error:?}"))
+    })?;
+    if let Some(current) = current.filter(|value| !value.is_undefined() && !value.is_null()) {
+        let raw: String = serde_wasm_bindgen::from_value(current).map_err(|error| {
+            NookError::IndexedDb(format!("Pending genesis cleanup decode error: {error:?}"))
+        })?;
+        let pending = decode_pending_simple_genesis(&raw)?;
+        if pending.store_id == completed.store_id && pending.identity_id == completed.identity_id {
+            store.delete(id).await.map_err(|error| {
+                NookError::IndexedDb(format!("Pending genesis cleanup delete error: {error:?}"))
+            })?;
+        }
+    }
+    transaction.done().await.map(|_| ()).map_err(|error| {
+        NookError::IndexedDb(format!(
+            "Pending genesis cleanup completion error: {error:?}"
+        ))
+    })
 }
 
 pub(crate) async fn generate_vault_dek_for_identity(
@@ -407,6 +438,18 @@ mod tests {
         let resumed = begin_or_resume_simple_genesis(&app_key, "Ignored").await?;
         assert_eq!(resumed.store_id, pending.store_id);
         assert_eq!(resumed.identity_id, pending.identity_id);
+
+        clear_pending_simple_genesis(&pending).await?;
+        let replacement = begin_or_resume_simple_genesis(&app_key, "Work").await?;
+        assert_ne!(replacement.store_id, pending.store_id);
+        clear_pending_simple_genesis(&pending).await?;
+        let raw = idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
+            .await?
+            .ok_or_else(|| NookError::IndexedDb("Replacement marker disappeared.".to_owned()))?;
+        assert_eq!(
+            decode_pending_simple_genesis(&raw)?.store_id,
+            replacement.store_id
+        );
         clear_identity_directory_for_test().await
     }
 

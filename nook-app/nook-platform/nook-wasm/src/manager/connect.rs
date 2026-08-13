@@ -254,13 +254,17 @@ impl NookVaultManager {
             content_requires_genesis(&content, force_genesis)?
         };
 
-        if use_genesis {
-            self.bootstrap_genesis_connect(&identity).await?;
+        let completed_genesis = if use_genesis {
+            Some(self.bootstrap_genesis_connect(&identity).await?)
         } else if event_log_only_remote {
             self.connect_event_log_only_remote(&identity).await?;
+            None
         } else if !content.trim().is_empty() {
             self.connect_existing_content(&identity, &content).await?;
-        }
+            None
+        } else {
+            None
+        };
 
         if use_genesis || remote_content_missing {
             self.flush_event_outbox().await?;
@@ -279,8 +283,12 @@ impl NookVaultManager {
                 &self.vault.store_id,
             )
             .await?;
-        if use_genesis {
-            crate::storage::identity_record::clear_pending_simple_genesis().await?;
+        if let Some(completed) = completed_genesis
+            && let Err(error) =
+                crate::storage::identity_record::clear_pending_simple_genesis(&completed).await
+        {
+            self.reset_vault_session();
+            return Err(error.into());
         }
         let _ = self.status.tx.send("READY".to_owned());
         tracing::info!(
@@ -391,14 +399,15 @@ impl NookVaultManager {
     async fn bootstrap_genesis_connect(
         &mut self,
         identity: &nook_core::DeviceIdentity,
-    ) -> Result<(), NookError> {
-        self.initialize_genesis_vault_with_identity(identity)
+    ) -> Result<crate::storage::identity_record::PendingSimpleGenesis, NookError> {
+        let pending = self
+            .initialize_genesis_vault_with_identity(identity)
             .await?;
         self.bootstrap_event_log_genesis().await?;
         self.maybe_sync_self_into_roster(identity)?;
         self.event_log.enabled = true;
         self.persist_projection_cache().await?;
-        Ok(())
+        Ok(pending)
     }
 
     async fn discover_event_log_only_remote(
@@ -465,7 +474,7 @@ impl NookVaultManager {
     pub(in crate::manager) async fn initialize_genesis_vault_with_identity(
         &mut self,
         identity: &nook_core::DeviceIdentity,
-    ) -> Result<(), NookError> {
+    ) -> Result<crate::storage::identity_record::PendingSimpleGenesis, NookError> {
         let label = match &self.vault.vault_name {
             super::VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
             _ => "Personal".to_owned(),
@@ -477,10 +486,11 @@ impl NookVaultManager {
         let keys = crate::storage::identity_record::generate_vault_dek_for_identity(
             &pending.identity_id,
             identity,
-            pending.store_id,
+            pending.store_id.clone(),
         )
         .await?;
-        self.apply_genesis_vault_keys(identity, &keys)
+        self.apply_genesis_vault_keys(identity, &keys)?;
+        Ok(pending)
     }
 
     /// Test/helper path that still creates vault keys without Identity persistence.

@@ -73,6 +73,14 @@ All directory updates use one IndexedDB read-write transaction.
 Concurrent tabs must not overwrite identity creation, selection, membership,
 or DEK changes.
 
+Simple vault creation stores `pending_simple_genesis_v1` in IndexedDB.
+Its JSON fields are `storeId` and `identityId`.
+The app writes the marker before it creates the identity-owned DEK.
+A reload resumes the same store and identity binding.
+Verified connect completion removes the marker with a compare-and-delete
+transaction.
+An older tab cannot delete a newer genesis marker.
+
 The first directory read migrates `identity_record_v1` when present:
 
 1. decode the singleton record;
