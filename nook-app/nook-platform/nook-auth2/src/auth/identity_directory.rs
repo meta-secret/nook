@@ -128,10 +128,13 @@ impl IdentityDirectory {
     }
 
     pub fn replace_selected(&mut self, record: IdentityRecord) -> MultiDeviceResult<()> {
-        let selected = self.selected_mut()?;
-        if selected.identity_id != record.identity_id {
+        let IdentitySelection::Selected(identity_id) = &self.selection else {
+            return Err(MultiDeviceError::InvalidIdentitySelection);
+        };
+        if identity_id != &record.identity_id {
             return Err(MultiDeviceError::InvalidIdentitySelection);
         }
+        let selected = self.selected_mut()?;
         *selected = record;
         Ok(())
     }
