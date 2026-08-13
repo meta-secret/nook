@@ -118,12 +118,18 @@ impl IdentityDirectory {
         secrets_envelope: AgeArmoredCiphertext,
         members_envelope: AgeArmoredCiphertext,
     ) -> MultiDeviceResult<IdentityId> {
-        if let Some(identity_id) = self
+        if let Some(index) = self
             .identities
             .iter()
-            .find(|record| record.vault_dek(&store_id).is_some())
-            .map(|record| record.identity_id.clone())
+            .position(|record| record.vault_dek(&store_id).is_some())
         {
+            self.identities[index].reconcile_legacy_vault_member(
+                app_key,
+                &store_id,
+                secrets_envelope,
+                members_envelope,
+            )?;
+            let identity_id = self.identities[index].identity_id.clone();
             self.selection = IdentitySelection::Selected(identity_id.clone());
             return Ok(identity_id);
         }
@@ -144,6 +150,20 @@ impl IdentityDirectory {
         self.identities.push(record);
         self.selection = IdentitySelection::Selected(identity_id.clone());
         Ok(identity_id)
+    }
+
+    pub fn associate_sentinel_vault(
+        &mut self,
+        label: &str,
+        app_key: &AppKey,
+        store_id: StoreId,
+    ) -> MultiDeviceResult<IdentityId> {
+        if matches!(self.selection, IdentitySelection::Empty) {
+            self.create_identity(label, app_key, None)?;
+        }
+        let selected = self.selected_mut()?;
+        selected.associate_sentinel_vault(store_id);
+        Ok(selected.identity_id.clone())
     }
 
     pub fn selected(&self) -> MultiDeviceResult<&IdentityRecord> {
@@ -284,6 +304,62 @@ mod tests {
         )?;
         assert_eq!(same_id, imported_id);
         assert_eq!(directory.identities().len(), 2);
+
+        let recovered_app_key = AppKey::generate()?;
+        let imported_vault = directory.selected()?.vault_deks[0].clone();
+        let recovered_secrets_envelope = crate::encrypt_for_recipient(
+            keys.secrets_key.as_str().as_bytes(),
+            &recovered_app_key.public_key(),
+        )?;
+        let recovered_members_envelope = crate::encrypt_for_recipient(
+            keys.members_key.as_str().as_bytes(),
+            &recovered_app_key.public_key(),
+        )?;
+        let reconciled_id = directory.import_legacy_vault(
+            "Ignored",
+            &recovered_app_key,
+            imported_vault.store_id,
+            recovered_secrets_envelope,
+            recovered_members_envelope,
+        )?;
+        assert_eq!(reconciled_id, imported_id);
+        let selected = directory.selected()?;
+        assert!(
+            selected
+                .members
+                .iter()
+                .any(|member| member.app_id == *recovered_app_key.app_id())
+        );
+        assert!(
+            selected.vault_deks[0]
+                .secrets_envelopes
+                .iter()
+                .any(|entry| entry.app_id == *recovered_app_key.app_id())
+        );
+        let recovered_envelope = selected.vault_deks[0]
+            .secrets_envelopes
+            .iter()
+            .find(|entry| entry.app_id == *recovered_app_key.app_id())
+            .ok_or_else(|| anyhow::anyhow!("recovered app-key envelope missing"))?;
+        assert_eq!(
+            recovered_app_key
+                .decrypt_envelope(&recovered_envelope.envelope)?
+                .as_str(),
+            keys.secrets_key.as_str()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn sentinel_association_never_creates_app_key_dek_envelopes() -> anyhow::Result<()> {
+        let app_key = AppKey::generate()?;
+        let store_id = crate::generate_store_id()?;
+        let mut directory = IdentityDirectory::empty();
+        directory.associate_sentinel_vault("Sentinel", &app_key, store_id.clone())?;
+        let selected = directory.selected()?;
+        assert!(selected.owns_vault(&store_id));
+        assert!(selected.vault_deks.is_empty());
+        assert_eq!(selected.sentinel_vaults, vec![store_id]);
         Ok(())
     }
 }

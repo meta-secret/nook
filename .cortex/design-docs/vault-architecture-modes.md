@@ -1,7 +1,8 @@
 # Vault Architecture Modes
 
-**Status:** Vault modes and the device-local identity directory are implemented;
-replicated identity control and cross-installation enrollment remain target architecture.
+**Status:** Vault modes are implemented. The device-local identity directory is
+implemented. Replicated identity control and cross-installation enrollment remain
+target architecture.
 
 Nook's security choices belong to their owning lifecycle. Rust owns policy in
 `nook-core` / `nook-auth2`; WASM exposes typed decisions to the web layer.

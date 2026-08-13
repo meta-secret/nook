@@ -257,6 +257,22 @@ pub(crate) async fn generate_vault_dek_for_selected_identity(
     .await
 }
 
+pub(crate) async fn associate_sentinel_vault_with_selected_identity(
+    app_key: &nook_core::AppKey,
+    label: &str,
+    store_id: nook_core::StoreId,
+) -> Result<(), NookError> {
+    let app_key = app_key.clone();
+    let label = label.to_owned();
+    update_identity_directory(move |directory| {
+        directory
+            .associate_sentinel_vault(&label, &app_key, store_id)
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        Ok(())
+    })
+    .await
+}
+
 #[cfg(test)]
 pub(crate) async fn clear_identity_directory_for_test() -> Result<(), NookError> {
     idb_delete_key(IDENTITY_DIRECTORY_KEY).await?;

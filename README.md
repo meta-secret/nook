@@ -207,8 +207,9 @@ The target architecture keeps these vault and event-log boundaries while
 introducing virtual identity records and explicit identity-to-vault grants.
 The browser now stores a local identity directory and selected identity.
 It migrates the former singleton identity record on first read.
-Replicated identity-control logs and explicit identity-to-vault grants remain
-future work.
+Local encrypted identity-to-vault grants are implemented for Simple vaults.
+Local identity association is implemented for quorum-protected Sentinel vaults.
+Replicated grant enforcement and identity-control logs remain future work.
 
 ```text
 local command

@@ -42,7 +42,8 @@ impl NookIdentitySnapshot {
             control_epoch: record.control_epoch,
             app_id,
             app_key_count: u32::try_from(record.members.len()).unwrap_or(u32::MAX),
-            vault_count: u32::try_from(record.vault_deks.len()).unwrap_or(u32::MAX),
+            vault_count: u32::try_from(record.vault_deks.len() + record.sentinel_vaults.len())
+                .unwrap_or(u32::MAX),
             fingerprint: nook_core::identity_fingerprint(&record.identity_id),
         }
     }

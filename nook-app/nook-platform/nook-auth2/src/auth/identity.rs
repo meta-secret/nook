@@ -78,6 +78,10 @@ pub struct IdentityRecord {
     pub control_epoch: u64,
     pub members: Vec<IdentityMember>,
     pub vault_deks: Vec<IdentityVaultDek>,
+    /// Sentinel vaults associated with this identity. Their quorum-protected
+    /// roots are never represented as app-key DEK envelopes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sentinel_vaults: Vec<StoreId>,
 }
 
 impl IdentityRecord {
@@ -98,6 +102,7 @@ impl IdentityRecord {
                 label: member_label,
             }],
             vault_deks: Vec::new(),
+            sentinel_vaults: Vec::new(),
         })
     }
 
@@ -191,6 +196,71 @@ impl IdentityRecord {
             .find(|entry| &entry.store_id == store_id)
     }
 
+    #[must_use]
+    pub fn owns_vault(&self, store_id: &StoreId) -> bool {
+        self.vault_dek(store_id).is_some() || self.sentinel_vaults.contains(store_id)
+    }
+
+    pub fn associate_sentinel_vault(&mut self, store_id: StoreId) {
+        if !self.owns_vault(&store_id) {
+            self.sentinel_vaults.push(store_id);
+            self.control_epoch = self.control_epoch.saturating_add(1);
+        }
+    }
+
+    pub fn reconcile_legacy_vault_member(
+        &mut self,
+        app_key: &AppKey,
+        store_id: &StoreId,
+        secrets_envelope: AgeArmoredCiphertext,
+        members_envelope: AgeArmoredCiphertext,
+    ) -> MultiDeviceResult<()> {
+        if let Some(existing) = self
+            .members
+            .iter()
+            .find(|member| member.app_id == *app_key.app_id())
+        {
+            if existing.auth_id != app_key.auth_id() || existing.public_key != app_key.public_key()
+            {
+                return Err(MultiDeviceError::InvalidDeviceIdentity(
+                    "existing app id has different key material".to_owned(),
+                ));
+            }
+        } else {
+            self.add_member(IdentityMember {
+                app_id: app_key.app_id().clone(),
+                auth_id: app_key.auth_id(),
+                public_key: app_key.public_key(),
+                label: None,
+            })?;
+        }
+        let vault_dek = self
+            .vault_deks
+            .iter_mut()
+            .find(|entry| entry.store_id == *store_id)
+            .ok_or_else(|| {
+                MultiDeviceError::InvalidDeviceIdentity(
+                    "identity does not own this legacy vault".to_owned(),
+                )
+            })?;
+        if !vault_dek
+            .secrets_envelopes
+            .iter()
+            .any(|entry| entry.app_id == *app_key.app_id())
+        {
+            vault_dek.secrets_envelopes.push(MemberDekEnvelope {
+                app_id: app_key.app_id().clone(),
+                envelope: secrets_envelope,
+            });
+            vault_dek.members_envelopes.push(MemberDekEnvelope {
+                app_id: app_key.app_id().clone(),
+                envelope: members_envelope,
+            });
+            self.control_epoch = self.control_epoch.saturating_add(1);
+        }
+        Ok(())
+    }
+
     /// Synthesize an identity from a legacy vault member + auth envelopes.
     pub fn synthesize_from_legacy_vault(
         label: impl Into<String>,
@@ -216,6 +286,7 @@ impl IdentityRecord {
                     envelope: members_envelope,
                 }],
             }],
+            sentinel_vaults: Vec::new(),
         })
     }
 }
@@ -270,6 +341,7 @@ mod tests {
             control_epoch: 1,
             members: Vec::new(),
             vault_deks: Vec::new(),
+            sentinel_vaults: Vec::new(),
         };
         let store = StoreId::before_genesis_placeholder();
         assert!(identity.generate_vault_dek(store).is_err());

@@ -141,6 +141,16 @@ impl NookVaultManager {
             &stored_json,
         )
         .await?;
+        let store_id = nook_core::StoreId::parse(&pending.store_id)
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        let label = match &pending.vault_name {
+            VaultNameState::Named(name) if !name.trim().is_empty() => name.as_str(),
+            _ => "Personal",
+        };
+        crate::storage::identity_record::associate_sentinel_vault_with_selected_identity(
+            &identity, label, store_id,
+        )
+        .await?;
         clear_sentinel_genesis_finalization_pending().await?;
         self.sentinel_genesis = CeremonyState::Inactive;
         self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::DeliveringShares;
