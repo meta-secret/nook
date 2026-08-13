@@ -26,7 +26,7 @@ pub struct ActiveProviderCredentialsRequest {
     pub current_local_folder: StoredLocalFolderConfiguration,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi)]
 pub struct ActiveProviderCredentialDraft {
@@ -49,9 +49,9 @@ impl ActiveProviderCredentialDraft {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "draft", rename_all = "camelCase")]
-#[tsify(into_wasm_abi)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ActiveProviderCredentialsProjection {
     Unchanged,
     Apply(Box<ActiveProviderCredentialDraft>),

@@ -49,6 +49,7 @@ import {
 import {
   apply_provider_save_policy,
   active_provider_credentials_projection,
+  active_provider_credentials_projection_state,
   authenticated_vault_storage_args,
   draft_github_storage_args,
   draft_local_storage_args,
@@ -60,6 +61,7 @@ import {
   has_oauth_credentials,
   new_provider_save_setup,
   NookProviderSaveOutcomeState,
+  NookActiveProviderCredentialsProjectionState,
   NookOAuthRemoteConfigurationUpdateState,
   NookStagedStorageArgsState,
   provider_wasm_args,
@@ -485,7 +487,12 @@ export function applyActiveProviderCredentials(
     currentLocalFolder,
   };
   const projection = active_provider_credentials_projection(projectionArgs);
-  if (projection.state === "unchanged") return;
+  if (
+    active_provider_credentials_projection_state(projection) ===
+    NookActiveProviderCredentialsProjectionState.Unchanged
+  ) {
+    return;
+  }
   const { draft } = projection;
   state.storageMode = draft.storageMode;
   state.githubPat = draft.githubPat;

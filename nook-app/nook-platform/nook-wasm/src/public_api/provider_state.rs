@@ -2,6 +2,29 @@ use super::{NookStorageConnectArgs, wasm_bindgen};
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookActiveProviderCredentialsProjectionState {
+    Unchanged,
+    Apply,
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn active_provider_credentials_projection_state(
+    projection: nook_core::ActiveProviderCredentialsProjection,
+) -> NookActiveProviderCredentialsProjectionState {
+    match projection {
+        nook_core::ActiveProviderCredentialsProjection::Unchanged => {
+            NookActiveProviderCredentialsProjectionState::Unchanged
+        }
+        nook_core::ActiveProviderCredentialsProjection::Apply(_) => {
+            NookActiveProviderCredentialsProjectionState::Apply
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookStoredOAuthFileConfigurationState {
     NotApplicable,
     Configured,
