@@ -4,9 +4,9 @@ use tsify::Tsify;
 use super::{StorageProviderData, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration};
 use crate::{DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, StorageProviderType};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Tsify)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "providerType", rename_all = "camelCase")]
-#[tsify(from_wasm_abi)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ActiveProviderLoginSetup {
     Inactive,
     Active(StorageProviderType),

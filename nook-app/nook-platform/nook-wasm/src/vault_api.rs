@@ -23,6 +23,20 @@ pub fn new_provider_save_setup(
 }
 
 #[wasm_bindgen]
+#[must_use]
+pub fn inactive_provider_login_setup() -> nook_core::ActiveProviderLoginSetup {
+    nook_core::ActiveProviderLoginSetup::Inactive
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn active_provider_login_setup(
+    provider_type: nook_core::StorageProviderType,
+) -> nook_core::ActiveProviderLoginSetup {
+    nook_core::ActiveProviderLoginSetup::Active(provider_type)
+}
+
+#[wasm_bindgen]
 pub struct NookProviderSaveOutcome(nook_core::ProviderSaveOutcome);
 
 #[wasm_bindgen]

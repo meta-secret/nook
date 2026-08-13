@@ -48,6 +48,7 @@ import {
 } from "$lib/auth/providers";
 import {
   apply_provider_save_policy,
+  active_provider_login_setup,
   active_provider_credentials_projection_draft,
   active_provider_credentials_projection,
   active_provider_credentials_projection_state,
@@ -60,6 +61,7 @@ import {
   has_local_vault,
   has_local_folder_credentials,
   has_oauth_credentials,
+  inactive_provider_login_setup,
   new_provider_save_setup,
   NookProviderSaveOutcomeState,
   NookActiveProviderCredentialsProjectionState,
@@ -80,7 +82,6 @@ import {
   local_vault_storage_args,
   type NookStorageConnectArgs,
   type ActiveProviderCredentialsRequest,
-  type ActiveProviderLoginSetup,
   type ProviderSaveRequest,
 } from "$app-wasm";
 import { createLogger } from "$lib/runtime/log";
@@ -473,10 +474,10 @@ export function applyActiveProviderCredentials(
     state.localFolderDraft.kind === LocalFolderDraftKind.Configured
       ? configuredLocalFolder($state.snapshot(state.localFolderDraft.config))
       : localFolderConfigurationNotApplicable();
-  const loginSetup: ActiveProviderLoginSetup =
+  const loginSetup =
     state.loginSetup.kind === LoginSetupKind.Active
-      ? { state: "active", providerType: state.loginSetup.providerType }
-      : { state: "inactive" };
+      ? active_provider_login_setup(state.loginSetup.providerType)
+      : inactive_provider_login_setup();
   const projectionArgs: ActiveProviderCredentialsRequest = {
     localVaultPresent: state.localVaultPresent,
     loginSetup,
