@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
-use crate::{AppKey, IdentityId, IdentityRecord};
+use crate::{AgeArmoredCiphertext, AppKey, IdentityId, IdentityMember, IdentityRecord, StoreId};
 
 /// Explicit identity-selection state. Empty directories cannot have a selection.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -107,6 +107,45 @@ impl IdentityDirectory {
         Ok(())
     }
 
+    /// Associate an imported legacy vault without guessing that the active
+    /// identity owns it. Existing ownership wins; otherwise the vault receives
+    /// a synthesized identity because the legacy record has no identity id.
+    pub fn import_legacy_vault(
+        &mut self,
+        label: &str,
+        app_key: &AppKey,
+        store_id: StoreId,
+        secrets_envelope: AgeArmoredCiphertext,
+        members_envelope: AgeArmoredCiphertext,
+    ) -> MultiDeviceResult<IdentityId> {
+        if let Some(identity_id) = self
+            .identities
+            .iter()
+            .find(|record| record.vault_dek(&store_id).is_some())
+            .map(|record| record.identity_id.clone())
+        {
+            self.selection = IdentitySelection::Selected(identity_id.clone());
+            return Ok(identity_id);
+        }
+        let member = IdentityMember {
+            app_id: app_key.app_id().clone(),
+            auth_id: app_key.auth_id(),
+            public_key: app_key.public_key(),
+            label: None,
+        };
+        let record = IdentityRecord::synthesize_from_legacy_vault(
+            label,
+            member,
+            store_id,
+            secrets_envelope,
+            members_envelope,
+        )?;
+        let identity_id = record.identity_id.clone();
+        self.identities.push(record);
+        self.selection = IdentitySelection::Selected(identity_id.clone());
+        Ok(identity_id)
+    }
+
     pub fn selected(&self) -> MultiDeviceResult<&IdentityRecord> {
         let IdentitySelection::Selected(identity_id) = &self.selection else {
             return Err(MultiDeviceError::InvalidIdentitySelection);
@@ -194,6 +233,57 @@ mod tests {
         directory.create_identity("Personal", &app_key, None)?;
         let other = IdentityRecord::create_with_app_key("Other", &app_key, None)?;
         assert!(directory.replace_selected(other).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn imported_legacy_vault_does_not_inherit_active_identity() -> anyhow::Result<()> {
+        let app_key = AppKey::generate()?;
+        let mut directory = IdentityDirectory::empty();
+        let personal = directory.create_identity("Personal", &app_key, None)?;
+        let store_id = crate::generate_store_id()?;
+        let keys = crate::generate_vault_keys()?;
+        let imported = IdentityRecord::synthesize_from_legacy_vault(
+            "Imported",
+            IdentityMember {
+                app_id: app_key.app_id().clone(),
+                auth_id: app_key.auth_id(),
+                public_key: app_key.public_key(),
+                label: None,
+            },
+            store_id.clone(),
+            crate::encrypt_for_recipient(
+                keys.secrets_key.as_str().as_bytes(),
+                &app_key.public_key(),
+            )?,
+            crate::encrypt_for_recipient(
+                keys.members_key.as_str().as_bytes(),
+                &app_key.public_key(),
+            )?,
+        )?;
+        let secrets_envelope = imported.vault_deks[0].secrets_envelopes[0].envelope.clone();
+        let members_envelope = imported.vault_deks[0].members_envelopes[0].envelope.clone();
+
+        let imported_id = directory.import_legacy_vault(
+            "Imported",
+            &app_key,
+            store_id.clone(),
+            secrets_envelope.clone(),
+            members_envelope.clone(),
+        )?;
+        assert_ne!(imported_id, personal);
+        assert_eq!(directory.identities().len(), 2);
+        assert_eq!(directory.selected()?.identity_id, imported_id);
+
+        let same_id = directory.import_legacy_vault(
+            "Ignored",
+            &app_key,
+            store_id,
+            secrets_envelope,
+            members_envelope,
+        )?;
+        assert_eq!(same_id, imported_id);
+        assert_eq!(directory.identities().len(), 2);
         Ok(())
     }
 }

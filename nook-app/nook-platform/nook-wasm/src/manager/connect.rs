@@ -268,7 +268,7 @@ impl NookVaultManager {
         }
 
         self.purge_legacy_plaintext_search_catalog().await?;
-        let _ = self.ensure_identity_after_connect(&identity).await;
+        self.ensure_identity_after_connect(&identity).await?;
         let records = VerifiedVaultAccessFlow::Connect
             .complete(
                 self.get_records(),
@@ -292,12 +292,6 @@ impl NookVaultManager {
         &self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
-        if crate::storage::identity_record::load_selected_identity()
-            .await?
-            .is_some()
-        {
-            return Ok(());
-        }
         let label = match &self.vault.vault_name {
             super::VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
             _ => "Personal".to_owned(),

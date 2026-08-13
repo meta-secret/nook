@@ -28,9 +28,10 @@ async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, Nook
         NookError::IndexedDb(format!("Identity directory read error: {error:?}"))
     })?;
     if let Some(value) = current.filter(|value| !value.is_undefined() && !value.is_null()) {
-        let raw = serde_wasm_bindgen::from_value(value).map_err(|error| {
+        let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
             NookError::IndexedDb(format!("Identity directory value error: {error:?}"))
         })?;
+        let _ = decode_directory(&raw)?;
         store.delete(legacy_id).await.map_err(|error| {
             NookError::IndexedDb(format!("Legacy identity delete error: {error:?}"))
         })?;
@@ -188,7 +189,7 @@ pub(crate) async fn ensure_local_identity_for_app_key(
     .await
 }
 
-/// Synthesize an identity from a legacy vault auth envelope when the directory is empty.
+/// Associate a legacy vault with an identity without guessing from active selection.
 pub(crate) async fn ensure_identity_from_legacy_vault(
     app_key: &nook_core::AppKey,
     store_id: &nook_core::StoreId,
@@ -200,28 +201,21 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
     let store_id = store_id.clone();
     let label = label.to_owned();
     update_identity_directory(move |directory| {
-        if matches!(directory.selection(), nook_core::IdentitySelection::Empty) {
-            let member = nook_core::IdentityMember {
-                app_id: app_key.app_id().clone(),
-                auth_id: app_key.auth_id(),
-                public_key: app_key.public_key(),
-                label: None,
-            };
-            let record = nook_core::IdentityRecord::synthesize_from_legacy_vault(
-                label,
-                member,
+        let identity_id = directory
+            .import_legacy_vault(
+                &label,
+                &app_key,
                 store_id,
                 secrets_envelope,
                 members_envelope,
             )
             .map_err(|error| NookError::Database(error.to_string()))?;
-            *directory = nook_core::IdentityDirectory::from_legacy_record(record)
-                .map_err(|error| NookError::Database(error.to_string()))?;
-        }
         directory
-            .selected()
+            .identities()
+            .iter()
+            .find(|record| record.identity_id == identity_id)
             .cloned()
-            .map_err(|error| NookError::Database(error.to_string()))
+            .ok_or_else(|| NookError::Database("Imported identity disappeared.".to_owned()))
     })
     .await
 }
@@ -340,6 +334,25 @@ mod tests {
         let loaded = load_identity_directory().await?;
         assert_eq!(loaded, current);
         assert!(idb_get_string(LEGACY_IDENTITY_RECORD_KEY).await?.is_none());
+        clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn invalid_current_directory_preserves_legacy_record() -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let legacy = nook_core::IdentityRecord::create_with_app_key("Legacy", &app_key, None)
+            .map_err(map_domain_error)?;
+        idb_put_string(
+            LEGACY_IDENTITY_RECORD_KEY,
+            &serde_json::to_string(&legacy)
+                .map_err(|error| NookError::IndexedDb(error.to_string()))?,
+        )
+        .await?;
+        idb_put_string(IDENTITY_DIRECTORY_KEY, "{invalid-json").await?;
+
+        assert!(load_identity_directory().await.is_err());
+        assert!(idb_get_string(LEGACY_IDENTITY_RECORD_KEY).await?.is_some());
         clear_identity_directory_for_test().await
     }
 
