@@ -61,6 +61,16 @@ only.
 Descriptive dashboard metadata uses a separately versioned access profile.
 Missing descriptive data must not prevent app-key unlock.
 
+The local identity directory uses `identity_directory_v1`.
+Its selection is an explicit `Empty` or `Selected(identity_id)` state.
+Updates use one IndexedDB read-write transaction.
+
+On first read, the app migrates `identity_record_v1` into the directory.
+It deletes the legacy key only after the new directory is durable.
+Downgrading to a pre-directory build is unsupported after migration.
+The local directory is separate from the future replicated identity control
+log.
+
 The dashboard may persist only non-secret metadata.
 Private app keys, PRF output, PIN/passphrases, vault DEKs, backup-password
 values, and plaintext vault contents are forbidden.

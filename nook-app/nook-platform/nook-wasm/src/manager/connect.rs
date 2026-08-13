@@ -475,18 +475,10 @@ impl NookVaultManager {
             super::VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
             _ => "Personal".to_owned(),
         };
-        let mut identity_record =
-            crate::storage::identity_record::ensure_local_identity_for_app_key(identity, &label)
-                .await?;
-        if !identity_record.has_members() {
-            return Err(NookError::Database(
-                "Identity must have at least one app key before creating a vault.".to_owned(),
-            ));
-        }
-        let keys = identity_record
-            .generate_vault_dek(store_id)
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        crate::storage::identity_record::save_selected_identity(identity_record).await?;
+        let keys = crate::storage::identity_record::generate_vault_dek_for_selected_identity(
+            identity, &label, store_id,
+        )
+        .await?;
         self.apply_genesis_vault_keys(identity, &keys)
     }
 

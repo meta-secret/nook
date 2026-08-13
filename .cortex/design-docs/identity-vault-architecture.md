@@ -1,8 +1,8 @@
 # Identity, App Keys, Passkeys, and Vault DEKs
 
 **Status:** Architecture decision in implementation.
-Identity control storage, `AppKey` rename, and identity-owned DEKs are the
-active delivery target.
+The local identity directory and identity-owned DEKs are implemented.
+Replicated identity control remains an active delivery target.
 
 Nook distinguishes a person, identities, passkeys, app keys, sync providers,
 and vaults. None of these names are interchangeable.
@@ -60,6 +60,28 @@ The identity control log owns:
 - zero or more sync-provider mounts for the control log.
 
 Private app keys never enter the replicated identity record.
+
+### Local directory phase
+
+The browser stores the local directory under `identity_directory_v1`.
+The directory contains:
+
+- zero or more `IdentityRecord` values; and
+- an explicit `Empty` or `Selected(identity_id)` state.
+
+All directory updates use one IndexedDB read-write transaction.
+Concurrent tabs must not overwrite identity creation, selection, membership,
+or DEK changes.
+
+The first directory read migrates `identity_record_v1` when present:
+
+1. decode the singleton record;
+2. write a valid directory with that record selected; and
+3. delete the legacy key only after the directory write succeeds.
+
+Pre-directory builds cannot read the new key.
+Downgrading after migration is unsupported.
+This local record is not the future replicated identity control log.
 
 ## DEK ownership
 

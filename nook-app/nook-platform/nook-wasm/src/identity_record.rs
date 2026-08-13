@@ -116,10 +116,15 @@ pub enum NookIdentityDirectorySelectionKind {
     Selected,
 }
 
+enum NookIdentityDirectorySelection {
+    Empty,
+    Selected(String),
+}
+
 #[wasm_bindgen]
 pub struct NookIdentityDirectorySnapshot {
     identities: Vec<NookIdentitySnapshot>,
-    selected_identity_id: Option<String>,
+    selection: NookIdentityDirectorySelection,
 }
 
 #[wasm_bindgen]
@@ -138,18 +143,22 @@ impl NookIdentityDirectorySnapshot {
 
     #[wasm_bindgen(getter, js_name = selectionKind)]
     pub fn selection_kind(&self) -> NookIdentityDirectorySelectionKind {
-        if self.selected_identity_id.is_some() {
-            NookIdentityDirectorySelectionKind::Selected
-        } else {
-            NookIdentityDirectorySelectionKind::Empty
+        match self.selection {
+            NookIdentityDirectorySelection::Empty => NookIdentityDirectorySelectionKind::Empty,
+            NookIdentityDirectorySelection::Selected(_) => {
+                NookIdentityDirectorySelectionKind::Selected
+            }
         }
     }
 
     #[wasm_bindgen(getter, js_name = selectedIdentityId)]
     pub fn selected_identity_id(&self) -> Result<String, wasm_bindgen::JsError> {
-        self.selected_identity_id
-            .clone()
-            .ok_or_else(|| wasm_bindgen::JsError::new("Identity directory has no selection"))
+        match &self.selection {
+            NookIdentityDirectorySelection::Empty => Err(wasm_bindgen::JsError::new(
+                "Identity directory has no selection",
+            )),
+            NookIdentityDirectorySelection::Selected(identity_id) => Ok(identity_id.clone()),
+        }
     }
 }
 
@@ -159,10 +168,10 @@ pub async fn load_identity_directory_snapshot()
     let directory = load_identity_directory()
         .await
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
-    let selected_identity_id = match directory.selection() {
-        nook_core::IdentitySelection::Empty => None,
+    let selection = match directory.selection() {
+        nook_core::IdentitySelection::Empty => NookIdentityDirectorySelection::Empty,
         nook_core::IdentitySelection::Selected(identity_id) => {
-            Some(identity_id.as_str().to_owned())
+            NookIdentityDirectorySelection::Selected(identity_id.as_str().to_owned())
         }
     };
     Ok(NookIdentityDirectorySnapshot {
@@ -171,7 +180,7 @@ pub async fn load_identity_directory_snapshot()
             .iter()
             .map(NookIdentitySnapshot::from_record)
             .collect(),
-        selected_identity_id,
+        selection,
     })
 }
 
@@ -179,15 +188,13 @@ pub async fn load_identity_directory_snapshot()
 pub async fn select_identity(identity_id: String) -> Result<(), wasm_bindgen::JsError> {
     let identity_id = nook_core::IdentityId::parse(&identity_id)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
-    let mut directory = load_identity_directory()
-        .await
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
-    directory
-        .select(&identity_id)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
-    crate::storage::identity_record::save_identity_directory(&directory)
-        .await
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+    crate::storage::identity_record::update_identity_directory(move |directory| {
+        directory
+            .select(&identity_id)
+            .map_err(|error| crate::NookError::Database(error.to_string()))
+    })
+    .await
+    .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]

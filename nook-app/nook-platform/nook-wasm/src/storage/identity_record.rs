@@ -1,6 +1,12 @@
 //! Local identity-directory persistence, independent of vault `store_id`.
 
-use super::indexed_db::{idb_delete_key, idb_get_string, idb_put_string};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use super::indexed_db::{
+    StringUpdateGuard, StringUpdateResult, idb_delete_key, idb_get_string, idb_put_string,
+    idb_update_string,
+};
 use crate::NookError;
 
 const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
@@ -23,7 +29,7 @@ pub(crate) async fn load_identity_directory() -> Result<nook_core::IdentityDirec
     Ok(directory)
 }
 
-pub(crate) async fn save_identity_directory(
+async fn save_identity_directory(
     directory: &nook_core::IdentityDirectory,
 ) -> Result<(), NookError> {
     directory
@@ -45,6 +51,44 @@ fn decode_directory(raw: &str) -> Result<nook_core::IdentityDirectory, NookError
     Ok(directory)
 }
 
+pub(crate) async fn update_identity_directory<F, T>(update: F) -> Result<T, NookError>
+where
+    F: FnOnce(&mut nook_core::IdentityDirectory) -> Result<T, NookError>,
+{
+    // Complete legacy migration before entering the atomic current-key update.
+    let _ = load_identity_directory().await?;
+    let result = Rc::new(RefCell::new(None));
+    let captured_result = Rc::clone(&result);
+    let disposition = idb_update_string(
+        IDENTITY_DIRECTORY_KEY,
+        StringUpdateGuard::Unconditional,
+        move |raw| {
+            let mut directory = match raw {
+                Some(raw) => decode_directory(&raw)?,
+                None => nook_core::IdentityDirectory::empty(),
+            };
+            let value = update(&mut directory)?;
+            directory
+                .validate()
+                .map_err(|error| NookError::Database(error.to_string()))?;
+            let encoded = serde_json::to_string(&directory).map_err(|error| {
+                NookError::IndexedDb(format!("Identity directory encode error: {error}"))
+            })?;
+            *captured_result.borrow_mut() = Some(value);
+            Ok(encoded)
+        },
+    )
+    .await?;
+    if disposition != StringUpdateResult::Applied {
+        return Err(NookError::IndexedDb(
+            "Identity directory update was rejected.".to_owned(),
+        ));
+    }
+    result.borrow_mut().take().ok_or_else(|| {
+        NookError::IndexedDb("Identity directory update produced no result.".to_owned())
+    })
+}
+
 pub(crate) async fn load_selected_identity() -> Result<Option<nook_core::IdentityRecord>, NookError>
 {
     let directory = load_identity_directory().await?;
@@ -58,16 +102,6 @@ pub(crate) async fn load_selected_identity() -> Result<Option<nook_core::Identit
     }
 }
 
-pub(crate) async fn save_selected_identity(
-    record: nook_core::IdentityRecord,
-) -> Result<(), NookError> {
-    let mut directory = load_identity_directory().await?;
-    directory
-        .replace_selected(record)
-        .map_err(|error| NookError::Database(error.to_string()))?;
-    save_identity_directory(&directory).await
-}
-
 /// Ensure the selected identity contains the current app key.
 ///
 /// This preserves the legacy single-installation bootstrap. New cross-installation
@@ -76,12 +110,91 @@ pub(crate) async fn ensure_local_identity_for_app_key(
     app_key: &nook_core::AppKey,
     label: &str,
 ) -> Result<nook_core::IdentityRecord, NookError> {
-    let mut directory = load_identity_directory().await?;
-    if matches!(directory.selection(), nook_core::IdentitySelection::Empty) {
+    let app_key = app_key.clone();
+    let label = label.to_owned();
+    update_identity_directory(move |directory| {
+        if matches!(directory.selection(), nook_core::IdentitySelection::Empty) {
+            directory
+                .create_identity(&label, &app_key, None)
+                .map_err(|error| NookError::Database(error.to_string()))?;
+        } else {
+            let selected = directory
+                .selected_mut()
+                .map_err(|error| NookError::Database(error.to_string()))?;
+            if !selected
+                .members
+                .iter()
+                .any(|member| member.app_id == *app_key.app_id())
+            {
+                selected
+                    .add_member(nook_core::IdentityMember {
+                        app_id: app_key.app_id().clone(),
+                        auth_id: app_key.auth_id(),
+                        public_key: app_key.public_key(),
+                        label: None,
+                    })
+                    .map_err(|error| NookError::Database(error.to_string()))?;
+            }
+        }
         directory
-            .create_identity(label, app_key, None)
+            .selected()
+            .cloned()
+            .map_err(|error| NookError::Database(error.to_string()))
+    })
+    .await
+}
+
+/// Synthesize an identity from a legacy vault auth envelope when the directory is empty.
+pub(crate) async fn ensure_identity_from_legacy_vault(
+    app_key: &nook_core::AppKey,
+    store_id: &nook_core::StoreId,
+    secrets_envelope: nook_core::AgeArmoredCiphertext,
+    members_envelope: nook_core::AgeArmoredCiphertext,
+    label: &str,
+) -> Result<nook_core::IdentityRecord, NookError> {
+    let app_key = app_key.clone();
+    let store_id = store_id.clone();
+    let label = label.to_owned();
+    update_identity_directory(move |directory| {
+        if matches!(directory.selection(), nook_core::IdentitySelection::Empty) {
+            let member = nook_core::IdentityMember {
+                app_id: app_key.app_id().clone(),
+                auth_id: app_key.auth_id(),
+                public_key: app_key.public_key(),
+                label: None,
+            };
+            let record = nook_core::IdentityRecord::synthesize_from_legacy_vault(
+                label,
+                member,
+                store_id,
+                secrets_envelope,
+                members_envelope,
+            )
             .map_err(|error| NookError::Database(error.to_string()))?;
-    } else {
+            *directory = nook_core::IdentityDirectory::from_legacy_record(record)
+                .map_err(|error| NookError::Database(error.to_string()))?;
+        }
+        directory
+            .selected()
+            .cloned()
+            .map_err(|error| NookError::Database(error.to_string()))
+    })
+    .await
+}
+
+pub(crate) async fn generate_vault_dek_for_selected_identity(
+    app_key: &nook_core::AppKey,
+    label: &str,
+    store_id: nook_core::StoreId,
+) -> Result<nook_core::VaultKeys, NookError> {
+    let app_key = app_key.clone();
+    let label = label.to_owned();
+    update_identity_directory(move |directory| {
+        if matches!(directory.selection(), nook_core::IdentitySelection::Empty) {
+            directory
+                .create_identity(&label, &app_key, None)
+                .map_err(|error| NookError::Database(error.to_string()))?;
+        }
         let selected = directory
             .selected_mut()
             .map_err(|error| NookError::Database(error.to_string()))?;
@@ -99,52 +212,11 @@ pub(crate) async fn ensure_local_identity_for_app_key(
                 })
                 .map_err(|error| NookError::Database(error.to_string()))?;
         }
-    }
-    let selected = directory
-        .selected()
-        .cloned()
-        .map_err(|error| NookError::Database(error.to_string()))?;
-    save_identity_directory(&directory).await?;
-    Ok(selected)
-}
-
-/// Synthesize an identity from a legacy vault auth envelope when the directory is empty.
-pub(crate) async fn ensure_identity_from_legacy_vault(
-    app_key: &nook_core::AppKey,
-    store_id: &nook_core::StoreId,
-    secrets_envelope: nook_core::AgeArmoredCiphertext,
-    members_envelope: nook_core::AgeArmoredCiphertext,
-    label: &str,
-) -> Result<nook_core::IdentityRecord, NookError> {
-    let mut directory = load_identity_directory().await?;
-    if !matches!(directory.selection(), nook_core::IdentitySelection::Empty) {
-        return directory
-            .selected()
-            .cloned()
-            .map_err(|error| NookError::Database(error.to_string()));
-    }
-    let member = nook_core::IdentityMember {
-        app_id: app_key.app_id().clone(),
-        auth_id: app_key.auth_id(),
-        public_key: app_key.public_key(),
-        label: None,
-    };
-    let record = nook_core::IdentityRecord::synthesize_from_legacy_vault(
-        label,
-        member,
-        store_id.clone(),
-        secrets_envelope,
-        members_envelope,
-    )
-    .map_err(|error| NookError::Database(error.to_string()))?;
-    directory = nook_core::IdentityDirectory::from_legacy_record(record)
-        .map_err(|error| NookError::Database(error.to_string()))?;
-    let selected = directory
-        .selected()
-        .cloned()
-        .map_err(|error| NookError::Database(error.to_string()))?;
-    save_identity_directory(&directory).await?;
-    Ok(selected)
+        selected
+            .generate_vault_dek(store_id)
+            .map_err(|error| NookError::Database(error.to_string()))
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -172,7 +244,7 @@ mod tests {
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
         idb_put_string(LEGACY_IDENTITY_RECORD_KEY, &raw).await?;
 
-        let mut migrated = load_identity_directory().await?;
+        let migrated = load_identity_directory().await?;
         assert_eq!(
             migrated.selected().map_err(map_domain_error)?.identity_id,
             legacy_id
@@ -180,10 +252,12 @@ mod tests {
         assert!(idb_get_string(LEGACY_IDENTITY_RECORD_KEY).await?.is_none());
         assert!(idb_get_string(IDENTITY_DIRECTORY_KEY).await?.is_some());
 
-        let work_id = migrated
-            .create_identity("Work", &app_key, None)
-            .map_err(map_domain_error)?;
-        save_identity_directory(&migrated).await?;
+        let work_id = update_identity_directory(move |directory| {
+            directory
+                .create_identity("Work", &app_key, None)
+                .map_err(map_domain_error)
+        })
+        .await?;
         let reloaded = load_identity_directory().await?;
         assert_eq!(reloaded.identities().len(), 2);
         assert_eq!(

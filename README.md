@@ -205,7 +205,10 @@ passkey-provider visibility.
 
 The target architecture keeps these vault and event-log boundaries while
 introducing virtual identity records and explicit identity-to-vault grants.
-Those identity-control records and their migration are not implemented yet.
+The browser now stores a local identity directory and selected identity.
+It migrates the former singleton identity record on first read.
+Replicated identity-control logs and explicit identity-to-vault grants remain
+future work.
 
 ```text
 local command
