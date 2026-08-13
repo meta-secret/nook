@@ -323,6 +323,10 @@ impl NookVaultManager {
         if let Some(identity) = identity.as_ref() {
             self.persist_password_unlock_membership(&records, identity, &keys)
                 .await?;
+            if let Err(error) = self.ensure_identity_after_connect(identity).await {
+                self.reset_vault_session();
+                return Err(error.into());
+            }
         }
 
         if event_log_remote {

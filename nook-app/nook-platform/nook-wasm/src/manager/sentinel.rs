@@ -153,19 +153,18 @@ impl NookVaultManager {
         let signing = self.ensure_signing_identity().await?;
         let session = nook_core::start_sentinel_genesis(&identity, &signing, args)?;
         self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::from_session(&session);
-        self.sentinel_genesis = CeremonyState::Active(session);
-        self.sentinel_genesis_identity_id = Some(identity_id);
+        self.sentinel_genesis =
+            CeremonyState::Active(super::SentinelGenesisCeremony::new(session, identity_id));
         Ok(self.sentinel_genesis_status())
     }
 
-    /// Public pairing request rendered as QR/link/paste JSON by the web layer.
     #[wasm_bindgen]
     pub fn sentinel_genesis_request_json(&self) -> Result<String, JsError> {
-        let session = self
+        let ceremony = self
             .sentinel_genesis
             .get("No Sentinel genesis ceremony is active.")?;
         Ok(
-            serde_json::to_string(&nook_core::sentinel_genesis_request(session))
+            serde_json::to_string(&nook_core::sentinel_genesis_request(&ceremony.session))
                 .map_err(|error| NookError::Serialization(error.to_string()))?,
         )
     }
@@ -232,24 +231,27 @@ impl NookVaultManager {
         response_json: &str,
         participant_label: &str,
     ) -> Result<NookSentinelGenesisStatus, JsError> {
-        let session = self
+        let ceremony = self
             .sentinel_genesis
             .get_mut("No Sentinel genesis ceremony is active.")?;
         let response_json =
             nook_core::normalize_sentinel_genesis_participant_payload(response_json)?;
         nook_core::add_sentinel_genesis_participant_payload_with_label(
-            session,
+            &mut ceremony.session,
             &response_json,
             participant_label,
         )?;
-        self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::from_session(session);
+        self.sentinel_genesis_phase =
+            nook_core::SentinelGenesisPhase::from_session(&ceremony.session);
         Ok(self.sentinel_genesis_status())
     }
 
     #[wasm_bindgen]
     pub fn sentinel_genesis_status(&self) -> NookSentinelGenesisStatus {
         match &self.sentinel_genesis {
-            CeremonyState::Active(session) => NookSentinelGenesisStatus::from_session(session),
+            CeremonyState::Active(ceremony) => {
+                NookSentinelGenesisStatus::from_session(&ceremony.session)
+            }
             CeremonyState::Inactive => {
                 NookSentinelGenesisStatus::from_phase(self.sentinel_genesis_phase)
             }
@@ -644,7 +646,9 @@ mod tests {
             },
         )?;
         let mut manager = NookVaultManager::new();
-        manager.sentinel_genesis = CeremonyState::Active(session);
+        let identity_id = nook_core::IdentityId::generate()?;
+        let ceremony = super::super::SentinelGenesisCeremony::new(session, identity_id);
+        manager.sentinel_genesis = CeremonyState::Active(ceremony);
 
         let mut status = manager.sentinel_genesis_status();
         assert_eq!(

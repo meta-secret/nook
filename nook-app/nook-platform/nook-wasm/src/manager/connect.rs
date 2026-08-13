@@ -268,7 +268,10 @@ impl NookVaultManager {
         }
 
         self.purge_legacy_plaintext_search_catalog().await?;
-        self.ensure_identity_after_connect(&identity).await?;
+        if let Err(error) = self.ensure_identity_after_connect(&identity).await {
+            self.reset_vault_session();
+            return Err(error.into());
+        }
         let records = VerifiedVaultAccessFlow::Connect
             .complete(
                 self.get_records(),
@@ -288,7 +291,7 @@ impl NookVaultManager {
     }
 
     /// Persist a first-class Identity after connect, synthesizing from vault auth when needed.
-    async fn ensure_identity_after_connect(
+    pub(in crate::manager) async fn ensure_identity_after_connect(
         &self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
@@ -388,10 +391,26 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         self.initialize_genesis_vault_with_identity(identity)
             .await?;
-        self.bootstrap_event_log_genesis().await?;
-        self.maybe_sync_self_into_roster(identity)?;
-        self.event_log.enabled = true;
-        self.persist_projection_cache().await?;
+        let result = async {
+            self.bootstrap_event_log_genesis().await?;
+            self.maybe_sync_self_into_roster(identity)?;
+            self.event_log.enabled = true;
+            self.persist_projection_cache().await
+        }
+        .await;
+        if let Err(error) = result {
+            let store_id = nook_core::StoreId::parse(&self.vault.store_id)
+                .map_err(|parse_error| NookError::Database(parse_error.to_string()))?;
+            if let Err(rollback_error) =
+                crate::storage::identity_record::rollback_vault_dek_for_selected_identity(&store_id)
+                    .await
+            {
+                return Err(NookError::Database(format!(
+                    "{error}; identity DEK rollback failed: {rollback_error}"
+                )));
+            }
+            return Err(error);
+        }
         Ok(())
     }
 

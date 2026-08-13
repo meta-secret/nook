@@ -136,6 +136,23 @@ impl IdentityRecord {
         Ok(keys)
     }
 
+    /// Remove a DEK association created by a vault genesis attempt that did not
+    /// become durable. This is a compensating identity-directory mutation.
+    pub fn rollback_vault_dek(&mut self, store_id: &StoreId) -> MultiDeviceResult<()> {
+        let index = self
+            .vault_deks
+            .iter()
+            .position(|entry| &entry.store_id == store_id)
+            .ok_or_else(|| {
+                MultiDeviceError::InvalidDeviceIdentity(
+                    "identity does not hold a DEK for this vault".to_owned(),
+                )
+            })?;
+        self.vault_deks.remove(index);
+        self.control_epoch = self.control_epoch.saturating_add(1);
+        Ok(())
+    }
+
     /// Re-wrap every vault DEK to the current member set after membership change.
     pub fn rewrap_vault_deks(
         &mut self,
@@ -350,6 +367,8 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("identity DEK missing after generate"))?;
         let opened = app_key.decrypt_envelope(&vault_dek.secrets_envelopes[0].envelope)?;
         assert_eq!(opened.as_str(), keys.secrets_key.as_str());
+        identity.rollback_vault_dek(&store)?;
+        assert!(identity.vault_dek(&store).is_none());
         Ok(())
     }
 

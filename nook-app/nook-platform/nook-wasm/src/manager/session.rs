@@ -78,6 +78,23 @@ pub(in crate::manager) enum CeremonyState<T> {
     Active(T),
 }
 
+pub(in crate::manager) struct SentinelGenesisCeremony {
+    pub(in crate::manager) session: nook_core::SentinelGenesisSession,
+    pub(in crate::manager) identity_id: nook_core::IdentityId,
+}
+
+impl SentinelGenesisCeremony {
+    pub(in crate::manager) fn new(
+        session: nook_core::SentinelGenesisSession,
+        identity_id: nook_core::IdentityId,
+    ) -> Self {
+        Self {
+            session,
+            identity_id,
+        }
+    }
+}
+
 pub(in crate::manager) enum EventLogSyncIssueState {
     Clear,
     Pending {
@@ -298,8 +315,7 @@ pub struct NookVaultManager {
     pub(in crate::manager) device: DeviceSessionState,
     pub(in crate::manager) status: StatusChannel,
     pub(in crate::manager) event_log: EventLogSessionState,
-    pub(in crate::manager) sentinel_genesis: CeremonyState<nook_core::SentinelGenesisSession>,
-    pub(in crate::manager) sentinel_genesis_identity_id: Option<nook_core::IdentityId>,
+    pub(in crate::manager) sentinel_genesis: CeremonyState<SentinelGenesisCeremony>,
     pub(in crate::manager) sentinel_genesis_phase: nook_core::SentinelGenesisPhase,
     pub(in crate::manager) pending_sentinel_genesis_request:
         CeremonyState<nook_core::SentinelGenesisRequest>,
@@ -316,7 +332,6 @@ impl Drop for NookVaultManager {
         self.device.extension_handoff_private_key.zeroize();
         self.event_log.reset();
         self.sentinel_genesis = CeremonyState::Inactive;
-        self.sentinel_genesis_identity_id = None;
         self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Inactive;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         self.sentinel_unlock = CeremonyState::Inactive;
@@ -337,7 +352,6 @@ impl NookVaultManager {
             status: StatusChannel::new(),
             event_log: EventLogSessionState::default(),
             sentinel_genesis: CeremonyState::Inactive,
-            sentinel_genesis_identity_id: None,
             sentinel_genesis_phase: nook_core::SentinelGenesisPhase::Inactive,
             pending_sentinel_genesis_request: CeremonyState::Inactive,
             sentinel_unlock: CeremonyState::Inactive,

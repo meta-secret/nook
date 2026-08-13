@@ -14,7 +14,8 @@ use wasm_bindgen::prelude::wasm_bindgen;
 #[serde(rename_all = "camelCase")]
 struct PendingSentinelGenesisFinalization {
     store_id: String,
-    identity_id: nook_core::IdentityId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    identity_id: Option<nook_core::IdentityId>,
     vault_name: VaultNameState,
     architecture: nook_core::VaultArchitecture,
     yaml: String,
@@ -58,18 +59,15 @@ impl NookVaultManager {
         }
 
         let signing = self.ensure_signing_identity().await?;
-        let session = self
+        let ceremony = self
             .sentinel_genesis
-            .get("No Sentinel genesis ceremony is active.")?
-            .clone();
+            .get("No Sentinel genesis ceremony is active.")?;
+        let session = ceremony.session.clone();
+        let identity_id = ceremony.identity_id.clone();
         let genesis_request = session.request.clone();
         let participants = session.participants().to_vec();
         let output = nook_core::finalize_sentinel_genesis(session, &signing)?;
         let store_id = output.store_id.as_str().to_owned();
-        let identity_id = self
-            .sentinel_genesis_identity_id
-            .clone()
-            .ok_or_else(|| JsError::new("Sentinel genesis has no initiating identity."))?;
         let vault_name = self.vault.vault_name.clone();
         let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
             &output.stored_records,
@@ -85,7 +83,7 @@ impl NookVaultManager {
         )?;
         let pending = PendingSentinelGenesisFinalization {
             store_id,
-            identity_id,
+            identity_id: Some(identity_id),
             vault_name,
             architecture: output.architecture,
             yaml: yaml.into_inner(),
@@ -106,8 +104,24 @@ impl NookVaultManager {
 impl NookVaultManager {
     async fn complete_sentinel_genesis_finalization(
         &mut self,
-        pending: PendingSentinelGenesisFinalization,
+        mut pending: PendingSentinelGenesisFinalization,
     ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {
+        let identity = self.device_identity()?;
+        let identity_id = if let Some(identity_id) = pending.identity_id.clone() {
+            identity_id
+        } else {
+            let label = match &pending.vault_name {
+                VaultNameState::Named(name) if !name.trim().is_empty() => name.as_str(),
+                _ => "Personal",
+            };
+            let identity_id =
+                super::identity_association::ensure_local_identity(&identity, label).await?;
+            pending.identity_id = Some(identity_id.clone());
+            let upgraded = serde_json::to_string(&pending)
+                .map_err(|error| NookError::Serialization(error.to_string()))?;
+            save_sentinel_genesis_finalization_pending(&upgraded).await?;
+            identity_id
+        };
         let format = nook_core::detect_stored_format(&pending.yaml)?;
         let records = nook_core::deserialize_stored(&pending.yaml, format)?;
         pending.architecture.validate_records(&records)?;
@@ -123,7 +137,6 @@ impl NookVaultManager {
         self.ensure_sentinel_genesis_event(&pending.participants, &pending.deliveries)
             .await?;
 
-        let identity = self.device_identity()?;
         let own_delivery = pending
             .deliveries
             .iter()
@@ -139,7 +152,7 @@ impl NookVaultManager {
         let stored_json = serde_json::to_string(&StoredSentinelGenesisDelivery {
             request: pending.request.clone(),
             delivery: own_delivery.clone(),
-            identity_id: Some(pending.identity_id.clone()),
+            identity_id: Some(identity_id.clone()),
         })
         .map_err(|error| NookError::Serialization(error.to_string()))?;
         save_sentinel_genesis_share_delivery(
@@ -151,14 +164,13 @@ impl NookVaultManager {
         let store_id = nook_core::StoreId::parse(&pending.store_id)
             .map_err(|error| NookError::Database(error.to_string()))?;
         crate::storage::identity_record::associate_sentinel_vault_with_identity(
-            &pending.identity_id,
+            &identity_id,
             &identity,
             store_id,
         )
         .await?;
         clear_sentinel_genesis_finalization_pending().await?;
         self.sentinel_genesis = CeremonyState::Inactive;
-        self.sentinel_genesis_identity_id = None;
         self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::DeliveringShares;
 
         Ok(NookSentinelGenesisFinalizeResult::from_core(

@@ -44,8 +44,8 @@ pub use session::{NookEventLogSyncIssueResult, NookVaultManager, NookVaultNameSt
 
 pub(in crate::manager) use session::{
     CeremonyState, EventLogSessionState, EventLogSyncIssueState, SearchCatalogRestore,
-    SearchCatalogState, StorageSession, SyncOutboxState, VaultCryptoState, VaultNameState,
-    VaultSessionState,
+    SearchCatalogState, SentinelGenesisCeremony, StorageSession, SyncOutboxState, VaultCryptoState,
+    VaultNameState, VaultSessionState,
 };
 
 use crate::NookError;
@@ -208,7 +208,6 @@ impl NookVaultManager {
         self.storage.use_local_cache_for_connect = false;
         self.event_log.reset();
         self.sentinel_genesis = CeremonyState::Inactive;
-        self.sentinel_genesis_identity_id = None;
         self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Inactive;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         self.sentinel_unlock = CeremonyState::Inactive;

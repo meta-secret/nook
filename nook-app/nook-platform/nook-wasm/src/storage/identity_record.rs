@@ -236,17 +236,26 @@ pub(crate) async fn generate_vault_dek_for_selected_identity(
             .iter()
             .any(|member| member.app_id == *app_key.app_id())
         {
-            selected
-                .add_member(nook_core::IdentityMember {
-                    app_id: app_key.app_id().clone(),
-                    auth_id: app_key.auth_id(),
-                    public_key: app_key.public_key(),
-                    label: None,
-                })
-                .map_err(|error| NookError::Database(error.to_string()))?;
+            return Err(NookError::Database(
+                nook_core::MultiDeviceError::IdentityEnrollmentRequired.to_string(),
+            ));
         }
         selected
             .generate_vault_dek(store_id)
+            .map_err(|error| NookError::Database(error.to_string()))
+    })
+    .await
+}
+
+pub(crate) async fn rollback_vault_dek_for_selected_identity(
+    store_id: &nook_core::StoreId,
+) -> Result<(), NookError> {
+    let store_id = store_id.clone();
+    update_identity_directory(move |directory| {
+        directory
+            .selected_mut()
+            .map_err(|error| NookError::Database(error.to_string()))?
+            .rollback_vault_dek(&store_id)
             .map_err(|error| NookError::Database(error.to_string()))
     })
     .await

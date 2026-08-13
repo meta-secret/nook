@@ -198,7 +198,6 @@ impl NookVaultManager {
                 previous_event_log.reset();
                 previous_sync_outbox.reset();
                 self.sentinel_genesis = CeremonyState::Inactive;
-                self.sentinel_genesis_identity_id = None;
                 self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Inactive;
                 self.pending_sentinel_genesis_request = CeremonyState::Inactive;
                 self.sentinel_unlock = CeremonyState::Inactive;
