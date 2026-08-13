@@ -276,6 +276,16 @@ impl NookVaultManager {
             self.reset_vault_session();
             return Err(error.into());
         }
+        let connected_store_id = nook_core::StoreId::parse(&self.vault.store_id)
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        if let Err(error) = crate::storage::identity_record::clear_identity_reconciliation_pending(
+            &connected_store_id,
+        )
+        .await
+        {
+            self.reset_vault_session();
+            return Err(error.into());
+        }
         let records = VerifiedVaultAccessFlow::Connect
             .complete(
                 self.get_records(),
@@ -418,7 +428,8 @@ impl NookVaultManager {
         let pending = self
             .initialize_genesis_vault_with_identity(identity)
             .await?;
-        self.bootstrap_event_log_genesis().await?;
+        self.bootstrap_event_log_genesis_at(&pending.created_at)
+            .await?;
         self.maybe_sync_self_into_roster(identity)?;
         self.event_log.enabled = true;
         self.persist_projection_cache().await?;

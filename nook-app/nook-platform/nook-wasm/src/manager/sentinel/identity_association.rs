@@ -39,6 +39,16 @@ pub(super) async fn identity_for_unlock(
         if let Some(identity_id) = stored.identity_id.clone() {
             return Ok(identity_id);
         }
+        if stored.delivery.store_id != *store_id {
+            return Err(NookError::Database(
+                "Stored Sentinel delivery does not match the requested vault.".to_owned(),
+            ));
+        }
+        let _ = nook_core::accept_sentinel_genesis_share_delivery(
+            &stored.delivery,
+            &stored.request,
+            app_key,
+        )?;
         let identity = crate::storage::identity_record::ensure_unambiguous_identity_for_app_key(
             app_key, "Personal",
         )

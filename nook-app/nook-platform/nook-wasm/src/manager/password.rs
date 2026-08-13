@@ -337,6 +337,13 @@ impl NookVaultManager {
                 self.reset_vault_session();
                 return Err(error.into());
             }
+            if let Err(error) =
+                crate::storage::identity_record::clear_identity_reconciliation_pending(&store_id)
+                    .await
+            {
+                self.reset_vault_session();
+                return Err(error.into());
+            }
         }
 
         if event_log_remote {

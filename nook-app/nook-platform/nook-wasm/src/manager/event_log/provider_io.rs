@@ -129,6 +129,14 @@ impl NookVaultManager {
     pub(in crate::manager) async fn bootstrap_event_log_genesis(
         &mut self,
     ) -> Result<(), NookError> {
+        let created_at = nook_core::IsoTimestamp::parse(&iso_timestamp())?;
+        self.bootstrap_event_log_genesis_at(&created_at).await
+    }
+
+    pub(in crate::manager) async fn bootstrap_event_log_genesis_at(
+        &mut self,
+        created_at: &nook_core::IsoTimestamp,
+    ) -> Result<(), NookError> {
         self.activate_event_log_mode().await?;
         let signing = self.ensure_signing_identity().await?;
         let actor_id = signing.actor_id()?;
@@ -173,7 +181,7 @@ impl NookVaultManager {
             actor_id,
             actor_signing_public_key: signing_public_key,
             parents: Vec::new(),
-            created_at: nook_core::IsoTimestamp::parse(&iso_timestamp())?,
+            created_at: created_at.clone(),
             key_epoch: EventId::parse(&key_epoch)?,
             operations,
         };

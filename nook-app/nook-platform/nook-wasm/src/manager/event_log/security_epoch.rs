@@ -66,6 +66,8 @@ impl NookVaultManager {
         &mut self,
         prepared: PreparedEpochRotation,
     ) -> Result<(), NookError> {
+        let store_id = nook_core::StoreId::parse(&self.vault.store_id)?;
+        crate::storage::identity_record::mark_identity_reconciliation_pending(&store_id).await?;
         self.apply_vault_keys(
             prepared.new_keys.secrets_key.as_str(),
             prepared.new_keys.members_key.as_str(),
@@ -92,7 +94,8 @@ impl NookVaultManager {
         }])
         .await?;
         let identity = self.device_identity()?;
-        self.ensure_identity_after_connect(&identity).await
+        self.ensure_identity_after_connect(&identity).await?;
+        crate::storage::identity_record::clear_identity_reconciliation_pending(&store_id).await
     }
 
     pub(in crate::manager) async fn rotate_security_epoch(

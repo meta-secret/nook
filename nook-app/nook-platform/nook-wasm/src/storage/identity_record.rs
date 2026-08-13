@@ -8,17 +8,24 @@ use serde::{Deserialize, Serialize};
 use super::indexed_db::{StringUpdateGuard, StringUpdateResult, idb_get_string, idb_update_string};
 #[cfg(test)]
 use super::indexed_db::{idb_delete_key, idb_put_string};
-use crate::{NookError, storage::open_nook_database};
+use crate::{NookError, conversion::wasm_iso_timestamp, storage::open_nook_database};
 
 const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
 const LEGACY_IDENTITY_RECORD_KEY: &str = "identity_record_v1";
 const PENDING_SIMPLE_GENESIS_KEY: &str = "pending_simple_genesis_v1";
+const PENDING_IDENTITY_RECONCILIATION_PREFIX: &str = "pending_identity_reconciliation_v1:";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PendingSimpleGenesis {
     pub(crate) store_id: nook_core::StoreId,
     pub(crate) identity_id: nook_core::IdentityId,
+    #[serde(default = "legacy_simple_genesis_timestamp")]
+    pub(crate) created_at: nook_core::IsoTimestamp,
+}
+
+fn legacy_simple_genesis_timestamp() -> nook_core::IsoTimestamp {
+    nook_core::IsoTimestamp::from_trusted("1970-01-01T00:00:00.000Z".to_owned())
 }
 
 fn decode_pending_simple_genesis(raw: &str) -> Result<PendingSimpleGenesis, NookError> {
@@ -269,6 +276,8 @@ pub(crate) async fn begin_or_resume_simple_genesis(
         store_id: nook_core::generate_store_id()
             .map_err(|error| NookError::Database(error.to_string()))?,
         identity_id: identity.identity_id,
+        created_at: nook_core::IsoTimestamp::parse(&wasm_iso_timestamp())
+            .map_err(|error| NookError::Database(error.to_string()))?,
     };
     let proposed_json = serde_json::to_string(&proposed).map_err(|error| {
         NookError::IndexedDb(format!("Pending Simple genesis encode error: {error}"))
@@ -292,6 +301,23 @@ pub(crate) async fn begin_or_resume_simple_genesis(
     selected.borrow_mut().take().ok_or_else(|| {
         NookError::IndexedDb("Pending Simple genesis produced no result.".to_owned())
     })
+}
+
+fn identity_reconciliation_key(store_id: &nook_core::StoreId) -> String {
+    format!("{PENDING_IDENTITY_RECONCILIATION_PREFIX}{store_id}")
+}
+
+pub(crate) async fn mark_identity_reconciliation_pending(
+    store_id: &nook_core::StoreId,
+) -> Result<(), NookError> {
+    super::indexed_db::idb_put_string(&identity_reconciliation_key(store_id), store_id.as_str())
+        .await
+}
+
+pub(crate) async fn clear_identity_reconciliation_pending(
+    store_id: &nook_core::StoreId,
+) -> Result<(), NookError> {
+    super::indexed_db::idb_delete_key(&identity_reconciliation_key(store_id)).await
 }
 
 pub(crate) async fn clear_pending_simple_genesis(

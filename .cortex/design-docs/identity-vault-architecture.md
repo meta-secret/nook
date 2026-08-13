@@ -80,6 +80,15 @@ A reload resumes the same store and identity binding.
 Verified connect completion removes the marker with a compare-and-delete
 transaction.
 An older tab cannot delete a newer genesis marker.
+The marker also owns the genesis timestamp.
+Concurrent tabs therefore sign the same immutable root instead of creating
+multiple parentless roots.
+
+Security-epoch rotation records a per-vault identity-reconciliation marker
+before it appends the checkpoint.
+Successful directory reconciliation clears that marker.
+Any later verified connect repeats the idempotent reconciliation and clears a
+marker left by an interrupted post-commit update.
 
 Verified Sentinel delivery records use
 `sentinel_genesis_share:{store_id}:{device_id}`. New records include an
