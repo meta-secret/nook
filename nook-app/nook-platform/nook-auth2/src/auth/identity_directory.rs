@@ -293,6 +293,11 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        unknown_lints,
+        non_local_effect_before_unhandled_error,
+        reason = "the contract intentionally exercises rejected legacy reconciliation and verifies that state stays unchanged"
+    )]
     fn imported_legacy_vault_does_not_inherit_active_identity() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let mut directory = IdentityDirectory::empty();
@@ -383,6 +388,11 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        unknown_lints,
+        non_local_effect_before_unhandled_error,
+        reason = "the contract intentionally exercises duplicate ownership rejection before verifying the original association"
+    )]
     fn sentinel_association_never_creates_app_key_dek_envelopes() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let store_id = crate::generate_store_id()?;
