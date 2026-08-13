@@ -391,26 +391,10 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         self.initialize_genesis_vault_with_identity(identity)
             .await?;
-        let result = async {
-            self.bootstrap_event_log_genesis().await?;
-            self.maybe_sync_self_into_roster(identity)?;
-            self.event_log.enabled = true;
-            self.persist_projection_cache().await
-        }
-        .await;
-        if let Err(error) = result {
-            let store_id = nook_core::StoreId::parse(&self.vault.store_id)
-                .map_err(|parse_error| NookError::Database(parse_error.to_string()))?;
-            if let Err(rollback_error) =
-                crate::storage::identity_record::rollback_vault_dek_for_selected_identity(&store_id)
-                    .await
-            {
-                return Err(NookError::Database(format!(
-                    "{error}; identity DEK rollback failed: {rollback_error}"
-                )));
-            }
-            return Err(error);
-        }
+        self.bootstrap_event_log_genesis().await?;
+        self.maybe_sync_self_into_roster(identity)?;
+        self.event_log.enabled = true;
+        self.persist_projection_cache().await?;
         Ok(())
     }
 

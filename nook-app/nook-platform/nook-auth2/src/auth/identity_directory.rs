@@ -202,6 +202,72 @@ impl IdentityDirectory {
         Ok(identity.identity_id.clone())
     }
 
+    pub fn open_or_generate_vault_dek(
+        &mut self,
+        app_key: &AppKey,
+        store_id: StoreId,
+    ) -> MultiDeviceResult<crate::VaultKeys> {
+        if let Some(index) = self
+            .identities
+            .iter()
+            .position(|identity| identity.vault_dek(&store_id).is_some())
+        {
+            return self.identities[index].open_or_generate_vault_dek(app_key, store_id);
+        }
+        self.selected_mut()?
+            .open_or_generate_vault_dek(app_key, store_id)
+    }
+
+    pub fn validate_vault_enrollment(
+        &self,
+        app_key: &AppKey,
+        store_id: &StoreId,
+    ) -> MultiDeviceResult<()> {
+        let Some(owner) = self
+            .identities
+            .iter()
+            .find(|record| record.owns_vault(store_id))
+        else {
+            return Ok(());
+        };
+        let member = owner
+            .members
+            .iter()
+            .find(|member| member.app_id == *app_key.app_id())
+            .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
+        if member.auth_id != app_key.auth_id() || member.public_key != app_key.public_key() {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "existing app id has different key material".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn identity_for_app_key(&self, app_key: &AppKey) -> MultiDeviceResult<Option<IdentityId>> {
+        let mut matches = Vec::new();
+        for identity in &self.identities {
+            let Some(member) = identity
+                .members
+                .iter()
+                .find(|member| member.app_id == *app_key.app_id())
+            else {
+                continue;
+            };
+            if member.auth_id != app_key.auth_id() || member.public_key != app_key.public_key() {
+                return Err(MultiDeviceError::InvalidDeviceIdentity(
+                    "existing app id has different key material".to_owned(),
+                ));
+            }
+            matches.push(identity.identity_id.clone());
+        }
+        if matches.len() > 1 {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "app key belongs to multiple local identities".to_owned(),
+            ));
+        }
+        Ok(matches.pop())
+    }
+
     pub fn selected(&self) -> MultiDeviceResult<&IdentityRecord> {
         let IdentitySelection::Selected(identity_id) = &self.selection else {
             return Err(MultiDeviceError::InvalidIdentitySelection);
@@ -289,6 +355,33 @@ mod tests {
         directory.create_identity("Personal", &app_key, None)?;
         let other = IdentityRecord::create_with_app_key("Other", &app_key, None)?;
         assert!(directory.replace_selected(other).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn genesis_retry_reopens_original_owner_after_selection_changes() -> anyhow::Result<()> {
+        let app_key = AppKey::generate()?;
+        let mut directory = IdentityDirectory::empty();
+        let owner_id = directory.create_identity("Personal", &app_key, None)?;
+        let store_id = crate::generate_store_id()?;
+        let original = directory.open_or_generate_vault_dek(&app_key, store_id.clone())?;
+        directory.create_identity("Work", &app_key, None)?;
+
+        let reopened = directory.open_or_generate_vault_dek(&app_key, store_id.clone())?;
+        assert_eq!(reopened, original);
+        let owner = directory
+            .identities()
+            .iter()
+            .find(|identity| identity.identity_id == owner_id)
+            .ok_or_else(|| anyhow::anyhow!("original owner missing"))?;
+        assert!(owner.vault_dek(&store_id).is_some());
+        assert_eq!(directory.selected()?.label, "Work");
+
+        let unenrolled = AppKey::generate()?;
+        assert!(matches!(
+            directory.validate_vault_enrollment(&unenrolled, &store_id),
+            Err(MultiDeviceError::IdentityEnrollmentRequired)
+        ));
         Ok(())
     }
 

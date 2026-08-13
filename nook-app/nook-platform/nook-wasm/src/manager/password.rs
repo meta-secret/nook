@@ -321,6 +321,16 @@ impl NookVaultManager {
         self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
         self.ensure_event_log_ready().await?;
         if let Some(identity) = identity.as_ref() {
+            let store_id = nook_core::StoreId::parse(&self.vault.store_id)
+                .map_err(|error| NookError::Database(error.to_string()))?;
+            if let Err(error) = crate::storage::identity_record::validate_vault_identity_enrollment(
+                identity, &store_id,
+            )
+            .await
+            {
+                self.reset_vault_session();
+                return Err(error.into());
+            }
             self.persist_password_unlock_membership(&records, identity, &keys)
                 .await?;
             if let Err(error) = self.ensure_identity_after_connect(identity).await {

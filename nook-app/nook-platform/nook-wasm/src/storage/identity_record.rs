@@ -184,6 +184,32 @@ pub(crate) async fn ensure_local_identity_for_app_key(
     .await
 }
 
+pub(crate) async fn ensure_unambiguous_identity_for_app_key(
+    app_key: &nook_core::AppKey,
+    label: &str,
+) -> Result<nook_core::IdentityRecord, NookError> {
+    let app_key = app_key.clone();
+    let label = label.to_owned();
+    update_identity_directory(move |directory| {
+        let identity_id = match directory
+            .identity_for_app_key(&app_key)
+            .map_err(|error| NookError::Database(error.to_string()))?
+        {
+            Some(identity_id) => identity_id,
+            None => directory
+                .create_identity(&label, &app_key, None)
+                .map_err(|error| NookError::Database(error.to_string()))?,
+        };
+        directory
+            .identities()
+            .iter()
+            .find(|record| record.identity_id == identity_id)
+            .cloned()
+            .ok_or_else(|| NookError::Database("Identity disappeared during binding.".to_owned()))
+    })
+    .await
+}
+
 /// Associate a legacy vault with an identity without guessing from active selection.
 pub(crate) async fn ensure_identity_from_legacy_vault(
     app_key: &nook_core::AppKey,
@@ -228,37 +254,21 @@ pub(crate) async fn generate_vault_dek_for_selected_identity(
                 .create_identity(&label, &app_key, None)
                 .map_err(|error| NookError::Database(error.to_string()))?;
         }
-        let selected = directory
-            .selected_mut()
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        if !selected
-            .members
-            .iter()
-            .any(|member| member.app_id == *app_key.app_id())
-        {
-            return Err(NookError::Database(
-                nook_core::MultiDeviceError::IdentityEnrollmentRequired.to_string(),
-            ));
-        }
-        selected
-            .generate_vault_dek(store_id)
+        directory
+            .open_or_generate_vault_dek(&app_key, store_id)
             .map_err(|error| NookError::Database(error.to_string()))
     })
     .await
 }
 
-pub(crate) async fn rollback_vault_dek_for_selected_identity(
+pub(crate) async fn validate_vault_identity_enrollment(
+    app_key: &nook_core::AppKey,
     store_id: &nook_core::StoreId,
 ) -> Result<(), NookError> {
-    let store_id = store_id.clone();
-    update_identity_directory(move |directory| {
-        directory
-            .selected_mut()
-            .map_err(|error| NookError::Database(error.to_string()))?
-            .rollback_vault_dek(&store_id)
-            .map_err(|error| NookError::Database(error.to_string()))
-    })
-    .await
+    load_identity_directory()
+        .await?
+        .validate_vault_enrollment(app_key, store_id)
+        .map_err(|error| NookError::Database(error.to_string()))
 }
 
 pub(crate) async fn associate_sentinel_vault_with_identity(

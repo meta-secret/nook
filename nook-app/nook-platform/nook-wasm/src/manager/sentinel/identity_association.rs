@@ -1,7 +1,9 @@
 //! Identity-directory association for Sentinel ceremony lifecycle events.
 
 use crate::NookError;
-use crate::storage::indexed_db::load_sentinel_genesis_share_delivery;
+use crate::storage::indexed_db::{
+    load_sentinel_genesis_share_delivery, save_sentinel_genesis_share_delivery,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -28,17 +30,51 @@ pub(super) async fn identity_for_unlock(
     app_key: &nook_core::AppKey,
     store_id: &nook_core::StoreId,
 ) -> Result<nook_core::IdentityId, NookError> {
-    let stored_identity_id =
+    let stored_json =
         load_sentinel_genesis_share_delivery(store_id.as_str(), app_key.device_id().as_str())
-            .await?
-            .map(|stored_json| {
-                serde_json::from_str::<StoredSentinelGenesisDelivery>(&stored_json)
-                    .map_err(|error| NookError::Serialization(error.to_string()))
-            })
-            .transpose()?
-            .and_then(|stored| stored.identity_id);
-    match stored_identity_id {
-        Some(identity_id) => Ok(identity_id),
-        None => ensure_local_identity(app_key, "Personal").await,
+            .await?;
+    if let Some(stored_json) = stored_json {
+        let mut stored: StoredSentinelGenesisDelivery = serde_json::from_str(&stored_json)
+            .map_err(|error| NookError::Serialization(error.to_string()))?;
+        if let Some(identity_id) = stored.identity_id.clone() {
+            return Ok(identity_id);
+        }
+        let identity = crate::storage::identity_record::ensure_unambiguous_identity_for_app_key(
+            app_key, "Personal",
+        )
+        .await?;
+        stored.identity_id = Some(identity.identity_id.clone());
+        persist_delivery_identity_binding(&stored, app_key).await?;
+        return Ok(identity.identity_id);
     }
+    Ok(
+        crate::storage::identity_record::ensure_unambiguous_identity_for_app_key(
+            app_key, "Personal",
+        )
+        .await?
+        .identity_id,
+    )
+}
+
+pub(super) async fn persist_delivery_identity_binding(
+    stored: &StoredSentinelGenesisDelivery,
+    app_key: &nook_core::AppKey,
+) -> Result<(), NookError> {
+    let identity_id = stored.identity_id.as_ref().ok_or_else(|| {
+        NookError::Database("Sentinel delivery has no identity binding.".to_owned())
+    })?;
+    crate::storage::identity_record::associate_sentinel_vault_with_identity(
+        identity_id,
+        app_key,
+        stored.delivery.store_id.clone(),
+    )
+    .await?;
+    let stored_json = serde_json::to_string(stored)
+        .map_err(|error| NookError::Serialization(error.to_string()))?;
+    save_sentinel_genesis_share_delivery(
+        stored.delivery.store_id.as_str(),
+        app_key.device_id().as_str(),
+        &stored_json,
+    )
+    .await
 }

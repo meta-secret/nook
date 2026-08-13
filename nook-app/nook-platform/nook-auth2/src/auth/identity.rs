@@ -136,21 +136,39 @@ impl IdentityRecord {
         Ok(keys)
     }
 
-    /// Remove a DEK association created by a vault genesis attempt that did not
-    /// become durable. This is a compensating identity-directory mutation.
-    pub fn rollback_vault_dek(&mut self, store_id: &StoreId) -> MultiDeviceResult<()> {
-        let index = self
-            .vault_deks
+    /// Reopen a previously committed DEK on retry, or generate it once.
+    pub fn open_or_generate_vault_dek(
+        &mut self,
+        app_key: &AppKey,
+        store_id: StoreId,
+    ) -> MultiDeviceResult<VaultKeys> {
+        let member = self
+            .members
             .iter()
-            .position(|entry| &entry.store_id == store_id)
-            .ok_or_else(|| {
-                MultiDeviceError::InvalidDeviceIdentity(
-                    "identity does not hold a DEK for this vault".to_owned(),
-                )
-            })?;
-        self.vault_deks.remove(index);
-        self.control_epoch = self.control_epoch.saturating_add(1);
-        Ok(())
+            .find(|member| member.app_id == *app_key.app_id())
+            .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
+        if member.auth_id != app_key.auth_id() || member.public_key != app_key.public_key() {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "existing app id has different key material".to_owned(),
+            ));
+        }
+        let Some(vault_dek) = self.vault_dek(&store_id) else {
+            return self.generate_vault_dek(store_id);
+        };
+        let secrets = vault_dek
+            .secrets_envelopes
+            .iter()
+            .find(|entry| entry.app_id == *app_key.app_id())
+            .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
+        let members = vault_dek
+            .members_envelopes
+            .iter()
+            .find(|entry| entry.app_id == *app_key.app_id())
+            .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
+        Ok(VaultKeys {
+            secrets_key: app_key.decrypt_envelope(&secrets.envelope)?,
+            members_key: app_key.decrypt_envelope(&members.envelope)?,
+        })
     }
 
     /// Re-wrap every vault DEK to the current member set after membership change.
@@ -367,8 +385,9 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("identity DEK missing after generate"))?;
         let opened = app_key.decrypt_envelope(&vault_dek.secrets_envelopes[0].envelope)?;
         assert_eq!(opened.as_str(), keys.secrets_key.as_str());
-        identity.rollback_vault_dek(&store)?;
-        assert!(identity.vault_dek(&store).is_none());
+        let reopened = identity.open_or_generate_vault_dek(&app_key, store.clone())?;
+        assert_eq!(reopened, keys);
+        assert_eq!(identity.vault_deks.len(), 1);
         Ok(())
     }
 

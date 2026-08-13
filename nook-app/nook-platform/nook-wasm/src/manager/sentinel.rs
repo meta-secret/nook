@@ -422,24 +422,35 @@ impl NookVaultManager {
         let records = self.stored_records_snapshot();
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
-        if self.event_log_has_events().await? {
-            self.apply_event_projection_to_session().await?;
-        }
-        self.persist_projection_cache().await?;
-        self.purge_legacy_plaintext_search_catalog().await?;
-        let records = VerifiedVaultAccessFlow::SentinelUnlock
-            .complete(
-                self.get_records(),
-                identity.device_id(),
-                &self.vault.store_id,
+        let completion = async {
+            if self.event_log_has_events().await? {
+                self.apply_event_projection_to_session().await?;
+            }
+            self.persist_projection_cache().await?;
+            self.purge_legacy_plaintext_search_catalog().await?;
+            let records = VerifiedVaultAccessFlow::SentinelUnlock
+                .complete(
+                    self.get_records(),
+                    identity.device_id(),
+                    &self.vault.store_id,
+                )
+                .await?;
+            crate::storage::identity_record::associate_sentinel_vault_with_identity(
+                &identity_id,
+                &identity,
+                store_id,
             )
             .await?;
-        crate::storage::identity_record::associate_sentinel_vault_with_identity(
-            &identity_id,
-            &identity,
-            store_id,
-        )
-        .await?;
+            Ok::<_, JsError>(records)
+        }
+        .await;
+        let records = match completion {
+            Ok(records) => records,
+            Err(error) => {
+                self.reset_vault_session();
+                return Err(error);
+            }
+        };
         self.sentinel_unlock = CeremonyState::Inactive;
         Ok(records)
     }
@@ -460,7 +471,7 @@ impl NookVaultManager {
             .clone();
         let identity = self.ensure_device_identity()?;
         let identity_id =
-            identity_association::ensure_local_identity(&identity, "Personal").await?;
+            identity_association::identity_for_unlock(&identity, &delivery.store_id).await?;
         let record =
             nook_core::accept_sentinel_genesis_share_delivery(&delivery, &request, &identity)?;
         let stored = StoredSentinelGenesisDelivery {
@@ -468,20 +479,7 @@ impl NookVaultManager {
             delivery: delivery.clone(),
             identity_id: Some(identity_id.clone()),
         };
-        let stored_json = serde_json::to_string(&stored)
-            .map_err(|error| NookError::Serialization(error.to_string()))?;
-        save_sentinel_genesis_share_delivery(
-            delivery.store_id.as_str(),
-            identity.device_id().as_str(),
-            &stored_json,
-        )
-        .await?;
-        crate::storage::identity_record::associate_sentinel_vault_with_identity(
-            &identity_id,
-            &identity,
-            delivery.store_id.clone(),
-        )
-        .await?;
+        identity_association::persist_delivery_identity_binding(&stored, &identity).await?;
 
         self.install_accepted_sentinel_delivery(&delivery, &record);
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
