@@ -269,20 +269,40 @@ impl IdentityRecord {
                     "identity does not own this legacy vault".to_owned(),
                 )
             })?;
-        if !vault_dek
+        let secrets_entry = vault_dek
             .secrets_envelopes
-            .iter()
-            .any(|entry| entry.app_id == *app_key.app_id())
-        {
-            vault_dek.secrets_envelopes.push(MemberDekEnvelope {
-                app_id: app_key.app_id().clone(),
-                envelope: secrets_envelope,
-            });
-            vault_dek.members_envelopes.push(MemberDekEnvelope {
-                app_id: app_key.app_id().clone(),
-                envelope: members_envelope,
-            });
-            self.control_epoch = self.control_epoch.saturating_add(1);
+            .iter_mut()
+            .find(|entry| entry.app_id == *app_key.app_id());
+        let members_entry = vault_dek
+            .members_envelopes
+            .iter_mut()
+            .find(|entry| entry.app_id == *app_key.app_id());
+        match (secrets_entry, members_entry) {
+            (Some(secrets_entry), Some(members_entry)) => {
+                if secrets_entry.envelope != secrets_envelope
+                    || members_entry.envelope != members_envelope
+                {
+                    secrets_entry.envelope = secrets_envelope;
+                    members_entry.envelope = members_envelope;
+                    self.control_epoch = self.control_epoch.saturating_add(1);
+                }
+            }
+            (None, None) => {
+                vault_dek.secrets_envelopes.push(MemberDekEnvelope {
+                    app_id: app_key.app_id().clone(),
+                    envelope: secrets_envelope,
+                });
+                vault_dek.members_envelopes.push(MemberDekEnvelope {
+                    app_id: app_key.app_id().clone(),
+                    envelope: members_envelope,
+                });
+                self.control_epoch = self.control_epoch.saturating_add(1);
+            }
+            _ => {
+                return Err(MultiDeviceError::InvalidDeviceIdentity(
+                    "vault DEK envelope sets are inconsistent".to_owned(),
+                ));
+            }
         }
         Ok(())
     }
@@ -388,6 +408,23 @@ mod tests {
         let reopened = identity.open_or_generate_vault_dek(&app_key, store.clone())?;
         assert_eq!(reopened, keys);
         assert_eq!(identity.vault_deks.len(), 1);
+        let rotated = crate::generate_vault_keys()?;
+        identity.reconcile_legacy_vault_member(
+            &app_key,
+            &store,
+            crate::encrypt_for_recipient(
+                rotated.secrets_key.as_str().as_bytes(),
+                &app_key.public_key(),
+            )?,
+            crate::encrypt_for_recipient(
+                rotated.members_key.as_str().as_bytes(),
+                &app_key.public_key(),
+            )?,
+        )?;
+        assert_eq!(
+            identity.open_or_generate_vault_dek(&app_key, store)?,
+            rotated
+        );
         Ok(())
     }
 

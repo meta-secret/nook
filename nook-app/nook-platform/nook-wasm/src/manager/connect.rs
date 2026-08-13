@@ -279,6 +279,9 @@ impl NookVaultManager {
                 &self.vault.store_id,
             )
             .await?;
+        if use_genesis {
+            crate::storage::identity_record::clear_pending_simple_genesis().await?;
+        }
         let _ = self.status.tx.send("READY".to_owned());
         tracing::info!(
             scope = "wasm-connect",
@@ -463,17 +466,18 @@ impl NookVaultManager {
         &mut self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
-        if self.vault.store_id.is_empty() {
-            self.vault.store_id = nook_core::generate_store_id()?.to_string();
-        }
-        let store_id = nook_core::StoreId::parse(&self.vault.store_id)
-            .map_err(|error| NookError::Database(error.to_string()))?;
         let label = match &self.vault.vault_name {
             super::VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
             _ => "Personal".to_owned(),
         };
-        let keys = crate::storage::identity_record::generate_vault_dek_for_selected_identity(
-            identity, &label, store_id,
+        let pending =
+            crate::storage::identity_record::begin_or_resume_simple_genesis(identity, &label)
+                .await?;
+        self.vault.store_id = pending.store_id.to_string();
+        let keys = crate::storage::identity_record::generate_vault_dek_for_identity(
+            &pending.identity_id,
+            identity,
+            pending.store_id,
         )
         .await?;
         self.apply_genesis_vault_keys(identity, &keys)

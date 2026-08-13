@@ -90,7 +90,9 @@ impl NookVaultManager {
             secrets: prepared.secrets,
             members_checkpoint_hash: prepared.members_checkpoint_hash,
         }])
-        .await
+        .await?;
+        let identity = self.device_identity()?;
+        self.ensure_identity_after_connect(&identity).await
     }
 
     pub(in crate::manager) async fn rotate_security_epoch(

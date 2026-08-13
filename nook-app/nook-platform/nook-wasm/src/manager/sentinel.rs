@@ -14,7 +14,7 @@ use crate::conversion::{LoadedVault, load_stored_vault};
 use crate::storage::auth_providers::save_auth_providers;
 use crate::storage::indexed_db::{
     list_sentinel_genesis_share_deliveries, load_sentinel_genesis_finalization_pending,
-    load_sentinel_genesis_share_delivery, save_sentinel_genesis_share_delivery,
+    load_sentinel_genesis_share_delivery,
 };
 use crate::{
     NookSecretRecord, NookSentinelGenesisStatus, NookSentinelStoredDeliverySummary,
@@ -55,26 +55,15 @@ impl NookVaultManager {
         let package = nook_core::decode_sentinel_onboarding_package(&package_json)?;
         let identity = self.ensure_device_identity()?;
         let identity_id =
-            identity_association::ensure_local_identity(&identity, "Personal").await?;
+            identity_association::identity_for_unlock(&identity, &package.delivery.store_id)
+                .await?;
         let accepted = nook_core::accept_sentinel_onboarding_package(&package, &identity)?;
-        let stored_json = serde_json::to_string(&StoredSentinelGenesisDelivery {
+        let stored = StoredSentinelGenesisDelivery {
             request: package.request.clone(),
             delivery: package.delivery.clone(),
             identity_id: Some(identity_id.clone()),
-        })
-        .map_err(|error| NookError::Serialization(error.to_string()))?;
-        save_sentinel_genesis_share_delivery(
-            package.delivery.store_id.as_str(),
-            identity.device_id().as_str(),
-            &stored_json,
-        )
-        .await?;
-        crate::storage::identity_record::associate_sentinel_vault_with_identity(
-            &identity_id,
-            &identity,
-            package.delivery.store_id.clone(),
-        )
-        .await?;
+        };
+        identity_association::persist_delivery_identity_binding(&stored, &identity).await?;
         save_auth_providers(&identity, &accepted.provider_snapshot).await?;
         self.install_accepted_sentinel_delivery(&package.delivery, &accepted.share_record);
         self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Complete;

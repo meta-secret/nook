@@ -218,6 +218,31 @@ impl IdentityDirectory {
             .open_or_generate_vault_dek(app_key, store_id)
     }
 
+    pub fn open_or_generate_vault_dek_for_identity(
+        &mut self,
+        identity_id: &IdentityId,
+        app_key: &AppKey,
+        store_id: StoreId,
+    ) -> MultiDeviceResult<crate::VaultKeys> {
+        if let Some(owner) = self
+            .identities
+            .iter()
+            .find(|identity| identity.vault_dek(&store_id).is_some())
+            && owner.identity_id != *identity_id
+        {
+            return Err(MultiDeviceError::DuplicateVaultOwnership {
+                store_id: store_id.to_string(),
+            });
+        }
+        self.identities
+            .iter_mut()
+            .find(|identity| identity.identity_id == *identity_id)
+            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                identity_id: identity_id.to_string(),
+            })?
+            .open_or_generate_vault_dek(app_key, store_id)
+    }
+
     pub fn validate_vault_enrollment(
         &self,
         app_key: &AppKey,

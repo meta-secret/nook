@@ -3,13 +3,31 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::indexed_db::{StringUpdateGuard, StringUpdateResult, idb_update_string};
+use serde::{Deserialize, Serialize};
+
 #[cfg(test)]
-use super::indexed_db::{idb_delete_key, idb_get_string, idb_put_string};
+use super::indexed_db::idb_put_string;
+use super::indexed_db::{
+    StringUpdateGuard, StringUpdateResult, idb_delete_key, idb_get_string, idb_update_string,
+};
 use crate::{NookError, storage::open_nook_database};
 
 const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
 const LEGACY_IDENTITY_RECORD_KEY: &str = "identity_record_v1";
+const PENDING_SIMPLE_GENESIS_KEY: &str = "pending_simple_genesis_v1";
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PendingSimpleGenesis {
+    pub(crate) store_id: nook_core::StoreId,
+    pub(crate) identity_id: nook_core::IdentityId,
+}
+
+fn decode_pending_simple_genesis(raw: &str) -> Result<PendingSimpleGenesis, NookError> {
+    serde_json::from_str(raw).map_err(|error| {
+        NookError::IndexedDb(format!("Pending Simple genesis decode error: {error}"))
+    })
+}
 
 async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, NookError> {
     let rexie = open_nook_database().await?;
@@ -241,21 +259,57 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
     .await
 }
 
-pub(crate) async fn generate_vault_dek_for_selected_identity(
+pub(crate) async fn begin_or_resume_simple_genesis(
     app_key: &nook_core::AppKey,
     label: &str,
+) -> Result<PendingSimpleGenesis, NookError> {
+    if let Some(raw) = idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? {
+        return decode_pending_simple_genesis(&raw);
+    }
+    let identity = ensure_local_identity_for_app_key(app_key, label).await?;
+    let proposed = PendingSimpleGenesis {
+        store_id: nook_core::generate_store_id()
+            .map_err(|error| NookError::Database(error.to_string()))?,
+        identity_id: identity.identity_id,
+    };
+    let proposed_json = serde_json::to_string(&proposed).map_err(|error| {
+        NookError::IndexedDb(format!("Pending Simple genesis encode error: {error}"))
+    })?;
+    let selected = Rc::new(RefCell::new(None));
+    let captured = Rc::clone(&selected);
+    idb_update_string(
+        PENDING_SIMPLE_GENESIS_KEY,
+        StringUpdateGuard::Unconditional,
+        move |current| {
+            let pending = current
+                .as_deref()
+                .map(decode_pending_simple_genesis)
+                .transpose()?
+                .unwrap_or(proposed);
+            *captured.borrow_mut() = Some(pending);
+            Ok(current.unwrap_or(proposed_json))
+        },
+    )
+    .await?;
+    selected.borrow_mut().take().ok_or_else(|| {
+        NookError::IndexedDb("Pending Simple genesis produced no result.".to_owned())
+    })
+}
+
+pub(crate) async fn clear_pending_simple_genesis() -> Result<(), NookError> {
+    idb_delete_key(PENDING_SIMPLE_GENESIS_KEY).await
+}
+
+pub(crate) async fn generate_vault_dek_for_identity(
+    identity_id: &nook_core::IdentityId,
+    app_key: &nook_core::AppKey,
     store_id: nook_core::StoreId,
 ) -> Result<nook_core::VaultKeys, NookError> {
+    let identity_id = identity_id.clone();
     let app_key = app_key.clone();
-    let label = label.to_owned();
     update_identity_directory(move |directory| {
-        if matches!(directory.selection(), nook_core::IdentitySelection::Empty) {
-            directory
-                .create_identity(&label, &app_key, None)
-                .map_err(|error| NookError::Database(error.to_string()))?;
-        }
         directory
-            .open_or_generate_vault_dek(&app_key, store_id)
+            .open_or_generate_vault_dek_for_identity(&identity_id, &app_key, store_id)
             .map_err(|error| NookError::Database(error.to_string()))
     })
     .await
@@ -290,7 +344,8 @@ pub(crate) async fn associate_sentinel_vault_with_identity(
 #[cfg(test)]
 pub(crate) async fn clear_identity_directory_for_test() -> Result<(), NookError> {
     idb_delete_key(IDENTITY_DIRECTORY_KEY).await?;
-    idb_delete_key(LEGACY_IDENTITY_RECORD_KEY).await
+    idb_delete_key(LEGACY_IDENTITY_RECORD_KEY).await?;
+    idb_delete_key(PENDING_SIMPLE_GENESIS_KEY).await
 }
 
 #[cfg(test)]
@@ -332,6 +387,26 @@ mod tests {
             reloaded.selected().map_err(map_domain_error)?.identity_id,
             work_id
         );
+        clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn pending_genesis_survives_selection_change() -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let pending = begin_or_resume_simple_genesis(&app_key, "Personal").await?;
+        let another_key = app_key.clone();
+        update_identity_directory(move |directory| {
+            directory
+                .create_identity("Work", &another_key, None)
+                .map_err(map_domain_error)?;
+            Ok(())
+        })
+        .await?;
+
+        let resumed = begin_or_resume_simple_genesis(&app_key, "Ignored").await?;
+        assert_eq!(resumed.store_id, pending.store_id);
+        assert_eq!(resumed.identity_id, pending.identity_id);
         clear_identity_directory_for_test().await
     }
 
