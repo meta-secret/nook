@@ -566,8 +566,27 @@ impl NookVaultManager {
             pending.store_id.clone(),
         )
         .await?;
-        self.apply_genesis_vault_keys(identity, &keys)?;
+        let identity_record = crate::storage::identity_record::load_identity(&pending.identity_id)
+            .await?
+            .ok_or_else(|| {
+                NookError::Database("Pending genesis identity no longer exists.".to_owned())
+            })?;
+        self.apply_identity_genesis_vault_keys(&identity_record, &keys)?;
         Ok(pending)
+    }
+
+    fn apply_identity_genesis_vault_keys(
+        &mut self,
+        identity: &nook_core::IdentityRecord,
+        keys: &nook_core::VaultKeys,
+    ) -> Result<(), NookError> {
+        self.prepare_genesis_vault_keys(keys)?;
+        if self.vault.architecture.vault_type == nook_core::VaultType::Simple {
+            for record in nook_core::identity_vault_genesis_records(identity, keys, "genesis")? {
+                self.vault.meta.apply_record(&record);
+            }
+        }
+        Ok(())
     }
 
     /// Test/helper path that still creates vault keys without Identity persistence.
@@ -585,10 +604,7 @@ impl NookVaultManager {
         identity: &nook_core::DeviceIdentity,
         keys: &nook_core::VaultKeys,
     ) -> Result<(), NookError> {
-        self.vault.password_entries.clear();
-        self.vault.unlock = nook_core::VaultUnlock::Keys;
-        self.vault.meta = nook_core::VaultMetaState::default();
-        self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
+        self.prepare_genesis_vault_keys(keys)?;
         match self.vault.architecture.vault_type {
             nook_core::VaultType::Simple => {
                 let genesis =
@@ -603,6 +619,14 @@ impl NookVaultManager {
         for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
             self.vault.meta.apply_record(&member);
         }
+        Ok(())
+    }
+
+    fn prepare_genesis_vault_keys(&mut self, keys: &nook_core::VaultKeys) -> Result<(), NookError> {
+        self.vault.password_entries.clear();
+        self.vault.unlock = nook_core::VaultUnlock::Keys;
+        self.vault.meta = nook_core::VaultMetaState::default();
+        self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         self.vault.last_synced_content.clear();
         Ok(())
     }

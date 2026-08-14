@@ -5,6 +5,7 @@ pub mod enrollment;
 pub mod identity;
 mod identity_dek_grant;
 pub mod identity_directory;
+pub(crate) mod identity_genesis;
 pub mod multi_device;
 pub mod password_envelope;
 pub mod sentinel_genesis;

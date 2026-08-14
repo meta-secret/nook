@@ -163,6 +163,17 @@ pub(crate) async fn load_selected_identity() -> Result<Option<nook_core::Identit
     }
 }
 
+pub(crate) async fn load_identity(
+    identity_id: &nook_core::IdentityId,
+) -> Result<Option<nook_core::IdentityRecord>, NookError> {
+    Ok(load_identity_directory()
+        .await?
+        .identities()
+        .iter()
+        .find(|record| record.identity_id == *identity_id)
+        .cloned())
+}
+
 /// Ensure the selected identity contains the current app key.
 ///
 /// This preserves the legacy single-installation bootstrap. New cross-installation

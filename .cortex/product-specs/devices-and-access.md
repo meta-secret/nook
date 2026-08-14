@@ -89,8 +89,9 @@ Security-epoch retry state uses
 `pending_identity_reconciliation_v2:{store_id}`.
 Its value pins `storeId`, `previousKeyEpoch`, `previousCheckpoint`, and tagged
 `progress`. `prepared` contains an app-key-encrypted resumable plan with exact
-signed trigger and checkpoint events. `epoch-committed` adds `keyEpoch`.
-`committed` replaces the plan with the exact checkpoint event ID. Connect must
+signed trigger and checkpoint events. `epoch-committed` adds `key_epoch` and
+retains `plan_envelope`. `committed` replaces the plan with the exact checkpoint
+event ID. Connect must
 resume prepared work before identity reconciliation.
 Each identity-owned Simple vault DEK serializes `key_epoch`. Missing legacy
 fields decode as tagged `legacy-unknown`; current `known` values carry both

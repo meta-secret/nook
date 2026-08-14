@@ -213,6 +213,7 @@ pub use nook_auth2::{
     AppId, AppKey, IdentityDirectory, IdentityId, IdentityMember, IdentityRecord,
     IdentitySelection, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
     IdentityVaultDekReconciliation, IdentityVaultEventId, MemberDekEnvelope, identity_fingerprint,
+    identity_vault_genesis_records,
 };
 
 pub use multi_device::{

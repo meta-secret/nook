@@ -1,7 +1,6 @@
 use super::{
     BuiltVaultEvent, NookError, NookVaultManager, VaultOperation,
-    members_checkpoint_hash_from_roster, rewrap_vault_meta_for_epoch,
-    rewrapped_vault_meta_records_for_epoch, save_key_epoch,
+    members_checkpoint_hash_from_roster, rewrapped_vault_meta_records_for_epoch, save_key_epoch,
 };
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
@@ -9,8 +8,6 @@ use zeroize::{Zeroize, Zeroizing};
 struct PreparedEpochRotation {
     previous_key_epoch: nook_core::IdentityVaultEventId,
     previous_checkpoint: nook_core::IdentityVaultEventId,
-    records_snapshot: Vec<nook_core::StoredSecretRecord>,
-    old_members_key: nook_core::SymmetricKey,
     new_keys: nook_core::VaultKeys,
     secrets: Vec<nook_core::EncryptedSecretPayload>,
     members_checkpoint_hash: nook_core::Sha256Hex,
@@ -20,19 +17,14 @@ struct PreparedEpochRotation {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SecurityEpochRecoveryPlan {
-    records_snapshot: Vec<nook_core::StoredSecretRecord>,
-    old_members_key: String,
     new_secrets_key: String,
     new_members_key: String,
-    secrets: Vec<nook_core::EncryptedSecretPayload>,
-    members_checkpoint_hash: nook_core::Sha256Hex,
     trigger_event_yaml: String,
     checkpoint_event_yaml: String,
 }
 
 impl Drop for SecurityEpochRecoveryPlan {
     fn drop(&mut self) {
-        self.old_members_key.zeroize();
         self.new_secrets_key.zeroize();
         self.new_members_key.zeroize();
     }
@@ -45,21 +37,6 @@ fn built_event_from_yaml(yaml: &str) -> Result<BuiltVaultEvent, NookError> {
 }
 
 impl NookVaultManager {
-    fn rewrap_device_meta_for_epoch(
-        &mut self,
-        records_snapshot: &[nook_core::StoredSecretRecord],
-        old_members_key: &nook_core::SymmetricKey,
-        new_keys: &nook_core::VaultKeys,
-    ) -> Result<(), NookError> {
-        rewrap_vault_meta_for_epoch(
-            &mut self.vault.meta,
-            records_snapshot,
-            old_members_key,
-            new_keys,
-        )?;
-        Ok(())
-    }
-
     fn prepare_security_epoch_rotation(
         &self,
         previous_key_epoch: nook_core::IdentityVaultEventId,
@@ -85,8 +62,6 @@ impl NookVaultManager {
         Ok(PreparedEpochRotation {
             previous_key_epoch,
             previous_checkpoint,
-            records_snapshot,
-            old_members_key,
             new_keys,
             secrets,
             members_checkpoint_hash,
@@ -148,12 +123,8 @@ impl NookVaultManager {
         let checkpoint_event_yaml = String::from_utf8(checkpoint_event.bytes)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         let plan = SecurityEpochRecoveryPlan {
-            records_snapshot: prepared.records_snapshot,
-            old_members_key: prepared.old_members_key.as_str().to_owned(),
             new_secrets_key: prepared.new_keys.secrets_key.as_str().to_owned(),
             new_members_key: prepared.new_keys.members_key.as_str().to_owned(),
-            secrets: prepared.secrets,
-            members_checkpoint_hash: prepared.members_checkpoint_hash,
             trigger_event_yaml,
             checkpoint_event_yaml,
         };
@@ -174,50 +145,6 @@ impl NookVaultManager {
         Ok(plan)
     }
 
-    async fn validate_security_epoch_trigger(
-        &self,
-        event: &nook_core::VaultEvent,
-    ) -> Result<(), NookError> {
-        let event_id = event.id()?;
-        let local = crate::storage::event_db::load_local_event_store(&self.vault.store_id).await?;
-        let mut graph = local.load_graph(&self.vault.store_id)?;
-        if !graph.contains(&event_id) {
-            let mut current_heads = graph.heads();
-            let mut expected_heads = event.body.parents.clone();
-            current_heads.sort();
-            expected_heads.sort();
-            if current_heads != expected_heads {
-                return Err(NookError::Database(
-                    "Vault changed before security epoch commit; recovery is required.".to_owned(),
-                ));
-            }
-        }
-        match graph.insert(event.clone(), self.vault.store_id.as_str())? {
-            nook_core::EventInsertStatus::Quarantined(reason) => {
-                return Err(NookError::Database(format!(
-                    "Refusing conflicting security epoch event: {reason}"
-                )));
-            }
-            nook_core::EventInsertStatus::Pending(reason) => {
-                return Err(NookError::Database(format!(
-                    "Refusing security epoch event with unresolved parents: {reason:?}"
-                )));
-            }
-            nook_core::EventInsertStatus::Duplicate | nook_core::EventInsertStatus::Applied => {}
-        }
-        let projection = nook_core::project_vault(&graph, &self.vault.store_id)?;
-        if projection
-            .security_conflicts
-            .iter()
-            .any(|conflict| conflict.events.contains(&event_id))
-        {
-            return Err(NookError::Database(
-                "Concurrent security epoch transition detected; recovery is required.".to_owned(),
-            ));
-        }
-        Ok(())
-    }
-
     async fn execute_security_epoch_recovery_plan(
         &mut self,
         plan: SecurityEpochRecoveryPlan,
@@ -235,38 +162,35 @@ impl NookVaultManager {
                 "Persisted security epoch does not match its recovery plan.".to_owned(),
             ));
         }
-        self.validate_security_epoch_trigger(&trigger_event.event)
-            .await?;
-        self.persist_built_vault_event(trigger_event).await?;
+        let checkpoint_event = built_event_from_yaml(&plan.checkpoint_event_yaml)?;
+        let checkpoint_id = checkpoint_event.event.id()?;
+        let checkpoint = nook_core::IdentityVaultEventId::parse(checkpoint_id.as_str())?;
+        self.event_log.heads = crate::storage::event_db::save_security_epoch_event_pair(
+            &self.vault.store_id,
+            &trigger_event.event,
+            &trigger_event.bytes,
+            &checkpoint_event.event,
+            &checkpoint_event.bytes,
+        )
+        .await?;
         crate::storage::identity_record::commit_identity_reconciliation_epoch(
             &store_id, &key_epoch,
         )
         .await?;
-        self.event_log.key_epoch = trigger_event_id.into_inner();
+        self.event_log.key_epoch = trigger_event_id.as_str().to_owned();
         save_key_epoch(&self.vault.store_id, &self.event_log.key_epoch).await?;
 
-        let old_members_key = nook_core::SymmetricKey::parse(&plan.old_members_key)?;
         let new_keys = nook_core::VaultKeys {
             secrets_key: nook_core::SymmetricKey::parse(&plan.new_secrets_key)?,
             members_key: nook_core::SymmetricKey::parse(&plan.new_members_key)?,
         };
         self.apply_vault_keys(new_keys.secrets_key.as_str(), new_keys.members_key.as_str())?;
-        self.rewrap_device_meta_for_epoch(&plan.records_snapshot, &old_members_key, &new_keys)?;
-        for payload in &plan.secrets {
-            self.vault.meta.secrets.insert(
-                payload.id.clone(),
-                (
-                    payload.secret_type,
-                    nook_core::StoredRecordPayload::from_trusted(
-                        payload.ciphertext.as_str().to_owned(),
-                    ),
-                ),
-            );
-        }
-        let checkpoint_event = built_event_from_yaml(&plan.checkpoint_event_yaml)?;
-        let checkpoint =
-            nook_core::IdentityVaultEventId::parse(checkpoint_event.event.id()?.as_str())?;
-        self.persist_built_vault_event(checkpoint_event).await?;
+        self.apply_event_projection_to_session().await?;
+        self.queue_event_outbox_for_current_provider(&trigger_event_id, &trigger_event.bytes)
+            .await?;
+        self.queue_event_outbox_for_current_provider(&checkpoint_id, &checkpoint_event.bytes)
+            .await?;
+        self.persist_projection_cache().await?;
         crate::storage::identity_record::commit_identity_reconciliation_checkpoint(
             &store_id,
             &key_epoch,
