@@ -74,10 +74,17 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 ## 8. Default to the Coding Bro Pipeline
 
 - **Every implementation task** follows [workflows/coding-bro.md](../workflows/coding-bro.md).
-- Pipeline: fetch → branch from `origin/main` → implement → Loom pre-push →
-  commit and push/update PR → focused hosted execution → final complete PR
-  validation → fix failures/comments/conflicts → exact-head readiness audit →
-  automatic agent-owned squash merge.
+- The delivery pipeline has these ordered steps:
+  1. Fetch the repository.
+  2. Branch from `origin/main`.
+  3. Implement the change.
+  4. Run Loom pre-push.
+  5. Commit and push or update the PR.
+  6. Run focused hosted execution.
+  7. Run final complete PR validation.
+  8. Fix failures, comments, and conflicts.
+  9. Run the exact-head readiness audit.
+  10. Complete the automatic agent-owned squash merge.
 - **Do not stop at push or readiness.** The agent owns the PR through squash merge unless concretely blocked.
 - **Question-only turns** (no code changes) skip the pipeline.
 

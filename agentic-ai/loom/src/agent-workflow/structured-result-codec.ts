@@ -45,7 +45,11 @@ export const WORKFLOW_TASK_OUTPUT_SCHEMA = {
           },
           title: { type: 'string' },
           summary: { type: 'string' },
-          evidence: { type: 'array', items: { type: 'string' } },
+          evidence: {
+            type: 'array',
+            minItems: 1,
+            items: { type: 'string', minLength: 1, pattern: '\\S' },
+          },
           affectedPaths: { type: 'array', items: { type: 'string' } },
         },
       },
@@ -134,7 +138,7 @@ function decodeFindings(node: UntrustedYamlNode): readonly WorkflowFinding[] {
       severity: severityValue as WorkflowFindingSeverity,
       title: stringValue(readProperty([entry, 'title'])),
       summary: stringValue(readProperty([entry, 'summary'])),
-      evidence: stringSequence(readProperty([entry, 'evidence'])),
+      evidence: evidenceSequence(readProperty([entry, 'evidence'])),
       affectedPaths: stringSequence(readProperty([entry, 'affectedPaths'])),
     };
     return finding;
@@ -206,6 +210,16 @@ function stringSequence(node: UntrustedYamlNode): readonly string[] {
     invalidOutput('workflow structured result expected a string array');
   }
   return node as readonly string[];
+}
+
+function evidenceSequence(node: UntrustedYamlNode): readonly string[] {
+  const evidence = stringSequence(node);
+  if (evidence.length === 0 || evidence.some((entry) => entry.trim() === '')) {
+    invalidOutput(
+      'each workflow finding requires at least one non-empty evidence string',
+    );
+  }
+  return evidence;
 }
 
 function invalidOutput(message: string): never {
