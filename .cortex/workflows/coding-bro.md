@@ -173,8 +173,8 @@ Default agent flow:
 6. **Validate on GitHub Actions:**
    - Dispatch focused `task remote` jobs as useful.
    - Run `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`.
-   - Loom requests exact-head Codex review through `task pr:validate`.
-   - Repository-owned PR checks start immediately after the request.
+   - Loom dispatches repository-owned PR checks through `task pr:validate`.
+   - It then attempts the non-blocking exact-head Codex review request.
    - Green status is necessary, but the full readiness audit must also pass.
    - See [code-review.md](code-review.md).
 7. **On a Nook PR-test failure:**
@@ -242,10 +242,11 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    - Use `task remote` for focused feedback.
    - Run `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` at the
      complete validation boundary.
-   - Loom converges Codex review first.
+   - Loom dispatches validation before attempting the Codex review request.
    - Monitor repository-owned PR checks.
    - Inspect any feedback already present.
-   - Never wait for Codex after repository-owned checks finish. Never request or wait for other optional external reviewers.
+   - Never wait for Codex after repository-owned checks finish.
+   - Never request or wait for other optional external reviewers.
    - Before merging, fetch `origin/main` and verify the PR branch is not stale.
    - If it is stale, merge `origin/main`, push, and explicitly validate the refreshed head.
 7. **Fix loop on failure** — If Nook's PR test checks fail: read **app logs** → fix → `task loom:pre-push` → commit and push → optional focused `task remote` → explicitly re-validate.
