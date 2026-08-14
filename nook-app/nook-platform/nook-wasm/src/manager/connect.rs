@@ -398,6 +398,7 @@ impl NookVaultManager {
                     verified_previous_key_epoch,
                     committed_event_ids,
                     checkpoint_ancestors,
+                    authorized_auth_ids: self.vault.meta.auth.keys().cloned().collect(),
                     label: &label,
                 },
             )

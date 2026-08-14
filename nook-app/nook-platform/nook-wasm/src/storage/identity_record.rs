@@ -265,6 +265,7 @@ pub(crate) struct LegacyVaultIdentityInput<'a> {
     pub(crate) verified_previous_key_epoch: Option<nook_core::IdentityVaultEventId>,
     pub(crate) committed_event_ids: Vec<nook_core::IdentityVaultEventId>,
     pub(crate) checkpoint_ancestors: Vec<nook_core::IdentityVaultEventId>,
+    pub(crate) authorized_auth_ids: Vec<nook_core::AuthKeyId>,
     pub(crate) label: &'a str,
 }
 
@@ -280,6 +281,7 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
         verified_previous_key_epoch,
         committed_event_ids,
         checkpoint_ancestors,
+        authorized_auth_ids,
         label,
     } = input;
     let app_key = app_key.clone();
@@ -301,9 +303,12 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
                 &label,
                 &app_key,
                 directory_store_id,
-                secrets_envelope,
-                members_envelope,
-                resolution.update,
+                nook_core::IdentityVaultDekReconciliation {
+                    secrets_envelope,
+                    members_envelope,
+                    epoch_update: resolution.update,
+                    authorized_auth_ids,
+                },
             )
             .map_err(|error| NookError::Database(error.to_string()))?;
         directory
@@ -425,7 +430,10 @@ async fn reset_identity_directory_for_recovery() -> Result<(), NookError> {
     for key in store_ids
         .iter()
         .flat_map(identity_reconciliation_keys_for_recovery)
-        .chain([LEGACY_IDENTITY_RECORD_KEY.to_owned()])
+        .chain([
+            LEGACY_IDENTITY_RECORD_KEY.to_owned(),
+            simple_genesis::PENDING_SIMPLE_GENESIS_KEY.to_owned(),
+        ])
     {
         let key = serde_wasm_bindgen::to_value(&key).map_err(|error| {
             NookError::IndexedDb(format!("Identity reset delete key error: {error:?}"))
@@ -441,8 +449,7 @@ async fn reset_identity_directory_for_recovery() -> Result<(), NookError> {
 }
 
 pub(crate) async fn delete_identity_directory_for_recovery() -> Result<(), NookError> {
-    reset_identity_directory_for_recovery().await?;
-    simple_genesis::clear_pending_simple_genesis_for_recovery().await
+    reset_identity_directory_for_recovery().await
 }
 
 #[cfg(test)]

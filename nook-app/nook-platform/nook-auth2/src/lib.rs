@@ -88,8 +88,8 @@ pub use auth::password_envelope::{
     attach_password_envelope, attach_password_envelope_with_work_factor, create_password_entry,
     create_password_entry_with_work_factor, is_vault_password_long_enough,
     is_vault_password_recommended_length, resolve_keys_from_entry, resolve_keys_from_password,
-    vault_password_min_length, vault_password_recommended_min_length, verify_password,
-    verify_password_entry,
+    rewrap_password_envelope, vault_password_min_length, vault_password_recommended_min_length,
+    verify_password, verify_password_entry,
 };
 pub use auth::sentinel_genesis::{
     SentinelGenesisIssued, SentinelGenesisParticipant, SentinelGenesisParticipantResponse,

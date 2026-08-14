@@ -20,6 +20,7 @@ mod event;
 mod fingerprint;
 mod graph;
 mod projection;
+mod remote_epoch_visibility;
 mod signing;
 mod store;
 
@@ -49,6 +50,7 @@ pub use projection::{
     SecretReplacementConflict, SecurityConflict, VaultProjection,
     assert_projection_permutation_invariant, project_vault,
 };
+pub use remote_epoch_visibility::order_remote_events_for_visibility;
 pub use signing::SigningIdentity;
 pub use store::{
     LocalEventStore, RemoteEventLogClassification, classify_remote_event_log,

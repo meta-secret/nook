@@ -14,6 +14,32 @@ struct PreparedEpochRotation {
     rotated_meta_records: Vec<nook_core::StoredSecretRecord>,
 }
 
+fn rewrap_password_entries(
+    entries: &[nook_core::PasswordUnlockEntry],
+    new_keys: &nook_core::VaultKeys,
+    trigger: &VaultOperation,
+) -> Result<Vec<nook_core::PasswordUnlockEntry>, NookError> {
+    let mut entries = entries.to_vec();
+    match trigger {
+        VaultOperation::PasswordRotated { entry_id, envelope } => {
+            let entry = entries
+                .iter_mut()
+                .find(|entry| entry.id == entry_id.as_str())
+                .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
+            entry.envelope.clone_from(envelope);
+        }
+        VaultOperation::PasswordRemoved { entry_id } => {
+            entries.retain(|entry| entry.id != entry_id.as_str());
+        }
+        _ => {}
+    }
+    for entry in &mut entries {
+        entry.envelope = nook_core::rewrap_password_envelope(&entry.envelope, new_keys)
+            .map_err(|error| NookError::Database(error.to_string()))?;
+    }
+    Ok(entries)
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SecurityEpochRecoveryPlan {
@@ -82,7 +108,7 @@ impl NookVaultManager {
 
     async fn persist_security_epoch_recovery_plan(
         &mut self,
-        mut prepared: PreparedEpochRotation,
+        prepared: PreparedEpochRotation,
         trigger: VaultOperation,
     ) -> Result<SecurityEpochRecoveryPlan, NookError> {
         let previous_key_epoch = prepared.previous_key_epoch.clone();
@@ -98,10 +124,8 @@ impl NookVaultManager {
                 "Vault changed while preparing security epoch rotation; retry.".to_owned(),
             ));
         }
-        prepared = self.prepare_security_epoch_rotation(
-            prepared.previous_key_epoch,
-            prepared.previous_checkpoint,
-        )?;
+        let password_entries =
+            rewrap_password_entries(&self.vault.password_entries, &prepared.new_keys, &trigger)?;
         let previous_epoch = nook_core::EventId::parse(prepared.previous_key_epoch.as_str())?;
         let trigger_event = self
             .build_vault_operations_event(vec![trigger], parents, previous_epoch)
@@ -113,6 +137,7 @@ impl NookVaultManager {
                     secrets: prepared.secrets.clone(),
                     members_checkpoint_hash: prepared.members_checkpoint_hash.clone(),
                     rotated_meta_records: prepared.rotated_meta_records,
+                    password_entries: Some(password_entries),
                 }],
                 vec![trigger_event_id.clone()],
                 trigger_event_id,
@@ -186,9 +211,9 @@ impl NookVaultManager {
         };
         self.apply_vault_keys(new_keys.secrets_key.as_str(), new_keys.members_key.as_str())?;
         self.apply_event_projection_to_session().await?;
-        self.queue_event_outbox_for_current_provider(&trigger_event_id, &trigger_event.bytes)
-            .await?;
         self.queue_event_outbox_for_current_provider(&checkpoint_id, &checkpoint_event.bytes)
+            .await?;
+        self.queue_event_outbox_for_current_provider(&trigger_event_id, &trigger_event.bytes)
             .await?;
         self.persist_projection_cache().await?;
         crate::storage::identity_record::commit_identity_reconciliation_checkpoint(

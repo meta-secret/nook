@@ -47,17 +47,28 @@ type LocalDataResetMessage =
 
 type BrowserDataDeletionErrors = Error[];
 
+export type LocalDataStorageOperation<T> = {
+  readonly generation: string;
+  readonly operation: () => T | Promise<T>;
+};
+
+export function captureLocalDataStorageGeneration(): string {
+  return localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION) ?? "";
+}
+
 export async function runWithLocalDataStorageLock<T>(
-  operation: () => T | Promise<T>,
+  input: LocalDataStorageOperation<T>,
 ): Promise<T> {
-  if (!("locks" in navigator)) return operation();
-  const generation = localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION);
+  if (!("locks" in navigator)) return input.operation();
   const options: LockOptions = { mode: "shared" };
   return navigator.locks.request(LOCAL_DATA_STORAGE_LOCK, options, () => {
-    if (localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION) !== generation) {
+    if (
+      (localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION) ?? "") !==
+      input.generation
+    ) {
       throw new Error("Local browser data changed in another Nook tab");
     }
-    return operation();
+    return input.operation();
   });
 }
 

@@ -214,8 +214,8 @@ async fn write_events<const COUNT: usize>(
     Ok(heads)
 }
 
-async fn begin_append_transaction(
-) -> Result<(rexie::Rexie, rexie::Transaction), NookError> {
+async fn begin_append_transaction()
+-> Result<(std::rc::Rc<rexie::Rexie>, rexie::Transaction), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(
@@ -229,7 +229,7 @@ async fn begin_append_transaction(
 /// Validate and persist one event and its derived heads atomically.
 ///
 /// The transaction overlaps the same events store as security-epoch commits,
-/// so IndexedDB serializes their frontier checks and writes across tabs.
+/// so `IndexedDB` serializes their frontier checks and writes across tabs.
 pub(crate) async fn save_verified_event(
     store_id: &str,
     event: &VaultEvent,

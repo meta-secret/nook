@@ -5,12 +5,14 @@ use std::{cell::RefCell, rc::Rc};
 use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 
 use super::ensure_local_identity_for_app_key;
+#[cfg(test)]
+use crate::storage::indexed_db::idb_delete_key;
 use crate::storage::indexed_db::{
-    StringUpdateGuard, StringUpdateResult, idb_delete_key, idb_get_string, idb_update_string,
+    StringUpdateGuard, StringUpdateResult, idb_get_string, idb_update_string,
 };
 use crate::{NookError, conversion::wasm_iso_timestamp, storage::open_nook_database};
 
-const PENDING_SIMPLE_GENESIS_KEY: &str = "pending_simple_genesis_v1";
+pub(super) const PENDING_SIMPLE_GENESIS_KEY: &str = "pending_simple_genesis_v1";
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -332,13 +334,9 @@ pub(crate) async fn pending_simple_genesis_for_store(
     Ok((pending.store_id == store_id).then_some(pending))
 }
 
-pub(super) async fn clear_pending_simple_genesis_for_recovery() -> Result<(), NookError> {
-    idb_delete_key(PENDING_SIMPLE_GENESIS_KEY).await
-}
-
 #[cfg(test)]
 pub(super) async fn clear_pending_simple_genesis_for_test() -> Result<(), NookError> {
-    clear_pending_simple_genesis_for_recovery().await
+    idb_delete_key(PENDING_SIMPLE_GENESIS_KEY).await
 }
 
 #[cfg(test)]

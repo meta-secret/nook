@@ -113,90 +113,7 @@ pub struct IdentityVaultDekReconciliation {
     pub secrets_envelope: AgeArmoredCiphertext,
     pub members_envelope: AgeArmoredCiphertext,
     pub epoch_update: IdentityVaultDekEpochUpdate,
-}
-
-impl IdentityVaultDek {
-    fn next_epoch(
-        &self,
-        update: &IdentityVaultDekEpochUpdate,
-    ) -> MultiDeviceResult<IdentityVaultDekEpoch> {
-        let next = match (&self.key_epoch, update) {
-            (
-                IdentityVaultDekEpoch::LegacyUnknown,
-                IdentityVaultDekEpochUpdate::Observe { key_epoch, .. },
-            ) => key_epoch.clone(),
-            (
-                IdentityVaultDekEpoch::Known {
-                    key_epoch: current_epoch,
-                    checkpoint: current_checkpoint,
-                },
-                IdentityVaultDekEpochUpdate::Observe {
-                    key_epoch:
-                        IdentityVaultDekEpoch::Known {
-                            key_epoch,
-                            checkpoint,
-                        },
-                    checkpoint_ancestors,
-                },
-            ) if current_epoch == key_epoch
-                && (current_checkpoint == checkpoint
-                    || checkpoint_ancestors.contains(current_checkpoint)) =>
-            {
-                IdentityVaultDekEpoch::Known {
-                    key_epoch: key_epoch.clone(),
-                    checkpoint: checkpoint.clone(),
-                }
-            }
-            (
-                IdentityVaultDekEpoch::LegacyUnknown,
-                IdentityVaultDekEpochUpdate::Rotate {
-                    key_epoch,
-                    checkpoint,
-                    ..
-                },
-            ) => IdentityVaultDekEpoch::Known {
-                key_epoch: key_epoch.clone(),
-                checkpoint: checkpoint.clone(),
-            },
-            (
-                IdentityVaultDekEpoch::Known {
-                    key_epoch: current_epoch,
-                    checkpoint: current_checkpoint,
-                },
-                IdentityVaultDekEpochUpdate::Rotate {
-                    previous_key_epoch,
-                    previous_checkpoint_ancestors,
-                    key_epoch,
-                    checkpoint,
-                },
-            ) if (current_epoch == previous_key_epoch
-                && previous_checkpoint_ancestors.contains(current_checkpoint))
-                || (current_epoch == key_epoch
-                    && (current_checkpoint == checkpoint
-                        || previous_checkpoint_ancestors.contains(current_checkpoint))) =>
-            {
-                IdentityVaultDekEpoch::Known {
-                    key_epoch: key_epoch.clone(),
-                    checkpoint: checkpoint.clone(),
-                }
-            }
-            (current, update) => {
-                let expected = match update {
-                    IdentityVaultDekEpochUpdate::Observe { key_epoch, .. } => {
-                        epoch_label(key_epoch)
-                    }
-                    IdentityVaultDekEpochUpdate::Rotate {
-                        previous_key_epoch, ..
-                    } => previous_key_epoch.to_string(),
-                };
-                return Err(MultiDeviceError::StaleVaultDekEpoch {
-                    expected,
-                    actual: epoch_label(current),
-                });
-            }
-        };
-        Ok(next)
-    }
+    pub authorized_auth_ids: Vec<AuthKeyId>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -418,16 +335,31 @@ impl IdentityRecord {
             secrets_key: app_key.decrypt_envelope(&reconciliation.secrets_envelope)?,
             members_key: app_key.decrypt_envelope(&reconciliation.members_envelope)?,
         };
+        let authorized_members = self
+            .members
+            .iter()
+            .filter(|member| reconciliation.authorized_auth_ids.contains(&member.auth_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !authorized_members
+            .iter()
+            .any(|member| member.app_id == *app_key.app_id())
+        {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "reconciling app key is not authorized for this vault".to_owned(),
+            ));
+        }
         if crate::auth::identity_dek_grant::already_grants(
             vault_dek,
             app_key,
-            &self.members,
+            &authorized_members,
             &keys,
             &next_epoch,
         ) {
             return Ok(());
         }
-        let mut rewrapped = wrap_vault_keys_for_members(&keys, &self.members, store_id.clone())?;
+        let mut rewrapped =
+            wrap_vault_keys_for_members(&keys, &authorized_members, store_id.clone())?;
         rewrapped.key_epoch = next_epoch;
         if *vault_dek != rewrapped {
             self.vault_deks[vault_dek_index] = rewrapped;
@@ -499,16 +431,6 @@ fn wrap_vault_keys_for_members(
     })
 }
 
-fn epoch_label(epoch: &IdentityVaultDekEpoch) -> String {
-    match epoch {
-        IdentityVaultDekEpoch::LegacyUnknown => "legacy-unknown".to_owned(),
-        IdentityVaultDekEpoch::Known {
-            key_epoch,
-            checkpoint,
-        } => format!("{key_epoch}@{checkpoint}"),
-    }
-}
-
 /// Deterministic identity fingerprint for UI progressive disclosure.
 #[must_use]
 pub fn identity_fingerprint(identity_id: &IdentityId) -> String {
@@ -574,6 +496,7 @@ mod tests {
                     key_epoch: IdentityVaultDekEpoch::LegacyUnknown,
                     checkpoint_ancestors: Vec::new(),
                 },
+                authorized_auth_ids: vec![app_key.auth_id(), second_key.auth_id()],
             },
         )?;
         assert_eq!(
@@ -631,6 +554,44 @@ mod tests {
         assert_eq!(
             identity.open_or_generate_vault_dek(&app_key, store)?,
             rotated
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn reconciliation_excludes_identity_member_revoked_from_vault() -> anyhow::Result<()> {
+        let active = AppKey::generate()?;
+        let revoked = AppKey::generate()?;
+        let mut identity = IdentityRecord::create_with_app_key("Personal", &active, None)?;
+        identity.add_member(IdentityMember {
+            app_id: revoked.app_id().clone(),
+            auth_id: revoked.auth_id(),
+            public_key: revoked.public_key(),
+            label: None,
+        })?;
+        let store = StoreId::parse("store_abcdefghijk")?;
+        let _ = identity.generate_vault_dek(store.clone())?;
+        let rotated = crate::generate_vault_keys()?;
+        let mut reconciliation = reconciliation_for_keys(
+            &active,
+            &rotated,
+            IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: IdentityVaultDekEpoch::LegacyUnknown,
+                checkpoint_ancestors: Vec::new(),
+            },
+        )?;
+        reconciliation.authorized_auth_ids = vec![active.auth_id()];
+
+        identity.reconcile_legacy_vault_member(&active, &store, &reconciliation)?;
+
+        assert_eq!(
+            identity.open_or_generate_vault_dek(&active, store.clone())?,
+            rotated
+        );
+        assert!(
+            identity
+                .open_or_generate_vault_dek(&revoked, store)
+                .is_err()
         );
         Ok(())
     }
@@ -710,6 +671,7 @@ mod tests {
                 &app_key.public_key(),
             )?,
             epoch_update,
+            authorized_auth_ids: vec![app_key.auth_id()],
         })
     }
 

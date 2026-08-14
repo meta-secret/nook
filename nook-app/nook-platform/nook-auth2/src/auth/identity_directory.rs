@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
-use crate::{AgeArmoredCiphertext, AppKey, IdentityId, IdentityMember, IdentityRecord, StoreId};
+use crate::{AppKey, IdentityId, IdentityMember, IdentityRecord, StoreId};
 
 /// Explicit identity-selection state. Empty directories cannot have a selection.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -146,9 +146,7 @@ impl IdentityDirectory {
         label: &str,
         app_key: &AppKey,
         store_id: StoreId,
-        secrets_envelope: AgeArmoredCiphertext,
-        members_envelope: AgeArmoredCiphertext,
-        epoch_update: crate::IdentityVaultDekEpochUpdate,
+        reconciliation: crate::IdentityVaultDekReconciliation,
     ) -> MultiDeviceResult<IdentityId> {
         self.ensure_app_key_active(app_key)?;
         if let Some(index) = self
@@ -159,11 +157,7 @@ impl IdentityDirectory {
             self.identities[index].reconcile_legacy_vault_member(
                 app_key,
                 &store_id,
-                &crate::IdentityVaultDekReconciliation {
-                    secrets_envelope,
-                    members_envelope,
-                    epoch_update,
-                },
+                &reconciliation,
             )?;
             let identity_id = self.identities[index].identity_id.clone();
             self.selection = IdentitySelection::Selected(identity_id.clone());
@@ -179,9 +173,9 @@ impl IdentityDirectory {
             label,
             member,
             store_id,
-            secrets_envelope,
-            members_envelope,
-            epoch_update.committed_epoch(),
+            reconciliation.secrets_envelope,
+            reconciliation.members_envelope,
+            reconciliation.epoch_update.committed_epoch(),
         )?;
         let identity_id = record.identity_id.clone();
         self.identities.push(record);
@@ -602,12 +596,7 @@ mod tests {
             "Imported",
             &app_key,
             store_id.clone(),
-            secrets_envelope.clone(),
-            members_envelope.clone(),
-            crate::IdentityVaultDekEpochUpdate::Observe {
-                key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
-                checkpoint_ancestors: Vec::new(),
-            },
+            legacy_reconciliation(&app_key, secrets_envelope.clone(), members_envelope.clone()),
         )?;
         assert_ne!(imported_id, personal);
         assert_eq!(directory.identities().len(), 2);
@@ -617,12 +606,7 @@ mod tests {
             "Ignored",
             &app_key,
             store_id,
-            secrets_envelope,
-            members_envelope,
-            crate::IdentityVaultDekEpochUpdate::Observe {
-                key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
-                checkpoint_ancestors: Vec::new(),
-            },
+            legacy_reconciliation(&app_key, secrets_envelope, members_envelope),
         )?;
         assert_eq!(same_id, imported_id);
         assert_eq!(directory.identities().len(), 2);
@@ -644,12 +628,11 @@ mod tests {
             "Ignored",
             &recovered_app_key,
             imported_vault.store_id,
-            recovered_secrets_envelope,
-            recovered_members_envelope,
-            crate::IdentityVaultDekEpochUpdate::Observe {
-                key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
-                checkpoint_ancestors: Vec::new(),
-            },
+            legacy_reconciliation(
+                &recovered_app_key,
+                recovered_secrets_envelope,
+                recovered_members_envelope,
+            ),
         );
         assert!(matches!(
             result,
@@ -670,6 +653,22 @@ mod tests {
                 .any(|entry| entry.app_id == *recovered_app_key.app_id())
         );
         Ok(())
+    }
+
+    fn legacy_reconciliation(
+        app_key: &AppKey,
+        secrets_envelope: crate::AgeArmoredCiphertext,
+        members_envelope: crate::AgeArmoredCiphertext,
+    ) -> crate::IdentityVaultDekReconciliation {
+        crate::IdentityVaultDekReconciliation {
+            secrets_envelope,
+            members_envelope,
+            epoch_update: crate::IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
+                checkpoint_ancestors: Vec::new(),
+            },
+            authorized_auth_ids: vec![app_key.auth_id()],
+        }
     }
 
     #[test]

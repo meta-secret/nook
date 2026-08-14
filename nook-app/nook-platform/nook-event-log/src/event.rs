@@ -147,6 +147,8 @@ pub enum VaultOperation {
         members_checkpoint_hash: Sha256Hex,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         rotated_meta_records: Vec<StoredSecretRecord>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        password_entries: Option<Vec<PasswordUnlockEntry>>,
     },
 }
 
@@ -538,6 +540,8 @@ mod tests {
                     version: 1,
                     kdf: "scrypt".to_owned(),
                     work_factor: 18,
+                    recipient: String::new(),
+                    wrapped_keys: String::new(),
                     ciphertext: "age-ciphertext".to_owned(),
                 },
             }],

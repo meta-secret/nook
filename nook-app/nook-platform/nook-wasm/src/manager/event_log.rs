@@ -314,8 +314,7 @@ impl NookVaultManager {
         // Keep validation, the event write, the index update, and derived heads
         // in the same transaction as security-epoch commits. Otherwise another
         // tab can commit a new epoch between validation and this write.
-        self.event_log.heads =
-            save_verified_event(&self.vault.store_id, &event, &bytes).await?;
+        self.event_log.heads = save_verified_event(&self.vault.store_id, &event, &bytes).await?;
         if self.vault.crypto.is_unlocked() || self.ensure_vault_crypto_from_cache().await.is_ok() {
             self.apply_event_projection_to_session().await?;
         } else {
