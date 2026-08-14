@@ -10,7 +10,7 @@ use super::simple_genesis::{
 use crate::storage::indexed_db::{StringUpdateGuard, idb_update_string};
 use crate::{NookError, conversion::wasm_iso_timestamp};
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct StagedSimpleGenesisIdentity {
     pub(crate) base_directory: nook_core::IdentityDirectory,
@@ -145,6 +145,13 @@ mod tests {
             label: "Personal",
         })
         .await?;
+
+        let encoded = super::super::simple_genesis::encode_pending_simple_genesis(&pending)?;
+        let wire: serde_json::Value = serde_json::from_str(&encoded)
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        assert_eq!(wire["flow"]["kind"], "staged");
+        assert!(wire["stagedIdentity"].is_object());
+        assert!(super::super::simple_genesis::decode_pending_simple_genesis(&encoded)?.is_staged());
 
         assert!(
             super::super::load_identity_directory()

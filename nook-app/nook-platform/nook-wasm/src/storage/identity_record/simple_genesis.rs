@@ -18,8 +18,7 @@ use crate::{NookError, conversion::wasm_iso_timestamp, storage::open_nook_databa
 
 pub(crate) const PENDING_SIMPLE_GENESIS_KEY: &str = "pending_simple_genesis_v1";
 
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug)]
 pub(crate) struct PendingSimpleGenesis {
     pub(crate) store_id: nook_core::StoreId,
     pub(crate) identity_id: nook_core::IdentityId,
@@ -167,6 +166,11 @@ impl<'de> Deserialize<'de> for PendingSimpleGenesis {
             (Some(flow), None) => flow,
             (None, Some(staged)) => PendingSimpleGenesisFlow::Staged(staged),
             (None, None) => PendingSimpleGenesisFlow::Ordinary,
+            (Some(PendingSimpleGenesisFlow::Staged(current)), Some(legacy))
+                if current == legacy =>
+            {
+                PendingSimpleGenesisFlow::Staged(current)
+            }
             (Some(_), Some(_)) => {
                 return Err(D::Error::custom(
                     "pending Simple genesis has both current and legacy flow state",

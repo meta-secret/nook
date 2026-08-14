@@ -83,16 +83,34 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn paired_handoff_defers_identity_reconciliation_until_authenticated_commit()
-    -> Result<(), JsError> {
-        let mut manager = NookVaultManager::new();
+    async fn paired_reconciliation_keeps_directory_unchanged_until_commit() -> Result<(), JsError> {
+        crate::storage::identity_record::clear_identity_directory_for_test().await?;
         let authorizer = nook_core::AppKey::generate()?;
+        let extension = nook_core::AppKey::generate()?;
+        let store_id = nook_core::generate_store_id()?;
+        let owner_key = authorizer.clone();
+        let owner_store = store_id.clone();
+        crate::storage::identity_record::update_identity_directory(move |directory| {
+            let owner_id = directory.create_identity("Personal", &owner_key, None)?;
+            let _ = directory.open_or_generate_vault_dek_for_identity(
+                &owner_id,
+                &owner_key,
+                owner_store,
+            )?;
+            Ok(())
+        })
+        .await?;
+
         let (signing, signing_seed) = nook_core::SigningIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.device.id = extension.device_id().as_str().to_owned();
+        manager.device.identity_private_key = extension.secret_string().into_inner();
+        manager.vault.store_id = store_id.to_string();
         manager.device.pending_extension_handoff = Some(
             super::super::device_protection::PendingExtensionIdentityHandoff {
                 enrollment: super::super::PendingExtensionIdentityEnrollment::PairedVault {
                     authorizer,
-                    store_id: nook_core::generate_store_id()?,
+                    store_id,
                 },
                 authorizer_signing: None,
                 signing_public_key: signing.public_key(),
@@ -102,7 +120,14 @@ mod tests {
             },
         );
 
-        assert!(manager.defers_identity_reconciliation_until_handoff());
+        manager.ensure_identity_after_connect(&extension).await?;
+        let deferred = crate::storage::identity_record::load_identity_directory().await?;
+        assert!(deferred.identity_for_app_key(&extension)?.is_none());
+
+        manager.commit_extension_identity_handoff().await?;
+        let committed = crate::storage::identity_record::load_identity_directory().await?;
+        assert!(committed.identity_for_app_key(&extension)?.is_some());
+        crate::storage::identity_record::clear_identity_directory_for_test().await?;
         Ok(())
     }
 }

@@ -101,7 +101,9 @@ Simple vault creation stores `pending_simple_genesis_v1` in IndexedDB.
 Its JSON fields are `storeId`, `identityId`, `createdAt`, `eventState`, and
 `flow`. The flow is explicitly `ordinary` or `staged`. The staged variant owns
 the base directory and inactive candidate directory. The candidate owns the
-identity DEK envelopes.
+identity DEK envelopes. Writers also emit the legacy `stagedIdentity` projection
+for already-open tabs. Current readers reject markers that contain conflicting
+current and legacy staged state.
 The app writes the marker before any event-log state.
 A reload resumes the same store and identity binding.
 Verified connect completion removes the marker with a compare-and-delete
