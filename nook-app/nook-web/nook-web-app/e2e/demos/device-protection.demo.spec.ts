@@ -181,6 +181,10 @@ test('replace an inaccessible device identity without losing vault recovery', as
     password: 'demo-recovery-password',
     entryLabel: 'Recovery',
   })
+  await expect(page.getByTestId('authenticated-shell')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await page.getByTestId('vault-secrets-tab').click()
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

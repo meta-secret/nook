@@ -126,6 +126,6 @@ pub use multi_device_api::*;
 pub use records::{SecretType, StoredRecordPayload, StoredSecretRecord};
 pub use wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
-    DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId,
-    Sha256Hex, SigningSeedHex, SymmetricKey, Url64EncodedString,
+    DeviceSigningPublicKey, IdentityVaultEventId, IsoTimestamp, MemberLabel, OpaqueCiphertext,
+    PasswordEntryId, Sha256Hex, SigningSeedHex, SymmetricKey, Url64EncodedString,
 };

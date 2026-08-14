@@ -261,9 +261,9 @@ fn identity_reconciliation_key(store_id: &nook_core::StoreId) -> String {
 #[serde(rename_all = "camelCase")]
 struct PendingIdentityReconciliation {
     store_id: nook_core::StoreId,
-    previous_key_epoch: nook_core::Sha256Hex,
-    previous_checkpoint: nook_core::Sha256Hex,
-    key_epoch: nook_core::Sha256Hex,
+    previous_key_epoch: nook_core::IdentityVaultEventId,
+    previous_checkpoint: nook_core::IdentityVaultEventId,
+    key_epoch: nook_core::IdentityVaultEventId,
     #[serde(default)]
     checkpoint_state: PendingIdentityReconciliationCheckpoint,
 }
@@ -274,15 +274,15 @@ enum PendingIdentityReconciliationCheckpoint {
     #[default]
     AwaitingCheckpoint,
     Committed {
-        checkpoint: nook_core::Sha256Hex,
+        checkpoint: nook_core::IdentityVaultEventId,
     },
 }
 
 pub(crate) async fn mark_identity_reconciliation_pending(
     store_id: &nook_core::StoreId,
-    previous_key_epoch: &nook_core::Sha256Hex,
-    previous_checkpoint: &nook_core::Sha256Hex,
-    key_epoch: &nook_core::Sha256Hex,
+    previous_key_epoch: &nook_core::IdentityVaultEventId,
+    previous_checkpoint: &nook_core::IdentityVaultEventId,
+    key_epoch: &nook_core::IdentityVaultEventId,
 ) -> Result<(), NookError> {
     let pending = PendingIdentityReconciliation {
         store_id: store_id.clone(),
@@ -298,8 +298,8 @@ pub(crate) async fn mark_identity_reconciliation_pending(
 
 pub(crate) async fn commit_identity_reconciliation_checkpoint(
     store_id: &nook_core::StoreId,
-    key_epoch: &nook_core::Sha256Hex,
-    checkpoint: &nook_core::Sha256Hex,
+    key_epoch: &nook_core::IdentityVaultEventId,
+    checkpoint: &nook_core::IdentityVaultEventId,
 ) -> Result<(), NookError> {
     let expected_store_id = store_id.clone();
     let expected_key_epoch = key_epoch.clone();
@@ -589,16 +589,11 @@ mod tests {
         clear_identity_directory_for_test().await?;
         let store_id =
             nook_core::StoreId::parse("store_abcdefghijk").map_err(map_validation_error)?;
-        let previous_epoch =
-            nook_core::Sha256Hex::parse(&"1".repeat(64)).map_err(map_validation_error)?;
-        let previous_checkpoint =
-            nook_core::Sha256Hex::parse(&"2".repeat(64)).map_err(map_validation_error)?;
-        let key_epoch =
-            nook_core::Sha256Hex::parse(&"3".repeat(64)).map_err(map_validation_error)?;
-        let checkpoint =
-            nook_core::Sha256Hex::parse(&"4".repeat(64)).map_err(map_validation_error)?;
-        let other_checkpoint =
-            nook_core::Sha256Hex::parse(&"5".repeat(64)).map_err(map_validation_error)?;
+        let previous_epoch = event_id('a')?;
+        let previous_checkpoint = event_id('b')?;
+        let key_epoch = event_id('c')?;
+        let checkpoint = event_id('d')?;
+        let other_checkpoint = event_id('e')?;
         mark_identity_reconciliation_pending(
             &store_id,
             &previous_epoch,
@@ -654,5 +649,10 @@ mod tests {
 
     fn map_validation_error(error: nook_core::ValidationError) -> NookError {
         NookError::Database(error.to_string())
+    }
+
+    fn event_id(fill: char) -> Result<nook_core::IdentityVaultEventId, NookError> {
+        nook_core::IdentityVaultEventId::parse(&format!("sha256u:{}", fill.to_string().repeat(43)))
+            .map_err(map_validation_error)
     }
 }

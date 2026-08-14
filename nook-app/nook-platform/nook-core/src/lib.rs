@@ -212,7 +212,7 @@ pub use multi_device::sentinel_member_records_from_public_roster;
 pub use nook_auth2::{
     AppId, AppKey, IdentityDirectory, IdentityId, IdentityMember, IdentityRecord,
     IdentitySelection, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
-    IdentityVaultDekReconciliation, MemberDekEnvelope, identity_fingerprint,
+    IdentityVaultDekReconciliation, IdentityVaultEventId, MemberDekEnvelope, identity_fingerprint,
 };
 
 pub use multi_device::{

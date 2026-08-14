@@ -2,8 +2,8 @@
 
 use crate::errors::{MultiDeviceError, MultiDeviceResult, ValidationError, ValidationResult};
 use crate::{
-    AgeArmoredCiphertext, AppId, AppKey, AuthKeyId, DevicePublicKey, Sha256Hex, StoreId, VaultKeys,
-    encrypt_for_recipient, generate_id, generate_vault_keys,
+    AgeArmoredCiphertext, AppId, AppKey, AuthKeyId, DevicePublicKey, IdentityVaultEventId, StoreId,
+    VaultKeys, encrypt_for_recipient, generate_id, generate_vault_keys,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -72,8 +72,8 @@ pub enum IdentityVaultDekEpoch {
     #[default]
     LegacyUnknown,
     Known {
-        key_epoch: Sha256Hex,
-        checkpoint: Sha256Hex,
+        key_epoch: IdentityVaultEventId,
+        checkpoint: IdentityVaultEventId,
     },
 }
 
@@ -83,10 +83,10 @@ pub enum IdentityVaultDekEpochUpdate {
         key_epoch: IdentityVaultDekEpoch,
     },
     Rotate {
-        previous_key_epoch: Sha256Hex,
-        previous_checkpoint: Sha256Hex,
-        key_epoch: Sha256Hex,
-        checkpoint: Sha256Hex,
+        previous_key_epoch: IdentityVaultEventId,
+        previous_checkpoint: IdentityVaultEventId,
+        key_epoch: IdentityVaultEventId,
+        checkpoint: IdentityVaultEventId,
     },
 }
 
@@ -588,10 +588,10 @@ mod tests {
         let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
         let store = StoreId::parse("store_abcdefghijk")?;
         let original = identity.generate_vault_dek(store.clone())?;
-        let previous = Sha256Hex::parse(&"1".repeat(64))?;
-        let current = Sha256Hex::parse(&"2".repeat(64))?;
-        let previous_checkpoint = Sha256Hex::parse(&"3".repeat(64))?;
-        let current_checkpoint = Sha256Hex::parse(&"4".repeat(64))?;
+        let previous = event_id('a')?;
+        let current = event_id('b')?;
+        let previous_checkpoint = event_id('c')?;
+        let current_checkpoint = event_id('d')?;
         let rotated = crate::generate_vault_keys()?;
         let rotated_reconciliation = reconciliation_for_keys(
             &app_key,
@@ -633,9 +633,9 @@ mod tests {
         let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
         let store = StoreId::parse("store_abcdefghijk")?;
         let keys = identity.generate_vault_dek(store.clone())?;
-        let key_epoch = Sha256Hex::parse(&"1".repeat(64))?;
-        let first_checkpoint = Sha256Hex::parse(&"2".repeat(64))?;
-        let advanced_checkpoint = Sha256Hex::parse(&"3".repeat(64))?;
+        let key_epoch = event_id('a')?;
+        let first_checkpoint = event_id('b')?;
+        let advanced_checkpoint = event_id('c')?;
         let first = reconciliation_for_keys(
             &app_key,
             &keys,
@@ -702,5 +702,12 @@ mod tests {
         identity.remove_member(second.app_id())?;
         assert!(identity.remove_member(first.app_id()).is_err());
         Ok(())
+    }
+
+    fn event_id(fill: char) -> anyhow::Result<IdentityVaultEventId> {
+        Ok(IdentityVaultEventId::parse(&format!(
+            "sha256u:{}",
+            fill.to_string().repeat(43)
+        ))?)
     }
 }

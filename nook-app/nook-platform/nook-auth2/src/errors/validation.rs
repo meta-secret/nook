@@ -28,6 +28,8 @@ const ERRORS_VALIDATION_DEVICE_PUBLIC_KEY_INVALID: &str =
 const ERRORS_VALIDATION_DEVICE_IDENTITY_SECRET_INVALID: &str =
     "errors.validation.device_identity_secret_invalid";
 const ERRORS_VALIDATION_SHA256_HEX_INVALID: &str = "errors.validation.sha256_hex_invalid";
+const ERRORS_VALIDATION_IDENTITY_VAULT_EVENT_ID_INVALID: &str =
+    "errors.validation.identity_vault_event_id_invalid";
 const ERRORS_VALIDATION_DEVICE_SIGNING_PUBLIC_KEY_INVALID: &str =
     "errors.validation.device_signing_public_key_invalid";
 const ERRORS_VALIDATION_ISO_TIMESTAMP_INVALID: &str = "errors.validation.iso_timestamp_invalid";
@@ -214,6 +216,9 @@ pub enum ValidationError {
 
     #[error("{}", ERRORS_VALIDATION_SHA256_HEX_INVALID)]
     Sha256HexInvalid,
+
+    #[error("{}", ERRORS_VALIDATION_IDENTITY_VAULT_EVENT_ID_INVALID)]
+    IdentityVaultEventIdInvalid,
 
     #[error("{}", ERRORS_VALIDATION_DEVICE_SIGNING_PUBLIC_KEY_INVALID)]
     DeviceSigningPublicKeyInvalid,
