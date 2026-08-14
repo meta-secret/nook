@@ -43,7 +43,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Docker tasks live in `nook-app/nook-platform/docker/Taskfile.yml` and `nook-app/nook-web/docker/Taskfile.yml`.
 - Web-family tasks live in `nook-app/nook-web/Taskfile.yml` and `nook-web-extension/Taskfile.yml`.
 - Agents do not run raw compiler, bundler, or environment commands.
-- They use `task format` locally.
+- They use `task loom:pre-push` locally.
 - They use `task remote TASK_NAME=<name>` for focused hosted execution.
 - They use `task pr:validate` for the complete gate.
 - They use local `task web:dev` only for interactive development state.
@@ -74,7 +74,10 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 ## 8. Default to the Coding Bro Pipeline
 
 - **Every implementation task** follows [workflows/coding-bro.md](../workflows/coding-bro.md).
-- Pipeline: fetch → branch from `origin/main` → implement → `task format` → commit and push/update PR → focused hosted execution → explicit complete PR validation → fix failures/comments/conflicts → exact-head readiness audit → automatic agent-owned squash merge.
+- Pipeline: fetch → branch from `origin/main` → implement → Loom pre-push →
+  commit and push/update PR → focused hosted execution → final complete PR
+  validation → fix failures/comments/conflicts → exact-head readiness audit →
+  automatic agent-owned squash merge.
 - **Do not stop at push or readiness.** The agent owns the PR through squash merge unless concretely blocked.
 - **Question-only turns** (no code changes) skip the pipeline.
 

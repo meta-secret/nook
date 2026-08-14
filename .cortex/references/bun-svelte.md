@@ -2,9 +2,11 @@
 
 ## 1. Package Manager
 
-- We use Bun for JavaScript/TypeScript tooling.
-- Always run `bun install` or `bun run dev` instead of npm/yarn.
-- Do not check in `package-lock.json` or `yarn.lock`.
+- Nook web and Loom use Bun for JavaScript/TypeScript tooling.
+- Use their Task or Bun commands instead of npm/yarn.
+- Do not check in `package-lock.json` or `yarn.lock` in Bun-owned packages.
+- `agentic-ai/ci-agent` is the maintained Node/npm exception.
+- It owns its checked-in `package-lock.json` and runs through Task wrappers.
 
 ## 2. Dev Server and Build
 
@@ -63,8 +65,10 @@ thresholds, add authored-code ignores, or leave the task done while either gate
 is red. See [quality.md § Fix check findings](../workflows/quality.md#fix-check-findings--not-silence-them).
 
 - **Human interactive single-spec debug:** `E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file`. Agents use the hosted remote catalog.
-- Full stub Playwright: `task web:test:e2e` — runs the `stable` IndexedDB group at 6 workers, then the provider/sync `unstable` group at 4; runs on main CI and explicitly for PR validation.
-- Stable subset Playwright (`stable` project): `task web:test:e2e:pr` — 6-worker manual/debug subset for vault CRUD, login, and legal pages (no sync HTTP).
+- Full stub Playwright: `task web:test:e2e` runs the `stable` IndexedDB group at
+  3 workers. It then runs the provider/sync `unstable` group at 2 workers.
+- Stable subset Playwright (`stable` project): `task web:test:e2e:pr` uses 3
+  workers for the manual/debug subset.
 - Mounted dev servers publish container port `5173` on `WEB_DEV_PORT` (default
   `5173`). In the multi-worktree repo, use an unused host port such as
   `WEB_DEV_PORT=5175 task web:dev:fast`; never stop another worktree's container
@@ -74,5 +78,6 @@ is red. See [quality.md § Fix check findings](../workflows/quality.md#fix-check
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
 - Agent e2e runs on GitHub-hosted workers through `task remote`; humans may use
   local single-spec Docker e2e for interactive debugging. Complete agent
-  validation is explicit: format, commit, push, then `task pr:validate`.
+  validation is explicit: Loom pre-push, commit, push, then `task pr:validate`
+  when the head is ready for the final gate.
   See [workflows/remote-execution.md](../workflows/remote-execution.md).

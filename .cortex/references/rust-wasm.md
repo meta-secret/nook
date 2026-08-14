@@ -134,7 +134,7 @@ distinguish wasm-bindgen's generated ABI code from authored code.
 | `NookVaultSyncResult` | `sync_vault_from_storage` payload (`changed`, `accessStatus`, `secrets`, `pendingJoins`, `vaultMembers`) |
 | `NookVaultClientPolicy` | Portable login, lock, sync, join, remote-recovery, vault-switch, and pagination decisions |
 | `NookResolveConflictKeepLocalResult` / `NookResolveConflictKeepRemoteResult` | conflict resolution |
-| `NookSecretFormFields` | `build_secret_yaml` input (flat constructor; unused fields empty) |
+| `NookSecretFormFields` | WASM wrapper over core-owned variant-specific `SecretFormFields`; static constructors select the variant |
 
 Provider list scoping, locked-device visibility, staged connect arguments,
 remote-reference normalization, and sync metadata updates cross the boundary as
@@ -212,7 +212,7 @@ ends.
 |-------|----------------|
 | `nook-core` | Schema, validation, YAML parse/serialize, display/search helpers (`secret_view.rs`) |
 | `nook-wasm` | Typed boundary structs, `build_secret_yaml`, session CRUD |
-| `nook-web` | Svelte forms + rendering; `VaultItemType` string union for the type picker only |
+| `nook-web` | Svelte forms and rendering; the type picker uses Rust-owned generated `SecretType` values |
 
 **Reads:** page queries convert decrypted records into
 `Vec<NookSecretListItem>` and zeroize the full records before returning.

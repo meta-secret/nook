@@ -209,9 +209,12 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   - Do not prefix versions with `=` (e.g., `age = "=0.11.3"` is invalid).
   - Do not use semver ranges (`^`, `~`, `>=`, `*`) in dependencies.
 - **Bun for Node/JS Tooling:**
-  - Svelte project dependencies must be managed using Bun.
-  - Do not commit `package-lock.json` or `yarn.lock`.
+  - Svelte project and Loom dependencies must be managed using Bun.
+  - Do not commit `package-lock.json` or `yarn.lock` in Bun-owned packages.
   - Commit `bun.lock` (with `package.json`) for reproducible Docker web installs.
+  - `agentic-ai/ci-agent` is the explicit maintained Node/npm exception.
+  - That package owns its checked-in `package-lock.json`.
+  - Run its dependency and test commands through the repository Task surface.
   - Pin linux/amd64 native optional deps:
     `@rolldown/binding-linux-x64-gnu`,
     `@tailwindcss/oxide-linux-x64-gnu`,
@@ -226,11 +229,13 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   - Every domain file must be reachable from the composition root.
   - Do not add orphan Taskfiles or standalone shell scripts anywhere under `infra/`.
   - Repository preflight enforces this boundary.
-  - Before every push, agents and developers must run **`task format` unconditionally**.
-  - It formats Rust and JS/TS/Svelte inside sealed Docker images **and applies the diff to the host working tree**.
+  - Before every push, agents and developers must run
+    **`task loom:pre-push` unconditionally**.
+  - Loom runs sealed formatting and applies the diff to the host working tree.
+  - It also checks the UI demo contract.
   - Sealed-only commands such as `task extension:format` do not write the host.
   - They must not be the sole format step.
-  - **`task format` is the only required local product action.**
+  - **`task loom:pre-push` is the only required local product action.**
   - Product gates run on **GitHub Actions**.
   - Gates include format check, Clippy, vitest, svelte-check, web lint (Knip unused and jscpd clone detection), web build, coverage, and e2e.
   - See [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) and [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
@@ -317,7 +322,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 >
 > Once a change or experiment is coherent enough to check, the mandatory sequence is:
 >
-> 1. **`task format`**
+> 1. **`task loom:pre-push`**
 > 2. **commit**
 > 3. **push**
 > 4. **optional allowlisted `task remote TASK_NAME=<name>` for isolated diagnostics**
@@ -346,14 +351,17 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 > After any red remote run:
 >
 > 1. Fix the failure.
-> 2. Run `task format`.
+> 2. Run `task loom:pre-push`.
 > 3. Commit and push.
 > 4. Dispatch the useful focused or complete remote validation again.
 > See [workflows/remote-execution.md](workflows/remote-execution.md).
 
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
 - **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task.
-- Steps: fetch, branch from `origin/main`, implement, **always `task format`**, commit and push/open/update the PR, use focused hosted tasks only for useful isolated diagnostics, explicitly trigger complete PR validation as soon as the coherent head is ready, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically.
+- Steps: fetch, branch from `origin/main`, implement, always run Loom pre-push,
+  commit and push/open/update the PR, use focused hosted tasks for useful
+  diagnostics, trigger complete validation at the final boundary, fix failures,
+  address comments and conflicts, require `task pr:ready`, and squash-merge.
 - Do not stop at a ready-PR handoff or ask for separate merge permission.
 - Do not run heavy product checks locally.
 - **Finish at implementation PR merge.** A successful squash merge completes normal implementation delivery.

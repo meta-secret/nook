@@ -59,7 +59,8 @@ and [loom-tools.md](../references/loom-tools.md).
 
 ### Sealed-image rule
 
-- `task format` is the agent entrypoint through Loom.
+- Loom invokes host-applied `task format` internally.
+- The agent entrypoint is `task loom:pre-push`.
 - `task format:diff` prints the diff without applying.
 - Never use `task extension:format` as the only format step before push.
 

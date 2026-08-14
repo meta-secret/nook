@@ -45,14 +45,16 @@ Cursor, CodeRabbit, or another service:
 
 1. Verify the finding against the current branch and `.cortex` rules.
 2. Make the minimal correct fix or document why no change is needed.
-3. Run `task format` when files changed; use focused hosted tasks as useful.
-4. Commit and push the completed fix, then explicitly trigger complete PR
-   validation for the replacement head while continuing to poll feedback.
-5. Reply on the original thread or comment with the fix and validation when a
+3. Run `task loom:pre-push` when files changed.
+4. Commit and push the completed fix.
+5. Use focused hosted tasks as useful.
+6. If complete validation was already requested, restart it for the replacement
+   head. Otherwise start it when that head is ready for the final gate.
+7. Reply on the original thread or comment with the fix and validation when a
    targeted reply is possible.
-6. Resolve only after the targeted reply is visible and the finding is fixed or
+8. Resolve only after the targeted reply is visible and the finding is fixed or
    explicitly invalidated.
-7. Re-query feedback throughout validation and immediately before handoff or
+9. Re-query feedback throughout validation and immediately before handoff or
    merge.
 
 Inspect every external-service review comment already present. An optional
@@ -74,7 +76,7 @@ Report:
 
 - every actionable finding that was already present and how it was handled;
 - unresolved active review-thread count at the time of the final inspection;
-- `task format` / optional debug results when used; and
+- Loom pre-push and optional debug results when used; and
 - the state of Nook's applicable repository-owned PR test checks.
 
 Confirm that unresolved review-thread count was zero at the final readiness

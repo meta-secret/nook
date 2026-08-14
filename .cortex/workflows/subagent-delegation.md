@@ -205,9 +205,11 @@ The parent still owns integration.
 
 ## Machine-managed workflows
 
-Repeated and stable graphs should become machine-readable.
+Repeated and stable graphs should become compiled Loom workflows.
 
-The manifest owns:
+Each workflow is a fixed TypeScript definition.
+
+The definition owns:
 
 - task IDs;
 - dependencies;
@@ -218,9 +220,34 @@ The manifest owns:
 - join rules;
 - skipped-task reporting.
 
-Do not infer parallelism from a YAML list.
+Do not accept workflow topology from YAML.
+
+Do not generate workflow topology from prompts or Cortex prose.
+
+Do not ask an agent to invent tasks or edges at runtime.
+
+Runtime input may select a reviewed catalog entry.
+
+It may bind the exact source commit and bounded scalar inputs.
+
+It must not change the compiled topology.
+
+Do not infer parallelism from collection order.
 
 Only reachable tasks execute.
+
+Every declared but unreached branch receives an explicit skipped result.
+
+Local runs use Loom's append-only event journal as their run authority.
+
+Hive-backed runs use Neo4j as their durable lifecycle authority.
+
+Do not run two authoritative schedulers for one workflow.
+
+The first compiled workflow is `cortex-full-garbage-collection`.
+
+It contains one fixed parallel evidence wave, one join, one synthesis task, and
+the existing mechanical Cortex audit leaf.
 
 The architecture boundary is defined in
 [agent-workflow-orchestration.md](../design-docs/agent-workflow-orchestration.md).
