@@ -220,7 +220,9 @@ export async function handleRemoteLocalBrowserDataDeletion(
 ): Promise<void> {
   if (state.localDataDeletionStarted) return;
   const resetManager = state.hasManager
-    ? state.enqueueStorage(() => state.requireManager().reset_vault_session())
+    ? state.enqueueStorage(() =>
+        state.requireManager().quiesce_for_local_recovery(),
+      )
     : state.waitForStorageChain();
   state.localDataDeletionStarted = true;
   state.stopIdleSessionTracking();

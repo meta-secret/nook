@@ -95,23 +95,30 @@ Recovery clears identity ownership but preserves retired app IDs. Every
 app-key operation rejects a retired ID. Atomic updates therefore prevent a
 stale tab from writing old ownership back after recovery.
 Before recovery mutates IndexedDB, the initiating tab quiesces storage work in
-every open Nook tab. It then serializes its own reset through the storage queue.
+every open Nook tab. Each responding tab zeroizes its app key and storage
+credentials before acknowledging readiness. The initiating tab then serializes
+its own reset through the storage queue.
 
 Security-epoch rotation stores `storeId`, `previousKeyEpoch`,
 `previousCheckpoint`, `keyEpoch`, and a named `checkpointState` at
-`pending_identity_reconciliation_v1:{store_id}` before installing rotated keys.
+`pending_identity_reconciliation_v1:{store_id}` before the new key epoch is
+persisted.
 Each identity DEK grant stores its committed key epoch.
-The initial `awaiting-checkpoint` state cannot authorize reconciliation.
+The initial `awaiting-checkpoint` state blocks observations after the epoch has
+advanced. If epoch persistence did not occur, a verified observation of the
+previous epoch can consume that abandoned intent.
 After the epoch checkpoint event is durable, the marker changes to `committed`
 and owns that exact event ID. Reconciliation is a compare-and-swap from the
-previous epoch to the committed epoch and checkpoint. An idempotent retry at
-the new epoch succeeds. An older epoch observation fails. Ordinary event heads
-may advance within the same key epoch without changing the DEK generation.
-Successful directory reconciliation clears that marker.
+previous epoch to the committed epoch. The committed checkpoint must appear in
+verified event history. Reconciliation records the latest observed head, so
+ordinary event heads may advance within the same key epoch without blocking
+recovery. An idempotent retry at the new epoch succeeds. An older epoch
+observation fails. Successful directory reconciliation compare-deletes only
+the exact marker it consumed.
 Any later verified connect repeats the idempotent reconciliation and clears a
 marker left by an interrupted post-commit update.
-The marker is local retry state and is safe for current builds to delete only
-after successful reconciliation.
+The marker is local retry state. Current builds delete it only after successful
+reconciliation or proof that epoch persistence never advanced.
 
 Verified Sentinel delivery records use
 `sentinel_genesis_share:{store_id}:{device_id}`. New records include a named

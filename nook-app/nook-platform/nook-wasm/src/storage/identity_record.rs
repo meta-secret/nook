@@ -3,14 +3,17 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use super::indexed_db::{StringUpdateGuard, StringUpdateResult, idb_delete_key, idb_update_string};
 #[cfg(test)]
-use super::indexed_db::idb_put_string;
-use super::indexed_db::{
-    StringUpdateGuard, StringUpdateResult, idb_delete_key, idb_get_string, idb_update_string,
-};
+use super::indexed_db::{idb_get_string, idb_put_string};
 use crate::{NookError, storage::open_nook_database};
 
+mod reconciliation;
 mod simple_genesis;
+use reconciliation::{clear_consumed_identity_reconciliation, resolve_identity_epoch};
+pub(crate) use reconciliation::{
+    commit_identity_reconciliation_checkpoint, mark_identity_reconciliation_pending,
+};
 pub(crate) use simple_genesis::{
     PendingSimpleGenesis, begin_or_resume_simple_genesis, clear_pending_simple_genesis,
     pending_simple_genesis_for_store, persist_simple_genesis_event,
@@ -18,7 +21,6 @@ pub(crate) use simple_genesis::{
 
 const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
 const LEGACY_IDENTITY_RECORD_KEY: &str = "identity_record_v1";
-const PENDING_IDENTITY_RECONCILIATION_PREFIX: &str = "pending_identity_reconciliation_v1:";
 
 async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, NookError> {
     let rexie = open_nook_database().await?;
@@ -226,21 +228,24 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
     secrets_envelope: nook_core::AgeArmoredCiphertext,
     members_envelope: nook_core::AgeArmoredCiphertext,
     key_epoch: nook_core::IdentityVaultDekEpoch,
+    committed_event_ids: Vec<nook_core::IdentityVaultEventId>,
     label: &str,
 ) -> Result<nook_core::IdentityRecord, NookError> {
     let app_key = app_key.clone();
     let store_id = store_id.clone();
     let label = label.to_owned();
-    let epoch_update = identity_epoch_update_for_store(&store_id, key_epoch).await?;
-    update_identity_directory(move |directory| {
+    let resolution = resolve_identity_epoch(&store_id, key_epoch, &committed_event_ids).await?;
+    let consumed_marker = resolution.consumed_marker;
+    let directory_store_id = store_id.clone();
+    let record = update_identity_directory(move |directory| {
         let identity_id = directory
             .import_legacy_vault(
                 &label,
                 &app_key,
-                store_id,
+                directory_store_id,
                 secrets_envelope,
                 members_envelope,
-                epoch_update,
+                resolution.update,
             )
             .map_err(|error| NookError::Database(error.to_string()))?;
         directory
@@ -250,142 +255,11 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
             .cloned()
             .ok_or_else(|| NookError::Database("Imported identity disappeared.".to_owned()))
     })
-    .await
-}
-
-fn identity_reconciliation_key(store_id: &nook_core::StoreId) -> String {
-    format!("{PENDING_IDENTITY_RECONCILIATION_PREFIX}{store_id}")
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PendingIdentityReconciliation {
-    store_id: nook_core::StoreId,
-    previous_key_epoch: nook_core::IdentityVaultEventId,
-    previous_checkpoint: nook_core::IdentityVaultEventId,
-    key_epoch: nook_core::IdentityVaultEventId,
-    #[serde(default)]
-    checkpoint_state: PendingIdentityReconciliationCheckpoint,
-}
-
-#[derive(Default, serde::Deserialize, serde::Serialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
-enum PendingIdentityReconciliationCheckpoint {
-    #[default]
-    AwaitingCheckpoint,
-    Committed {
-        checkpoint: nook_core::IdentityVaultEventId,
-    },
-}
-
-pub(crate) async fn mark_identity_reconciliation_pending(
-    store_id: &nook_core::StoreId,
-    previous_key_epoch: &nook_core::IdentityVaultEventId,
-    previous_checkpoint: &nook_core::IdentityVaultEventId,
-    key_epoch: &nook_core::IdentityVaultEventId,
-) -> Result<(), NookError> {
-    let pending = PendingIdentityReconciliation {
-        store_id: store_id.clone(),
-        previous_key_epoch: previous_key_epoch.clone(),
-        previous_checkpoint: previous_checkpoint.clone(),
-        key_epoch: key_epoch.clone(),
-        checkpoint_state: PendingIdentityReconciliationCheckpoint::AwaitingCheckpoint,
-    };
-    let raw = serde_json::to_string(&pending)
-        .map_err(|error| NookError::Serialization(error.to_string()))?;
-    super::indexed_db::idb_put_string(&identity_reconciliation_key(store_id), &raw).await
-}
-
-pub(crate) async fn commit_identity_reconciliation_checkpoint(
-    store_id: &nook_core::StoreId,
-    key_epoch: &nook_core::IdentityVaultEventId,
-    checkpoint: &nook_core::IdentityVaultEventId,
-) -> Result<(), NookError> {
-    let expected_store_id = store_id.clone();
-    let expected_key_epoch = key_epoch.clone();
-    let committed_checkpoint = checkpoint.clone();
-    let disposition = idb_update_string(
-        &identity_reconciliation_key(store_id),
-        StringUpdateGuard::Unconditional,
-        move |raw| {
-            let raw = raw.ok_or_else(|| {
-                NookError::IndexedDb("Identity reconciliation marker disappeared.".to_owned())
-            })?;
-            let mut pending: PendingIdentityReconciliation = serde_json::from_str(&raw)
-                .map_err(|error| NookError::Serialization(error.to_string()))?;
-            if pending.store_id != expected_store_id || pending.key_epoch != expected_key_epoch {
-                return Err(NookError::IndexedDb(
-                    "Identity reconciliation marker changed before checkpoint commit.".to_owned(),
-                ));
-            }
-            pending.checkpoint_state = PendingIdentityReconciliationCheckpoint::Committed {
-                checkpoint: committed_checkpoint.clone(),
-            };
-            serde_json::to_string(&pending)
-                .map_err(|error| NookError::Serialization(error.to_string()))
-        },
-    )
     .await?;
-    if disposition != StringUpdateResult::Applied {
-        return Err(NookError::IndexedDb(
-            "Identity reconciliation checkpoint update was rejected.".to_owned(),
-        ));
+    if let Some(consumed_marker) = consumed_marker {
+        clear_consumed_identity_reconciliation(&store_id, &consumed_marker).await?;
     }
-    Ok(())
-}
-
-async fn identity_epoch_update_for_store(
-    store_id: &nook_core::StoreId,
-    observed: nook_core::IdentityVaultDekEpoch,
-) -> Result<nook_core::IdentityVaultDekEpochUpdate, NookError> {
-    let Some(raw) = idb_get_string(&identity_reconciliation_key(store_id)).await? else {
-        return Ok(nook_core::IdentityVaultDekEpochUpdate::Observe {
-            key_epoch: observed,
-        });
-    };
-    let Ok(pending) = serde_json::from_str::<PendingIdentityReconciliation>(&raw) else {
-        return Ok(nook_core::IdentityVaultDekEpochUpdate::Observe {
-            key_epoch: observed,
-        });
-    };
-    let (observed_epoch, observed_checkpoint) = match &observed {
-        nook_core::IdentityVaultDekEpoch::Known {
-            key_epoch,
-            checkpoint,
-        } => (key_epoch, checkpoint),
-        nook_core::IdentityVaultDekEpoch::LegacyUnknown => {
-            return Ok(nook_core::IdentityVaultDekEpochUpdate::Observe {
-                key_epoch: observed,
-            });
-        }
-    };
-    let PendingIdentityReconciliationCheckpoint::Committed { checkpoint } =
-        pending.checkpoint_state
-    else {
-        return Ok(nook_core::IdentityVaultDekEpochUpdate::Observe {
-            key_epoch: observed,
-        });
-    };
-    if pending.store_id == *store_id
-        && pending.key_epoch == *observed_epoch
-        && checkpoint == *observed_checkpoint
-    {
-        return Ok(nook_core::IdentityVaultDekEpochUpdate::Rotate {
-            previous_key_epoch: pending.previous_key_epoch,
-            previous_checkpoint: pending.previous_checkpoint,
-            key_epoch: pending.key_epoch,
-            checkpoint,
-        });
-    }
-    Ok(nook_core::IdentityVaultDekEpochUpdate::Observe {
-        key_epoch: observed,
-    })
-}
-
-pub(crate) async fn clear_identity_reconciliation_pending(
-    store_id: &nook_core::StoreId,
-) -> Result<(), NookError> {
-    super::indexed_db::idb_delete_key(&identity_reconciliation_key(store_id)).await
+    Ok(record)
 }
 
 pub(crate) async fn generate_vault_dek_for_identity(
@@ -584,75 +458,7 @@ mod tests {
         clear_identity_directory_for_test().await
     }
 
-    #[wasm_bindgen_test]
-    async fn rotation_reconciliation_requires_the_committed_checkpoint() -> Result<(), NookError> {
-        clear_identity_directory_for_test().await?;
-        let store_id =
-            nook_core::StoreId::parse("store_abcdefghijk").map_err(map_validation_error)?;
-        let previous_epoch = event_id('a')?;
-        let previous_checkpoint = event_id('b')?;
-        let key_epoch = event_id('c')?;
-        let checkpoint = event_id('d')?;
-        let other_checkpoint = event_id('e')?;
-        mark_identity_reconciliation_pending(
-            &store_id,
-            &previous_epoch,
-            &previous_checkpoint,
-            &key_epoch,
-        )
-        .await?;
-
-        let awaiting = identity_epoch_update_for_store(
-            &store_id,
-            nook_core::IdentityVaultDekEpoch::Known {
-                key_epoch: key_epoch.clone(),
-                checkpoint: checkpoint.clone(),
-            },
-        )
-        .await?;
-        assert!(matches!(
-            awaiting,
-            nook_core::IdentityVaultDekEpochUpdate::Observe { .. }
-        ));
-
-        commit_identity_reconciliation_checkpoint(&store_id, &key_epoch, &checkpoint).await?;
-        let wrong_checkpoint = identity_epoch_update_for_store(
-            &store_id,
-            nook_core::IdentityVaultDekEpoch::Known {
-                key_epoch: key_epoch.clone(),
-                checkpoint: other_checkpoint,
-            },
-        )
-        .await?;
-        assert!(matches!(
-            wrong_checkpoint,
-            nook_core::IdentityVaultDekEpochUpdate::Observe { .. }
-        ));
-        let committed = identity_epoch_update_for_store(
-            &store_id,
-            nook_core::IdentityVaultDekEpoch::Known {
-                key_epoch,
-                checkpoint,
-            },
-        )
-        .await?;
-        assert!(matches!(
-            committed,
-            nook_core::IdentityVaultDekEpochUpdate::Rotate { .. }
-        ));
-        clear_identity_reconciliation_pending(&store_id).await
-    }
-
     fn map_domain_error(error: nook_core::MultiDeviceError) -> NookError {
         NookError::Database(error.to_string())
-    }
-
-    fn map_validation_error(error: nook_core::ValidationError) -> NookError {
-        NookError::Database(error.to_string())
-    }
-
-    fn event_id(fill: char) -> Result<nook_core::IdentityVaultEventId, NookError> {
-        nook_core::IdentityVaultEventId::parse(&format!("sha256u:{}", fill.to_string().repeat(43)))
-            .map_err(map_validation_error)
     }
 }

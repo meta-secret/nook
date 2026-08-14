@@ -276,16 +276,6 @@ impl NookVaultManager {
             self.reset_vault_session();
             return Err(error.into());
         }
-        let connected_store_id = nook_core::StoreId::parse(&self.vault.store_id)
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        if let Err(error) = crate::storage::identity_record::clear_identity_reconciliation_pending(
-            &connected_store_id,
-        )
-        .await
-        {
-            self.reset_vault_session();
-            return Err(error.into());
-        }
         let records = VerifiedVaultAccessFlow::Connect
             .complete(
                 self.get_records(),
@@ -344,7 +334,7 @@ impl NookVaultManager {
         }
         let store_id = nook_core::StoreId::parse(&self.vault.store_id)
             .map_err(|error| NookError::Database(error.to_string()))?;
-        let key_epoch = if self.event_log.enabled {
+        let (key_epoch, committed_event_ids) = if self.event_log.enabled {
             let key_epoch = self.ensure_key_epoch().await?;
             let checkpoint = self
                 .load_event_heads()
@@ -352,14 +342,26 @@ impl NookVaultManager {
                 .last()
                 .cloned()
                 .unwrap_or_else(|| key_epoch.clone());
-            nook_core::IdentityVaultDekEpoch::Known {
-                key_epoch: nook_core::IdentityVaultEventId::parse(&key_epoch)
-                    .map_err(|error| NookError::Database(error.to_string()))?,
-                checkpoint: nook_core::IdentityVaultEventId::parse(&checkpoint)
-                    .map_err(|error| NookError::Database(error.to_string()))?,
-            }
+            let event_store =
+                crate::storage::event_db::load_local_event_store(&self.vault.store_id).await?;
+            let committed_event_ids = event_store
+                .load_graph(&self.vault.store_id)?
+                .topological_order()?
+                .into_iter()
+                .map(|event_id| nook_core::IdentityVaultEventId::parse(event_id.as_str()))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| NookError::Database(error.to_string()))?;
+            (
+                nook_core::IdentityVaultDekEpoch::Known {
+                    key_epoch: nook_core::IdentityVaultEventId::parse(&key_epoch)
+                        .map_err(|error| NookError::Database(error.to_string()))?,
+                    checkpoint: nook_core::IdentityVaultEventId::parse(&checkpoint)
+                        .map_err(|error| NookError::Database(error.to_string()))?,
+                },
+                committed_event_ids,
+            )
         } else {
-            nook_core::IdentityVaultDekEpoch::LegacyUnknown
+            (nook_core::IdentityVaultDekEpoch::LegacyUnknown, Vec::new())
         };
         if let Some(envelopes) = self.vault.meta.auth.get(&identity.auth_id()) {
             let _ = crate::storage::identity_record::ensure_identity_from_legacy_vault(
@@ -368,6 +370,7 @@ impl NookVaultManager {
                 envelopes.secrets_key.clone(),
                 envelopes.members_key.clone(),
                 key_epoch,
+                committed_event_ids,
                 &label,
             )
             .await?;

@@ -62,20 +62,15 @@ impl NookVaultManager {
         })
     }
 
-    async fn adopt_latest_security_epoch(&mut self) -> Result<(), NookError> {
+    async fn adopt_latest_security_epoch(
+        &mut self,
+        prepared: &PreparedEpochRotation,
+    ) -> Result<nook_core::IdentityVaultEventId, NookError> {
         let new_epoch = self.event_log.heads.last().cloned().ok_or_else(|| {
             NookError::Database("Security epoch rotation did not produce an event head.".to_owned())
         })?;
-        self.event_log.key_epoch = new_epoch;
-        save_key_epoch(&self.vault.store_id, &self.event_log.key_epoch).await
-    }
-
-    async fn commit_security_epoch_rotation(
-        &mut self,
-        prepared: PreparedEpochRotation,
-    ) -> Result<(), NookError> {
         let store_id = nook_core::StoreId::parse(&self.vault.store_id)?;
-        let key_epoch = nook_core::IdentityVaultEventId::parse(&self.event_log.key_epoch)?;
+        let key_epoch = nook_core::IdentityVaultEventId::parse(&new_epoch)?;
         crate::storage::identity_record::mark_identity_reconciliation_pending(
             &store_id,
             &prepared.previous_key_epoch,
@@ -83,6 +78,21 @@ impl NookVaultManager {
             &key_epoch,
         )
         .await?;
+        let previous_in_memory_epoch = self.event_log.key_epoch.clone();
+        self.event_log.key_epoch = new_epoch;
+        if let Err(error) = save_key_epoch(&self.vault.store_id, &self.event_log.key_epoch).await {
+            self.event_log.key_epoch = previous_in_memory_epoch;
+            return Err(error);
+        }
+        Ok(key_epoch)
+    }
+
+    async fn commit_security_epoch_rotation(
+        &mut self,
+        prepared: PreparedEpochRotation,
+        key_epoch: nook_core::IdentityVaultEventId,
+    ) -> Result<(), NookError> {
+        let store_id = nook_core::StoreId::parse(&self.vault.store_id)?;
         self.apply_vault_keys(
             prepared.new_keys.secrets_key.as_str(),
             prepared.new_keys.members_key.as_str(),
@@ -122,7 +132,7 @@ impl NookVaultManager {
         .await?;
         let identity = self.device_identity()?;
         self.ensure_identity_after_connect(&identity).await?;
-        crate::storage::identity_record::clear_identity_reconciliation_pending(&store_id).await
+        Ok(())
     }
 
     pub(in crate::manager) async fn rotate_security_epoch(
@@ -136,11 +146,12 @@ impl NookVaultManager {
             Some(head) => nook_core::IdentityVaultEventId::parse(head)?,
             None => previous_key_epoch.clone(),
         };
-        self.append_vault_operations(vec![trigger]).await?;
-        self.adopt_latest_security_epoch().await?;
         let prepared =
             self.prepare_security_epoch_rotation(previous_key_epoch, previous_checkpoint)?;
-        self.commit_security_epoch_rotation(prepared).await
+        self.append_vault_operations(vec![trigger]).await?;
+        let key_epoch = self.adopt_latest_security_epoch(&prepared).await?;
+        self.commit_security_epoch_rotation(prepared, key_epoch)
+            .await
     }
 
     pub(in crate::manager) async fn rotate_password_security_epoch(
@@ -170,8 +181,9 @@ impl NookVaultManager {
             envelope: envelope.clone(),
         }])
         .await?;
-        self.adopt_latest_security_epoch().await?;
-        self.commit_security_epoch_rotation(prepared).await?;
+        let key_epoch = self.adopt_latest_security_epoch(&prepared).await?;
+        self.commit_security_epoch_rotation(prepared, key_epoch)
+            .await?;
         Ok(envelope)
     }
 }

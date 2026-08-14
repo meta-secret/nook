@@ -82,19 +82,21 @@ event signer.
 Destructive local device recovery keeps retired app IDs in the directory.
 Atomic directory updates reject those app keys. This prevents a stale browser
 tab from recreating ownership after recovery. The initiating tab first asks
-every open Nook tab to stop queued storage work. The reset then runs inside the
-initiating tab's storage queue.
+every open Nook tab to stop queued storage work and zeroize its app key. The
+reset then runs inside the initiating tab's storage queue.
 
 Security-epoch retry state uses
 `pending_identity_reconciliation_v1:{store_id}`.
 Its value pins `storeId`, `previousKeyEpoch`, `previousCheckpoint`, `keyEpoch`,
 and a named `checkpointState`.
 Each identity-owned Simple vault DEK also stores its committed key epoch.
-The app writes `awaiting-checkpoint` before installing rotated keys. It changes
-that state to `committed` with the exact checkpoint event ID only after the
-event is durable. Reconciliation consumes only that exact epoch and checkpoint.
-The marker is removed only after the identity directory compare-and-swap
-succeeds. Stale observations cannot replace envelopes from a newer epoch.
+The app writes `awaiting-checkpoint` before persisting the new key epoch. An
+advanced epoch cannot be observed until the checkpoint is committed. The state
+changes to `committed` with the exact checkpoint event ID only after the event
+is durable. That checkpoint must remain in verified event history, while the
+directory records the latest observed head. The marker is compare-deleted only
+after the identity directory compare-and-swap succeeds. Stale observations
+cannot replace envelopes from a newer epoch.
 
 Sentinel delivery records use a named `identityBinding`. Current records use
 `bound` with a required `identityId`. Missing legacy bindings decode as
