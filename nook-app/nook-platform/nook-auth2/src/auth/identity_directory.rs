@@ -365,22 +365,26 @@ impl IdentityDirectory {
         if matches!(&self.selection, IdentitySelection::Empty) {
             return self.create_identity(label, app_key, None);
         }
-        let selected = self.selected_mut()?;
-        if let Some(member) = selected
-            .members
-            .iter()
-            .find(|member| member.app_id == *app_key.app_id())
         {
-            if member.auth_id != app_key.auth_id() || member.public_key != app_key.public_key() {
-                return Err(MultiDeviceError::InvalidDeviceIdentity(
-                    "existing app id has different key material".to_owned(),
-                ));
+            let selected = self.selected()?;
+            if let Some(member) = selected
+                .members
+                .iter()
+                .find(|member| member.app_id == *app_key.app_id())
+            {
+                if member.auth_id != app_key.auth_id() || member.public_key != app_key.public_key()
+                {
+                    return Err(MultiDeviceError::InvalidDeviceIdentity(
+                        "existing app id has different key material".to_owned(),
+                    ));
+                }
+                return Ok(selected.identity_id.clone());
             }
-            return Ok(selected.identity_id.clone());
+            if !selected.vault_deks.is_empty() || !selected.sentinel_vaults.is_empty() {
+                return Err(MultiDeviceError::IdentityEnrollmentRequired);
+            }
         }
-        if !selected.vault_deks.is_empty() || !selected.sentinel_vaults.is_empty() {
-            return Err(MultiDeviceError::IdentityEnrollmentRequired);
-        }
+        let selected = self.selected_mut()?;
         selected.add_member(IdentityMember {
             app_id: app_key.app_id().clone(),
             auth_id: app_key.auth_id(),
