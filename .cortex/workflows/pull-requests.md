@@ -43,7 +43,7 @@ ownership until merge or a concrete blocked handoff:
    - Inspect the path-applicable `PR / Verify and preview` and `Web research / Build and deploy research catalog` workflows.
    - Do **not** run a required local `task check` / `task ci:pr`.
 5. **Fix Nook's failed PR workflow** — inspect failed logs, consult app logs for web/e2e failures, fix, `task loom:pre-push`, and push the completed fix; the agent explicitly triggers complete validation for the replacement head.
-6. **Converge review before complete validation** — run advisory local Codex review before the first push. After each coherent push, run bounded exact-head Codex Cloud review convergence. Fix every actionable finding. Do not request or wait for other optional reviewers.
+6. **Converge review before complete validation** — run advisory local Codex review before the first owner-authored push. For a harness-created PR, the continuing owner runs it immediately after handoff. After each coherent push, run bounded exact-head Codex Cloud review convergence. Fix every actionable finding. Do not request or wait for other optional reviewers.
 7. **Merge automatically when ready** — after the branch is current with `origin/main`, Nook's applicable repository-owned PR test checks are green, all actionable comments are resolved, and `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` / `task pr:ready` succeeds, squash-merge immediately without requesting separate permission.
 
 ## Pull request size and modularity
@@ -258,7 +258,8 @@ gh pr create --title "…" --body "…"
 
 See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
-Before the first push, run `task pr:review-local` on the coherent branch head.
+Before the first owner-authored push, run `task pr:review-local` on the coherent
+branch head. For a harness-created PR, run it immediately after handoff.
 After each coherent push, run bounded review convergence before complete
 validation. Use focused remote tasks only when they shorten diagnosis of a
 known failure. See [code-review.md](code-review.md).
@@ -519,7 +520,7 @@ Rules:
 See [coding-bro.md](coding-bro.md) for the numbered 0–12 checklist.
 
 1. Fetch `origin/main`; branch from it.
-2. Implement; run `task loom:pre-push`; commit; run `task pr:review-local`; then push/open/update the PR.
+2. Implement; run `task loom:pre-push`; commit; run `task pr:review-local`; then push/open/update the PR. For a harness-created PR, run local review immediately after handoff.
 3. Run focused `task remote` jobs only for faster isolated diagnosis. Run Loom/Task validate on the ready head; bounded Codex convergence runs before complete validation.
 4. Never wait beyond the Codex convergence timeout. Never request or wait for other optional external reviews/checks.
 5. Address and resolve every actionable comment already present.

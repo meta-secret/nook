@@ -8,7 +8,7 @@ delivery indefinitely.
 Other external review services remain optional. Do not request or wait for
 them unless the user explicitly asks.
 
-## Local review before the first push
+## Local review before the first owner-authored push
 
 Run the advisory local review on a coherent branch head:
 
@@ -21,6 +21,11 @@ The command compares the branch with current `origin/main`.
 If the Codex CLI or authentication is unavailable, it reports the skip and
 does not block delivery. Treat any actionable finding it does produce as normal
 implementation work. Run pre-push hygiene again after fixes.
+
+The bounded implementation worker cannot run Git. The harness commits and
+pushes its result after the worker exits. For that path, the continuing owner
+runs local review immediately after handoff and before Cloud review
+convergence. This is the only first-push exception.
 
 ## Cloud review before complete validation
 

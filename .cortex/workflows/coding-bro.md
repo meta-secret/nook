@@ -58,7 +58,7 @@ Default PR-first loop:
    - Fix the code; do not silence the check.
    - Push the completed fix, then explicitly trigger complete validation again.
    - Use a focused remote task only when it shortens diagnosis of a known failure.
-7. **Converge review before complete validation** — run advisory local Codex review before the first push. After each coherent push, give automatic Codex Cloud review a grace period, request one exact-head review when needed, and stop at the bounded timeout. Fix every actionable finding before complete validation. Do not request or wait for other optional reviewers.
+7. **Converge review before complete validation** — run advisory local Codex review before the first owner-authored push. For a harness-created PR, the continuing owner runs it immediately after handoff. After each coherent push, give automatic Codex Cloud review a grace period, request one exact-head review when needed, and stop at the bounded timeout. Fix every actionable finding before complete validation. Do not request or wait for other optional reviewers.
 8. **Merge automatically when ready** — require `task pr:ready PR=<number>`, then squash-merge as soon as the branch is current, Nook's applicable repository-owned PR test checks are green and all actionable comments are resolved. Do not pause for a ready-PR handoff or separate merge permission.
 
 ## Testing strategy — GitHub Actions only
@@ -147,7 +147,7 @@ Default agent flow:
 5. **Push and open/update the PR** — once the branch has a coherent formatted commit, commit, push, and create/update the PR.
 6. **Validate on GitHub Actions:**
    - Dispatch focused `task remote` jobs as useful.
-   - Run `task pr:review-local` on a coherent local head before the first push.
+   - Run `task pr:review-local` on a coherent local head before the first owner-authored push. For a harness-created PR, run it immediately after handoff.
    - Run `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`. Loom performs bounded exact-head Codex review convergence before `task pr:validate` and repository-owned PR checks.
    - Green status is necessary, but the full readiness audit must also pass.
    - See [code-review.md](code-review.md).
@@ -194,7 +194,7 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
 5. **Push and open/update PR** — Commit and push as soon as the branch has a coherent formatted implementation commit. If no PR exists, open it; pushes do not automatically start the complete validation workflow.
 6. **Explicit Nook PR checks:**
    - Use `task remote` for focused feedback.
-   - Run `task pr:review-local` before the first push.
+   - Run `task pr:review-local` before the first owner-authored push. For a harness-created PR, run it immediately after handoff.
    - Run `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` at the complete validation boundary. Loom converges Codex review first.
    - Monitor repository-owned PR checks.
    - Inspect any feedback already present.
@@ -287,7 +287,8 @@ builds, and e2e.
 Format on the host with Loom, commit and push, use focused `task remote` jobs,
 then explicitly validate when the exact head is ready.
 
-Run `task pr:review-local` on a coherent local head before the first push.
+Run `task pr:review-local` on a coherent local head before the first
+owner-authored push. For a harness-created PR, run it immediately after handoff.
 
 After each coherent push, run `task pr:review-converge PR=<number>` before
 complete validation. Fix actionable feedback. A review-service timeout remains
@@ -403,7 +404,7 @@ Do not wait for post-merge Main. Any performance fix belongs in a separate norma
 - **Never merge after a Nook PR-test failure without a green Actions run on the latest head.**
 - **Fix Knip, jscpd, and every other check finding** — unused code, clones/duplicates, lint, types, tests, coverage. Do not raise thresholds or ignore authored sources to silence a red gate. See [quality.md § Fix check findings](quality.md#fix-check-findings--not-silence-them).
 - **Never merge on checks alone.** Require the exact-head `task pr:ready` audit; once it succeeds, the task-owning agent must squash-merge without asking again. Workflows do not blindly merge based on a check event.
-- **Converge Codex review before complete validation.** Run local review before the first push and bounded Cloud review convergence after each coherent push. Address and resolve all actionable comments, then require `task pr:ready`. Never wait beyond the convergence timeout or request other optional reviewers.
+- **Converge Codex review before complete validation.** Run local review before the first owner-authored push. For a harness-created PR, run it immediately after handoff. Run bounded Cloud review convergence after each coherent push. Address and resolve all actionable comments, then require `task pr:ready`. Never wait beyond the convergence timeout or request other optional reviewers.
 - **Never kill the Docker daemon** — only stop containers. See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
 - **Never hide deferred scope** — if requested functionality is not fully implemented because it is large, risky, blocked, or out of scope, manage it in Workbench Markdown first. See [issues.md](issues.md).
 - **Plan bounded PRs** — target no more than 5,000 authored changed lines per

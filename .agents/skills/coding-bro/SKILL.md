@@ -41,8 +41,8 @@ contract:
 | 2 | Publish `plans/<feature>/<timestamp>-<task>.md`, then branch from `origin/main` |
 | 3 | Implement the published plan |
 | 4 | **Always** `task loom:pre-push` |
-| 5 | Commit + push/open or update PR |
-| 6 | Run focused `task remote` jobs as useful; then `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` |
+| 5 | Commit; run local review; then push/open or update PR. For a harness PR, run local review immediately after handoff |
+| 6 | Run focused `task remote` jobs as useful; then bounded review convergence and `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` |
 | 7 | Watch exact-head repository-owned checks and inspect feedback already present |
 | 8–10 | On failure: CI logs → fix → `task loom:pre-push` → commit/push → focused remote proof → explicit validation |
 | 11 | `gh pr merge --squash` when repository checks are green, threads are resolved, and Loom/Task readiness succeeds |

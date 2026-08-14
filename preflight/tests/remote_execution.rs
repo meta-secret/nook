@@ -95,6 +95,7 @@ fn pr_landing_converges_review_before_complete_validation() {
         "pr:review-converge:",
         "CODEX_REVIEW_AUTOMATIC_GRACE_SECONDS",
         "CODEX_REVIEW_TIMEOUT_SECONDS",
+        "-e CODEX_REVIEW_POLL_SECONDS",
         "CI_AGENT_CMD=pr-review-converge",
     ] {
         assert!(

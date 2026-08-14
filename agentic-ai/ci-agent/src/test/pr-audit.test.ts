@@ -111,6 +111,17 @@ test("buildPrAudit reports a dismissed exact-head Codex review without waiting",
   assert.deepEqual(audit.reasons, []);
 });
 
+test("buildPrAudit ignores the automated continuing-owner handoff", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ includeAgentHandoff: true }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, true);
+  assert.equal(audit.feedback.substantiveComments, 0);
+});
+
 test("buildPrAudit blocks a lookalike Codex status review", async () => {
   const audit = await buildPrAudit(
     mockOctokit({ codexReview: MockCodexReview.Impostor }),
@@ -235,6 +246,7 @@ enum MockJobConclusion {
 type MockOptions = {
   behindBy?: number;
   codexReview?: MockCodexReview;
+  includeAgentHandoff?: boolean;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
   runStatus?: MockRunStatus;
@@ -345,6 +357,13 @@ function mockOctokit(options: MockOptions = {}): Octokit {
         {
           body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS",
         },
+        ...(options.includeAgentHandoff
+          ? [
+              {
+                body: "@octocat this workflow assigned you PR #410. Continue only this PR's recorded scope through review, exact-head validation, and squash merge.",
+              },
+            ]
+          : []),
       ],
     }),
   };

@@ -454,10 +454,15 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 
 ## ⛔ Non-negotiable: converge Codex review before complete validation
 
-Run advisory local Codex review before the first push. After each coherent push,
-run bounded exact-head Codex Cloud review convergence before complete
-validation. Give the automatic review a grace period. Request it once when
-needed. A missing service result times out without blocking delivery.
+Run advisory local Codex review before the first owner-authored push. The
+bounded implementation harness is the exception. It commits and pushes after
+the worker exits. Its continuing owner runs local review immediately after
+handoff and before Cloud review convergence.
+
+After each coherent push, run bounded exact-head Codex Cloud review convergence
+before complete validation. Give the automatic review a grace period. Request
+it once when needed. A missing service result times out without blocking
+delivery.
 
 Before merge or handoff, inspect the comments and review findings currently
 present and address every active actionable item from humans or external
