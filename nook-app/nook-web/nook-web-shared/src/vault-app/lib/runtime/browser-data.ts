@@ -176,7 +176,7 @@ export function subscribeToLocalBrowserDataDeletion(
   };
 }
 
-async function quiesceOtherTabs(): Promise<void> {
+export async function quiesceOtherTabsForLocalRecovery(): Promise<void> {
   if (!("BroadcastChannel" in globalThis)) {
     throw new Error("Safe cross-tab local data deletion is unavailable");
   }
@@ -236,7 +236,7 @@ export async function deleteLocalBrowserData(
 ): Promise<void> {
   const errors: Error[] = [];
   await suspendWasmLogging();
-  await quiesceOtherTabs();
+  await quiesceOtherTabsForLocalRecovery();
   try {
     await clearNookDatabases();
   } catch (error) {

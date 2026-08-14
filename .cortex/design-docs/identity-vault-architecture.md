@@ -86,15 +86,22 @@ The marker owns the genesis timestamp and complete signed event lifecycle.
 owns the signed event in `eventYaml` before the first event-log write. Retries
 reuse those exact bytes because encrypted DEK envelopes are randomized.
 Legacy markers without `createdAt` use the Unix epoch timestamp. Legacy markers
-without `eventState` decode as `awaiting-event`.
+without `eventState` decode as `awaiting-event`. The preceding top-level
+`eventYaml` field migrates into `eventState.event-pinned`. A successful read
+rewrites either legacy shape in the current schema within the same transaction.
 
 Recovery clears identity ownership but preserves retired app IDs. Every
 app-key operation rejects a retired ID. Atomic updates therefore prevent a
 stale tab from writing old ownership back after recovery.
+Before recovery mutates IndexedDB, the initiating tab quiesces storage work in
+every open Nook tab. It then serializes its own reset through the storage queue.
 
-Security-epoch rotation stores the vault ID at
-`pending_identity_reconciliation_v1:{store_id}` before it appends the
-checkpoint.
+Security-epoch rotation stores `storeId`, `previousKeyEpoch`,
+`previousCheckpoint`, and `keyEpoch` at
+`pending_identity_reconciliation_v1:{store_id}` before installing rotated keys.
+Each identity DEK grant stores its committed key epoch.
+Reconciliation is a compare-and-swap from the previous epoch to the new epoch.
+An idempotent retry at the new epoch succeeds. An older observation fails.
 Successful directory reconciliation clears that marker.
 Any later verified connect repeats the idempotent reconciliation and clears a
 marker left by an interrupted post-commit update.
@@ -112,11 +119,13 @@ If an association commits but delivery persistence is interrupted, retry
 recovers the validated owner from the directory before rewriting the delivery.
 
 Sentinel creation stores `sentinel_genesis_finalization_pending` as a JSON
-commit marker. It contains `storeId`, optional `identityId`, vault metadata, the
+commit marker. It contains `storeId`, `identityBinding`, vault metadata, the
 encrypted projection, request, participants, and deliveries. Current writers
-always pin `identityId`. A legacy marker without it may be upgraded only when
-the current app key belongs to one unambiguous local identity. Ambiguous legacy
-state fails closed. Successful finalization deletes the marker.
+use the named `bound` variant, which owns `identityId`. The named
+`legacy-unbound` variant is retained only for migration. A legacy top-level
+`identityId` becomes `bound`. A marker without either field may be upgraded
+only when the current app key belongs to one unambiguous local identity.
+Ambiguous legacy state fails closed. Successful finalization deletes the marker.
 
 The first directory read migrates `identity_record_v1` when present:
 

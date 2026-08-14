@@ -4,6 +4,8 @@ use super::{
 };
 
 struct PreparedEpochRotation {
+    previous_key_epoch: nook_core::Sha256Hex,
+    previous_checkpoint: nook_core::Sha256Hex,
     records_snapshot: Vec<nook_core::StoredSecretRecord>,
     old_members_key: nook_core::SymmetricKey,
     new_keys: nook_core::VaultKeys,
@@ -29,7 +31,11 @@ impl NookVaultManager {
         Ok(())
     }
 
-    fn prepare_security_epoch_rotation(&self) -> Result<PreparedEpochRotation, NookError> {
+    fn prepare_security_epoch_rotation(
+        &self,
+        previous_key_epoch: nook_core::Sha256Hex,
+        previous_checkpoint: nook_core::Sha256Hex,
+    ) -> Result<PreparedEpochRotation, NookError> {
         let old_secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
         let old_members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
         let records_snapshot = self.stored_records_snapshot();
@@ -46,6 +52,8 @@ impl NookVaultManager {
             &new_keys.members_key,
         )?;
         Ok(PreparedEpochRotation {
+            previous_key_epoch,
+            previous_checkpoint,
             records_snapshot,
             old_members_key,
             new_keys,
@@ -67,7 +75,14 @@ impl NookVaultManager {
         prepared: PreparedEpochRotation,
     ) -> Result<(), NookError> {
         let store_id = nook_core::StoreId::parse(&self.vault.store_id)?;
-        crate::storage::identity_record::mark_identity_reconciliation_pending(&store_id).await?;
+        let key_epoch = nook_core::Sha256Hex::parse(&self.event_log.key_epoch)?;
+        crate::storage::identity_record::mark_identity_reconciliation_pending(
+            &store_id,
+            &prepared.previous_key_epoch,
+            &prepared.previous_checkpoint,
+            &key_epoch,
+        )
+        .await?;
         self.apply_vault_keys(
             prepared.new_keys.secrets_key.as_str(),
             prepared.new_keys.members_key.as_str(),
@@ -103,9 +118,15 @@ impl NookVaultManager {
         trigger: VaultOperation,
     ) -> Result<(), NookError> {
         self.activate_event_log_mode().await?;
+        let previous_key_epoch = nook_core::Sha256Hex::parse(&self.ensure_key_epoch().await?)?;
+        let previous_checkpoint = match self.load_event_heads().await?.last() {
+            Some(head) => nook_core::Sha256Hex::parse(head)?,
+            None => previous_key_epoch.clone(),
+        };
         self.append_vault_operations(vec![trigger]).await?;
         self.adopt_latest_security_epoch().await?;
-        let prepared = self.prepare_security_epoch_rotation()?;
+        let prepared =
+            self.prepare_security_epoch_rotation(previous_key_epoch, previous_checkpoint)?;
         self.commit_security_epoch_rotation(prepared).await
     }
 
@@ -117,7 +138,13 @@ impl NookVaultManager {
     ) -> Result<nook_core::PasswordEnvelope, NookError> {
         self.activate_event_log_mode().await?;
 
-        let prepared = self.prepare_security_epoch_rotation()?;
+        let previous_key_epoch = nook_core::Sha256Hex::parse(&self.ensure_key_epoch().await?)?;
+        let previous_checkpoint = match self.load_event_heads().await?.last() {
+            Some(head) => nook_core::Sha256Hex::parse(head)?,
+            None => previous_key_epoch.clone(),
+        };
+        let prepared =
+            self.prepare_security_epoch_rotation(previous_key_epoch, previous_checkpoint)?;
         let envelope = nook_core::attach_password_envelope_with_work_factor(
             &prepared.new_keys,
             password,

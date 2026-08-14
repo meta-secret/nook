@@ -345,11 +345,27 @@ impl NookVaultManager {
         let store_id = nook_core::StoreId::parse(&self.vault.store_id)
             .map_err(|error| NookError::Database(error.to_string()))?;
         if let Some(envelopes) = self.vault.meta.auth.get(&identity.auth_id()) {
+            let key_epoch = if self.event_log.key_epoch.is_empty() {
+                nook_core::IdentityVaultDekEpoch::LegacyUnknown
+            } else {
+                let checkpoint = self
+                    .event_log
+                    .heads
+                    .last()
+                    .unwrap_or(&self.event_log.key_epoch);
+                nook_core::IdentityVaultDekEpoch::Known {
+                    key_epoch: nook_core::Sha256Hex::parse(&self.event_log.key_epoch)
+                        .map_err(|error| NookError::Database(error.to_string()))?,
+                    checkpoint: nook_core::Sha256Hex::parse(checkpoint)
+                        .map_err(|error| NookError::Database(error.to_string()))?,
+                }
+            };
             let _ = crate::storage::identity_record::ensure_identity_from_legacy_vault(
                 identity,
                 &store_id,
                 envelopes.secrets_key.clone(),
                 envelopes.members_key.clone(),
+                key_epoch,
                 &label,
             )
             .await?;

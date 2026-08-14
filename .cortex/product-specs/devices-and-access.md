@@ -73,23 +73,32 @@ Legacy records without `createdAt` use the Unix epoch timestamp.
 `eventState` is either `awaiting-event` or `event-pinned`. The pinned variant
 owns the complete signed genesis event in `eventYaml` before its first
 event-log write. Retries reuse those exact bytes. A legacy marker without
-`eventState` is explicitly treated as `awaiting-event`.
+`eventState` is explicitly treated as `awaiting-event`. The preceding schema's
+top-level `eventYaml` is migrated into the `event-pinned` variant. Reading
+either legacy shape rewrites the current schema atomically.
 
 Destructive local device recovery keeps retired app IDs in the directory.
 Atomic directory updates reject those app keys. This prevents a stale browser
-tab from recreating ownership after recovery.
+tab from recreating ownership after recovery. The initiating tab first asks
+every open Nook tab to stop queued storage work. The reset then runs inside the
+initiating tab's storage queue.
 
 Security-epoch retry state uses
 `pending_identity_reconciliation_v1:{store_id}`.
-Its value is the same `store_id`.
-The app writes it before the epoch checkpoint and removes it only after the
-identity directory reconciles successfully.
+Its value pins `storeId`, `previousKeyEpoch`, `previousCheckpoint`, and
+`keyEpoch`.
+Each identity-owned Simple vault DEK also stores its committed key epoch.
+The app writes retry state before installing rotated keys and removes it only
+after the identity directory compare-and-swap succeeds. Stale observations
+cannot replace envelopes from a newer epoch.
 
 Sentinel finalization uses `sentinel_genesis_finalization_pending`.
-Its JSON payload contains `storeId`, optional `identityId`, vault metadata, the
-encrypted projection, request, participants, and deliveries. New markers always
-include `identityId`. A legacy missing field is filled only when the current app
-key maps to one unambiguous identity; otherwise finalization fails closed.
+Its JSON payload contains `storeId`, `identityBinding`, vault metadata, the
+encrypted projection, request, participants, and deliveries. `identityBinding`
+is either `bound` with an `identityId` or `legacy-unbound`. New markers always
+use `bound`. A legacy top-level `identityId` migrates to `bound`. A missing
+legacy field resolves only when the current app key maps to one unambiguous
+identity; otherwise finalization fails closed.
 Successful finalization removes the marker.
 
 On first read, the app migrates `identity_record_v1` into the directory.

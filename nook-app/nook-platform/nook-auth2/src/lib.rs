@@ -44,7 +44,8 @@ pub use auth::enrollment::{
     peek_enrollment_entry_id, peek_enrollment_entry_label, peek_enrollment_issued_at,
 };
 pub use auth::identity::{
-    IdentityId, IdentityMember, IdentityRecord, IdentityVaultDek, MemberDekEnvelope,
+    IdentityId, IdentityMember, IdentityRecord, IdentityVaultDek, IdentityVaultDekEpoch,
+    IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, MemberDekEnvelope,
     identity_fingerprint,
 };
 pub use auth::identity_directory::{IdentityDirectory, IdentitySelection};

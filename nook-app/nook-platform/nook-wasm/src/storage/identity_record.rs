@@ -3,61 +3,22 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use serde::{Deserialize, Serialize};
-
 #[cfg(test)]
 use super::indexed_db::idb_put_string;
 use super::indexed_db::{
     StringUpdateGuard, StringUpdateResult, idb_delete_key, idb_get_string, idb_update_string,
 };
-use crate::{NookError, conversion::wasm_iso_timestamp, storage::open_nook_database};
+use crate::{NookError, storage::open_nook_database};
+
+mod simple_genesis;
+pub(crate) use simple_genesis::{
+    PendingSimpleGenesis, begin_or_resume_simple_genesis, clear_pending_simple_genesis,
+    pending_simple_genesis_for_store, persist_simple_genesis_event,
+};
 
 const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
 const LEGACY_IDENTITY_RECORD_KEY: &str = "identity_record_v1";
-const PENDING_SIMPLE_GENESIS_KEY: &str = "pending_simple_genesis_v1";
 const PENDING_IDENTITY_RECONCILIATION_PREFIX: &str = "pending_identity_reconciliation_v1:";
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct PendingSimpleGenesis {
-    pub(crate) store_id: nook_core::StoreId,
-    pub(crate) identity_id: nook_core::IdentityId,
-    #[serde(default = "legacy_simple_genesis_timestamp")]
-    pub(crate) created_at: nook_core::IsoTimestamp,
-    #[serde(default)]
-    pub(crate) event_state: PendingSimpleGenesisEvent,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
-pub(crate) enum PendingSimpleGenesisEvent {
-    #[default]
-    AwaitingEvent,
-    EventPinned {
-        #[serde(rename = "eventYaml")]
-        event_yaml: String,
-    },
-}
-
-impl PendingSimpleGenesis {
-    #[cfg(test)]
-    fn event_yaml(&self) -> Option<&str> {
-        match &self.event_state {
-            PendingSimpleGenesisEvent::AwaitingEvent => None,
-            PendingSimpleGenesisEvent::EventPinned { event_yaml } => Some(event_yaml),
-        }
-    }
-}
-
-fn legacy_simple_genesis_timestamp() -> nook_core::IsoTimestamp {
-    nook_core::IsoTimestamp::from_trusted("1970-01-01T00:00:00.000Z".to_owned())
-}
-
-fn decode_pending_simple_genesis(raw: &str) -> Result<PendingSimpleGenesis, NookError> {
-    serde_json::from_str(raw).map_err(|error| {
-        NookError::IndexedDb(format!("Pending Simple genesis decode error: {error}"))
-    })
-}
 
 async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, NookError> {
     let rexie = open_nook_database().await?;
@@ -264,11 +225,13 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
     store_id: &nook_core::StoreId,
     secrets_envelope: nook_core::AgeArmoredCiphertext,
     members_envelope: nook_core::AgeArmoredCiphertext,
+    key_epoch: nook_core::IdentityVaultDekEpoch,
     label: &str,
 ) -> Result<nook_core::IdentityRecord, NookError> {
     let app_key = app_key.clone();
     let store_id = store_id.clone();
     let label = label.to_owned();
+    let epoch_update = identity_epoch_update_for_store(&store_id, key_epoch).await?;
     update_identity_directory(move |directory| {
         let identity_id = directory
             .import_legacy_vault(
@@ -277,6 +240,7 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
                 store_id,
                 secrets_envelope,
                 members_envelope,
+                epoch_update,
             )
             .map_err(|error| NookError::Database(error.to_string()))?;
         directory
@@ -289,167 +253,78 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
     .await
 }
 
-pub(crate) async fn begin_or_resume_simple_genesis(
-    app_key: &nook_core::AppKey,
-    label: &str,
-) -> Result<PendingSimpleGenesis, NookError> {
-    if let Some(raw) = idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? {
-        return decode_pending_simple_genesis(&raw);
-    }
-    let identity = ensure_local_identity_for_app_key(app_key, label).await?;
-    let proposed = PendingSimpleGenesis {
-        store_id: nook_core::generate_store_id()
-            .map_err(|error| NookError::Database(error.to_string()))?,
-        identity_id: identity.identity_id,
-        created_at: nook_core::IsoTimestamp::parse(&wasm_iso_timestamp())
-            .map_err(|error| NookError::Database(error.to_string()))?,
-        event_state: PendingSimpleGenesisEvent::AwaitingEvent,
-    };
-    let proposed_json = serde_json::to_string(&proposed).map_err(|error| {
-        NookError::IndexedDb(format!("Pending Simple genesis encode error: {error}"))
-    })?;
-    let selected = Rc::new(RefCell::new(None));
-    let captured = Rc::clone(&selected);
-    idb_update_string(
-        PENDING_SIMPLE_GENESIS_KEY,
-        StringUpdateGuard::Unconditional,
-        move |current| {
-            let pending = current
-                .as_deref()
-                .map(decode_pending_simple_genesis)
-                .transpose()?
-                .unwrap_or(proposed);
-            *captured.borrow_mut() = Some(pending);
-            Ok(current.unwrap_or(proposed_json))
-        },
-    )
-    .await?;
-    selected.borrow_mut().take().ok_or_else(|| {
-        NookError::IndexedDb("Pending Simple genesis produced no result.".to_owned())
-    })
-}
-
-/// Pin the first complete signed Simple genesis event before any event-log write.
-///
-/// Age envelopes are randomized, so a timestamp alone cannot reproduce the same
-/// immutable root. Concurrent callers atomically converge on the first event
-/// stored in the pending marker and must publish those exact bytes.
-pub(crate) async fn persist_simple_genesis_event(
-    pending: &PendingSimpleGenesis,
-    proposed_yaml: String,
-) -> Result<String, NookError> {
-    let expected = pending.clone();
-    let selected = Rc::new(RefCell::new(None));
-    let captured = Rc::clone(&selected);
-    let disposition = idb_update_string(
-        PENDING_SIMPLE_GENESIS_KEY,
-        StringUpdateGuard::Unconditional,
-        move |raw| {
-            let raw = raw.ok_or_else(|| {
-                NookError::IndexedDb("Pending Simple genesis marker disappeared.".to_owned())
-            })?;
-            let mut current = decode_pending_simple_genesis(&raw)?;
-            if current.store_id != expected.store_id
-                || current.identity_id != expected.identity_id
-                || current.created_at != expected.created_at
-            {
-                return Err(NookError::IndexedDb(
-                    "Pending Simple genesis marker changed during event creation.".to_owned(),
-                ));
-            }
-            let event_yaml = match &current.event_state {
-                PendingSimpleGenesisEvent::AwaitingEvent => {
-                    current.event_state = PendingSimpleGenesisEvent::EventPinned {
-                        event_yaml: proposed_yaml.clone(),
-                    };
-                    proposed_yaml
-                }
-                PendingSimpleGenesisEvent::EventPinned { event_yaml } => event_yaml.clone(),
-            };
-            *captured.borrow_mut() = Some(event_yaml);
-            serde_json::to_string(&current).map_err(|error| {
-                NookError::IndexedDb(format!("Pending Simple genesis encode error: {error}"))
-            })
-        },
-    )
-    .await?;
-    if disposition != StringUpdateResult::Applied {
-        return Err(NookError::IndexedDb(
-            "Pending Simple genesis event update was rejected.".to_owned(),
-        ));
-    }
-    selected.borrow_mut().take().ok_or_else(|| {
-        NookError::IndexedDb("Pending Simple genesis event produced no result.".to_owned())
-    })
-}
-
 fn identity_reconciliation_key(store_id: &nook_core::StoreId) -> String {
     format!("{PENDING_IDENTITY_RECONCILIATION_PREFIX}{store_id}")
 }
 
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PendingIdentityReconciliation {
+    store_id: nook_core::StoreId,
+    previous_key_epoch: nook_core::Sha256Hex,
+    previous_checkpoint: nook_core::Sha256Hex,
+    key_epoch: nook_core::Sha256Hex,
+}
+
 pub(crate) async fn mark_identity_reconciliation_pending(
     store_id: &nook_core::StoreId,
+    previous_key_epoch: &nook_core::Sha256Hex,
+    previous_checkpoint: &nook_core::Sha256Hex,
+    key_epoch: &nook_core::Sha256Hex,
 ) -> Result<(), NookError> {
-    super::indexed_db::idb_put_string(&identity_reconciliation_key(store_id), store_id.as_str())
-        .await
+    let pending = PendingIdentityReconciliation {
+        store_id: store_id.clone(),
+        previous_key_epoch: previous_key_epoch.clone(),
+        previous_checkpoint: previous_checkpoint.clone(),
+        key_epoch: key_epoch.clone(),
+    };
+    let raw = serde_json::to_string(&pending)
+        .map_err(|error| NookError::Serialization(error.to_string()))?;
+    super::indexed_db::idb_put_string(&identity_reconciliation_key(store_id), &raw).await
+}
+
+async fn identity_epoch_update_for_store(
+    store_id: &nook_core::StoreId,
+    observed: nook_core::IdentityVaultDekEpoch,
+) -> Result<nook_core::IdentityVaultDekEpochUpdate, NookError> {
+    let Some(raw) = idb_get_string(&identity_reconciliation_key(store_id)).await? else {
+        return Ok(nook_core::IdentityVaultDekEpochUpdate::Observe {
+            key_epoch: observed,
+        });
+    };
+    let Ok(pending) = serde_json::from_str::<PendingIdentityReconciliation>(&raw) else {
+        return Ok(nook_core::IdentityVaultDekEpochUpdate::Observe {
+            key_epoch: observed,
+        });
+    };
+    let (observed_epoch, observed_checkpoint) = match &observed {
+        nook_core::IdentityVaultDekEpoch::Known {
+            key_epoch,
+            checkpoint,
+        } => (key_epoch, checkpoint),
+        nook_core::IdentityVaultDekEpoch::LegacyUnknown => {
+            return Ok(nook_core::IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: observed,
+            });
+        }
+    };
+    if pending.store_id == *store_id && pending.key_epoch == *observed_epoch {
+        return Ok(nook_core::IdentityVaultDekEpochUpdate::Rotate {
+            previous_key_epoch: pending.previous_key_epoch,
+            previous_checkpoint: pending.previous_checkpoint,
+            key_epoch: pending.key_epoch,
+            checkpoint: observed_checkpoint.clone(),
+        });
+    }
+    Ok(nook_core::IdentityVaultDekEpochUpdate::Observe {
+        key_epoch: observed,
+    })
 }
 
 pub(crate) async fn clear_identity_reconciliation_pending(
     store_id: &nook_core::StoreId,
 ) -> Result<(), NookError> {
     super::indexed_db::idb_delete_key(&identity_reconciliation_key(store_id)).await
-}
-
-pub(crate) async fn clear_pending_simple_genesis(
-    completed: &PendingSimpleGenesis,
-) -> Result<(), NookError> {
-    let rexie = open_nook_database().await?;
-    let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
-        .map_err(|error| {
-            NookError::IndexedDb(format!(
-                "Pending genesis cleanup transaction error: {error:?}"
-            ))
-        })?;
-    let store = transaction.store("vault").map_err(|error| {
-        NookError::IndexedDb(format!("Pending genesis cleanup store error: {error:?}"))
-    })?;
-    let id = serde_wasm_bindgen::to_value(PENDING_SIMPLE_GENESIS_KEY)
-        .map_err(|error| NookError::IndexedDb(format!("Pending genesis key error: {error:?}")))?;
-    let current = store.get(id.clone()).await.map_err(|error| {
-        NookError::IndexedDb(format!("Pending genesis cleanup read error: {error:?}"))
-    })?;
-    if let Some(current) = current.filter(|value| !value.is_undefined() && !value.is_null()) {
-        let raw: String = serde_wasm_bindgen::from_value(current).map_err(|error| {
-            NookError::IndexedDb(format!("Pending genesis cleanup decode error: {error:?}"))
-        })?;
-        let pending = decode_pending_simple_genesis(&raw)?;
-        if pending.store_id == completed.store_id && pending.identity_id == completed.identity_id {
-            store.delete(id).await.map_err(|error| {
-                NookError::IndexedDb(format!("Pending genesis cleanup delete error: {error:?}"))
-            })?;
-        }
-    }
-    transaction.done().await.map(|_| ()).map_err(|error| {
-        NookError::IndexedDb(format!(
-            "Pending genesis cleanup completion error: {error:?}"
-        ))
-    })
-}
-
-pub(crate) async fn pending_simple_genesis_for_store(
-    store_id: &str,
-) -> Result<Option<PendingSimpleGenesis>, NookError> {
-    if store_id.is_empty() {
-        return Ok(None);
-    }
-    let store_id = nook_core::StoreId::parse(store_id)
-        .map_err(|error| NookError::Database(error.to_string()))?;
-    let Some(raw) = idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? else {
-        return Ok(None);
-    };
-    let pending = decode_pending_simple_genesis(&raw)?;
-    Ok((pending.store_id == store_id).then_some(pending))
 }
 
 pub(crate) async fn generate_vault_dek_for_identity(
@@ -512,14 +387,14 @@ pub(crate) async fn delete_identity_directory_for_recovery() -> Result<(), NookE
     })
     .await?;
     idb_delete_key(LEGACY_IDENTITY_RECORD_KEY).await?;
-    idb_delete_key(PENDING_SIMPLE_GENESIS_KEY).await
+    simple_genesis::clear_pending_simple_genesis_for_recovery().await
 }
 
 #[cfg(test)]
 pub(crate) async fn clear_identity_directory_for_test() -> Result<(), NookError> {
     idb_delete_key(IDENTITY_DIRECTORY_KEY).await?;
     idb_delete_key(LEGACY_IDENTITY_RECORD_KEY).await?;
-    idb_delete_key(PENDING_SIMPLE_GENESIS_KEY).await
+    simple_genesis::clear_pending_simple_genesis_for_test().await
 }
 
 #[cfg(test)]
@@ -565,82 +440,6 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    async fn pending_genesis_survives_selection_change() -> Result<(), NookError> {
-        clear_identity_directory_for_test().await?;
-        let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
-        let pending = begin_or_resume_simple_genesis(&app_key, "Personal").await?;
-        let another_key = app_key.clone();
-        update_identity_directory(move |directory| {
-            directory
-                .create_identity("Work", &another_key, None)
-                .map_err(map_domain_error)?;
-            Ok(())
-        })
-        .await?;
-
-        let resumed = begin_or_resume_simple_genesis(&app_key, "Ignored").await?;
-        assert_eq!(resumed.store_id, pending.store_id);
-        assert_eq!(resumed.identity_id, pending.identity_id);
-        assert_eq!(
-            pending_simple_genesis_for_store(pending.store_id.as_str())
-                .await?
-                .map(|marker| marker.identity_id),
-            Some(pending.identity_id.clone())
-        );
-
-        clear_pending_simple_genesis(&pending).await?;
-        let replacement = begin_or_resume_simple_genesis(&app_key, "Work").await?;
-        assert_ne!(replacement.store_id, pending.store_id);
-        clear_pending_simple_genesis(&pending).await?;
-        let raw = idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-            .await?
-            .ok_or_else(|| NookError::IndexedDb("Replacement marker disappeared.".to_owned()))?;
-        assert_eq!(
-            decode_pending_simple_genesis(&raw)?.store_id,
-            replacement.store_id
-        );
-        clear_identity_directory_for_test().await
-    }
-
-    #[wasm_bindgen_test]
-    fn legacy_pending_genesis_without_event_state_is_awaiting() -> Result<(), NookError> {
-        let raw = serde_json::json!({
-            "storeId": nook_core::generate_store_id().map_err(map_domain_error)?,
-            "identityId": nook_core::IdentityId::generate().map_err(map_domain_error)?,
-            "createdAt": "2026-08-13T00:00:00.000Z"
-        })
-        .to_string();
-
-        let marker = decode_pending_simple_genesis(&raw)?;
-        assert!(matches!(
-            marker.event_state,
-            PendingSimpleGenesisEvent::AwaitingEvent
-        ));
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    async fn pending_genesis_reuses_first_complete_signed_event() -> Result<(), NookError> {
-        clear_identity_directory_for_test().await?;
-        let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
-        let pending = begin_or_resume_simple_genesis(&app_key, "Personal").await?;
-
-        let first = persist_simple_genesis_event(&pending, "first-event\n".to_owned()).await?;
-        let resumed =
-            persist_simple_genesis_event(&pending, "different-event\n".to_owned()).await?;
-
-        assert_eq!(first, "first-event\n");
-        assert_eq!(resumed, first);
-        assert_eq!(
-            pending_simple_genesis_for_store(pending.store_id.as_str())
-                .await?
-                .and_then(|marker| marker.event_yaml().map(str::to_owned)),
-            Some(first)
-        );
-        clear_identity_directory_for_test().await
-    }
-
-    #[wasm_bindgen_test]
     async fn destructive_recovery_forgets_stale_identity_ownership() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
         let inaccessible_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
@@ -665,7 +464,11 @@ mod tests {
         let replacement = ensure_local_identity_for_app_key(&replacement_key, "Recovered").await?;
         assert_ne!(replacement.identity_id, pending.identity_id);
         validate_vault_identity_enrollment(&replacement_key, &store_id).await?;
-        assert!(idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?.is_none());
+        assert!(
+            pending_simple_genesis_for_store(store_id.as_str())
+                .await?
+                .is_none()
+        );
         clear_identity_directory_for_test().await
     }
 

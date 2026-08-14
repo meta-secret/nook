@@ -148,6 +148,7 @@ impl IdentityDirectory {
         store_id: StoreId,
         secrets_envelope: AgeArmoredCiphertext,
         members_envelope: AgeArmoredCiphertext,
+        epoch_update: crate::IdentityVaultDekEpochUpdate,
     ) -> MultiDeviceResult<IdentityId> {
         self.ensure_app_key_active(app_key)?;
         if let Some(index) = self
@@ -158,8 +159,11 @@ impl IdentityDirectory {
             self.identities[index].reconcile_legacy_vault_member(
                 app_key,
                 &store_id,
-                secrets_envelope,
-                members_envelope,
+                crate::IdentityVaultDekReconciliation {
+                    secrets_envelope,
+                    members_envelope,
+                    epoch_update,
+                },
             )?;
             let identity_id = self.identities[index].identity_id.clone();
             self.selection = IdentitySelection::Selected(identity_id.clone());
@@ -177,11 +181,30 @@ impl IdentityDirectory {
             store_id,
             secrets_envelope,
             members_envelope,
+            epoch_update.committed_epoch(),
         )?;
         let identity_id = record.identity_id.clone();
         self.identities.push(record);
         self.selection = IdentitySelection::Selected(identity_id.clone());
         Ok(identity_id)
+    }
+
+    pub fn reconcile_vault_dek(
+        &mut self,
+        app_key: &AppKey,
+        store_id: &StoreId,
+        reconciliation: crate::IdentityVaultDekReconciliation,
+    ) -> MultiDeviceResult<IdentityId> {
+        self.ensure_app_key_active(app_key)?;
+        let identity = self
+            .identities
+            .iter_mut()
+            .find(|record| record.vault_dek(store_id).is_some())
+            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                identity_id: format!("vault:{store_id}"),
+            })?;
+        identity.reconcile_legacy_vault_member(app_key, store_id, reconciliation)?;
+        Ok(identity.identity_id.clone())
     }
 
     pub fn associate_sentinel_vault(
@@ -507,6 +530,7 @@ mod tests {
                 keys.members_key.as_str().as_bytes(),
                 &app_key.public_key(),
             )?,
+            crate::IdentityVaultDekEpoch::LegacyUnknown,
         )?;
         let secrets_envelope = imported.vault_deks[0].secrets_envelopes[0].envelope.clone();
         let members_envelope = imported.vault_deks[0].members_envelopes[0].envelope.clone();
@@ -517,6 +541,9 @@ mod tests {
             store_id.clone(),
             secrets_envelope.clone(),
             members_envelope.clone(),
+            crate::IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
+            },
         )?;
         assert_ne!(imported_id, personal);
         assert_eq!(directory.identities().len(), 2);
@@ -528,6 +555,9 @@ mod tests {
             store_id,
             secrets_envelope,
             members_envelope,
+            crate::IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
+            },
         )?;
         assert_eq!(same_id, imported_id);
         assert_eq!(directory.identities().len(), 2);
@@ -551,6 +581,9 @@ mod tests {
             imported_vault.store_id,
             recovered_secrets_envelope,
             recovered_members_envelope,
+            crate::IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
+            },
         );
         assert!(matches!(
             result,

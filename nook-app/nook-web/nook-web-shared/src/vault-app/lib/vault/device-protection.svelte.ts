@@ -15,6 +15,7 @@ import {
   unselectedVaultScope,
 } from "$lib/auth/providers";
 import { createLogger } from "$lib/runtime/log";
+import { quiesceOtherTabsForLocalRecovery } from "$lib/runtime/browser-data";
 import type { DeviceMode } from "$lib/vault/architecture-model";
 import type { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
@@ -400,7 +401,10 @@ export async function resetDeviceProtectionForRecovery(
   state.isVerifying = true;
   state.errorMsg = "";
   try {
-    await state.requireManager().reset_device_protection_for_recovery();
+    await quiesceOtherTabsForLocalRecovery();
+    await state.enqueueStorage(() =>
+      state.requireManager().reset_device_protection_for_recovery(),
+    );
     state.deviceProtectionStatus = DeviceProtectionStatus.Missing;
     state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey;
     state.deviceId = "";
