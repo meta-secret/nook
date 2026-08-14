@@ -5,9 +5,11 @@ use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
 
-use super::indexed_db::{StringUpdateGuard, StringUpdateResult, idb_get_string, idb_update_string};
 #[cfg(test)]
-use super::indexed_db::{idb_delete_key, idb_put_string};
+use super::indexed_db::idb_put_string;
+use super::indexed_db::{
+    StringUpdateGuard, StringUpdateResult, idb_delete_key, idb_get_string, idb_update_string,
+};
 use crate::{NookError, conversion::wasm_iso_timestamp, storage::open_nook_database};
 
 const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
@@ -22,6 +24,8 @@ pub(crate) struct PendingSimpleGenesis {
     pub(crate) identity_id: nook_core::IdentityId,
     #[serde(default = "legacy_simple_genesis_timestamp")]
     pub(crate) created_at: nook_core::IsoTimestamp,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) event_yaml: Option<String>,
 }
 
 fn legacy_simple_genesis_timestamp() -> nook_core::IsoTimestamp {
@@ -278,6 +282,7 @@ pub(crate) async fn begin_or_resume_simple_genesis(
         identity_id: identity.identity_id,
         created_at: nook_core::IsoTimestamp::parse(&wasm_iso_timestamp())
             .map_err(|error| NookError::Database(error.to_string()))?,
+        event_yaml: None,
     };
     let proposed_json = serde_json::to_string(&proposed).map_err(|error| {
         NookError::IndexedDb(format!("Pending Simple genesis encode error: {error}"))
@@ -300,6 +305,52 @@ pub(crate) async fn begin_or_resume_simple_genesis(
     .await?;
     selected.borrow_mut().take().ok_or_else(|| {
         NookError::IndexedDb("Pending Simple genesis produced no result.".to_owned())
+    })
+}
+
+/// Pin the first complete signed Simple genesis event before any event-log write.
+///
+/// Age envelopes are randomized, so a timestamp alone cannot reproduce the same
+/// immutable root. Concurrent callers atomically converge on the first event
+/// stored in the pending marker and must publish those exact bytes.
+pub(crate) async fn persist_simple_genesis_event(
+    pending: &PendingSimpleGenesis,
+    proposed_yaml: String,
+) -> Result<String, NookError> {
+    let expected = pending.clone();
+    let selected = Rc::new(RefCell::new(None));
+    let captured = Rc::clone(&selected);
+    let disposition = idb_update_string(
+        PENDING_SIMPLE_GENESIS_KEY,
+        StringUpdateGuard::Unconditional,
+        move |raw| {
+            let raw = raw.ok_or_else(|| {
+                NookError::IndexedDb("Pending Simple genesis marker disappeared.".to_owned())
+            })?;
+            let mut current = decode_pending_simple_genesis(&raw)?;
+            if current.store_id != expected.store_id
+                || current.identity_id != expected.identity_id
+                || current.created_at != expected.created_at
+            {
+                return Err(NookError::IndexedDb(
+                    "Pending Simple genesis marker changed during event creation.".to_owned(),
+                ));
+            }
+            let event_yaml = current.event_yaml.get_or_insert(proposed_yaml).clone();
+            *captured.borrow_mut() = Some(event_yaml);
+            serde_json::to_string(&current).map_err(|error| {
+                NookError::IndexedDb(format!("Pending Simple genesis encode error: {error}"))
+            })
+        },
+    )
+    .await?;
+    if disposition != StringUpdateResult::Applied {
+        return Err(NookError::IndexedDb(
+            "Pending Simple genesis event update was rejected.".to_owned(),
+        ));
+    }
+    selected.borrow_mut().take().ok_or_else(|| {
+        NookError::IndexedDb("Pending Simple genesis event produced no result.".to_owned())
     })
 }
 
@@ -423,6 +474,18 @@ pub(crate) async fn identity_for_sentinel_vault(
         .map_err(|error| NookError::Database(error.to_string()))
 }
 
+/// Forget identity state sealed to the inaccessible app key while preserving
+/// encrypted vault projections for password-backed recovery.
+pub(crate) async fn delete_identity_directory_for_recovery() -> Result<(), NookError> {
+    update_identity_directory(|directory| {
+        directory.reset_for_device_recovery();
+        Ok(())
+    })
+    .await?;
+    idb_delete_key(LEGACY_IDENTITY_RECORD_KEY).await?;
+    idb_delete_key(PENDING_SIMPLE_GENESIS_KEY).await
+}
+
 #[cfg(test)]
 pub(crate) async fn clear_identity_directory_for_test() -> Result<(), NookError> {
     idb_delete_key(IDENTITY_DIRECTORY_KEY).await?;
@@ -507,6 +570,50 @@ mod tests {
             decode_pending_simple_genesis(&raw)?.store_id,
             replacement.store_id
         );
+        clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn pending_genesis_reuses_first_complete_signed_event() -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let pending = begin_or_resume_simple_genesis(&app_key, "Personal").await?;
+
+        let first = persist_simple_genesis_event(&pending, "first-event\n".to_owned()).await?;
+        let resumed =
+            persist_simple_genesis_event(&pending, "different-event\n".to_owned()).await?;
+
+        assert_eq!(first, "first-event\n");
+        assert_eq!(resumed, first);
+        assert_eq!(
+            pending_simple_genesis_for_store(pending.store_id.as_str())
+                .await?
+                .and_then(|marker| marker.event_yaml),
+            Some(first)
+        );
+        clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn destructive_recovery_forgets_stale_identity_ownership() -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        let inaccessible_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let pending = begin_or_resume_simple_genesis(&inaccessible_key, "Personal").await?;
+        let store_id = pending.store_id.clone();
+        let _ = generate_vault_dek_for_identity(
+            &pending.identity_id,
+            &inaccessible_key,
+            store_id.clone(),
+        )
+        .await?;
+
+        delete_identity_directory_for_recovery().await?;
+
+        let replacement_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let replacement = ensure_local_identity_for_app_key(&replacement_key, "Recovered").await?;
+        assert_ne!(replacement.identity_id, pending.identity_id);
+        validate_vault_identity_enrollment(&replacement_key, &store_id).await?;
+        assert!(idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?.is_none());
         clear_identity_directory_for_test().await
     }
 

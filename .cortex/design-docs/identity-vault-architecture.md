@@ -74,17 +74,18 @@ Concurrent tabs must not overwrite identity creation, selection, membership,
 or DEK changes.
 
 Simple vault creation stores `pending_simple_genesis_v1` in IndexedDB.
-Its JSON fields are `storeId`, `identityId`, and `createdAt`.
+Its JSON fields are `storeId`, `identityId`, `createdAt`, and optional
+`eventYaml`.
 The app writes the marker before it creates the identity-owned DEK.
 A reload resumes the same store and identity binding.
 Verified connect completion removes the marker with a compare-and-delete
 transaction.
 An older tab cannot delete a newer genesis marker.
-The marker also owns the genesis timestamp.
-Concurrent tabs therefore sign the same immutable root instead of creating
-multiple parentless roots.
+The marker owns the genesis timestamp and the complete signed event.
+Before the first event-log write, Nook stores the signed event in `eventYaml`.
+Retries reuse those exact bytes because encrypted DEK envelopes are randomized.
 Legacy markers without `createdAt` use the Unix epoch timestamp.
-They are rewritten only when a later genesis marker is created.
+Legacy markers without `eventYaml` are upgraded before genesis is published.
 
 Security-epoch rotation stores the vault ID at
 `pending_identity_reconciliation_v1:{store_id}` before it appends the
@@ -104,6 +105,13 @@ A successful legacy read validates the relationship.
 It associates the vault and rewrites the delivery with `identityId`.
 If an association commits but delivery persistence is interrupted, retry
 recovers the validated owner from the directory before rewriting the delivery.
+
+Sentinel creation stores `sentinel_genesis_finalization_pending` as a JSON
+commit marker. It contains `storeId`, optional `identityId`, vault metadata, the
+encrypted projection, request, participants, and deliveries. Current writers
+always pin `identityId`. A legacy marker without it may be upgraded only when
+the current app key belongs to one unambiguous local identity. Ambiguous legacy
+state fails closed. Successful finalization deletes the marker.
 
 The first directory read migrates `identity_record_v1` when present:
 

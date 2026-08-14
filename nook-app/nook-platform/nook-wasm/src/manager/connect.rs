@@ -428,8 +428,7 @@ impl NookVaultManager {
         let pending = self
             .initialize_genesis_vault_with_identity(identity)
             .await?;
-        self.bootstrap_event_log_genesis_at(&pending.created_at)
-            .await?;
+        self.bootstrap_simple_event_log_genesis(&pending).await?;
         self.maybe_sync_self_into_roster(identity)?;
         self.event_log.enabled = true;
         self.persist_projection_cache().await?;

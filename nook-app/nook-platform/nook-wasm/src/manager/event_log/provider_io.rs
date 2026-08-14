@@ -130,12 +130,22 @@ impl NookVaultManager {
         &mut self,
     ) -> Result<(), NookError> {
         let created_at = nook_core::IsoTimestamp::parse(&iso_timestamp())?;
-        self.bootstrap_event_log_genesis_at(&created_at).await
+        self.bootstrap_event_log_genesis_inner(&created_at, None)
+            .await
     }
 
-    pub(in crate::manager) async fn bootstrap_event_log_genesis_at(
+    pub(in crate::manager) async fn bootstrap_simple_event_log_genesis(
+        &mut self,
+        pending: &crate::storage::identity_record::PendingSimpleGenesis,
+    ) -> Result<(), NookError> {
+        self.bootstrap_event_log_genesis_inner(&pending.created_at, Some(pending))
+            .await
+    }
+
+    async fn bootstrap_event_log_genesis_inner(
         &mut self,
         created_at: &nook_core::IsoTimestamp,
+        pending: Option<&crate::storage::identity_record::PendingSimpleGenesis>,
     ) -> Result<(), NookError> {
         self.activate_event_log_mode().await?;
         let signing = self.ensure_signing_identity().await?;
@@ -185,10 +195,21 @@ impl NookVaultManager {
             key_epoch: EventId::parse(&key_epoch)?,
             operations,
         };
-        let import = nook_core::VaultEvent::sign(body, signing.signing_key())?;
-        let event_id = import.id()?;
-        let bytes = nook_core::serialize_event_storage_yaml(&import)
+        let proposed = nook_core::VaultEvent::sign(body, signing.signing_key())?;
+        let proposed_bytes = nook_core::serialize_event_storage_yaml(&proposed)
             .map_err(|e| NookError::Serialization(e.to_string()))?;
+        let bytes = if let Some(pending) = pending {
+            let proposed_yaml = String::from_utf8(proposed_bytes)
+                .map_err(|error| NookError::Serialization(error.to_string()))?;
+            crate::storage::identity_record::persist_simple_genesis_event(pending, proposed_yaml)
+                .await?
+                .into_bytes()
+        } else {
+            proposed_bytes
+        };
+        let import = nook_core::parse_event_storage_bytes(&bytes)?;
+        let expected_store_id = nook_core::StoreId::parse(&self.vault.store_id)?;
+        let event_id = import.validate_envelope(&expected_store_id)?;
         save_event_bytes(&self.vault.store_id, event_id.as_str(), &bytes).await?;
         self.event_log.heads = vec![event_id.as_str().to_owned()];
         save_heads(&self.vault.store_id, &self.event_log.heads).await?;

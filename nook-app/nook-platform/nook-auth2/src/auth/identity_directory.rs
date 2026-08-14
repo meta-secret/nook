@@ -306,6 +306,14 @@ impl IdentityDirectory {
         Ok(matches.pop())
     }
 
+    /// Drop directory ownership sealed to an inaccessible installation key.
+    /// Encrypted vault storage remains outside this portable record and may be
+    /// rebound only after a recovery credential proves access.
+    pub fn reset_for_device_recovery(&mut self) {
+        self.identities.clear();
+        self.selection = IdentitySelection::Empty;
+    }
+
     pub fn selected(&self) -> MultiDeviceResult<&IdentityRecord> {
         let IdentitySelection::Selected(identity_id) = &self.selection else {
             return Err(MultiDeviceError::InvalidIdentitySelection);
@@ -545,6 +553,27 @@ mod tests {
             directory.associate_sentinel_vault(&other_id, &app_key, owned_store_id,),
             Err(MultiDeviceError::DuplicateVaultOwnership { .. })
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn device_recovery_removes_stale_local_ownership() -> anyhow::Result<()> {
+        let inaccessible_key = AppKey::generate()?;
+        let store_id = crate::generate_store_id()?;
+        let mut directory = IdentityDirectory::empty();
+        let identity_id = directory.create_identity("Personal", &inaccessible_key, None)?;
+        let _ = directory.open_or_generate_vault_dek_for_identity(
+            &identity_id,
+            &inaccessible_key,
+            store_id.clone(),
+        )?;
+
+        directory.reset_for_device_recovery();
+
+        assert!(directory.identities().is_empty());
+        assert_eq!(directory.selection(), &IdentitySelection::Empty);
+        let replacement_key = AppKey::generate()?;
+        directory.validate_vault_enrollment(&replacement_key, &store_id)?;
         Ok(())
     }
 }

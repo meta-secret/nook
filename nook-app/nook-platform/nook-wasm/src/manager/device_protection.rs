@@ -460,6 +460,7 @@ impl NookVaultManager {
         self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
         self.storage.mode = nook_core::StorageMode::Local;
         indexed_db::delete_device_identity_for_recovery().await?;
+        crate::storage::identity_record::delete_identity_directory_for_recovery().await?;
         auth_providers::delete_auth_providers_db().await?;
         Ok(())
     }

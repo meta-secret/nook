@@ -66,16 +66,27 @@ Its selection is an explicit `Empty` or `Selected(identity_id)` state.
 Updates use one IndexedDB read-write transaction.
 
 Simple vault genesis uses `pending_simple_genesis_v1`.
-The record contains `storeId`, `identityId`, and `createdAt`.
+The record contains `storeId`, `identityId`, `createdAt`, and optional
+`eventYaml`.
 It is durable before DEK creation and survives reloads.
 Successful verified connect removes only the matching marker.
 Legacy records without `createdAt` use the Unix epoch timestamp.
+The complete signed genesis event is stored in `eventYaml` before its first
+event-log write. Retries reuse those exact bytes. A legacy marker without the
+field is upgraded before publishing genesis.
 
 Security-epoch retry state uses
 `pending_identity_reconciliation_v1:{store_id}`.
 Its value is the same `store_id`.
 The app writes it before the epoch checkpoint and removes it only after the
 identity directory reconciles successfully.
+
+Sentinel finalization uses `sentinel_genesis_finalization_pending`.
+Its JSON payload contains `storeId`, optional `identityId`, vault metadata, the
+encrypted projection, request, participants, and deliveries. New markers always
+include `identityId`. A legacy missing field is filled only when the current app
+key maps to one unambiguous identity; otherwise finalization fails closed.
+Successful finalization removes the marker.
 
 On first read, the app migrates `identity_record_v1` into the directory.
 It deletes the legacy key only after the new directory is durable.

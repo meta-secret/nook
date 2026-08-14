@@ -114,8 +114,14 @@ impl NookVaultManager {
                 VaultNameState::Named(name) if !name.trim().is_empty() => name.as_str(),
                 _ => "Personal",
             };
+            // Active selection is mutable and cannot prove which identity began
+            // a legacy ceremony. Resolve only an unambiguous app-key binding.
             let identity_id =
-                super::identity_association::ensure_local_identity(&identity, label).await?;
+                crate::storage::identity_record::ensure_unambiguous_identity_for_app_key(
+                    &identity, label,
+                )
+                .await?
+                .identity_id;
             pending.identity_id = Some(identity_id.clone());
             let upgraded = serde_json::to_string(&pending)
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
