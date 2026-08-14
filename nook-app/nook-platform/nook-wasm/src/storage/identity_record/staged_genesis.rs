@@ -230,7 +230,7 @@ mod tests {
         assert!(
             super::super::pending_simple_genesis_for_store(pending.store_id.as_str())
                 .await?
-                .is_none()
+                .is_some_and(|retained| retained.is_staged())
         );
         super::super::clear_identity_directory_for_test().await
     }

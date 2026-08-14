@@ -523,14 +523,8 @@ pub(crate) async fn clear_pending_simple_genesis(
                     .transpose()?
                     .unwrap_or_else(nook_core::IdentityDirectory::empty);
                 if current_directory != staged.base_directory {
-                    store.delete(id).await.map_err(|error| {
-                        NookError::IndexedDb(format!("Genesis conflict cleanup error: {error:?}"))
-                    })?;
-                    transaction.done().await.map_err(|error| {
-                        NookError::IndexedDb(format!("Genesis conflict commit error: {error:?}"))
-                    })?;
                     return Err(NookError::IndexedDb(
-                        "Identity directory changed during staged vault genesis; the stale marker was aborted."
+                        "Identity directory changed during staged vault genesis; the marker was retained for retry."
                             .to_owned(),
                     ));
                 }
