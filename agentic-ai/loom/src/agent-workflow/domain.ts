@@ -270,7 +270,22 @@ function directGlobOverlaps(pair: ResourceDescriptorPair): boolean {
     first.kind === ResourceClaimKind.DirectGlob &&
     second.kind === ResourceClaimKind.DirectGlob
   ) {
-    if (first.path !== second.path) return false;
+    if (first.path !== second.path) {
+      const outer = second.path.startsWith(`${first.path}/`)
+        ? first
+        : first.path.startsWith(`${second.path}/`)
+          ? second
+          : false;
+      if (!outer) return false;
+      const inner = outer === first ? second : first;
+      const relative = inner.path.slice(outer.path.length + 1);
+      const firstSegment = relative.split('/')[0] ?? '';
+      const nestedBasenames: TaskResourcePatternPair = {
+        first: outer.basename,
+        second: firstSegment,
+      };
+      return globBasenamesOverlap(nestedBasenames);
+    }
     const basenames: TaskResourcePatternPair = {
       first: first.basename,
       second: second.basename,
