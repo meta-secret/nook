@@ -384,7 +384,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   Never use `gh pr merge --merge` or `gh pr merge --rebase`.
 - **Request review without delaying complete validation.**
   - Run `task pr:review-local` on a coherent local head.
-  - After opening or updating the PR, run `task pr:validate`.
+  - When the head is ready for the final gate, run `task pr:validate`.
   - It dispatches checks and then requests exact-head Codex review.
   - Review-request failure does not stop those checks.
   - Address findings that arrive while checks run.

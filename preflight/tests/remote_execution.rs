@@ -16,6 +16,11 @@ fn read(path: &str) -> String {
         .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
 }
 
+fn read_fallible(path: &str) -> Result<String> {
+    fs::read_to_string(repository_root().join(path))
+        .with_context(|| format!("failed to read {path}"))
+}
+
 fn docker_stage<'a>(dockerfile: &'a str, stage: &str) -> &'a str {
     let marker = format!(" AS {stage}\n");
     let marker_start = dockerfile
@@ -75,8 +80,8 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 
 #[test]
 fn complete_validation_starts_before_non_blocking_review_request() -> Result<()> {
-    let agentic_tasks = read(".task/agentic-ai.yml");
-    let direct_validation = read(".task/remote-execution.yml");
+    let agentic_tasks = read_fallible(".task/agentic-ai.yml")?;
+    let direct_validation = read_fallible(".task/remote-execution.yml")?;
     let direct_review_position = direct_validation
         .find("if ! task pr:review PR=\"$REQUESTED_PR\"; then")
         .context("direct validation must request review without making it a gate")?;
@@ -91,7 +96,7 @@ fn complete_validation_starts_before_non_blocking_review_request() -> Result<()>
         )
         .context("direct validation must recheck the PR head after requesting review")?;
     let validation_label_position = direct_validation
-        .find("validation_label=\"ci:validate\"")
+        .find("gh pr edit \"$REQUESTED_PR\" --add-label \"$validation_label\"")
         .context("direct validation must apply its label")?;
     assert!(
         validation_label_position < head_recheck_position

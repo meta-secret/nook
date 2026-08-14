@@ -292,7 +292,8 @@ dispatches checks immediately, then requests exact-head Codex review.
 
 After a complete-gate failure, validate the completed replacement head again.
 
-Do not request or wait for external reviewers. See
+Do not wait for Codex review. Do not request or wait for other external
+reviewers. See
 [code-review.md](code-review.md).
 
 The feedback inspection and readiness audit replace any blind review-batching grace period.
