@@ -68,12 +68,18 @@ Member records persist both encryption and event-signing public keys.
 Missing signing keys from older records are unavailable, not inferred.
 New Simple-vault genesis requires a verified signing key for every member.
 Simple vault genesis uses `pending_simple_genesis_v1`.
-The record contains `storeId`, `identityId`, `createdAt`, `eventState`, and an
-optional inactive `stagedIdentity` directory transaction. It is durable before
-event creation and survives reloads. Successful verified connect publishes the
-staged directory and matching signing seed, then removes the marker in one
-compare-and-write transaction. Concurrent identity changes fail closed and are
-never overwritten.
+The record contains `storeId`, `identityId`, `createdAt`, `eventState`, and
+`flow`.
+The flow is explicitly `ordinary` or `staged`.
+The staged variant owns the base directory and inactive candidate directory.
+Writers also emit the legacy `stagedIdentity` projection for already-open tabs.
+Current readers reject conflicting current and legacy staged state.
+The marker is durable before event creation and survives reloads.
+Successful verified connect publishes the staged directory and matching signing
+seed, then removes the marker in one compare-and-write transaction.
+Concurrent identity changes fail closed and are never overwritten.
+The staged marker remains durable so publication can retry without losing the
+candidate directory or signing state.
 Legacy records without `createdAt` use the Unix epoch timestamp.
 `eventState` is `awaiting-event`, `legacy-event-pinned`, or `event-pinned`.
 The current pinned variant owns the complete signed genesis event in

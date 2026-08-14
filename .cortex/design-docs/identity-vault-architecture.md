@@ -84,9 +84,9 @@ Extension identity adoption remains staged through vault initialization.
 - Completion compares the marker's base directory with the current directory.
 - A match publishes the candidate directory and signing seed atomically.
 - The same transaction removes the completed marker.
-- A concurrent directory update aborts and removes the stale marker.
+- A concurrent directory update aborts publication and retains the marker.
 - The concurrent directory update remains intact.
-- A retry starts a new genesis transaction instead of reusing stale state.
+- A retry resumes the retained candidate instead of losing ownership state.
 - Failed creation clears decrypted host state and stops background sync.
 - Failed creation does not rewind event stores or active identity state.
 
