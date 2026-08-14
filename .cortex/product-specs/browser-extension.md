@@ -399,6 +399,11 @@ recipient.
 The website's Rust/WASM boundary decrypts the envelope.
 It validates the route nonce and advertised device id/public keys.
 It keeps the adopted material only in memory.
+The website completes vault initialization before committing enrollment.
+One IndexedDB transaction then persists the identity member, both public keys,
+authorized DEK envelopes, and the matching event-signing seed.
+A failed initialization rolls back the in-memory handoff and leaves no durable
+member or signer mutation.
 Raw private material never appears in URL parameters, TypeScript values,
 browser-vendor storage, website IndexedDB, or logs.
 Reloading the website requests a new handoff from the unlocked extension.

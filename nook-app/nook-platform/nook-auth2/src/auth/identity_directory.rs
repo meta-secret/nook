@@ -143,6 +143,7 @@ impl IdentityDirectory {
             app_id: app_key.app_id().clone(),
             auth_id: app_key.auth_id(),
             public_key: app_key.public_key(),
+            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
             label: None,
         };
         let record = IdentityRecord::synthesize_from_legacy_vault(
@@ -303,6 +304,7 @@ impl IdentityDirectory {
             app_id: new_app_key.app_id().clone(),
             auth_id: new_app_key.auth_id(),
             public_key: new_app_key.public_key(),
+            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
             label: None,
         };
         owner.add_member(member.clone())?;
@@ -333,6 +335,21 @@ impl IdentityDirectory {
             ));
         }
         Ok(matches.pop())
+    }
+
+    pub fn set_member_signing_public_key(
+        &mut self,
+        identity_id: &IdentityId,
+        app_id: &crate::AppId,
+        signing_public_key: &crate::DeviceSigningPublicKey,
+    ) -> MultiDeviceResult<()> {
+        self.identities
+            .iter_mut()
+            .find(|identity| &identity.identity_id == identity_id)
+            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                identity_id: identity_id.to_string(),
+            })?
+            .set_member_signing_public_key(app_id, signing_public_key)
     }
 
     /// Enroll an authenticated installation key into the selected identity
@@ -370,6 +387,7 @@ impl IdentityDirectory {
             app_id: app_key.app_id().clone(),
             auth_id: app_key.auth_id(),
             public_key: app_key.public_key(),
+            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
             label: None,
         });
         Ok(selected.identity_id.clone())
@@ -522,6 +540,7 @@ mod tests {
             app_id: revoked.app_id().clone(),
             auth_id: revoked.auth_id(),
             public_key: revoked.public_key(),
+            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
             label: None,
         })?;
         let store_id = crate::generate_store_id()?;
@@ -613,6 +632,7 @@ mod tests {
                 app_id: app_key.app_id().clone(),
                 auth_id: app_key.auth_id(),
                 public_key: app_key.public_key(),
+                signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
                 label: None,
             },
             store_id.clone(),

@@ -2,8 +2,8 @@
 
 use crate::errors::{MultiDeviceError, MultiDeviceResult, ValidationError, ValidationResult};
 use crate::{
-    AgeArmoredCiphertext, AppId, AppKey, AuthKeyId, DevicePublicKey, StoreId, VaultKeys,
-    encrypt_for_recipient, generate_id, generate_vault_keys,
+    AgeArmoredCiphertext, AppId, AppKey, AuthKeyId, DevicePublicKey, DeviceSigningPublicKey,
+    StoreId, VaultKeys, encrypt_for_recipient, generate_id, generate_vault_keys,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -50,6 +50,8 @@ pub struct IdentityMember {
     pub app_id: AppId,
     pub auth_id: AuthKeyId,
     pub public_key: DevicePublicKey,
+    #[serde(default, skip_serializing_if = "DeviceSigningPublicKey::is_empty")]
+    pub signing_public_key: DeviceSigningPublicKey,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
 }
@@ -102,6 +104,7 @@ impl IdentityRecord {
                 app_id: app_key.app_id().clone(),
                 auth_id: app_key.auth_id(),
                 public_key: app_key.public_key(),
+                signing_public_key: DeviceSigningPublicKey::Unavailable,
                 label: member_label,
             }],
             vault_deks: Vec::new(),
@@ -251,6 +254,23 @@ impl IdentityRecord {
             ));
         }
         self.add_prevalidated_member(member);
+        Ok(())
+    }
+
+    pub fn set_member_signing_public_key(
+        &mut self,
+        app_id: &AppId,
+        signing_public_key: &DeviceSigningPublicKey,
+    ) -> MultiDeviceResult<()> {
+        let member = self
+            .members
+            .iter_mut()
+            .find(|member| &member.app_id == app_id)
+            .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
+        if member.signing_public_key != *signing_public_key {
+            member.signing_public_key = signing_public_key.clone();
+            self.control_epoch = self.control_epoch.saturating_add(1);
+        }
         Ok(())
     }
 
@@ -450,6 +470,7 @@ mod tests {
             app_id: second_key.app_id().clone(),
             auth_id: second_key.auth_id(),
             public_key: second_key.public_key(),
+            signing_public_key: DeviceSigningPublicKey::Unavailable,
             label: None,
         })?;
         let store = StoreId::parse("store_abcdefghijk")?;
@@ -498,6 +519,7 @@ mod tests {
             app_id: revoked.app_id().clone(),
             auth_id: revoked.auth_id(),
             public_key: revoked.public_key(),
+            signing_public_key: DeviceSigningPublicKey::Unavailable,
             label: None,
         })?;
         let store = StoreId::parse("store_abcdefghijk")?;
@@ -546,10 +568,26 @@ mod tests {
             app_id: second.app_id().clone(),
             auth_id: second.auth_id(),
             public_key: second.public_key(),
+            signing_public_key: DeviceSigningPublicKey::Unavailable,
             label: None,
         })?;
         identity.remove_member(second.app_id())?;
         assert!(identity.remove_member(first.app_id()).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn member_signing_key_migrates_from_unavailable_and_persists() -> anyhow::Result<()> {
+        let app_key = AppKey::generate()?;
+        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let legacy_json = serde_json::to_string(&identity)?;
+        let legacy: IdentityRecord = serde_json::from_str(&legacy_json)?;
+        assert!(legacy.members[0].signing_public_key.is_empty());
+
+        let signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
+        identity.set_member_signing_public_key(app_key.app_id(), &signing_public_key)?;
+        let restored: IdentityRecord = serde_json::from_str(&serde_json::to_string(&identity)?)?;
+        assert_eq!(restored.members[0].signing_public_key, signing_public_key);
         Ok(())
     }
 }

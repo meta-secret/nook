@@ -321,6 +321,9 @@ impl NookVaultManager {
         &mut self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
+        if self.device.pending_extension_handoff.is_some() {
+            return Ok(());
+        }
         let label = match &self.vault.vault_name {
             super::VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
             _ => "Personal".to_owned(),

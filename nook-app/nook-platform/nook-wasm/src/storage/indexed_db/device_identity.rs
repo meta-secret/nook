@@ -1,5 +1,7 @@
 use wasm_bindgen::prelude::wasm_bindgen;
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use super::idb_delete_key;
 use super::{
     APP_ID_KEY, APP_KEY_WRAPPED_KEY, DEVICE_ID_KEY, NookError, WRAPPED_DEVICE_IDENTITY_KEY,
     idb_delete_keys, idb_get_string, open_nook_database, read_string_preferring,

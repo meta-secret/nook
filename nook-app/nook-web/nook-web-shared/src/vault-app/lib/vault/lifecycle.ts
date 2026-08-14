@@ -321,6 +321,9 @@ export async function authorizeWithExternalDeviceIdentity({
     } else {
       await continueInitializationAfterDeviceUnlock(state);
     }
+    await state.enqueueStorage(() =>
+      state.requireManager().commit_extension_identity_handoff(),
+    );
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
     const adoptedIdentity: { readonly deviceId: string } = {
       deviceId: state.deviceId,

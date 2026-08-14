@@ -4,7 +4,7 @@ use crate::{NookError, storage::open_nook_database};
 use nook_core::{EventId, LocalEventStore};
 
 const EVENT_LOG_MODE_KEY: &str = "event_log:mode";
-const SIGNING_SEED_KEY: &str = "signing_seed";
+pub(crate) const SIGNING_SEED_KEY: &str = "signing_seed";
 const EVENT_LOG_ACTIVE: &str = "event_log";
 const STORE_VAULT: &str = "vault";
 const STORE_EVENTS: &str = "events";
@@ -127,13 +127,6 @@ pub(crate) async fn load_signing_seed() -> Result<Option<String>, NookError> {
 
 pub(crate) async fn save_signing_seed(seed: &str) -> Result<(), NookError> {
     vault_put(SIGNING_SEED_KEY, seed).await
-}
-
-pub(crate) async fn restore_signing_seed(seed: Option<&str>) -> Result<(), NookError> {
-    match seed {
-        Some(seed) => save_signing_seed(seed).await,
-        None => store_delete(STORE_VAULT, SIGNING_SEED_KEY).await,
-    }
 }
 
 pub(crate) async fn load_heads(store_id: &str) -> Result<Vec<String>, NookError> {

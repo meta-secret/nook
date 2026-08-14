@@ -57,6 +57,7 @@ mod tests {
             app_id: second.app_id().clone(),
             auth_id: second.auth_id(),
             public_key: second.public_key(),
+            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
             label: Some("Phone".to_owned()),
         })?;
         let keys = crate::generate_vault_keys()?;

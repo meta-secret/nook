@@ -69,9 +69,18 @@ The directory contains:
 - zero or more `IdentityRecord` values; and
 - an explicit `Empty` or `Selected(identity_id)` state.
 
+Each identity member stores its X25519 encryption public key and Ed25519 event
+signing public key. Older records decode a missing signing key as unavailable.
+They cannot enter a new signed Simple-vault genesis roster until an authenticated
+handoff or the local signer supplies that public key.
+
 All directory updates use one IndexedDB read-write transaction.
 Concurrent tabs must not overwrite identity creation, selection, membership,
 or DEK changes.
+Extension identity adoption remains in memory through vault initialization.
+After initialization succeeds, one IndexedDB transaction commits the member,
+its signing public key, its authorized per-vault DEK envelopes, and any adopted
+signing seed. Failure before that commit leaves no durable enrollment.
 
 Simple vault creation stores `pending_simple_genesis_v1` in IndexedDB.
 Its JSON fields are `storeId`, `identityId`, `createdAt`, and `eventState`.

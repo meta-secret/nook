@@ -22,15 +22,13 @@ pub struct SimpleIdentityGenesisOperationsInput<'a> {
 /// Identity membership is portable ownership state. The event log must carry
 /// the complete roster because encrypted metadata projections are disposable.
 pub fn simple_identity_genesis_operations(
-    input: SimpleIdentityGenesisOperationsInput<'_>,
+    input: &SimpleIdentityGenesisOperationsInput<'_>,
 ) -> nook_auth2::MultiDeviceResult<Vec<VaultOperation>> {
-    let SimpleIdentityGenesisOperationsInput {
-        identity,
-        keys,
-        current_app_id,
-        current_signing_public_key,
-        created_at,
-    } = input;
+    let identity = input.identity;
+    let keys = input.keys;
+    let current_app_id = input.current_app_id;
+    let current_signing_public_key = input.current_signing_public_key;
+    let created_at = input.created_at;
     if identity
         .members
         .iter()
@@ -57,8 +55,12 @@ pub fn simple_identity_genesis_operations(
                 encryption_public_key: member.public_key.clone(),
                 signing_public_key: if &member.app_id == current_app_id {
                     current_signing_public_key.clone()
+                } else if member.signing_public_key.is_empty() {
+                    return Err(nook_auth2::MultiDeviceError::InvalidDeviceIdentity(
+                        "identity member is missing its event signing public key".to_owned(),
+                    ));
                 } else {
-                    crate::DeviceSigningPublicKey::Unavailable
+                    member.signing_public_key.clone()
                 },
                 label: crate::MemberLabel::from_trusted(
                     member
@@ -348,6 +350,8 @@ mod tests {
     fn simple_identity_genesis_retains_every_app_key_authorization() -> anyhow::Result<()> {
         let current = crate::AppKey::generate()?;
         let second = crate::AppKey::generate()?;
+        let (current_signing, _) = SigningIdentity::generate()?;
+        let (second_signing, _) = SigningIdentity::generate()?;
         let mut identity = crate::IdentityRecord::create_with_app_key(
             "Personal",
             &current,
@@ -357,20 +361,29 @@ mod tests {
             app_id: second.app_id().clone(),
             auth_id: second.auth_id(),
             public_key: second.public_key(),
+            signing_public_key: second_signing.public_key(),
             label: Some("Phone".to_owned()),
         })?;
         let keys = crate::generate_vault_keys()?;
-        let (signing, _) = SigningIdentity::generate()?;
         let operations =
-            simple_identity_genesis_operations(SimpleIdentityGenesisOperationsInput {
+            simple_identity_genesis_operations(&SimpleIdentityGenesisOperationsInput {
                 identity: &identity,
                 keys: &keys,
                 current_app_id: current.app_id(),
-                current_signing_public_key: &signing.public_key(),
+                current_signing_public_key: &current_signing.public_key(),
                 created_at: "2026-08-14T00:00:00Z",
             })?;
 
         assert_eq!(operations.len(), 2);
+        assert!(operations.iter().any(|operation| matches!(
+            operation,
+            VaultOperation::JoinApproved {
+                device_id,
+                signing_public_key,
+                ..
+            } if device_id == second.app_id()
+                && signing_public_key == &second_signing.public_key()
+        )));
         let mut state = VaultMetaState::default();
         for operation in &operations {
             apply_vault_meta_operation(&mut state, operation, "2026-08-14T00:00:00Z")?;

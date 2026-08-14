@@ -18,6 +18,12 @@ pub(crate) use simple_genesis::{
 pub(super) const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
 pub(super) const LEGACY_IDENTITY_RECORD_KEY: &str = "identity_record_v1";
 
+fn map_domain_error(error: nook_core::MultiDeviceError) -> NookError {
+    let message = error.to_string();
+    drop(error);
+    NookError::Database(message)
+}
+
 async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
@@ -165,6 +171,22 @@ pub(crate) async fn load_identity(
         .cloned())
 }
 
+pub(crate) async fn set_identity_member_signing_public_key(
+    identity_id: &nook_core::IdentityId,
+    app_id: &nook_core::AppId,
+    signing_public_key: &nook_core::DeviceSigningPublicKey,
+) -> Result<(), NookError> {
+    let identity_id = identity_id.clone();
+    let app_id = app_id.clone();
+    let signing_public_key = signing_public_key.clone();
+    update_identity_directory(move |directory| {
+        directory
+            .set_member_signing_public_key(&identity_id, &app_id, &signing_public_key)
+            .map_err(map_domain_error)
+    })
+    .await
+}
+
 /// Ensure the selected identity contains the current app key.
 ///
 /// This preserves the legacy single-installation bootstrap. New cross-installation
@@ -202,44 +224,92 @@ pub(crate) async fn ensure_local_identity_for_app_key(
     .await
 }
 
-pub(crate) async fn enroll_authenticated_app_key_for_vault_creation(
-    app_key: &nook_core::AppKey,
-) -> Result<nook_core::IdentityRecord, NookError> {
-    let app_key = app_key.clone();
-    update_identity_directory(move |directory| {
-        let identity_id = directory
-            .enroll_selected_app_key_for_vault_creation(&app_key, "Personal")
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        directory
-            .identities()
-            .iter()
-            .find(|identity| identity.identity_id == identity_id)
-            .cloned()
-            .ok_or_else(|| NookError::Database("Enrolled identity disappeared.".to_owned()))
-    })
-    .await
+pub(crate) struct IdentityHandoffCommit<'a> {
+    pub(crate) app_key: &'a nook_core::AppKey,
+    pub(crate) signing_public_key: &'a nook_core::DeviceSigningPublicKey,
+    pub(crate) authorizer_signing:
+        Option<&'a (nook_core::AppId, nook_core::DeviceSigningPublicKey)>,
+    pub(crate) enrollment: &'a crate::manager::PendingExtensionIdentityEnrollment,
+    pub(crate) signing_seed: Option<&'a str>,
 }
 
-pub(crate) async fn enroll_authenticated_app_key_for_paired_vault(
-    current_app_key: &nook_core::AppKey,
-    new_app_key: &nook_core::AppKey,
-    store_id: &nook_core::StoreId,
-) -> Result<nook_core::IdentityRecord, NookError> {
-    let current_app_key = current_app_key.clone();
-    let new_app_key = new_app_key.clone();
-    let store_id = store_id.clone();
-    update_identity_directory(move |directory| {
-        let identity_id = directory
-            .enroll_app_key_for_owned_vault(&current_app_key, &new_app_key, &store_id)
-            .map_err(|error| NookError::Database(error.to_string()))?;
+/// Commit the identity-directory membership and its matching event signer in
+/// one `IndexedDB` transaction after the complete handoff flow succeeds.
+pub(crate) async fn commit_authenticated_identity_handoff(
+    input: IdentityHandoffCommit<'_>,
+) -> Result<(), NookError> {
+    let _ = load_identity_directory().await?;
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| NookError::IndexedDb(format!("Handoff transaction error: {error:?}")))?;
+    let store = transaction.store("vault").map_err(|error| {
+        NookError::IndexedDb(format!("Handoff transaction store error: {error:?}"))
+    })?;
+    let directory_key = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Handoff key error: {error:?}")))?;
+    let directory_value = store
+        .get(directory_key.clone())
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Handoff read error: {error:?}")))?;
+    let mut directory = match directory_value {
+        Some(value) if !value.is_undefined() && !value.is_null() => {
+            let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
+                NookError::IndexedDb(format!("Handoff directory value error: {error:?}"))
+            })?;
+            decode_directory(&raw)?
+        }
+        _ => nook_core::IdentityDirectory::empty(),
+    };
+    let identity_id = match input.enrollment {
+        crate::manager::PendingExtensionIdentityEnrollment::VaultCreation => directory
+            .enroll_selected_app_key_for_vault_creation(input.app_key, "Personal")
+            .map_err(map_domain_error)?,
+        crate::manager::PendingExtensionIdentityEnrollment::PairedVault {
+            authorizer,
+            store_id,
+        } => directory
+            .enroll_app_key_for_owned_vault(authorizer, input.app_key, store_id)
+            .map_err(map_domain_error)?,
+    };
+    directory
+        .set_member_signing_public_key(
+            &identity_id,
+            input.app_key.app_id(),
+            input.signing_public_key,
+        )
+        .map_err(map_domain_error)?;
+    if let Some((app_id, signing_public_key)) = input.authorizer_signing {
         directory
-            .identities()
-            .iter()
-            .find(|identity| identity.identity_id == identity_id)
-            .cloned()
-            .ok_or_else(|| NookError::Database("Enrolled identity disappeared.".to_owned()))
-    })
-    .await
+            .set_member_signing_public_key(&identity_id, app_id, signing_public_key)
+            .map_err(map_domain_error)?;
+    }
+    directory.validate().map_err(map_domain_error)?;
+    let encoded = serde_json::to_string(&directory)
+        .map_err(|error| NookError::IndexedDb(format!("Handoff encode error: {error}")))?;
+    let encoded_value = serde_wasm_bindgen::to_value(&encoded)
+        .map_err(|error| NookError::IndexedDb(format!("Handoff value error: {error:?}")))?;
+    store
+        .put(&encoded_value, Some(&directory_key))
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Handoff write error: {error:?}")))?;
+    if let Some(seed) = input.signing_seed {
+        let seed_key = serde_wasm_bindgen::to_value(crate::storage::event_db::SIGNING_SEED_KEY)
+            .map_err(|error| NookError::IndexedDb(format!("Handoff seed key error: {error:?}")))?;
+        let seed_value = serde_wasm_bindgen::to_value(seed).map_err(|error| {
+            NookError::IndexedDb(format!("Handoff seed value error: {error:?}"))
+        })?;
+        store
+            .put(&seed_value, Some(&seed_key))
+            .await
+            .map_err(|error| {
+                NookError::IndexedDb(format!("Handoff seed write error: {error:?}"))
+            })?;
+    }
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!("Handoff transaction completion error: {error:?}"))
+    })?;
+    Ok(())
 }
 
 /// Associate a legacy vault with an identity without guessing from active selection.
@@ -404,7 +474,35 @@ mod tests {
         clear_identity_directory_for_test().await
     }
 
-    fn map_domain_error(error: nook_core::MultiDeviceError) -> NookError {
-        NookError::Database(error.to_string())
+    #[wasm_bindgen_test]
+    async fn handoff_commit_persists_member_and_signer_together() -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        idb_delete_key(crate::storage::event_db::SIGNING_SEED_KEY).await?;
+        let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let signing_public_key = nook_core::DeviceSigningPublicKey::parse(&"22".repeat(32))
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        let enrollment = crate::manager::PendingExtensionIdentityEnrollment::VaultCreation;
+        let signing_seed = "33".repeat(32);
+
+        commit_authenticated_identity_handoff(IdentityHandoffCommit {
+            app_key: &app_key,
+            signing_public_key: &signing_public_key,
+            authorizer_signing: None,
+            enrollment: &enrollment,
+            signing_seed: Some(&signing_seed),
+        })
+        .await?;
+
+        let directory = load_identity_directory().await?;
+        assert_eq!(
+            directory.selected().map_err(map_domain_error)?.members[0].signing_public_key,
+            signing_public_key
+        );
+        assert_eq!(
+            crate::storage::event_db::load_signing_seed().await?,
+            Some(signing_seed)
+        );
+        clear_identity_directory_for_test().await?;
+        idb_delete_key(crate::storage::event_db::SIGNING_SEED_KEY).await
     }
 }
