@@ -1155,15 +1155,33 @@ Nook keeps agent workflow policy, scheduling, deterministic tools, and durable
 execution separate.
 
 - Cortex Markdown owns semantic delegation contracts.
-- Loom owns deterministic tools and the planned agent workflow engine.
+- Loom owns deterministic tools and the static agent workflow engine.
 - Hive owns durable task state and isolated execution.
 - One delivery owner integrates results and mutates shared lifecycle state.
 
-The Loom `agentWorkflow` family is not implemented yet.
+Loom agent workflows are compiled TypeScript definitions.
 
-Current capable Codex clients use native child workers.
+They live in the isolated `agentic-ai/loom/src/agent-workflow/` module.
 
-The experimental Lace fixture will be deleted after Loom owns the typed graph.
+The separate workflow CLI selects one reviewed catalog entry.
+
+It does not accept graph topology from YAML.
+
+It does not generate topology from prompts or Cortex prose.
+
+The first entry is the read-only `cortex-full-garbage-collection` workflow.
+
+Local runs use an append-only event journal as their run authority.
+
+The current static workflow implementation runs locally.
+
+It does not materialize Hive tasks.
+
+A future Hive adapter will use Neo4j for durable lifecycle authority.
+
+The local journal must not compete with Neo4j for scheduling authority.
+
+The experimental Lace fixture will be deleted after Loom runs the static graph.
 
 See
 [design-docs/agent-workflow-orchestration.md](design-docs/agent-workflow-orchestration.md)

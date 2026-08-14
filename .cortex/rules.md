@@ -209,9 +209,12 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   - Do not prefix versions with `=` (e.g., `age = "=0.11.3"` is invalid).
   - Do not use semver ranges (`^`, `~`, `>=`, `*`) in dependencies.
 - **Bun for Node/JS Tooling:**
-  - Svelte project dependencies must be managed using Bun.
-  - Do not commit `package-lock.json` or `yarn.lock`.
+  - Svelte project and Loom dependencies must be managed using Bun.
+  - Do not commit `package-lock.json` or `yarn.lock` in Bun-owned packages.
   - Commit `bun.lock` (with `package.json`) for reproducible Docker web installs.
+  - `agentic-ai/ci-agent` is the explicit maintained Node/npm exception.
+  - That package owns its checked-in `package-lock.json`.
+  - Run its dependency and test commands through the repository Task surface.
   - Pin linux/amd64 native optional deps:
     `@rolldown/binding-linux-x64-gnu`,
     `@tailwindcss/oxide-linux-x64-gnu`,
@@ -226,11 +229,13 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   - Every domain file must be reachable from the composition root.
   - Do not add orphan Taskfiles or standalone shell scripts anywhere under `infra/`.
   - Repository preflight enforces this boundary.
-  - Before every push, agents and developers must run **`task format` unconditionally**.
-  - It formats Rust and JS/TS/Svelte inside sealed Docker images **and applies the diff to the host working tree**.
+  - Before every push, agents and developers must run
+    **`task loom:pre-push` unconditionally**.
+  - Loom runs sealed formatting and applies the diff to the host working tree.
+  - It also checks the UI demo contract.
   - Sealed-only commands such as `task extension:format` do not write the host.
   - They must not be the sole format step.
-  - **`task format` is the only required local product action.**
+  - **`task loom:pre-push` is the only required local product action.**
   - Product gates run on **GitHub Actions**.
   - Gates include format check, Clippy, vitest, svelte-check, web lint (Knip unused and jscpd clone detection), web build, coverage, and e2e.
   - See [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) and [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
@@ -318,7 +323,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 >
 > Once a change or experiment is coherent enough to check, the mandatory sequence is:
 >
-> 1. **`task format`**
+> 1. **`task loom:pre-push`**
 > 2. **commit**
 > 3. **advisory `task pr:review-local` before the first owner-authored push**
 > 4. **push**
@@ -348,7 +353,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 > After any red remote run:
 >
 > 1. Fix the failure.
-> 2. Run `task format`.
+> 2. Run `task loom:pre-push`.
 > 3. Commit and push.
 > 4. Dispatch the useful focused or complete remote validation again.
 > See [workflows/remote-execution.md](workflows/remote-execution.md).
@@ -357,11 +362,12 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 - **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task.
 - Required delivery sequence:
   1. Fetch and branch from `origin/main`.
-  2. Implement and **always run `task format`**.
+  2. Implement and **always run `task loom:pre-push`**.
   3. Commit and run advisory local Codex review.
   4. Push or update the PR.
   5. Use focused hosted diagnostics only when useful.
-  6. Trigger complete PR validation and the exact-head Codex review request.
+  6. Trigger complete PR validation and the exact-head Codex review request at
+     the final boundary.
   7. Fix failures, comments, and conflicts.
   8. Require `task pr:ready` and squash-merge automatically.
 - Do not stop at a ready-PR handoff or ask for separate merge permission.
@@ -384,7 +390,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   - Address findings that arrive while checks run.
   - If none arrive by check completion, continue without waiting.
   - Do not request or wait for other external reviews.
-  - Do not require a local product gate.
+  - Do not treat advisory local review as a product gate.
 - **Publish Workbench context after merge.** Follow
   [workflows/issues.md](workflows/issues.md) and
   [workflows/agent-statistics.md](workflows/agent-statistics.md): the task plan

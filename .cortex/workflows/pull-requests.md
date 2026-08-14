@@ -282,10 +282,20 @@ See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
 Before the first owner-authored push, run `task pr:review-local` on the coherent
 branch head. For a harness-created PR, run it immediately after handoff.
-When the coherent head is ready, run complete validation. It dispatches checks
-immediately. It then requests exact-head Codex review. Use focused remote tasks
-while iterating or when they shorten diagnosis of a known failure. See
+
+After each coherent push, inspect feedback already present.
+
+Use focused remote tasks when they shorten diagnosis.
+
+Trigger complete validation only when the head is ready for the final gate. It
+dispatches checks immediately, then requests exact-head Codex review.
+
+After a complete-gate failure, validate the completed replacement head again.
+
+Do not request or wait for external reviewers. See
 [code-review.md](code-review.md).
+
+The feedback inspection and readiness audit replace any blind review-batching grace period.
 
 ### 5. Hosted iteration and explicit validation
 
@@ -325,7 +335,7 @@ task pr:validate PR=<number> FULL_E2E=1
 | UI-facing path changes     | included in Loom pre-push                        | Cheap hygiene before hosted execution           |
 | Focused build/test feedback| `task remote TASK_NAMES=<a>,<b>`                | Reuse one hosted worker for selected tasks      |
 | Final validation boundary  | `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`     | Start the complete exact-head PR gate           |
-| After complete CI failure  | fix → format → commit → push → validate again    | A push does not automatically refresh `pr.yml`  |
+| After complete CI failure  | fix → Loom pre-push → commit → push → validate again | A push does not refresh `pr.yml`              |
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci) and [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md).
 

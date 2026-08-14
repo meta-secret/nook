@@ -13,6 +13,9 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 | --- | --- | --- | --- |
 | [`remote.yml`](../../.github/workflows/remote.yml) | Manual allowlisted task dispatch | Focused command batch; no merge authorization | No |
 | [`pr.yml`](../../.github/workflows/pr.yml) | Explicit `ci:validate` / `ci:full-e2e` label | Exact-head PR gate, including Rust ecosystem jobs | No |
+| [`loom.yml`](../../.github/workflows/loom.yml) | Path-filtered PR and Main changes | Loom TypeScript, authored-state, and single-parameter verification | No |
+| [`source-architecture.yml`](../../.github/workflows/source-architecture.yml) | Every opened, synchronized, or reopened PR | Source-size and Rust unit-test-colocation enforcement | No |
+| [`web-research.yml`](../../.github/workflows/web-research.yml) | Path-filtered PR/Main changes or manual dispatch | Research check, build, Cloudflare deploy, and PR preview | No |
 | [`rust-ecosystem.yml`](../../.github/workflows/rust-ecosystem.yml) | Schedule, path-filtered main push, manual | Non-PR Rust ecosystem entry points | No |
 | [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml) | Successful same-repository PR workflow | Promote trusted PR artifacts | No |
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml) | Successful PR workflow / PR close | Publish PR demo WebMs to Linear | No |
@@ -23,6 +26,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 | [`release.yml`](../../.github/workflows/release.yml) | Semver tag `v*.*.*` or manual version + ref | Production verify, deploy, release | No |
 | [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual | Audit and AI-update Rust deps | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Scheduled ready-Workbench scan or manual dispatch | Claim Workbench issue → implement → PR | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
+| [`ci-agent-smoke.yml`](../../.github/workflows/ci-agent-smoke.yml) | Manual | ci-agent unit tests and open-handle exit smoke | No |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml) | Manual | Debug e2e on a PR branch | Only for `sync-live` |
 | [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Docker prune on self-hosted `nook` runner | No |
 
@@ -52,6 +56,24 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite.
 - Keep independent long-running gates on separate hosted runners.
 - Combine jobs only when measured setup savings exceed lost parallelism.
+
+**`loom.yml`**
+
+- Runs when Loom, its Task wrapper, or related preflight sources change.
+- Verifies Loom formatting, lint, types, and tests.
+- Enforces authored TypeScript state and Loom API contracts.
+
+**`source-architecture.yml`**
+
+- Runs on every opened, synchronized, or reopened pull request.
+- Enforces the authored source-file limit.
+- Enforces Rust unit-test colocation.
+
+**`web-research.yml`**
+
+- Checks and builds the isolated research package.
+- Deploys path-applicable PR previews and Main updates to Cloudflare Pages.
+- Records the deployment and comments the PR preview URL.
 
 **`rust-ecosystem.yml`**
 
@@ -98,7 +120,9 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 **`hive.yml`**
 
-- Pinned Docker format/Clippy, behavior tests against Neo4j, k0s manifest/Taskfile contracts.
+- Installs, checks, and browser-tests the Hive Control Center.
+- Runs pinned Docker format/Clippy and behavior tests against Neo4j.
+- Checks k0s manifests and the Taskfile command surface.
 - Main alone publishes the shared Hive dependency cache.
 
 **`release.yml`**
@@ -120,6 +144,11 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
   collaborator.
 - Cursor SDK implement → PR opened → owner assigned and mentioned → Workbench
   progress/worklog published → workflow exits.
+
+**`ci-agent-smoke.yml`**
+
+- Runs the maintained npm-based ci-agent unit suite through Task.
+- Proves that `exitCiAgent` terminates open handles.
 
 **`e2e-pr.yml`**
 
@@ -392,8 +421,9 @@ so the persistent-context smoke cannot compete with other headed Chromium tests.
 | Workflow                                                                | `runs-on`       | Why                                                            |
 | ----------------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
 | `pr.yml`, `main.yml`, `release.yml`                                     | `ubuntu-latest` | Elastic delivery capacity with Main-seeded private Zot caches  |
-| `agent-implement.yml`, `ci-agent-smoke.yml`                            | `ubuntu-latest` | Long-running background AI work scales independently           |
-| `e2e-pr.yml`, `web-research.yml`                                       | `ubuntu-latest` | Manual and research work scales independently                  |
+| `loom.yml`, `source-architecture.yml`, `hive.yml`                       | `ubuntu-latest` | Independent architecture and package verification              |
+| `agent-implement.yml`, `ci-agent-smoke.yml`                             | `ubuntu-latest` | Background implementation and bounded smoke work               |
+| `e2e-pr.yml`, `web-research.yml`                                        | `ubuntu-latest` | Manual and research work scales independently                  |
 | `runner-cleanup.yml`                                                    | `nook`          | Maintain the registered self-hosted Docker host and disk       |
 
 The runner-cleanup workflow runs its age-filtered system prune separately from
@@ -788,11 +818,16 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Agent efficiency rules:**
 
-1. **Before product validation** — `task format` (+ UI demo contract when UI), then commit and push/open/update the PR so the exact head can run remotely.
+1. **Before product validation** — run `task loom:pre-push`, then commit and
+   push/open/update the PR so the exact head can run remotely.
 2. **Focused hosted iteration** — batch useful allowlisted tasks when they need
    the same head. Use separate dispatches when parallel compute is worth another
    runner.
-3. **After any remote CI failure** — read test output and static-analysis errors, then **persisted app logs** (see below), fix, `task format`, push the completed fix, then dispatch focused work or explicitly trigger complete validation again.
+3. **After any remote CI failure** — read test output and static-analysis errors.
+   Then read persisted app logs when applicable. Fix the problem, run
+   `task loom:pre-push`, and push the completed fix. Use focused work for
+   diagnosis. Repeat complete validation only when replacing a failed final
+   gate.
 4. **Complete gate only when ready** — run `task pr:validate`; a push never refreshes that gate automatically.
 
 ## Runner cleanup
@@ -954,9 +989,16 @@ Tool starts, shell output, and command results are always logged at **INFO**.
 
 Heartbeat interval: `CI_AGENT_HEARTBEAT_MS` (default 60s).
 
-The harness's local/default agent timeout is 90m. Every production Actions agent job explicitly sets `CI_AGENT_TIMEOUT_MS=21600000` and `timeout-minutes: 360`. That matches GitHub's six-hour hosted-runner ceiling so the harness does not interrupt the agent earlier.
+The harness's local/default agent timeout is 90 minutes.
 
-The six-hour job limit covers setup, the agent run, and PR creation. The job exits after opening the PR.
+`agent-implement.yml` sets:
+
+- `timeout-minutes: 360` for the complete job;
+- `CI_AGENT_TIMEOUT_MS=18000000` for a five-hour agent run.
+
+The remaining hour covers setup and result publication.
+
+The job exits after opening the PR and publishing its bounded handoff.
 
 `task pr:preflight` and `task pr:ready` are read-only audits. No hosted continuation or CLI command merges based on their result.
 

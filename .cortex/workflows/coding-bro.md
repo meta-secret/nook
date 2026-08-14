@@ -72,7 +72,8 @@ Default PR-first loop:
    - PRs fixing a failure observed on `main` must trigger the Main-equivalent suite with `task pr:validate PR=<number> FULL_E2E=1`.
    - Do not run heavy local builds or tests.
 7. **Fix Nook's red PR test checks until green:**
-   - Inspect failed logs, check app logs for web/e2e failures, fix, `task format`, and push the completed fix.
+   - Inspect failed logs and check app logs for web/e2e failures.
+   - Fix the problem, run `task loom:pre-push`, and push the completed fix.
    - This includes Knip unused findings, jscpd clone/duplicate findings, and every other mechanical gate.
    - Fix the code; do not silence the check.
    - Push the completed fix, then explicitly trigger complete validation again.
@@ -125,8 +126,10 @@ This ordering applies to the first implementation and every review/CI fix.
 
 Required pre-push hygiene always runs before the push:
 
-- `task format`
-- the UI demo contract when UI paths change
+- host-applied formatting;
+- the UI demo contract when UI paths change.
+
+Both run through `task loom:pre-push`.
 
 Focused builds/tests run through `task remote` only after the exact commit is pushed.
 Use them only when they isolate a known failure faster than complete validation.
@@ -135,7 +138,7 @@ Do not run a broad focused batch before complete validation.
 If Actions fails:
 
 1. fix the failure
-2. run `task format` again
+2. run `task loom:pre-push` again
 3. commit and push the complete fix
 4. trigger the complete PR workflow again
 5. dispatch a focused task only if a known failure needs faster isolation
@@ -238,7 +241,7 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    - Commit the formatted implementation.
    - Run `task pr:review-local` before the first owner-authored push.
    - For a harness-created PR, run local review after handoff instead.
-   - Do not run a required local product gate.
+   - Do not run heavy product gates locally.
 5. **Push and open or update the PR:**
    - Push the coherent implementation commit.
    - Open the PR when it does not exist.
@@ -458,8 +461,14 @@ Do not wait for post-merge Main. Any performance fix belongs in a separate norma
 ## Non-negotiables
 
 - **Never push directly to `main`.** Branch → PR → squash merge.
-- **Always `task format` before every push** — host-applied, unconditional; never rely on sealed-only `task extension:format`. When UI paths change, pass the UI demo contract against `origin/main` before push. See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
-- **Never stop after push.** Explicitly trigger complete PR validation, then own failures, comments, conflicts, and readiness through squash merge. Use focused hosted tasks only to shorten diagnosis.
+- **Always `task loom:pre-push` before every push.** It host-applies formatting
+  and checks the UI demo contract. Never rely on sealed-only
+  `task extension:format`. See
+  [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
+- **Never stop after push.** Use focused hosted tasks for experimental
+  diagnosis. Trigger complete PR validation when the head is ready for the
+  final gate. Then own failures, comments, conflicts, and readiness through
+  squash merge.
 - **GitHub Actions is the only product gate and heavy execution surface** — do not run `task check`, `task ci:pr`, full suites, builds, or e2e on the agent machine. See [remote-execution.md](remote-execution.md).
 - **Use persisted app logs for e2e analysis** — read `nook-app-logs.json`, call `fetchAppLogs`, or open `/app-logs`; see [logging.md](../references/logging.md).
 - **Never merge after a Nook PR-test failure without a green Actions run on the latest head.**

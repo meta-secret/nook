@@ -114,7 +114,7 @@ An exclusion must describe data provenance, not excuse authored source.
       correct boundaries.
 - [ ] Run the repository source-size scanner through the hosted remote preflight
       task and inspect every violation.
-- [ ] Run `task format`, commit and push, then explicitly trigger exact-head
+- [ ] Run `task loom:pre-push`, commit and push, then explicitly trigger exact-head
       GitHub Actions validation.
 
 ## Static Enforcement
@@ -131,4 +131,4 @@ and scanner diagnostics; code review must verify the actual architectural seam.
 ## Validation
 
 Use the hosted remote preflight task while developing the gate. Before every
-push, run `task format`; explicitly trigger the complete PR gate when ready.
+push, run `task loom:pre-push`; explicitly trigger the complete PR gate when ready.

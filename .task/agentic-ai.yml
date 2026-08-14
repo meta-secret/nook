@@ -108,6 +108,28 @@ tasks:
         vars:
           CONFIG: '{{.CONFIG}}'
 
+  loom:agent-workflow:cortex-audit:
+    desc: Run the compiled Cortex full-GC agent workflow (BASELINE=<40-char-sha>, PLAN=1 for dry-run).
+    deps: [loom:install]
+    requires:
+      vars: [BASELINE]
+    env:
+      LOOM_WORKFLOW_BASELINE: '{{.BASELINE}}'
+      LOOM_WORKFLOW_PLAN: '{{default "0" .PLAN}}'
+    cmds:
+      - |
+        set -euo pipefail
+        if [ "$LOOM_WORKFLOW_PLAN" = "1" ]; then
+          bun run --cwd agentic-ai/loom agent-workflow -- \
+            cortex-full-garbage-collection \
+            --baseline "$LOOM_WORKFLOW_BASELINE" \
+            --plan
+        else
+          bun run --cwd agentic-ai/loom agent-workflow -- \
+            cortex-full-garbage-collection \
+            --baseline "$LOOM_WORKFLOW_BASELINE"
+        fi
+
   loom:skill-scaffold:
     desc: Scaffold a dynamic-skill card via Loom (CONFIG=<request.yaml>).
     deps: [loom:install]
