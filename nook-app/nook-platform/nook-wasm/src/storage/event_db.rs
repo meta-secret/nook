@@ -2,7 +2,7 @@
 
 mod security_epoch;
 
-pub(crate) use security_epoch::save_security_epoch_event_pair;
+pub(crate) use security_epoch::{save_security_epoch_event_pair, save_verified_event};
 
 use crate::{NookError, storage::open_nook_database};
 use nook_core::{EventId, LocalEventStore};

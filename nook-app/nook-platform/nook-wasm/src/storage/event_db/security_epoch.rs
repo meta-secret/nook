@@ -1,4 +1,4 @@
-//! Atomic persistence for one security-epoch trigger and its checkpoint.
+//! Atomic persistence for verified event appends.
 
 use crate::{NookError, storage::open_nook_database};
 use nook_core::{EventGraph, EventId, EventInsertStatus, LocalEventStore, VaultEvent};
@@ -134,15 +134,48 @@ fn insert_pair(
     Ok((trigger_id, checkpoint_id))
 }
 
-async fn write_pair(
+fn insert_event(
+    graph: &mut EventGraph,
+    store_id: &str,
+    event: &VaultEvent,
+) -> Result<EventId, NookError> {
+    let event_id = event.id()?;
+    if !graph.contains(&event_id) {
+        let mut current = graph.heads();
+        let mut expected = event.body.parents.clone();
+        current.sort();
+        expected.sort();
+        if current != expected {
+            return Err(NookError::Database(
+                "Vault changed before the event could commit.".to_owned(),
+            ));
+        }
+    }
+    match graph.insert(event.clone(), store_id)? {
+        EventInsertStatus::Applied | EventInsertStatus::Duplicate => {}
+        EventInsertStatus::Quarantined(reason) => {
+            return Err(NookError::Database(format!(
+                "Refusing to append unauthorized vault event: {reason}"
+            )));
+        }
+        EventInsertStatus::Pending(reason) => {
+            return Err(NookError::Database(format!(
+                "Refusing to append vault event with unresolved parents: {reason:?}"
+            )));
+        }
+    }
+    Ok(event_id)
+}
+
+async fn write_events<const COUNT: usize>(
     events: &rexie::Store,
     projections: &rexie::Store,
     store_id: &str,
     mut ids: Vec<String>,
     graph: &EventGraph,
-    pair: [(&EventId, &[u8]); 2],
+    entries: [(&EventId, &[u8]); COUNT],
 ) -> Result<Vec<String>, NookError> {
-    for (event_id, bytes) in pair {
+    for (event_id, bytes) in entries {
         let value = String::from_utf8(bytes.to_vec())
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         put_string(
@@ -181,6 +214,52 @@ async fn write_pair(
     Ok(heads)
 }
 
+async fn begin_append_transaction(
+) -> Result<(rexie::Rexie, rexie::Transaction), NookError> {
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(
+            &[STORE_EVENTS, STORE_PROJECTIONS],
+            rexie::TransactionMode::ReadWrite,
+        )
+        .map_err(|error| NookError::IndexedDb(format!("Event transaction error: {error:?}")))?;
+    Ok((rexie, transaction))
+}
+
+/// Validate and persist one event and its derived heads atomically.
+///
+/// The transaction overlaps the same events store as security-epoch commits,
+/// so IndexedDB serializes their frontier checks and writes across tabs.
+pub(crate) async fn save_verified_event(
+    store_id: &str,
+    event: &VaultEvent,
+    bytes: &[u8],
+) -> Result<Vec<String>, NookError> {
+    let (_rexie, transaction) = begin_append_transaction().await?;
+    let events = transaction
+        .store(STORE_EVENTS)
+        .map_err(|error| NookError::IndexedDb(format!("Event store error: {error:?}")))?;
+    let projections = transaction
+        .store(STORE_PROJECTIONS)
+        .map_err(|error| NookError::IndexedDb(format!("Projection store error: {error:?}")))?;
+    let (ids, local) = load_local_store(&events, store_id).await?;
+    let mut graph = local.load_graph(store_id)?;
+    let event_id = insert_event(&mut graph, store_id, event)?;
+    let heads = write_events(
+        &events,
+        &projections,
+        store_id,
+        ids,
+        &graph,
+        [(&event_id, bytes)],
+    )
+    .await?;
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!("Event transaction completion error: {error:?}"))
+    })?;
+    Ok(heads)
+}
+
 /// Persist the trigger and checkpoint in one `IndexedDB` transaction.
 ///
 /// Read-write transactions overlapping the events store serialize across tabs.
@@ -192,13 +271,7 @@ pub(crate) async fn save_security_epoch_event_pair(
     checkpoint: &VaultEvent,
     checkpoint_bytes: &[u8],
 ) -> Result<Vec<String>, NookError> {
-    let rexie = open_nook_database().await?;
-    let transaction = rexie
-        .transaction(
-            &[STORE_EVENTS, STORE_PROJECTIONS],
-            rexie::TransactionMode::ReadWrite,
-        )
-        .map_err(|error| NookError::IndexedDb(format!("Epoch transaction error: {error:?}")))?;
+    let (_rexie, transaction) = begin_append_transaction().await?;
     let events = transaction
         .store(STORE_EVENTS)
         .map_err(|error| NookError::IndexedDb(format!("Epoch events store error: {error:?}")))?;
@@ -208,7 +281,7 @@ pub(crate) async fn save_security_epoch_event_pair(
     let (ids, local) = load_local_store(&events, store_id).await?;
     let mut graph = local.load_graph(store_id)?;
     let (trigger_id, checkpoint_id) = insert_pair(&mut graph, store_id, trigger, checkpoint)?;
-    let heads = write_pair(
+    let heads = write_events(
         &events,
         &projections,
         store_id,

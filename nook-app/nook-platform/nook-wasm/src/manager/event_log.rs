@@ -19,8 +19,8 @@ use crate::storage::drive_events::{
 };
 use crate::storage::event_db::{
     append_outbox_index, is_event_log_mode, load_heads, load_key_epoch, load_local_event_store,
-    load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_event_bytes,
-    save_heads, save_key_epoch, save_signing_seed, set_event_log_mode,
+    load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_heads,
+    save_key_epoch, save_signing_seed, save_verified_event, set_event_log_mode,
 };
 use crate::storage::github_events::{
     fetch_github_event, list_github_event_ids, put_github_event_if_absent,
@@ -311,31 +311,11 @@ impl NookVaultManager {
         let event_id = event.id()?;
         let operations = event.body.operations.clone();
         let created_at = event.body.created_at.clone();
-        // Refuse to persist events the causal graph would quarantine. Otherwise
-        // an unauthorized JoinApproved becomes a permanent poisoned head that
-        // blocks later extension pairing imports.
-        let local = load_local_event_store(&self.vault.store_id).await?;
-        let mut graph = local.load_graph(&self.vault.store_id)?;
-        match graph.insert(event.clone(), self.vault.store_id.as_str())? {
-            nook_core::EventInsertStatus::Quarantined(reason) => {
-                return Err(NookError::Database(format!(
-                    "Refusing to append unauthorized vault event: {reason}"
-                )));
-            }
-            nook_core::EventInsertStatus::Pending(reason) => {
-                return Err(NookError::Database(format!(
-                    "Refusing to append vault event with unresolved parents: {reason:?}"
-                )));
-            }
-            nook_core::EventInsertStatus::Duplicate | nook_core::EventInsertStatus::Applied => {}
-        }
-        save_event_bytes(&self.vault.store_id, event_id.as_str(), &bytes).await?;
-        self.event_log.heads = graph
-            .heads()
-            .into_iter()
-            .map(nook_core::EventId::into_inner)
-            .collect();
-        save_heads(&self.vault.store_id, &self.event_log.heads).await?;
+        // Keep validation, the event write, the index update, and derived heads
+        // in the same transaction as security-epoch commits. Otherwise another
+        // tab can commit a new epoch between validation and this write.
+        self.event_log.heads =
+            save_verified_event(&self.vault.store_id, &event, &bytes).await?;
         if self.vault.crypto.is_unlocked() || self.ensure_vault_crypto_from_cache().await.is_ok() {
             self.apply_event_projection_to_session().await?;
         } else {
