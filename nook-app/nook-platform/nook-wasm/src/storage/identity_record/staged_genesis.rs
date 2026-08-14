@@ -2,6 +2,7 @@
 
 use std::{cell::RefCell, rc::Rc};
 
+use super::genesis_flow::PendingSimpleGenesisFlow;
 use super::simple_genesis::{
     PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,
     decode_pending_simple_genesis, encode_pending_simple_genesis,
@@ -67,7 +68,7 @@ pub(crate) async fn begin_or_resume_staged_simple_genesis(
         created_at: nook_core::IsoTimestamp::parse(&wasm_iso_timestamp())
             .map_err(|error| NookError::Database(error.to_string()))?,
         event_state: PendingSimpleGenesisEvent::AwaitingEvent,
-        staged_identity: Some(StagedSimpleGenesisIdentity {
+        flow: PendingSimpleGenesisFlow::Staged(StagedSimpleGenesisIdentity {
             base_directory,
             directory: staged_directory,
         }),
@@ -83,7 +84,7 @@ pub(crate) async fn begin_or_resume_staged_simple_genesis(
                 .map(decode_pending_simple_genesis)
                 .transpose()?
                 .unwrap_or(proposed);
-            if pending.staged_identity.is_none() {
+            if !pending.is_staged() {
                 return Err(NookError::IndexedDb(
                     "Pending Simple genesis belongs to another creation flow.".to_owned(),
                 ));
@@ -97,7 +98,7 @@ pub(crate) async fn begin_or_resume_staged_simple_genesis(
     let pending = selected.borrow_mut().take().ok_or_else(|| {
         NookError::IndexedDb("Staged Simple genesis produced no result.".to_owned())
     })?;
-    let staged = pending.staged_identity.as_ref().ok_or_else(|| {
+    let staged = pending.staged_identity().ok_or_else(|| {
         NookError::IndexedDb("Staged Simple genesis lost its identity state.".to_owned())
     })?;
     let identity = staged
@@ -151,9 +152,9 @@ mod tests {
                 .identities()
                 .is_empty()
         );
-        super::super::clear_pending_simple_genesis(super::super::SimpleGenesisCompletion {
+        super::super::clear_pending_simple_genesis(super::super::SimpleGenesisCompletion::Staged {
             pending: &pending,
-            staged_signing_seed: Some("staged-signing-seed"),
+            signing_seed: "staged-signing-seed",
         })
         .await?;
         let published = super::super::load_identity_directory().await?;
@@ -196,16 +197,23 @@ mod tests {
         .await?;
 
         assert!(
-            super::super::clear_pending_simple_genesis(super::super::SimpleGenesisCompletion {
-                pending: &pending,
-                staged_signing_seed: Some("staged-signing-seed"),
-            })
+            super::super::clear_pending_simple_genesis(
+                super::super::SimpleGenesisCompletion::Staged {
+                    pending: &pending,
+                    signing_seed: "staged-signing-seed",
+                },
+            )
             .await
             .is_err()
         );
         let current = super::super::load_identity_directory().await?;
         assert_eq!(current.identities().len(), 1);
         assert!(!current.identities()[0].owns_vault(&pending.store_id));
+        assert!(
+            super::super::pending_simple_genesis_for_store(pending.store_id.as_str())
+                .await?
+                .is_none()
+        );
         super::super::clear_identity_directory_for_test().await
     }
 

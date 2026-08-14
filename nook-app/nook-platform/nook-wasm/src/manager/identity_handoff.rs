@@ -12,6 +12,19 @@ pub(in crate::manager) struct PendingVaultCreationHandoff {
 }
 
 impl NookVaultManager {
+    pub(in crate::manager) fn defers_identity_reconciliation_until_handoff(&self) -> bool {
+        self.device
+            .pending_extension_handoff
+            .as_ref()
+            .is_some_and(|pending| {
+                matches!(
+                    &pending.enrollment,
+                    PendingExtensionIdentityEnrollment::VaultCreation { .. }
+                        | PendingExtensionIdentityEnrollment::PairedVault { .. }
+                )
+            })
+    }
+
     pub(in crate::manager) fn pending_vault_creation_handoff(
         &self,
     ) -> Option<PendingVaultCreationHandoff> {

@@ -78,25 +78,30 @@ All directory updates use one IndexedDB read-write transaction.
 Concurrent tabs must not overwrite identity creation, selection, membership,
 or DEK changes.
 Extension identity adoption remains staged through vault initialization.
-Fresh-vault membership, signing keys, and per-vault DEK envelopes live only in
-the resumable genesis marker until verified connect succeeds. The completion
-transaction compares the marker's base directory with the current directory.
-It publishes the staged directory and matching signing seed, then removes the
-marker atomically. A concurrent identity update makes completion fail closed
-instead of rewinding that update. A failed create clears decrypted host state
-and stops background sync without rolling back event stores or active identity
-state.
+
+- Fresh-vault membership remains in the genesis marker until connect succeeds.
+- The marker also owns staged signing keys and per-vault DEK envelopes.
+- Completion compares the marker's base directory with the current directory.
+- A match publishes the candidate directory and signing seed atomically.
+- The same transaction removes the completed marker.
+- A concurrent directory update aborts and removes the stale marker.
+- The concurrent directory update remains intact.
+- A retry starts a new genesis transaction instead of reusing stale state.
+- Failed creation clears decrypted host state and stops background sync.
+- Failed creation does not rewind event stores or active identity state.
+
 Existing-vault imports use a distinct pending handoff state. Verified connect
-first synthesizes the vault owner from active signed envelopes, verifies the
-extension signing key against the active event roster, then commits the member
-signer and adopted signing seed atomically.
+first synthesizes the vault owner from active signed envelopes. It then verifies
+the extension signing key against the active event roster. The final transaction
+commits the member signer and adopted signing seed.
 Legacy-vault reconciliation derives DEK recipients from the signed event
 graph's active approvals after revocations, not from stale encrypted auth rows.
 
 Simple vault creation stores `pending_simple_genesis_v1` in IndexedDB.
-Its JSON fields are `storeId`, `identityId`, `createdAt`, `eventState`, and an
-optional `stagedIdentity` transaction payload. That payload carries the base
-directory and inactive candidate directory with identity-owned DEK envelopes.
+Its JSON fields are `storeId`, `identityId`, `createdAt`, `eventState`, and
+`flow`. The flow is explicitly `ordinary` or `staged`. The staged variant owns
+the base directory and inactive candidate directory. The candidate owns the
+identity DEK envelopes.
 The app writes the marker before any event-log state.
 A reload resumes the same store and identity binding.
 Verified connect completion removes the marker with a compare-and-delete

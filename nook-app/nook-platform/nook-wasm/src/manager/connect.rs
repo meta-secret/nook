@@ -13,6 +13,7 @@ use crate::NookError;
 use crate::NookSecretRecord;
 use crate::conversion::{LoadedVault, access_status_for_vault_content, content_requires_genesis};
 use crate::storage::event_db::load_local_event_store;
+use crate::storage::identity_record::PendingSimpleGenesis;
 use crate::storage::indexed_db::load_vault_local_cache;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -78,6 +79,30 @@ mod tests {
         assert!(discovered.is_empty());
         assert!(manager.vault.store_id.is_empty());
         assert!(matches!(manager.vault.vault_name, VaultNameState::Unnamed));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn paired_handoff_defers_identity_reconciliation_until_authenticated_commit()
+    -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        let authorizer = nook_core::AppKey::generate()?;
+        let (signing, signing_seed) = nook_core::SigningIdentity::generate()?;
+        manager.device.pending_extension_handoff = Some(
+            super::super::device_protection::PendingExtensionIdentityHandoff {
+                enrollment: super::super::PendingExtensionIdentityEnrollment::PairedVault {
+                    authorizer,
+                    store_id: nook_core::generate_store_id()?,
+                },
+                authorizer_signing: None,
+                signing_public_key: signing.public_key(),
+                handoff_signing_seed: signing_seed.as_str().to_owned(),
+                persist_signing_seed: false,
+                previous_session_signing_seed: String::new(),
+            },
+        );
+
+        assert!(manager.defers_identity_reconciliation_until_handoff());
         Ok(())
     }
 }
@@ -320,7 +345,7 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         let staged_genesis = pending_cleanup
             .as_ref()
-            .is_some_and(|pending| pending.staged_identity.is_some());
+            .is_some_and(PendingSimpleGenesis::is_staged);
         if !staged_genesis {
             self.ensure_identity_after_connect(identity).await?;
         }
@@ -328,17 +353,18 @@ impl NookVaultManager {
         let Some(completed) = pending_cleanup else {
             return Ok(());
         };
-        let staged_handoff = completed.staged_identity.is_some();
-        crate::storage::identity_record::clear_pending_simple_genesis(
-            crate::storage::identity_record::SimpleGenesisCompletion {
+        let staged_handoff = completed.is_staged();
+        let completion = if staged_handoff {
+            crate::storage::identity_record::SimpleGenesisCompletion::Staged {
                 pending: &completed,
-                staged_signing_seed: completed
-                    .staged_identity
-                    .as_ref()
-                    .map(|_| self.event_log.signing_seed.as_str()),
-            },
-        )
-        .await?;
+                signing_seed: self.event_log.signing_seed.as_str(),
+            }
+        } else {
+            crate::storage::identity_record::SimpleGenesisCompletion::Ordinary {
+                pending: &completed,
+            }
+        };
+        crate::storage::identity_record::clear_pending_simple_genesis(completion).await?;
         if staged_handoff {
             self.device.pending_extension_handoff = None;
         }
@@ -350,7 +376,7 @@ impl NookVaultManager {
         &mut self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
-        if self.pending_vault_creation_handoff().is_some() {
+        if self.defers_identity_reconciliation_until_handoff() {
             return Ok(());
         }
         let label = match &self.vault.vault_name {
@@ -563,7 +589,7 @@ impl NookVaultManager {
             crate::storage::identity_record::begin_or_resume_simple_genesis(identity, &label)
                 .await?;
         self.vault.store_id = pending.store_id.to_string();
-        if let Some(staged) = &pending.staged_identity {
+        if let Some(staged) = pending.staged_identity() {
             let mut directory = staged.directory.clone();
             let keys = directory
                 .open_or_generate_vault_dek_for_identity(

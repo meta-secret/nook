@@ -8,12 +8,14 @@ use super::indexed_db::{StringUpdateGuard, StringUpdateResult, idb_update_string
 use super::indexed_db::{idb_delete_key, idb_get_string, idb_put_string};
 use crate::{NookError, storage::open_nook_database};
 
+mod genesis_flow;
 mod simple_genesis;
 mod staged_genesis;
+pub(crate) use genesis_flow::SimpleGenesisCompletion;
 pub(crate) use simple_genesis::PENDING_SIMPLE_GENESIS_KEY;
 pub(crate) use simple_genesis::{
-    PendingSimpleGenesis, SimpleGenesisCompletion, begin_or_resume_simple_genesis,
-    clear_pending_simple_genesis, pending_simple_genesis_for_store, persist_simple_genesis_event,
+    PendingSimpleGenesis, begin_or_resume_simple_genesis, clear_pending_simple_genesis,
+    pending_simple_genesis_for_store, persist_simple_genesis_event,
     resume_staged_simple_genesis_signing_seed,
 };
 pub(crate) use staged_genesis::{StagedSimpleGenesisInput, begin_or_resume_staged_simple_genesis};
