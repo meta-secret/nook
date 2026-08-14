@@ -8,9 +8,12 @@ ready head, and carrying ready PRs directly through squash merge.
 
 ## Problem Pattern
 
-Agents repeatedly query PR/check state, serialize or duplicate local and remote
-validation, run full local gates before review feedback, or spend the complete
-pipeline on a head that Codex immediately asks them to change.
+Agents waste delivery time when they:
+
+- repeatedly query PR or check state;
+- serialize or duplicate local and remote validation;
+- run full local gates before review feedback; or
+- spend the complete pipeline on a head that Codex immediately asks them to change.
 
 Moving `main`, unresolved-conversation policy, and exact-head deployment
 requirements are then discovered only at merge time.

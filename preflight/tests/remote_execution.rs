@@ -74,29 +74,25 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 }
 
 #[test]
-fn complete_validation_starts_before_non_blocking_review_request() {
+fn complete_validation_starts_before_non_blocking_review_request() -> Result<()> {
     let agentic_tasks = read(".task/agentic-ai.yml");
     let direct_validation = read(".task/remote-execution.yml");
-    let Some(direct_review_position) =
-        direct_validation.find("if ! task pr:review PR=\"$REQUESTED_PR\"; then")
-    else {
-        panic!("direct validation must request review without making it a gate");
-    };
-    let Some(head_recheck_position) = direct_validation.find(
-        "pre_review_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
-    ) else {
-        panic!("direct validation must recheck the PR head before requesting review");
-    };
-    let Some(post_review_recheck_position) = direct_validation.find(
-        "post_review_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
-    ) else {
-        panic!("direct validation must recheck the PR head after requesting review");
-    };
-    let Some(validation_label_position) =
-        direct_validation.find("validation_label=\"ci:validate\"")
-    else {
-        panic!("direct validation must apply its label");
-    };
+    let direct_review_position = direct_validation
+        .find("if ! task pr:review PR=\"$REQUESTED_PR\"; then")
+        .context("direct validation must request review without making it a gate")?;
+    let head_recheck_position = direct_validation
+        .find(
+            "pre_review_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
+        )
+        .context("direct validation must recheck the PR head before requesting review")?;
+    let post_review_recheck_position = direct_validation
+        .find(
+            "post_review_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
+        )
+        .context("direct validation must recheck the PR head after requesting review")?;
+    let validation_label_position = direct_validation
+        .find("validation_label=\"ci:validate\"")
+        .context("direct validation must apply its label")?;
     assert!(
         validation_label_position < head_recheck_position
             && head_recheck_position < direct_review_position
@@ -130,6 +126,7 @@ fn complete_validation_starts_before_non_blocking_review_request() {
         ),
         "a head change during the review request must fail so the replacement head is validated"
     );
+    Ok(())
 }
 
 #[test]

@@ -46,13 +46,14 @@ ownership until merge or a concrete blocked handoff:
 5. **Request review and validate on GitHub Actions:**
    - Run focused `task remote TASK_NAME=<name>` jobs as useful.
    - Use focused hosted tasks while iterating.
-   - Run `task pr:validate PR=<number>` when the coherent head is ready.
+   - When the coherent head is ready, run one complete-validation command:
+     `task pr:validate PR=<number>` or
+     `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`.
    - It dispatches checks and then requests exact-head Codex Cloud review.
    - Review-request failure does not block those checks.
    - Fix every actionable finding that arrives while checks run.
    - If no feedback exists when checks finish, continue without waiting.
    - Do not request or wait for other optional reviewers.
-   - When the head is ready, run `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` (or Task `pr:preflight` / `pr:validate`).
    - Inspect the path-applicable `PR / Verify and preview` and `Web research / Build and deploy research catalog` workflows.
    - Do **not** run a required local `task check` / `task ci:pr`.
 6. **Fix Nook's failed PR workflow.** Inspect CI and app logs. Fix the

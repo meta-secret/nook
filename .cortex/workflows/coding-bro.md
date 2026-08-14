@@ -369,7 +369,8 @@ task remote TASK_NAME=rust:test
 
 ```text
 implement → task loom:pre-push
-           → commit → push → gh pr create/update
+           → commit → task pr:review-local
+           → push → gh pr create/update
            → task loom:pr-land CONFIG=<pr-land-validate-request.yaml>
            → monitor exact-head GitHub Actions
 ```
