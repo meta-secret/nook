@@ -7,8 +7,8 @@ description: >-
   contract when UI paths change), commit and push/open the PR, run focused
   allowlisted tasks on GitHub-hosted workers, then explicitly trigger complete
   exact-head PR validation; on failure fix from CI logs, format, push, and
-  trigger again until Nook's PR checks are green, resolve every actionable comment already present
-  after bounded Codex review convergence, then squash merge; afterward publish the issue
+  trigger again until Nook's PR checks are green, resolve every actionable comment already present,
+  then squash merge; afterward publish the issue
   update, linked worklog, and PR statistics to Nook Workbench. Always follow this
   pipeline for implementation work unless the user explicitly asks for a
   read-only or question-only answer.
@@ -26,14 +26,14 @@ Follow the delivery sequence in the cortex workflow:
 2. Branch, implement, and run `task loom:pre-push`.
 3. Commit and run advisory local Codex review.
 4. Push and use focused hosted execution when useful.
-5. Run bounded exact-head Cloud review convergence through Loom.
-6. Resolve actionable feedback and trigger complete validation.
+5. Trigger exact-head Cloud review and complete validation through Loom.
+6. Resolve actionable feedback while repository-owned checks run.
 7. Fix until exact-head checks and readiness pass.
 8. Squash-merge and publish the Workbench completion records.
 9. Report duration.
 
-Never wait beyond the convergence timeout. Do not request other external
-reviews or checks. Never run heavy product work locally.
+Never wait for a Codex result after repository-owned checks finish. Do not
+request other external reviews or checks. Never run heavy product work locally.
 
 Before any mutation, apply
 [agent-feature-ownership](../agent-feature-ownership/SKILL.md). Work only on the
@@ -57,7 +57,7 @@ contract:
 | 3 | Implement the published plan |
 | 4 | **Always** `task loom:pre-push` |
 | 5 | Commit; run local review; then push/open or update PR. For a harness PR, run local review immediately after handoff |
-| 6 | Run focused `task remote` jobs as useful; then bounded review convergence and `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` |
+| 6 | Run focused `task remote` jobs as useful; then `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` to request review and dispatch validation |
 | 7 | Watch exact-head repository-owned checks and inspect feedback already present |
 | 8–10 | On failure: CI logs → fix → `task loom:pre-push` → commit/push → focused remote proof → explicit validation |
 | 11 | `gh pr merge --squash` when repository checks are green, threads are resolved, and Loom/Task readiness succeeds |

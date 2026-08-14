@@ -59,7 +59,7 @@ tasks:
       - .github/scripts/remote-task-batch.sh --list
 
   pr:validate:
-    desc: Trigger required PR validation by re-applying its one-shot label (PR=<number>, FULL_E2E=1 for a Main-fix browser gate).
+    desc: Request exact-head Codex review, then immediately trigger required PR validation (PR=<number>, FULL_E2E=1 for a Main-fix browser gate).
     requires:
       vars: [PR]
     env:
@@ -101,17 +101,11 @@ tasks:
 
         .github/scripts/require-current-base.sh origin "$base_ref"
 
-        receipt="$(git rev-parse --git-path nook-review-convergence)/$local_sha"
-        if [ -f "$receipt" ] && [ "$(cat "$receipt")" = "$REQUESTED_PR" ]; then
-          task pr:review-converge PR="$REQUESTED_PR" \
-            AUTOMATIC_GRACE_SECONDS=1 REVIEW_TIMEOUT_SECONDS=1 POLL_SECONDS=1
-        else
-          task pr:review-converge PR="$REQUESTED_PR"
-        fi
+        task pr:review PR="$REQUESTED_PR"
 
         current_pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
         if [ "$local_sha" != "$current_pr_sha" ]; then
-          echo "PR #$REQUESTED_PR changed head during review convergence." >&2
+          echo "PR #$REQUESTED_PR changed head during the review request." >&2
           echo "local: $local_sha" >&2
           echo "PR:    $current_pr_sha" >&2
           exit 2

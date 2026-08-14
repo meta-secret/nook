@@ -302,14 +302,14 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 >
 > Linear `main` history is a project requirement, not a preference.
 
-> ## ⛔ CONVERGE CODEX REVIEW; DO NOT WAIT FOR OPTIONAL REVIEWERS
+> ## ⛔ REQUEST CODEX REVIEW; DO NOT DELAY VALIDATION
 >
 > Before merge or handoff, inspect comments and findings that already exist and
 > address every active actionable item, regardless of whether it came from a
 > human or an external service. Reply with the fix, validation, or no-change
 > rationale and resolve each actionable thread. Every external-service review
-> comment already present must be inspected. Run bounded exact-head Codex review
-> convergence before complete validation. Its timeout is non-blocking. Claude,
+> comment already present must be inspected. Complete validation requests one
+> idempotent exact-head Codex review and dispatches checks immediately. Claude,
 > Cursor, CodeRabbit, and other external reviewers remain optional: do not
 > request or wait for them. Optional review never means optional handling of
 > feedback that already arrived.
@@ -360,10 +360,9 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   3. Commit and run advisory local Codex review.
   4. Push or update the PR.
   5. Use focused hosted diagnostics only when useful.
-  6. Run bounded exact-head Codex Cloud review convergence.
-  7. Trigger complete PR validation.
-  8. Fix failures, comments, and conflicts.
-  9. Require `task pr:ready` and squash-merge automatically.
+  6. Trigger complete PR validation and the exact-head Codex review request.
+  7. Fix failures, comments, and conflicts.
+  8. Require `task pr:ready` and squash-merge automatically.
 - Do not stop at a ready-PR handoff or ask for separate merge permission.
 - Do not run heavy product checks locally.
 - **Finish at implementation PR merge.** A successful squash merge completes normal implementation delivery.
@@ -376,11 +375,12 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   gh pr merge <number> --squash
   ```
   Never use `gh pr merge --merge` or `gh pr merge --rebase`.
-- **Converge review before complete validation.**
+- **Request review without delaying complete validation.**
   - Run `task pr:review-local` on a coherent local head.
-  - After opening or updating the PR, run `task pr:review-converge`.
-  - Address findings before dispatching complete validation.
-  - Continue after the bounded timeout.
+  - After opening or updating the PR, run `task pr:validate`.
+  - It requests exact-head Codex review and dispatches checks immediately.
+  - Address findings that arrive while checks run.
+  - If none arrive by check completion, continue without waiting.
   - Do not request or wait for other external reviews.
   - Do not require a local product gate.
 - **Publish Workbench context after merge.** Follow

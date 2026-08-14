@@ -338,26 +338,11 @@ export type PrFeedbackSummary = {
   unresolvedThreads: number;
 };
 
-export type PrFeedbackSnapshot = {
-  feedback: PrFeedbackSummary;
-  headSha: string;
-  stable: boolean;
-};
-
 export async function inspectPrFeedback(
   octokit: Octokit,
   repoRef: RepoRef,
   prNumber: number,
 ): Promise<PrFeedbackSummary> {
-  const snapshot = await inspectPrFeedbackSnapshot(octokit, repoRef, prNumber);
-  return snapshot.feedback;
-}
-
-export async function inspectPrFeedbackSnapshot(
-  octokit: Octokit,
-  repoRef: RepoRef,
-  prNumber: number,
-): Promise<PrFeedbackSnapshot> {
   const { owner, repo } = repoRef;
   const { data: pr } = await octokit.rest.pulls.get({
     owner,
@@ -456,7 +441,7 @@ export async function inspectPrFeedbackSnapshot(
     return body.length > 0 && !isCodexReviewStatusBody(body, review.user);
   });
 
-  const feedback = {
+  return {
     codexReview: {
       approvalReaction,
       cleanComment,
@@ -467,16 +452,6 @@ export async function inspectPrFeedbackSnapshot(
     substantiveComments: substantiveComments.length,
     substantiveReviews: substantiveReviews.length,
     unresolvedThreads,
-  };
-  const { data: currentPr } = await octokit.rest.pulls.get({
-    owner,
-    repo,
-    pull_number: prNumber,
-  });
-  return {
-    feedback,
-    headSha: pr.head.sha,
-    stable: currentPr.head.sha === pr.head.sha,
   };
 }
 

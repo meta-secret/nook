@@ -479,17 +479,17 @@ Do not make Main completion a prerequisite.
 
 Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 
-## ⛔ Non-negotiable: converge Codex review before complete validation
+## ⛔ Non-negotiable: request Codex review without delaying validation
 
 Run advisory local Codex review before the first owner-authored push. The
 bounded implementation harness is the exception. It commits and pushes after
 the worker exits. Its continuing owner runs local review immediately after
-handoff and before Cloud review convergence.
+handoff.
 
-After each coherent push, run bounded exact-head Codex Cloud review convergence
-before complete validation. Give the automatic review a grace period. Request
-it once when needed. A missing service result times out without blocking
-delivery.
+After each coherent push, request one idempotent exact-head Codex Cloud review.
+Dispatch complete validation immediately. The GitHub Actions runtime is the
+review window. If no review feedback exists when checks finish, continue to
+readiness without waiting.
 
 Before merge or handoff, inspect the comments and review findings currently
 present and address every active actionable item from humans or external
@@ -642,8 +642,7 @@ The normal loop:
 3. Advisory `task pr:review-local` before the first owner-authored push
 4. Push
 5. Optional focused `task remote` runs for isolated diagnostics
-6. Bounded `task pr:review-converge` on the exact head
-7. Explicit `task pr:validate` when convergence finishes or times out
+6. Explicit `task pr:validate` to request review and dispatch exact-head checks
 
 For a harness-created PR, the continuing owner runs local review after handoff.
 
@@ -674,8 +673,7 @@ On a red remote run:
 4. Commit
 5. Run local review when this is the first owner-authored push
 6. Push
-7. Run bounded exact-head Cloud review convergence
-8. Dispatch focused remote work or complete validation again
+7. Dispatch focused remote work or complete validation again
 
 Full policy: [workflows/remote-execution.md](workflows/remote-execution.md) and [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
 
@@ -890,8 +888,8 @@ Re-query the PR and inspect again before merge or handoff.
 
 Every active actionable item must be handled.
 
-Do not wait beyond the bounded Codex convergence timeout. Do not request or wait
-for other external reviewers or services.
+Do not wait for a Codex result after repository-owned checks finish. Do not
+request or wait for other external reviewers or services.
 
 See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
 

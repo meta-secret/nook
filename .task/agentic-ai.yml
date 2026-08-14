@@ -374,10 +374,6 @@ tasks:
         -e AGENT_PR_BODY
         -e AGENT_COMMIT_MESSAGE
         -e PR_NUMBER
-        -e CODEX_REVIEW_AUTOMATIC_GRACE_SECONDS
-        -e CODEX_REVIEW_TIMEOUT_SECONDS
-        -e CODEX_REVIEW_POLL_SECONDS
-        -e CODEX_REVIEW_EXPECTED_HEAD_SHA
         -e VITE_BASE
         -e VITE_VAULT_SYNC_INTERVAL_MS
         -e WASM_BUILD_MODE
@@ -444,7 +440,7 @@ tasks:
         task ci-agent:docker:run CI_AGENT_CMD=pr-ready'
 
   pr:review:
-    desc: Optionally request a Codex review for the exact PR head, idempotently (PR=<number>); never required for readiness.
+    desc: Request Codex review for the exact PR head, idempotently (PR=<number>); never waits and is not required for readiness.
     requires:
       vars: [PR]
     cmds:
@@ -472,40 +468,3 @@ tasks:
         if ! codex review --base origin/main; then
           echo "Codex local review was unavailable; continuing without blocking delivery.";
         fi'
-
-  pr:review-converge:
-    desc: Wait boundedly for exact-head Codex review before full validation (PR=<number>); actionable feedback and head changes fail, timeout does not.
-    requires:
-      vars: [PR]
-    vars:
-      AUTOMATIC_GRACE_SECONDS: '{{default "120" .AUTOMATIC_GRACE_SECONDS}}'
-      REVIEW_TIMEOUT_SECONDS: '{{default "900" .REVIEW_TIMEOUT_SECONDS}}'
-      POLL_SECONDS: '{{default "30" .POLL_SECONDS}}'
-    cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";
-        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
-        export PR_NUMBER="{{.PR}}";
-        local_sha="$(git rev-parse HEAD)";
-        pr_sha="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)";
-        base_ref="$(gh pr view "$PR_NUMBER" --json baseRefName --jq .baseRefName)";
-        if [ "$local_sha" != "$pr_sha" ]; then
-          echo "Local HEAD is not PR #$PR_NUMBER current head." >&2;
-          echo "local: $local_sha" >&2;
-          echo "PR:    $pr_sha" >&2;
-          exit 2;
-        fi;
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "Commit and push the complete change before review convergence." >&2;
-          exit 2;
-        fi;
-        .github/scripts/require-current-base.sh origin "$base_ref";
-        export CODEX_REVIEW_EXPECTED_HEAD_SHA="$local_sha";
-        export CODEX_REVIEW_AUTOMATIC_GRACE_SECONDS="{{.AUTOMATIC_GRACE_SECONDS}}";
-        export CODEX_REVIEW_TIMEOUT_SECONDS="{{.REVIEW_TIMEOUT_SECONDS}}";
-        export CODEX_REVIEW_POLL_SECONDS="{{.POLL_SECONDS}}";
-        task ci-agent:docker:run CI_AGENT_CMD=pr-review-converge;
-        receipt_dir="$(git rev-parse --git-path nook-review-convergence)";
-        mkdir -p "$receipt_dir";
-        printf "%s\n" "$PR_NUMBER" >"$receipt_dir/$local_sha"'

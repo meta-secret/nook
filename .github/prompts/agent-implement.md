@@ -25,8 +25,8 @@ PR.** Your required local action is host-applied formatting only. Do not run
 `task check` / `task ci:pr` before finishing. The harness assigns the PR to the
 continuing task owner and posts a direct mention. That owner runs advisory local
 review after handoff. The owner may use `task remote` for focused execution,
-then runs `task pr:review-converge` before explicitly triggering
-`task pr:validate`. Use repository Task targets; do not replace them with
+then runs `task pr:validate`. It requests exact-head Codex review and
+immediately dispatches GitHub Actions. Use repository Task targets; do not replace them with
 hand-written `docker run` commands.
 
 ## Steps
@@ -59,7 +59,7 @@ hand-written `docker run` commands.
 - Do **not** create, monitor, or merge a PR from this bounded worker. The harness
   opens the PR after you finish. It assigns and directly mentions the continuing
   task owner. That owner runs advisory local review on the committed head, then
-  bounded exact-head Codex Cloud review convergence before complete validation.
+  requests exact-head Codex Cloud review alongside complete validation.
   The owner fixes failures/comments/conflicts, runs the exact-head readiness
   audit, and squash-merges without separate merge authorization.
 - Do **not** commit secrets, `.env`, or credentials.

@@ -74,65 +74,44 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 }
 
 #[test]
-fn complete_validation_converges_review_before_dispatch() {
+fn complete_validation_requests_review_without_waiting_before_dispatch() {
     let agentic_tasks = read(".task/agentic-ai.yml");
-    let convergence_task_position = agentic_tasks
-        .find("pr:review-converge:")
-        .expect("review convergence Task must exist");
-    let convergence_task = &agentic_tasks[convergence_task_position..];
-    let local_head_position = convergence_task
-        .find("local_sha=\"$(git rev-parse HEAD)\"")
-        .expect("review convergence must inspect the local head");
-    let convergence_command_position = convergence_task
-        .find("CI_AGENT_CMD=pr-review-converge")
-        .expect("review convergence must invoke ci-agent");
-
     let direct_validation = read(".task/remote-execution.yml");
     let direct_review_position = direct_validation
-        .find("task pr:review-converge PR=\"$REQUESTED_PR\"")
-        .expect("direct validation must converge review");
+        .find("task pr:review PR=\"$REQUESTED_PR\"")
+        .expect("direct validation must request review");
+    let head_recheck_position = direct_validation
+        .find(
+            "current_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
+        )
+        .expect("direct validation must recheck the PR head after requesting review");
     let validation_label_position = direct_validation
         .find("validation_label=\"ci:validate\"")
         .expect("direct validation must apply its label");
     assert!(
         direct_review_position < validation_label_position,
-        "direct review convergence must finish before validation is dispatched"
+        "direct review request must happen before validation is dispatched"
     );
-    for required in [
-        "git rev-parse --git-path nook-review-convergence",
-        "AUTOMATIC_GRACE_SECONDS=1 REVIEW_TIMEOUT_SECONDS=1 POLL_SECONDS=1",
-        "current_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
-        "changed head during review convergence",
-    ] {
-        assert!(
-            direct_validation.contains(required),
-            "direct validation review contract missing: {required}"
-        );
-    }
     assert!(
-        local_head_position < convergence_command_position,
-        "local exact-head preflight must run before review convergence"
+        direct_review_position < head_recheck_position
+            && head_recheck_position < validation_label_position,
+        "validation must recheck the exact head between review request and dispatch"
     );
     for required in [
         "pr:review-local:",
         "codex review --base origin/main",
-        "pr:review-converge:",
-        "CODEX_REVIEW_AUTOMATIC_GRACE_SECONDS",
-        "CODEX_REVIEW_TIMEOUT_SECONDS",
-        "-e CODEX_REVIEW_POLL_SECONDS",
-        "-e CODEX_REVIEW_EXPECTED_HEAD_SHA",
-        "export CODEX_REVIEW_EXPECTED_HEAD_SHA=\"$local_sha\"",
-        "pr_sha=\"$(gh pr view \"$PR_NUMBER\" --json headRefOid --jq .headRefOid)\"",
-        "git status --porcelain",
-        "require-current-base.sh origin \"$base_ref\"",
-        "git rev-parse --git-path nook-review-convergence",
-        "CI_AGENT_CMD=pr-review-converge",
+        "pr:review:",
+        "CI_AGENT_CMD=pr-review",
     ] {
         assert!(
             agentic_tasks.contains(required),
             "review delivery contract missing: {required}"
         );
     }
+    assert!(
+        direct_validation.contains("changed head during the review request"),
+        "direct validation must reject a head replacement during review request"
+    );
 }
 
 #[test]

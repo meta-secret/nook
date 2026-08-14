@@ -43,19 +43,19 @@ ownership until merge or a concrete blocked handoff:
    - For a harness-created PR, the continuing owner runs local review after
      handoff instead.
 4. **Push and create or update the PR.**
-5. **Converge review and validate on GitHub Actions:**
+5. **Request review and validate on GitHub Actions:**
    - Run focused `task remote TASK_NAME=<name>` jobs as useful.
-   - Run bounded exact-head Codex Cloud review convergence after each coherent
-     push.
-   - Fix every actionable finding before complete validation.
-   - Continue after the bounded timeout.
+   - Run `task pr:validate PR=<number>` after each coherent push.
+   - It requests exact-head Codex Cloud review and dispatches checks immediately.
+   - Fix every actionable finding that arrives while checks run.
+   - If no feedback exists when checks finish, continue without waiting.
    - Do not request or wait for other optional reviewers.
    - When the head is ready, run `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` (or Task `pr:preflight` / `pr:validate`).
    - Inspect the path-applicable `PR / Verify and preview` and `Web research / Build and deploy research catalog` workflows.
    - Do **not** run a required local `task check` / `task ci:pr`.
 6. **Fix Nook's failed PR workflow.** Inspect CI and app logs. Fix the
-   failure, run pre-push hygiene, and push the complete fix. Converge review and
-   validate the replacement head.
+   failure, run pre-push hygiene, and push the complete fix. Request review and
+   validate the replacement head together.
 7. **Merge automatically when ready.** Require a current branch, green
    repository-owned checks, resolved actionable comments, and the exact-head
    readiness audit. Then squash-merge without separate permission.
@@ -279,9 +279,10 @@ See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
 Before the first owner-authored push, run `task pr:review-local` on the coherent
 branch head. For a harness-created PR, run it immediately after handoff.
-After each coherent push, run bounded review convergence before complete
-validation. Use focused remote tasks only when they shorten diagnosis of a
-known failure. See [code-review.md](code-review.md).
+After each coherent push, run complete validation. It requests exact-head Codex
+review and dispatches checks immediately. Use focused remote tasks only when
+they shorten diagnosis of a known failure. See
+[code-review.md](code-review.md).
 
 ### 5. Hosted iteration and explicit validation
 
@@ -289,7 +290,7 @@ known failure. See [code-review.md](code-review.md).
 
 ```text
 implement/fix → task loom:pre-push → commit → local review → push/update PR
-→ bounded Cloud review convergence → complete exact-head PR workflow
+→ Cloud review request and complete exact-head PR workflow
 ```
 
 **Required local action** (before every push):
@@ -380,9 +381,9 @@ task pr:preflight PR=<number>
 
 Use `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` (or `task pr:ready`) for a read-only exact-head readiness assertion. The command never merges by itself. Its success is the final signal for the task-owning agent to squash-merge immediately.
 
-Codex convergence is bounded and is not a readiness requirement. Do not wait
-beyond its timeout. Do not request or wait for Claude, Cursor, CodeRabbit, or
-other optional external reviews/checks. Repository-owned checks and exact-head
+Codex review is not a readiness requirement. Do not wait for it after
+repository-owned checks finish. Do not request or wait for Claude, Cursor,
+CodeRabbit, or other optional external reviews/checks. Repository-owned checks and exact-head
 deployment remain required.
 
 Before treating a PR as mergeable, **always verify the branch against the latest `origin/main`**.
@@ -439,8 +440,9 @@ Track actionable submitted review-body items without a threaded reply target in 
 
 Resolve all actionable threads and re-query immediately before merge.
 
-Do not wait beyond bounded Codex convergence or request other optional external
-reviews or status changes. See [code-review.md](code-review.md).
+Do not wait for Codex after repository-owned checks finish. Do not request
+other optional external reviews or status changes. See
+[code-review.md](code-review.md).
 
 ### 7. Fix loop on failure
 
@@ -453,8 +455,8 @@ Static analysis includes Knip unused findings and jscpd clone/duplicate findings
 3. Fix the root cause.
 4. Run `task loom:pre-push`, commit, and push the completed fix.
 5. Run Loom/Task validate and return to monitoring Nook's complete exact-head PR checks. Use a focused `task remote` job only when it shortens diagnosis.
-6. Repeat bounded Codex review convergence for the replacement head. Never wait
-   beyond its timeout or request other external review services.
+6. Complete validation requests Codex review for the replacement head. Never
+   wait for its result after checks finish or request other review services.
 
 If the failure was obviously fmt-only, `task loom:pre-push` before re-push is enough. Broader failures are proven by the refreshed remote `pr.yml` run on the latest head.
 
@@ -546,9 +548,9 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–12 checklist.
 6. For a harness-created PR, run local review after handoff instead.
 7. Push and open or update the PR.
 8. Use focused `task remote` jobs only for faster isolated diagnosis.
-9. Run bounded Codex convergence on the ready head.
-10. Run Loom or Task validation after convergence finishes.
-11. Do not wait beyond its timeout or request other optional reviews.
+9. Run Loom or Task validation on the ready head.
+10. It requests exact-head Codex review and dispatches checks immediately.
+11. Do not wait for review after checks finish or request optional reviews.
 12. Address and resolve actionable comments.
 13. On failure, fix the issue and repeat pre-push hygiene.
 14. Push the fix and explicitly validate the replacement head.

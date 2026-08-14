@@ -666,16 +666,16 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 - Agents use `task remote TASK_NAME=<name>` for one focused command.
 - Agents use `task remote TASK_NAMES=<a>,<b>` to reuse one job for a batch.
-- When the branch is ready, agents run
-  `task pr:review-converge PR=<number>`.
-- They then run `task pr:validate PR=<number>` or add `FULL_E2E=1`.
+- When the branch is ready, agents run `task pr:validate PR=<number>` or add
+  `FULL_E2E=1`.
+- Validation requests one idempotent exact-head Codex review.
+- It dispatches repository-owned checks immediately after the request.
 - They wait only for applicable repository-owned exact-head PR checks.
 - Ordinary pushes do not start `pr.yml`.
 - Every later push requires another explicit validation before readiness.
 - Every actionable comment already present must be addressed and resolved.
-- Codex gets a short automatic-review grace period.
-- The convergence command makes one idempotent exact-head request when needed.
-- Its timeout is non-blocking.
+- The GitHub Actions runtime is the Codex review window.
+- If no review feedback exists when checks finish, agents proceed without waiting.
 - Claude, Cursor, CodeRabbit, and other optional services are not requested or
   awaited.
 - The local ci-agent image tag is derived from the worktree path, preventing parallel worktrees from replacing each other's review/readiness binaries.
