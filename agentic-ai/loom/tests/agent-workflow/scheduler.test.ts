@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +12,7 @@ import {
 import {
   LoomLeafKind,
   StaticAgentWorkflowName,
+  TaskTargetKind,
   TaskTerminalKind,
   WorkflowExecutorKind,
   WorkflowResultKind,
@@ -35,6 +36,7 @@ import type { TaskStopRequest } from '../../src/agent-workflow/runtime.ts';
 import {
   TaskStopReason,
   TaskTeardownKind,
+  UnconfirmedTaskTeardownError,
 } from '../../src/agent-workflow/runtime.ts';
 import { runStaticWorkflow } from '../../src/agent-workflow/scheduler.ts';
 import type { StaticWorkflowRunConfiguration } from '../../src/agent-workflow/scheduler.ts';
@@ -188,6 +190,157 @@ function confirmedAttempt<TTask extends string>(
       return { kind: TaskTeardownKind.Confirmed };
     },
   };
+}
+
+enum TeardownDrainTask {
+  Entry = 'entry',
+  Unsafe = 'unsafe',
+  Sibling = 'sibling',
+}
+
+class TeardownDrainRuntime implements WorkflowTaskRuntime<
+  TeardownDrainTask,
+  never
+> {
+  siblingDrained = false;
+  readonly stopReasons = new Map<TeardownDrainTask, TaskStopReason>();
+
+  start(
+    invocation: WorkflowTaskInvocation<TeardownDrainTask, never>,
+  ): WorkflowTaskAttempt<TeardownDrainTask> {
+    if (invocation.task === TeardownDrainTask.Entry) {
+      return confirmedAttempt(Promise.resolve(completedDrainTask(invocation)));
+    }
+    const completion = new Promise<TaskTerminal<TeardownDrainTask>>(() => {});
+    return {
+      completion,
+      stop: async (request: TaskStopRequest) => {
+        this.stopReasons.set(invocation.task, request.reason);
+        if (invocation.task === TeardownDrainTask.Unsafe) {
+          throw new UnconfirmedTaskTeardownError(invocation.task);
+        }
+        await Bun.sleep(25);
+        this.siblingDrained = true;
+        return { kind: TaskTeardownKind.Confirmed };
+      },
+    };
+  }
+}
+
+function completedDrainTask(
+  invocation: WorkflowTaskInvocation<TeardownDrainTask, never>,
+): TaskTerminal<TeardownDrainTask> {
+  const output: WorkflowTaskOutput = {
+    resultKind: WorkflowResultKind.LoomLeafEvidence,
+    summary: `${invocation.task} completed.`,
+    findings: [],
+    notesForParent: [],
+    artifacts: [],
+  };
+  return {
+    kind: TaskTerminalKind.Completed,
+    task: invocation.task,
+    attempt: invocation.attempt,
+    threadId: 'loom-leaf',
+    output,
+  };
+}
+
+async function createTeardownDrainFixture(): Promise<{
+  readonly runRoot: string;
+  readonly runtime: TeardownDrainRuntime;
+  readonly configuration: StaticWorkflowRunConfiguration<
+    TeardownDrainTask,
+    never,
+    never
+  >;
+}> {
+  const workflow: StaticAgentWorkflowDefinition<
+    TeardownDrainTask,
+    never,
+    never
+  > = {
+    name: StaticAgentWorkflowName.CortexFullGarbageCollection,
+    version: 'teardown-drain-test',
+    entry: TeardownDrainTask.Entry,
+    taskNames: [
+      TeardownDrainTask.Entry,
+      TeardownDrainTask.Unsafe,
+      TeardownDrainTask.Sibling,
+    ],
+    agentNames: [],
+    joinNames: [],
+    agents: {},
+    tasks: {
+      [TeardownDrainTask.Entry]: {
+        name: TeardownDrainTask.Entry,
+        execution: {
+          kind: WorkflowExecutorKind.LoomLeaf,
+          leaf: LoomLeafKind.VerifyGitBaseline,
+        },
+        completed: {
+          kind: TaskTargetKind.Parallel,
+          tasks: [TeardownDrainTask.Unsafe, TeardownDrainTask.Sibling],
+        },
+        failed: noTasks,
+        resources: { read: ['git:HEAD'], write: [] },
+        timeoutMs: 1_000,
+      },
+      [TeardownDrainTask.Unsafe]: {
+        name: TeardownDrainTask.Unsafe,
+        execution: {
+          kind: WorkflowExecutorKind.LoomLeaf,
+          leaf: LoomLeafKind.VerifyGitBaseline,
+        },
+        completed: noTasks,
+        failed: noTasks,
+        resources: { read: ['git:HEAD'], write: [] },
+        timeoutMs: 5,
+      },
+      [TeardownDrainTask.Sibling]: {
+        name: TeardownDrainTask.Sibling,
+        execution: {
+          kind: WorkflowExecutorKind.LoomLeaf,
+          leaf: LoomLeafKind.VerifyGitBaseline,
+        },
+        completed: noTasks,
+        failed: noTasks,
+        resources: { read: ['git:HEAD'], write: [] },
+        timeoutMs: 60_000,
+      },
+    },
+    joins: {},
+  };
+  const runRoot = await mkdtemp(join(tmpdir(), 'loom-teardown-drain-'));
+  const journalConfiguration: WorkflowJournalConfiguration = {
+    runRoot,
+    identity: {
+      runId: 'teardown-drain-test',
+      workflow: workflow.name,
+      workflowVersion: workflow.version,
+      sourceCommit: SOURCE_COMMIT,
+    },
+    now: () => FIXED_TIME,
+  };
+  const journal = new WorkflowJournal<TeardownDrainTask>(journalConfiguration);
+  const runtime = new TeardownDrainRuntime();
+  const abortController = new AbortController();
+  const configuration: StaticWorkflowRunConfiguration<
+    TeardownDrainTask,
+    never,
+    never
+  > = {
+    workflow,
+    runtime,
+    journal,
+    runId: 'teardown-drain-test',
+    sourceCommit: SOURCE_COMMIT,
+    workingDirectory: process.cwd(),
+    maxConcurrency: 2,
+    signal: abortController.signal,
+    now: () => FIXED_TIME,
+  };
+  return { runRoot, runtime, configuration };
 }
 
 type LeafWorkflowFixtureConfiguration = {
@@ -476,6 +629,33 @@ describe('static workflow scheduler', () => {
       expect(elapsedMs).toBeLessThan(900);
       expect(terminal.kind).toBe(WorkflowTerminalKind.CompletedWithFailures);
       expect(terminal.taskTerminals[0]?.kind).toBe(TaskTerminalKind.TimedOut);
+    } finally {
+      await rm(fixture.runRoot, removeOptions);
+    }
+  });
+
+  test('drains active siblings before propagating unconfirmed teardown', async () => {
+    const fixture = await createTeardownDrainFixture();
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      await expect(runStaticWorkflow(fixture.configuration)).rejects.toThrow(
+        UnconfirmedTaskTeardownError,
+      );
+      expect(fixture.runtime.siblingDrained).toBe(true);
+      expect(fixture.runtime.stopReasons).toEqual(
+        new Map([
+          [TeardownDrainTask.Unsafe, TaskStopReason.Timeout],
+          [TeardownDrainTask.Sibling, TaskStopReason.WorkflowCancellation],
+        ]),
+      );
+      const events = await readFile(
+        fixture.configuration.journal.eventsPath,
+        'utf8',
+      );
+      expect(events).not.toContain('"kind":"workflow-terminal-recorded"');
+      expect(events).not.toContain(
+        '"task":"unsafe","attempt":1,"terminalKind"',
+      );
     } finally {
       await rm(fixture.runRoot, removeOptions);
     }

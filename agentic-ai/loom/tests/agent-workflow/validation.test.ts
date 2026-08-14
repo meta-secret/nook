@@ -589,12 +589,17 @@ describe('static agent workflow validation', () => {
       first: 'docs',
       second: '**/*.ts',
     } as const;
+    const dottedExactDirectoryPair = {
+      first: '.github',
+      second: '**/*.ts',
+    } as const;
     const directoryGlobPair = {
       first: 'docs/*.md',
       second: '**/*.ts',
     } as const;
 
     expect(taskResourcePatternsOverlap(exactDirectoryPair)).toBe(true);
+    expect(taskResourcePatternsOverlap(dottedExactDirectoryPair)).toBe(true);
     expect(taskResourcePatternsOverlap(directoryGlobPair)).toBe(true);
   });
 

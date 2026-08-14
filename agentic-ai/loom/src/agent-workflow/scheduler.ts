@@ -107,6 +107,13 @@ export async function runStaticWorkflow<
   const joinArrivals = new Map<TJoin, Set<TTask>>();
   const dependencyTasks = new Map<TTask, readonly TTask[]>();
   const running: RunningTask<TTask>[] = [];
+  const runController = new AbortController();
+  const forwardWorkflowCancellation = (): void => runController.abort();
+  if (configuration.signal.aborted) {
+    runController.abort();
+  } else {
+    configuration.signal.addEventListener('abort', forwardWorkflowCancellation);
+  }
   const entryEligibility: EligibilityOperation<TTask> = {
     tasks: [configuration.workflow.entry],
     eligible,
@@ -115,91 +122,102 @@ export async function runStaticWorkflow<
     upstreamTasks: [],
     journal: configuration.journal,
   };
-  await makeEligible(entryEligibility);
 
-  while (eligible.length > 0 || running.length > 0) {
-    while (
-      !configuration.signal.aborted &&
-      eligible.length > 0 &&
-      running.length < configuration.maxConcurrency
-    ) {
-      const taskName = eligible.shift();
-      if (!taskName) {
+  try {
+    await makeEligible(entryEligibility);
+    while (eligible.length > 0 || running.length > 0) {
+      while (
+        !runController.signal.aborted &&
+        eligible.length > 0 &&
+        running.length < configuration.maxConcurrency
+      ) {
+        const taskName = eligible.shift();
+        if (!taskName) {
+          break;
+        }
+        const task = configuration.workflow.tasks[taskName];
+        const agentResolution: AgentResolution<TTask, TAgent, TJoin> = {
+          workflow: configuration.workflow,
+          task,
+        };
+        const upstreamOutputs: WorkflowDependencyOutput<TTask>[] = [];
+        for (const upstreamTask of dependencyTasks.get(taskName) ?? []) {
+          const output = completedOutputs.get(upstreamTask);
+          if (output) {
+            const dependencyOutput: WorkflowDependencyOutput<TTask> = {
+              task: upstreamTask,
+              output,
+            };
+            upstreamOutputs.push(dependencyOutput);
+          }
+        }
+        const executionContext: TaskExecutionContext<TTask, TAgent> = {
+          task: task as StaticTaskDefinition<TTask, TAgent, string>,
+          agentProfile: resolveAgentProfile(agentResolution),
+          runtime: configuration.runtime,
+          runId: configuration.runId,
+          sourceCommit: configuration.sourceCommit,
+          workingDirectory: configuration.workingDirectory,
+          upstreamOutputs,
+          signal: runController.signal,
+          journal: configuration.journal,
+        };
+        const runningTask: RunningTask<TTask> = {
+          task: taskName,
+          completion: executeTask(executionContext),
+        };
+        running.push(runningTask);
+      }
+      if (running.length === 0) {
         break;
       }
-      const task = configuration.workflow.tasks[taskName];
-      const agentResolution: AgentResolution<TTask, TAgent, TJoin> = {
-        workflow: configuration.workflow,
-        task,
-      };
-      const upstreamOutputs: WorkflowDependencyOutput<TTask>[] = [];
-      for (const upstreamTask of dependencyTasks.get(taskName) ?? []) {
-        const output = completedOutputs.get(upstreamTask);
-        if (output) {
-          const dependencyOutput: WorkflowDependencyOutput<TTask> = {
-            task: upstreamTask,
-            output,
-          };
-          upstreamOutputs.push(dependencyOutput);
-        }
+      const settled = await waitForFirstCompletion(running);
+      const runningIndex = running.findIndex(
+        (entry) => entry.task === settled.task,
+      );
+      running.splice(runningIndex, 1);
+      const terminal = settled.terminal;
+      terminals.set(terminal.task, terminal);
+      if (terminal.kind === TaskTerminalKind.Completed) {
+        completedOutputs.set(terminal.task, terminal.output);
       }
-      const executionContext: TaskExecutionContext<TTask, TAgent> = {
-        task: task as StaticTaskDefinition<TTask, TAgent, string>,
-        agentProfile: resolveAgentProfile(agentResolution),
-        runtime: configuration.runtime,
-        runId: configuration.runId,
-        sourceCommit: configuration.sourceCommit,
-        workingDirectory: configuration.workingDirectory,
-        upstreamOutputs,
-        signal: configuration.signal,
-        journal: configuration.journal,
-      };
-      const runningTask: RunningTask<TTask> = {
-        task: taskName,
-        completion: executeTask(executionContext),
-      };
-      running.push(runningTask);
-    }
-    if (running.length === 0) {
-      break;
-    }
-    const settled = await waitForFirstCompletion(running);
-    const runningIndex = running.findIndex(
-      (entry) => entry.task === settled.task,
-    );
-    running.splice(runningIndex, 1);
-    const terminal = settled.terminal;
-    terminals.set(terminal.task, terminal);
-    if (terminal.kind === TaskTerminalKind.Completed) {
-      completedOutputs.set(terminal.task, terminal.output);
-    }
-    let activated: ActivatedTargets<TTask, TJoin> = { tasks: [], joins: [] };
-    if (!configuration.signal.aborted) {
-      const definition = configuration.workflow.tasks[terminal.task];
-      const target =
-        terminal.kind === TaskTerminalKind.Completed
-          ? definition.completed
-          : definition.failed;
-      const targetActivation: TargetActivation<TTask, TAgent, TJoin> = {
+      let activated: ActivatedTargets<TTask, TJoin> = { tasks: [], joins: [] };
+      if (!runController.signal.aborted) {
+        const definition = configuration.workflow.tasks[terminal.task];
+        const target =
+          terminal.kind === TaskTerminalKind.Completed
+            ? definition.completed
+            : definition.failed;
+        const targetActivation: TargetActivation<TTask, TAgent, TJoin> = {
+          sourceTask: terminal.task,
+          dependencyTasks: [terminal.task],
+          target,
+          workflow: configuration.workflow,
+          eligible,
+          scheduled,
+          joinArrivals,
+          taskDependencies: dependencyTasks,
+          journal: configuration.journal,
+        };
+        activated = await activateTarget(targetActivation);
+      }
+      const activationEvent: WorkflowEventWithoutMetadata<TTask> = {
+        kind: WorkflowEventKind.SuccessorsActivated,
         sourceTask: terminal.task,
-        dependencyTasks: [terminal.task],
-        target,
-        workflow: configuration.workflow,
-        eligible,
-        scheduled,
-        joinArrivals,
-        taskDependencies: dependencyTasks,
-        journal: configuration.journal,
+        activatedTasks: activated.tasks,
+        arrivedJoins: activated.joins,
       };
-      activated = await activateTarget(targetActivation);
+      await configuration.journal.append(activationEvent);
     }
-    const activationEvent: WorkflowEventWithoutMetadata<TTask> = {
-      kind: WorkflowEventKind.SuccessorsActivated,
-      sourceTask: terminal.task,
-      activatedTasks: activated.tasks,
-      arrivedJoins: activated.joins,
-    };
-    await configuration.journal.append(activationEvent);
+  } catch (error) {
+    runController.abort();
+    await drainRunningTasks(running);
+    throw error;
+  } finally {
+    configuration.signal.removeEventListener(
+      'abort',
+      forwardWorkflowCancellation,
+    );
   }
 
   for (const taskName of configuration.workflow.taskNames) {
@@ -308,6 +326,12 @@ async function waitForFirstCompletion<TTask extends string>(
     return settled;
   });
   return Promise.race(candidates);
+}
+
+async function drainRunningTasks<TTask extends string>(
+  running: readonly RunningTask<TTask>[],
+): Promise<void> {
+  await Promise.allSettled(running.map((entry) => entry.completion));
 }
 
 type AgentResolution<

@@ -250,7 +250,7 @@ function recursiveBasenameOverlaps(pair: ResourceDescriptorPair): boolean {
   if (other.kind === ResourceClaimKind.DirectGlob) return true;
   if (
     other.kind === ResourceClaimKind.Exact &&
-    !basenameOfPath(other.path).includes('.')
+    exactClaimCanNameDirectory(other.path)
   ) {
     return true;
   }
@@ -263,6 +263,11 @@ function recursiveBasenameOverlaps(pair: ResourceDescriptorPair): boolean {
     second: otherBasename,
   };
   return globBasenamesOverlap(basenames);
+}
+
+function exactClaimCanNameDirectory(resourcePath: string): boolean {
+  const basename = basenameOfPath(resourcePath);
+  return basename.startsWith('.') || !basename.includes('.');
 }
 
 function basenameOfPath(resourcePath: string): string {
