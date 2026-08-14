@@ -10,9 +10,13 @@ use crate::{NookError, storage::open_nook_database};
 
 mod reconciliation;
 mod simple_genesis;
-use reconciliation::{clear_consumed_identity_reconciliation, resolve_identity_epoch};
+use reconciliation::{
+    clear_consumed_identity_reconciliation, clear_pending_identity_reconciliation_for_recovery,
+    resolve_identity_epoch,
+};
 pub(crate) use reconciliation::{
-    commit_identity_reconciliation_checkpoint, mark_identity_reconciliation_pending,
+    commit_identity_reconciliation_checkpoint, commit_identity_reconciliation_epoch,
+    load_pending_identity_rotation, mark_identity_reconciliation_pending,
 };
 pub(crate) use simple_genesis::{
     PendingSimpleGenesis, begin_or_resume_simple_genesis, clear_pending_simple_genesis,
@@ -195,6 +199,29 @@ pub(crate) async fn ensure_local_identity_for_app_key(
     .await
 }
 
+pub(crate) async fn enroll_authenticated_app_key_for_vault_creation(
+    app_key: &nook_core::AppKey,
+) -> Result<nook_core::IdentityRecord, NookError> {
+    let app_key = app_key.clone();
+    update_identity_directory(move |directory| {
+        if let Ok(selected) = directory.selected()
+            && (!selected.vault_deks.is_empty() || !selected.sentinel_vaults.is_empty())
+        {
+            return Ok(selected.clone());
+        }
+        let identity_id = directory
+            .enroll_selected_app_key_for_vault_creation(&app_key, "Personal")
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        directory
+            .identities()
+            .iter()
+            .find(|identity| identity.identity_id == identity_id)
+            .cloned()
+            .ok_or_else(|| NookError::Database("Enrolled identity disappeared.".to_owned()))
+    })
+    .await
+}
+
 pub(crate) async fn ensure_unambiguous_identity_for_app_key(
     app_key: &nook_core::AppKey,
     label: &str,
@@ -337,6 +364,20 @@ pub(crate) async fn identity_for_sentinel_vault(
 /// Forget identity state sealed to the inaccessible app key while preserving
 /// encrypted vault projections for password-backed recovery.
 pub(crate) async fn delete_identity_directory_for_recovery() -> Result<(), NookError> {
+    let directory = load_identity_directory().await?;
+    let mut store_ids = Vec::new();
+    for store_id in directory.identities().iter().flat_map(|identity| {
+        identity
+            .vault_deks
+            .iter()
+            .map(|dek| &dek.store_id)
+            .chain(identity.sentinel_vaults.iter())
+    }) {
+        if !store_ids.contains(store_id) {
+            store_ids.push(store_id.clone());
+        }
+    }
+    clear_pending_identity_reconciliation_for_recovery(&store_ids).await?;
     update_identity_directory(|directory| {
         directory.reset_for_device_recovery();
         Ok(())
@@ -407,8 +448,15 @@ mod tests {
             store_id.clone(),
         )
         .await?;
+        let marker_v2 = format!("pending_identity_reconciliation_v2:{store_id}");
+        let marker_v1 = format!("pending_identity_reconciliation_v1:{store_id}");
+        idb_put_string(&marker_v2, "stale-v2").await?;
+        idb_put_string(&marker_v1, "stale-v1").await?;
 
         delete_identity_directory_for_recovery().await?;
+
+        assert!(idb_get_string(&marker_v2).await?.is_none());
+        assert!(idb_get_string(&marker_v1).await?.is_none());
 
         let stale_result = ensure_local_identity_for_app_key(&inaccessible_key, "Stale").await;
         assert!(matches!(

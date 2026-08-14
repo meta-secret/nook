@@ -54,10 +54,10 @@ impl NookVaultManager {
     ) -> Result<String, JsError> {
         let package = nook_core::decode_sentinel_onboarding_package(&package_json)?;
         let identity = self.ensure_device_identity()?;
+        let accepted = nook_core::accept_sentinel_onboarding_package(&package, &identity)?;
         let identity_id =
             identity_association::identity_for_unlock(&identity, &package.delivery.store_id)
                 .await?;
-        let accepted = nook_core::accept_sentinel_onboarding_package(&package, &identity)?;
         let stored = StoredSentinelGenesisDelivery {
             request: package.request.clone(),
             delivery: package.delivery.clone(),
@@ -461,10 +461,10 @@ impl NookVaultManager {
             .get("Paste the initiator request in the share section before accepting delivery.")?
             .clone();
         let identity = self.ensure_device_identity()?;
-        let identity_id =
-            identity_association::identity_for_unlock(&identity, &delivery.store_id).await?;
         let record =
             nook_core::accept_sentinel_genesis_share_delivery(&delivery, &request, &identity)?;
+        let identity_id =
+            identity_association::identity_for_unlock(&identity, &delivery.store_id).await?;
         let stored = StoredSentinelGenesisDelivery {
             request,
             delivery: delivery.clone(),

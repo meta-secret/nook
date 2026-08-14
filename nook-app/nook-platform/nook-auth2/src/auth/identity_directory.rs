@@ -353,6 +353,43 @@ impl IdentityDirectory {
         Ok(matches.pop())
     }
 
+    /// Enroll an authenticated installation key into the selected identity
+    /// before that identity owns a vault. Existing vaults require an explicit
+    /// enrollment flow that also re-wraps every DEK.
+    pub fn enroll_selected_app_key_for_vault_creation(
+        &mut self,
+        app_key: &AppKey,
+        label: &str,
+    ) -> MultiDeviceResult<IdentityId> {
+        self.ensure_app_key_active(app_key)?;
+        if matches!(&self.selection, IdentitySelection::Empty) {
+            return self.create_identity(label, app_key, None);
+        }
+        let selected = self.selected_mut()?;
+        if let Some(member) = selected
+            .members
+            .iter()
+            .find(|member| member.app_id == *app_key.app_id())
+        {
+            if member.auth_id != app_key.auth_id() || member.public_key != app_key.public_key() {
+                return Err(MultiDeviceError::InvalidDeviceIdentity(
+                    "existing app id has different key material".to_owned(),
+                ));
+            }
+            return Ok(selected.identity_id.clone());
+        }
+        if !selected.vault_deks.is_empty() || !selected.sentinel_vaults.is_empty() {
+            return Err(MultiDeviceError::IdentityEnrollmentRequired);
+        }
+        selected.add_member(IdentityMember {
+            app_id: app_key.app_id().clone(),
+            auth_id: app_key.auth_id(),
+            public_key: app_key.public_key(),
+            label: None,
+        })?;
+        Ok(selected.identity_id.clone())
+    }
+
     /// Drop directory ownership sealed to an inaccessible installation key.
     /// Encrypted vault storage remains outside this portable record and may be
     /// rebound only after a recovery credential proves access.
@@ -471,6 +508,28 @@ mod tests {
         directory.create_identity("Personal", &app_key, None)?;
         let other = IdentityRecord::create_with_app_key("Other", &app_key, None)?;
         assert!(directory.replace_selected(other).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn authenticated_handoff_enrolls_only_before_vault_creation() -> anyhow::Result<()> {
+        let website_key = AppKey::generate()?;
+        let extension_key = AppKey::generate()?;
+        let mut directory = IdentityDirectory::empty();
+        let identity_id = directory.create_identity("Personal", &website_key, None)?;
+        assert_eq!(
+            directory.enroll_selected_app_key_for_vault_creation(&extension_key, "Personal")?,
+            identity_id
+        );
+        assert_eq!(directory.selected()?.members.len(), 2);
+
+        let later_key = AppKey::generate()?;
+        let _ =
+            directory.open_or_generate_vault_dek(&extension_key, crate::generate_store_id()?)?;
+        assert!(matches!(
+            directory.enroll_selected_app_key_for_vault_creation(&later_key, "Personal"),
+            Err(MultiDeviceError::IdentityEnrollmentRequired)
+        ));
         Ok(())
     }
 

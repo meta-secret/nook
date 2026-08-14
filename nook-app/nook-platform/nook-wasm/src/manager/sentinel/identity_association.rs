@@ -100,15 +100,24 @@ pub(super) async fn identity_for_unlock(
             &stored.request,
             app_key,
         )?;
-        let identity = crate::storage::identity_record::ensure_unambiguous_identity_for_app_key(
-            app_key, "Personal",
-        )
-        .await?;
+        let identity_id =
+            match crate::storage::identity_record::identity_for_sentinel_vault(app_key, store_id)
+                .await?
+            {
+                Some(identity_id) => identity_id,
+                None => {
+                    crate::storage::identity_record::ensure_unambiguous_identity_for_app_key(
+                        app_key, "Personal",
+                    )
+                    .await?
+                    .identity_id
+                }
+            };
         stored.identity_binding = SentinelDeliveryIdentityBinding::Bound {
-            identity_id: identity.identity_id.clone(),
+            identity_id: identity_id.clone(),
         };
         persist_delivery_identity_binding(&stored, app_key).await?;
-        return Ok(identity.identity_id);
+        return Ok(identity_id);
     }
     if let Some(identity_id) =
         crate::storage::identity_record::identity_for_sentinel_vault(app_key, store_id).await?

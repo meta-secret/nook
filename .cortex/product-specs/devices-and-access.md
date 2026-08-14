@@ -86,14 +86,24 @@ every open Nook tab to stop queued storage work and zeroize its app key. The
 reset then runs inside the initiating tab's storage queue.
 
 Security-epoch retry state uses
-`pending_identity_reconciliation_v1:{store_id}`.
-Its value pins `storeId`, `previousKeyEpoch`, `previousCheckpoint`, `keyEpoch`,
-and a named `checkpointState`.
-Each identity-owned Simple vault DEK also stores its committed key epoch.
-The app writes `awaiting-checkpoint` before persisting the new key epoch. An
-advanced epoch cannot be observed until the checkpoint is committed. The state
-changes to `committed` with the exact checkpoint event ID only after the event
-is durable. That checkpoint must remain in verified event history, while the
+`pending_identity_reconciliation_v2:{store_id}`.
+Its value pins `storeId`, `previousKeyEpoch`, `previousCheckpoint`, and tagged
+`progress`. `prepared` contains an app-key-encrypted resumable plan with exact
+signed trigger and checkpoint events. `epoch-committed` adds `keyEpoch`.
+`committed` replaces the plan with the exact checkpoint event ID. Connect must
+resume prepared work before identity reconciliation.
+Each identity-owned Simple vault DEK serializes `key_epoch`. Missing legacy
+fields decode as tagged `legacy-unknown`; current `known` values carry both
+`key_epoch` and `checkpoint` event IDs. Verified reconciliation performs the
+upgrade, and current writers retain the compatibility variant.
+The `identity_directory_v1` record stores retired installation keys in
+`retired_app_ids`. Omitted legacy fields decode as an empty list. Destructive
+device recovery appends removed member app IDs before clearing identities, and
+current writers preserve the list permanently. A retired key cannot recreate
+or reclaim identity ownership.
+The app writes `prepared` before persisting the access-changing trigger. An
+advanced epoch cannot be observed until the checkpoint is committed. That
+checkpoint must remain in verified event history, while the
 directory records the latest observed head. Same-epoch observations advance
 that stored checkpoint only when it is a verified ancestor of the observed
 head. The marker is compare-deleted only

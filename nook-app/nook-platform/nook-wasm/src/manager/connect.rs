@@ -272,6 +272,10 @@ impl NookVaultManager {
         }
 
         self.purge_legacy_plaintext_search_catalog().await?;
+        if let Err(error) = self.resume_pending_security_epoch_rotation(&identity).await {
+            self.reset_vault_session();
+            return Err(error.into());
+        }
         if let Err(error) = self.ensure_identity_after_connect(&identity).await {
             self.reset_vault_session();
             return Err(error.into());

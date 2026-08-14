@@ -100,20 +100,29 @@ credentials before acknowledging readiness. The initiating tab then serializes
 its own reset through the storage queue.
 
 Security-epoch rotation stores `storeId`, `previousKeyEpoch`,
-`previousCheckpoint`, `keyEpoch`, and a named `checkpointState` at
-`pending_identity_reconciliation_v1:{store_id}` before the new key epoch is
-persisted.
-Each identity DEK grant stores its committed key epoch.
-The initial `awaiting-checkpoint` state blocks observations after the epoch has
-advanced. If epoch persistence did not occur, a verified observation of the
-previous epoch can consume that abandoned intent.
-After the epoch checkpoint event is durable, the marker changes to `committed`
-and owns that exact event ID. Reconciliation is a compare-and-swap from the
-previous epoch to the committed epoch. The committed checkpoint must appear in
-verified event history. Reconciliation records the latest observed head, so
-ordinary event heads may advance within the same key epoch without blocking
-recovery. Same-epoch observations advance the stored checkpoint only when the
-stored checkpoint is a verified ancestor of the observed head. An idempotent
+`previousCheckpoint`, and a tagged `progress` value at
+`pending_identity_reconciliation_v2:{store_id}` before the access-changing
+trigger event is persisted. `prepared` contains an app-key-encrypted recovery
+plan with the exact signed trigger and checkpoint events plus the key material
+needed to resume. `epoch-committed` adds `keyEpoch` and retains that encrypted
+plan. `committed` retains `keyEpoch` and the exact checkpoint event ID but drops
+the plan. Prepared and epoch-committed states must resume; an ordinary connect
+cannot consume them as abandoned work.
+Each identity DEK grant serializes `key_epoch`. A missing field decodes as the
+tagged `legacy-unknown` variant. Current writes use `known` with `key_epoch` and
+`checkpoint` event IDs. Reconciliation upgrades legacy-unknown only from a
+verified observation. Current writers do not remove this compatibility variant.
+The `identity_directory_v1` record serializes retired installation keys in
+`retired_app_ids`. Existing records that omit the field decode it as an empty
+list. Destructive device recovery appends every removed member app ID before it
+clears identities. Current writers retain those IDs for the lifetime of the
+directory so a stale installation key cannot restore ownership.
+After the epoch checkpoint event is durable, reconciliation compares and swaps
+the previous epoch for the committed epoch. The committed checkpoint must
+appear in verified event history. Reconciliation records the latest observed
+head. Ordinary event heads may advance within the same key epoch without
+blocking recovery. Same-epoch observations advance the stored checkpoint only
+when it is a verified ancestor of the observed head. An idempotent
 retry at the new epoch succeeds. An older epoch
 observation fails. Successful directory reconciliation compare-deletes only
 the exact marker it consumed.

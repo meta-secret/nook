@@ -80,10 +80,6 @@ impl NookVaultManager {
         )?;
         let (identity, handoff_signing_seed) = material.into_parts();
 
-        self.device.identity_private_key.zeroize();
-        self.device.id = identity.device_id().as_str().to_owned();
-        self.device.identity_private_key = identity.secret_string().into_inner();
-
         // Age identity may come from a reinstalled extension. Keep any durable
         // authorized signer when the vault already has events so Approve does
         // not append JoinApproved as an unauthorized actor.
@@ -94,6 +90,14 @@ impl NookVaultManager {
             stored_seed,
             has_events,
         );
+        let _ = crate::storage::identity_record::enroll_authenticated_app_key_for_vault_creation(
+            &identity,
+        )
+        .await?;
+
+        self.device.identity_private_key.zeroize();
+        self.device.id = identity.device_id().as_str().to_owned();
+        self.device.identity_private_key = identity.secret_string().into_inner();
         self.event_log.signing_seed.zeroize();
         match choice {
             nook_core::HandoffSigningSeedChoice::KeepStored { seed } => {
