@@ -6,6 +6,8 @@
 
 pub use nook_auth2::multi_device_api::*;
 
+use std::collections::BTreeMap;
+
 use crate::VaultOperation;
 
 /// Inputs for the immutable Simple-vault identity roster written at genesis.
@@ -244,6 +246,54 @@ pub fn event_graph_has_active_device_access(
     Ok(active)
 }
 
+/// Return the active Simple-vault authorization recipients after replaying
+/// approvals and revocations from the signed event graph.
+pub fn event_graph_active_auth_ids(
+    graph: &crate::EventGraph,
+) -> nook_auth2::MultiDeviceResult<Vec<crate::AuthKeyId>> {
+    let mut active = BTreeMap::<crate::DeviceId, crate::AuthKeyId>::new();
+    let order = graph
+        .topological_order()
+        .map_err(|error| nook_auth2::MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
+    for event_id in order {
+        let event = graph.get(&event_id).ok_or_else(|| {
+            nook_auth2::MultiDeviceError::InvalidDeviceIdentity(format!(
+                "Missing event {event_id} in graph."
+            ))
+        })?;
+        for operation in &event.body.operations {
+            match operation {
+                VaultOperation::JoinApproved {
+                    device_id,
+                    encryption_public_key,
+                    ..
+                } => {
+                    let derived_device_id =
+                        nook_auth2::device_id_from_public_key(encryption_public_key)?;
+                    if &derived_device_id != device_id {
+                        return Err(nook_auth2::MultiDeviceError::InvalidDeviceIdentity(
+                            "Approved device id does not match its encryption public key."
+                                .to_owned(),
+                        ));
+                    }
+                    active.insert(
+                        device_id.clone(),
+                        crate::dec_auth_id_from_public_key(encryption_public_key)?,
+                    );
+                }
+                VaultOperation::DeviceRevoked { device_id } => {
+                    active.remove(device_id);
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut auth_ids = active.into_values().collect::<Vec<_>>();
+    auth_ids.sort();
+    auth_ids.dedup();
+    Ok(auth_ids)
+}
+
 /// Rebuild encrypted `members:` rows after quorum unlock of an event-only
 /// Sentinel vault. Public event roster entries are retained before unlock; the
 /// reconstructed members key turns them back into the canonical encrypted
@@ -446,6 +496,7 @@ mod tests {
             &signing.public_key(),
         )?);
         let auth_id = dec_auth_id_from_public_key(&extension.public_key())?;
+        assert_eq!(event_graph_active_auth_ids(&graph)?, vec![auth_id.clone()]);
         let mut meta = VaultMetaState::default();
         materialize_vault_meta_from_graph(&graph, &mut meta)?;
         assert!(meta.auth.contains_key(&auth_id));
@@ -482,6 +533,7 @@ mod tests {
             &extension.public_key(),
             &signing.public_key(),
         )?);
+        assert!(event_graph_active_auth_ids(&graph)?.is_empty());
         Ok(())
     }
 }

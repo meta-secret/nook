@@ -196,6 +196,7 @@ fn seal_legacy_signing_seed(
     else {
         return Ok(());
     };
+    validate_genesis_signing_seed(event_yaml, signing_seed)?;
     let signing_seed_envelope = app_key
         .seal_utf8(signing_seed)
         .map_err(|error| NookError::Database(error.to_string()))?;
@@ -495,7 +496,49 @@ mod tests {
         clear_identity_directory_for_test().await
     }
 
+    #[test]
+    fn rejects_mismatched_plaintext_legacy_signing_seed() -> anyhow::Result<()> {
+        let app_key = nook_core::AppKey::generate()?;
+        let (event_signing, _) = nook_core::SigningIdentity::generate()?;
+        let (_, mismatched_seed) = nook_core::SigningIdentity::generate()?;
+        let store_id = nook_core::generate_store_id()?;
+        let event = nook_core::VaultEvent::sign(
+            nook_core::VaultEventBody {
+                schema_version: nook_core::VaultEventSchemaVersion::CURRENT,
+                store_id: store_id.clone(),
+                actor_id: event_signing.actor_id()?,
+                actor_signing_public_key: event_signing.public_key(),
+                parents: Vec::new(),
+                created_at: nook_core::IsoTimestamp::parse("2026-08-14T00:00:00Z")?,
+                key_epoch: nook_core::EventId::from_sha256_hex(
+                    nook_core::sha256_hex(store_id.as_str().as_bytes()).as_str(),
+                )?,
+                operations: Vec::new(),
+            },
+            event_signing.signing_key(),
+        )?;
+        let event_yaml = String::from_utf8(nook_core::serialize_event_storage_yaml(&event)?)?;
+        let mut pending = PendingSimpleGenesis {
+            store_id,
+            identity_id: nook_core::IdentityId::generate()?,
+            created_at: nook_core::IsoTimestamp::parse("2026-08-14T00:00:00Z")?,
+            event_state: PendingSimpleGenesisEvent::LegacyUnsealedEventPinned {
+                event_yaml,
+                signing_seed: mismatched_seed.as_str().to_owned(),
+            },
+        };
+
+        assert!(seal_legacy_signing_seed(&mut pending, &app_key).is_err());
+        assert!(matches!(
+            pending.event_state,
+            PendingSimpleGenesisEvent::LegacyUnsealedEventPinned { .. }
+        ));
+        Ok(())
+    }
+
     fn map_domain_error(error: nook_core::MultiDeviceError) -> NookError {
-        NookError::Database(error.to_string())
+        let message = error.to_string();
+        drop(error);
+        NookError::Database(message)
     }
 }

@@ -77,10 +77,14 @@ handoff or the local signer supplies that public key.
 All directory updates use one IndexedDB read-write transaction.
 Concurrent tabs must not overwrite identity creation, selection, membership,
 or DEK changes.
-Extension identity adoption remains in memory through vault initialization.
-After initialization succeeds, one IndexedDB transaction commits the member,
-its signing public key, its authorized per-vault DEK envelopes, and any adopted
-signing seed. Failure before that commit leaves no durable enrollment.
+Extension identity adoption remains reversible through vault initialization.
+One IndexedDB transaction commits the member, its signing public key, its
+authorized per-vault DEK envelopes, and any adopted signing seed. Fresh-vault
+creation retains the exact prior directory, signer, and genesis-marker state
+until verified genesis connect succeeds. A failed create restores that snapshot
+atomically. It also clears decrypted host state and stops background sync.
+Legacy-vault reconciliation derives DEK recipients from the signed event
+graph's active approvals after revocations, not from stale encrypted auth rows.
 
 Simple vault creation stores `pending_simple_genesis_v1` in IndexedDB.
 Its JSON fields are `storeId`, `identityId`, `createdAt`, and `eventState`.
@@ -98,6 +102,7 @@ Legacy markers without `createdAt` use the Unix epoch timestamp. Markers without
 `eventState` decode as `awaiting-event`. A preceding top-level `eventYaml`, or
 an `event-pinned` state without seed material becomes `legacy-event-pinned`.
 That state upgrades only after the durable seed matches the pinned event signer.
+The same signer check applies before sealing a legacy plaintext seed.
 
 The first directory read migrates `identity_record_v1` when present:
 

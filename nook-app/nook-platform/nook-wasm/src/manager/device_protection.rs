@@ -14,7 +14,9 @@ enum ExtensionIdentityHandoffContextValue {
 }
 
 pub(crate) enum PendingExtensionIdentityEnrollment {
-    VaultCreation,
+    VaultCreation {
+        authorizer: Option<nook_core::AppKey>,
+    },
     PairedVault {
         authorizer: nook_core::AppKey,
         store_id: nook_core::StoreId,
@@ -27,6 +29,13 @@ pub(in crate::manager) struct PendingExtensionIdentityHandoff {
     signing_public_key: nook_core::DeviceSigningPublicKey,
     persist_signing_seed: bool,
     previous_session_signing_seed: String,
+    durable_rollback: Option<crate::storage::identity_record::IdentityHandoffRollback>,
+}
+
+impl Drop for PendingExtensionIdentityHandoff {
+    fn drop(&mut self) {
+        self.previous_session_signing_seed.zeroize();
+    }
 }
 
 /// Security context for adopting an extension identity.
@@ -136,7 +145,9 @@ impl NookVaultManager {
         };
         let enrollment = match &context.value {
             ExtensionIdentityHandoffContextValue::VaultCreation => {
-                PendingExtensionIdentityEnrollment::VaultCreation
+                PendingExtensionIdentityEnrollment::VaultCreation {
+                    authorizer: authorizer.as_ref().map(|(app_key, _)| app_key.clone()),
+                }
             }
             ExtensionIdentityHandoffContextValue::PairedVault { store_id } => {
                 PendingExtensionIdentityEnrollment::PairedVault {
@@ -192,8 +203,24 @@ impl NookVaultManager {
             signing_public_key: expected_signing_public_key,
             persist_signing_seed,
             previous_session_signing_seed,
+            durable_rollback: None,
         });
         Ok(())
+    }
+
+    /// Whether the caller must retain rollback state until fresh vault genesis
+    /// has completed successfully.
+    #[wasm_bindgen]
+    pub fn extension_identity_handoff_requires_vault_creation(&self) -> bool {
+        self.device
+            .pending_extension_handoff
+            .as_ref()
+            .is_some_and(|pending| {
+                matches!(
+                    &pending.enrollment,
+                    PendingExtensionIdentityEnrollment::VaultCreation { .. }
+                )
+            })
     }
 
     /// Atomically persist identity membership and its matching signing seed
@@ -205,35 +232,66 @@ impl NookVaultManager {
             .pending_extension_handoff
             .as_ref()
             .ok_or_else(|| JsError::new("Extension identity handoff is not pending."))?;
+        if pending.durable_rollback.is_some() {
+            return Err(JsError::new(
+                "Extension identity handoff is already committed.",
+            ));
+        }
         let app_key = self.device_identity()?;
         let signing_seed = pending
             .persist_signing_seed
             .then_some(self.event_log.signing_seed.as_str());
-        crate::storage::identity_record::commit_authenticated_identity_handoff(
-            crate::storage::identity_record::IdentityHandoffCommit {
-                app_key: &app_key,
-                signing_public_key: &pending.signing_public_key,
-                authorizer_signing: pending.authorizer_signing.as_ref(),
-                enrollment: &pending.enrollment,
-                signing_seed,
-            },
-        )
-        .await?;
-        self.device.pending_extension_handoff = None;
+        let durable_rollback =
+            crate::storage::identity_record::commit_authenticated_identity_handoff(
+                crate::storage::identity_record::IdentityHandoffCommit {
+                    app_key: &app_key,
+                    signing_public_key: &pending.signing_public_key,
+                    authorizer_signing: pending.authorizer_signing.as_ref(),
+                    enrollment: &pending.enrollment,
+                    signing_seed,
+                },
+            )
+            .await?;
+        self.device
+            .pending_extension_handoff
+            .as_mut()
+            .ok_or_else(|| JsError::new("Extension identity handoff disappeared."))?
+            .durable_rollback = Some(durable_rollback);
         Ok(())
+    }
+
+    /// Accept a committed handoff after the complete caller-owned operation,
+    /// including fresh vault genesis, has succeeded.
+    #[wasm_bindgen]
+    pub fn confirm_extension_identity_handoff(&mut self) {
+        self.device.pending_extension_handoff = None;
     }
 
     /// Clear every secret installed by a failed external identity
     /// authorization, including the event-log signing seed.
     #[wasm_bindgen]
-    pub fn rollback_extension_identity_handoff(&mut self) {
-        if let Some(mut pending) = self.device.pending_extension_handoff.take() {
+    pub async fn rollback_extension_identity_handoff(&mut self) -> Result<(), JsError> {
+        let durable_result = if let Some(rollback) = self
+            .device
+            .pending_extension_handoff
+            .as_ref()
+            .and_then(|pending| pending.durable_rollback.as_ref())
+        {
+            crate::storage::identity_record::rollback_authenticated_identity_handoff(rollback).await
+        } else {
+            Ok(())
+        };
+        if durable_result.is_ok()
+            && let Some(mut pending) = self.device.pending_extension_handoff.take()
+        {
             self.event_log.signing_seed.zeroize();
             self.event_log.signing_seed =
                 std::mem::take(&mut pending.previous_session_signing_seed);
         }
         self.lock_device_identity();
         self.reset_vault_session();
+        durable_result?;
+        Ok(())
     }
 
     #[wasm_bindgen]

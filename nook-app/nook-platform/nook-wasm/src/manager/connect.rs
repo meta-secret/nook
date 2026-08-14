@@ -12,6 +12,7 @@ use super::verified_access::VerifiedVaultAccessFlow;
 use crate::NookError;
 use crate::NookSecretRecord;
 use crate::conversion::{LoadedVault, access_status_for_vault_content, content_requires_genesis};
+use crate::storage::event_db::load_local_event_store;
 use crate::storage::indexed_db::load_vault_local_cache;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -338,13 +339,20 @@ impl NookVaultManager {
         let store_id = nook_core::StoreId::parse(&self.vault.store_id)
             .map_err(|error| NookError::Database(error.to_string()))?;
         if let Some(envelopes) = self.vault.meta.auth.get(&identity.auth_id()) {
+            let authorized_auth_ids = if self.event_log.enabled {
+                let store = load_local_event_store(store_id.as_str()).await?;
+                let graph = store.load_graph(store_id.as_str())?;
+                nook_core::event_graph_active_auth_ids(&graph)?
+            } else {
+                self.vault.meta.auth.keys().cloned().collect()
+            };
             let _ = crate::storage::identity_record::ensure_identity_from_legacy_vault(
                 crate::storage::identity_record::LegacyVaultIdentityInput {
                     app_key: identity,
                     store_id: &store_id,
                     secrets_envelope: envelopes.secrets_key.clone(),
                     members_envelope: envelopes.members_key.clone(),
-                    authorized_auth_ids: self.vault.meta.auth.keys().cloned().collect(),
+                    authorized_auth_ids,
                     label: &label,
                 },
             )

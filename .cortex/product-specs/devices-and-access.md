@@ -80,6 +80,12 @@ A legacy marker without `eventState` is treated as `awaiting-event`.
 A preceding top-level `eventYaml`, or an `event-pinned` state without seed
 material, migrates to `legacy-event-pinned`. It upgrades to the current pinned
 state only after the durable seed is verified against the event signer.
+Legacy plaintext seed migration performs that verification before sealing.
+Failed extension-first creation restores the exact pre-handoff identity
+directory, signer, and pending-genesis marker. Decrypted UI state and sync are
+cleared before the failure is shown.
+Legacy-vault DEK reconciliation uses only active signed event approvals after
+revocation replay.
 
 On first read, the app migrates `identity_record_v1` into the directory.
 It deletes the legacy key only after the new directory is durable.

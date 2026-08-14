@@ -15,6 +15,7 @@ import {
   parse_app_locale,
   prepare_new_local_vault_slot,
   set_active_vault,
+  set_vault_session_locked,
   supported_app_locale_code,
   type NookAppLocale,
   type NookVaultManager,
@@ -321,9 +322,17 @@ export async function authorizeWithExternalDeviceIdentity({
     } else {
       await continueInitializationAfterDeviceUnlock(state);
     }
+    const requiresVaultCreation = state
+      .requireManager()
+      .extension_identity_handoff_requires_vault_creation();
     await state.enqueueStorage(() =>
       state.requireManager().commit_extension_identity_handoff(),
     );
+    if (!requiresVaultCreation) {
+      await state.enqueueStorage(() =>
+        state.requireManager().confirm_extension_identity_handoff(),
+      );
+    }
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
     const adoptedIdentity: { readonly deviceId: string } = {
       deviceId: state.deviceId,
@@ -335,9 +344,15 @@ export async function authorizeWithExternalDeviceIdentity({
     log.infoWithContext(context);
     return true;
   } catch {
-    await state.enqueueStorage(() =>
-      state.requireManager().rollback_extension_identity_handoff(),
-    );
+    try {
+      await state.enqueueStorage(() =>
+        state.requireManager().rollback_extension_identity_handoff(),
+      );
+    } catch {
+      log.warn("extension identity durable rollback failed");
+    }
+    set_vault_session_locked(true);
+    state.clearUnlockedSession(false);
     state.deviceId = "";
     state.devicePublicKey = "";
     state.deviceProtectionStatus =

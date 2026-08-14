@@ -223,9 +223,13 @@ export async function createLocalVaultWithDeviceKeys({
   state.clearOauthFile();
   state.clearLocalFolder();
   state.isVerifying = true;
+  let handoffAwaitingVaultCreation = false;
 
   try {
     await state.initDeviceIdentity();
+    handoffAwaitingVaultCreation = state
+      .requireManager()
+      .extension_identity_handoff_requires_vault_creation();
     const creatingAdditionalVault = state.localVaults.length > 0;
     if (creatingAdditionalVault) {
       await prepare_new_local_vault_slot();
@@ -241,6 +245,12 @@ export async function createLocalVaultWithDeviceKeys({
       return state.requireManager().connect("local", "", "");
     })) as NookSecretRecord[];
     for (const record of rawRecords) record.free();
+    if (handoffAwaitingVaultCreation) {
+      await state.enqueueStorage(() =>
+        state.requireManager().confirm_extension_identity_handoff(),
+      );
+      handoffAwaitingVaultCreation = false;
+    }
     const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
       query: "",
       requestedOffset: 0,
@@ -263,7 +273,20 @@ export async function createLocalVaultWithDeviceKeys({
     state.startIdleSessionTracking();
     state.startVaultSync();
   } catch (e) {
-    state.isAuthenticated = false;
+    if (handoffAwaitingVaultCreation) {
+      try {
+        await state.enqueueStorage(() =>
+          state.requireManager().rollback_extension_identity_handoff(),
+        );
+      } catch {
+        log.warn("failed vault creation handoff rollback failed");
+      }
+      state.deviceId = "";
+      state.devicePublicKey = "";
+      state.deviceProtectionStatus = state.deviceProtectionLockedStatus;
+    }
+    set_vault_session_locked(true);
+    state.clearUnlockedSession(false);
     const message =
       e instanceof Error
         ? e.message
