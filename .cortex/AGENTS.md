@@ -486,10 +486,10 @@ bounded implementation harness is the exception. It commits and pushes after
 the worker exits. Its continuing owner runs local review immediately after
 handoff.
 
-After each coherent push, request one idempotent exact-head Codex Cloud review.
-Dispatch complete validation immediately. The GitHub Actions runtime is the
-review window. If no review feedback exists when checks finish, continue to
-readiness without waiting.
+When a coherent head is ready for complete validation, request one idempotent
+exact-head Codex Cloud review alongside that validation. The GitHub Actions
+runtime is the review window. If no review feedback exists when checks finish,
+continue to readiness without waiting. Use focused hosted tasks while iterating.
 
 Before merge or handoff, inspect the comments and review findings currently
 present and address every active actionable item from humans or external

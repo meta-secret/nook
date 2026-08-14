@@ -45,7 +45,8 @@ ownership until merge or a concrete blocked handoff:
 4. **Push and create or update the PR.**
 5. **Request review and validate on GitHub Actions:**
    - Run focused `task remote TASK_NAME=<name>` jobs as useful.
-   - Run `task pr:validate PR=<number>` after each coherent push.
+   - Use focused hosted tasks while iterating.
+   - Run `task pr:validate PR=<number>` when the coherent head is ready.
    - It dispatches checks and then requests exact-head Codex Cloud review.
    - Review-request failure does not block those checks.
    - Fix every actionable finding that arrives while checks run.
@@ -280,9 +281,9 @@ See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
 Before the first owner-authored push, run `task pr:review-local` on the coherent
 branch head. For a harness-created PR, run it immediately after handoff.
-After each coherent push, run complete validation. It dispatches checks
+When the coherent head is ready, run complete validation. It dispatches checks
 immediately. It then requests exact-head Codex review. Use focused remote tasks
-only when they shorten diagnosis of a known failure. See
+while iterating or when they shorten diagnosis of a known failure. See
 [code-review.md](code-review.md).
 
 ### 5. Hosted iteration and explicit validation

@@ -29,7 +29,7 @@ exception.
 
 ## Complete validation and Cloud review
 
-After each coherent push, run complete validation:
+When the coherent head is ready, run complete validation:
 
 ```bash
 task pr:validate PR=<number>
@@ -53,7 +53,7 @@ Before merge, inspect feedback currently present. Agents must:
 - address every active actionable finding;
 - reply on the targeted thread before resolving it;
 - re-query until unresolved review threads are zero;
-- keep polling feedback while repository checks run after each push; and
+- keep polling feedback while repository checks run for the validation head; and
 - interrupt obsolete check waiting when actionable feedback requires another
   push.
 

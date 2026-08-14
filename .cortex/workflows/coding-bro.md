@@ -57,7 +57,8 @@ Default PR-first loop:
    - Later coherent commits update the same PR.
    - A push does not start complete validation.
 6. **Request review and validate on hosted workers:**
-   - Run `task pr:validate PR=<number>` after each coherent push.
+   - Use focused hosted tasks while iterating.
+   - Run `task pr:validate PR=<number>` when the coherent head is ready.
    - The command dispatches repository-owned checks immediately.
    - It then attempts one idempotent exact-head Codex Cloud request.
    - Review-request failure does not block those checks.
@@ -340,7 +341,7 @@ owner-authored push.
 
 For a harness-created PR, run it after handoff instead.
 
-After each coherent push, run `task pr:validate PR=<number>`.
+When the coherent head is ready, run `task pr:validate PR=<number>`.
 
 It immediately dispatches complete validation. It then requests exact-head
 Codex review. Fix actionable feedback that arrives while checks run.
@@ -462,7 +463,7 @@ Do not wait for post-merge Main. Any performance fix belongs in a separate norma
 - **Request Codex review without delaying complete validation.**
   - Run local review before the first owner-authored push.
   - For a harness-created PR, run it after handoff.
-  - Dispatch complete validation and request Cloud review after each coherent push.
+  - Dispatch complete validation and request Cloud review when the coherent head is ready.
   - Address and resolve actionable comments.
   - Require `task pr:ready` after repository-owned checks pass.
   - Never wait for Codex after checks finish or request other optional reviewers.
