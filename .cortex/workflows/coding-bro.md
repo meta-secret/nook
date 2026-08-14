@@ -106,13 +106,17 @@ See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
 ### ⛔ Format, push, execute on GitHub-hosted workers
 
-Once the current change is coherent and checkable, run pre-push hygiene, then commit and push/open or update the PR. Ordinary pushes do not start complete PR validation. Request the complete exact-head workflow as soon as the branch is ready. Use a focused task only when it shortens diagnosis.
+Once the current change is coherent and checkable, run pre-push hygiene and
+commit. Run local review before the first owner-authored push. Then push or
+update the PR. Ordinary pushes do not start complete PR validation. Request the
+complete exact-head workflow as soon as the branch is ready. Use a focused task
+only when it shortens diagnosis.
 
 ```text
 WRONG: implement → local task check / full tests / build → push
 WRONG: implement → push dirty/uncommitted source → remote task tests an older SHA
 WRONG: implement → push → assume complete PR validation started automatically
-RIGHT: implement → task loom:pre-push → commit → push
+RIGHT: implement → task loom:pre-push → commit → task pr:review-local → push
        → task loom:pr-land CONFIG=<pr-land-validate-request.yaml>
        → exact-head GitHub Actions
 ```
