@@ -144,6 +144,7 @@ impl VaultEventSession {
             vec![VaultOperation::EpochCheckpoint {
                 secrets,
                 members_checkpoint_hash,
+                rotated_meta_records: Vec::new(),
             }],
             created_at,
             provider_id,

@@ -95,6 +95,16 @@ pub fn apply_vault_meta_operation(
             state.sentinel_participants.remove(device_id);
             state.sentinel_shares.remove(device_id);
         }
+        VaultOperation::EpochCheckpoint {
+            rotated_meta_records,
+            ..
+        } if !rotated_meta_records.is_empty() => {
+            state.auth.clear();
+            state.members.clear();
+            for record in rotated_meta_records {
+                state.apply_record(record);
+            }
+        }
         VaultOperation::VaultImported { .. }
         | VaultOperation::SecretCreated { .. }
         | VaultOperation::SecretDeleted { .. }

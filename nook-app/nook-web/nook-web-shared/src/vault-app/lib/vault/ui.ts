@@ -7,6 +7,7 @@ import type {
 import {
   clearTabScopedBrowserData,
   deleteLocalBrowserData,
+  requireLocalDataRecoverySupport,
 } from "$lib/runtime/browser-data";
 import { set_vault_session_locked } from "$app-wasm";
 import {
@@ -196,19 +197,17 @@ export async function deleteLocalData(state: UiActionsContext): Promise<void> {
   try {
     const manager = state.requireManager();
     await state.waitForStorageChain();
+    requireLocalDataRecoverySupport();
     state.localDataDeletionStarted = true;
     await deleteLocalBrowserData(() => {
       return manager.delete_local_browser_data();
     });
-  } catch (error) {
+  } catch {
     const managerWasZeroized = state.localDataDeletionStarted;
     set_vault_session_locked(true);
     state.clearUnlockedSession(!managerWasZeroized);
     state.localDataDeletionStarted = false;
-    state.errorMsg =
-      error instanceof Error
-        ? error.message
-        : state.t(I18N_KEYS.SettingsDeleteLocalError);
+    state.errorMsg = state.t(I18N_KEYS.SettingsDeleteLocalError);
     state.isSaving = false;
   }
 }

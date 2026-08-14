@@ -416,10 +416,9 @@ export async function resetDeviceProtectionForRecovery(
     state.clearLocalFolder();
     state.storageMode = LOCAL_PROVIDER_TYPE;
     state.showSuccess(state.t(I18N_KEYS.DeviceProtectionRecoveryComplete));
-  } catch (error) {
+  } catch {
     log.warn("device protection recovery reset failed");
-    state.errorMsg =
-      error instanceof Error ? error.message : "Recovery reset failed.";
+    state.errorMsg = state.t(I18N_KEYS.DeviceProtectionRecoveryFailed);
   } finally {
     state.isVerifying = false;
   }

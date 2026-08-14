@@ -36,7 +36,8 @@ use nook_core::{
     AppendEventInput, EventId, RemoteEventLogClassification, SigningIdentity, VaultEvent,
     VaultOperation, apply_user_records_to_encrypted_session, build_signed_event,
     classify_remote_event_log, members_checkpoint_hash_from_roster, project_vault,
-    rewrap_vault_meta_for_epoch, union_remote_events_and_heads,
+    rewrap_vault_meta_for_epoch, rewrapped_vault_meta_records_for_epoch,
+    union_remote_events_and_heads,
 };
 
 fn iso_timestamp() -> String {

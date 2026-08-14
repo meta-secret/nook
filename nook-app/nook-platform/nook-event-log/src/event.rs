@@ -145,6 +145,8 @@ pub enum VaultOperation {
     EpochCheckpoint {
         secrets: Vec<EncryptedSecretPayload>,
         members_checkpoint_hash: Sha256Hex,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        rotated_meta_records: Vec<StoredSecretRecord>,
     },
 }
 

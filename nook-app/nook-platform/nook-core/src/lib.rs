@@ -353,7 +353,8 @@ pub use vault_connect::{
 pub use vault_crypto::VaultCrypto;
 pub use vault_epoch_crypto::{
     members_checkpoint_hash_from_roster, reencrypt_user_secrets_for_epoch,
-    rewrap_vault_meta_for_epoch, rotate_vault_keys_with_secrets,
+    rewrap_vault_meta_for_epoch, rewrapped_vault_meta_records_for_epoch,
+    rotate_vault_keys_with_secrets,
 };
 pub use vault_event_session::VaultEventSession;
 pub use vault_format::{

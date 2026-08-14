@@ -208,10 +208,14 @@ export function subscribeToLocalBrowserDataDeletion(
   };
 }
 
-export async function quiesceOtherTabsForLocalRecovery(): Promise<void> {
-  if (!("BroadcastChannel" in globalThis)) {
+export function requireLocalDataRecoverySupport(): void {
+  if (!("BroadcastChannel" in globalThis) || !("locks" in navigator)) {
     throw new Error("Safe cross-tab local data deletion is unavailable");
   }
+}
+
+export async function quiesceOtherTabsForLocalRecovery(): Promise<void> {
+  requireLocalDataRecoverySupport();
   const request: LocalDataResetRequest = {
     type: LocalDataResetMessageType.Request,
     requestId: crypto.randomUUID(),
@@ -266,8 +270,9 @@ export async function quiesceOtherTabsForLocalRecovery(): Promise<void> {
 export async function deleteLocalBrowserData(
   clearNookDatabases: () => Promise<void>,
 ): Promise<void> {
-  await suspendWasmLogging();
+  requireLocalDataRecoverySupport();
   await quiesceOtherTabsForLocalRecovery();
+  await suspendWasmLogging();
   await runWithExclusiveLocalDataStorageLock(async () => {
     const errors: Error[] = [];
     try {

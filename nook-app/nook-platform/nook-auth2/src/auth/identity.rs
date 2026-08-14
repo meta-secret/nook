@@ -418,6 +418,15 @@ impl IdentityRecord {
             secrets_key: app_key.decrypt_envelope(&reconciliation.secrets_envelope)?,
             members_key: app_key.decrypt_envelope(&reconciliation.members_envelope)?,
         };
+        if crate::auth::identity_dek_grant::already_grants(
+            vault_dek,
+            app_key,
+            &self.members,
+            &keys,
+            &next_epoch,
+        ) {
+            return Ok(());
+        }
         let mut rewrapped = wrap_vault_keys_for_members(&keys, &self.members, store_id.clone())?;
         rewrapped.key_epoch = next_epoch;
         if *vault_dek != rewrapped {
@@ -600,7 +609,9 @@ mod tests {
             },
         )?;
         identity.reconcile_legacy_vault_member(&app_key, &store, &rotated_reconciliation)?;
+        let reconciled_control_epoch = identity.control_epoch;
         identity.reconcile_legacy_vault_member(&app_key, &store, &rotated_reconciliation)?;
+        assert_eq!(identity.control_epoch, reconciled_control_epoch);
 
         let stale = reconciliation_for_keys(
             &app_key,

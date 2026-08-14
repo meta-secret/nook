@@ -104,10 +104,10 @@ Security-epoch rotation stores `storeId`, `previousKeyEpoch`,
 `pending_identity_reconciliation_v2:{store_id}` before the access-changing
 trigger event is persisted. `prepared` contains an app-key-encrypted recovery
 plan with the exact signed trigger and checkpoint events plus the key material
-needed to resume. `epoch-committed` adds `keyEpoch` and retains that encrypted
-plan. `committed` retains `keyEpoch` and the exact checkpoint event ID but drops
-the plan. Prepared and epoch-committed states must resume; an ordinary connect
-cannot consume them as abandoned work.
+needed to resume. `epoch-committed` adds `key_epoch` and retains that encrypted
+`plan_envelope`. `committed` retains `key_epoch` and the exact checkpoint event
+ID but drops the plan. Prepared and epoch-committed states must resume.
+An ordinary connect cannot consume them as abandoned work.
 Each identity DEK grant serializes `key_epoch`. A missing field decodes as the
 tagged `legacy-unknown` variant. Current writes use `known` with `key_epoch` and
 `checkpoint` event IDs. Reconciliation upgrades legacy-unknown only from a
@@ -129,7 +129,7 @@ the exact marker it consumed.
 Any later verified connect repeats the idempotent reconciliation and clears a
 marker left by an interrupted post-commit update.
 The marker is local retry state. Current builds delete it only after successful
-reconciliation or proof that epoch persistence never advanced.
+reconciliation or explicit destructive device recovery.
 
 Verified Sentinel delivery records use
 `sentinel_genesis_share:{store_id}:{device_id}`. New records include a named

@@ -1,6 +1,7 @@
 use super::{
     BuiltVaultEvent, NookError, NookVaultManager, VaultOperation,
-    members_checkpoint_hash_from_roster, rewrap_vault_meta_for_epoch, save_key_epoch,
+    members_checkpoint_hash_from_roster, rewrap_vault_meta_for_epoch,
+    rewrapped_vault_meta_records_for_epoch, save_key_epoch,
 };
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
@@ -13,6 +14,7 @@ struct PreparedEpochRotation {
     new_keys: nook_core::VaultKeys,
     secrets: Vec<nook_core::EncryptedSecretPayload>,
     members_checkpoint_hash: nook_core::Sha256Hex,
+    rotated_meta_records: Vec<nook_core::StoredSecretRecord>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -49,10 +51,8 @@ impl NookVaultManager {
         old_members_key: &nook_core::SymmetricKey,
         new_keys: &nook_core::VaultKeys,
     ) -> Result<(), NookError> {
-        let identity = self.device_identity()?;
         rewrap_vault_meta_for_epoch(
             &mut self.vault.meta,
-            &identity,
             records_snapshot,
             old_members_key,
             new_keys,
@@ -80,6 +80,8 @@ impl NookVaultManager {
             &old_members_key,
             &new_keys.members_key,
         )?;
+        let rotated_meta_records =
+            rewrapped_vault_meta_records_for_epoch(&records_snapshot, &old_members_key, &new_keys)?;
         Ok(PreparedEpochRotation {
             previous_key_epoch,
             previous_checkpoint,
@@ -88,12 +90,24 @@ impl NookVaultManager {
             new_keys,
             secrets,
             members_checkpoint_hash,
+            rotated_meta_records,
         })
+    }
+
+    fn rotation_frontier_matches(
+        prepared: &PreparedEpochRotation,
+        parents: &[nook_core::EventId],
+    ) -> bool {
+        match parents {
+            [] => prepared.previous_checkpoint == prepared.previous_key_epoch,
+            [parent] => parent.as_str() == prepared.previous_checkpoint.as_str(),
+            _ => false,
+        }
     }
 
     async fn persist_security_epoch_recovery_plan(
         &mut self,
-        prepared: PreparedEpochRotation,
+        mut prepared: PreparedEpochRotation,
         trigger: VaultOperation,
     ) -> Result<SecurityEpochRecoveryPlan, NookError> {
         let previous_key_epoch = prepared.previous_key_epoch.clone();
@@ -104,6 +118,15 @@ impl NookVaultManager {
             .into_iter()
             .map(|parent| nook_core::EventId::parse(&parent))
             .collect::<Result<Vec<_>, _>>()?;
+        if !Self::rotation_frontier_matches(&prepared, &parents) {
+            return Err(NookError::Database(
+                "Vault changed while preparing security epoch rotation; retry.".to_owned(),
+            ));
+        }
+        prepared = self.prepare_security_epoch_rotation(
+            prepared.previous_key_epoch,
+            prepared.previous_checkpoint,
+        )?;
         let previous_epoch = nook_core::EventId::parse(prepared.previous_key_epoch.as_str())?;
         let trigger_event = self
             .build_vault_operations_event(vec![trigger], parents, previous_epoch)
@@ -114,6 +137,7 @@ impl NookVaultManager {
                 vec![VaultOperation::EpochCheckpoint {
                     secrets: prepared.secrets.clone(),
                     members_checkpoint_hash: prepared.members_checkpoint_hash.clone(),
+                    rotated_meta_records: prepared.rotated_meta_records,
                 }],
                 vec![trigger_event_id.clone()],
                 trigger_event_id,
@@ -150,6 +174,50 @@ impl NookVaultManager {
         Ok(plan)
     }
 
+    async fn validate_security_epoch_trigger(
+        &self,
+        event: &nook_core::VaultEvent,
+    ) -> Result<(), NookError> {
+        let event_id = event.id()?;
+        let local = crate::storage::event_db::load_local_event_store(&self.vault.store_id).await?;
+        let mut graph = local.load_graph(&self.vault.store_id)?;
+        if !graph.contains(&event_id) {
+            let mut current_heads = graph.heads();
+            let mut expected_heads = event.body.parents.clone();
+            current_heads.sort();
+            expected_heads.sort();
+            if current_heads != expected_heads {
+                return Err(NookError::Database(
+                    "Vault changed before security epoch commit; recovery is required.".to_owned(),
+                ));
+            }
+        }
+        match graph.insert(event.clone(), self.vault.store_id.as_str())? {
+            nook_core::EventInsertStatus::Quarantined(reason) => {
+                return Err(NookError::Database(format!(
+                    "Refusing conflicting security epoch event: {reason}"
+                )));
+            }
+            nook_core::EventInsertStatus::Pending(reason) => {
+                return Err(NookError::Database(format!(
+                    "Refusing security epoch event with unresolved parents: {reason:?}"
+                )));
+            }
+            nook_core::EventInsertStatus::Duplicate | nook_core::EventInsertStatus::Applied => {}
+        }
+        let projection = nook_core::project_vault(&graph, &self.vault.store_id)?;
+        if projection
+            .security_conflicts
+            .iter()
+            .any(|conflict| conflict.events.contains(&event_id))
+        {
+            return Err(NookError::Database(
+                "Concurrent security epoch transition detected; recovery is required.".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
     async fn execute_security_epoch_recovery_plan(
         &mut self,
         plan: SecurityEpochRecoveryPlan,
@@ -167,6 +235,8 @@ impl NookVaultManager {
                 "Persisted security epoch does not match its recovery plan.".to_owned(),
             ));
         }
+        self.validate_security_epoch_trigger(&trigger_event.event)
+            .await?;
         self.persist_built_vault_event(trigger_event).await?;
         crate::storage::identity_record::commit_identity_reconciliation_epoch(
             &store_id, &key_epoch,

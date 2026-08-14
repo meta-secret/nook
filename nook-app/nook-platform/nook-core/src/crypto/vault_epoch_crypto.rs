@@ -2,14 +2,13 @@
 
 use crate::EncryptedSecretPayload;
 use crate::errors::{VaultEpochError, VaultEpochResult, VaultResult};
-use crate::multi_device::{DeviceIdentity, VaultKeys};
+use crate::multi_device::VaultKeys;
 #[cfg(test)]
 use crate::secret_types::StoredRecordPayload;
 use crate::secret_types::StoredSecretRecord;
-use crate::vault_connect::apply_member_records;
 use crate::vault_crypto::VaultCrypto;
 use crate::vault_wire::{AgeArmoredCiphertext, OpaqueCiphertext, Sha256Hex, SymmetricKey};
-use crate::{VaultMetaRecord, build_members_records, genesis_auth_record, resolve_member_roster};
+use crate::{auth_record, build_members_records, resolve_member_roster};
 
 /// Re-encrypt user secrets under a new `secrets_key`.
 pub fn reencrypt_user_secrets_for_epoch(
@@ -69,22 +68,40 @@ pub fn members_checkpoint_hash_from_roster(
     Ok(crate::sha256_hex(json.as_bytes()))
 }
 
+/// Build replacement auth + member rows for every active device after epoch rotation.
+pub fn rewrapped_vault_meta_records_for_epoch(
+    records_snapshot: &[StoredSecretRecord],
+    old_members_key: &SymmetricKey,
+    new_keys: &VaultKeys,
+) -> VaultResult<Vec<StoredSecretRecord>> {
+    let roster = resolve_member_roster(records_snapshot, old_members_key)?;
+    let mut records = Vec::with_capacity(roster.len().saturating_mul(2));
+    for member in &roster {
+        records.push(auth_record(
+            &member.auth_id,
+            &new_keys.secrets_key,
+            &new_keys.members_key,
+            &member.public_key,
+        )?);
+    }
+    records.extend(build_members_records(&roster, &new_keys.members_key)?);
+    Ok(records)
+}
+
 /// Replace auth + member meta rows in the typed session meta state after epoch rotation.
 pub fn rewrap_vault_meta_for_epoch(
     state: &mut crate::VaultMetaState,
-    identity: &DeviceIdentity,
     records_snapshot: &[StoredSecretRecord],
     old_members_key: &SymmetricKey,
     new_keys: &VaultKeys,
 ) -> VaultResult<()> {
-    let auth = genesis_auth_record(identity, &new_keys.secrets_key, &new_keys.members_key)?;
+    let records =
+        rewrapped_vault_meta_records_for_epoch(records_snapshot, old_members_key, new_keys)?;
     state.auth.clear();
-    if let VaultMetaRecord::Auth(auth_id, envelopes) = VaultMetaRecord::classify(&auth) {
-        state.auth.insert(auth_id, envelopes);
+    state.members.clear();
+    for record in &records {
+        state.apply_record(record);
     }
-    let roster = resolve_member_roster(records_snapshot, old_members_key)?;
-    let member_records = build_members_records(&roster, &new_keys.members_key)?;
-    apply_member_records(state, &member_records);
     Ok(())
 }
 
@@ -92,8 +109,10 @@ pub fn rewrap_vault_meta_for_epoch(
 mod tests {
     use super::*;
     use crate::{
-        ApiKeySecret, DeviceIdentity, SecretId, SecretValue, VaultResult, generate_vault_keys,
-        genesis_members_records,
+        ApiKeySecret, DeviceIdentity, SecretId, SecretValue, VaultOperation, VaultResult,
+        approve_join_request, create_join_request_record, generate_vault_keys, genesis_auth_record,
+        genesis_members_records, pending_join_for_device, replace_member_records,
+        resolve_members_key, resolve_secrets_key,
     };
 
     #[test]
@@ -170,19 +189,69 @@ mod tests {
         let mut state = crate::VaultMetaState::from_stored_records(&records);
         let old_auth_envelopes = state.auth.get(&identity.auth_id()).cloned();
 
-        rewrap_vault_meta_for_epoch(
-            &mut state,
-            &identity,
-            &records,
-            &old_keys.members_key,
-            &new_keys,
-        )?;
+        rewrap_vault_meta_for_epoch(&mut state, &records, &old_keys.members_key, &new_keys)?;
 
         assert_ne!(
             state.auth.get(&identity.auth_id()),
             old_auth_envelopes.as_ref()
         );
         assert!(!state.members.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn checkpoint_meta_replay_preserves_every_device_grant() -> anyhow::Result<()> {
+        let old_keys = generate_vault_keys()?;
+        let new_keys = generate_vault_keys()?;
+        let owner = DeviceIdentity::generate()?;
+        let joiner = DeviceIdentity::generate()?;
+        let mut records = vec![genesis_auth_record(
+            &owner,
+            &old_keys.secrets_key,
+            &old_keys.members_key,
+        )?];
+        records.extend(genesis_members_records(
+            &owner,
+            &old_keys.members_key,
+            "2026-06-28T00:00:00Z",
+        )?);
+        records.push(create_join_request_record(&joiner, "2026-06-28T00:01:00Z")?);
+        let join = pending_join_for_device(&records, joiner.device_id())
+            .ok_or_else(|| std::io::Error::other("join request must exist"))?;
+        let (joiner_auth, join_key, member_records) = approve_join_request(
+            &old_keys.secrets_key,
+            &old_keys.members_key,
+            &join,
+            &owner,
+            &records,
+        )?;
+        records.retain(|record| record.key.as_str() != join_key);
+        records.push(joiner_auth);
+        replace_member_records(&mut records, member_records);
+
+        let rotated_meta_records =
+            rewrapped_vault_meta_records_for_epoch(&records, &old_keys.members_key, &new_keys)?;
+        let mut state = crate::VaultMetaState::from_stored_records(&records);
+        crate::apply_vault_meta_operation(
+            &mut state,
+            &VaultOperation::EpochCheckpoint {
+                secrets: Vec::new(),
+                members_checkpoint_hash: crate::sha256_hex(b"members"),
+                rotated_meta_records,
+            },
+            "2026-06-28T00:02:00Z",
+        )?;
+        let replayed = state.to_stored_records();
+        for identity in [&owner, &joiner] {
+            assert_eq!(
+                resolve_secrets_key(&replayed, identity)?,
+                new_keys.secrets_key
+            );
+            assert_eq!(
+                resolve_members_key(&replayed, identity)?,
+                new_keys.members_key
+            );
+        }
         Ok(())
     }
 }

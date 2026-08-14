@@ -422,6 +422,7 @@ pub const DEVICE_PROTECTION_PIN_UNLOCK_FAILED: &str = "device_protection.pin_unl
 pub const DEVICE_PROTECTION_RECOVERY_ACTION: &str = "device_protection.recovery_action";
 pub const DEVICE_PROTECTION_RECOVERY_COMPLETE: &str = "device_protection.recovery_complete";
 pub const DEVICE_PROTECTION_RECOVERY_CONFIRM: &str = "device_protection.recovery_confirm";
+pub const DEVICE_PROTECTION_RECOVERY_FAILED: &str = "device_protection.recovery_failed";
 pub const DEVICE_PROTECTION_RECOVERY_PASSKEY_UNAVAILABLE_PIN_FALLBACK_READY: &str =
     "device_protection.recovery_passkey_unavailable_pin_fallback_ready";
 pub const DEVICE_PROTECTION_RECOVERY_PIN_FALLBACK_READY: &str =
