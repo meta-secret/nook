@@ -59,57 +59,6 @@ impl<'de> Deserialize<'de> for Sha256Hex {
     }
 }
 
-/// Content-addressed event reference used to version an identity-owned vault DEK.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct IdentityVaultEventId(String);
-
-impl IdentityVaultEventId {
-    pub fn parse(raw: &str) -> ValidationResult<Self> {
-        let value = raw.trim();
-        let Some(digest) = value.strip_prefix("sha256u:") else {
-            return Err(ValidationError::IdentityVaultEventIdInvalid);
-        };
-        if digest.len() != 43
-            || !digest
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
-        {
-            return Err(ValidationError::IdentityVaultEventIdInvalid);
-        }
-        Ok(Self(value.to_owned()))
-    }
-
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for IdentityVaultEventId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl AsRef<str> for IdentityVaultEventId {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl Serialize for IdentityVaultEventId {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for IdentityVaultEventId {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
-    }
-}
-
 /// Ed25519 verifying-key state used by persisted membership and event records.
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DeviceSigningPublicKey {
@@ -254,19 +203,6 @@ mod tests {
         assert!(Sha256Hex::parse("short").is_err());
         let roundtripped: Sha256Hex = serde_json::from_str(&serde_json::to_string(&hex)?)?;
         assert_eq!(roundtripped, hex);
-        Ok(())
-    }
-
-    #[test]
-    fn identity_vault_event_id_parse_and_serde() -> anyhow::Result<()> {
-        let event_id = IdentityVaultEventId::parse(&format!("sha256u:{}", "a".repeat(43)))?;
-        assert!(
-            IdentityVaultEventId::parse(event_id.as_str().trim_start_matches("sha256u:")).is_err()
-        );
-        assert!(IdentityVaultEventId::parse("sha256u:short").is_err());
-        let roundtripped: IdentityVaultEventId =
-            serde_json::from_str(&serde_json::to_string(&event_id)?)?;
-        assert_eq!(roundtripped, event_id);
         Ok(())
     }
 

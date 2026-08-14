@@ -739,13 +739,10 @@ FROM nook-rust AS nook-rust-browser
 
 ARG BUN_VERSION=1.3.14
 ARG PLAYWRIGHT_VERSION=1.55.0
-ARG PLAYWRIGHT_CHROMIUM_VERSION=140.0.7339.16
-ARG PLAYWRIGHT_CHROMEDRIVER_SHA256=f40639ecc590adea9583a15066afd8e2e3e84173435dc4e31d9b01afcc41bd66
 
 ENV BUN_INSTALL=/usr/local/bun
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright
-ENV CHROMEDRIVER=/usr/local/bin/chromedriver
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends unzip \
@@ -754,16 +751,6 @@ RUN apt-get update \
     && bunx playwright@${PLAYWRIGHT_VERSION} install-deps chromium \
     && mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
     && bunx playwright@${PLAYWRIGHT_VERSION} install chromium \
-    && chromium="$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name headless_shell -print -quit)" \
-    && test -x "$chromium" \
-    && ln -s "$chromium" /usr/local/bin/google-chrome \
-    && curl -fsSL \
-        "https://storage.googleapis.com/chrome-for-testing-public/${PLAYWRIGHT_CHROMIUM_VERSION}/linux64/chromedriver-linux64.zip" \
-        -o /tmp/chromedriver.zip \
-    && echo "${PLAYWRIGHT_CHROMEDRIVER_SHA256}  /tmp/chromedriver.zip" | sha256sum -c - \
-    && unzip -q /tmp/chromedriver.zip -d /tmp/chromedriver \
-    && install -m 0755 /tmp/chromedriver/chromedriver-linux64/chromedriver "$CHROMEDRIVER" \
-    && rm -rf /tmp/chromedriver /tmp/chromedriver.zip \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------

@@ -98,14 +98,9 @@ pub fn union_remote_events(
     remote_events: &[(EventId, Vec<u8>)],
     store_id: &str,
 ) -> EventResult<Vec<EventId>> {
-    let visible_remote_events = crate::remote_epoch_visibility::visibility_gated_remote_events(
-        local,
-        remote_events,
-        store_id,
-    )?;
     let mut candidate = local.clone();
     let mut candidates = Vec::new();
-    for (event_id, bytes) in &visible_remote_events {
+    for (event_id, bytes) in remote_events {
         if local.get_bytes(event_id).is_some() || candidate.get_bytes(event_id).is_some() {
             continue;
         }

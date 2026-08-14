@@ -1,6 +1,6 @@
 //! Semantic comparison for identity-held vault DEK grants.
 
-use super::identity::{IdentityMember, IdentityVaultDek, IdentityVaultDekEpoch, MemberDekEnvelope};
+use super::identity::{IdentityMember, IdentityVaultDek, MemberDekEnvelope};
 use super::multi_device::{AppKey, VaultKeys};
 
 pub(super) fn already_grants(
@@ -8,10 +8,8 @@ pub(super) fn already_grants(
     app_key: &AppKey,
     members: &[IdentityMember],
     keys: &VaultKeys,
-    key_epoch: &IdentityVaultDekEpoch,
 ) -> bool {
-    if &vault_dek.key_epoch != key_epoch
-        || vault_dek.secrets_envelopes.len() != members.len()
+    if vault_dek.secrets_envelopes.len() != members.len()
         || vault_dek.members_envelopes.len() != members.len()
     {
         return false;

@@ -562,12 +562,17 @@ export async function adoptExtensionIdentity(
   const { envelope, nextNonce } = await requestIdentityEnvelope(
     requestIdentityEnvelopeArgs,
   );
+  const pairedVaultStoreId =
+    request.source === ExtensionIdentityRequestSource.PairedVault
+      ? request.vaultStoreId
+      : "";
   await manager.finish_extension_identity_handoff(
     envelope,
     nonce,
     request.deviceId,
     request.devicePublicKey,
     request.deviceSigningPublicKey,
+    pairedVaultStoreId,
   );
   request.nonce = nextNonce;
 }

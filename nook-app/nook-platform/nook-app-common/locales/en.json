@@ -982,8 +982,7 @@
     "recovery_action": "I can't use this passkey",
     "pin_recovery_action": "I forgot this PIN or passphrase",
     "recovery_confirm": "Reset this browser's device identity? Saved sync connections will be removed. Local encrypted vaults will remain, but you may need a vault password or another enrolled device to regain access.",
-    "recovery_complete": "Device identity reset. Create a new passkey to continue.",
-    "recovery_failed": "Could not safely reset this browser's device identity."
+    "recovery_complete": "Device identity reset. Create a new passkey to continue."
   },
   "vault_recovery": {
     "passkey_title": "Passkeys for this vault",

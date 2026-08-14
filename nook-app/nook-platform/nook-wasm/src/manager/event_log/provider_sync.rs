@@ -1,4 +1,3 @@
-use crate::storage::event_db::save_event_bytes;
 use std::collections::BTreeSet;
 
 use super::{
@@ -6,7 +5,7 @@ use super::{
     LocalFolderEventWrite, NookError, NookVaultManager, RemoteEventLogClassification,
     append_outbox_index, classify_remote_event_log, load_from_indexed_db, load_local_event_store,
     load_outbox, queue_outbox_entry, read_local_folder_event_files, remove_outbox_entry,
-    save_heads, union_remote_events_and_heads, write_local_folder_event_files,
+    save_event_bytes, save_heads, union_remote_events_and_heads, write_local_folder_event_files,
 };
 
 impl NookVaultManager {
@@ -155,36 +154,24 @@ impl NookVaultManager {
         let mut remote_ids = self.list_current_provider_event_ids().await?;
         self.guard_current_provider_writable_for_active_store(&remote_ids)
             .await?;
-        let mut pending = load_outbox(&provider_id)
-            .await?
-            .into_iter()
-            .map(|(event_id, bytes)| Ok((EventId::parse(&event_id)?, bytes)))
-            .collect::<Result<Vec<_>, NookError>>()?;
-        nook_core::order_remote_events_for_visibility(&mut pending)?;
-        for (event_id, bytes) in pending {
+        let pending = load_outbox(&provider_id).await?;
+        for (raw_id, bytes) in pending {
+            let event_id = EventId::parse(&raw_id)?;
             // Always put-if-absent: a listed remote name may be unreadable junk.
             // Only drop the outbox row after a successful idempotent publish.
             self.put_current_provider_event_if_absent(&event_id, &bytes)
                 .await?;
-            remove_outbox_entry(&provider_id, event_id.as_str()).await?;
             remote_ids.insert(event_id);
+            remove_outbox_entry(&provider_id, &raw_id).await?;
         }
 
         if !self.vault.store_id.is_empty() {
             let local = load_local_event_store(&self.vault.store_id).await?;
-            let mut missing = local
-                .missing_event_ids(&remote_ids)
-                .into_iter()
-                .map(|event_id| {
-                    let bytes = local.get_bytes(&event_id).ok_or_else(|| {
-                        NookError::Database(format!("Local event {event_id} is missing"))
-                    })?;
-                    Ok((event_id, bytes.to_vec()))
-                })
-                .collect::<Result<Vec<_>, NookError>>()?;
-            nook_core::order_remote_events_for_visibility(&mut missing)?;
-            for (event_id, bytes) in missing {
-                self.put_current_provider_event_if_absent(&event_id, &bytes)
+            for event_id in local.missing_event_ids(&remote_ids) {
+                let bytes = local.get_bytes(&event_id).ok_or_else(|| {
+                    NookError::Database(format!("Local event {event_id} is missing"))
+                })?;
+                self.put_current_provider_event_if_absent(&event_id, bytes)
                     .await?;
                 remote_ids.insert(event_id);
             }

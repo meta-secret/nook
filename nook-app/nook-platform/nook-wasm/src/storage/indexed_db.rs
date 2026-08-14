@@ -21,7 +21,7 @@
 //!   catalog buckets. Searchable metadata is decrypted only while unlocked.
 //! - `secret_search:{store_id}` — legacy plaintext catalog key, deleted
 //!   unconditionally when that vault opens.
-//! - `sentinel_genesis_share:{store_id}:{device_id}` — a core-verified encrypted Sentinel genesis share delivery for this participant. Current payloads include the owning `identityId`. Legacy payloads without it are accepted only when the app key maps to one unambiguous identity, then rewritten with the validated binding. Unlike a draft genesis
+//! - `sentinel_genesis_share:{store_id}:{device_id}` — a core-verified encrypted Sentinel genesis share delivery for this participant. Unlike a draft genesis
 //!   session, this may survive refresh and does not contain plaintext key
 //!   material.
 mod device_identity;

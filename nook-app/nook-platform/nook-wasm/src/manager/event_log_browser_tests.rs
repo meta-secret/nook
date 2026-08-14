@@ -32,15 +32,11 @@ async fn import_fixture(with_update: bool) -> anyhow::Result<ImportFixture> {
     source.initialize_genesis_vault(&identity)?;
     source.vault.store_id = nook_core::generate_store_id()?.to_string();
     source.bootstrap_event_log_genesis().await?;
-    source.persist_projection_cache().await?;
     if with_update {
         source
-            .append_vault_operations(vec![VaultOperation::MemberRenamed {
-                device_id: identity.device_id().clone(),
-                label: nook_core::MemberLabel::from_trusted("Candidate device".to_owned()),
-            }])
+            .set_vault_name("Candidate vault")
             .await
-            .map_err(|error| anyhow::anyhow!("append candidate update: {error}"))?;
+            .map_err(|error| anyhow::anyhow!("append candidate update: {error:?}"))?;
     }
     let signing_public_key = source.ensure_signing_identity().await?.public_key();
     let records = source
@@ -259,30 +255,28 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
 }
 
 #[wasm_bindgen_test]
-async fn staged_incomplete_extension_import_restores_session_and_active_projection()
--> anyhow::Result<()> {
+async fn staged_extension_import_error_restores_session_and_active_projection() -> anyhow::Result<()>
+{
     let mut fixture = import_fixture(true).await?;
-    let dependent_index = fixture
+    let dependent = fixture
         .records
-        .iter()
-        .position(|record| !record.event.body.parents.is_empty())
+        .pop()
         .ok_or_else(|| anyhow::anyhow!("candidate update event is missing"))?;
-    let dependent = fixture.records.remove(dependent_index);
     for record in &fixture.records {
         crate::storage::event_db::remove_event_fixture(&fixture.store_id, &record.event_id).await?;
     }
     let (mut replacement, previous_store_id) = replacement_manager(&fixture).await?;
-    let status = replacement
-        .import_extension_event_log_records(
-            &fixture.store_id,
-            &fixture.device_id,
-            fixture.device_public_key.as_str(),
-            fixture.signing_public_key.as_str(),
-            vec![dependent],
-        )
-        .await?;
-    assert!(!status.access_granted);
-    assert_eq!(status.event_count, 1);
-    assert!(status.heads.is_empty());
+    assert!(
+        replacement
+            .import_extension_event_log_records(
+                &fixture.store_id,
+                &fixture.device_id,
+                fixture.device_public_key.as_str(),
+                fixture.signing_public_key.as_str(),
+                vec![dependent],
+            )
+            .await
+            .is_err()
+    );
     assert_rollback(&replacement, &previous_store_id).await
 }

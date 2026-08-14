@@ -131,8 +131,6 @@ mod tests {
                 version: 1,
                 kdf: "argon2id".to_owned(),
                 work_factor: 3,
-                recipient: String::new(),
-                wrapped_keys: String::new(),
                 ciphertext: "AGE-ENCRYPTED-KEYS".to_owned(),
             },
         }

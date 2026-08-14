@@ -65,41 +65,6 @@ pub struct SentinelShareIssuedPayload {
     pub ciphertext: AgeArmoredCiphertext,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub enum EpochPasswordState {
-    #[default]
-    LegacyRetain,
-    Replace(Vec<PasswordUnlockEntry>),
-}
-
-impl EpochPasswordState {
-    fn is_legacy_retain(&self) -> bool {
-        matches!(self, Self::LegacyRetain)
-    }
-}
-
-fn deserialize_epoch_password_state<'de, D>(deserializer: D) -> Result<EpochPasswordState, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Vec::<PasswordUnlockEntry>::deserialize(deserializer).map(EpochPasswordState::Replace)
-}
-
-fn serialize_epoch_password_state<S>(
-    state: &EpochPasswordState,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    match state {
-        EpochPasswordState::Replace(entries) => entries.serialize(serializer),
-        EpochPasswordState::LegacyRetain => Err(serde::ser::Error::custom(
-            "legacy checkpoint password state must be omitted",
-        )),
-    }
-}
-
 /// Atomic domain operations recorded in the immutable event log.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -180,15 +145,6 @@ pub enum VaultOperation {
     EpochCheckpoint {
         secrets: Vec<EncryptedSecretPayload>,
         members_checkpoint_hash: Sha256Hex,
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        rotated_meta_records: Vec<StoredSecretRecord>,
-        #[serde(
-            default,
-            skip_serializing_if = "EpochPasswordState::is_legacy_retain",
-            deserialize_with = "deserialize_epoch_password_state",
-            serialize_with = "serialize_epoch_password_state"
-        )]
-        password_entries: EpochPasswordState,
     },
 }
 
@@ -406,24 +362,6 @@ mod tests {
     }
 
     #[test]
-    fn omitted_checkpoint_password_state_decodes_as_legacy_retain() -> anyhow::Result<()> {
-        let operation: VaultOperation = serde_json::from_value(json!({
-            "type": "epoch-checkpoint",
-            "secrets": [],
-            "members_checkpoint_hash": "00".repeat(32),
-            "rotated_meta_records": []
-        }))?;
-        assert!(matches!(
-            operation,
-            VaultOperation::EpochCheckpoint {
-                password_entries: EpochPasswordState::LegacyRetain,
-                ..
-            }
-        ));
-        Ok(())
-    }
-
-    #[test]
     fn schema_one_event_is_rejected() -> anyhow::Result<()> {
         let signing_key = test_signing_key();
         let mut event = empty_genesis_event(&signing_key)?;
@@ -598,8 +536,6 @@ mod tests {
                     version: 1,
                     kdf: "scrypt".to_owned(),
                     work_factor: 18,
-                    recipient: String::new(),
-                    wrapped_keys: String::new(),
                     ciphertext: "age-ciphertext".to_owned(),
                 },
             }],

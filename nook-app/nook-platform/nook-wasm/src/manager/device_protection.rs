@@ -57,6 +57,7 @@ impl NookVaultManager {
         expected_device_id: &str,
         expected_device_public_key: &str,
         expected_device_signing_public_key: &str,
+        paired_vault_store_id: &str,
     ) -> Result<(), JsError> {
         let private_key = Zeroizing::new(std::mem::take(
             &mut self.device.extension_handoff_private_key,
@@ -79,6 +80,14 @@ impl NookVaultManager {
             &nook_core::DeviceSigningPublicKey::parse(expected_device_signing_public_key)?,
         )?;
         let (identity, handoff_signing_seed) = material.into_parts();
+        let paired_vault = if paired_vault_store_id.is_empty() {
+            None
+        } else {
+            Some((
+                self.device_identity()?,
+                nook_core::StoreId::parse(paired_vault_store_id)?,
+            ))
+        };
 
         // Age identity may come from a reinstalled extension. Keep any durable
         // authorized signer when the vault already has events so Approve does
@@ -102,12 +111,23 @@ impl NookVaultManager {
             crate::storage::event_db::save_signing_seed(seed).await?;
         }
         let signing_seed_was_persisted = seed_to_persist.is_some();
-        if let Err(enrollment_error) =
-            crate::storage::identity_record::enroll_authenticated_app_key_for_vault_creation(
-                &identity,
-            )
-            .await
-        {
+        let enrollment = match paired_vault {
+            Some((current_app_key, store_id)) => {
+                crate::storage::identity_record::enroll_authenticated_app_key_for_paired_vault(
+                    &current_app_key,
+                    &identity,
+                    &store_id,
+                )
+                .await
+            }
+            None => {
+                crate::storage::identity_record::enroll_authenticated_app_key_for_vault_creation(
+                    &identity,
+                )
+                .await
+            }
+        };
+        if let Err(enrollment_error) = enrollment {
             crate::storage::event_db::restore_signing_seed(previous_stored_seed.as_deref()).await?;
             return Err(enrollment_error.into());
         }
@@ -464,9 +484,10 @@ impl NookVaultManager {
         result.map_err(Into::into)
     }
 
-    /// Zeroize this tab before another tab performs destructive local recovery.
+    /// Destructive local recovery: forget the inaccessible identity and its
+    /// identity-sealed provider credentials, preserving local encrypted vaults.
     #[wasm_bindgen]
-    pub fn quiesce_for_local_recovery(&mut self) {
+    pub async fn reset_device_protection_for_recovery(&mut self) -> Result<(), JsError> {
         self.reset_vault_session();
         self.device.identity_private_key.zeroize();
         self.device.extension_handoff_private_key.zeroize();
@@ -476,16 +497,7 @@ impl NookVaultManager {
         self.storage.remote_path.clear();
         self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
         self.storage.mode = nook_core::StorageMode::Local;
-    }
-
-    /// Destructive local recovery: forget the inaccessible identity and its
-    /// identity-sealed provider credentials, preserving local encrypted vaults.
-    #[wasm_bindgen]
-    pub async fn reset_device_protection_for_recovery(&mut self) -> Result<(), JsError> {
-        self.quiesce_for_local_recovery();
         indexed_db::delete_device_identity_for_recovery().await?;
-        crate::storage::identity_record::delete_identity_directory_for_recovery().await?;
-        indexed_db::clear_sentinel_genesis_finalization_pending().await?;
         auth_providers::delete_auth_providers_db().await?;
         Ok(())
     }

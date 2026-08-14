@@ -1,8 +1,7 @@
 # Vault Architecture Modes
 
-**Status:** Vault modes are implemented. The device-local identity directory is
-implemented. Replicated identity control and cross-installation enrollment remain
-target architecture.
+**Status:** Vault modes implemented; virtual identity lifecycle is target
+architecture and is not yet implemented.
 
 Nook's security choices belong to their owning lifecycle. Rust owns policy in
 `nook-core` / `nook-auth2`; WASM exposes typed decisions to the web layer.
@@ -13,9 +12,8 @@ In the target identity architecture, identity creation and device onboarding
 are separate from vault creation. A combined product journey may perform them
 consecutively, but a person may hold multiple virtual identities; each exists
 independently with zero or more registered keys and receives explicit grants
-to independently encrypted vaults. The local directory, active selection, and
-identity-owned DEK records are implemented. Replicated identity-control storage,
-cross-installation enrollment, and revocation are not implemented yet. See
+to independently encrypted vaults. This lifecycle and its identity-control
+storage are not implemented yet. See
 [identity-vault-architecture.md](identity-vault-architecture.md).
 
 ## Architecture Groups

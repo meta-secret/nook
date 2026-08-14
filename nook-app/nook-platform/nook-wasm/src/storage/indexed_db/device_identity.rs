@@ -226,7 +226,7 @@ mod tests {
         let wrapped =
             nook_core::wrap_device_identity_with_pin(&identity.secret_string(), "123456")?;
         save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
-        idb_delete_keys(&[APP_ID_KEY, DEVICE_ID_KEY]).await?;
+        idb_delete_key(DEVICE_ID_KEY).await?;
 
         assert!(load_wrapped_device_identity().await.is_err());
         Ok(())

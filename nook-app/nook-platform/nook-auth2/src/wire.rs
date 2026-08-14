@@ -8,7 +8,7 @@ use std::fmt;
 use zeroize::Zeroize;
 
 mod metadata;
-pub use metadata::{DeviceSigningPublicKey, IdentityVaultEventId, IsoTimestamp, Sha256Hex};
+pub use metadata::{DeviceSigningPublicKey, IsoTimestamp, Sha256Hex};
 
 const AGE_ARMOR_MARKER: &str = "BEGIN AGE ENCRYPTED FILE";
 const HEX_32_BYTE_LEN: usize = 64;

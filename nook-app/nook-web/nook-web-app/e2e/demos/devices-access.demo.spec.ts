@@ -8,7 +8,7 @@ import {
 
 const BEAT_MS = 650
 
-test('walk the access chain from passkey to app key to vaults', async ({
+test('walk the selected identity chain from passkey to app key to vaults', async ({
   page,
 }) => {
   await page.addInitScript(() => {

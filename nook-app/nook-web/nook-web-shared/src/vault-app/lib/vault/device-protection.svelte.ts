@@ -15,7 +15,6 @@ import {
   unselectedVaultScope,
 } from "$lib/auth/providers";
 import { createLogger } from "$lib/runtime/log";
-import { quiesceOtherTabsForLocalRecovery } from "$lib/runtime/browser-data";
 import type { DeviceMode } from "$lib/vault/architecture-model";
 import type { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
@@ -401,10 +400,7 @@ export async function resetDeviceProtectionForRecovery(
   state.isVerifying = true;
   state.errorMsg = "";
   try {
-    await quiesceOtherTabsForLocalRecovery();
-    await state.enqueueExclusiveStorage(() =>
-      state.requireManager().reset_device_protection_for_recovery(),
-    );
+    await state.requireManager().reset_device_protection_for_recovery();
     state.deviceProtectionStatus = DeviceProtectionStatus.Missing;
     state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey;
     state.deviceId = "";
@@ -416,9 +412,10 @@ export async function resetDeviceProtectionForRecovery(
     state.clearLocalFolder();
     state.storageMode = LOCAL_PROVIDER_TYPE;
     state.showSuccess(state.t(I18N_KEYS.DeviceProtectionRecoveryComplete));
-  } catch {
+  } catch (error) {
     log.warn("device protection recovery reset failed");
-    state.errorMsg = state.t(I18N_KEYS.DeviceProtectionRecoveryFailed);
+    state.errorMsg =
+      error instanceof Error ? error.message : "Recovery reset failed.";
   } finally {
     state.isVerifying = false;
   }

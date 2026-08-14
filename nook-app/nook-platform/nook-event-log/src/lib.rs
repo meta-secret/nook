@@ -20,7 +20,6 @@ mod event;
 mod fingerprint;
 mod graph;
 mod projection;
-mod remote_epoch_visibility;
 mod signing;
 mod store;
 
@@ -39,10 +38,9 @@ pub use epoch::{
 };
 pub use errors::{EventError, EventResult};
 pub use event::{
-    EncryptedSecretPayload, EpochPasswordState, GenesisImportPayload, SentinelShareIssuedPayload,
-    VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
-    build_genesis_import_event, parse_event_storage_bytes, parse_remote_event_storage_bytes,
-    serialize_event_storage_yaml,
+    EncryptedSecretPayload, GenesisImportPayload, SentinelShareIssuedPayload, VaultEvent,
+    VaultEventBody, VaultEventSchemaVersion, VaultOperation, build_genesis_import_event,
+    parse_event_storage_bytes, parse_remote_event_storage_bytes, serialize_event_storage_yaml,
 };
 pub use fingerprint::SecretFingerprint;
 pub use graph::{EventGraph, EventInsertStatus, EventPendingReason};
@@ -51,7 +49,6 @@ pub use projection::{
     SecretReplacementConflict, SecurityConflict, VaultProjection,
     assert_projection_permutation_invariant, project_vault,
 };
-pub use remote_epoch_visibility::order_remote_events_for_visibility;
 pub use signing::SigningIdentity;
 pub use store::{
     LocalEventStore, RemoteEventLogClassification, classify_remote_event_log,
