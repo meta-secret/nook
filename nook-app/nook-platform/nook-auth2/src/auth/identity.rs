@@ -384,37 +384,44 @@ impl IdentityRecord {
                 "existing app id has different key material".to_owned(),
             ));
         }
-        let vault_dek = self
+        let vault_dek_index = self
             .vault_deks
-            .iter_mut()
-            .find(|entry| entry.store_id == *store_id)
+            .iter()
+            .position(|entry| entry.store_id == *store_id)
             .ok_or_else(|| {
                 MultiDeviceError::InvalidDeviceIdentity(
                     "identity does not own this legacy vault".to_owned(),
                 )
             })?;
+        let vault_dek = &self.vault_deks[vault_dek_index];
         let next_epoch = vault_dek.next_epoch(&reconciliation.epoch_update)?;
         let secrets_entry = vault_dek
             .secrets_envelopes
-            .iter_mut()
-            .find(|entry| entry.app_id == *app_key.app_id());
+            .iter()
+            .position(|entry| entry.app_id == *app_key.app_id());
         let members_entry = vault_dek
             .members_envelopes
-            .iter_mut()
-            .find(|entry| entry.app_id == *app_key.app_id());
+            .iter()
+            .position(|entry| entry.app_id == *app_key.app_id());
         match (secrets_entry, members_entry) {
-            (Some(secrets_entry), Some(members_entry)) => {
-                if secrets_entry.envelope != reconciliation.secrets_envelope
-                    || members_entry.envelope != reconciliation.members_envelope
+            (Some(secrets_index), Some(members_index)) => {
+                if vault_dek.secrets_envelopes[secrets_index].envelope
+                    != reconciliation.secrets_envelope
+                    || vault_dek.members_envelopes[members_index].envelope
+                        != reconciliation.members_envelope
                     || vault_dek.key_epoch != next_epoch
                 {
-                    secrets_entry.envelope = reconciliation.secrets_envelope;
-                    members_entry.envelope = reconciliation.members_envelope;
+                    let vault_dek = &mut self.vault_deks[vault_dek_index];
+                    vault_dek.secrets_envelopes[secrets_index].envelope =
+                        reconciliation.secrets_envelope;
+                    vault_dek.members_envelopes[members_index].envelope =
+                        reconciliation.members_envelope;
                     vault_dek.key_epoch = next_epoch;
                     self.control_epoch = self.control_epoch.saturating_add(1);
                 }
             }
             (None, None) => {
+                let vault_dek = &mut self.vault_deks[vault_dek_index];
                 vault_dek.secrets_envelopes.push(MemberDekEnvelope {
                     app_id: app_key.app_id().clone(),
                     envelope: reconciliation.secrets_envelope,
