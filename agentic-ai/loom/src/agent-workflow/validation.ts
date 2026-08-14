@@ -774,6 +774,7 @@ function tasksAreOutcomeExclusive<
   const rightNode = taskNode(inspection.rightTask);
   for (const sourceTask of inspection.workflow.taskNames) {
     const source = inspection.workflow.tasks[sourceTask];
+    if (!source) continue;
     const completedInspection: OutcomeDescendantInspection<TTask, TJoin> = {
       target: source.completed,
       adjacency: inspection.adjacency,

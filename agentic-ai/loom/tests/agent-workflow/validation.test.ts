@@ -96,6 +96,25 @@ describe('static agent workflow validation', () => {
     expectIssue(assertion);
   });
 
+  test('returns Invalid when a declared task is absent from the registry', () => {
+    const {
+      [CortexAuditTask.ResolveBaseline]: omittedTask,
+      ...incompleteTasks
+    } = CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks;
+    expect(omittedTask.name).toBe(CortexAuditTask.ResolveBaseline);
+    const workflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      tasks: incompleteTasks,
+    } as CortexWorkflow;
+    const validation = validateStaticAgentWorkflow(workflow);
+    const assertion: WorkflowIssueAssertion = {
+      validation,
+      kind: WorkflowValidationIssueKind.RegistryMismatch,
+    };
+
+    expectIssue(assertion);
+  });
+
   test('rejects missing task and agent references', () => {
     const workflow: CortexWorkflow = {
       ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,

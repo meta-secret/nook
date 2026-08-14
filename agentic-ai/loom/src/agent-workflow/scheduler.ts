@@ -406,6 +406,7 @@ async function executeTask<TTask extends string, TAgent extends string>(
       invocation,
       runtime: context.runtime,
       timeoutMs: context.task.timeoutMs,
+      workflowSignal: context.signal,
       abort: () => taskController.abort(),
       cleanup: () =>
         context.signal.removeEventListener('abort', forwardCancellation),
@@ -443,6 +444,7 @@ type TimedExecution<TTask extends string, TAgent extends string> = {
   readonly invocation: WorkflowTaskInvocation<TTask, TAgent>;
   readonly runtime: WorkflowTaskRuntime<TTask, TAgent>;
   readonly timeoutMs: number;
+  readonly workflowSignal: AbortSignal;
   readonly abort: () => void;
   readonly cleanup: () => void;
 };
@@ -451,6 +453,7 @@ async function withTimeout<TTask extends string, TAgent extends string>(
   execution: TimedExecution<TTask, TAgent>,
 ): Promise<TaskTerminal<TTask>> {
   const timeoutControl = createTimeout(execution);
+  const cancellationControl = createWorkflowCancellation(execution);
   const attempt = execution.runtime.start(execution.invocation);
   const runtimeCompletion = attempt.completion;
   void runtimeCompletion.catch(() => false);
@@ -458,10 +461,17 @@ async function withTimeout<TTask extends string, TAgent extends string>(
     const terminal = await Promise.race([
       runtimeCompletion,
       timeoutControl.terminal,
+      cancellationControl.terminal,
     ]);
-    if (terminal.kind === TaskTerminalKind.TimedOut) {
+    if (
+      terminal.kind === TaskTerminalKind.TimedOut ||
+      terminal.kind === TaskTerminalKind.Cancelled
+    ) {
       const stopRequest = {
-        reason: TaskStopReason.Timeout,
+        reason:
+          terminal.kind === TaskTerminalKind.TimedOut
+            ? TaskStopReason.Timeout
+            : TaskStopReason.WorkflowCancellation,
         hardDeadlineMs: TASK_TEARDOWN_HARD_DEADLINE_MS,
       } as const;
       await attempt.stop(stopRequest);
@@ -469,8 +479,49 @@ async function withTimeout<TTask extends string, TAgent extends string>(
     return terminal;
   } finally {
     timeoutControl.cancel();
+    cancellationControl.cancel();
     execution.cleanup();
   }
+}
+
+type CancellationControl<TTask extends string> = {
+  readonly terminal: Promise<TaskTerminal<TTask>>;
+  readonly cancel: () => void;
+};
+
+function createWorkflowCancellation<
+  TTask extends string,
+  TAgent extends string,
+>(execution: TimedExecution<TTask, TAgent>): CancellationControl<TTask> {
+  let resolveCancellation: (terminal: TaskTerminal<TTask>) => void = () => {};
+  const terminal = new Promise<TaskTerminal<TTask>>((resolve) => {
+    resolveCancellation = resolve;
+  });
+  const cancelTask = (): void => {
+    execution.abort();
+    const cancelled: TaskTerminal<TTask> = {
+      kind: TaskTerminalKind.Cancelled,
+      task: execution.invocation.task,
+      attempt: execution.invocation.attempt,
+      summary: 'Workflow cancellation stopped this task.',
+    };
+    resolveCancellation(cancelled);
+  };
+  if (execution.workflowSignal.aborted) {
+    cancelTask();
+  } else {
+    const listenerOptions: AddEventListenerOptions = { once: true };
+    execution.workflowSignal.addEventListener(
+      'abort',
+      cancelTask,
+      listenerOptions,
+    );
+  }
+  return {
+    terminal,
+    cancel: () =>
+      execution.workflowSignal.removeEventListener('abort', cancelTask),
+  };
 }
 
 const TASK_TEARDOWN_HARD_DEADLINE_MS = 10_000;

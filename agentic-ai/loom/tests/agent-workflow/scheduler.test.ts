@@ -32,7 +32,10 @@ import type {
   WorkflowTaskRuntime,
 } from '../../src/agent-workflow/runtime.ts';
 import type { TaskStopRequest } from '../../src/agent-workflow/runtime.ts';
-import { TaskTeardownKind } from '../../src/agent-workflow/runtime.ts';
+import {
+  TaskStopReason,
+  TaskTeardownKind,
+} from '../../src/agent-workflow/runtime.ts';
 import { runStaticWorkflow } from '../../src/agent-workflow/scheduler.ts';
 import type { StaticWorkflowRunConfiguration } from '../../src/agent-workflow/scheduler.ts';
 
@@ -130,6 +133,7 @@ type LeafRuntimeConfiguration = { readonly mode: LeafRuntimeMode };
 class LeafOnlyRuntime implements WorkflowTaskRuntime<LeafOnlyTask, never> {
   readonly mode: LeafRuntimeMode;
   sawAgentProfile = false;
+  readonly stopReasons: TaskStopReason[] = [];
 
   constructor(configuration: LeafRuntimeConfiguration) {
     this.mode = configuration.mode;
@@ -139,7 +143,14 @@ class LeafOnlyRuntime implements WorkflowTaskRuntime<LeafOnlyTask, never> {
     invocation: WorkflowTaskInvocation<LeafOnlyTask, never>,
   ): WorkflowTaskAttempt<LeafOnlyTask> {
     const completion = this.execute(invocation);
-    return confirmedAttempt(completion);
+    const attempt = confirmedAttempt(completion);
+    return {
+      completion,
+      stop: async (request: TaskStopRequest) => {
+        this.stopReasons.push(request.reason);
+        return attempt.stop(request);
+      },
+    };
   }
 
   private async execute(
@@ -187,6 +198,7 @@ type LeafWorkflowFixtureConfiguration = {
 type LeafWorkflowFixture = {
   readonly runRoot: string;
   readonly runtime: LeafOnlyRuntime;
+  readonly abortController: AbortController;
   readonly configuration: StaticWorkflowRunConfiguration<
     LeafOnlyTask,
     never,
@@ -250,7 +262,7 @@ async function createLeafWorkflowFixture(
     signal: abortController.signal,
     now: () => FIXED_TIME,
   };
-  return { runRoot, runtime, configuration };
+  return { runRoot, runtime, abortController, configuration };
 }
 
 async function createFixture(
@@ -464,6 +476,30 @@ describe('static workflow scheduler', () => {
       expect(elapsedMs).toBeLessThan(900);
       expect(terminal.kind).toBe(WorkflowTerminalKind.CompletedWithFailures);
       expect(terminal.taskTerminals[0]?.kind).toBe(TaskTerminalKind.TimedOut);
+    } finally {
+      await rm(fixture.runRoot, removeOptions);
+    }
+  });
+
+  test('stops running work immediately when the workflow is cancelled', async () => {
+    const fixtureRequest: LeafWorkflowFixtureConfiguration = {
+      mode: LeafRuntimeMode.RejectAfterCancellationBarrier,
+      timeoutMs: 60_000,
+    };
+    const fixture = await createLeafWorkflowFixture(fixtureRequest);
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const startedAt = performance.now();
+      const completion = runStaticWorkflow(fixture.configuration);
+      setTimeout(() => fixture.abortController.abort(), 5);
+      const terminal = await completion;
+      const elapsedMs = performance.now() - startedAt;
+      expect(elapsedMs).toBeLessThan(900);
+      expect(terminal.kind).toBe(WorkflowTerminalKind.Cancelled);
+      expect(terminal.taskTerminals[0]?.kind).toBe(TaskTerminalKind.Cancelled);
+      expect(fixture.runtime.stopReasons).toEqual([
+        TaskStopReason.WorkflowCancellation,
+      ]);
     } finally {
       await rm(fixture.runRoot, removeOptions);
     }
