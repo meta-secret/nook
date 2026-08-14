@@ -43,7 +43,7 @@ async fn simple_genesis_operations(
             members_key_ciphertext: envelopes.members_key,
         }]);
     };
-    let identity_record = if let Some(staged) = &pending.staged_identity {
+    let identity_record = if let Some(staged) = pending.staged_identity() {
         staged
             .directory
             .identities()
@@ -82,7 +82,7 @@ async fn simple_genesis_signing_identity(
     manager: &mut NookVaultManager,
     pending: Option<&crate::storage::identity_record::PendingSimpleGenesis>,
 ) -> Result<nook_core::SigningIdentity, NookError> {
-    let Some(pending) = pending.filter(|pending| pending.staged_identity.is_some()) else {
+    let Some(pending) = pending.filter(|pending| pending.is_staged()) else {
         return manager.ensure_signing_identity().await;
     };
     let app_key = manager.device_identity()?;
@@ -100,7 +100,7 @@ async fn simple_genesis_signing_identity(
     }
     let signing =
         nook_core::SigningIdentity::from_seed_hex_stored(&manager.event_log.signing_seed)?;
-    let staged = pending.staged_identity.as_ref().ok_or_else(|| {
+    let staged = pending.staged_identity().ok_or_else(|| {
         NookError::Database("Staged Simple genesis state disappeared.".to_owned())
     })?;
     let member = staged
@@ -319,7 +319,7 @@ impl NookVaultManager {
             )
             .await?;
             self.event_log.signing_seed.clone_from(&pinned.signing_seed);
-            if pending.staged_identity.is_none() {
+            if !pending.is_staged() {
                 save_signing_seed(&pinned.signing_seed).await?;
             }
             pinned.event_yaml.into_bytes()
