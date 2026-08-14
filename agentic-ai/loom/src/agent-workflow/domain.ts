@@ -98,10 +98,11 @@ export type VerifyGitBaselineLeafExecution = {
   readonly leaf: LoomLeafKind.VerifyGitBaseline;
 };
 
+export type LoomLeafTaskExecution =
+  CortexAuditLeafExecution | VerifyGitBaselineLeafExecution;
+
 export type StaticTaskExecution<TAgent extends string> =
-  | AgentTaskExecution<TAgent>
-  | CortexAuditLeafExecution
-  | VerifyGitBaselineLeafExecution;
+  AgentTaskExecution<TAgent> | LoomLeafTaskExecution;
 
 export type NoTaskTarget = {
   readonly kind: TaskTargetKind.None;
@@ -132,6 +133,144 @@ export type TaskResourceClaims = {
   readonly read: readonly string[];
   readonly write: readonly string[];
 };
+
+export type TaskResourcePatternPair = {
+  readonly first: string;
+  readonly second: string;
+};
+
+type ResourceClaimKind =
+  'git' | 'exact' | 'subtree' | 'direct-glob' | 'recursive-basename';
+
+type ResourceClaimDescriptor = {
+  readonly kind: ResourceClaimKind;
+  readonly path: string;
+  readonly basename: string;
+};
+
+export function isValidTaskResourceClaim(claim: string): boolean {
+  return parseResourceClaim(claim) !== false;
+}
+
+export function taskResourcePatternsOverlap(
+  pair: TaskResourcePatternPair,
+): boolean {
+  const first = parseResourceClaim(pair.first);
+  const second = parseResourceClaim(pair.second);
+  if (!first || !second) return false;
+  if (first.kind === 'git') {
+    return second.kind === 'git' && first.path === second.path;
+  }
+  if (second.kind === 'git') return false;
+  if (
+    first.kind === 'recursive-basename' ||
+    second.kind === 'recursive-basename'
+  ) {
+    return true;
+  }
+  if (first.kind === 'direct-glob' || second.kind === 'direct-glob') {
+    const overlap: ResourceDescriptorPair = { first, second };
+    return directGlobOverlaps(overlap);
+  }
+  const pathPair: TaskResourcePatternPair = {
+    first: first.path,
+    second: second.path,
+  };
+  return pathsAreNested(pathPair);
+}
+
+function parseResourceClaim(claim: string): ResourceClaimDescriptor | false {
+  if (/^git:[A-Za-z0-9._/-]+$/.test(claim)) {
+    return { kind: 'git', path: claim, basename: '' };
+  }
+  const literalPath = '[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*';
+  if (new RegExp(`^${literalPath}$`).test(claim)) {
+    return { kind: 'exact', path: claim, basename: '' };
+  }
+  if (new RegExp(`^${literalPath}/\\*\\*$`).test(claim)) {
+    return { kind: 'subtree', path: claim.slice(0, -3), basename: '' };
+  }
+  const globBasename = '\\*(?:\\.[A-Za-z0-9_-]+)?';
+  const directMatch = claim.match(
+    new RegExp(`^(${literalPath})/(${globBasename})$`),
+  );
+  if (directMatch?.[1] && directMatch[2]) {
+    return {
+      kind: 'direct-glob',
+      path: directMatch[1],
+      basename: directMatch[2],
+    };
+  }
+  const recursiveMatch = claim.match(
+    new RegExp(`^\\*\\*/([A-Za-z0-9._-]+|${globBasename})$`),
+  );
+  if (recursiveMatch?.[1]) {
+    return {
+      kind: 'recursive-basename',
+      path: '',
+      basename: recursiveMatch[1],
+    };
+  }
+  return false;
+}
+
+function pathsAreNested(pair: TaskResourcePatternPair): boolean {
+  return (
+    pair.first === pair.second ||
+    pair.first.startsWith(`${pair.second}/`) ||
+    pair.second.startsWith(`${pair.first}/`)
+  );
+}
+
+type ResourceDescriptorPair = {
+  readonly first: ResourceClaimDescriptor;
+  readonly second: ResourceClaimDescriptor;
+};
+
+function directGlobOverlaps(pair: ResourceDescriptorPair): boolean {
+  const first = pair.first;
+  const second = pair.second;
+  if (first.kind === 'direct-glob' && second.kind === 'direct-glob') {
+    if (first.path === second.path) {
+      const basenames: TaskResourcePatternPair = {
+        first: first.basename,
+        second: second.basename,
+      };
+      return globBasenamesOverlap(basenames);
+    }
+    const paths: TaskResourcePatternPair = {
+      first: first.path,
+      second: second.path,
+    };
+    return pathsAreNested(paths);
+  }
+  const glob = first.kind === 'direct-glob' ? first : second;
+  const concrete = glob === first ? second : first;
+  if (concrete.path === glob.path) return true;
+  if (concrete.path.startsWith(`${glob.path}/`)) {
+    const relative = concrete.path.slice(glob.path.length + 1);
+    const firstSegment = relative.split('/')[0] ?? '';
+    const basenames: TaskResourcePatternPair = {
+      first: glob.basename,
+      second: firstSegment,
+    };
+    return globBasenamesOverlap(basenames);
+  }
+  return glob.path.startsWith(`${concrete.path}/`);
+}
+
+function globBasenamesOverlap(pair: TaskResourcePatternPair): boolean {
+  if (pair.first === '*' || pair.second === '*') return true;
+  if (!pair.first.startsWith('*') && !pair.second.startsWith('*')) {
+    return pair.first === pair.second;
+  }
+  if (pair.first.startsWith('*') && pair.second.startsWith('*')) {
+    return pair.first === pair.second;
+  }
+  const glob = pair.first.startsWith('*') ? pair.first : pair.second;
+  const literal = glob === pair.first ? pair.second : pair.first;
+  return literal.endsWith(glob.slice(1));
+}
 
 export type StaticTaskDefinition<
   TTask extends string,

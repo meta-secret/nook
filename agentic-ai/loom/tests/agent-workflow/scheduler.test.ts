@@ -10,12 +10,16 @@ import {
   CortexAuditTask,
 } from '../../src/agent-workflow/cortex-workflow.ts';
 import {
+  LoomLeafKind,
+  StaticAgentWorkflowName,
   TaskTerminalKind,
   WorkflowExecutorKind,
   WorkflowResultKind,
   WorkflowTerminalKind,
+  noTasks,
 } from '../../src/agent-workflow/domain.ts';
 import type {
+  StaticAgentWorkflowDefinition,
   TaskTerminal,
   WorkflowTaskOutput,
 } from '../../src/agent-workflow/domain.ts';
@@ -101,6 +105,124 @@ type SchedulerFixture = {
     CortexAuditJoin
   >;
 };
+
+enum LeafOnlyTask {
+  Inspect = 'inspect',
+}
+
+enum LeafRuntimeMode {
+  Complete = 'complete',
+  RejectAfterCancellationBarrier = 'reject-after-cancellation-barrier',
+}
+
+type LeafRuntimeConfiguration = { readonly mode: LeafRuntimeMode };
+
+class LeafOnlyRuntime implements WorkflowTaskRuntime<LeafOnlyTask, never> {
+  readonly mode: LeafRuntimeMode;
+  sawAgentProfile = false;
+
+  constructor(configuration: LeafRuntimeConfiguration) {
+    this.mode = configuration.mode;
+  }
+
+  async execute(
+    invocation: WorkflowTaskInvocation<LeafOnlyTask, never>,
+  ): Promise<TaskTerminal<LeafOnlyTask>> {
+    this.sawAgentProfile = 'agentProfile' in invocation;
+    if (this.mode === LeafRuntimeMode.RejectAfterCancellationBarrier) {
+      await Bun.sleep(500);
+      throw new Error('late read-only worker rejection');
+    }
+    const output: WorkflowTaskOutput = {
+      resultKind: WorkflowResultKind.LoomLeafEvidence,
+      summary: 'Leaf completed.',
+      findings: [],
+      notesForParent: [],
+      artifacts: [],
+    };
+    return {
+      kind: TaskTerminalKind.Completed,
+      task: invocation.task,
+      attempt: invocation.attempt,
+      threadId: 'loom-leaf',
+      output,
+    };
+  }
+}
+
+type LeafWorkflowFixtureConfiguration = {
+  readonly mode: LeafRuntimeMode;
+  readonly timeoutMs: number;
+};
+
+type LeafWorkflowFixture = {
+  readonly runRoot: string;
+  readonly runtime: LeafOnlyRuntime;
+  readonly configuration: StaticWorkflowRunConfiguration<
+    LeafOnlyTask,
+    never,
+    never
+  >;
+};
+
+async function createLeafWorkflowFixture(
+  request: LeafWorkflowFixtureConfiguration,
+): Promise<LeafWorkflowFixture> {
+  const workflow: StaticAgentWorkflowDefinition<LeafOnlyTask, never, never> = {
+    name: StaticAgentWorkflowName.CortexFullGarbageCollection,
+    version: 'leaf-only-test',
+    entry: LeafOnlyTask.Inspect,
+    taskNames: [LeafOnlyTask.Inspect],
+    agentNames: [],
+    joinNames: [],
+    agents: {},
+    tasks: {
+      [LeafOnlyTask.Inspect]: {
+        name: LeafOnlyTask.Inspect,
+        execution: {
+          kind: WorkflowExecutorKind.LoomLeaf,
+          leaf: LoomLeafKind.VerifyGitBaseline,
+        },
+        completed: noTasks,
+        failed: noTasks,
+        resources: { read: ['git:HEAD'], write: [] },
+        timeoutMs: request.timeoutMs,
+      },
+    },
+    joins: {},
+  };
+  const runRoot = await mkdtemp(join(tmpdir(), 'loom-leaf-scheduler-'));
+  const journalConfiguration: WorkflowJournalConfiguration = {
+    runRoot,
+    identity: {
+      runId: 'leaf-scheduler-test',
+      workflow: workflow.name,
+      workflowVersion: workflow.version,
+      sourceCommit: SOURCE_COMMIT,
+    },
+    now: () => FIXED_TIME,
+  };
+  const journal = new WorkflowJournal<LeafOnlyTask>(journalConfiguration);
+  const runtimeConfiguration: LeafRuntimeConfiguration = { mode: request.mode };
+  const runtime = new LeafOnlyRuntime(runtimeConfiguration);
+  const abortController = new AbortController();
+  const configuration: StaticWorkflowRunConfiguration<
+    LeafOnlyTask,
+    never,
+    never
+  > = {
+    workflow,
+    runtime,
+    journal,
+    runId: 'leaf-scheduler-test',
+    sourceCommit: SOURCE_COMMIT,
+    workingDirectory: process.cwd(),
+    maxConcurrency: 1,
+    signal: abortController.signal,
+    now: () => FIXED_TIME,
+  };
+  return { runRoot, runtime, configuration };
+}
 
 async function createFixture(
   runtimeConfiguration: ScriptedRuntimeConfiguration,
@@ -277,6 +399,42 @@ describe('static workflow scheduler', () => {
         (task) => task.task === CortexAuditTask.SynthesizeFindings,
       );
       expect(synthesis?.kind).toBe(TaskTerminalKind.Skipped);
+    } finally {
+      await rm(fixture.runRoot, removeOptions);
+    }
+  });
+
+  test('runs a leaf-only workflow without an agent profile', async () => {
+    const fixtureRequest: LeafWorkflowFixtureConfiguration = {
+      mode: LeafRuntimeMode.Complete,
+      timeoutMs: 1_000,
+    };
+    const fixture = await createLeafWorkflowFixture(fixtureRequest);
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const terminal = await runStaticWorkflow(fixture.configuration);
+      expect(terminal.kind).toBe(WorkflowTerminalKind.Completed);
+      expect(fixture.runtime.sawAgentProfile).toBe(false);
+    } finally {
+      await rm(fixture.runRoot, removeOptions);
+    }
+  });
+
+  test('returns after a bounded timeout barrier and consumes a late rejection', async () => {
+    const fixtureRequest: LeafWorkflowFixtureConfiguration = {
+      mode: LeafRuntimeMode.RejectAfterCancellationBarrier,
+      timeoutMs: 5,
+    };
+    const fixture = await createLeafWorkflowFixture(fixtureRequest);
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const startedAt = performance.now();
+      const terminal = await runStaticWorkflow(fixture.configuration);
+      const elapsedMs = performance.now() - startedAt;
+      expect(elapsedMs).toBeLessThan(900);
+      expect(terminal.kind).toBe(WorkflowTerminalKind.CompletedWithFailures);
+      expect(terminal.taskTerminals[0]?.kind).toBe(TaskTerminalKind.TimedOut);
+      await Bun.sleep(300);
     } finally {
       await rm(fixture.runRoot, removeOptions);
     }

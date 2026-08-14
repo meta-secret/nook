@@ -2,7 +2,7 @@ import type {
   AgentProfile,
   AgentTaskExecution,
   GitCommit,
-  StaticTaskExecution,
+  LoomLeafTaskExecution,
   TaskTerminal,
   WorkflowAttemptNumber,
   WorkflowRunId,
@@ -19,14 +19,9 @@ export type WorkflowDependencyOutput<TTask extends string> = {
   readonly output: WorkflowTaskOutput;
 };
 
-export type WorkflowTaskInvocation<
-  TTask extends string,
-  TAgent extends string,
-> = {
+type WorkflowTaskInvocationBase<TTask extends string> = {
   readonly task: TTask;
   readonly attempt: WorkflowAttemptNumber;
-  readonly execution: StaticTaskExecution<TAgent>;
-  readonly agentProfile: AgentProfile<TAgent>;
   readonly sourceCommit: GitCommit;
   readonly runId: WorkflowRunId;
   readonly workingDirectory: string;
@@ -34,6 +29,26 @@ export type WorkflowTaskInvocation<
   readonly signal: AbortSignal;
   readonly observe: RuntimeActivityObserver;
 };
+
+export type AgentWorkflowTaskInvocation<
+  TTask extends string,
+  TAgent extends string,
+> = WorkflowTaskInvocationBase<TTask> & {
+  readonly execution: AgentTaskExecution<TAgent>;
+  readonly agentProfile: AgentProfile<TAgent>;
+};
+
+export type LoomLeafWorkflowTaskInvocation<TTask extends string> =
+  WorkflowTaskInvocationBase<TTask> & {
+    readonly execution: LoomLeafTaskExecution;
+  };
+
+export type WorkflowTaskInvocation<
+  TTask extends string,
+  TAgent extends string,
+> =
+  | AgentWorkflowTaskInvocation<TTask, TAgent>
+  | LoomLeafWorkflowTaskInvocation<TTask>;
 
 export interface WorkflowTaskRuntime<
   TTask extends string,
@@ -47,9 +62,7 @@ export interface WorkflowTaskRuntime<
 export type AgentExecutionInvocation<
   TTask extends string,
   TAgent extends string,
-> = Omit<WorkflowTaskInvocation<TTask, TAgent>, 'execution'> & {
-  readonly execution: AgentTaskExecution<TAgent>;
-};
+> = AgentWorkflowTaskInvocation<TTask, TAgent>;
 
 export type AgentExecutionCompletion = {
   readonly threadId: string;

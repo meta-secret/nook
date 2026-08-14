@@ -1,4 +1,5 @@
 import { runCortexAudit } from '../commands/cortex-audit.ts';
+import type { CortexAuditReport } from '../commands/cortex-audit.ts';
 import type { CortexAuditRequest } from '../codec/args/cortex-audit.ts';
 import { runCommand } from '../lib/run.ts';
 import type { RunCommandArgs } from '../lib/run.ts';
@@ -7,12 +8,14 @@ import {
   TaskTerminalKind,
   WorkflowArtifactKind,
   WorkflowExecutorKind,
+  WorkflowFindingSeverity,
   WorkflowResultKind,
 } from './domain.ts';
 import type {
   CompletedTaskTerminal,
   StaticTaskExecution,
   TaskTerminal,
+  WorkflowFinding,
   WorkflowTaskOutput,
 } from './domain.ts';
 import type {
@@ -34,7 +37,10 @@ export class LocalWorkflowTaskRuntime<
   async execute(
     invocation: WorkflowTaskInvocation<TTask, TAgent>,
   ): Promise<TaskTerminal<TTask>> {
-    if (invocation.execution.kind === WorkflowExecutorKind.Agent) {
+    if (
+      invocation.execution.kind === WorkflowExecutorKind.Agent &&
+      'agentProfile' in invocation
+    ) {
       const agentInvocation = {
         ...invocation,
         execution: invocation.execution,
@@ -85,33 +91,41 @@ async function executeLeaf<TTask extends string, TAgent extends string>(
     if (statusOutput.exitCode !== 0 || statusOutput.stdout.trim().length > 0) {
       throw new Error('Workflow baseline must have a clean working tree.');
     }
-    return completedLeafTerminal([
-      invocation,
+    const baselineOutput = leafEvidenceOutput(
       `Verified source commit ${actualCommit}.`,
-    ]);
+    );
+    return completedLeafTerminal([invocation, baselineOutput]);
   }
   const cortexAuditInput: CortexAuditRequest = {
     includeDensityLint: execution.includeDensityLint,
   };
   const report = await runCortexAudit(cortexAuditInput);
-  if (!report.auditOk) {
-    throw new Error('Mechanical Cortex audit reported inconsistencies.');
-  }
-  return completedLeafTerminal([invocation, 'Mechanical Cortex audit passed.']);
+  const cortexAuditOutput = mechanicalCortexAuditOutput(report);
+  return completedLeafTerminal([invocation, cortexAuditOutput]);
 }
 
 type LeafCompletionValues<
   TTask extends string,
   TAgent extends string,
-> = readonly [WorkflowTaskInvocation<TTask, TAgent>, string];
+> = readonly [WorkflowTaskInvocation<TTask, TAgent>, WorkflowTaskOutput];
 
 function completedLeafTerminal<TTask extends string, TAgent extends string>(
   values: LeafCompletionValues<TTask, TAgent>,
 ): CompletedTaskTerminal<TTask> {
   const invocation = values[0];
+  return {
+    kind: TaskTerminalKind.Completed,
+    task: invocation.task,
+    attempt: invocation.attempt,
+    threadId: 'loom-leaf',
+    output: values[1],
+  };
+}
+
+function leafEvidenceOutput(summary: string): WorkflowTaskOutput {
   const output: WorkflowTaskOutput = {
     resultKind: WorkflowResultKind.LoomLeafEvidence,
-    summary: values[1],
+    summary,
     findings: [],
     notesForParent: [],
     artifacts: [
@@ -122,11 +136,76 @@ function completedLeafTerminal<TTask extends string, TAgent extends string>(
       },
     ],
   };
-  return {
-    kind: TaskTerminalKind.Completed,
-    task: invocation.task,
-    attempt: invocation.attempt,
-    threadId: 'loom-leaf',
-    output,
-  };
+  return output;
+}
+
+export function mechanicalCortexAuditOutput(
+  report: CortexAuditReport,
+): WorkflowTaskOutput {
+  const findings: WorkflowFinding[] = [];
+
+  for (const brokenLink of report.brokenLinks) {
+    const finding: WorkflowFinding = {
+      severity: WorkflowFindingSeverity.Error,
+      title: 'Broken Cortex link',
+      summary: `${brokenLink.file}:${brokenLink.line} references a missing target.`,
+      evidence: [
+        `${brokenLink.file}:${brokenLink.line} -> ${brokenLink.target}`,
+      ],
+      affectedPaths: [brokenLink.file],
+    };
+    findings.push(finding);
+  }
+  for (const skill of report.missingFromIndex) {
+    const finding: WorkflowFinding = {
+      severity: WorkflowFindingSeverity.Error,
+      title: 'Dynamic skill missing from index',
+      summary: `${skill} is not registered in the dynamic-skill index.`,
+      evidence: [`.cortex/dynamic-skills/index.md does not list ${skill}.`],
+      affectedPaths: [
+        '.cortex/dynamic-skills/index.md',
+        `.cortex/dynamic-skills/${skill}`,
+      ],
+    };
+    findings.push(finding);
+  }
+  for (const skill of report.orphanIndexRows) {
+    const finding: WorkflowFinding = {
+      severity: WorkflowFindingSeverity.Error,
+      title: 'Orphan dynamic-skill index row',
+      summary: `${skill} is indexed but its durable skill card is absent.`,
+      evidence: [`.cortex/dynamic-skills/index.md references ${skill}.`],
+      affectedPaths: ['.cortex/dynamic-skills/index.md'],
+    };
+    findings.push(finding);
+  }
+  for (const skill of report.missingExecutableSkills) {
+    const executablePath = `.agents/skills/${skill}/SKILL.md`;
+    const finding: WorkflowFinding = {
+      severity: WorkflowFindingSeverity.Error,
+      title: 'Missing executable dynamic-skill wrapper',
+      summary: `${skill} has no executable skill wrapper.`,
+      evidence: [`Expected executable wrapper at ${executablePath}.`],
+      affectedPaths: ['.cortex/dynamic-skills/index.md', executablePath],
+    };
+    findings.push(finding);
+  }
+  for (const densityFinding of report.densityFindings) {
+    const finding: WorkflowFinding = {
+      severity: WorkflowFindingSeverity.Warning,
+      title: 'Dense Cortex prose',
+      summary: `${densityFinding.file}:${densityFinding.line} ${densityFinding.reason}.`,
+      evidence: [
+        `${densityFinding.file}:${densityFinding.line}: ${densityFinding.excerpt}`,
+      ],
+      affectedPaths: [densityFinding.file],
+    };
+    findings.push(finding);
+  }
+
+  const summary = report.auditOk
+    ? 'Mechanical Cortex audit passed.'
+    : `Mechanical Cortex audit found ${findings.length} inconsistencies.`;
+  const output = leafEvidenceOutput(summary);
+  return { ...output, findings };
 }

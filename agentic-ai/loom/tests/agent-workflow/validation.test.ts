@@ -253,4 +253,156 @@ describe('static agent workflow validation', () => {
 
     expectIssue(assertion);
   });
+
+  test('rejects a descendant that can overlap a parallel sibling', () => {
+    const workflow: CortexWorkflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      tasks: {
+        ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks,
+        [CortexAuditTask.ResolveBaseline]: {
+          ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+            CortexAuditTask.ResolveBaseline
+          ],
+          completed: {
+            kind: TaskTargetKind.Parallel,
+            tasks: [
+              CortexAuditTask.AuditWorkflowsAndReferences,
+              CortexAuditTask.AuditDesignDocsAndProductSpecs,
+              CortexAuditTask.AuditDynamicSkillsAndEntryPoints,
+              CortexAuditTask.AuditRuntimeTaskAndCi,
+            ],
+          },
+        },
+        [CortexAuditTask.AuditWorkflowsAndReferences]: {
+          ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+            CortexAuditTask.AuditWorkflowsAndReferences
+          ],
+          completed: {
+            kind: TaskTargetKind.Task,
+            task: CortexAuditTask.MechanicalCortexAudit,
+          },
+        },
+        [CortexAuditTask.MechanicalCortexAudit]: {
+          ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+            CortexAuditTask.MechanicalCortexAudit
+          ],
+          resources: { read: [], write: ['docs/*.md'] },
+        },
+        [CortexAuditTask.AuditDesignDocsAndProductSpecs]: {
+          ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+            CortexAuditTask.AuditDesignDocsAndProductSpecs
+          ],
+          resources: { read: ['docs/readme.md'], write: [] },
+        },
+      },
+      joins: {
+        [CortexAuditJoin.EvidenceCollected]: {
+          ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.joins[
+            CortexAuditJoin.EvidenceCollected
+          ],
+          arrivals: [
+            CortexAuditTask.MechanicalCortexAudit,
+            CortexAuditTask.AuditDesignDocsAndProductSpecs,
+            CortexAuditTask.AuditDynamicSkillsAndEntryPoints,
+            CortexAuditTask.AuditRuntimeTaskAndCi,
+          ],
+        },
+      },
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    const assertion: WorkflowIssueAssertion = {
+      validation,
+      kind: WorkflowValidationIssueKind.ResourceConflict,
+    };
+
+    expectIssue(assertion);
+  });
+
+  test('supports recursive basename resource claims', () => {
+    const workflow: CortexWorkflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      tasks: {
+        ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks,
+        [CortexAuditTask.AuditWorkflowsAndReferences]: {
+          ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+            CortexAuditTask.AuditWorkflowsAndReferences
+          ],
+          resources: { read: [], write: ['**/Taskfile.yml'] },
+        },
+        [CortexAuditTask.AuditDesignDocsAndProductSpecs]: {
+          ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+            CortexAuditTask.AuditDesignDocsAndProductSpecs
+          ],
+          resources: { read: ['nook-app/Taskfile.yml'], write: [] },
+        },
+      },
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    const assertion: WorkflowIssueAssertion = {
+      validation,
+      kind: WorkflowValidationIssueKind.ResourceConflict,
+    };
+
+    expectIssue(assertion);
+  });
+
+  test('rejects unsupported resource claim syntax', () => {
+    const workflow: CortexWorkflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      tasks: {
+        ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks,
+        [CortexAuditTask.AuditWorkflowsAndReferences]: {
+          ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+            CortexAuditTask.AuditWorkflowsAndReferences
+          ],
+          resources: { read: ['docs/**/nested.md'], write: [] },
+        },
+      },
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    const assertion: WorkflowIssueAssertion = {
+      validation,
+      kind: WorkflowValidationIssueKind.InvalidResourceClaim,
+    };
+
+    expectIssue(assertion);
+  });
+
+  test('returns Invalid for a missing join registry entry', () => {
+    const workflow: CortexWorkflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      joins: {} as CortexWorkflow['joins'],
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    const assertion: WorkflowIssueAssertion = {
+      validation,
+      kind: WorkflowValidationIssueKind.RegistryMismatch,
+    };
+
+    expectIssue(assertion);
+  });
+
+  test('rejects join-to-join routing', () => {
+    const workflow: CortexWorkflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      joins: {
+        [CortexAuditJoin.EvidenceCollected]: {
+          ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.joins[
+            CortexAuditJoin.EvidenceCollected
+          ],
+          completed: {
+            kind: TaskTargetKind.Join,
+            join: CortexAuditJoin.EvidenceCollected,
+          },
+        },
+      },
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    const assertion: WorkflowIssueAssertion = {
+      validation,
+      kind: WorkflowValidationIssueKind.InvalidJoin,
+    };
+
+    expectIssue(assertion);
+  });
 });

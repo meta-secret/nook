@@ -19,6 +19,8 @@ import type {
 import type { WorkflowEventWithoutMetadata } from './events.ts';
 import { WorkflowJournal } from './journal.ts';
 import type {
+  AgentWorkflowTaskInvocation,
+  LoomLeafWorkflowTaskInvocation,
   WorkflowDependencyOutput,
   WorkflowTaskInvocation,
   WorkflowTaskRuntime,
@@ -46,7 +48,7 @@ export type StaticWorkflowRunConfiguration<
 
 type TaskExecutionContext<TTask extends string, TAgent extends string> = {
   readonly task: StaticTaskDefinition<TTask, TAgent, string>;
-  readonly agentProfile: AgentProfile<TAgent>;
+  readonly agentProfile: AgentProfile<TAgent> | false;
   readonly runtime: WorkflowTaskRuntime<TTask, TAgent>;
   readonly runId: WorkflowRunId;
   readonly sourceCommit: GitCommit;
@@ -320,15 +322,13 @@ function resolveAgentProfile<
   TTask extends string,
   TAgent extends string,
   TJoin extends string,
->(resolution: AgentResolution<TTask, TAgent, TJoin>): AgentProfile<TAgent> {
+>(
+  resolution: AgentResolution<TTask, TAgent, TJoin>,
+): AgentProfile<TAgent> | false {
   if (resolution.task.execution.kind === WorkflowExecutorKind.Agent) {
     return resolution.workflow.agents[resolution.task.execution.agent];
   }
-  const firstAgentName = resolution.workflow.agentNames[0];
-  if (!firstAgentName) {
-    throw new Error('Static workflow must declare at least one agent profile.');
-  }
-  return resolution.workflow.agents[firstAgentName];
+  return false;
 }
 
 async function executeTask<TTask extends string, TAgent extends string>(
@@ -365,18 +365,40 @@ async function executeTask<TTask extends string, TAgent extends string>(
   } else {
     context.signal.addEventListener('abort', forwardCancellation);
   }
-  const invocation: WorkflowTaskInvocation<TTask, TAgent> = {
-    task: context.task.name,
-    attempt: 1,
-    execution: context.task.execution,
-    agentProfile: context.agentProfile,
-    sourceCommit: context.sourceCommit,
-    runId: context.runId,
-    workingDirectory: context.workingDirectory,
-    upstreamOutputs: context.upstreamOutputs,
-    signal: taskController.signal,
-    observe,
-  };
+  let invocation: WorkflowTaskInvocation<TTask, TAgent>;
+  if (context.task.execution.kind === WorkflowExecutorKind.Agent) {
+    if (!context.agentProfile) {
+      throw new Error(
+        `Agent task ${context.task.name} has no validated agent profile.`,
+      );
+    }
+    const agentInvocation: AgentWorkflowTaskInvocation<TTask, TAgent> = {
+      task: context.task.name,
+      attempt: 1,
+      execution: context.task.execution,
+      agentProfile: context.agentProfile,
+      sourceCommit: context.sourceCommit,
+      runId: context.runId,
+      workingDirectory: context.workingDirectory,
+      upstreamOutputs: context.upstreamOutputs,
+      signal: taskController.signal,
+      observe,
+    };
+    invocation = agentInvocation;
+  } else {
+    const leafInvocation: LoomLeafWorkflowTaskInvocation<TTask> = {
+      task: context.task.name,
+      attempt: 1,
+      execution: context.task.execution,
+      sourceCommit: context.sourceCommit,
+      runId: context.runId,
+      workingDirectory: context.workingDirectory,
+      upstreamOutputs: context.upstreamOutputs,
+      signal: taskController.signal,
+      observe,
+    };
+    invocation = leafInvocation;
+  }
   let terminal: TaskTerminal<TTask>;
   try {
     const timedExecution: TimedExecution<TTask, TAgent> = {
@@ -426,22 +448,39 @@ async function withTimeout<TTask extends string, TAgent extends string>(
 ): Promise<TaskTerminal<TTask>> {
   const timeoutControl = createTimeout(execution);
   const runtimeCompletion = execution.runtime.execute(execution.invocation);
+  const consumedRuntimeCompletion = runtimeCompletion.then(
+    (terminal) => terminal,
+    () => false as const,
+  );
   try {
     const terminal = await Promise.race([
       runtimeCompletion,
       timeoutControl.terminal,
     ]);
     if (terminal.kind === TaskTerminalKind.TimedOut) {
-      await runtimeCompletion.then(
-        () => true,
-        () => true,
-      );
+      await waitForCancellationBarrier(consumedRuntimeCompletion);
     }
     return terminal;
   } finally {
     timeoutControl.cancel();
     execution.cleanup();
   }
+}
+
+const TASK_CANCELLATION_BARRIER_MS = 250;
+
+async function waitForCancellationBarrier<TTask extends string>(
+  runtimeCompletion: Promise<TaskTerminal<TTask> | false>,
+): Promise<void> {
+  let barrierHandle: ReturnType<typeof setTimeout> | false = false;
+  const barrier = new Promise<false>((resolve) => {
+    barrierHandle = setTimeout(
+      () => resolve(false),
+      TASK_CANCELLATION_BARRIER_MS,
+    );
+  });
+  await Promise.race([runtimeCompletion, barrier]);
+  if (barrierHandle) clearTimeout(barrierHandle);
 }
 
 type TimeoutControl<TTask extends string> = {
