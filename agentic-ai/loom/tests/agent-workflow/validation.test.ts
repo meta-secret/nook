@@ -5,7 +5,13 @@ import {
   CortexAuditJoin,
   CortexAuditTask,
 } from '../../src/agent-workflow/cortex-workflow.ts';
-import { TaskTargetKind, noTasks } from '../../src/agent-workflow/domain.ts';
+import {
+  LoomLeafKind,
+  TaskTargetKind,
+  WorkflowExecutorKind,
+  noTasks,
+  taskResourcePatternsOverlap,
+} from '../../src/agent-workflow/domain.ts';
 import {
   WorkflowValidationIssueKind,
   WorkflowValidationStatus,
@@ -22,6 +28,19 @@ type CortexWorkflow = StaticAgentWorkflowDefinition<
   CortexAuditTask,
   CortexAuditAgent,
   CortexAuditJoin
+>;
+
+enum ExclusiveBranchTask {
+  Root = 'root',
+  CompletedBranch = 'completed-branch',
+  CompletedDescendant = 'completed-descendant',
+  FailedBranch = 'failed-branch',
+  FailedDescendant = 'failed-descendant',
+}
+type ExclusiveBranchWorkflow = StaticAgentWorkflowDefinition<
+  ExclusiveBranchTask,
+  never,
+  never
 >;
 
 type WorkflowIssueAssertion = {
@@ -318,6 +337,89 @@ describe('static agent workflow validation', () => {
     expectIssue(assertion);
   });
 
+  test('accepts conflicting claims on mutually exclusive outcome branches', () => {
+    const leafExecution = {
+      kind: WorkflowExecutorKind.LoomLeaf,
+      leaf: LoomLeafKind.VerifyGitBaseline,
+    } as const;
+    const workflow: ExclusiveBranchWorkflow = {
+      name: CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.name,
+      version: 'exclusive-outcome-test',
+      entry: ExclusiveBranchTask.Root,
+      taskNames: [
+        ExclusiveBranchTask.Root,
+        ExclusiveBranchTask.CompletedBranch,
+        ExclusiveBranchTask.CompletedDescendant,
+        ExclusiveBranchTask.FailedBranch,
+        ExclusiveBranchTask.FailedDescendant,
+      ],
+      agentNames: [],
+      joinNames: [],
+      agents: {},
+      tasks: {
+        [ExclusiveBranchTask.Root]: {
+          name: ExclusiveBranchTask.Root,
+          execution: leafExecution,
+          completed: {
+            kind: TaskTargetKind.Task,
+            task: ExclusiveBranchTask.CompletedBranch,
+          },
+          failed: {
+            kind: TaskTargetKind.Task,
+            task: ExclusiveBranchTask.FailedBranch,
+          },
+          resources: { read: [], write: [] },
+          timeoutMs: 1_000,
+        },
+        [ExclusiveBranchTask.CompletedBranch]: {
+          name: ExclusiveBranchTask.CompletedBranch,
+          execution: leafExecution,
+          completed: {
+            kind: TaskTargetKind.Task,
+            task: ExclusiveBranchTask.CompletedDescendant,
+          },
+          failed: noTasks,
+          resources: { read: [], write: [] },
+          timeoutMs: 1_000,
+        },
+        [ExclusiveBranchTask.CompletedDescendant]: {
+          name: ExclusiveBranchTask.CompletedDescendant,
+          execution: leafExecution,
+          completed: noTasks,
+          failed: noTasks,
+          resources: { read: [], write: ['docs/README.md'] },
+          timeoutMs: 1_000,
+        },
+        [ExclusiveBranchTask.FailedBranch]: {
+          name: ExclusiveBranchTask.FailedBranch,
+          execution: leafExecution,
+          completed: {
+            kind: TaskTargetKind.Task,
+            task: ExclusiveBranchTask.FailedDescendant,
+          },
+          failed: noTasks,
+          resources: { read: [], write: [] },
+          timeoutMs: 1_000,
+        },
+        [ExclusiveBranchTask.FailedDescendant]: {
+          name: ExclusiveBranchTask.FailedDescendant,
+          execution: leafExecution,
+          completed: noTasks,
+          failed: noTasks,
+          resources: { read: ['docs/README.md'], write: [] },
+          timeoutMs: 1_000,
+        },
+      },
+      joins: {},
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    const expectedValidation: WorkflowValidation = {
+      status: WorkflowValidationStatus.Valid,
+    };
+
+    expect(validation).toEqual(expectedValidation);
+  });
+
   test('supports recursive basename resource claims', () => {
     const workflow: CortexWorkflow = {
       ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
@@ -344,6 +446,29 @@ describe('static agent workflow validation', () => {
     };
 
     expectIssue(assertion);
+  });
+
+  test('does not overlap unrelated recursive basename claims', () => {
+    const nonOverlappingPairs = [
+      { first: 'README.md', second: '**/Taskfile.yml' },
+      { first: '**/*.md', second: '**/*.ts' },
+    ];
+
+    for (const pair of nonOverlappingPairs) {
+      expect(taskResourcePatternsOverlap(pair)).toBe(false);
+    }
+  });
+
+  test('overlaps recursive basename claims with matching names and extensions', () => {
+    const overlappingPairs = [
+      { first: 'nook-app/Taskfile.yml', second: '**/Taskfile.yml' },
+      { first: 'docs/README.md', second: '**/*.md' },
+      { first: '**/*.md', second: 'docs/*.md' },
+    ];
+
+    for (const pair of overlappingPairs) {
+      expect(taskResourcePatternsOverlap(pair)).toBe(true);
+    }
   });
 
   test('rejects unsupported resource claim syntax', () => {

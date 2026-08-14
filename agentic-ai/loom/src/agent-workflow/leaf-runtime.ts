@@ -1,5 +1,6 @@
-import { runCortexAudit } from '../commands/cortex-audit.ts';
+import { runCortexAuditFromDirectory } from '../commands/cortex-audit.ts';
 import type { CortexAuditReport } from '../commands/cortex-audit.ts';
+import type { RunCortexAuditFromDirectoryArgs } from '../commands/cortex-audit.ts';
 import type { CortexAuditRequest } from '../codec/args/cortex-audit.ts';
 import { runCommand } from '../lib/run.ts';
 import type { RunCommandArgs } from '../lib/run.ts';
@@ -99,7 +100,11 @@ async function executeLeaf<TTask extends string, TAgent extends string>(
   const cortexAuditInput: CortexAuditRequest = {
     includeDensityLint: execution.includeDensityLint,
   };
-  const report = await runCortexAudit(cortexAuditInput);
+  const cortexAuditArgs: RunCortexAuditFromDirectoryArgs = {
+    request: cortexAuditInput,
+    startDirectory: invocation.workingDirectory,
+  };
+  const report = await runCortexAuditFromDirectory(cortexAuditArgs);
   const cortexAuditOutput = mechanicalCortexAuditOutput(report);
   return completedLeafTerminal([invocation, cortexAuditOutput]);
 }

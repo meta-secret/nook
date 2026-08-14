@@ -166,7 +166,8 @@ export function parseCommandLine(
     !baseline ||
     !/^[0-9a-f]{40}$/.test(baseline) ||
     workingDirectoryFlagIndex !== 3 ||
-    !workingDirectory
+    !workingDirectory ||
+    workingDirectory.startsWith('--')
   ) {
     return false;
   }
@@ -177,7 +178,7 @@ export function parseCommandLine(
     workflow: workflowToken,
     baseline,
     workingDirectory: resolve(workingDirectory),
-    planOnly: argv.includes('--plan'),
+    planOnly: argv.length === 6,
   };
 }
 

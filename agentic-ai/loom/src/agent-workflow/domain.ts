@@ -171,7 +171,8 @@ export function taskResourcePatternsOverlap(
     first.kind === ResourceClaimKind.RecursiveBasename ||
     second.kind === ResourceClaimKind.RecursiveBasename
   ) {
-    return true;
+    const descriptors: ResourceDescriptorPair = { first, second };
+    return recursiveBasenameOverlaps(descriptors);
   }
   if (
     first.kind === ResourceClaimKind.DirectGlob ||
@@ -238,6 +239,29 @@ type ResourceDescriptorPair = {
   readonly first: ResourceClaimDescriptor;
   readonly second: ResourceClaimDescriptor;
 };
+
+function recursiveBasenameOverlaps(pair: ResourceDescriptorPair): boolean {
+  const recursive =
+    pair.first.kind === ResourceClaimKind.RecursiveBasename
+      ? pair.first
+      : pair.second;
+  const other = recursive === pair.first ? pair.second : pair.first;
+  if (other.kind === ResourceClaimKind.Subtree) return true;
+  const otherBasename =
+    other.kind === ResourceClaimKind.RecursiveBasename ||
+    other.kind === ResourceClaimKind.DirectGlob
+      ? other.basename
+      : basenameOfPath(other.path);
+  const basenames: TaskResourcePatternPair = {
+    first: recursive.basename,
+    second: otherBasename,
+  };
+  return globBasenamesOverlap(basenames);
+}
+
+function basenameOfPath(resourcePath: string): string {
+  return resourcePath.split('/').at(-1) ?? resourcePath;
+}
 
 function directGlobOverlaps(pair: ResourceDescriptorPair): boolean {
   const first = pair.first;

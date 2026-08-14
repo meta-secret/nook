@@ -179,6 +179,20 @@ type ResourceConcurrencyInspection<
   readonly adjacency: ReadonlyMap<string, ReadonlySet<string>>;
   readonly issues: WorkflowIssueList;
 };
+type OutcomeDescendantInspection<TTask extends string, TJoin extends string> = {
+  readonly target: TaskOutcomeTarget<TTask, TJoin>;
+  readonly adjacency: ReadonlyMap<string, ReadonlySet<string>>;
+};
+type OutcomeExclusivityInspection<
+  TTask extends string,
+  TAgent extends string,
+  TJoin extends string,
+> = {
+  readonly workflow: StaticAgentWorkflowDefinition<TTask, TAgent, TJoin>;
+  readonly leftTask: TTask;
+  readonly rightTask: TTask;
+  readonly adjacency: ReadonlyMap<string, ReadonlySet<string>>;
+};
 
 type DuplicateSchedulingInspection<TTask extends string> = {
   readonly entry: TTask;
@@ -732,6 +746,13 @@ function inspectConcurrentResourceConflicts<
       };
       const ordered = hasPath(forwardPath) || hasPath(reversePath);
       if (ordered) continue;
+      const exclusivity: OutcomeExclusivityInspection<TTask, TAgent, TJoin> = {
+        workflow: inspection.workflow,
+        leftTask,
+        rightTask,
+        adjacency: inspection.adjacency,
+      };
+      if (tasksAreOutcomeExclusive(exclusivity)) continue;
       const conflict: ResourceConflictInspection = {
         leftTask,
         leftResources: inspection.workflow.tasks[leftTask].resources,
@@ -741,6 +762,65 @@ function inspectConcurrentResourceConflicts<
       };
       inspectResourceConflict(conflict);
     }
+  }
+}
+
+function tasksAreOutcomeExclusive<
+  TTask extends string,
+  TAgent extends string,
+  TJoin extends string,
+>(inspection: OutcomeExclusivityInspection<TTask, TAgent, TJoin>): boolean {
+  const leftNode = taskNode(inspection.leftTask);
+  const rightNode = taskNode(inspection.rightTask);
+  for (const sourceTask of inspection.workflow.taskNames) {
+    const source = inspection.workflow.tasks[sourceTask];
+    const completedInspection: OutcomeDescendantInspection<TTask, TJoin> = {
+      target: source.completed,
+      adjacency: inspection.adjacency,
+    };
+    const failedInspection: OutcomeDescendantInspection<TTask, TJoin> = {
+      target: source.failed,
+      adjacency: inspection.adjacency,
+    };
+    const completedDescendants = collectOutcomeDescendants(completedInspection);
+    const failedDescendants = collectOutcomeDescendants(failedInspection);
+    const leftCompletedRightFailed =
+      completedDescendants.has(leftNode) && failedDescendants.has(rightNode);
+    const leftFailedRightCompleted =
+      failedDescendants.has(leftNode) && completedDescendants.has(rightNode);
+    if (leftCompletedRightFailed || leftFailedRightCompleted) return true;
+  }
+  return false;
+}
+
+function collectOutcomeDescendants<TTask extends string, TJoin extends string>(
+  inspection: OutcomeDescendantInspection<TTask, TJoin>,
+): ReadonlySet<string> {
+  const descendants = new Set<string>();
+  for (const node of targetNodes(inspection.target)) {
+    const reachability: WorkflowReachabilityInspection = {
+      entry: node,
+      adjacency: inspection.adjacency,
+    };
+    for (const descendant of collectReachableNodes(reachability)) {
+      descendants.add(descendant);
+    }
+  }
+  return descendants;
+}
+
+function targetNodes<TTask extends string, TJoin extends string>(
+  target: TaskOutcomeTarget<TTask, TJoin>,
+): readonly string[] {
+  switch (target.kind) {
+    case TaskTargetKind.None:
+      return [];
+    case TaskTargetKind.Task:
+      return [taskNode(target.task)];
+    case TaskTargetKind.Parallel:
+      return target.tasks.map((task) => taskNode(task));
+    case TaskTargetKind.Join:
+      return [joinNode(target.join)];
   }
 }
 

@@ -58,3 +58,40 @@ test('accepts an explicit repository working directory', () => {
   }
   expect(commandLine.workingDirectory).toBe('/tmp/nook-repository-root');
 });
+
+test('rejects an option token as the repository working directory', () => {
+  const planValueTokens: readonly string[] = [
+    'cortex-full-garbage-collection',
+    '--baseline',
+    '1111111111111111111111111111111111111111',
+    '--working-directory',
+    '--plan',
+  ];
+  const unexpectedOptionTokens: readonly string[] = [
+    'cortex-full-garbage-collection',
+    '--baseline',
+    '1111111111111111111111111111111111111111',
+    '--working-directory',
+    '--unexpected-option',
+  ];
+
+  expect(parseCommandLine(planValueTokens)).toBe(false);
+  expect(parseCommandLine(unexpectedOptionTokens)).toBe(false);
+});
+
+test('derives plan mode only from the expected final token', () => {
+  const commandLineTokens: readonly string[] = [
+    'cortex-full-garbage-collection',
+    '--baseline',
+    '1111111111111111111111111111111111111111',
+    '--working-directory',
+    '/tmp/--plan-repository',
+  ];
+  const commandLine = parseCommandLine(commandLineTokens);
+
+  expect(commandLine).not.toBe(false);
+  if (commandLine === false) {
+    throw new Error('Expected a valid agent workflow command line.');
+  }
+  expect(commandLine.planOnly).toBe(false);
+});
