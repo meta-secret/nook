@@ -189,6 +189,7 @@ export function taskResourcePatternsOverlap(
 }
 
 function parseResourceClaim(claim: string): ResourceClaimDescriptor | false {
+  if (!hasCanonicalResourcePathSegments(claim)) return false;
   if (/^git:[A-Za-z0-9._/-]+$/.test(claim)) {
     return { kind: ResourceClaimKind.Git, path: claim, basename: '' };
   }
@@ -227,6 +228,13 @@ function parseResourceClaim(claim: string): ResourceClaimDescriptor | false {
   return false;
 }
 
+function hasCanonicalResourcePathSegments(claim: string): boolean {
+  const path = claim.startsWith('git:') ? claim.slice(4) : claim;
+  return path
+    .split('/')
+    .every((segment) => segment !== '.' && segment !== '..');
+}
+
 function pathsAreNested(pair: TaskResourcePatternPair): boolean {
   return (
     pair.first === pair.second ||
@@ -240,6 +248,11 @@ type ResourceDescriptorPair = {
   readonly second: ResourceClaimDescriptor;
 };
 
+type RecursiveExactOverlapInspection = {
+  readonly recursiveBasename: string;
+  readonly exactPath: string;
+};
+
 function recursiveBasenameOverlaps(pair: ResourceDescriptorPair): boolean {
   const recursive =
     pair.first.kind === ResourceClaimKind.RecursiveBasename
@@ -248,21 +261,31 @@ function recursiveBasenameOverlaps(pair: ResourceDescriptorPair): boolean {
   const other = recursive === pair.first ? pair.second : pair.first;
   if (other.kind === ResourceClaimKind.Subtree) return true;
   if (other.kind === ResourceClaimKind.DirectGlob) return true;
-  if (
-    other.kind === ResourceClaimKind.Exact &&
-    exactClaimCanNameDirectory(other.path)
-  ) {
-    return true;
+  if (other.kind === ResourceClaimKind.Exact) {
+    const inspection: RecursiveExactOverlapInspection = {
+      recursiveBasename: recursive.basename,
+      exactPath: other.path,
+    };
+    return exactPathOverlapsRecursiveBasename(inspection);
   }
-  const otherBasename =
-    other.kind === ResourceClaimKind.RecursiveBasename
-      ? other.basename
-      : basenameOfPath(other.path);
   const basenames: TaskResourcePatternPair = {
     first: recursive.basename,
-    second: otherBasename,
+    second: other.basename,
   };
   return globBasenamesOverlap(basenames);
+}
+
+function exactPathOverlapsRecursiveBasename(
+  inspection: RecursiveExactOverlapInspection,
+): boolean {
+  const matchingSegment = inspection.exactPath.split('/').some((segment) => {
+    const basenames: TaskResourcePatternPair = {
+      first: inspection.recursiveBasename,
+      second: segment,
+    };
+    return globBasenamesOverlap(basenames);
+  });
+  return matchingSegment || exactClaimCanNameDirectory(inspection.exactPath);
 }
 
 function exactClaimCanNameDirectory(resourcePath: string): boolean {

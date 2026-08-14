@@ -9,6 +9,7 @@ import {
   LoomLeafKind,
   TaskTargetKind,
   WorkflowExecutorKind,
+  isValidTaskResourceClaim,
   noTasks,
   taskResourcePatternsOverlap,
 } from '../../src/agent-workflow/domain.ts';
@@ -519,13 +520,13 @@ describe('static agent workflow validation', () => {
           ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
             CortexAuditTask.AuditWorkflowsAndReferences
           ],
-          resources: { read: [], write: ['**/Taskfile.yml'] },
+          resources: { read: [], write: ['**/cache'] },
         },
         [CortexAuditTask.AuditDesignDocsAndProductSpecs]: {
           ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
             CortexAuditTask.AuditDesignDocsAndProductSpecs
           ],
-          resources: { read: ['nook-app/Taskfile.yml'], write: [] },
+          resources: { read: ['src/cache/state.json'], write: [] },
         },
       },
     };
@@ -576,12 +577,28 @@ describe('static agent workflow validation', () => {
     const overlappingPairs = [
       { first: 'nook-app/Taskfile.yml', second: '**/Taskfile.yml' },
       { first: 'docs/README.md', second: '**/*.md' },
+      { first: '**/cache', second: 'src/cache/state.json' },
+      { first: '**/*.md', second: 'docs/readme.md/file.ts' },
       { first: '**/*.md', second: 'docs/*.md' },
     ];
 
     for (const pair of overlappingPairs) {
       expect(taskResourcePatternsOverlap(pair)).toBe(true);
     }
+  });
+
+  test('does not overlap unrelated recursive basenames in exact path segments', () => {
+    const literalPair = {
+      first: '**/cache',
+      second: 'src/state/data.json',
+    } as const;
+    const extensionPair = {
+      first: '**/*.md',
+      second: 'docs/readme.txt/file.ts',
+    } as const;
+
+    expect(taskResourcePatternsOverlap(literalPair)).toBe(false);
+    expect(taskResourcePatternsOverlap(extensionPair)).toBe(false);
   });
 
   test('overlaps recursive globs with claims that can own ancestor directories', () => {
@@ -623,6 +640,22 @@ describe('static agent workflow validation', () => {
     };
 
     expectIssue(assertion);
+  });
+
+  test('rejects noncanonical dot path segments', () => {
+    const invalidClaims = [
+      'tmp/../docs/README.md',
+      './docs/README.md',
+      'git:refs/../index',
+    ];
+    const validClaims = ['tmp/docs/README.md', '.github', '**/*.ts'];
+
+    for (const claim of invalidClaims) {
+      expect(isValidTaskResourceClaim(claim)).toBe(false);
+    }
+    for (const claim of validClaims) {
+      expect(isValidTaskResourceClaim(claim)).toBe(true);
+    }
   });
 
   test('returns Invalid for a missing join registry entry', () => {
