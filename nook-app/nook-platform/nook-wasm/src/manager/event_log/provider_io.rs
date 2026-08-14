@@ -163,17 +163,41 @@ impl NookVaultManager {
             let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
             match self.vault.architecture.vault_type {
                 nook_core::VaultType::Simple => {
-                    let auth_record =
-                        nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
-                    let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
-                    operations.push(VaultOperation::JoinApproved {
-                        device_id: identity.device_id().clone(),
-                        encryption_public_key: identity.public_key(),
-                        signing_public_key: signing_public_key.clone(),
-                        label: nook_core::MemberLabel::from_trusted("genesis".to_owned()),
-                        secrets_key_ciphertext: envelopes.secrets_key,
-                        members_key_ciphertext: envelopes.members_key,
-                    });
+                    if let Some(pending) = pending {
+                        let identity_record =
+                            crate::storage::identity_record::load_identity(&pending.identity_id)
+                                .await?
+                                .ok_or_else(|| {
+                                    NookError::Database(
+                                        "Simple genesis identity no longer exists.".to_owned(),
+                                    )
+                                })?;
+                        operations.extend(nook_core::simple_identity_genesis_operations(
+                            nook_core::SimpleIdentityGenesisOperationsInput {
+                                identity: &identity_record,
+                                keys: &nook_core::VaultKeys {
+                                    secrets_key,
+                                    members_key,
+                                },
+                                current_app_id: identity.device_id(),
+                                current_signing_public_key: &signing_public_key,
+                                created_at: created_at.as_str(),
+                            },
+                        )?);
+                    } else {
+                        let auth_record =
+                            nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
+                        let envelopes =
+                            nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
+                        operations.push(VaultOperation::JoinApproved {
+                            device_id: identity.device_id().clone(),
+                            encryption_public_key: identity.public_key(),
+                            signing_public_key: signing_public_key.clone(),
+                            label: nook_core::MemberLabel::from_trusted("genesis".to_owned()),
+                            secrets_key_ciphertext: envelopes.secrets_key,
+                            members_key_ciphertext: envelopes.members_key,
+                        });
+                    }
                 }
                 nook_core::VaultType::Sentinel => {
                     operations.push(VaultOperation::SentinelParticipantEnrolled {

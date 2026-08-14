@@ -157,6 +157,9 @@ pub(crate) async fn save_wrapped_device_identity(
 pub(crate) async fn delete_device_identity_for_recovery() -> Result<(), NookError> {
     idb_delete_keys(&[
         crate::storage::device_access::DEVICE_ACCESS_PROFILE_KEY,
+        crate::storage::identity_record::IDENTITY_DIRECTORY_KEY,
+        crate::storage::identity_record::LEGACY_IDENTITY_RECORD_KEY,
+        crate::storage::identity_record::PENDING_SIMPLE_GENESIS_KEY,
         APP_KEY_WRAPPED_KEY,
         APP_ID_KEY,
         WRAPPED_DEVICE_IDENTITY_KEY,
@@ -229,6 +232,46 @@ mod tests {
         idb_delete_key(DEVICE_ID_KEY).await?;
 
         assert!(load_wrapped_device_identity().await.is_err());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn recovery_atomically_forgets_app_key_and_identity_ownership()
+    -> Result<(), wasm_bindgen::JsError> {
+        let _ = rexie::Rexie::delete("nook_db").await;
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let wrapped =
+            nook_core::wrap_device_identity_with_pin(&identity.secret_string(), "123456")?;
+        save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
+        crate::storage::indexed_db::idb_put_string(
+            crate::storage::identity_record::IDENTITY_DIRECTORY_KEY,
+            "directory",
+        )
+        .await?;
+        crate::storage::indexed_db::idb_put_string(
+            crate::storage::identity_record::PENDING_SIMPLE_GENESIS_KEY,
+            "pending",
+        )
+        .await?;
+        crate::storage::indexed_db::idb_put_string("vault:preserved", "ciphertext").await?;
+
+        delete_device_identity_for_recovery().await?;
+
+        assert!(load_wrapped_device_identity().await?.is_none());
+        assert!(
+            idb_get_string(crate::storage::identity_record::IDENTITY_DIRECTORY_KEY)
+                .await?
+                .is_none()
+        );
+        assert!(
+            idb_get_string(crate::storage::identity_record::PENDING_SIMPLE_GENESIS_KEY)
+                .await?
+                .is_none()
+        );
+        assert_eq!(
+            idb_get_string("vault:preserved").await?,
+            Some("ciphertext".to_owned())
+        );
         Ok(())
     }
 }

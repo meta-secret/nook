@@ -8,6 +8,71 @@ pub use nook_auth2::multi_device_api::*;
 
 use crate::VaultOperation;
 
+/// Inputs for the immutable Simple-vault identity roster written at genesis.
+pub struct SimpleIdentityGenesisOperationsInput<'a> {
+    pub identity: &'a crate::IdentityRecord,
+    pub keys: &'a VaultKeys,
+    pub current_app_id: &'a crate::AppId,
+    pub current_signing_public_key: &'a crate::DeviceSigningPublicKey,
+    pub created_at: &'a str,
+}
+
+/// Build one signed-log authorization operation for every identity app key.
+///
+/// Identity membership is portable ownership state. The event log must carry
+/// the complete roster because encrypted metadata projections are disposable.
+pub fn simple_identity_genesis_operations(
+    input: SimpleIdentityGenesisOperationsInput<'_>,
+) -> nook_auth2::MultiDeviceResult<Vec<VaultOperation>> {
+    let SimpleIdentityGenesisOperationsInput {
+        identity,
+        keys,
+        current_app_id,
+        current_signing_public_key,
+        created_at,
+    } = input;
+    if identity
+        .members
+        .iter()
+        .all(|member| &member.app_id != current_app_id)
+    {
+        return Err(nook_auth2::MultiDeviceError::IdentityEnrollmentRequired);
+    }
+    let records = crate::identity_vault_genesis_records(identity, keys, created_at)?;
+    identity
+        .members
+        .iter()
+        .map(|member| {
+            let record = records
+                .iter()
+                .find(|record| record.key.as_str() == member.auth_id.as_str())
+                .ok_or_else(|| {
+                    nook_auth2::MultiDeviceError::InvalidDeviceIdentity(
+                        "identity genesis is missing a member authorization envelope".to_owned(),
+                    )
+                })?;
+            let envelopes = crate::parse_auth_envelopes(record.value.as_str())?;
+            Ok(VaultOperation::JoinApproved {
+                device_id: member.app_id.clone(),
+                encryption_public_key: member.public_key.clone(),
+                signing_public_key: if &member.app_id == current_app_id {
+                    current_signing_public_key.clone()
+                } else {
+                    crate::DeviceSigningPublicKey::Unavailable
+                },
+                label: crate::MemberLabel::from_trusted(
+                    member
+                        .label
+                        .clone()
+                        .unwrap_or_else(|| "Identity app key".to_owned()),
+                ),
+                secrets_key_ciphertext: envelopes.secrets_key,
+                members_key_ciphertext: envelopes.members_key,
+            })
+        })
+        .collect()
+}
+
 /// Apply a single core event-log meta operation to the typed auth metadata cache.
 ///
 /// User secrets are projected separately; this covers join rows and other meta
@@ -276,6 +341,54 @@ mod tests {
                 .label,
             "Renamed"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn simple_identity_genesis_retains_every_app_key_authorization() -> anyhow::Result<()> {
+        let current = crate::AppKey::generate()?;
+        let second = crate::AppKey::generate()?;
+        let mut identity = crate::IdentityRecord::create_with_app_key(
+            "Personal",
+            &current,
+            Some("Browser".to_owned()),
+        )?;
+        identity.add_member(crate::IdentityMember {
+            app_id: second.app_id().clone(),
+            auth_id: second.auth_id(),
+            public_key: second.public_key(),
+            label: Some("Phone".to_owned()),
+        })?;
+        let keys = crate::generate_vault_keys()?;
+        let (signing, _) = SigningIdentity::generate()?;
+        let operations =
+            simple_identity_genesis_operations(SimpleIdentityGenesisOperationsInput {
+                identity: &identity,
+                keys: &keys,
+                current_app_id: current.app_id(),
+                current_signing_public_key: &signing.public_key(),
+                created_at: "2026-08-14T00:00:00Z",
+            })?;
+
+        assert_eq!(operations.len(), 2);
+        let mut state = VaultMetaState::default();
+        for operation in &operations {
+            apply_vault_meta_operation(&mut state, operation, "2026-08-14T00:00:00Z")?;
+        }
+        for app_key in [&current, &second] {
+            let envelopes = state
+                .auth
+                .get(&app_key.auth_id())
+                .ok_or_else(|| std::io::Error::other("member authorization must be replayable"))?;
+            assert_eq!(
+                app_key.decrypt_envelope(&envelopes.secrets_key)?,
+                keys.secrets_key
+            );
+            assert_eq!(
+                app_key.decrypt_envelope(&envelopes.members_key)?,
+                keys.members_key
+            );
+        }
         Ok(())
     }
 

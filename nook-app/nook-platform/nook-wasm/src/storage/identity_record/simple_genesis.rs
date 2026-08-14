@@ -12,7 +12,7 @@ use crate::storage::indexed_db::{
 };
 use crate::{NookError, conversion::wasm_iso_timestamp, storage::open_nook_database};
 
-pub(super) const PENDING_SIMPLE_GENESIS_KEY: &str = "pending_simple_genesis_v1";
+pub(crate) const PENDING_SIMPLE_GENESIS_KEY: &str = "pending_simple_genesis_v1";
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

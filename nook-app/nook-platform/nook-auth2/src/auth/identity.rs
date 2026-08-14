@@ -85,10 +85,6 @@ pub struct IdentityRecord {
     pub control_epoch: u64,
     pub members: Vec<IdentityMember>,
     pub vault_deks: Vec<IdentityVaultDek>,
-    /// Sentinel vaults associated with this identity. Their quorum-protected
-    /// roots are never represented as app-key DEK envelopes.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub sentinel_vaults: Vec<StoreId>,
 }
 
 impl IdentityRecord {
@@ -109,7 +105,6 @@ impl IdentityRecord {
                 label: member_label,
             }],
             vault_deks: Vec::new(),
-            sentinel_vaults: Vec::new(),
         })
     }
 
@@ -178,21 +173,70 @@ impl IdentityRecord {
         })
     }
 
-    /// Re-wrap every vault DEK to the current member set after membership change.
-    pub fn rewrap_vault_deks(
+    /// Grant a newly authenticated member only to vaults the authorizing app
+    /// key could already open. Preserve each vault's existing recipient set so
+    /// identity membership cannot resurrect a vault-level revocation.
+    pub fn grant_member_to_vaults(
         &mut self,
+        member: &IdentityMember,
         keys_by_store: &[(StoreId, VaultKeys)],
     ) -> MultiDeviceResult<()> {
-        let mut next = Vec::with_capacity(keys_by_store.len());
         for (store_id, keys) in keys_by_store {
-            next.push(wrap_vault_keys_for_members(
-                keys,
-                &self.members,
-                store_id.clone(),
-            )?);
+            let index = self
+                .vault_deks
+                .iter()
+                .position(|grant| grant.store_id == *store_id)
+                .ok_or_else(|| {
+                    MultiDeviceError::InvalidDeviceIdentity(
+                        "identity does not own the vault being granted".to_owned(),
+                    )
+                })?;
+            let grant = &self.vault_deks[index];
+            let authorized_app_ids = grant
+                .secrets_envelopes
+                .iter()
+                .map(|entry| entry.app_id.clone())
+                .collect::<Vec<_>>();
+            let members_cover_same_apps = authorized_app_ids.len() == grant.members_envelopes.len()
+                && authorized_app_ids.iter().all(|app_id| {
+                    grant
+                        .members_envelopes
+                        .iter()
+                        .filter(|entry| entry.app_id == *app_id)
+                        .count()
+                        == 1
+                });
+            if !members_cover_same_apps {
+                return Err(MultiDeviceError::InvalidDeviceIdentity(
+                    "identity vault grant has inconsistent recipient envelopes".to_owned(),
+                ));
+            }
+            let mut authorized_members = authorized_app_ids
+                .iter()
+                .map(|app_id| {
+                    self.members
+                        .iter()
+                        .find(|candidate| candidate.app_id == *app_id)
+                        .cloned()
+                        .ok_or_else(|| {
+                            MultiDeviceError::InvalidDeviceIdentity(
+                                "vault grant references an unknown identity member".to_owned(),
+                            )
+                        })
+                })
+                .collect::<MultiDeviceResult<Vec<_>>>()?;
+            if authorized_members
+                .iter()
+                .all(|candidate| candidate.app_id != member.app_id)
+            {
+                authorized_members.push(member.clone());
+            }
+            self.vault_deks[index] =
+                wrap_vault_keys_for_members(keys, &authorized_members, store_id.clone())?;
         }
-        self.control_epoch = self.control_epoch.saturating_add(1);
-        self.vault_deks = next;
+        if !keys_by_store.is_empty() {
+            self.control_epoch = self.control_epoch.saturating_add(1);
+        }
         Ok(())
     }
 
@@ -249,7 +293,7 @@ impl IdentityRecord {
 
     #[must_use]
     pub fn owns_vault(&self, store_id: &StoreId) -> bool {
-        self.vault_dek(store_id).is_some() || self.sentinel_vaults.contains(store_id)
+        self.vault_dek(store_id).is_some()
     }
 
     pub fn reconcile_legacy_vault_member(
@@ -337,7 +381,6 @@ impl IdentityRecord {
                     envelope: members_envelope,
                 }],
             }],
-            sentinel_vaults: Vec::new(),
         })
     }
 }
@@ -392,7 +435,6 @@ mod tests {
             control_epoch: 1,
             members: Vec::new(),
             vault_deks: Vec::new(),
-            sentinel_vaults: Vec::new(),
         };
         let store = StoreId::before_genesis_placeholder();
         assert!(identity.generate_vault_dek(store).is_err());

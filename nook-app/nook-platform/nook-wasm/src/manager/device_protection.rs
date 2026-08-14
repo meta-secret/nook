@@ -8,6 +8,35 @@ use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::{Zeroize, Zeroizing};
 
+enum ExtensionIdentityHandoffContextValue {
+    VaultCreation,
+    PairedVault { store_id: nook_core::StoreId },
+}
+
+/// Security context for adopting an extension identity.
+#[wasm_bindgen]
+pub struct NookExtensionIdentityHandoffContext {
+    value: ExtensionIdentityHandoffContextValue,
+}
+
+#[wasm_bindgen]
+impl NookExtensionIdentityHandoffContext {
+    #[must_use]
+    pub fn vault_creation() -> Self {
+        Self {
+            value: ExtensionIdentityHandoffContextValue::VaultCreation,
+        }
+    }
+
+    pub fn paired_vault(store_id: &str) -> Result<Self, JsError> {
+        Ok(Self {
+            value: ExtensionIdentityHandoffContextValue::PairedVault {
+                store_id: nook_core::StoreId::parse(store_id)?,
+            },
+        })
+    }
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Require passkey authorization again before any device-key operation.
@@ -57,7 +86,7 @@ impl NookVaultManager {
         expected_device_id: &str,
         expected_device_public_key: &str,
         expected_device_signing_public_key: &str,
-        paired_vault_store_id: &str,
+        context: &NookExtensionIdentityHandoffContext,
     ) -> Result<(), JsError> {
         let private_key = Zeroizing::new(std::mem::take(
             &mut self.device.extension_handoff_private_key,
@@ -80,13 +109,11 @@ impl NookVaultManager {
             &nook_core::DeviceSigningPublicKey::parse(expected_device_signing_public_key)?,
         )?;
         let (identity, handoff_signing_seed) = material.into_parts();
-        let paired_vault = if paired_vault_store_id.is_empty() {
-            None
-        } else {
-            Some((
-                self.device_identity()?,
-                nook_core::StoreId::parse(paired_vault_store_id)?,
-            ))
+        let paired_vault = match &context.value {
+            ExtensionIdentityHandoffContextValue::VaultCreation => None,
+            ExtensionIdentityHandoffContextValue::PairedVault { store_id } => {
+                Some((self.device_identity()?, store_id.clone()))
+            }
         };
 
         // Age identity may come from a reinstalled extension. Keep any durable

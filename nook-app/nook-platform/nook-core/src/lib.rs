@@ -208,7 +208,10 @@ pub use nook_auth2::{
     sentinel_genesis_request,
 };
 
-pub use multi_device::sentinel_member_records_from_public_roster;
+pub use multi_device::{
+    SimpleIdentityGenesisOperationsInput, sentinel_member_records_from_public_roster,
+    simple_identity_genesis_operations,
+};
 pub use nook_auth2::{
     AppId, AppKey, IdentityDirectory, IdentityId, IdentityMember, IdentityRecord,
     IdentitySelection, IdentityVaultDek, IdentityVaultDekReconciliation, MemberDekEnvelope,

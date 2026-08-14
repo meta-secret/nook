@@ -16,7 +16,10 @@ type IdentityEnvelopeRequest = {
 };
 
 import { stripBasePath } from "$lib/runtime/routes";
-import type { NookVaultManager } from "$app-wasm";
+import {
+  NookExtensionIdentityHandoffContext,
+  type NookVaultManager,
+} from "$app-wasm";
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
   ExtensionPairedVaultIdentityHandoffRequestMessageType,
@@ -562,17 +565,17 @@ export async function adoptExtensionIdentity(
   const { envelope, nextNonce } = await requestIdentityEnvelope(
     requestIdentityEnvelopeArgs,
   );
-  const pairedVaultStoreId =
+  const context =
     request.source === ExtensionIdentityRequestSource.PairedVault
-      ? request.vaultStoreId
-      : "";
+      ? NookExtensionIdentityHandoffContext.paired_vault(request.vaultStoreId)
+      : NookExtensionIdentityHandoffContext.vault_creation();
   await manager.finish_extension_identity_handoff(
     envelope,
     nonce,
     request.deviceId,
     request.devicePublicKey,
     request.deviceSigningPublicKey,
-    pairedVaultStoreId,
+    context,
   );
   request.nonce = nextNonce;
 }

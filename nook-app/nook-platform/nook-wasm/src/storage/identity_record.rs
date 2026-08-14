@@ -9,13 +9,14 @@ use super::indexed_db::{idb_delete_key, idb_get_string, idb_put_string};
 use crate::{NookError, storage::open_nook_database};
 
 mod simple_genesis;
+pub(crate) use simple_genesis::PENDING_SIMPLE_GENESIS_KEY;
 pub(crate) use simple_genesis::{
     PendingSimpleGenesis, begin_or_resume_simple_genesis, clear_pending_simple_genesis,
     pending_simple_genesis_for_store, persist_simple_genesis_event,
 };
 
-const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
-const LEGACY_IDENTITY_RECORD_KEY: &str = "identity_record_v1";
+pub(super) const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
+pub(super) const LEGACY_IDENTITY_RECORD_KEY: &str = "identity_record_v1";
 
 async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, NookError> {
     let rexie = open_nook_database().await?;

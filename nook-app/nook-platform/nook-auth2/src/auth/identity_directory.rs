@@ -57,12 +57,7 @@ impl IdentityDirectory {
                     identity_id: record.identity_id.to_string(),
                 });
             }
-            for store_id in record
-                .vault_deks
-                .iter()
-                .map(|vault| &vault.store_id)
-                .chain(record.sentinel_vaults.iter())
-            {
+            for store_id in record.vault_deks.iter().map(|vault| &vault.store_id) {
                 if !vaults.insert(store_id) {
                     return Err(MultiDeviceError::DuplicateVaultOwnership {
                         store_id: store_id.to_string(),
@@ -278,6 +273,16 @@ impl IdentityDirectory {
         let grant_store_ids = owner
             .vault_deks
             .iter()
+            .filter(|grant| {
+                grant
+                    .secrets_envelopes
+                    .iter()
+                    .any(|entry| entry.app_id == *current_app_key.app_id())
+                    && grant
+                        .members_envelopes
+                        .iter()
+                        .any(|entry| entry.app_id == *current_app_key.app_id())
+            })
             .map(|grant| grant.store_id.clone())
             .collect::<Vec<_>>();
         let keys_by_store = grant_store_ids
@@ -288,15 +293,20 @@ impl IdentityDirectory {
                     .map(|keys| (grant_store_id, keys))
             })
             .collect::<MultiDeviceResult<Vec<_>>>()?;
-        owner.add_member(IdentityMember {
+        if !keys_by_store
+            .iter()
+            .any(|(grant_store_id, _)| grant_store_id == store_id)
+        {
+            return Err(MultiDeviceError::IdentityEnrollmentRequired);
+        }
+        let member = IdentityMember {
             app_id: new_app_key.app_id().clone(),
             auth_id: new_app_key.auth_id(),
             public_key: new_app_key.public_key(),
             label: None,
-        })?;
-        if !keys_by_store.is_empty() {
-            owner.rewrap_vault_deks(&keys_by_store)?;
-        }
+        };
+        owner.add_member(member.clone())?;
+        owner.grant_member_to_vaults(&member, &keys_by_store)?;
         Ok(owner.identity_id.clone())
     }
 
@@ -351,7 +361,7 @@ impl IdentityDirectory {
                 }
                 return Ok(selected.identity_id.clone());
             }
-            if !selected.vault_deks.is_empty() || !selected.sentinel_vaults.is_empty() {
+            if !selected.vault_deks.is_empty() {
                 return Err(MultiDeviceError::IdentityEnrollmentRequired);
             }
         }
@@ -407,6 +417,7 @@ impl Default for IdentityDirectory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::IdentityVaultDekReconciliation;
 
     #[test]
     fn creates_and_selects_independent_identities() -> anyhow::Result<()> {
@@ -497,6 +508,63 @@ mod tests {
             expected_keys
         );
         assert_eq!(directory.selected()?.members.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn paired_handoff_preserves_vault_level_revocations() -> anyhow::Result<()> {
+        let authorizer = AppKey::generate()?;
+        let revoked = AppKey::generate()?;
+        let handoff = AppKey::generate()?;
+        let mut directory = IdentityDirectory::empty();
+        directory.create_identity("Personal", &authorizer, None)?;
+        directory.selected_mut()?.add_member(IdentityMember {
+            app_id: revoked.app_id().clone(),
+            auth_id: revoked.auth_id(),
+            public_key: revoked.public_key(),
+            label: None,
+        })?;
+        let store_id = crate::generate_store_id()?;
+        let keys = directory.open_or_generate_vault_dek(&authorizer, store_id.clone())?;
+        directory.reconcile_vault_dek(
+            &authorizer,
+            &store_id,
+            &IdentityVaultDekReconciliation {
+                secrets_envelope: crate::encrypt_for_recipient(
+                    keys.secrets_key.as_str().as_bytes(),
+                    &authorizer.public_key(),
+                )?,
+                members_envelope: crate::encrypt_for_recipient(
+                    keys.members_key.as_str().as_bytes(),
+                    &authorizer.public_key(),
+                )?,
+                authorized_auth_ids: vec![authorizer.auth_id()],
+            },
+        )?;
+
+        directory.enroll_app_key_for_owned_vault(&authorizer, &handoff, &store_id)?;
+
+        let grant = directory
+            .selected()?
+            .vault_dek(&store_id)
+            .ok_or_else(|| anyhow::anyhow!("vault grant missing"))?;
+        for envelopes in [&grant.secrets_envelopes, &grant.members_envelopes] {
+            assert!(
+                envelopes
+                    .iter()
+                    .any(|entry| entry.app_id == *authorizer.app_id())
+            );
+            assert!(
+                envelopes
+                    .iter()
+                    .any(|entry| entry.app_id == *handoff.app_id())
+            );
+            assert!(
+                envelopes
+                    .iter()
+                    .all(|entry| entry.app_id != *revoked.app_id())
+            );
+        }
         Ok(())
     }
 

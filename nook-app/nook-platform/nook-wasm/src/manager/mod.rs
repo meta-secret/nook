@@ -36,6 +36,7 @@ mod session;
 mod sync;
 mod verified_access;
 
+pub use device_protection::NookExtensionIdentityHandoffContext;
 pub use secrets::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
     NookExternalEventLogRecords,
