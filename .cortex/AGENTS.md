@@ -588,7 +588,11 @@ Policy and judgment stay in `.cortex`. Loom only runs deterministic steps.
 
 ## ⛔ Non-negotiable: heavy agent work runs remotely
 
-**The only required local action is `task format`** (plus the light UI demo contract when UI paths change).
+`task format` is the only required local product transformation.
+
+The light UI demo contract also runs when UI paths change.
+
+Advisory local Codex review is part of delivery, but it is not a product gate.
 
 Every product check runs on **GitHub Actions**, not on the agent machine.
 
@@ -598,9 +602,13 @@ The normal loop:
 
 1. Pre-push hygiene
 2. Commit
-3. Push
-4. Optional focused `task remote` runs for isolated diagnostics
-5. Explicit `task pr:validate` as soon as the coherent head is ready
+3. Advisory `task pr:review-local` before the first owner-authored push
+4. Push
+5. Optional focused `task remote` runs for isolated diagnostics
+6. Bounded `task pr:review-converge` on the exact head
+7. Explicit `task pr:validate` when convergence finishes or times out
+
+For a harness-created PR, the continuing owner runs local review after handoff.
 
 Ordinary PR pushes do not start the full PR workflow.
 
@@ -613,7 +621,13 @@ Heavy focused debugging runs through the allowlisted remote task catalog.
 Do not batch broad gates sequentially when complete PR validation runs them in
 parallel with a shorter critical path.
 
-Local execution is reserved for formatting, the UI demo contract, repository inspection, and interactive development sessions that require a persistent local server/browser.
+Permitted local execution is limited to:
+
+- formatting;
+- the UI demo contract;
+- advisory local Codex review;
+- repository inspection; and
+- interactive development that requires a persistent local server or browser.
 
 On a red remote run:
 
@@ -621,8 +635,10 @@ On a red remote run:
 2. Fix
 3. `task format`
 4. Commit
-5. Push
-6. Dispatch focused remote work or complete validation again
+5. Run local review when this is the first owner-authored push
+6. Push
+7. Run bounded exact-head Cloud review convergence
+8. Dispatch focused remote work or complete validation again
 
 Full policy: [workflows/remote-execution.md](workflows/remote-execution.md) and [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
 

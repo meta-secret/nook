@@ -2,7 +2,7 @@ import type { Octokit } from "@octokit/rest";
 
 import {
   createOctokit,
-  inspectPrFeedback,
+  inspectPrFeedbackSnapshot,
   parseRepository,
   requestCodexReview,
   type PrFeedbackSummary,
@@ -20,6 +20,7 @@ export enum CodexReviewConvergenceOutcome {
 export type CodexReviewSnapshot = {
   feedback: PrFeedbackSummary;
   headSha: string;
+  stable: boolean;
 };
 
 export type CodexReviewRequestResult = {
@@ -73,11 +74,12 @@ export async function convergeCodexReview(
   let latestFeedback = EMPTY_FEEDBACK;
   let manualRequestAttempted = false;
   let manualRequestCreated = false;
+  let settlementConfirmationPending = false;
 
   while (true) {
     const snapshot = await input.readSnapshot();
     latestFeedback = snapshot.feedback;
-    if (snapshot.headSha !== input.expectedHeadSha) {
+    if (!snapshot.stable || snapshot.headSha !== input.expectedHeadSha) {
       return resultFor({
         feedback: latestFeedback,
         headSha: snapshot.headSha,
@@ -98,14 +100,16 @@ export async function convergeCodexReview(
       });
     }
     if (snapshot.feedback.codexReview.settled) {
-      return resultFor({
-        feedback: latestFeedback,
-        headSha: snapshot.headSha,
-        manualRequestCreated,
-        outcome: CodexReviewConvergenceOutcome.Clean,
-        startedAt,
-        clock: input.clock,
-      });
+      if (settlementConfirmationPending) {
+        return resultFor({
+          feedback: latestFeedback,
+          headSha: snapshot.headSha,
+          manualRequestCreated,
+          outcome: CodexReviewConvergenceOutcome.Clean,
+          startedAt,
+          clock: input.clock,
+        });
+      }
     }
 
     const now = input.clock.nowMilliseconds();
@@ -119,6 +123,16 @@ export async function convergeCodexReview(
         clock: input.clock,
       });
     }
+    if (snapshot.feedback.codexReview.settled) {
+      settlementConfirmationPending = true;
+      const confirmationDelayMilliseconds = Math.max(
+        1,
+        Math.min(input.pollSeconds * 1_000, timeoutAt - now),
+      );
+      await input.clock.sleepMilliseconds(confirmationDelayMilliseconds);
+      continue;
+    }
+    settlementConfirmationPending = false;
     if (!manualRequestAttempted && now >= graceAt) {
       manualRequestAttempted = true;
       const request = await input.requestReview();
@@ -189,17 +203,11 @@ type GithubReviewConvergenceContext = {
 async function readGithubSnapshot(
   context: GithubReviewConvergenceContext,
 ): Promise<CodexReviewSnapshot> {
-  const { data: pr } = await context.octokit.rest.pulls.get({
-    owner: context.repoRef.owner,
-    repo: context.repoRef.repo,
-    pull_number: context.prNumber,
-  });
-  const feedback = await inspectPrFeedback(
+  return inspectPrFeedbackSnapshot(
     context.octokit,
     context.repoRef,
     context.prNumber,
   );
-  return { feedback, headSha: pr.head.sha };
 }
 
 export async function runPrReviewConvergence(): Promise<void> {
@@ -220,13 +228,14 @@ export async function runPrReviewConvergence(): Promise<void> {
     fallback: 30,
     name: "CODEX_REVIEW_POLL_SECONDS",
   });
+  const expectedHeadSha = process.env.CODEX_REVIEW_EXPECTED_HEAD_SHA?.trim();
+  if (!expectedHeadSha || !/^[0-9a-f]{40}$/.test(expectedHeadSha)) {
+    throw new Error(
+      "CODEX_REVIEW_EXPECTED_HEAD_SHA must be a full lowercase Git SHA",
+    );
+  }
   const octokit = createOctokit();
   const repoRef = parseRepository(repository);
-  const { data: pr } = await octokit.rest.pulls.get({
-    owner: repoRef.owner,
-    repo: repoRef.repo,
-    pull_number: prNumber,
-  });
   const context = { octokit, prNumber, repoRef };
   const result = await convergeCodexReview({
     automaticGraceSeconds,
@@ -236,7 +245,7 @@ export async function runPrReviewConvergence(): Promise<void> {
         await new Promise((resolve) => setTimeout(resolve, delayMilliseconds));
       },
     },
-    expectedHeadSha: pr.head.sha,
+    expectedHeadSha,
     pollSeconds,
     readSnapshot: async () => readGithubSnapshot(context),
     requestReview: async () => requestCodexReview(octokit, repoRef, prNumber),

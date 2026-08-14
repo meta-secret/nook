@@ -101,6 +101,22 @@ tasks:
 
         .github/scripts/require-current-base.sh origin "$base_ref"
 
+        receipt="$(git rev-parse --git-path nook-review-convergence)/$local_sha"
+        if [ -f "$receipt" ] && [ "$(cat "$receipt")" = "$REQUESTED_PR" ]; then
+          task pr:review-converge PR="$REQUESTED_PR" \
+            AUTOMATIC_GRACE_SECONDS=1 REVIEW_TIMEOUT_SECONDS=1 POLL_SECONDS=1
+        else
+          task pr:review-converge PR="$REQUESTED_PR"
+        fi
+
+        current_pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
+        if [ "$local_sha" != "$current_pr_sha" ]; then
+          echo "PR #$REQUESTED_PR changed head during review convergence." >&2
+          echo "local: $local_sha" >&2
+          echo "PR:    $current_pr_sha" >&2
+          exit 2
+        fi
+
         validation_label="ci:validate"
         if [ "$REQUEST_FULL_E2E" = "1" ]; then
           validation_label="ci:full-e2e"

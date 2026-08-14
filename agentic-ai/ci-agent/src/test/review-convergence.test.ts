@@ -63,7 +63,7 @@ function snapshotSequence(
 test("automatic exact-head review settles during the grace period", async () => {
   const clock = fakeClock();
   const snapshots = snapshotSequence([
-    { feedback: feedbackWith(), headSha: HEAD_SHA },
+    { feedback: feedbackWith(), headSha: HEAD_SHA, stable: true },
     {
       feedback: feedbackWith({
         codexReview: {
@@ -75,6 +75,7 @@ test("automatic exact-head review settles during the grace period", async () => 
         },
       }),
       headSha: HEAD_SHA,
+      stable: true,
     },
   ]);
   let requestCalls = 0;
@@ -93,7 +94,7 @@ test("automatic exact-head review settles during the grace period", async () => 
   });
 
   assert.equal(result.outcome, CodexReviewConvergenceOutcome.Clean);
-  assert.equal(result.waitedSeconds, 30);
+  assert.equal(result.waitedSeconds, 60);
   assert.equal(result.manualRequestCreated, false);
   assert.equal(requestCalls, 0);
 });
@@ -101,8 +102,8 @@ test("automatic exact-head review settles during the grace period", async () => 
 test("manual exact-head review is requested once after automatic grace", async () => {
   const clock = fakeClock();
   const snapshots = snapshotSequence([
-    { feedback: feedbackWith(), headSha: HEAD_SHA },
-    { feedback: feedbackWith(), headSha: HEAD_SHA },
+    { feedback: feedbackWith(), headSha: HEAD_SHA, stable: true },
+    { feedback: feedbackWith(), headSha: HEAD_SHA, stable: true },
     {
       feedback: feedbackWith({
         codexReview: {
@@ -114,6 +115,7 @@ test("manual exact-head review is requested once after automatic grace", async (
         },
       }),
       headSha: HEAD_SHA,
+      stable: true,
     },
   ]);
   let requestCalls = 0;
@@ -132,6 +134,7 @@ test("manual exact-head review is requested once after automatic grace", async (
   });
 
   assert.equal(result.outcome, CodexReviewConvergenceOutcome.Clean);
+  assert.equal(result.waitedSeconds, 60);
   assert.equal(result.manualRequestCreated, true);
   assert.equal(requestCalls, 1);
 });
@@ -147,6 +150,7 @@ test("actionable feedback stops convergence before validation", async () => {
     readSnapshot: async () => ({
       feedback: feedbackWith({ unresolvedThreads: 2 }),
       headSha: HEAD_SHA,
+      stable: true,
     }),
     requestReview: async () => ({
       headSha: HEAD_SHA,
@@ -173,6 +177,7 @@ test("review service timeout remains non-blocking", async () => {
     readSnapshot: async () => ({
       feedback: feedbackWith(),
       headSha: HEAD_SHA,
+      stable: true,
     }),
     requestReview: async () => {
       requestCalls += 1;
@@ -198,6 +203,7 @@ test("head replacement invalidates review convergence", async () => {
     readSnapshot: async () => ({
       feedback: feedbackWith(),
       headSha: replacementHead,
+      stable: true,
     }),
     requestReview: async () => ({
       headSha: HEAD_SHA,
@@ -209,4 +215,77 @@ test("head replacement invalidates review convergence", async () => {
 
   assert.equal(result.outcome, CodexReviewConvergenceOutcome.HeadChanged);
   assert.equal(result.headSha, replacementHead);
+});
+
+test("an unstable feedback snapshot invalidates convergence", async () => {
+  const clock = fakeClock();
+
+  const result = await convergeCodexReview({
+    automaticGraceSeconds: 60,
+    clock,
+    expectedHeadSha: HEAD_SHA,
+    pollSeconds: 30,
+    readSnapshot: async () => ({
+      feedback: feedbackWith({
+        codexReview: {
+          approvalReaction: false,
+          cleanComment: true,
+          currentHeadReview: false,
+          requested: false,
+          settled: true,
+        },
+      }),
+      headSha: HEAD_SHA,
+      stable: false,
+    }),
+    requestReview: async () => ({
+      headSha: HEAD_SHA,
+      requested: true,
+      settled: false,
+    }),
+    timeoutSeconds: 120,
+  });
+
+  assert.equal(result.outcome, CodexReviewConvergenceOutcome.HeadChanged);
+});
+
+test("settled review is reread before inline findings are accepted as clean", async () => {
+  const clock = fakeClock();
+  const settledFeedback = feedbackWith({
+    codexReview: {
+      approvalReaction: false,
+      cleanComment: false,
+      currentHeadReview: true,
+      requested: false,
+      settled: true,
+    },
+  });
+  const snapshots = snapshotSequence([
+    { feedback: settledFeedback, headSha: HEAD_SHA, stable: true },
+    {
+      feedback: feedbackWith({
+        codexReview: settledFeedback.codexReview,
+        unresolvedThreads: 1,
+      }),
+      headSha: HEAD_SHA,
+      stable: true,
+    },
+  ]);
+
+  const result = await convergeCodexReview({
+    automaticGraceSeconds: 60,
+    clock,
+    expectedHeadSha: HEAD_SHA,
+    pollSeconds: 30,
+    readSnapshot: snapshots.next,
+    requestReview: async () => ({
+      headSha: HEAD_SHA,
+      requested: true,
+      settled: false,
+    }),
+    timeoutSeconds: 120,
+  });
+
+  assert.equal(result.outcome, CodexReviewConvergenceOutcome.Feedback);
+  assert.equal(result.feedback.unresolvedThreads, 1);
 });

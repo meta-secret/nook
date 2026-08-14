@@ -302,7 +302,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 >
 > Linear `main` history is a project requirement, not a preference.
 
-> ## ⛔ INSPECT EXISTING FEEDBACK; DO NOT WAIT FOR REVIEWERS
+> ## ⛔ CONVERGE CODEX REVIEW; DO NOT WAIT FOR OPTIONAL REVIEWERS
 >
 > Before merge or handoff, inspect comments and findings that already exist and
 > address every active actionable item, regardless of whether it came from a
@@ -354,7 +354,16 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
 - **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task.
-- Steps: fetch, branch from `origin/main`, implement, **always `task format`**, commit, run advisory local Codex review, push/open/update the PR, use focused hosted tasks only for useful isolated diagnostics, run bounded exact-head Codex Cloud review convergence, explicitly trigger complete PR validation, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically.
+- Required delivery sequence:
+  1. Fetch and branch from `origin/main`.
+  2. Implement and **always run `task format`**.
+  3. Commit and run advisory local Codex review.
+  4. Push or update the PR.
+  5. Use focused hosted diagnostics only when useful.
+  6. Run bounded exact-head Codex Cloud review convergence.
+  7. Trigger complete PR validation.
+  8. Fix failures, comments, and conflicts.
+  9. Require `task pr:ready` and squash-merge automatically.
 - Do not stop at a ready-PR handoff or ask for separate merge permission.
 - Do not run heavy product checks locally.
 - **Finish at implementation PR merge.** A successful squash merge completes normal implementation delivery.
@@ -367,7 +376,13 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   gh pr merge <number> --squash
   ```
   Never use `gh pr merge --merge` or `gh pr merge --rebase`.
-- **Converge review before complete validation.** Run `task pr:review-local` on a coherent local head. After opening or updating the PR, run `task pr:review-converge`. Address findings before dispatching complete validation. The bounded timeout is non-blocking. Do not request or wait for other external reviews. Do not require a local product gate.
+- **Converge review before complete validation.**
+  - Run `task pr:review-local` on a coherent local head.
+  - After opening or updating the PR, run `task pr:review-converge`.
+  - Address findings before dispatching complete validation.
+  - Continue after the bounded timeout.
+  - Do not request or wait for other external reviews.
+  - Do not require a local product gate.
 - **Publish Workbench context after merge.** Follow
   [workflows/issues.md](workflows/issues.md) and
   [workflows/agent-statistics.md](workflows/agent-statistics.md): the task plan

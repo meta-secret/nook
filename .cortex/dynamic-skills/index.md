@@ -14,7 +14,7 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 | [cortex-writer.md](cortex-writer.md) | **P1 / critical `.cortex` writing rule:** split long dense sentences into short sentences, bullets, and lists to reduce cognitive complexity | [`.agents/skills/cortex-writer/SKILL.md`](../../.agents/skills/cortex-writer/SKILL.md) |
 | [cortex-consistency.md](cortex-consistency.md) | **P1 / critical `.cortex` GC rule:** verify docs are current, agree with each other, and agree with the code | [`.agents/skills/cortex-consistency/SKILL.md`](../../.agents/skills/cortex-consistency/SKILL.md) |
 | [agent-feature-ownership.md](agent-feature-ownership.md) | Keep every agent inside its assigned feature and focused issue set | [`.agents/skills/agent-feature-ownership/SKILL.md`](../../.agents/skills/agent-feature-ownership/SKILL.md) |
-| [code-review-comments.md](code-review-comments.md) | Handle every active comment after bounded review convergence: verify, fix or explain, validate, push, reply on-thread, then resolve | [`.agents/skills/code-review-comments/SKILL.md`](../../.agents/skills/code-review-comments/SKILL.md) |
+| [code-review-comments.md](code-review-comments.md) | Resolve every active comment | [executable skill][code-review-skill] |
 | [dynamic-skill-authoring.md](dynamic-skill-authoring.md) | Capture user feedback as durable `.cortex` skill cards and optional project skills | [`.agents/skills/dynamic-skill/SKILL.md`](../../.agents/skills/dynamic-skill/SKILL.md) |
 | [efficient-pr-delivery.md](efficient-pr-delivery.md) | Ship PRs with focused hosted execution, explicit complete validation, and exact-head readiness | [`.agents/skills/efficient-pr-delivery/SKILL.md`](../../.agents/skills/efficient-pr-delivery/SKILL.md) |
 | [github-actions-only-validation.md](github-actions-only-validation.md) | Format locally; run focused tasks and complete gates explicitly on GitHub-hosted workers | [`.agents/skills/github-actions-only-validation/SKILL.md`](../../.agents/skills/github-actions-only-validation/SKILL.md) |
@@ -35,7 +35,10 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 | [typescript-named-args.md](typescript-named-args.md) | Require semantic named object parameter contracts and named typed values at object call boundaries | [`.agents/skills/typescript-named-args/SKILL.md`](../../.agents/skills/typescript-named-args/SKILL.md) |
 | [prefer-popular-libraries.md](prefer-popular-libraries.md) | Before writing boilerplate, prefer mature high-adoption libraries; reject obscure low-star/low-download deps; validate with Loom `dependencyPopularity` | [`.agents/skills/prefer-popular-libraries/SKILL.md`](../../.agents/skills/prefer-popular-libraries/SKILL.md) |
 | [ui-design-skills.md](ui-design-skills.md) | Load `design-taste-frontend` for user-visible UI work; Impeccable is disabled by default and may be used only when the user explicitly requests it | |
+
 | [web-unused-code.md](web-unused-code.md) | Enable class-member analysis in every web Knip graph and remove every valid unused-code finding | |
+
+[code-review-skill]: ../../.agents/skills/code-review-comments/SKILL.md
 
 ## How To Add One
 

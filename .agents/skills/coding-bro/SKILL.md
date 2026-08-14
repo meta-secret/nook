@@ -18,7 +18,22 @@ description: >-
 
 **Default workflow for all implementation tasks.** System of record: [`.cortex/workflows/coding-bro.md`](../../.cortex/workflows/coding-bro.md).
 
-Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting. Follow the steps in the cortex doc — fetch, publish the Workbench task plan before implementation, branch, implement, **always `task loom:pre-push`**, commit, run advisory local Codex review, push, use `task remote` for focused hosted execution, run bounded exact-head Codex Cloud review convergence through `task loom:pr-land`, address and resolve every actionable comment, trigger complete validation, fix until exact-head checks are green, squash merge, publish the Workbench issue update/linked worklog/statistics, and report duration. Never wait beyond the convergence timeout or request other external reviews/checks. Never run heavy product work locally.
+Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting.
+
+Follow the delivery sequence in the cortex workflow:
+
+1. Fetch and publish the Workbench task plan.
+2. Branch, implement, and run `task loom:pre-push`.
+3. Commit and run advisory local Codex review.
+4. Push and use focused hosted execution when useful.
+5. Run bounded exact-head Cloud review convergence through Loom.
+6. Resolve actionable feedback and trigger complete validation.
+7. Fix until exact-head checks and readiness pass.
+8. Squash-merge and publish the Workbench completion records.
+9. Report duration.
+
+Never wait beyond the convergence timeout. Do not request other external
+reviews or checks. Never run heavy product work locally.
 
 Before any mutation, apply
 [agent-feature-ownership](../agent-feature-ownership/SKILL.md). Work only on the

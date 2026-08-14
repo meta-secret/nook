@@ -666,11 +666,18 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 - Agents use `task remote TASK_NAME=<name>` for one focused command.
 - Agents use `task remote TASK_NAMES=<a>,<b>` to reuse one job for a batch.
-- When the branch is ready, they run bounded `task pr:review-converge PR=<number>`, then `task pr:validate PR=<number>` (or `FULL_E2E=1`) and wait only for the applicable repository-owned exact-head PR checks.
+- When the branch is ready, agents run
+  `task pr:review-converge PR=<number>`.
+- They then run `task pr:validate PR=<number>` or add `FULL_E2E=1`.
+- They wait only for applicable repository-owned exact-head PR checks.
 - Ordinary pushes do not start `pr.yml`.
 - Every later push requires another explicit validation before readiness.
 - Every actionable comment already present must be addressed and resolved.
-- Codex is given a short automatic-review grace period and one idempotent exact-head request before a non-blocking timeout. Claude, Cursor, CodeRabbit, and other optional external services are never requested or awaited.
+- Codex gets a short automatic-review grace period.
+- The convergence command makes one idempotent exact-head request when needed.
+- Its timeout is non-blocking.
+- Claude, Cursor, CodeRabbit, and other optional services are not requested or
+  awaited.
 - The local ci-agent image tag is derived from the worktree path, preventing parallel worktrees from replacing each other's review/readiness binaries.
 
 **Ephemeral but cache-aware delivery jobs:**

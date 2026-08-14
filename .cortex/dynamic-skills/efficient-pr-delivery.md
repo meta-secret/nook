@@ -75,7 +75,9 @@ Does not apply to:
 
 - [ ] Establish the branch and PR path from current `origin/main`.
 - [ ] Run `task loom:pre-push` before every push.
-- [ ] Commit and run advisory `task pr:review-local` before the first owner-authored push. For a harness-created PR, run it immediately after handoff.
+- [ ] Commit the coherent formatted change.
+- [ ] Run advisory `task pr:review-local` before the first owner-authored push.
+- [ ] For a harness-created PR, run local review after handoff instead.
 - [ ] Push; use focused hosted tasks instead of a local product gate.
 - [ ] Run bounded review convergence before complete PR validation.
 - [ ] Inspect and address all feedback already present.
