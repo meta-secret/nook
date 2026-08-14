@@ -6,7 +6,76 @@
 
 pub use nook_auth2::multi_device_api::*;
 
+use std::collections::BTreeMap;
+
 use crate::VaultOperation;
+
+/// Inputs for the immutable Simple-vault identity roster written at genesis.
+pub struct SimpleIdentityGenesisOperationsInput<'a> {
+    pub identity: &'a crate::IdentityRecord,
+    pub keys: &'a VaultKeys,
+    pub current_app_id: &'a crate::AppId,
+    pub current_signing_public_key: &'a crate::DeviceSigningPublicKey,
+    pub created_at: &'a str,
+}
+
+/// Build one signed-log authorization operation for every identity app key.
+///
+/// Identity membership is portable ownership state. The event log must carry
+/// the complete roster because encrypted metadata projections are disposable.
+pub fn simple_identity_genesis_operations(
+    input: &SimpleIdentityGenesisOperationsInput<'_>,
+) -> nook_auth2::MultiDeviceResult<Vec<VaultOperation>> {
+    let identity = input.identity;
+    let keys = input.keys;
+    let current_app_id = input.current_app_id;
+    let current_signing_public_key = input.current_signing_public_key;
+    let created_at = input.created_at;
+    if identity
+        .members
+        .iter()
+        .all(|member| &member.app_id != current_app_id)
+    {
+        return Err(nook_auth2::MultiDeviceError::IdentityEnrollmentRequired);
+    }
+    let records = crate::identity_vault_genesis_records(identity, keys, created_at)?;
+    identity
+        .members
+        .iter()
+        .map(|member| {
+            let record = records
+                .iter()
+                .find(|record| record.key.as_str() == member.auth_id.as_str())
+                .ok_or_else(|| {
+                    nook_auth2::MultiDeviceError::InvalidDeviceIdentity(
+                        "identity genesis is missing a member authorization envelope".to_owned(),
+                    )
+                })?;
+            let envelopes = crate::parse_auth_envelopes(record.value.as_str())?;
+            Ok(VaultOperation::JoinApproved {
+                device_id: member.app_id.clone(),
+                encryption_public_key: member.public_key.clone(),
+                signing_public_key: if &member.app_id == current_app_id {
+                    current_signing_public_key.clone()
+                } else if member.signing_public_key.is_empty() {
+                    return Err(nook_auth2::MultiDeviceError::InvalidDeviceIdentity(
+                        "identity member is missing its event signing public key".to_owned(),
+                    ));
+                } else {
+                    member.signing_public_key.clone()
+                },
+                label: crate::MemberLabel::from_trusted(
+                    member
+                        .label
+                        .clone()
+                        .unwrap_or_else(|| "Identity app key".to_owned()),
+                ),
+                secrets_key_ciphertext: envelopes.secrets_key,
+                members_key_ciphertext: envelopes.members_key,
+            })
+        })
+        .collect()
+}
 
 /// Apply a single core event-log meta operation to the typed auth metadata cache.
 ///
@@ -177,6 +246,54 @@ pub fn event_graph_has_active_device_access(
     Ok(active)
 }
 
+/// Return the active Simple-vault authorization recipients after replaying
+/// approvals and revocations from the signed event graph.
+pub fn event_graph_active_auth_ids(
+    graph: &crate::EventGraph,
+) -> nook_auth2::MultiDeviceResult<Vec<crate::AuthKeyId>> {
+    let mut active = BTreeMap::<crate::DeviceId, crate::AuthKeyId>::new();
+    let order = graph
+        .topological_order()
+        .map_err(|error| nook_auth2::MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
+    for event_id in order {
+        let event = graph.get(&event_id).ok_or_else(|| {
+            nook_auth2::MultiDeviceError::InvalidDeviceIdentity(format!(
+                "Missing event {event_id} in graph."
+            ))
+        })?;
+        for operation in &event.body.operations {
+            match operation {
+                VaultOperation::JoinApproved {
+                    device_id,
+                    encryption_public_key,
+                    ..
+                } => {
+                    let derived_device_id =
+                        nook_auth2::device_id_from_public_key(encryption_public_key)?;
+                    if &derived_device_id != device_id {
+                        return Err(nook_auth2::MultiDeviceError::InvalidDeviceIdentity(
+                            "Approved device id does not match its encryption public key."
+                                .to_owned(),
+                        ));
+                    }
+                    active.insert(
+                        device_id.clone(),
+                        crate::dec_auth_id_from_public_key(encryption_public_key)?,
+                    );
+                }
+                VaultOperation::DeviceRevoked { device_id } => {
+                    active.remove(device_id);
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut auth_ids = active.into_values().collect::<Vec<_>>();
+    auth_ids.sort();
+    auth_ids.dedup();
+    Ok(auth_ids)
+}
+
 /// Rebuild encrypted `members:` rows after quorum unlock of an event-only
 /// Sentinel vault. Public event roster entries are retained before unlock; the
 /// reconstructed members key turns them back into the canonical encrypted
@@ -280,6 +397,65 @@ mod tests {
     }
 
     #[test]
+    fn simple_identity_genesis_retains_every_app_key_authorization() -> anyhow::Result<()> {
+        let current = crate::AppKey::generate()?;
+        let second = crate::AppKey::generate()?;
+        let (current_signing, _) = SigningIdentity::generate()?;
+        let (second_signing, _) = SigningIdentity::generate()?;
+        let mut identity = crate::IdentityRecord::create_with_app_key(
+            "Personal",
+            &current,
+            Some("Browser".to_owned()),
+        )?;
+        identity.add_member(crate::IdentityMember {
+            app_id: second.app_id().clone(),
+            auth_id: second.auth_id(),
+            public_key: second.public_key(),
+            signing_public_key: second_signing.public_key(),
+            label: Some("Phone".to_owned()),
+        })?;
+        let keys = crate::generate_vault_keys()?;
+        let operations =
+            simple_identity_genesis_operations(&SimpleIdentityGenesisOperationsInput {
+                identity: &identity,
+                keys: &keys,
+                current_app_id: current.app_id(),
+                current_signing_public_key: &current_signing.public_key(),
+                created_at: "2026-08-14T00:00:00Z",
+            })?;
+
+        assert_eq!(operations.len(), 2);
+        assert!(operations.iter().any(|operation| matches!(
+            operation,
+            VaultOperation::JoinApproved {
+                device_id,
+                signing_public_key,
+                ..
+            } if device_id == second.app_id()
+                && signing_public_key == &second_signing.public_key()
+        )));
+        let mut state = VaultMetaState::default();
+        for operation in &operations {
+            apply_vault_meta_operation(&mut state, operation, "2026-08-14T00:00:00Z")?;
+        }
+        for app_key in [&current, &second] {
+            let envelopes = state
+                .auth
+                .get(&app_key.auth_id())
+                .ok_or_else(|| std::io::Error::other("member authorization must be replayable"))?;
+            assert_eq!(
+                app_key.decrypt_envelope(&envelopes.secrets_key)?,
+                keys.secrets_key
+            );
+            assert_eq!(
+                app_key.decrypt_envelope(&envelopes.members_key)?,
+                keys.members_key
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn extension_access_follows_approval_and_revocation_events() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let extension = DeviceIdentity::generate()?;
@@ -320,6 +496,7 @@ mod tests {
             &signing.public_key(),
         )?);
         let auth_id = dec_auth_id_from_public_key(&extension.public_key())?;
+        assert_eq!(event_graph_active_auth_ids(&graph)?, vec![auth_id.clone()]);
         let mut meta = VaultMetaState::default();
         materialize_vault_meta_from_graph(&graph, &mut meta)?;
         assert!(meta.auth.contains_key(&auth_id));
@@ -356,6 +533,7 @@ mod tests {
             &extension.public_key(),
             &signing.public_key(),
         )?);
+        assert!(event_graph_active_auth_ids(&graph)?.is_empty());
         Ok(())
     }
 }

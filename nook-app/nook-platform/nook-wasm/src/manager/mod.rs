@@ -23,6 +23,8 @@ mod connect;
 mod device_protection;
 mod diagnostics;
 mod event_log;
+mod identity;
+mod identity_handoff;
 mod login_fill;
 mod login_save;
 mod multi_device;
@@ -35,6 +37,8 @@ mod session;
 mod sync;
 mod verified_access;
 
+pub use device_protection::NookExtensionIdentityHandoffContext;
+pub(crate) use device_protection::PendingExtensionIdentityEnrollment;
 pub use secrets::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
     NookExternalEventLogRecords,

@@ -1,8 +1,8 @@
 # Identity, App Keys, Passkeys, and Vault DEKs
 
 **Status:** Architecture decision in implementation.
-Identity control storage, `AppKey` rename, and identity-owned DEKs are the
-active delivery target.
+The local identity directory and identity-owned DEKs are implemented.
+Replicated identity control remains an active delivery target.
 
 Nook distinguishes a person, identities, passkeys, app keys, sync providers,
 and vaults. None of these names are interchangeable.
@@ -60,6 +60,69 @@ The identity control log owns:
 - zero or more sync-provider mounts for the control log.
 
 Private app keys never enter the replicated identity record.
+
+### Local directory phase
+
+The browser stores the local directory under `identity_directory_v1`.
+The directory contains:
+
+- zero or more `IdentityRecord` values; and
+- an explicit `Empty` or `Selected(identity_id)` state.
+
+Each identity member stores its X25519 encryption public key and Ed25519 event
+signing public key. Older records decode a missing signing key as unavailable.
+They cannot enter a new signed Simple-vault genesis roster until an authenticated
+handoff or the local signer supplies that public key.
+
+All directory updates use one IndexedDB read-write transaction.
+Concurrent tabs must not overwrite identity creation, selection, membership,
+or DEK changes.
+Extension identity adoption remains staged through vault initialization.
+Fresh-vault membership, signing keys, and per-vault DEK envelopes live only in
+the resumable genesis marker until verified connect succeeds. The completion
+transaction compares the marker's base directory with the current directory.
+It publishes the staged directory and matching signing seed, then removes the
+marker atomically. A concurrent identity update makes completion fail closed
+instead of rewinding that update. A failed create clears decrypted host state
+and stops background sync without rolling back event stores or active identity
+state.
+Existing-vault imports use a distinct pending handoff state. Verified connect
+first synthesizes the vault owner from active signed envelopes, verifies the
+extension signing key against the active event roster, then commits the member
+signer and adopted signing seed atomically.
+Legacy-vault reconciliation derives DEK recipients from the signed event
+graph's active approvals after revocations, not from stale encrypted auth rows.
+
+Simple vault creation stores `pending_simple_genesis_v1` in IndexedDB.
+Its JSON fields are `storeId`, `identityId`, `createdAt`, `eventState`, and an
+optional `stagedIdentity` transaction payload. That payload carries the base
+directory and inactive candidate directory with identity-owned DEK envelopes.
+The app writes the marker before any event-log state.
+A reload resumes the same store and identity binding.
+Verified connect completion removes the marker with a compare-and-delete
+transaction.
+An older tab cannot delete a newer genesis marker.
+The marker owns the genesis timestamp and complete signed event lifecycle.
+`eventState` is `awaiting-event`, `legacy-event-pinned`, or `event-pinned`.
+The current pinned variant owns the signed `eventYaml`, an app-key-sealed
+`signingSeedEnvelope`, and staged-member signer envelopes before the first
+event-log write. Either authorized staged member can resume the exact signer
+and event after a reload.
+Legacy markers without `createdAt` use the Unix epoch timestamp. Markers without
+`eventState` decode as `awaiting-event`. A preceding top-level `eventYaml`, or
+an `event-pinned` state without seed material becomes `legacy-event-pinned`.
+That state upgrades only after the durable seed matches the pinned event signer.
+The same signer check applies before sealing a legacy plaintext seed.
+
+The first directory read migrates `identity_record_v1` when present:
+
+1. decode the singleton record;
+2. write a valid directory with that record selected; and
+3. delete the legacy key only after the directory write succeeds.
+
+Pre-directory builds cannot read the new key.
+Downgrading after migration is unsupported.
+This local record is not the future replicated identity control log.
 
 ## DEK ownership
 

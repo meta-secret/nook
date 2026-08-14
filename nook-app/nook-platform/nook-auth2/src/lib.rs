@@ -44,9 +44,11 @@ pub use auth::enrollment::{
     peek_enrollment_entry_id, peek_enrollment_entry_label, peek_enrollment_issued_at,
 };
 pub use auth::identity::{
-    IdentityId, IdentityMember, IdentityRecord, IdentityVaultDek, MemberDekEnvelope,
-    identity_fingerprint,
+    IdentityId, IdentityMember, IdentityRecord, IdentityVaultDek, IdentityVaultDekReconciliation,
+    MemberDekEnvelope, identity_fingerprint,
 };
+pub use auth::identity_directory::{IdentityDirectory, IdentitySelection};
+pub use auth::identity_genesis::identity_vault_genesis_records;
 #[cfg(any(test, feature = "mock-passkey"))]
 pub use auth::mock_passkey::{
     MemoryPasskeyAuthenticator, MockPasskeyAssertion, MockPasskeyAssertionRequest,

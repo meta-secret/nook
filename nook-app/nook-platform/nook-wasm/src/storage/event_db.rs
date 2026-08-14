@@ -4,7 +4,7 @@ use crate::{NookError, storage::open_nook_database};
 use nook_core::{EventId, LocalEventStore};
 
 const EVENT_LOG_MODE_KEY: &str = "event_log:mode";
-const SIGNING_SEED_KEY: &str = "signing_seed";
+pub(crate) const SIGNING_SEED_KEY: &str = "signing_seed";
 const EVENT_LOG_ACTIVE: &str = "event_log";
 const STORE_VAULT: &str = "vault";
 const STORE_EVENTS: &str = "events";

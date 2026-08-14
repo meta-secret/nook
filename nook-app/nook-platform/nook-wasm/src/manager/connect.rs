@@ -12,6 +12,7 @@ use super::verified_access::VerifiedVaultAccessFlow;
 use crate::NookError;
 use crate::NookSecretRecord;
 use crate::conversion::{LoadedVault, access_status_for_vault_content, content_requires_genesis};
+use crate::storage::event_db::load_local_event_store;
 use crate::storage::indexed_db::load_vault_local_cache;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -254,13 +255,17 @@ impl NookVaultManager {
             content_requires_genesis(&content, force_genesis)?
         };
 
-        if use_genesis {
-            self.bootstrap_genesis_connect(&identity).await?;
+        let completed_genesis = if use_genesis {
+            Some(self.bootstrap_genesis_connect(&identity).await?)
         } else if event_log_only_remote {
             self.connect_event_log_only_remote(&identity).await?;
+            None
         } else if !content.trim().is_empty() {
             self.connect_existing_content(&identity, &content).await?;
-        }
+            None
+        } else {
+            None
+        };
 
         if use_genesis || remote_content_missing {
             self.flush_event_outbox().await?;
@@ -268,7 +273,6 @@ impl NookVaultManager {
         }
 
         self.purge_legacy_plaintext_search_catalog().await?;
-        let _ = self.ensure_identity_after_connect(&identity).await;
         let records = VerifiedVaultAccessFlow::Connect
             .complete(
                 self.get_records(),
@@ -276,6 +280,28 @@ impl NookVaultManager {
                 &self.vault.store_id,
             )
             .await?;
+        let pending_cleanup = match match completed_genesis {
+            Some(completed) => Ok(Some(completed)),
+            None => {
+                crate::storage::identity_record::pending_simple_genesis_for_store(
+                    &self.vault.store_id,
+                )
+                .await
+            }
+        } {
+            Ok(pending) => pending,
+            Err(error) => {
+                self.reset_vault_session();
+                return Err(error.into());
+            }
+        };
+        if let Err(error) = self
+            .complete_connected_identity(&identity, pending_cleanup)
+            .await
+        {
+            self.reset_vault_session();
+            return Err(error.into());
+        }
         let _ = self.status.tx.send("READY".to_owned());
         tracing::info!(
             scope = "wasm-connect",
@@ -287,15 +313,44 @@ impl NookVaultManager {
         Ok(records)
     }
 
+    async fn complete_connected_identity(
+        &mut self,
+        identity: &nook_core::DeviceIdentity,
+        pending_cleanup: Option<crate::storage::identity_record::PendingSimpleGenesis>,
+    ) -> Result<(), NookError> {
+        let staged_genesis = pending_cleanup
+            .as_ref()
+            .is_some_and(|pending| pending.staged_identity.is_some());
+        if !staged_genesis {
+            self.ensure_identity_after_connect(identity).await?;
+        }
+        self.finalize_existing_vault_import_handoff().await?;
+        let Some(completed) = pending_cleanup else {
+            return Ok(());
+        };
+        let staged_handoff = completed.staged_identity.is_some();
+        crate::storage::identity_record::clear_pending_simple_genesis(
+            crate::storage::identity_record::SimpleGenesisCompletion {
+                pending: &completed,
+                staged_signing_seed: completed
+                    .staged_identity
+                    .as_ref()
+                    .map(|_| self.event_log.signing_seed.as_str()),
+            },
+        )
+        .await?;
+        if staged_handoff {
+            self.device.pending_extension_handoff = None;
+        }
+        Ok(())
+    }
+
     /// Persist a first-class Identity after connect, synthesizing from vault auth when needed.
-    async fn ensure_identity_after_connect(
-        &self,
+    pub(in crate::manager) async fn ensure_identity_after_connect(
+        &mut self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
-        if crate::storage::identity_record::load_identity_record()
-            .await?
-            .is_some()
-        {
+        if self.pending_vault_creation_handoff().is_some() {
             return Ok(());
         }
         let label = match &self.vault.vault_name {
@@ -312,12 +367,22 @@ impl NookVaultManager {
         let store_id = nook_core::StoreId::parse(&self.vault.store_id)
             .map_err(|error| NookError::Database(error.to_string()))?;
         if let Some(envelopes) = self.vault.meta.auth.get(&identity.auth_id()) {
+            let authorized_auth_ids = if self.event_log.enabled {
+                let store = load_local_event_store(store_id.as_str()).await?;
+                let graph = store.load_graph(store_id.as_str())?;
+                nook_core::event_graph_active_auth_ids(&graph)?
+            } else {
+                self.vault.meta.auth.keys().cloned().collect()
+            };
             let _ = crate::storage::identity_record::ensure_identity_from_legacy_vault(
-                identity,
-                &store_id,
-                envelopes.secrets_key.clone(),
-                envelopes.members_key.clone(),
-                &label,
+                crate::storage::identity_record::LegacyVaultIdentityInput {
+                    app_key: identity,
+                    store_id: &store_id,
+                    secrets_envelope: envelopes.secrets_key.clone(),
+                    members_envelope: envelopes.members_key.clone(),
+                    authorized_auth_ids,
+                    label: &label,
+                },
             )
             .await?;
             return Ok(());
@@ -391,14 +456,18 @@ impl NookVaultManager {
     async fn bootstrap_genesis_connect(
         &mut self,
         identity: &nook_core::DeviceIdentity,
-    ) -> Result<(), NookError> {
-        self.initialize_genesis_vault_with_identity(identity)
+    ) -> Result<crate::storage::identity_record::PendingSimpleGenesis, NookError> {
+        let pending = self
+            .initialize_genesis_vault_with_identity(identity)
             .await?;
-        self.bootstrap_event_log_genesis().await?;
+        if let Err(error) = self.bootstrap_simple_event_log_genesis(&pending).await {
+            self.reset_vault_session();
+            return Err(error);
+        }
         self.maybe_sync_self_into_roster(identity)?;
         self.event_log.enabled = true;
         self.persist_projection_cache().await?;
-        Ok(())
+        Ok(pending)
     }
 
     async fn discover_event_log_only_remote(
@@ -465,29 +534,82 @@ impl NookVaultManager {
     pub(in crate::manager) async fn initialize_genesis_vault_with_identity(
         &mut self,
         identity: &nook_core::DeviceIdentity,
-    ) -> Result<(), NookError> {
-        if self.vault.store_id.is_empty() {
-            self.vault.store_id = nook_core::generate_store_id()?.to_string();
-        }
-        let store_id = nook_core::StoreId::parse(&self.vault.store_id)
-            .map_err(|error| NookError::Database(error.to_string()))?;
+    ) -> Result<crate::storage::identity_record::PendingSimpleGenesis, NookError> {
         let label = match &self.vault.vault_name {
             super::VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
             _ => "Personal".to_owned(),
         };
-        let mut identity_record =
-            crate::storage::identity_record::ensure_local_identity_for_app_key(identity, &label)
+        if let Some(handoff) = self.pending_vault_creation_handoff() {
+            let app_key = self.device_identity()?;
+            self.event_log
+                .signing_seed
+                .clone_from(&handoff.signing_seed);
+            let (pending, identity_record, keys) =
+                crate::storage::identity_record::begin_or_resume_staged_simple_genesis(
+                    crate::storage::identity_record::StagedSimpleGenesisInput {
+                        app_key: &app_key,
+                        signing_public_key: &handoff.signing_public_key,
+                        authorizer: handoff.authorizer.as_ref(),
+                        authorizer_signing: handoff.authorizer_signing.as_ref(),
+                        label: &label,
+                    },
+                )
                 .await?;
-        if !identity_record.has_members() {
-            return Err(NookError::Database(
-                "Identity must have at least one app key before creating a vault.".to_owned(),
-            ));
+            self.vault.store_id = pending.store_id.to_string();
+            self.apply_identity_genesis_vault_keys(&identity_record, &keys)?;
+            return Ok(pending);
         }
-        let keys = identity_record
-            .generate_vault_dek(store_id)
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        crate::storage::identity_record::save_identity_record(&identity_record).await?;
-        self.apply_genesis_vault_keys(identity, &keys)
+        let pending =
+            crate::storage::identity_record::begin_or_resume_simple_genesis(identity, &label)
+                .await?;
+        self.vault.store_id = pending.store_id.to_string();
+        if let Some(staged) = &pending.staged_identity {
+            let mut directory = staged.directory.clone();
+            let keys = directory
+                .open_or_generate_vault_dek_for_identity(
+                    &pending.identity_id,
+                    identity,
+                    pending.store_id.clone(),
+                )
+                .map_err(|error| NookError::Database(error.to_string()))?;
+            let identity_record = directory
+                .identities()
+                .iter()
+                .find(|record| record.identity_id == pending.identity_id)
+                .cloned()
+                .ok_or_else(|| {
+                    NookError::Database("Staged genesis identity disappeared.".to_owned())
+                })?;
+            self.apply_identity_genesis_vault_keys(&identity_record, &keys)?;
+            return Ok(pending);
+        }
+        let keys = crate::storage::identity_record::generate_vault_dek_for_identity(
+            &pending.identity_id,
+            identity,
+            pending.store_id.clone(),
+        )
+        .await?;
+        let identity_record = crate::storage::identity_record::load_identity(&pending.identity_id)
+            .await?
+            .ok_or_else(|| {
+                NookError::Database("Pending genesis identity no longer exists.".to_owned())
+            })?;
+        self.apply_identity_genesis_vault_keys(&identity_record, &keys)?;
+        Ok(pending)
+    }
+
+    fn apply_identity_genesis_vault_keys(
+        &mut self,
+        identity: &nook_core::IdentityRecord,
+        keys: &nook_core::VaultKeys,
+    ) -> Result<(), NookError> {
+        self.prepare_genesis_vault_keys(keys)?;
+        if self.vault.architecture.vault_type == nook_core::VaultType::Simple {
+            for record in nook_core::identity_vault_genesis_records(identity, keys, "genesis")? {
+                self.vault.meta.apply_record(&record);
+            }
+        }
+        Ok(())
     }
 
     /// Test/helper path that still creates vault keys without Identity persistence.
@@ -505,10 +627,7 @@ impl NookVaultManager {
         identity: &nook_core::DeviceIdentity,
         keys: &nook_core::VaultKeys,
     ) -> Result<(), NookError> {
-        self.vault.password_entries.clear();
-        self.vault.unlock = nook_core::VaultUnlock::Keys;
-        self.vault.meta = nook_core::VaultMetaState::default();
-        self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
+        self.prepare_genesis_vault_keys(keys)?;
         match self.vault.architecture.vault_type {
             nook_core::VaultType::Simple => {
                 let genesis =
@@ -523,6 +642,14 @@ impl NookVaultManager {
         for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
             self.vault.meta.apply_record(&member);
         }
+        Ok(())
+    }
+
+    fn prepare_genesis_vault_keys(&mut self, keys: &nook_core::VaultKeys) -> Result<(), NookError> {
+        self.vault.password_entries.clear();
+        self.vault.unlock = nook_core::VaultUnlock::Keys;
+        self.vault.meta = nook_core::VaultMetaState::default();
+        self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         self.vault.last_synced_content.clear();
         Ok(())
     }

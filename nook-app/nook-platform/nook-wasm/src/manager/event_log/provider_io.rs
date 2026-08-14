@@ -3,9 +3,9 @@ use std::collections::BTreeSet;
 use super::{
     EventId, NookError, NookVaultManager, VaultOperation, fetch_drive_event_optional,
     fetch_github_event, fetch_icloud_event, iso_timestamp, list_drive_event_ids,
-    list_github_event_ids, list_icloud_event_ids, load_local_event_store,
+    list_github_event_ids, list_icloud_event_ids, load_local_event_store, load_signing_seed,
     put_drive_event_if_absent, put_github_event_if_absent, put_icloud_event_if_absent,
-    save_event_bytes, save_heads,
+    save_event_bytes, save_heads, save_signing_seed,
 };
 
 fn is_github_event_missing(message: &str) -> bool {
@@ -14,6 +14,113 @@ fn is_github_event_missing(message: &str) -> bool {
 
 fn is_icloud_event_missing(message: &str) -> bool {
     message.contains("is missing.")
+}
+
+struct SimpleGenesisOperationsInput<'a> {
+    pending: Option<&'a crate::storage::identity_record::PendingSimpleGenesis>,
+    identity: &'a nook_core::AppKey,
+    signing_public_key: &'a nook_core::DeviceSigningPublicKey,
+    keys: &'a nook_core::VaultKeys,
+    created_at: &'a nook_core::IsoTimestamp,
+}
+
+async fn simple_genesis_operations(
+    input: &SimpleGenesisOperationsInput<'_>,
+) -> Result<Vec<VaultOperation>, NookError> {
+    let Some(pending) = input.pending else {
+        let auth_record = nook_core::genesis_auth_record(
+            input.identity,
+            &input.keys.secrets_key,
+            &input.keys.members_key,
+        )?;
+        let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
+        return Ok(vec![VaultOperation::JoinApproved {
+            device_id: input.identity.device_id().clone(),
+            encryption_public_key: input.identity.public_key(),
+            signing_public_key: input.signing_public_key.clone(),
+            label: nook_core::MemberLabel::from_trusted("genesis".to_owned()),
+            secrets_key_ciphertext: envelopes.secrets_key,
+            members_key_ciphertext: envelopes.members_key,
+        }]);
+    };
+    let identity_record = if let Some(staged) = &pending.staged_identity {
+        staged
+            .directory
+            .identities()
+            .iter()
+            .find(|identity| identity.identity_id == pending.identity_id)
+            .cloned()
+            .ok_or_else(|| {
+                NookError::Database("Staged Simple genesis identity no longer exists.".to_owned())
+            })?
+    } else {
+        crate::storage::identity_record::set_identity_member_signing_public_key(
+            &pending.identity_id,
+            input.identity.device_id(),
+            input.signing_public_key,
+        )
+        .await?;
+        crate::storage::identity_record::load_identity(&pending.identity_id)
+            .await?
+            .ok_or_else(|| {
+                NookError::Database("Simple genesis identity no longer exists.".to_owned())
+            })?
+    };
+    nook_core::simple_identity_genesis_operations(
+        &nook_core::SimpleIdentityGenesisOperationsInput {
+            identity: &identity_record,
+            keys: input.keys,
+            current_app_id: input.identity.device_id(),
+            current_signing_public_key: input.signing_public_key,
+            created_at: input.created_at.as_str(),
+        },
+    )
+    .map_err(NookError::from)
+}
+
+async fn simple_genesis_signing_identity(
+    manager: &mut NookVaultManager,
+    pending: Option<&crate::storage::identity_record::PendingSimpleGenesis>,
+) -> Result<nook_core::SigningIdentity, NookError> {
+    let Some(pending) = pending.filter(|pending| pending.staged_identity.is_some()) else {
+        return manager.ensure_signing_identity().await;
+    };
+    let app_key = manager.device_identity()?;
+    if let Some(seed) = crate::storage::identity_record::resume_staged_simple_genesis_signing_seed(
+        pending, &app_key,
+    )? {
+        manager.event_log.signing_seed = seed;
+    }
+    if manager.event_log.signing_seed.is_empty() {
+        manager.event_log.signing_seed = load_signing_seed().await?.ok_or_else(|| {
+            NookError::Database(
+                "Staged Simple genesis requires an enrolled member signing key.".to_owned(),
+            )
+        })?;
+    }
+    let signing =
+        nook_core::SigningIdentity::from_seed_hex_stored(&manager.event_log.signing_seed)?;
+    let staged = pending.staged_identity.as_ref().ok_or_else(|| {
+        NookError::Database("Staged Simple genesis state disappeared.".to_owned())
+    })?;
+    let member = staged
+        .directory
+        .identities()
+        .iter()
+        .find(|identity| identity.identity_id == pending.identity_id)
+        .and_then(|identity| {
+            identity
+                .members
+                .iter()
+                .find(|member| member.app_id == *app_key.app_id())
+        })
+        .ok_or_else(|| NookError::Database("Staged genesis member disappeared.".to_owned()))?;
+    if member.signing_public_key != signing.public_key() {
+        return Err(NookError::Database(
+            "Staged genesis signer does not match the authorized member.".to_owned(),
+        ));
+    }
+    Ok(signing)
 }
 
 impl NookVaultManager {
@@ -129,8 +236,26 @@ impl NookVaultManager {
     pub(in crate::manager) async fn bootstrap_event_log_genesis(
         &mut self,
     ) -> Result<(), NookError> {
+        let created_at = nook_core::IsoTimestamp::parse(&iso_timestamp())?;
+        self.bootstrap_event_log_genesis_inner(&created_at, None)
+            .await
+    }
+
+    pub(in crate::manager) async fn bootstrap_simple_event_log_genesis(
+        &mut self,
+        pending: &crate::storage::identity_record::PendingSimpleGenesis,
+    ) -> Result<(), NookError> {
+        self.bootstrap_event_log_genesis_inner(&pending.created_at, Some(pending))
+            .await
+    }
+
+    async fn bootstrap_event_log_genesis_inner(
+        &mut self,
+        created_at: &nook_core::IsoTimestamp,
+        pending: Option<&crate::storage::identity_record::PendingSimpleGenesis>,
+    ) -> Result<(), NookError> {
         self.activate_event_log_mode().await?;
-        let signing = self.ensure_signing_identity().await?;
+        let signing = simple_genesis_signing_identity(self, pending).await?;
         let actor_id = signing.actor_id()?;
         let signing_public_key = signing.public_key();
         let key_epoch = self.ensure_key_epoch().await?;
@@ -145,17 +270,19 @@ impl NookVaultManager {
             let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
             match self.vault.architecture.vault_type {
                 nook_core::VaultType::Simple => {
-                    let auth_record =
-                        nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
-                    let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
-                    operations.push(VaultOperation::JoinApproved {
-                        device_id: identity.device_id().clone(),
-                        encryption_public_key: identity.public_key(),
-                        signing_public_key: signing_public_key.clone(),
-                        label: nook_core::MemberLabel::from_trusted("genesis".to_owned()),
-                        secrets_key_ciphertext: envelopes.secrets_key,
-                        members_key_ciphertext: envelopes.members_key,
-                    });
+                    operations.extend(
+                        simple_genesis_operations(&SimpleGenesisOperationsInput {
+                            pending,
+                            identity: &identity,
+                            signing_public_key: &signing_public_key,
+                            keys: &nook_core::VaultKeys {
+                                secrets_key,
+                                members_key,
+                            },
+                            created_at,
+                        })
+                        .await?,
+                    );
                 }
                 nook_core::VaultType::Sentinel => {
                     operations.push(VaultOperation::SentinelParticipantEnrolled {
@@ -173,14 +300,35 @@ impl NookVaultManager {
             actor_id,
             actor_signing_public_key: signing_public_key,
             parents: Vec::new(),
-            created_at: nook_core::IsoTimestamp::parse(&iso_timestamp())?,
+            created_at: created_at.clone(),
             key_epoch: EventId::parse(&key_epoch)?,
             operations,
         };
-        let import = nook_core::VaultEvent::sign(body, signing.signing_key())?;
-        let event_id = import.id()?;
-        let bytes = nook_core::serialize_event_storage_yaml(&import)
+        let proposed = nook_core::VaultEvent::sign(body, signing.signing_key())?;
+        let proposed_bytes = nook_core::serialize_event_storage_yaml(&proposed)
             .map_err(|e| NookError::Serialization(e.to_string()))?;
+        let bytes = if let Some(pending) = pending {
+            let app_key = self.device_identity()?;
+            let proposed_yaml = String::from_utf8(proposed_bytes)
+                .map_err(|error| NookError::Serialization(error.to_string()))?;
+            let pinned = crate::storage::identity_record::persist_simple_genesis_event(
+                pending,
+                &app_key,
+                proposed_yaml,
+                self.event_log.signing_seed.clone(),
+            )
+            .await?;
+            self.event_log.signing_seed.clone_from(&pinned.signing_seed);
+            if pending.staged_identity.is_none() {
+                save_signing_seed(&pinned.signing_seed).await?;
+            }
+            pinned.event_yaml.into_bytes()
+        } else {
+            proposed_bytes
+        };
+        let import = nook_core::parse_event_storage_bytes(&bytes)?;
+        let expected_store_id = nook_core::StoreId::parse(&self.vault.store_id)?;
+        let event_id = import.validate_envelope(&expected_store_id)?;
         save_event_bytes(&self.vault.store_id, event_id.as_str(), &bytes).await?;
         self.event_log.heads = vec![event_id.as_str().to_owned()];
         save_heads(&self.vault.store_id, &self.event_log.heads).await?;

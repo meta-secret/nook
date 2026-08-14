@@ -61,6 +61,45 @@ only.
 Descriptive dashboard metadata uses a separately versioned access profile.
 Missing descriptive data must not prevent app-key unlock.
 
+The local identity directory uses `identity_directory_v1`.
+Its selection is an explicit `Empty` or `Selected(identity_id)` state.
+Updates use one IndexedDB read-write transaction.
+Member records persist both encryption and event-signing public keys.
+Missing signing keys from older records are unavailable, not inferred.
+New Simple-vault genesis requires a verified signing key for every member.
+Simple vault genesis uses `pending_simple_genesis_v1`.
+The record contains `storeId`, `identityId`, `createdAt`, `eventState`, and an
+optional inactive `stagedIdentity` directory transaction. It is durable before
+event creation and survives reloads. Successful verified connect publishes the
+staged directory and matching signing seed, then removes the marker in one
+compare-and-write transaction. Concurrent identity changes fail closed and are
+never overwritten.
+Legacy records without `createdAt` use the Unix epoch timestamp.
+`eventState` is `awaiting-event`, `legacy-event-pinned`, or `event-pinned`.
+The current pinned variant owns the complete signed genesis event in
+`eventYaml`, an app-key-sealed `signingSeedEnvelope`, and signer envelopes for
+the staged members before the first event-log write. Retries by either staged
+member open and reuse that exact pair.
+A legacy marker without `eventState` is treated as `awaiting-event`.
+A preceding top-level `eventYaml`, or an `event-pinned` state without seed
+material, migrates to `legacy-event-pinned`. It upgrades to the current pinned
+state only after the durable seed is verified against the event signer.
+Legacy plaintext seed migration performs that verification before sealing.
+Failed extension-first creation leaves active identity state unchanged.
+Pre-event attempts remain staged; pinned or partially written genesis resumes
+from the same marker. Decrypted UI state and sync are cleared before the failure
+is shown. Existing-vault imports use a separate pending state and publish only
+after verified connect establishes the owning identity and validates the active
+signed roster.
+Legacy-vault DEK reconciliation uses only active signed event approvals after
+revocation replay.
+
+On first read, the app migrates `identity_record_v1` into the directory.
+It deletes the legacy key only after the new directory is durable.
+Downgrading to a pre-directory build is unsupported after migration.
+The local directory is separate from the future replicated identity control
+log.
+
 The dashboard may persist only non-secret metadata.
 Private app keys, PRF output, PIN/passphrases, vault DEKs, backup-password
 values, and plaintext vault contents are forbidden.

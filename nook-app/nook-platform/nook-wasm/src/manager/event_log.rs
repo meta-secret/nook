@@ -152,6 +152,13 @@ impl NookVaultManager {
     pub(in crate::manager) async fn ensure_signing_identity(
         &mut self,
     ) -> Result<SigningIdentity, NookError> {
+        if self.device.pending_extension_handoff.is_some()
+            && !self.event_log.signing_seed.is_empty()
+        {
+            return Ok(SigningIdentity::from_seed_hex_stored(
+                &self.event_log.signing_seed,
+            )?);
+        }
         if self.event_log.signing_seed.is_empty() {
             if let Some(seed) = load_signing_seed().await? {
                 self.event_log.signing_seed = seed;

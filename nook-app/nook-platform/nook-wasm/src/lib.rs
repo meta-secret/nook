@@ -32,13 +32,15 @@ pub use wasm_bindgen_futures as __wasm_bindgen_futures;
 
 pub use device_access::*;
 pub use identity_record::{
-    NookIdentitySnapshot, NookIdentitySnapshotKind, NookIdentitySnapshotLoad,
-    load_identity_snapshot,
+    NookIdentityDirectorySelectionKind, NookIdentityDirectorySnapshot, NookIdentitySnapshot,
+    NookIdentitySnapshotKind, NookIdentitySnapshotLoad, load_identity_directory_snapshot,
+    load_identity_snapshot, select_identity,
 };
 pub use logger::NookLogEntries;
 pub use manager::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
-    NookExternalEventLogRecords, NookVaultManager, NookVaultNameState,
+    NookExtensionIdentityHandoffContext, NookExternalEventLogRecords, NookVaultManager,
+    NookVaultNameState,
 };
 pub use storage::indexed_db::DeviceProtectionDeviceModeState;
 pub use storage::local_folder::NookLocalFolderConfig;

@@ -398,7 +398,16 @@ The extension encrypts its age private key and event-signing seed to that
 recipient.
 The website's Rust/WASM boundary decrypts the envelope.
 It validates the route nonce and advertised device id/public keys.
-It keeps the adopted material only in memory.
+It keeps the adopted material staged until authorization completes.
+Extension-first creation writes an inactive, resumable genesis transaction with
+both members, their public keys, and authorized DEK envelopes. Verified connect
+publishes that directory and its matching signing seed atomically only when its
+base still matches current identity state. Partial genesis resumes instead of
+rewinding event stores.
+Failure clears decrypted web state and stops sync.
+Staged existing-vault imports use an explicit Rust handoff state. They publish
+the extension member and signer only after verified connect establishes the
+vault owner and confirms active signed-roster access.
 Raw private material never appears in URL parameters, TypeScript values,
 browser-vendor storage, website IndexedDB, or logs.
 Reloading the website requests a new handoff from the unlocked extension.
