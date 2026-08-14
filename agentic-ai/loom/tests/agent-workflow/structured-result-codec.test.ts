@@ -32,3 +32,16 @@ test('decodes a valid typed task output', () => {
   const decoded = decodeWorkflowTaskOutput(JSON.stringify(output));
   expect(decoded).toEqual(output);
 });
+
+test('requires non-empty evidence on every structured finding', () => {
+  const noEvidence =
+    '{"resultKind":"cortex-evidence","summary":"Audited.","findings":[{"severity":"error","title":"Missing evidence","summary":"No evidence was supplied.","evidence":[],"affectedPaths":[]}],"notesForParent":[],"artifacts":[]}';
+  const blankEvidence =
+    '{"resultKind":"cortex-evidence","summary":"Audited.","findings":[{"severity":"error","title":"Blank evidence","summary":"Only blank evidence was supplied.","evidence":["   "],"affectedPaths":[]}],"notesForParent":[],"artifacts":[]}';
+  expect(() => decodeWorkflowTaskOutput(noEvidence)).toThrow(
+    'at least one non-empty evidence string',
+  );
+  expect(() => decodeWorkflowTaskOutput(blankEvidence)).toThrow(
+    'at least one non-empty evidence string',
+  );
+});

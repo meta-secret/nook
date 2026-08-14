@@ -22,10 +22,25 @@ export type CortexAuditReport = {
   readonly auditOk: boolean;
 };
 
+export type RunCortexAuditFromDirectoryArgs = {
+  readonly request: CortexAuditRequest;
+  readonly startDirectory: string;
+};
+
 export async function runCortexAudit(
   request: CortexAuditRequest,
 ): Promise<CortexAuditReport> {
-  const repoRoot = findRepoRoot();
+  const args: RunCortexAuditFromDirectoryArgs = {
+    request,
+    startDirectory: process.cwd(),
+  };
+  return runCortexAuditFromDirectory(args);
+}
+
+export async function runCortexAuditFromDirectory(
+  args: RunCortexAuditFromDirectoryArgs,
+): Promise<CortexAuditReport> {
+  const repoRoot = findRepoRoot(args.startDirectory);
   const cortexRoot = path.join(repoRoot, '.cortex');
   if (!existsSync(cortexRoot)) {
     const loomFailureDetailArgs: LoomFailureDetailArgs = {
@@ -47,7 +62,7 @@ export async function runCortexAudit(
       repoRoot,
     };
     brokenLinks.push(...findBrokenRelativeLinks(findBrokenRelativeLinksArgs));
-    if (request.includeDensityLint) {
+    if (args.request.includeDensityLint) {
       const lintProseDensityArgs: LintProseDensityArgs = {
         filePath: path.relative(repoRoot, filePath),
         content,

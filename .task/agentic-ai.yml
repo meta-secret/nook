@@ -123,11 +123,13 @@ tasks:
           bun run --cwd agentic-ai/loom agent-workflow -- \
             cortex-full-garbage-collection \
             --baseline "$LOOM_WORKFLOW_BASELINE" \
+            --working-directory "{{.REPO_ROOT}}" \
             --plan
         else
           bun run --cwd agentic-ai/loom agent-workflow -- \
             cortex-full-garbage-collection \
-            --baseline "$LOOM_WORKFLOW_BASELINE"
+            --baseline "$LOOM_WORKFLOW_BASELINE" \
+            --working-directory "{{.REPO_ROOT}}"
         fi
 
   loom:skill-scaffold:

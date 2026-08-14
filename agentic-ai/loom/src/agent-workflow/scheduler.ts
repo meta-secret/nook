@@ -18,7 +18,10 @@ import type {
 } from './domain.ts';
 import type { WorkflowEventWithoutMetadata } from './events.ts';
 import { WorkflowJournal } from './journal.ts';
+import { TaskStopReason, UnconfirmedTaskTeardownError } from './runtime.ts';
 import type {
+  AgentWorkflowTaskInvocation,
+  LoomLeafWorkflowTaskInvocation,
   WorkflowDependencyOutput,
   WorkflowTaskInvocation,
   WorkflowTaskRuntime,
@@ -46,7 +49,7 @@ export type StaticWorkflowRunConfiguration<
 
 type TaskExecutionContext<TTask extends string, TAgent extends string> = {
   readonly task: StaticTaskDefinition<TTask, TAgent, string>;
-  readonly agentProfile: AgentProfile<TAgent>;
+  readonly agentProfile: AgentProfile<TAgent> | false;
   readonly runtime: WorkflowTaskRuntime<TTask, TAgent>;
   readonly runId: WorkflowRunId;
   readonly sourceCommit: GitCommit;
@@ -104,6 +107,7 @@ export async function runStaticWorkflow<
   const joinArrivals = new Map<TJoin, Set<TTask>>();
   const dependencyTasks = new Map<TTask, readonly TTask[]>();
   const running: RunningTask<TTask>[] = [];
+  const cancellationGate = new WorkflowCancellationGate(configuration.signal);
   const entryEligibility: EligibilityOperation<TTask> = {
     tasks: [configuration.workflow.entry],
     eligible,
@@ -112,91 +116,104 @@ export async function runStaticWorkflow<
     upstreamTasks: [],
     journal: configuration.journal,
   };
-  await makeEligible(entryEligibility);
 
-  while (eligible.length > 0 || running.length > 0) {
-    while (
-      !configuration.signal.aborted &&
-      eligible.length > 0 &&
-      running.length < configuration.maxConcurrency
-    ) {
-      const taskName = eligible.shift();
-      if (!taskName) {
+  try {
+    await makeEligible(entryEligibility);
+    while (eligible.length > 0 || running.length > 0) {
+      while (
+        !cancellationGate.signal.aborted &&
+        eligible.length > 0 &&
+        running.length < configuration.maxConcurrency
+      ) {
+        const taskName = eligible.shift();
+        if (!taskName) {
+          break;
+        }
+        const task = configuration.workflow.tasks[taskName];
+        const agentResolution: AgentResolution<TTask, TAgent, TJoin> = {
+          workflow: configuration.workflow,
+          task,
+        };
+        const upstreamOutputs: WorkflowDependencyOutput<TTask>[] = [];
+        for (const upstreamTask of dependencyTasks.get(taskName) ?? []) {
+          const output = completedOutputs.get(upstreamTask);
+          if (output) {
+            const dependencyOutput: WorkflowDependencyOutput<TTask> = {
+              task: upstreamTask,
+              output,
+            };
+            upstreamOutputs.push(dependencyOutput);
+          }
+        }
+        const executionContext: TaskExecutionContext<TTask, TAgent> = {
+          task: task as StaticTaskDefinition<TTask, TAgent, string>,
+          agentProfile: resolveAgentProfile(agentResolution),
+          runtime: configuration.runtime,
+          runId: configuration.runId,
+          sourceCommit: configuration.sourceCommit,
+          workingDirectory: configuration.workingDirectory,
+          upstreamOutputs,
+          signal: cancellationGate.signal,
+          journal: configuration.journal,
+        };
+        const runningTask: RunningTask<TTask> = {
+          task: taskName,
+          completion: executeTask(executionContext),
+        };
+        running.push(runningTask);
+      }
+      if (running.length === 0) {
         break;
       }
-      const task = configuration.workflow.tasks[taskName];
-      const agentResolution: AgentResolution<TTask, TAgent, TJoin> = {
-        workflow: configuration.workflow,
-        task,
-      };
-      const upstreamOutputs: WorkflowDependencyOutput<TTask>[] = [];
-      for (const upstreamTask of dependencyTasks.get(taskName) ?? []) {
-        const output = completedOutputs.get(upstreamTask);
-        if (output) {
-          const dependencyOutput: WorkflowDependencyOutput<TTask> = {
-            task: upstreamTask,
-            output,
+      const settled = await waitForFirstCompletion(running);
+      const runningIndex = running.findIndex(
+        (entry) => entry.task === settled.task,
+      );
+      running.splice(runningIndex, 1);
+      const terminal = settled.terminal;
+      terminals.set(terminal.task, terminal);
+      if (terminal.kind === TaskTerminalKind.Completed) {
+        completedOutputs.set(terminal.task, terminal.output);
+      }
+      let activated: ActivatedTargets<TTask, TJoin> = { tasks: [], joins: [] };
+      const activationLease = cancellationGate.acquireActivationLease();
+      if (activationLease) {
+        try {
+          const definition = configuration.workflow.tasks[terminal.task];
+          const target =
+            terminal.kind === TaskTerminalKind.Completed
+              ? definition.completed
+              : definition.failed;
+          const targetActivation: TargetActivation<TTask, TAgent, TJoin> = {
+            sourceTask: terminal.task,
+            dependencyTasks: [terminal.task],
+            target,
+            workflow: configuration.workflow,
+            eligible,
+            scheduled,
+            joinArrivals,
+            taskDependencies: dependencyTasks,
+            journal: configuration.journal,
           };
-          upstreamOutputs.push(dependencyOutput);
+          activated = await activateTarget(targetActivation);
+          const activationEvent: WorkflowEventWithoutMetadata<TTask> = {
+            kind: WorkflowEventKind.SuccessorsActivated,
+            sourceTask: terminal.task,
+            activatedTasks: activated.tasks,
+            arrivedJoins: activated.joins,
+          };
+          await configuration.journal.append(activationEvent);
+        } finally {
+          activationLease.release();
         }
       }
-      const executionContext: TaskExecutionContext<TTask, TAgent> = {
-        task: task as StaticTaskDefinition<TTask, TAgent, string>,
-        agentProfile: resolveAgentProfile(agentResolution),
-        runtime: configuration.runtime,
-        runId: configuration.runId,
-        sourceCommit: configuration.sourceCommit,
-        workingDirectory: configuration.workingDirectory,
-        upstreamOutputs,
-        signal: configuration.signal,
-        journal: configuration.journal,
-      };
-      const runningTask: RunningTask<TTask> = {
-        task: taskName,
-        completion: executeTask(executionContext),
-      };
-      running.push(runningTask);
     }
-    if (running.length === 0) {
-      break;
-    }
-    const settled = await waitForFirstCompletion(running);
-    const runningIndex = running.findIndex(
-      (entry) => entry.task === settled.task,
-    );
-    running.splice(runningIndex, 1);
-    const terminal = settled.terminal;
-    terminals.set(terminal.task, terminal);
-    if (terminal.kind === TaskTerminalKind.Completed) {
-      completedOutputs.set(terminal.task, terminal.output);
-    }
-    let activated: ActivatedTargets<TTask, TJoin> = { tasks: [], joins: [] };
-    if (!configuration.signal.aborted) {
-      const definition = configuration.workflow.tasks[terminal.task];
-      const target =
-        terminal.kind === TaskTerminalKind.Completed
-          ? definition.completed
-          : definition.failed;
-      const targetActivation: TargetActivation<TTask, TAgent, TJoin> = {
-        sourceTask: terminal.task,
-        dependencyTasks: [terminal.task],
-        target,
-        workflow: configuration.workflow,
-        eligible,
-        scheduled,
-        joinArrivals,
-        taskDependencies: dependencyTasks,
-        journal: configuration.journal,
-      };
-      activated = await activateTarget(targetActivation);
-    }
-    const activationEvent: WorkflowEventWithoutMetadata<TTask> = {
-      kind: WorkflowEventKind.SuccessorsActivated,
-      sourceTask: terminal.task,
-      activatedTasks: activated.tasks,
-      arrivedJoins: activated.joins,
-    };
-    await configuration.journal.append(activationEvent);
+  } catch (error) {
+    cancellationGate.cancel();
+    await drainRunningTasks(running);
+    throw error;
+  } finally {
+    cancellationGate.dispose();
   }
 
   for (const taskName of configuration.workflow.taskNames) {
@@ -267,6 +284,63 @@ type EligibilityOperation<TTask extends string> = {
   readonly journal: WorkflowJournal<TTask>;
 };
 
+type ActivationLease = {
+  readonly release: () => void;
+};
+
+// Acquiring this lease is the activation transaction's linearization point.
+// Earlier cancellation publishes nothing; later cancellation waits for the
+// complete TaskEligible and SuccessorsActivated journal transaction.
+class WorkflowCancellationGate {
+  readonly sourceSignal: AbortSignal;
+  readonly controller = new AbortController();
+  private activationInProgress = false;
+  private cancellationPending = false;
+
+  constructor(sourceSignal: AbortSignal) {
+    this.sourceSignal = sourceSignal;
+    if (sourceSignal.aborted) {
+      this.controller.abort();
+    } else {
+      sourceSignal.addEventListener('abort', this.cancel);
+    }
+  }
+
+  get signal(): AbortSignal {
+    return this.controller.signal;
+  }
+
+  readonly cancel = (): void => {
+    if (this.activationInProgress) {
+      this.cancellationPending = true;
+      return;
+    }
+    this.controller.abort();
+  };
+
+  acquireActivationLease(): ActivationLease | false {
+    if (this.controller.signal.aborted || this.sourceSignal.aborted) {
+      return false;
+    }
+    this.activationInProgress = true;
+    let released = false;
+    return {
+      release: () => {
+        if (released) return;
+        released = true;
+        this.activationInProgress = false;
+        if (this.cancellationPending || this.sourceSignal.aborted) {
+          this.controller.abort();
+        }
+      },
+    };
+  }
+
+  dispose(): void {
+    this.sourceSignal.removeEventListener('abort', this.cancel);
+  }
+}
+
 async function makeEligible<TTask extends string>(
   operation: EligibilityOperation<TTask>,
 ): Promise<void> {
@@ -307,6 +381,12 @@ async function waitForFirstCompletion<TTask extends string>(
   return Promise.race(candidates);
 }
 
+async function drainRunningTasks<TTask extends string>(
+  running: readonly RunningTask<TTask>[],
+): Promise<void> {
+  await Promise.allSettled(running.map((entry) => entry.completion));
+}
+
 type AgentResolution<
   TTask extends string,
   TAgent extends string,
@@ -320,15 +400,13 @@ function resolveAgentProfile<
   TTask extends string,
   TAgent extends string,
   TJoin extends string,
->(resolution: AgentResolution<TTask, TAgent, TJoin>): AgentProfile<TAgent> {
+>(
+  resolution: AgentResolution<TTask, TAgent, TJoin>,
+): AgentProfile<TAgent> | false {
   if (resolution.task.execution.kind === WorkflowExecutorKind.Agent) {
     return resolution.workflow.agents[resolution.task.execution.agent];
   }
-  const firstAgentName = resolution.workflow.agentNames[0];
-  if (!firstAgentName) {
-    throw new Error('Static workflow must declare at least one agent profile.');
-  }
-  return resolution.workflow.agents[firstAgentName];
+  return false;
 }
 
 async function executeTask<TTask extends string, TAgent extends string>(
@@ -365,30 +443,56 @@ async function executeTask<TTask extends string, TAgent extends string>(
   } else {
     context.signal.addEventListener('abort', forwardCancellation);
   }
-  const invocation: WorkflowTaskInvocation<TTask, TAgent> = {
-    task: context.task.name,
-    attempt: 1,
-    execution: context.task.execution,
-    agentProfile: context.agentProfile,
-    sourceCommit: context.sourceCommit,
-    runId: context.runId,
-    workingDirectory: context.workingDirectory,
-    upstreamOutputs: context.upstreamOutputs,
-    signal: taskController.signal,
-    observe,
-  };
+  let invocation: WorkflowTaskInvocation<TTask, TAgent>;
+  if (context.task.execution.kind === WorkflowExecutorKind.Agent) {
+    if (!context.agentProfile) {
+      throw new Error(
+        `Agent task ${context.task.name} has no validated agent profile.`,
+      );
+    }
+    const agentInvocation: AgentWorkflowTaskInvocation<TTask, TAgent> = {
+      task: context.task.name,
+      attempt: 1,
+      execution: context.task.execution,
+      agentProfile: context.agentProfile,
+      sourceCommit: context.sourceCommit,
+      runId: context.runId,
+      workingDirectory: context.workingDirectory,
+      upstreamOutputs: context.upstreamOutputs,
+      signal: taskController.signal,
+      observe,
+    };
+    invocation = agentInvocation;
+  } else {
+    const leafInvocation: LoomLeafWorkflowTaskInvocation<TTask> = {
+      task: context.task.name,
+      attempt: 1,
+      execution: context.task.execution,
+      sourceCommit: context.sourceCommit,
+      runId: context.runId,
+      workingDirectory: context.workingDirectory,
+      upstreamOutputs: context.upstreamOutputs,
+      signal: taskController.signal,
+      observe,
+    };
+    invocation = leafInvocation;
+  }
   let terminal: TaskTerminal<TTask>;
   try {
     const timedExecution: TimedExecution<TTask, TAgent> = {
       invocation,
       runtime: context.runtime,
       timeoutMs: context.task.timeoutMs,
+      workflowSignal: context.signal,
       abort: () => taskController.abort(),
       cleanup: () =>
         context.signal.removeEventListener('abort', forwardCancellation),
     };
     terminal = await withTimeout(timedExecution);
   } catch (error) {
+    if (error instanceof UnconfirmedTaskTeardownError) {
+      throw error;
+    }
     terminal = {
       kind: context.signal.aborted
         ? TaskTerminalKind.Cancelled
@@ -417,6 +521,7 @@ type TimedExecution<TTask extends string, TAgent extends string> = {
   readonly invocation: WorkflowTaskInvocation<TTask, TAgent>;
   readonly runtime: WorkflowTaskRuntime<TTask, TAgent>;
   readonly timeoutMs: number;
+  readonly workflowSignal: AbortSignal;
   readonly abort: () => void;
   readonly cleanup: () => void;
 };
@@ -425,24 +530,78 @@ async function withTimeout<TTask extends string, TAgent extends string>(
   execution: TimedExecution<TTask, TAgent>,
 ): Promise<TaskTerminal<TTask>> {
   const timeoutControl = createTimeout(execution);
-  const runtimeCompletion = execution.runtime.execute(execution.invocation);
+  const cancellationControl = createWorkflowCancellation(execution);
+  const attempt = execution.runtime.start(execution.invocation);
+  const runtimeCompletion = attempt.completion;
+  void runtimeCompletion.catch(() => false);
   try {
     const terminal = await Promise.race([
       runtimeCompletion,
       timeoutControl.terminal,
+      cancellationControl.terminal,
     ]);
-    if (terminal.kind === TaskTerminalKind.TimedOut) {
-      await runtimeCompletion.then(
-        () => true,
-        () => true,
-      );
+    if (
+      terminal.kind === TaskTerminalKind.TimedOut ||
+      terminal.kind === TaskTerminalKind.Cancelled
+    ) {
+      const stopRequest = {
+        reason:
+          terminal.kind === TaskTerminalKind.TimedOut
+            ? TaskStopReason.Timeout
+            : TaskStopReason.WorkflowCancellation,
+        hardDeadlineMs: TASK_TEARDOWN_HARD_DEADLINE_MS,
+      } as const;
+      await attempt.stop(stopRequest);
     }
     return terminal;
   } finally {
     timeoutControl.cancel();
+    cancellationControl.cancel();
     execution.cleanup();
   }
 }
+
+type CancellationControl<TTask extends string> = {
+  readonly terminal: Promise<TaskTerminal<TTask>>;
+  readonly cancel: () => void;
+};
+
+function createWorkflowCancellation<
+  TTask extends string,
+  TAgent extends string,
+>(execution: TimedExecution<TTask, TAgent>): CancellationControl<TTask> {
+  let resolveCancellation: (terminal: TaskTerminal<TTask>) => void = () => {};
+  const terminal = new Promise<TaskTerminal<TTask>>((resolve) => {
+    resolveCancellation = resolve;
+  });
+  const cancelTask = (): void => {
+    execution.abort();
+    const cancelled: TaskTerminal<TTask> = {
+      kind: TaskTerminalKind.Cancelled,
+      task: execution.invocation.task,
+      attempt: execution.invocation.attempt,
+      summary: 'Workflow cancellation stopped this task.',
+    };
+    resolveCancellation(cancelled);
+  };
+  if (execution.workflowSignal.aborted) {
+    cancelTask();
+  } else {
+    const listenerOptions: AddEventListenerOptions = { once: true };
+    execution.workflowSignal.addEventListener(
+      'abort',
+      cancelTask,
+      listenerOptions,
+    );
+  }
+  return {
+    terminal,
+    cancel: () =>
+      execution.workflowSignal.removeEventListener('abort', cancelTask),
+  };
+}
+
+const TASK_TEARDOWN_HARD_DEADLINE_MS = 10_000;
 
 type TimeoutControl<TTask extends string> = {
   readonly terminal: Promise<TaskTerminal<TTask>>;

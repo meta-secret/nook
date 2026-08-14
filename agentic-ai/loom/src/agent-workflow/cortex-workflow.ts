@@ -44,7 +44,12 @@ const READ_ONLY_CORTEX: TaskResourceClaims = {
 };
 
 const READ_ONLY_SKILLS: TaskResourceClaims = {
-  read: ['.cortex/**', '.agents/skills/**', 'AGENTS.md'],
+  read: ['.cortex/**', '.agents/**', '.cursor/**', '.claude/**', 'AGENTS.md'],
+  write: [],
+};
+
+const READ_ONLY_ARCHITECTURE: TaskResourceClaims = {
+  read: ['.cortex/**', 'nook-app/**'],
   write: [],
 };
 
@@ -174,7 +179,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: WorkflowExecutorKind.Agent,
         agent: CortexAuditAgent.ArchitectureAuditor,
         instruction:
-          'Inspect .cortex/design-docs and .cortex/product-specs. Find active claims that conflict with each other or with workflow policy. Return precise file and line evidence. Do not edit files.',
+          'Inspect .cortex/design-docs and .cortex/product-specs. Compare active product and architecture claims with their owning nook-app implementation and workflow policy. Find contradictions and stale implementation claims. Return precise file and line evidence. Do not edit files.',
         resultKind: WorkflowResultKind.CortexEvidence,
       },
       completed: {
@@ -182,7 +187,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         join: CortexAuditJoin.EvidenceCollected,
       },
       failed: noTasks,
-      resources: READ_ONLY_CORTEX,
+      resources: READ_ONLY_ARCHITECTURE,
       timeoutMs: 20 * 60_000,
     },
     [CortexAuditTask.AuditDynamicSkillsAndEntryPoints]: {
@@ -191,7 +196,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: WorkflowExecutorKind.Agent,
         agent: CortexAuditAgent.SkillAuditor,
         instruction:
-          'Inspect .cortex/dynamic-skills, .agents/skills, .cortex/AGENTS.md, and AGENTS.md. Find stale skills, missing executable wrappers, and entry-point guidance that disagrees with durable skill cards. Return precise file and line evidence. Do not edit files.',
+          'Inspect .cortex/dynamic-skills, .agents/skills, .cursor executable mirrors, .claude executable mirrors, .cortex/AGENTS.md, and AGENTS.md. Find stale skills, missing or divergent executable wrappers and mirrors, and entry-point guidance that disagrees with durable skill cards. Return precise file and line evidence. Do not edit files.',
         resultKind: WorkflowResultKind.CortexEvidence,
       },
       completed: {

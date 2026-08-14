@@ -395,7 +395,7 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 
 ## Development
 
-Agent workflow: run **`task format`**, commit, and push the exact branch head;
+Agent workflow: run **`task loom:pre-push`**, commit, and push the exact branch head;
 run focused builds/tests with **`task remote TASK_NAME=<name>`** or batch them
 with **`task remote TASK_NAMES=<name>,<name>`** on
 GitHub-hosted workers; then explicitly start complete PR validation with
@@ -405,7 +405,7 @@ humans. Main-fix PRs use `FULL_E2E=1` to request the Main-equivalent browser
 suites.
 
 ```sh
-task format                # required local agent action (host-applied)
+task loom:pre-push         # required local agent action (host-applied)
 task remote:list           # allowlisted focused GitHub-hosted task catalog
 task remote TASK_NAME=rust:test # narrow sealed image, exact pushed HEAD
 task remote TASK_NAMES=web:check,web:test # one runner, one setup, two tasks
