@@ -58,7 +58,8 @@ Default PR-first loop:
    - A push does not start complete validation.
 6. **Request review and validate on hosted workers:**
    - Use focused hosted tasks while iterating.
-   - Run `task pr:validate PR=<number>` when the coherent head is ready.
+   - At the final boundary, run `task pr:preflight PR=<number>` and
+     `task pr:validate PR=<number>` once.
    - The command dispatches repository-owned checks immediately.
    - It then attempts one idempotent exact-head Codex Cloud request.
    - Review-request failure does not block those checks.
@@ -67,7 +68,6 @@ Default PR-first loop:
    - Do not request or wait for other optional reviewers.
    - Run allowlisted `task remote TASK_NAME=<name>` only for isolated diagnostics that finish sooner than complete validation.
    - Do not use focused tasks as a prerequisite for complete validation.
-   - At the final boundary, run `task pr:preflight PR=<number>` and `task pr:validate PR=<number>`.
    - Monitor the path-applicable `PR / Verify and preview` and `Web research / Build and deploy research catalog` workflows.
    - PRs fixing a failure observed on `main` must trigger the Main-equivalent suite with `task pr:validate PR=<number> FULL_E2E=1`.
    - Do not run heavy local builds or tests.
