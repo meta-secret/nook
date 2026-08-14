@@ -107,13 +107,7 @@ export async function runStaticWorkflow<
   const joinArrivals = new Map<TJoin, Set<TTask>>();
   const dependencyTasks = new Map<TTask, readonly TTask[]>();
   const running: RunningTask<TTask>[] = [];
-  const runController = new AbortController();
-  const forwardWorkflowCancellation = (): void => runController.abort();
-  if (configuration.signal.aborted) {
-    runController.abort();
-  } else {
-    configuration.signal.addEventListener('abort', forwardWorkflowCancellation);
-  }
+  const cancellationGate = new WorkflowCancellationGate(configuration.signal);
   const entryEligibility: EligibilityOperation<TTask> = {
     tasks: [configuration.workflow.entry],
     eligible,
@@ -127,7 +121,7 @@ export async function runStaticWorkflow<
     await makeEligible(entryEligibility);
     while (eligible.length > 0 || running.length > 0) {
       while (
-        !runController.signal.aborted &&
+        !cancellationGate.signal.aborted &&
         eligible.length > 0 &&
         running.length < configuration.maxConcurrency
       ) {
@@ -159,7 +153,7 @@ export async function runStaticWorkflow<
           sourceCommit: configuration.sourceCommit,
           workingDirectory: configuration.workingDirectory,
           upstreamOutputs,
-          signal: runController.signal,
+          signal: cancellationGate.signal,
           journal: configuration.journal,
         };
         const runningTask: RunningTask<TTask> = {
@@ -182,42 +176,44 @@ export async function runStaticWorkflow<
         completedOutputs.set(terminal.task, terminal.output);
       }
       let activated: ActivatedTargets<TTask, TJoin> = { tasks: [], joins: [] };
-      if (!runController.signal.aborted) {
-        const definition = configuration.workflow.tasks[terminal.task];
-        const target =
-          terminal.kind === TaskTerminalKind.Completed
-            ? definition.completed
-            : definition.failed;
-        const targetActivation: TargetActivation<TTask, TAgent, TJoin> = {
-          sourceTask: terminal.task,
-          dependencyTasks: [terminal.task],
-          target,
-          workflow: configuration.workflow,
-          eligible,
-          scheduled,
-          joinArrivals,
-          taskDependencies: dependencyTasks,
-          journal: configuration.journal,
-        };
-        activated = await activateTarget(targetActivation);
+      const activationLease = cancellationGate.acquireActivationLease();
+      if (activationLease) {
+        try {
+          const definition = configuration.workflow.tasks[terminal.task];
+          const target =
+            terminal.kind === TaskTerminalKind.Completed
+              ? definition.completed
+              : definition.failed;
+          const targetActivation: TargetActivation<TTask, TAgent, TJoin> = {
+            sourceTask: terminal.task,
+            dependencyTasks: [terminal.task],
+            target,
+            workflow: configuration.workflow,
+            eligible,
+            scheduled,
+            joinArrivals,
+            taskDependencies: dependencyTasks,
+            journal: configuration.journal,
+          };
+          activated = await activateTarget(targetActivation);
+          const activationEvent: WorkflowEventWithoutMetadata<TTask> = {
+            kind: WorkflowEventKind.SuccessorsActivated,
+            sourceTask: terminal.task,
+            activatedTasks: activated.tasks,
+            arrivedJoins: activated.joins,
+          };
+          await configuration.journal.append(activationEvent);
+        } finally {
+          activationLease.release();
+        }
       }
-      const activationEvent: WorkflowEventWithoutMetadata<TTask> = {
-        kind: WorkflowEventKind.SuccessorsActivated,
-        sourceTask: terminal.task,
-        activatedTasks: activated.tasks,
-        arrivedJoins: activated.joins,
-      };
-      await configuration.journal.append(activationEvent);
     }
   } catch (error) {
-    runController.abort();
+    cancellationGate.cancel();
     await drainRunningTasks(running);
     throw error;
   } finally {
-    configuration.signal.removeEventListener(
-      'abort',
-      forwardWorkflowCancellation,
-    );
+    cancellationGate.dispose();
   }
 
   for (const taskName of configuration.workflow.taskNames) {
@@ -287,6 +283,63 @@ type EligibilityOperation<TTask extends string> = {
   readonly upstreamTasks: readonly TTask[];
   readonly journal: WorkflowJournal<TTask>;
 };
+
+type ActivationLease = {
+  readonly release: () => void;
+};
+
+// Acquiring this lease is the activation transaction's linearization point.
+// Earlier cancellation publishes nothing; later cancellation waits for the
+// complete TaskEligible and SuccessorsActivated journal transaction.
+class WorkflowCancellationGate {
+  readonly sourceSignal: AbortSignal;
+  readonly controller = new AbortController();
+  private activationInProgress = false;
+  private cancellationPending = false;
+
+  constructor(sourceSignal: AbortSignal) {
+    this.sourceSignal = sourceSignal;
+    if (sourceSignal.aborted) {
+      this.controller.abort();
+    } else {
+      sourceSignal.addEventListener('abort', this.cancel);
+    }
+  }
+
+  get signal(): AbortSignal {
+    return this.controller.signal;
+  }
+
+  readonly cancel = (): void => {
+    if (this.activationInProgress) {
+      this.cancellationPending = true;
+      return;
+    }
+    this.controller.abort();
+  };
+
+  acquireActivationLease(): ActivationLease | false {
+    if (this.controller.signal.aborted || this.sourceSignal.aborted) {
+      return false;
+    }
+    this.activationInProgress = true;
+    let released = false;
+    return {
+      release: () => {
+        if (released) return;
+        released = true;
+        this.activationInProgress = false;
+        if (this.cancellationPending || this.sourceSignal.aborted) {
+          this.controller.abort();
+        }
+      },
+    };
+  }
+
+  dispose(): void {
+    this.sourceSignal.removeEventListener('abort', this.cancel);
+  }
+}
 
 async function makeEligible<TTask extends string>(
   operation: EligibilityOperation<TTask>,

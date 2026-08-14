@@ -542,7 +542,7 @@ describe('static agent workflow validation', () => {
   test('does not overlap unrelated recursive basename claims', () => {
     const nonOverlappingPairs = [
       { first: 'README.md', second: '**/Taskfile.yml' },
-      { first: '**/*.md', second: '**/*.ts' },
+      { first: 'docs/readme.txt/file.ts', second: '**/*.md' },
     ];
 
     for (const pair of nonOverlappingPairs) {
@@ -585,6 +585,20 @@ describe('static agent workflow validation', () => {
     for (const pair of overlappingPairs) {
       expect(taskResourcePatternsOverlap(pair)).toBe(true);
     }
+  });
+
+  test('conservatively overlaps recursive claims that can own ancestors', () => {
+    const literalDirectoryPair = {
+      first: '**/cache',
+      second: '**/*.ts',
+    } as const;
+    const extensionDirectoryPair = {
+      first: '**/*.md',
+      second: '**/*.ts',
+    } as const;
+
+    expect(taskResourcePatternsOverlap(literalDirectoryPair)).toBe(true);
+    expect(taskResourcePatternsOverlap(extensionDirectoryPair)).toBe(true);
   });
 
   test('does not overlap unrelated recursive basenames in exact path segments', () => {

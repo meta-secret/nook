@@ -24,6 +24,11 @@ import type {
   TaskTerminal,
   WorkflowTaskOutput,
 } from '../../src/agent-workflow/domain.ts';
+import { WorkflowEventKind } from '../../src/agent-workflow/events.ts';
+import type {
+  WorkflowEvent,
+  WorkflowEventWithoutMetadata,
+} from '../../src/agent-workflow/events.ts';
 import { WorkflowJournal } from '../../src/agent-workflow/journal.ts';
 import type { WorkflowJournalConfiguration } from '../../src/agent-workflow/journal.ts';
 import type {
@@ -343,6 +348,181 @@ async function createTeardownDrainFixture(): Promise<{
   return { runRoot, runtime, configuration };
 }
 
+enum CancellationRaceTask {
+  Entry = 'entry',
+  Successor = 'successor',
+}
+
+enum CancellationRaceOrdering {
+  BeforeActivationLease = 'before-activation-lease',
+  DuringActivationLease = 'during-activation-lease',
+}
+
+type CancellationRaceJournalConfiguration = WorkflowJournalConfiguration & {
+  readonly abortController: AbortController;
+  readonly ordering: CancellationRaceOrdering;
+};
+
+class CancellationRaceJournal extends WorkflowJournal<CancellationRaceTask> {
+  readonly abortController: AbortController;
+  readonly ordering: CancellationRaceOrdering;
+  cancellationTriggered = false;
+
+  constructor(configuration: CancellationRaceJournalConfiguration) {
+    super(configuration);
+    this.abortController = configuration.abortController;
+    this.ordering = configuration.ordering;
+  }
+
+  override async append(
+    event: WorkflowEventWithoutMetadata<CancellationRaceTask>,
+  ): Promise<WorkflowEvent<CancellationRaceTask>> {
+    if (this.shouldCancel(event)) {
+      this.cancellationTriggered = true;
+      this.abortController.abort();
+    }
+    return super.append(event);
+  }
+
+  private shouldCancel(
+    event: WorkflowEventWithoutMetadata<CancellationRaceTask>,
+  ): boolean {
+    if (this.cancellationTriggered) return false;
+    if (
+      this.ordering === CancellationRaceOrdering.BeforeActivationLease &&
+      event.kind === WorkflowEventKind.TaskTerminalRecorded
+    ) {
+      return event.task === CancellationRaceTask.Entry;
+    }
+    return (
+      this.ordering === CancellationRaceOrdering.DuringActivationLease &&
+      event.kind === WorkflowEventKind.TaskEligible &&
+      event.task === CancellationRaceTask.Successor
+    );
+  }
+}
+
+class CancellationRaceRuntime implements WorkflowTaskRuntime<
+  CancellationRaceTask,
+  never
+> {
+  readonly started: CancellationRaceTask[] = [];
+
+  start(
+    invocation: WorkflowTaskInvocation<CancellationRaceTask, never>,
+  ): WorkflowTaskAttempt<CancellationRaceTask> {
+    this.started.push(invocation.task);
+    return confirmedAttempt(
+      Promise.resolve(completedCancellationRaceTask(invocation)),
+    );
+  }
+}
+
+function completedCancellationRaceTask(
+  invocation: WorkflowTaskInvocation<CancellationRaceTask, never>,
+): TaskTerminal<CancellationRaceTask> {
+  const output: WorkflowTaskOutput = {
+    resultKind: WorkflowResultKind.LoomLeafEvidence,
+    summary: `${invocation.task} completed.`,
+    findings: [],
+    notesForParent: [],
+    artifacts: [],
+  };
+  return {
+    kind: TaskTerminalKind.Completed,
+    task: invocation.task,
+    attempt: invocation.attempt,
+    threadId: 'loom-leaf',
+    output,
+  };
+}
+
+async function createCancellationRaceFixture(
+  ordering: CancellationRaceOrdering,
+): Promise<{
+  readonly runRoot: string;
+  readonly runtime: CancellationRaceRuntime;
+  readonly configuration: StaticWorkflowRunConfiguration<
+    CancellationRaceTask,
+    never,
+    never
+  >;
+}> {
+  const workflow: StaticAgentWorkflowDefinition<
+    CancellationRaceTask,
+    never,
+    never
+  > = {
+    name: StaticAgentWorkflowName.CortexFullGarbageCollection,
+    version: `cancellation-race-${ordering}`,
+    entry: CancellationRaceTask.Entry,
+    taskNames: [CancellationRaceTask.Entry, CancellationRaceTask.Successor],
+    agentNames: [],
+    joinNames: [],
+    agents: {},
+    tasks: {
+      [CancellationRaceTask.Entry]: {
+        name: CancellationRaceTask.Entry,
+        execution: {
+          kind: WorkflowExecutorKind.LoomLeaf,
+          leaf: LoomLeafKind.VerifyGitBaseline,
+        },
+        completed: {
+          kind: TaskTargetKind.Task,
+          task: CancellationRaceTask.Successor,
+        },
+        failed: noTasks,
+        resources: { read: ['git:HEAD'], write: [] },
+        timeoutMs: 1_000,
+      },
+      [CancellationRaceTask.Successor]: {
+        name: CancellationRaceTask.Successor,
+        execution: {
+          kind: WorkflowExecutorKind.LoomLeaf,
+          leaf: LoomLeafKind.VerifyGitBaseline,
+        },
+        completed: noTasks,
+        failed: noTasks,
+        resources: { read: ['git:HEAD'], write: [] },
+        timeoutMs: 1_000,
+      },
+    },
+    joins: {},
+  };
+  const runRoot = await mkdtemp(join(tmpdir(), 'loom-cancellation-race-'));
+  const abortController = new AbortController();
+  const journalConfiguration: CancellationRaceJournalConfiguration = {
+    runRoot,
+    identity: {
+      runId: `cancellation-race-${ordering}`,
+      workflow: workflow.name,
+      workflowVersion: workflow.version,
+      sourceCommit: SOURCE_COMMIT,
+    },
+    now: () => FIXED_TIME,
+    abortController,
+    ordering,
+  };
+  const journal = new CancellationRaceJournal(journalConfiguration);
+  const runtime = new CancellationRaceRuntime();
+  const configuration: StaticWorkflowRunConfiguration<
+    CancellationRaceTask,
+    never,
+    never
+  > = {
+    workflow,
+    runtime,
+    journal,
+    runId: journalConfiguration.identity.runId,
+    sourceCommit: SOURCE_COMMIT,
+    workingDirectory: process.cwd(),
+    maxConcurrency: 1,
+    signal: abortController.signal,
+    now: () => FIXED_TIME,
+  };
+  return { runRoot, runtime, configuration };
+}
+
 type LeafWorkflowFixtureConfiguration = {
   readonly mode: LeafRuntimeMode;
   readonly timeoutMs: number;
@@ -655,6 +835,50 @@ describe('static workflow scheduler', () => {
       expect(events).not.toContain('"kind":"workflow-terminal-recorded"');
       expect(events).not.toContain(
         '"task":"unsafe","attempt":1,"terminalKind"',
+      );
+    } finally {
+      await rm(fixture.runRoot, removeOptions);
+    }
+  });
+
+  test('publishes no activation when cancellation wins before the lease', async () => {
+    const fixture = await createCancellationRaceFixture(
+      CancellationRaceOrdering.BeforeActivationLease,
+    );
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const terminal = await runStaticWorkflow(fixture.configuration);
+      expect(terminal.kind).toBe(WorkflowTerminalKind.Cancelled);
+      expect(fixture.runtime.started).toEqual([CancellationRaceTask.Entry]);
+      const events = await readFile(
+        fixture.configuration.journal.eventsPath,
+        'utf8',
+      );
+      expect(events).not.toContain('"kind":"task-eligible","task":"successor"');
+      expect(events).not.toContain(
+        '"kind":"successors-activated","sourceTask":"entry"',
+      );
+    } finally {
+      await rm(fixture.runRoot, removeOptions);
+    }
+  });
+
+  test('finishes leased activation before observing concurrent cancellation', async () => {
+    const fixture = await createCancellationRaceFixture(
+      CancellationRaceOrdering.DuringActivationLease,
+    );
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const terminal = await runStaticWorkflow(fixture.configuration);
+      expect(terminal.kind).toBe(WorkflowTerminalKind.Cancelled);
+      expect(fixture.runtime.started).toEqual([CancellationRaceTask.Entry]);
+      const events = await readFile(
+        fixture.configuration.journal.eventsPath,
+        'utf8',
+      );
+      expect(events).toContain('"kind":"task-eligible","task":"successor"');
+      expect(events).toContain(
+        '"kind":"successors-activated","sourceTask":"entry","activatedTasks":["successor"]',
       );
     } finally {
       await rm(fixture.runRoot, removeOptions);
