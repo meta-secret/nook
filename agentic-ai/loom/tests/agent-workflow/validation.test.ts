@@ -584,6 +584,20 @@ describe('static agent workflow validation', () => {
     }
   });
 
+  test('overlaps recursive globs with claims that can own ancestor directories', () => {
+    const exactDirectoryPair = {
+      first: 'docs',
+      second: '**/*.ts',
+    } as const;
+    const directoryGlobPair = {
+      first: 'docs/*.md',
+      second: '**/*.ts',
+    } as const;
+
+    expect(taskResourcePatternsOverlap(exactDirectoryPair)).toBe(true);
+    expect(taskResourcePatternsOverlap(directoryGlobPair)).toBe(true);
+  });
+
   test('rejects unsupported resource claim syntax', () => {
     const workflow: CortexWorkflow = {
       ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,

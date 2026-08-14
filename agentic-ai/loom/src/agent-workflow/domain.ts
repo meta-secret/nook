@@ -247,9 +247,15 @@ function recursiveBasenameOverlaps(pair: ResourceDescriptorPair): boolean {
       : pair.second;
   const other = recursive === pair.first ? pair.second : pair.first;
   if (other.kind === ResourceClaimKind.Subtree) return true;
+  if (other.kind === ResourceClaimKind.DirectGlob) return true;
+  if (
+    other.kind === ResourceClaimKind.Exact &&
+    !basenameOfPath(other.path).includes('.')
+  ) {
+    return true;
+  }
   const otherBasename =
-    other.kind === ResourceClaimKind.RecursiveBasename ||
-    other.kind === ResourceClaimKind.DirectGlob
+    other.kind === ResourceClaimKind.RecursiveBasename
       ? other.basename
       : basenameOfPath(other.path);
   const basenames: TaskResourcePatternPair = {
