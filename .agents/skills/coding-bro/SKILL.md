@@ -8,7 +8,7 @@ description: >-
   allowlisted tasks on GitHub-hosted workers, then explicitly trigger complete
   exact-head PR validation; on failure fix from CI logs, format, push, and
   trigger again until Nook's PR checks are green, resolve every actionable comment already present
-  without waiting for reviewers, then squash merge; afterward publish the issue
+  after bounded Codex review convergence, then squash merge; afterward publish the issue
   update, linked worklog, and PR statistics to Nook Workbench. Always follow this
   pipeline for implementation work unless the user explicitly asks for a
   read-only or question-only answer.
@@ -18,7 +18,7 @@ description: >-
 
 **Default workflow for all implementation tasks.** System of record: [`.cortex/workflows/coding-bro.md`](../../.cortex/workflows/coding-bro.md).
 
-Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting. Follow the steps in the cortex doc — fetch, publish the Workbench task plan before implementation, branch, implement, **always `task loom:pre-push`**, commit and push, use `task remote` for focused hosted execution, run `task loom:pr-land` / `task pr:validate` when the head is ready, address and resolve every actionable comment already present, fix loop until exact-head checks are green, squash merge, publish the Workbench issue update/linked worklog/statistics, and report duration. Never request or wait for external reviews/checks. Never run heavy product work locally.
+Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting. Follow the steps in the cortex doc — fetch, publish the Workbench task plan before implementation, branch, implement, **always `task loom:pre-push`**, commit, run advisory local Codex review, push, use `task remote` for focused hosted execution, run bounded exact-head Codex Cloud review convergence through `task loom:pr-land`, address and resolve every actionable comment, trigger complete validation, fix until exact-head checks are green, squash merge, publish the Workbench issue update/linked worklog/statistics, and report duration. Never wait beyond the convergence timeout or request other external reviews/checks. Never run heavy product work locally.
 
 Before any mutation, apply
 [agent-feature-ownership](../agent-feature-ownership/SKILL.md). Work only on the

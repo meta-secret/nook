@@ -633,11 +633,18 @@ Commands:
 
 - `task pr:preflight`
 - `task pr:review`
+- `task pr:review-local`
+- `task pr:review-converge`
 - `task pr:ready`
 
 Review and audit behavior:
 
-- The optional review command posts an idempotent SHA-bound Codex request.
+- The local review command runs advisory Codex review against `origin/main`.
+- The review command posts an idempotent SHA-bound Codex request.
+- The convergence command gives automatic review a grace period, requests one
+  exact-head review when needed, and stops at a bounded timeout.
+- Actionable feedback and head replacement fail convergence.
+- Review-service timeout does not fail delivery.
 - Audit commands emit machine-readable exact-head state.
 - Audit commands do not wait for an external reviewer.
 - Audit commands never merge a PR.

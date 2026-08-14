@@ -5,8 +5,8 @@ description: >-
   Inspect submitted reviews, inline review threads, and PR comments; build a
   checklist from actionable items; verify each finding; fix or explain it;
   validate, push, reply on GitHub, and resolve conversations only after the
-  agent's targeted reply is visible. Never request or wait for external reviews
-  or checks.
+  agent's targeted reply is visible. This skill does not initiate reviews;
+  bounded Codex convergence belongs to PR delivery.
 ---
 
 # Code Review Comments
@@ -30,8 +30,8 @@ Inspect the feedback and address every actionable item already present. Proceed
 when the unresolved-thread count is zero and Nook's applicable repository-owned
 PR test checks are green.
 These are normally `PR / Verify and preview`, plus `Web research / Build and
-deploy research catalog` when web-research paths change. Never request or wait
-for external review services.
+deploy research catalog` when web-research paths change. Do not extend the
+bounded review-convergence wait or request another external review service.
 
 Use the concrete, paginated review-thread GraphQL query and the current-head
 `commit_id` comparison in the system-of-record skill; do not infer current

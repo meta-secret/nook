@@ -57,9 +57,10 @@ hand-written `docker run` commands.
 - Do **not** run any `git` commands — the harness commits and pushes `${AGENT_BRANCH}` after you finish.
 - Do **not** create, monitor, or merge a PR from this bounded worker. The harness
   opens the PR after you finish. It assigns and directly mentions the continuing
-  task owner. That owner monitors the PR, fixes failures/comments/conflicts,
-  runs the exact-head readiness audit, and squash-merges without separate merge
-  authorization.
+  task owner. That owner runs advisory local review on the committed head, then
+  bounded exact-head Codex Cloud review convergence before complete validation.
+  The owner fixes failures/comments/conflicts, runs the exact-head readiness
+  audit, and squash-merges without separate merge authorization.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the requested task.
 - Follow `.cortex/rules.md` (squash merge only; never kill Docker daemon — only stop containers).

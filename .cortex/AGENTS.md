@@ -452,15 +452,19 @@ Do not make Main completion a prerequisite.
 
 Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 
-## ⛔ Non-negotiable: inspect existing feedback without waiting for reviewers
+## ⛔ Non-negotiable: converge Codex review before complete validation
+
+Run advisory local Codex review before the first push. After each coherent push,
+run bounded exact-head Codex Cloud review convergence before complete
+validation. Give the automatic review a grace period. Request it once when
+needed. A missing service result times out without blocking delivery.
 
 Before merge or handoff, inspect the comments and review findings currently
 present and address every active actionable item from humans or external
 services. Reply with the fix, validation, or no-change rationale and resolve
-each actionable thread. Do not request or wait for Codex, Claude, Cursor,
-CodeRabbit, or any other optional reviewer when no feedback is present. A PR is
-ready when the applicable repository-owned checks are green, the branch is
-current and mergeable, and all feedback already present is addressed.
+each actionable thread. Do not request or wait for other optional reviewers.
+A PR is ready when the applicable repository-owned checks are green, the branch
+is current and mergeable, and all feedback already present is addressed.
 `task pr:ready` enforces the machine-checkable parts. Full policy:
 [rules.md §6](rules.md#6-git--pull-request-workflow).
 
@@ -826,7 +830,8 @@ Re-query the PR and inspect again before merge or handoff.
 
 Every active actionable item must be handled.
 
-Do not request or wait for external reviewers or services.
+Do not wait beyond the bounded Codex convergence timeout. Do not request or wait
+for other external reviewers or services.
 
 See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
 

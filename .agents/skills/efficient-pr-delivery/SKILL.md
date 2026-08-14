@@ -1,6 +1,6 @@
 ---
 name: efficient-pr-delivery
-description: Ship Nook PRs efficiently with focused hosted tasks, label-gated complete validation, exact-head readiness audits, and no waiting for external review.
+description: Ship Nook PRs efficiently with advisory local Codex review, bounded exact-head Cloud review convergence, focused hosted tasks, complete validation, and readiness audits.
 ---
 
 # Efficient PR Delivery

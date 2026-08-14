@@ -74,6 +74,37 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 }
 
 #[test]
+fn pr_landing_converges_review_before_complete_validation() {
+    let pr_land = read("agentic-ai/loom/src/commands/pr-land.ts");
+    let agentic_tasks = read(".task/agentic-ai.yml");
+    let review_position = pr_land
+        .find("args: ['pr:review-converge'")
+        .expect("PR landing must run bounded Codex review convergence");
+    let validate_position = pr_land
+        .find("const validateArgs = ['pr:validate'")
+        .expect("PR landing must dispatch complete validation");
+
+    assert!(
+        review_position < validate_position,
+        "review convergence must finish before complete validation starts"
+    );
+    assert!(pr_land.contains("task pr:review-converge failed"));
+    for required in [
+        "pr:review-local:",
+        "codex review --base origin/main",
+        "pr:review-converge:",
+        "CODEX_REVIEW_AUTOMATIC_GRACE_SECONDS",
+        "CODEX_REVIEW_TIMEOUT_SECONDS",
+        "CI_AGENT_CMD=pr-review-converge",
+    ] {
+        assert!(
+            agentic_tasks.contains(required),
+            "review delivery contract missing: {required}"
+        );
+    }
+}
+
+#[test]
 fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
     let valid = remote_batch_command(&["--validate", "rust:test,web:check"])?;
     assert!(valid.status.success());

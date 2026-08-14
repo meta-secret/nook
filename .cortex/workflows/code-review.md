@@ -1,9 +1,51 @@
-# External Review Feedback Workflow
+# Review Convergence Workflow
 
-Codex, Claude, Cursor, CodeRabbit, and all other external review services are
-optional and non-blocking.
+Codex review is a bounded quality filter before complete validation.
 
-## Non-blocking review rule
+It is not a merge gate. A missing or unavailable review service must not block
+delivery indefinitely.
+
+Other external review services remain optional. Do not request or wait for
+them unless the user explicitly asks.
+
+## Local review before the first push
+
+Run the advisory local review on a coherent branch head:
+
+```bash
+task pr:review-local
+```
+
+The command compares the branch with current `origin/main`.
+
+If the Codex CLI or authentication is unavailable, it reports the skip and
+does not block delivery. Treat any actionable finding it does produce as normal
+implementation work. Run pre-push hygiene again after fixes.
+
+## Cloud review before complete validation
+
+After each coherent push, run:
+
+```bash
+task pr:review-converge PR=<number>
+```
+
+The command is exact-head aware. It:
+
+1. Gives the automatic Codex Cloud review a short grace period.
+2. Reuses an existing exact-head request or settled result.
+3. Posts one idempotent `@codex review` request when no automatic result appears.
+4. Stops when review settles, actionable feedback appears, the head changes, or
+   the bounded timeout expires.
+
+Actionable feedback and head replacement fail convergence. A service timeout is
+reported but remains non-blocking.
+
+`task loom:pr-land` runs this convergence step after focused hosted diagnostics
+and before `task pr:validate`. This prevents spending the complete pipeline on a
+head already known to need review fixes.
+
+## Actionable feedback priority
 
 Before merge, inspect feedback currently present. Agents must:
 
@@ -28,12 +70,12 @@ When a new finding arrives:
 Use a focused task instead only when it isolates a known failure faster.
 
 Only let exact-head validation finish while the actionable feedback queue is
-empty.
+empty. Feedback that arrives after a convergence timeout still takes priority.
 
 `task pr:ready` enforces unresolved-thread count alongside the exact-head
 deployment, branch state, and applicable repository-owned PR checks. It reports
-existing comments and reviews for inspection but does not wait for an optional
-reviewer to respond. Do not request an external review merely to satisfy a gate.
+existing comments and reviews for inspection. It does not require a Codex result
+and does not repeat the bounded convergence wait.
 
 ## Handling feedback that already exists
 
@@ -46,8 +88,9 @@ Cursor, CodeRabbit, or another service:
 1. Verify the finding against the current branch and `.cortex` rules.
 2. Make the minimal correct fix or document why no change is needed.
 3. Run `task format` when files changed; use focused hosted tasks as useful.
-4. Commit and push the completed fix, then explicitly trigger complete PR
-   validation for the replacement head while continuing to poll feedback.
+4. Commit and push the completed fix, then repeat bounded review convergence
+   before explicitly triggering complete PR validation for the replacement
+   head.
 5. Reply on the original thread or comment with the fix and validation when a
    targeted reply is possible.
 6. Resolve only after the targeted reply is visible and the finding is fixed or
@@ -62,7 +105,8 @@ finding.
 
 After those items are handled, rerun the feedback query immediately before
 merge. If another actionable comment arrives while the agent is working,
-address it. Do not wait for external review services.
+address it. Never extend the configured convergence timeout merely to obtain a
+review result.
 
 An external service may be asked to implement a finding only when the user
 explicitly requests that separate service to own the fix. The active agent

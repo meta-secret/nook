@@ -5,8 +5,9 @@
 Make PR review-comment handling auditable: every active actionable item from a
 human reviewer, Codex, or another automated reviewer must be verified, fixed or
 explicitly invalidated, and replied to on GitHub. Agents must leave their own
-targeted reply before resolving any PR comment or review conversation. External
-reviewers are optional and must not be requested or awaited as a merge gate.
+targeted reply before resolving any PR comment or review conversation. This
+skill does not initiate reviews. The PR delivery workflow owns bounded Codex
+review convergence before complete validation.
 
 ## Problem Pattern
 
@@ -32,8 +33,8 @@ posting a broad or duplicative PR comment.
 
 Inspect the currently available feedback before merge or handoff. Proceed when
 all actionable items are handled, Nook's applicable repository-owned checks are
-green, and the unresolved-thread query is clear. Do not request or wait for an
-external reviewer.
+green, and the unresolved-thread query is clear. Do not extend the delivery
+workflow's bounded convergence wait.
 
 ## Scope
 
@@ -149,5 +150,5 @@ Use GraphQL or `gh pr view`/`gh api` to confirm there are no unresolved review
 threads, and inspect submitted reviews and PR comments for remaining actionable
 items currently present. Report Nook's applicable repository-owned PR test-check state,
 the unresolved-thread query result, and whether any unthreaded actionable
-review-body item remains in the handoff. Never request or wait for external
-reviewers or checks to change state.
+review-body item remains in the handoff. This comment-handling workflow does not
+request reviewers or wait for checks to change state.

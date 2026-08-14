@@ -136,6 +136,20 @@ async function validate(args: PrLandValidateArgs): Promise<PrLandReport> {
     }
   }
 
+  const reviewConvergenceArgs: RunCommandArgs = {
+    command: 'task',
+    args: ['pr:review-converge', `PR=${request.prNumber}`],
+    cwd: repoRoot,
+  };
+  const reviewConvergence = runCommand(reviewConvergenceArgs);
+  if (reviewConvergence.exitCode !== 0) {
+    const loomFailureDetailArgs: LoomFailureDetailArgs = {
+      code: LoomFailureCode.CommandFailed,
+      text: `task pr:review-converge failed: ${reviewConvergence.stderr || reviewConvergence.stdout}`,
+    };
+    loomFailureDetail(loomFailureDetailArgs);
+  }
+
   const validateArgs = ['pr:validate', `PR=${request.prNumber}`];
   if (request.runFullE2e) {
     validateArgs.push('FULL_E2E=1');
@@ -162,6 +176,7 @@ async function validate(args: PrLandValidateArgs): Promise<PrLandReport> {
     ready: false,
     messages: [
       'prePush passed',
+      (reviewConvergence.stdout || 'review convergence completed').trim(),
       (validated.stdout || 'pr:validate dispatched').trim(),
     ],
   };

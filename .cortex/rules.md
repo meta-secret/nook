@@ -308,9 +308,10 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 > address every active actionable item, regardless of whether it came from a
 > human or an external service. Reply with the fix, validation, or no-change
 > rationale and resolve each actionable thread. Every external-service review
-> comment already present must be inspected. Codex, Claude, Cursor, CodeRabbit,
-> and all other external reviewers are optional: do not request or wait for them
-> when no feedback is present. Optional review never means optional handling of
+> comment already present must be inspected. Run bounded exact-head Codex review
+> convergence before complete validation. Its timeout is non-blocking. Claude,
+> Cursor, CodeRabbit, and other external reviewers remain optional: do not
+> request or wait for them. Optional review never means optional handling of
 > feedback that already arrived.
 
 > ## ⛔ FORMAT LOCALLY; PRODUCT GATES ON GITHUB ACTIONS ONLY
@@ -353,7 +354,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
 - **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task.
-- Steps: fetch, branch from `origin/main`, implement, **always `task format`**, commit and push/open/update the PR, use focused hosted tasks only for useful isolated diagnostics, explicitly trigger complete PR validation as soon as the coherent head is ready, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically.
+- Steps: fetch, branch from `origin/main`, implement, **always `task format`**, commit, run advisory local Codex review, push/open/update the PR, use focused hosted tasks only for useful isolated diagnostics, run bounded exact-head Codex Cloud review convergence, explicitly trigger complete PR validation, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically.
 - Do not stop at a ready-PR handoff or ask for separate merge permission.
 - Do not run heavy product checks locally.
 - **Finish at implementation PR merge.** A successful squash merge completes normal implementation delivery.
@@ -366,7 +367,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   gh pr merge <number> --squash
   ```
   Never use `gh pr merge --merge` or `gh pr merge --rebase`.
-- **Inspect feedback without waiting.** After opening or updating the PR at the final-validation boundary, monitor applicable repository-owned checks (format must already have been host-applied before the push) and inspect feedback already present. Do not request or wait for external reviews. Do not require a local product gate.
+- **Converge review before complete validation.** Run `task pr:review-local` on a coherent local head. After opening or updating the PR, run `task pr:review-converge`. Address findings before dispatching complete validation. The bounded timeout is non-blocking. Do not request or wait for other external reviews. Do not require a local product gate.
 - **Publish Workbench context after merge.** Follow
   [workflows/issues.md](workflows/issues.md) and
   [workflows/agent-statistics.md](workflows/agent-statistics.md): the task plan

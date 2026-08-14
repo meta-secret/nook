@@ -8,6 +8,7 @@ import { loadPrompt } from "./prompt.js";
 import { runFixAgent } from "./run-agent.js";
 import { runPrAudit } from "./pr-audit.js";
 import { runPrReviewRequest } from "./pr-review.js";
+import { runPrReviewConvergence } from "./review-convergence.js";
 
 async function runAgentCommand(): Promise<void> {
   const loadedConfig = loadConfig();
@@ -44,9 +45,12 @@ async function main(): Promise<void> {
     case "pr-review":
       await runPrReviewRequest();
       break;
+    case "pr-review-converge":
+      await runPrReviewConvergence();
+      break;
     default:
       throw new Error(
-        `Unknown command: ${command} (expected agent, fix, implement, pr-preflight, pr-ready, or pr-review)`,
+        `Unknown command: ${command} (expected agent, fix, implement, pr-preflight, pr-ready, pr-review, or pr-review-converge)`,
       );
   }
 }
