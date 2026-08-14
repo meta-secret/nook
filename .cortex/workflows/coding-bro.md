@@ -117,12 +117,18 @@ only when it shortens diagnosis.
 WRONG: implement → local task check / full tests / build → push
 WRONG: implement → push dirty/uncommitted source → remote task tests an older SHA
 WRONG: implement → push → assume complete PR validation started automatically
-RIGHT: implement → task loom:pre-push → commit → task pr:review-local → push
+RIGHT first owner push: implement → task loom:pre-push → commit
+       → task pr:review-local → push
+       → task loom:pr-land CONFIG=<pr-land-validate-request.yaml>
+       → exact-head GitHub Actions
+RIGHT later fix: fix → task loom:pre-push → commit → push
        → task loom:pr-land CONFIG=<pr-land-validate-request.yaml>
        → exact-head GitHub Actions
 ```
 
-This ordering applies to the first implementation and every review/CI fix.
+Pre-push hygiene, commit, push, and validation ordering applies to the first
+implementation and every review/CI fix. Local review runs only before the first
+owner-authored push.
 
 Required pre-push hygiene always runs before the push:
 
