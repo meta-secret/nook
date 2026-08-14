@@ -81,6 +81,7 @@ pub enum IdentityVaultDekEpoch {
 pub enum IdentityVaultDekEpochUpdate {
     Observe {
         key_epoch: IdentityVaultDekEpoch,
+        checkpoint_ancestors: Vec<IdentityVaultEventId>,
     },
     Rotate {
         previous_key_epoch: IdentityVaultEventId,
@@ -94,7 +95,7 @@ impl IdentityVaultDekEpochUpdate {
     #[must_use]
     pub fn committed_epoch(&self) -> IdentityVaultDekEpoch {
         match self {
-            Self::Observe { key_epoch } => key_epoch.clone(),
+            Self::Observe { key_epoch, .. } => key_epoch.clone(),
             Self::Rotate {
                 key_epoch,
                 checkpoint,
@@ -122,12 +123,12 @@ impl IdentityVaultDek {
         let next = match (&self.key_epoch, update) {
             (
                 IdentityVaultDekEpoch::LegacyUnknown,
-                IdentityVaultDekEpochUpdate::Observe { key_epoch },
+                IdentityVaultDekEpochUpdate::Observe { key_epoch, .. },
             ) => key_epoch.clone(),
             (
                 IdentityVaultDekEpoch::Known {
                     key_epoch: current_epoch,
-                    ..
+                    checkpoint: current_checkpoint,
                 },
                 IdentityVaultDekEpochUpdate::Observe {
                     key_epoch:
@@ -135,11 +136,17 @@ impl IdentityVaultDek {
                             key_epoch,
                             checkpoint,
                         },
+                    checkpoint_ancestors,
                 },
-            ) if current_epoch == key_epoch => IdentityVaultDekEpoch::Known {
-                key_epoch: key_epoch.clone(),
-                checkpoint: checkpoint.clone(),
-            },
+            ) if current_epoch == key_epoch
+                && (current_checkpoint == checkpoint
+                    || checkpoint_ancestors.contains(current_checkpoint)) =>
+            {
+                IdentityVaultDekEpoch::Known {
+                    key_epoch: key_epoch.clone(),
+                    checkpoint: checkpoint.clone(),
+                }
+            }
             (
                 IdentityVaultDekEpoch::LegacyUnknown,
                 IdentityVaultDekEpochUpdate::Rotate {
@@ -173,7 +180,9 @@ impl IdentityVaultDek {
             }
             (current, update) => {
                 let expected = match update {
-                    IdentityVaultDekEpochUpdate::Observe { key_epoch } => epoch_label(key_epoch),
+                    IdentityVaultDekEpochUpdate::Observe { key_epoch, .. } => {
+                        epoch_label(key_epoch)
+                    }
                     IdentityVaultDekEpochUpdate::Rotate {
                         previous_key_epoch,
                         previous_checkpoint,
@@ -572,6 +581,7 @@ mod tests {
                 )?,
                 epoch_update: IdentityVaultDekEpochUpdate::Observe {
                     key_epoch: IdentityVaultDekEpoch::LegacyUnknown,
+                    checkpoint_ancestors: Vec::new(),
                 },
             },
         )?;
@@ -614,6 +624,7 @@ mod tests {
                     key_epoch: previous,
                     checkpoint: previous_checkpoint,
                 },
+                checkpoint_ancestors: Vec::new(),
             },
         )?;
         assert!(matches!(
@@ -643,7 +654,7 @@ mod tests {
                 previous_key_epoch: key_epoch.clone(),
                 previous_checkpoint: key_epoch.clone(),
                 key_epoch: key_epoch.clone(),
-                checkpoint: first_checkpoint,
+                checkpoint: first_checkpoint.clone(),
             },
         )?;
         identity.reconcile_legacy_vault_member(&app_key, &store, first)?;
@@ -656,9 +667,26 @@ mod tests {
                     key_epoch: key_epoch.clone(),
                     checkpoint: advanced_checkpoint.clone(),
                 },
+                checkpoint_ancestors: vec![first_checkpoint.clone()],
             },
         )?;
         identity.reconcile_legacy_vault_member(&app_key, &store, advanced)?;
+
+        let stale = reconciliation_for_keys(
+            &app_key,
+            &keys,
+            IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: IdentityVaultDekEpoch::Known {
+                    key_epoch: key_epoch.clone(),
+                    checkpoint: first_checkpoint,
+                },
+                checkpoint_ancestors: Vec::new(),
+            },
+        )?;
+        assert!(matches!(
+            identity.reconcile_legacy_vault_member(&app_key, &store, stale),
+            Err(MultiDeviceError::StaleVaultDekEpoch { .. })
+        ));
 
         assert_eq!(
             identity.vault_dek(&store).map(|dek| &dek.key_epoch),

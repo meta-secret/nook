@@ -543,6 +543,7 @@ mod tests {
             members_envelope.clone(),
             crate::IdentityVaultDekEpochUpdate::Observe {
                 key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
+                checkpoint_ancestors: Vec::new(),
             },
         )?;
         assert_ne!(imported_id, personal);
@@ -557,6 +558,7 @@ mod tests {
             members_envelope,
             crate::IdentityVaultDekEpochUpdate::Observe {
                 key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
+                checkpoint_ancestors: Vec::new(),
             },
         )?;
         assert_eq!(same_id, imported_id);
@@ -583,6 +585,7 @@ mod tests {
             recovered_members_envelope,
             crate::IdentityVaultDekEpochUpdate::Observe {
                 key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
+                checkpoint_ancestors: Vec::new(),
             },
         );
         assert!(matches!(

@@ -94,7 +94,9 @@ The app writes `awaiting-checkpoint` before persisting the new key epoch. An
 advanced epoch cannot be observed until the checkpoint is committed. The state
 changes to `committed` with the exact checkpoint event ID only after the event
 is durable. That checkpoint must remain in verified event history, while the
-directory records the latest observed head. The marker is compare-deleted only
+directory records the latest observed head. Same-epoch observations advance
+that stored checkpoint only when it is a verified ancestor of the observed
+head. The marker is compare-deleted only
 after the identity directory compare-and-swap succeeds. Stale observations
 cannot replace envelopes from a newer epoch.
 

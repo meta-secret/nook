@@ -334,7 +334,7 @@ impl NookVaultManager {
         }
         let store_id = nook_core::StoreId::parse(&self.vault.store_id)
             .map_err(|error| NookError::Database(error.to_string()))?;
-        let (key_epoch, committed_event_ids) = if self.event_log.enabled {
+        let (key_epoch, committed_event_ids, checkpoint_ancestors) = if self.event_log.enabled {
             let key_epoch = self.ensure_key_epoch().await?;
             let checkpoint = self
                 .load_event_heads()
@@ -344,10 +344,18 @@ impl NookVaultManager {
                 .unwrap_or_else(|| key_epoch.clone());
             let event_store =
                 crate::storage::event_db::load_local_event_store(&self.vault.store_id).await?;
-            let committed_event_ids = event_store
-                .load_graph(&self.vault.store_id)?
-                .topological_order()?
-                .into_iter()
+            let graph = event_store.load_graph(&self.vault.store_id)?;
+            let checkpoint_event_id = nook_core::EventId::parse(&checkpoint)
+                .map_err(|error| NookError::Database(error.to_string()))?;
+            let ordered_event_ids = graph.topological_order()?;
+            let committed_event_ids = ordered_event_ids
+                .iter()
+                .map(|event_id| nook_core::IdentityVaultEventId::parse(event_id.as_str()))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| NookError::Database(error.to_string()))?;
+            let checkpoint_ancestors = ordered_event_ids
+                .iter()
+                .filter(|event_id| graph.is_ancestor(event_id, &checkpoint_event_id))
                 .map(|event_id| nook_core::IdentityVaultEventId::parse(event_id.as_str()))
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|error| NookError::Database(error.to_string()))?;
@@ -359,19 +367,27 @@ impl NookVaultManager {
                         .map_err(|error| NookError::Database(error.to_string()))?,
                 },
                 committed_event_ids,
+                checkpoint_ancestors,
             )
         } else {
-            (nook_core::IdentityVaultDekEpoch::LegacyUnknown, Vec::new())
+            (
+                nook_core::IdentityVaultDekEpoch::LegacyUnknown,
+                Vec::new(),
+                Vec::new(),
+            )
         };
         if let Some(envelopes) = self.vault.meta.auth.get(&identity.auth_id()) {
             let _ = crate::storage::identity_record::ensure_identity_from_legacy_vault(
-                identity,
-                &store_id,
-                envelopes.secrets_key.clone(),
-                envelopes.members_key.clone(),
-                key_epoch,
-                committed_event_ids,
-                &label,
+                crate::storage::identity_record::LegacyVaultIdentityInput {
+                    app_key: identity,
+                    store_id: &store_id,
+                    secrets_envelope: envelopes.secrets_key.clone(),
+                    members_envelope: envelopes.members_key.clone(),
+                    key_epoch,
+                    committed_event_ids,
+                    checkpoint_ancestors,
+                    label: &label,
+                },
             )
             .await?;
             return Ok(());

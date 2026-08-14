@@ -222,19 +222,40 @@ pub(crate) async fn ensure_unambiguous_identity_for_app_key(
 }
 
 /// Associate a legacy vault with an identity without guessing from active selection.
+pub(crate) struct LegacyVaultIdentityInput<'a> {
+    pub(crate) app_key: &'a nook_core::AppKey,
+    pub(crate) store_id: &'a nook_core::StoreId,
+    pub(crate) secrets_envelope: nook_core::AgeArmoredCiphertext,
+    pub(crate) members_envelope: nook_core::AgeArmoredCiphertext,
+    pub(crate) key_epoch: nook_core::IdentityVaultDekEpoch,
+    pub(crate) committed_event_ids: Vec<nook_core::IdentityVaultEventId>,
+    pub(crate) checkpoint_ancestors: Vec<nook_core::IdentityVaultEventId>,
+    pub(crate) label: &'a str,
+}
+
 pub(crate) async fn ensure_identity_from_legacy_vault(
-    app_key: &nook_core::AppKey,
-    store_id: &nook_core::StoreId,
-    secrets_envelope: nook_core::AgeArmoredCiphertext,
-    members_envelope: nook_core::AgeArmoredCiphertext,
-    key_epoch: nook_core::IdentityVaultDekEpoch,
-    committed_event_ids: Vec<nook_core::IdentityVaultEventId>,
-    label: &str,
+    input: LegacyVaultIdentityInput<'_>,
 ) -> Result<nook_core::IdentityRecord, NookError> {
+    let LegacyVaultIdentityInput {
+        app_key,
+        store_id,
+        secrets_envelope,
+        members_envelope,
+        key_epoch,
+        committed_event_ids,
+        checkpoint_ancestors,
+        label,
+    } = input;
     let app_key = app_key.clone();
     let store_id = store_id.clone();
     let label = label.to_owned();
-    let resolution = resolve_identity_epoch(&store_id, key_epoch, &committed_event_ids).await?;
+    let resolution = resolve_identity_epoch(
+        &store_id,
+        key_epoch,
+        &committed_event_ids,
+        &checkpoint_ancestors,
+    )
+    .await?;
     let consumed_marker = resolution.consumed_marker;
     let directory_store_id = store_id.clone();
     let record = update_identity_directory(move |directory| {

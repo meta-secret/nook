@@ -129,11 +129,13 @@ pub(super) async fn resolve_identity_epoch(
     store_id: &nook_core::StoreId,
     observed: nook_core::IdentityVaultDekEpoch,
     committed_event_ids: &[nook_core::IdentityVaultEventId],
+    checkpoint_ancestors: &[nook_core::IdentityVaultEventId],
 ) -> Result<IdentityEpochResolution, NookError> {
     let Some(raw) = idb_get_string(&identity_reconciliation_key(store_id)).await? else {
         return Ok(IdentityEpochResolution {
             update: nook_core::IdentityVaultDekEpochUpdate::Observe {
                 key_epoch: observed,
+                checkpoint_ancestors: checkpoint_ancestors.to_vec(),
             },
             consumed_marker: None,
         });
@@ -165,12 +167,16 @@ pub(super) async fn resolve_identity_epoch(
             Ok(IdentityEpochResolution {
                 update: nook_core::IdentityVaultDekEpochUpdate::Observe {
                     key_epoch: observed,
+                    checkpoint_ancestors: checkpoint_ancestors.to_vec(),
                 },
                 consumed_marker: Some(raw),
             })
         }
         PendingIdentityReconciliationCheckpoint::Committed { checkpoint } => {
-            if pending.key_epoch != *observed_epoch || !committed_event_ids.contains(checkpoint) {
+            if pending.key_epoch != *observed_epoch
+                || !committed_event_ids.contains(checkpoint)
+                || (checkpoint != observed_checkpoint && !checkpoint_ancestors.contains(checkpoint))
+            {
                 return Err(NookError::IndexedDb(
                     "Committed security epoch checkpoint is absent from verified history."
                         .to_owned(),
@@ -260,6 +266,7 @@ mod browser_tests {
                 checkpoint: event_id('d')?,
             },
             &[],
+            &[],
         )
         .await;
         assert!(result.is_err());
@@ -289,6 +296,7 @@ mod browser_tests {
                 key_epoch,
                 checkpoint: advanced_head.clone(),
             },
+            std::slice::from_ref(&checkpoint),
             std::slice::from_ref(&checkpoint),
         )
         .await?;
@@ -327,6 +335,7 @@ mod browser_tests {
                 checkpoint: checkpoint.clone(),
             },
             std::slice::from_ref(&checkpoint),
+            &[],
         )
         .await?;
         let consumed = resolution.consumed_marker.ok_or_else(|| {

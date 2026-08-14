@@ -112,7 +112,9 @@ and owns that exact event ID. Reconciliation is a compare-and-swap from the
 previous epoch to the committed epoch. The committed checkpoint must appear in
 verified event history. Reconciliation records the latest observed head, so
 ordinary event heads may advance within the same key epoch without blocking
-recovery. An idempotent retry at the new epoch succeeds. An older epoch
+recovery. Same-epoch observations advance the stored checkpoint only when the
+stored checkpoint is a verified ancestor of the observed head. An idempotent
+retry at the new epoch succeeds. An older epoch
 observation fails. Successful directory reconciliation compare-deletes only
 the exact marker it consumed.
 Any later verified connect repeats the idempotent reconciliation and clears a
