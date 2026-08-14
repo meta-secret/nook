@@ -75,6 +75,14 @@ Default task scope:
 - follow links one hop from those docs;
 - do not rewrite the entire `.cortex` tree unless the user asks for a full GC.
 
+A full-tree GC follows
+[subagent-delegation.md](../workflows/subagent-delegation.md).
+
+When two or more document families are in scope, delegate read-only evidence
+collection by family.
+
+One task owner resolves conflicts and authors the final edit.
+
 Does not apply to:
 
 - chat-only scratch notes outside `.cortex`

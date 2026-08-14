@@ -6,6 +6,12 @@ embedded Codex thread, and owns Main-repair delivery through a green merged
 revision. It commits the terminal result using its lease token and exits. The
 Deployment then creates a clean microVM-backed replacement.
 
+Nested subagents are disabled inside that thread.
+
+Future multi-agent graphs must create separate durable tasks.
+
+Each reached task runs in its own disposable Pod.
+
 Hive deliberately has no separate message broker. Neo4j owns the DAG, claim
 transaction, leases, attempts, and results. A narrow coordinator sidecar owns
 the Neo4j credential and exposes only typed worker operations over one private
