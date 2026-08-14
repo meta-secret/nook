@@ -65,6 +65,18 @@ actor id must be the SHA-256 digest of that Ed25519 public key. The event
 signature must verify over the canonical body before a current-schema remote
 event enters the local event set.
 
+An `epoch-checkpoint` operation persists `secrets`,
+`members_checkpoint_hash`, and `rotated_meta_records`. The final field is the
+complete replacement set of rewrapped auth and member `StoredSecretRecord`
+values for an identity security-epoch rotation. Projection clears the previous
+auth and member envelopes before applying a non-empty replacement set. Signed
+legacy checkpoints that omit `rotated_meta_records` decode it as an empty list
+and retain the previous metadata behavior. Current identity-rotation writers
+must include the replacement set. A pre-field client may ignore the unknown
+field, but it cannot safely reopen or extend that rotated epoch. It must upgrade
+before operating on the vault. The field remains part of event schema `2` until
+an explicit event-schema migration replaces this compatibility contract.
+
 Non-genesis events are also checked against the event's causal past. An actor is
 accepted only if it is:
 

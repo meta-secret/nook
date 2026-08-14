@@ -70,6 +70,15 @@ The directory contains:
 - an explicit `Empty` or `Selected(identity_id)` state; and
 - app IDs retired by destructive local recovery.
 
+Each `IdentityRecord` serializes Sentinel ownership in `sentinel_vaults`.
+The field contains Sentinel vault `store_id` values, not DEK envelopes.
+An omitted legacy field decodes as an empty list. A validated bound Sentinel
+delivery or finalization adds the association. The association survives member
+and selection changes and prevents a second identity from claiming the same
+vault. Current writers retain it until destructive device recovery clears the
+identity directory. Recovery may reconstruct it only from a validated bound
+delivery or one unambiguous legacy app-key relationship.
+
 All directory updates use one IndexedDB read-write transaction.
 Concurrent tabs must not overwrite identity creation, selection, membership,
 or DEK changes.
@@ -94,6 +103,10 @@ That state upgrades only after the durable seed matches the pinned event signer.
 Recovery clears identity ownership but preserves retired app IDs. Every
 app-key operation rejects a retired ID. Atomic updates therefore prevent a
 stale tab from writing old ownership back after recovery.
+The reset of `identity_directory_v1` and deletion of every matching
+`pending_identity_reconciliation_v2:{store_id}` and legacy v1 marker use one
+IndexedDB read-write transaction over the `vault` store. The directory and its
+encrypted recovery plans therefore remain jointly present or jointly removed.
 Before recovery mutates IndexedDB, the initiating tab quiesces storage work in
 every open Nook tab. Each responding tab zeroizes its app key and storage
 credentials before acknowledging readiness. The initiating tab then serializes

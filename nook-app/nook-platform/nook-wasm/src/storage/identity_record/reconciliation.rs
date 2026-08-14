@@ -50,17 +50,13 @@ fn identity_reconciliation_key(store_id: &nook_core::StoreId) -> String {
     format!("{PENDING_IDENTITY_RECONCILIATION_PREFIX}{store_id}")
 }
 
-pub(super) async fn clear_pending_identity_reconciliation_for_recovery(
-    store_ids: &[nook_core::StoreId],
-) -> Result<(), NookError> {
-    for store_id in store_ids {
-        super::super::indexed_db::idb_delete_key(&identity_reconciliation_key(store_id)).await?;
-        super::super::indexed_db::idb_delete_key(&format!(
-            "{LEGACY_IDENTITY_RECONCILIATION_PREFIX}{store_id}"
-        ))
-        .await?;
-    }
-    Ok(())
+pub(super) fn identity_reconciliation_keys_for_recovery(
+    store_id: &nook_core::StoreId,
+) -> [String; 2] {
+    [
+        identity_reconciliation_key(store_id),
+        format!("{LEGACY_IDENTITY_RECONCILIATION_PREFIX}{store_id}"),
+    ]
 }
 
 fn decode_pending(raw: &str) -> Result<PendingIdentityReconciliation, NookError> {

@@ -3,9 +3,9 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::indexed_db::{StringUpdateGuard, StringUpdateResult, idb_delete_key, idb_update_string};
+use super::indexed_db::{StringUpdateGuard, StringUpdateResult, idb_update_string};
 #[cfg(test)]
-use super::indexed_db::{idb_get_string, idb_put_string};
+use super::indexed_db::{idb_delete_key, idb_get_string, idb_put_string};
 use crate::{NookError, storage::open_nook_database};
 
 mod reconciliation;
@@ -16,7 +16,7 @@ pub(crate) use reconciliation::{
     mark_identity_reconciliation_pending,
 };
 use reconciliation::{
-    clear_consumed_identity_reconciliation, clear_pending_identity_reconciliation_for_recovery,
+    clear_consumed_identity_reconciliation, identity_reconciliation_keys_for_recovery,
     resolve_identity_epoch,
 };
 pub(crate) use simple_genesis::{
@@ -373,8 +373,31 @@ pub(crate) async fn identity_for_sentinel_vault(
 
 /// Forget identity state sealed to the inaccessible app key while preserving
 /// encrypted vault projections for password-backed recovery.
-pub(crate) async fn delete_identity_directory_for_recovery() -> Result<(), NookError> {
-    let directory = load_identity_directory().await?;
+async fn reset_identity_directory_for_recovery() -> Result<(), NookError> {
+    // Complete legacy migration before the atomic current-directory reset.
+    let _ = load_identity_directory().await?;
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset error: {error:?}")))?;
+    let store = transaction
+        .store("vault")
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset store error: {error:?}")))?;
+    let directory_key = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset key error: {error:?}")))?;
+    let raw = store
+        .get(directory_key.clone())
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset read error: {error:?}")))?;
+    let mut directory = match raw.filter(|value| !value.is_undefined() && !value.is_null()) {
+        Some(value) => {
+            let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
+                NookError::IndexedDb(format!("Identity reset value error: {error:?}"))
+            })?;
+            decode_directory(&raw)?
+        }
+        None => nook_core::IdentityDirectory::empty(),
+    };
     let mut store_ids = Vec::new();
     for store_id in directory.identities().iter().flat_map(|identity| {
         identity
@@ -387,13 +410,38 @@ pub(crate) async fn delete_identity_directory_for_recovery() -> Result<(), NookE
             store_ids.push(store_id.clone());
         }
     }
-    clear_pending_identity_reconciliation_for_recovery(&store_ids).await?;
-    update_identity_directory(|directory| {
-        directory.reset_for_device_recovery();
-        Ok(())
-    })
-    .await?;
-    idb_delete_key(LEGACY_IDENTITY_RECORD_KEY).await?;
+    directory.reset_for_device_recovery();
+    directory
+        .validate()
+        .map_err(|error| NookError::Database(error.to_string()))?;
+    let encoded = serde_json::to_string(&directory)
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset encode error: {error}")))?;
+    let value = serde_wasm_bindgen::to_value(&encoded)
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset value error: {error:?}")))?;
+    store
+        .put(&value, Some(&directory_key))
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset write error: {error:?}")))?;
+    for key in store_ids
+        .iter()
+        .flat_map(identity_reconciliation_keys_for_recovery)
+        .chain([LEGACY_IDENTITY_RECORD_KEY.to_owned()])
+    {
+        let key = serde_wasm_bindgen::to_value(&key).map_err(|error| {
+            NookError::IndexedDb(format!("Identity reset delete key error: {error:?}"))
+        })?;
+        store.delete(key).await.map_err(|error| {
+            NookError::IndexedDb(format!("Identity reset delete error: {error:?}"))
+        })?;
+    }
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!("Identity reset completion error: {error:?}"))
+    })?;
+    Ok(())
+}
+
+pub(crate) async fn delete_identity_directory_for_recovery() -> Result<(), NookError> {
+    reset_identity_directory_for_recovery().await?;
     simple_genesis::clear_pending_simple_genesis_for_recovery().await
 }
 
