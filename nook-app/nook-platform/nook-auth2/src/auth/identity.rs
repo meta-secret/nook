@@ -297,13 +297,6 @@ impl IdentityRecord {
         self.vault_dek(store_id).is_some() || self.sentinel_vaults.contains(store_id)
     }
 
-    pub fn associate_sentinel_vault(&mut self, store_id: StoreId) {
-        if !self.owns_vault(&store_id) {
-            self.sentinel_vaults.push(store_id);
-            self.control_epoch = self.control_epoch.saturating_add(1);
-        }
-    }
-
     pub fn reconcile_legacy_vault_member(
         &mut self,
         app_key: &AppKey,

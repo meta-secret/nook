@@ -201,44 +201,6 @@ impl IdentityDirectory {
         Ok(identity.identity_id.clone())
     }
 
-    pub fn associate_sentinel_vault(
-        &mut self,
-        identity_id: &IdentityId,
-        app_key: &AppKey,
-        store_id: StoreId,
-    ) -> MultiDeviceResult<IdentityId> {
-        self.ensure_app_key_active(app_key)?;
-        if let Some(owner) = self
-            .identities
-            .iter()
-            .find(|record| record.owns_vault(&store_id))
-            && owner.identity_id != *identity_id
-        {
-            return Err(MultiDeviceError::DuplicateVaultOwnership {
-                store_id: store_id.to_string(),
-            });
-        }
-        let identity = self
-            .identities
-            .iter_mut()
-            .find(|record| record.identity_id == *identity_id)
-            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
-                identity_id: identity_id.to_string(),
-            })?;
-        let member = identity
-            .members
-            .iter()
-            .find(|member| member.app_id == *app_key.app_id())
-            .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
-        if member.auth_id != app_key.auth_id() || member.public_key != app_key.public_key() {
-            return Err(MultiDeviceError::InvalidDeviceIdentity(
-                "existing app id has different key material".to_owned(),
-            ));
-        }
-        identity.associate_sentinel_vault(store_id);
-        Ok(identity.identity_id.clone())
-    }
-
     pub fn open_or_generate_vault_dek(
         &mut self,
         app_key: &AppKey,
@@ -306,19 +268,6 @@ impl IdentityDirectory {
             ));
         }
         Ok(())
-    }
-
-    pub fn identity_for_vault(
-        &self,
-        app_key: &AppKey,
-        store_id: &StoreId,
-    ) -> MultiDeviceResult<Option<IdentityId>> {
-        self.validate_vault_enrollment(app_key, store_id)?;
-        Ok(self
-            .identities
-            .iter()
-            .find(|record| record.owns_vault(store_id))
-            .map(|record| record.identity_id.clone()))
     }
 
     pub fn identity_for_app_key(&self, app_key: &AppKey) -> MultiDeviceResult<Option<IdentityId>> {
@@ -669,36 +618,6 @@ mod tests {
             },
             authorized_auth_ids: vec![app_key.auth_id()],
         }
-    }
-
-    #[test]
-    #[allow(
-        unknown_lints,
-        non_local_effect_before_unhandled_error,
-        reason = "the contract intentionally exercises duplicate ownership rejection before verifying the original association"
-    )]
-    fn sentinel_association_never_creates_app_key_dek_envelopes() -> anyhow::Result<()> {
-        let app_key = AppKey::generate()?;
-        let store_id = crate::generate_store_id()?;
-        let mut directory = IdentityDirectory::empty();
-        let identity_id = directory.create_identity("Sentinel", &app_key, None)?;
-        directory.associate_sentinel_vault(&identity_id, &app_key, store_id.clone())?;
-        let selected = directory.selected()?;
-        assert!(selected.owns_vault(&store_id));
-        assert!(selected.vault_deks.is_empty());
-        assert_eq!(selected.sentinel_vaults, vec![store_id]);
-        let owned_store_id = selected.sentinel_vaults[0].clone();
-        assert_eq!(
-            directory.identity_for_vault(&app_key, &owned_store_id)?,
-            Some(identity_id)
-        );
-
-        let other_id = directory.create_identity("Other", &app_key, None)?;
-        assert!(matches!(
-            directory.associate_sentinel_vault(&other_id, &app_key, owned_store_id,),
-            Err(MultiDeviceError::DuplicateVaultOwnership { .. })
-        ));
-        Ok(())
     }
 
     #[test]

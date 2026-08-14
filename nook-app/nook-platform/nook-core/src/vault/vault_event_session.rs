@@ -145,7 +145,7 @@ impl VaultEventSession {
                 secrets,
                 members_checkpoint_hash,
                 rotated_meta_records: Vec::new(),
-                password_entries: Some(Vec::new()),
+                password_entries: crate::EpochPasswordState::Replace(Vec::new()),
             }],
             created_at,
             provider_id,

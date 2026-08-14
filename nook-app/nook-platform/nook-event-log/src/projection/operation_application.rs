@@ -33,7 +33,7 @@ pub(super) fn apply_operation(
             for secret in secrets {
                 insert_secret(projection, event_id, secret, ProjectedSecretOrigin::Created);
             }
-            if let Some(password_entries) = password_entries {
+            if let crate::EpochPasswordState::Replace(password_entries) = password_entries {
                 projection.password_entries.clone_from(password_entries);
             }
         }
@@ -363,7 +363,7 @@ mod tests {
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 rotated_meta_records: Vec::new(),
-                password_entries: Some(vec![replacement.clone()]),
+                password_entries: crate::EpochPasswordState::Replace(vec![replacement.clone()]),
             },
             &mut BTreeMap::new(),
         );

@@ -44,8 +44,8 @@ pub use session::{NookEventLogSyncIssueResult, NookVaultManager, NookVaultNameSt
 
 pub(in crate::manager) use session::{
     CeremonyState, EventLogSessionState, EventLogSyncIssueState, SearchCatalogRestore,
-    SearchCatalogState, SentinelGenesisCeremony, StorageSession, SyncOutboxState, VaultCryptoState,
-    VaultNameState, VaultSessionState,
+    SearchCatalogState, StorageSession, SyncOutboxState, VaultCryptoState, VaultNameState,
+    VaultSessionState,
 };
 
 use crate::NookError;

@@ -200,10 +200,12 @@ impl NookVaultManager {
         let proposed_bytes = nook_core::serialize_event_storage_yaml(&proposed)
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         let bytes = if let Some(pending) = pending {
+            let app_key = self.device_identity()?;
             let proposed_yaml = String::from_utf8(proposed_bytes)
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
             let pinned = crate::storage::identity_record::persist_simple_genesis_event(
                 pending,
+                &app_key,
                 proposed_yaml,
                 self.event_log.signing_seed.clone(),
             )

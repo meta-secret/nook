@@ -29,22 +29,19 @@ fn committed_epoch_parent(event: &VaultEvent) -> Option<&EventId> {
     }
 }
 
-fn checkpoint_parents(
+fn authorized_checkpoint_parents(
     local: &LocalEventStore,
     remote_events: &[(EventId, Vec<u8>)],
+    store_id: &str,
 ) -> EventResult<BTreeSet<EventId>> {
-    let mut parents = BTreeSet::new();
-    for event_id in local.event_ids() {
-        if let Some(bytes) = local.get_bytes(&event_id) {
-            let event = parse_event_storage_bytes(bytes)?;
-            if let Some(parent) = committed_epoch_parent(&event) {
-                parents.insert(parent.clone());
-            }
-        }
+    let mut candidate = local.clone();
+    for (event_id, bytes) in remote_events {
+        candidate.put_event(event_id.clone(), bytes.clone());
     }
-    for (_, bytes) in remote_events {
-        let event = parse_event_storage_bytes(bytes)?;
-        if let Some(parent) = committed_epoch_parent(&event) {
+    let graph = candidate.load_graph(store_id)?;
+    let mut parents = BTreeSet::new();
+    for event in graph.applicable_events() {
+        if let Some(parent) = committed_epoch_parent(event) {
             parents.insert(parent.clone());
         }
     }
@@ -57,8 +54,9 @@ fn checkpoint_parents(
 pub(crate) fn visibility_gated_remote_events(
     local: &LocalEventStore,
     remote_events: &[(EventId, Vec<u8>)],
+    store_id: &str,
 ) -> EventResult<Vec<(EventId, Vec<u8>)>> {
-    let committed = checkpoint_parents(local, remote_events)?;
+    let committed = authorized_checkpoint_parents(local, remote_events, store_id)?;
     remote_events
         .iter()
         .map(|(event_id, bytes)| {
@@ -112,8 +110,9 @@ pub fn order_remote_events_for_visibility(events: &mut [(EventId, Vec<u8>)]) -> 
 mod tests {
     use super::*;
     use crate::{
-        DeviceSigningPublicKey, IsoTimestamp, PasswordEntryId, Sha256Hex, SigningIdentity, StoreId,
-        VaultEventBody, VaultEventSchemaVersion, serialize_event_storage_yaml,
+        DeviceSigningPublicKey, GenesisImportPayload, IsoTimestamp, PasswordEntryId, Sha256Hex,
+        SigningIdentity, StoreId, VaultEventBody, VaultEventSchemaVersion,
+        build_genesis_import_event, serialize_event_storage_yaml,
     };
     use ed25519_dalek::SigningKey;
 
@@ -145,9 +144,23 @@ mod tests {
         )
     }
 
-    fn epoch_pair() -> EventResult<(RemoteEvent, RemoteEvent)> {
+    fn epoch_pair() -> EventResult<(LocalEventStore, RemoteEvent, RemoteEvent)> {
         let signing_key = crate::test_support::signing_key();
-        let previous = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
+        let genesis = build_genesis_import_event(
+            &StoreId::parse(STORE)?,
+            &SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?,
+            &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
+            GenesisImportPayload {
+                source_content_hash: Sha256Hex::from_trusted("00".repeat(32)),
+                secrets: Vec::new(),
+                password_entries: Vec::new(),
+            },
+            &IsoTimestamp::from_trusted("2026-08-14T00:00:00Z".to_owned()),
+            &signing_key,
+        )?;
+        let previous = genesis.id()?;
+        let mut local = LocalEventStore::new();
+        local.put_event(previous.clone(), serialize_event_storage_yaml(&genesis)?);
         let trigger = signed_event(
             &signing_key,
             vec![previous.clone()],
@@ -165,11 +178,12 @@ mod tests {
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
                 rotated_meta_records: Vec::new(),
-                password_entries: Some(Vec::new()),
+                password_entries: crate::EpochPasswordState::Replace(Vec::new()),
             },
         )?;
         let checkpoint_id = checkpoint.id()?;
         Ok((
+            local,
             (trigger_id, serialize_event_storage_yaml(&trigger)?),
             (checkpoint_id, serialize_event_storage_yaml(&checkpoint)?),
         ))
@@ -177,12 +191,14 @@ mod tests {
 
     #[test]
     fn defers_remote_trigger_until_checkpoint_is_visible() -> EventResult<()> {
-        let (trigger, checkpoint) = epoch_pair()?;
-        let local = LocalEventStore::new();
+        let (local, trigger, checkpoint) = epoch_pair()?;
 
-        assert!(visibility_gated_remote_events(&local, std::slice::from_ref(&trigger))?.is_empty());
+        assert!(
+            visibility_gated_remote_events(&local, std::slice::from_ref(&trigger), STORE)?
+                .is_empty()
+        );
         assert_eq!(
-            visibility_gated_remote_events(&local, &[trigger, checkpoint])?.len(),
+            visibility_gated_remote_events(&local, &[trigger, checkpoint], STORE)?.len(),
             2
         );
         Ok(())
@@ -190,13 +206,39 @@ mod tests {
 
     #[test]
     fn publishes_checkpoint_before_trigger() -> EventResult<()> {
-        let (trigger, checkpoint) = epoch_pair()?;
+        let (_, trigger, checkpoint) = epoch_pair()?;
         let checkpoint_id = checkpoint.0.clone();
         let mut events = vec![trigger, checkpoint];
 
         order_remote_events_for_visibility(&mut events)?;
 
         assert_eq!(events[0].0, checkpoint_id);
+        Ok(())
+    }
+
+    #[test]
+    fn unauthorized_checkpoint_does_not_release_trigger() -> EventResult<()> {
+        let (local, trigger, _) = epoch_pair()?;
+        let stranger = SigningKey::from_bytes(&[42_u8; 32]);
+        let checkpoint = signed_event(
+            &stranger,
+            vec![trigger.0.clone()],
+            trigger.0.clone(),
+            VaultOperation::EpochCheckpoint {
+                secrets: Vec::new(),
+                members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
+                rotated_meta_records: Vec::new(),
+                password_entries: crate::EpochPasswordState::Replace(Vec::new()),
+            },
+        )?;
+        let remote = vec![
+            trigger.clone(),
+            (checkpoint.id()?, serialize_event_storage_yaml(&checkpoint)?),
+        ];
+
+        let visible = visibility_gated_remote_events(&local, &remote, STORE)?;
+
+        assert!(!visible.iter().any(|(event_id, _)| event_id == &trigger.0));
         Ok(())
     }
 }

@@ -70,15 +70,6 @@ The directory contains:
 - an explicit `Empty` or `Selected(identity_id)` state; and
 - app IDs retired by destructive local recovery.
 
-Each `IdentityRecord` serializes Sentinel ownership in `sentinel_vaults`.
-The field contains Sentinel vault `store_id` values, not DEK envelopes.
-An omitted legacy field decodes as an empty list. A validated bound Sentinel
-delivery or finalization adds the association. The association survives member
-and selection changes and prevents a second identity from claiming the same
-vault. Current writers retain it until destructive device recovery clears the
-identity directory. Recovery may reconstruct it only from a validated bound
-delivery or one unambiguous legacy app-key relationship.
-
 All directory updates use one IndexedDB read-write transaction.
 Concurrent tabs must not overwrite identity creation, selection, membership,
 or DEK changes.
@@ -92,12 +83,12 @@ transaction.
 An older tab cannot delete a newer genesis marker.
 The marker owns the genesis timestamp and complete signed event lifecycle.
 `eventState` is `awaiting-event`, `legacy-event-pinned`, or `event-pinned`.
-The current pinned variant owns the signed `eventYaml` and matching
-`signingSeed` before the first event-log write. Competing tabs therefore reuse
-one signer and one event even though encrypted DEK envelopes are randomized.
+The current pinned variant owns the signed `eventYaml` and an app-key-sealed
+`signingSeedEnvelope` before the first event-log write. Competing tabs reuse one
+signer and one event without persisting the signing seed in plaintext.
 Legacy markers without `createdAt` use the Unix epoch timestamp. Markers without
 `eventState` decode as `awaiting-event`. A preceding top-level `eventYaml`, or
-an `event-pinned` state without `signingSeed`, becomes `legacy-event-pinned`.
+an `event-pinned` state without seed material becomes `legacy-event-pinned`.
 That state upgrades only after the durable seed matches the pinned event signer.
 
 Recovery clears identity ownership but preserves retired app IDs. Every
@@ -143,26 +134,6 @@ Any later verified connect repeats the idempotent reconciliation and clears a
 marker left by an interrupted post-commit update.
 The marker is local retry state. Current builds delete it only after successful
 reconciliation or explicit destructive device recovery.
-
-Verified Sentinel delivery records use
-`sentinel_genesis_share:{store_id}:{device_id}`. New records include a named
-`identityBinding`; its `bound` variant owns the required `identityId` naming
-the Sentinel vault's directory owner. Missing legacy bindings decode as
-`legacy-unbound` and are accepted only when their app key identifies one
-unambiguous local identity.
-A successful legacy read validates the relationship.
-It associates the vault and rewrites the delivery with a `bound` identity.
-If an association commits but delivery persistence is interrupted, retry
-recovers the validated owner from the directory before rewriting the delivery.
-
-Sentinel creation stores `sentinel_genesis_finalization_pending` as a JSON
-commit marker. It contains `storeId`, `identityBinding`, vault metadata, the
-encrypted projection, request, participants, and deliveries. Current writers
-use the named `bound` variant, which owns `identityId`. The named
-`legacy-unbound` variant is retained only for migration. A legacy top-level
-`identityId` becomes `bound`. A marker without either field may be upgraded
-only when the current app key belongs to one unambiguous local identity.
-Ambiguous legacy state fails closed. Successful finalization deletes the marker.
 
 The first directory read migrates `identity_record_v1` when present:
 

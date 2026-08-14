@@ -238,7 +238,13 @@ fn encrypted_payload_count(operation: &VaultOperation) -> usize {
             secrets,
             password_entries,
             ..
-        } => secrets.len() + password_entries.as_ref().map_or(0, std::vec::Vec::len),
+        } => {
+            secrets.len()
+                + match password_entries {
+                    crate::EpochPasswordState::LegacyRetain => 0,
+                    crate::EpochPasswordState::Replace(entries) => entries.len(),
+                }
+        }
         VaultOperation::SecretCreated { .. }
         | VaultOperation::SecretReplaced { .. }
         | VaultOperation::PasswordAdded { .. }

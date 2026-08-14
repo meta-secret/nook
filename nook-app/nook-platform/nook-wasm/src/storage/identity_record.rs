@@ -229,32 +229,6 @@ pub(crate) async fn enroll_authenticated_app_key_for_vault_creation(
     .await
 }
 
-pub(crate) async fn ensure_unambiguous_identity_for_app_key(
-    app_key: &nook_core::AppKey,
-    label: &str,
-) -> Result<nook_core::IdentityRecord, NookError> {
-    let app_key = app_key.clone();
-    let label = label.to_owned();
-    update_identity_directory(move |directory| {
-        let identity_id = match directory
-            .identity_for_app_key(&app_key)
-            .map_err(|error| NookError::Database(error.to_string()))?
-        {
-            Some(identity_id) => identity_id,
-            None => directory
-                .create_identity(&label, &app_key, None)
-                .map_err(|error| NookError::Database(error.to_string()))?,
-        };
-        directory
-            .identities()
-            .iter()
-            .find(|record| record.identity_id == identity_id)
-            .cloned()
-            .ok_or_else(|| NookError::Database("Identity disappeared during binding.".to_owned()))
-    })
-    .await
-}
-
 /// Associate a legacy vault with an identity without guessing from active selection.
 pub(crate) struct LegacyVaultIdentityInput<'a> {
     pub(crate) app_key: &'a nook_core::AppKey,
@@ -347,32 +321,6 @@ pub(crate) async fn validate_vault_identity_enrollment(
     load_identity_directory()
         .await?
         .validate_vault_enrollment(app_key, store_id)
-        .map_err(|error| NookError::Database(error.to_string()))
-}
-
-pub(crate) async fn associate_sentinel_vault_with_identity(
-    identity_id: &nook_core::IdentityId,
-    app_key: &nook_core::AppKey,
-    store_id: nook_core::StoreId,
-) -> Result<(), NookError> {
-    let identity_id = identity_id.clone();
-    let app_key = app_key.clone();
-    update_identity_directory(move |directory| {
-        directory
-            .associate_sentinel_vault(&identity_id, &app_key, store_id)
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        Ok(())
-    })
-    .await
-}
-
-pub(crate) async fn identity_for_sentinel_vault(
-    app_key: &nook_core::AppKey,
-    store_id: &nook_core::StoreId,
-) -> Result<Option<nook_core::IdentityId>, NookError> {
-    let directory = load_identity_directory().await?;
-    directory
-        .identity_for_vault(app_key, store_id)
         .map_err(|error| NookError::Database(error.to_string()))
 }
 

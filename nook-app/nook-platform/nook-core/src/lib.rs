@@ -241,14 +241,15 @@ pub use multi_device::{
 };
 
 pub use nook_event_log::{
-    AppendEventInput, Ed25519Signature, EncryptedSecretPayload, EpochRecord, EpochRotationReason,
-    EpochTransition, EventGraph, EventId, EventInsertStatus, EventPendingReason,
-    GenesisImportPayload, KeyEpoch, LocalEventStore, ObservedHeads, ProjectedSecret,
-    ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch, RemoteEventLogClassification,
-    SecretFingerprint, SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload,
-    SigningIdentity, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
-    VaultProjection, assert_projection_permutation_invariant, build_genesis_import_event,
-    build_signed_event, canonical_json_bytes, canonicalize_json, classify_remote_event_log,
+    AppendEventInput, Ed25519Signature, EncryptedSecretPayload, EpochPasswordState, EpochRecord,
+    EpochRotationReason, EpochTransition, EventGraph, EventId, EventInsertStatus,
+    EventPendingReason, GenesisImportPayload, KeyEpoch, LocalEventStore, ObservedHeads,
+    ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch,
+    RemoteEventLogClassification, SecretFingerprint, SecretReplacementConflict, SecurityConflict,
+    SentinelShareIssuedPayload, SigningIdentity, VaultEvent, VaultEventBody,
+    VaultEventSchemaVersion, VaultOperation, VaultProjection,
+    assert_projection_permutation_invariant, build_genesis_import_event, build_signed_event,
+    canonical_json_bytes, canonicalize_json, classify_remote_event_log,
     concurrent_epoch_rotations_conflict, encrypted_secret_from_armored, event_id_from_body_bytes,
     format_ed25519_signature, operation_starts_epoch, order_remote_events_for_visibility,
     parents_from_heads, parse_ed25519_signature, parse_event_storage_bytes,

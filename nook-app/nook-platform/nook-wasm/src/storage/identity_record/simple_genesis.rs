@@ -34,7 +34,12 @@ pub(crate) enum PendingSimpleGenesisEvent {
     EventPinned {
         #[serde(rename = "eventYaml")]
         event_yaml: String,
-        #[serde(rename = "signingSeed")]
+        #[serde(rename = "signingSeedEnvelope")]
+        signing_seed_envelope: nook_core::AgeArmoredCiphertext,
+    },
+    #[serde(skip_serializing)]
+    LegacyUnsealedEventPinned {
+        event_yaml: String,
         signing_seed: String,
     },
 }
@@ -56,6 +61,8 @@ enum PendingSimpleGenesisEventWire {
     EventPinned {
         #[serde(rename = "eventYaml")]
         event_yaml: String,
+        #[serde(default, rename = "signingSeedEnvelope")]
+        signing_seed_envelope: Option<nook_core::AgeArmoredCiphertext>,
         #[serde(default, rename = "signingSeed")]
         signing_seed: Option<String>,
     },
@@ -89,6 +96,7 @@ impl<'de> Deserialize<'de> for PendingSimpleGenesis {
                     PendingSimpleGenesisEventWire::LegacyEventPinned { event_yaml }
                     | PendingSimpleGenesisEventWire::EventPinned {
                         event_yaml,
+                        signing_seed_envelope: None,
                         signing_seed: None,
                     },
                 ),
@@ -100,13 +108,37 @@ impl<'de> Deserialize<'de> for PendingSimpleGenesis {
             (
                 Some(PendingSimpleGenesisEventWire::EventPinned {
                     event_yaml,
+                    signing_seed_envelope: None,
                     signing_seed: Some(signing_seed),
+                }),
+                None,
+            ) => PendingSimpleGenesisEvent::LegacyUnsealedEventPinned {
+                event_yaml,
+                signing_seed,
+            },
+            (
+                Some(PendingSimpleGenesisEventWire::EventPinned {
+                    event_yaml,
+                    signing_seed_envelope: Some(signing_seed_envelope),
+                    signing_seed: None,
                 }),
                 None,
             ) => PendingSimpleGenesisEvent::EventPinned {
                 event_yaml,
-                signing_seed,
+                signing_seed_envelope,
             },
+            (
+                Some(PendingSimpleGenesisEventWire::EventPinned {
+                    signing_seed_envelope: Some(_),
+                    signing_seed: Some(_),
+                    ..
+                }),
+                None,
+            ) => {
+                return Err(D::Error::custom(
+                    "pending Simple genesis has both sealed and unsealed signing seeds",
+                ));
+            }
             (None, None) => PendingSimpleGenesisEvent::AwaitingEvent,
             (Some(_), Some(_)) => {
                 return Err(D::Error::custom(
@@ -129,7 +161,10 @@ impl PendingSimpleGenesis {
         match &self.event_state {
             PendingSimpleGenesisEvent::AwaitingEvent => None,
             PendingSimpleGenesisEvent::LegacyEventPinned { event_yaml }
-            | PendingSimpleGenesisEvent::EventPinned { event_yaml, .. } => Some(event_yaml),
+            | PendingSimpleGenesisEvent::EventPinned { event_yaml, .. }
+            | PendingSimpleGenesisEvent::LegacyUnsealedEventPinned { event_yaml, .. } => {
+                Some(event_yaml)
+            }
         }
     }
 }
@@ -150,6 +185,27 @@ fn encode_pending_simple_genesis(pending: &PendingSimpleGenesis) -> Result<Strin
     })
 }
 
+fn seal_legacy_signing_seed(
+    pending: &mut PendingSimpleGenesis,
+    app_key: &nook_core::AppKey,
+) -> Result<(), NookError> {
+    let PendingSimpleGenesisEvent::LegacyUnsealedEventPinned {
+        event_yaml,
+        signing_seed,
+    } = &pending.event_state
+    else {
+        return Ok(());
+    };
+    let signing_seed_envelope = app_key
+        .seal_utf8(signing_seed)
+        .map_err(|error| NookError::Database(error.to_string()))?;
+    pending.event_state = PendingSimpleGenesisEvent::EventPinned {
+        event_yaml: event_yaml.clone(),
+        signing_seed_envelope,
+    };
+    Ok(())
+}
+
 pub(crate) async fn begin_or_resume_simple_genesis(
     app_key: &nook_core::AppKey,
     label: &str,
@@ -164,7 +220,8 @@ pub(crate) async fn begin_or_resume_simple_genesis(
                 let raw = current.ok_or_else(|| {
                     NookError::IndexedDb("Pending Simple genesis marker disappeared.".to_owned())
                 })?;
-                let pending = decode_pending_simple_genesis(&raw)?;
+                let mut pending = decode_pending_simple_genesis(&raw)?;
+                seal_legacy_signing_seed(&mut pending, app_key)?;
                 let encoded = encode_pending_simple_genesis(&pending)?;
                 *captured.borrow_mut() = Some(pending);
                 Ok(encoded)
@@ -209,9 +266,14 @@ pub(crate) async fn begin_or_resume_simple_genesis(
 /// Pin the first complete signed Simple genesis event before any event-log write.
 pub(crate) async fn persist_simple_genesis_event(
     pending: &PendingSimpleGenesis,
+    app_key: &nook_core::AppKey,
     proposed_yaml: String,
     proposed_signing_seed: String,
 ) -> Result<PinnedSimpleGenesisEvent, NookError> {
+    let proposed_signing_seed_envelope = app_key
+        .seal_utf8(&proposed_signing_seed)
+        .map_err(|error| NookError::Database(error.to_string()))?;
+    let app_key = app_key.clone();
     let expected = pending.clone();
     let selected = Rc::new(RefCell::new(None));
     let captured = Rc::clone(&selected);
@@ -235,7 +297,7 @@ pub(crate) async fn persist_simple_genesis_event(
                 PendingSimpleGenesisEvent::AwaitingEvent => {
                     current.event_state = PendingSimpleGenesisEvent::EventPinned {
                         event_yaml: proposed_yaml.clone(),
-                        signing_seed: proposed_signing_seed.clone(),
+                        signing_seed_envelope: proposed_signing_seed_envelope.clone(),
                     };
                     PinnedSimpleGenesisEvent {
                         event_yaml: proposed_yaml.clone(),
@@ -246,7 +308,7 @@ pub(crate) async fn persist_simple_genesis_event(
                     validate_genesis_signing_seed(&event_yaml, &proposed_signing_seed)?;
                     current.event_state = PendingSimpleGenesisEvent::EventPinned {
                         event_yaml: event_yaml.clone(),
-                        signing_seed: proposed_signing_seed.clone(),
+                        signing_seed_envelope: proposed_signing_seed_envelope.clone(),
                     };
                     PinnedSimpleGenesisEvent {
                         event_yaml: event_yaml.clone(),
@@ -255,11 +317,18 @@ pub(crate) async fn persist_simple_genesis_event(
                 }
                 PendingSimpleGenesisEvent::EventPinned {
                     event_yaml,
-                    signing_seed,
+                    signing_seed_envelope,
                 } => PinnedSimpleGenesisEvent {
                     event_yaml,
-                    signing_seed,
+                    signing_seed: app_key
+                        .open_utf8(&signing_seed_envelope)
+                        .map_err(|error| NookError::Database(error.to_string()))?,
                 },
+                PendingSimpleGenesisEvent::LegacyUnsealedEventPinned { .. } => {
+                    return Err(NookError::IndexedDb(
+                        "Pending Simple genesis retained an unsealed signing seed.".to_owned(),
+                    ));
+                }
             };
             *captured.borrow_mut() = Some(pinned);
             encode_pending_simple_genesis(&current)
@@ -404,12 +473,19 @@ mod tests {
         let pending = begin_or_resume_simple_genesis(&app_key, "Personal").await?;
         let first = persist_simple_genesis_event(
             &pending,
+            &app_key,
             "first-event\n".to_owned(),
             "first-seed".to_owned(),
         )
         .await?;
+        let stored = idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
+            .await?
+            .ok_or_else(|| NookError::IndexedDb("Marker disappeared.".to_owned()))?;
+        assert!(!stored.contains("first-seed"));
+        assert!(stored.contains("signingSeedEnvelope"));
         let resumed = persist_simple_genesis_event(
             &pending,
+            &app_key,
             "other-event\n".to_owned(),
             "other-seed".to_owned(),
         )

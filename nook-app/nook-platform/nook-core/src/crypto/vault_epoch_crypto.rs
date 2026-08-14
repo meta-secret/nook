@@ -238,7 +238,7 @@ mod tests {
                 secrets: Vec::new(),
                 members_checkpoint_hash: crate::sha256_hex(b"members"),
                 rotated_meta_records,
-                password_entries: Some(Vec::new()),
+                password_entries: crate::EpochPasswordState::Replace(Vec::new()),
             },
             "2026-06-28T00:02:00Z",
         )?;
