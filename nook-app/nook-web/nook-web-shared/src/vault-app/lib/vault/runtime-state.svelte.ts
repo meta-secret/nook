@@ -15,6 +15,10 @@ import {
   type StorageProvider,
 } from "$lib/auth/providers";
 import { SerialOperationQueue } from "$lib/runtime/serial-operation-queue";
+import {
+  runWithExclusiveLocalDataStorageLock,
+  runWithLocalDataStorageLock,
+} from "$lib/runtime/browser-data";
 import * as localeActions from "$lib/vault/locale";
 import * as oauthActions from "$lib/vault/oauth";
 import * as providersActions from "$lib/vault/providers.svelte";
@@ -156,7 +160,15 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     if (this.localDataDeletionStarted) {
       return Promise.reject(new Error("Local browser data deletion is active"));
     }
-    return this.storageQueue.enqueue(operation);
+    return this.storageQueue.enqueue(() =>
+      runWithLocalDataStorageLock(operation),
+    );
+  }
+
+  enqueueExclusiveStorage<T>(operation: () => T | Promise<T>): Promise<T> {
+    return this.storageQueue.enqueue(() =>
+      runWithExclusiveLocalDataStorageLock(operation),
+    );
   }
 
   waitForStorageChain(): Promise<void> {

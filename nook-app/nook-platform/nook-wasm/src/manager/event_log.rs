@@ -251,7 +251,7 @@ impl NookVaultManager {
     pub(in crate::manager) async fn append_vault_operations(
         &mut self,
         operations: Vec<VaultOperation>,
-    ) -> Result<(), NookError> {
+    ) -> Result<EventId, NookError> {
         if self.vault.store_id.is_empty() {
             self.vault.store_id = nook_core::generate_store_id()?.to_string();
         }
@@ -266,8 +266,19 @@ impl NookVaultManager {
         let built = self
             .build_vault_operations_event(operations, parents, key_epoch)
             .await?;
-        self.persist_built_vault_event(built).await?;
-        Ok(())
+        self.persist_built_vault_event(built).await
+    }
+
+    /// Return one verified event that causally dominates the current frontier.
+    pub(in crate::manager) async fn ensure_causal_event_checkpoint(
+        &mut self,
+    ) -> Result<String, NookError> {
+        let heads = self.load_event_heads().await?;
+        match heads.as_slice() {
+            [] => self.ensure_key_epoch().await,
+            [head] => Ok(head.clone()),
+            _ => Ok(self.append_vault_operations(Vec::new()).await?.into_inner()),
+        }
     }
 
     pub(super) async fn build_vault_operations_event(

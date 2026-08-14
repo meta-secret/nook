@@ -255,6 +255,7 @@ pub(crate) struct LegacyVaultIdentityInput<'a> {
     pub(crate) secrets_envelope: nook_core::AgeArmoredCiphertext,
     pub(crate) members_envelope: nook_core::AgeArmoredCiphertext,
     pub(crate) key_epoch: nook_core::IdentityVaultDekEpoch,
+    pub(crate) verified_previous_key_epoch: Option<nook_core::IdentityVaultEventId>,
     pub(crate) committed_event_ids: Vec<nook_core::IdentityVaultEventId>,
     pub(crate) checkpoint_ancestors: Vec<nook_core::IdentityVaultEventId>,
     pub(crate) label: &'a str,
@@ -269,6 +270,7 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
         secrets_envelope,
         members_envelope,
         key_epoch,
+        verified_previous_key_epoch,
         committed_event_ids,
         checkpoint_ancestors,
         label,
@@ -279,6 +281,7 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
     let resolution = resolve_identity_epoch(
         &store_id,
         key_epoch,
+        verified_previous_key_epoch,
         &committed_event_ids,
         &checkpoint_ancestors,
     )

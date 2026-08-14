@@ -85,15 +85,32 @@ impl NookVaultManager {
         // not append JoinApproved as an unauthorized actor.
         let stored_seed = crate::storage::event_db::load_signing_seed().await?;
         let has_events = self.event_log_has_events().await?;
+        let previous_stored_seed = stored_seed.clone();
         let choice = nook_core::choose_signing_seed_after_identity_handoff(
             handoff_signing_seed,
             stored_seed,
             has_events,
         );
-        let _ = crate::storage::identity_record::enroll_authenticated_app_key_for_vault_creation(
-            &identity,
-        )
-        .await?;
+        let seed_to_persist = match &choice {
+            nook_core::HandoffSigningSeedChoice::AdoptHandoff {
+                seed,
+                persist: true,
+            } => Some(seed.as_str()),
+            _ => None,
+        };
+        if let Some(seed) = seed_to_persist {
+            crate::storage::event_db::save_signing_seed(seed).await?;
+        }
+        let signing_seed_was_persisted = seed_to_persist.is_some();
+        if let Err(enrollment_error) =
+            crate::storage::identity_record::enroll_authenticated_app_key_for_vault_creation(
+                &identity,
+            )
+            .await
+        {
+            crate::storage::event_db::restore_signing_seed(previous_stored_seed.as_deref()).await?;
+            return Err(enrollment_error.into());
+        }
 
         self.device.identity_private_key.zeroize();
         self.device.id = identity.device_id().as_str().to_owned();
@@ -105,10 +122,7 @@ impl NookVaultManager {
             }
             nook_core::HandoffSigningSeedChoice::AdoptHandoff { seed, persist } => {
                 self.event_log.signing_seed = seed;
-                if persist {
-                    crate::storage::event_db::save_signing_seed(&self.event_log.signing_seed)
-                        .await?;
-                }
+                debug_assert!(!persist || signing_seed_was_persisted);
             }
         }
         Ok(())

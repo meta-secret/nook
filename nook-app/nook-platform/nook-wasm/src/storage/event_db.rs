@@ -129,6 +129,13 @@ pub(crate) async fn save_signing_seed(seed: &str) -> Result<(), NookError> {
     vault_put(SIGNING_SEED_KEY, seed).await
 }
 
+pub(crate) async fn restore_signing_seed(seed: Option<&str>) -> Result<(), NookError> {
+    match seed {
+        Some(seed) => save_signing_seed(seed).await,
+        None => store_delete(STORE_VAULT, SIGNING_SEED_KEY).await,
+    }
+}
+
 pub(crate) async fn load_heads(store_id: &str) -> Result<Vec<String>, NookError> {
     let key = heads_key(store_id);
     match store_get(STORE_PROJECTIONS, &key).await? {

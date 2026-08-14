@@ -2,6 +2,8 @@ import { appPath } from "$lib/content/legal";
 import { runtimeError, suspendWasmLogging } from "$lib/runtime/log";
 
 const LOCAL_DATA_RESET_CHANNEL = "nook-local-data-reset";
+const LOCAL_DATA_STORAGE_LOCK = "nook-local-data-storage";
+const LOCAL_DATA_STORAGE_GENERATION = "nook-local-data-storage-generation";
 const TAB_ID = crypto.randomUUID();
 
 enum LocalDataResetMessageType {
@@ -44,6 +46,36 @@ type LocalDataResetMessage =
   LocalDataResetRequest | LocalDataResetSeen | LocalDataResetReady;
 
 type BrowserDataDeletionErrors = Error[];
+
+export async function runWithLocalDataStorageLock<T>(
+  operation: () => T | Promise<T>,
+): Promise<T> {
+  if (!("locks" in navigator)) return operation();
+  const generation = localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION);
+  const options: LockOptions = { mode: "shared" };
+  return navigator.locks.request(LOCAL_DATA_STORAGE_LOCK, options, () => {
+    if (localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION) !== generation) {
+      throw new Error("Local browser data changed in another Nook tab");
+    }
+    return operation();
+  });
+}
+
+export async function runWithExclusiveLocalDataStorageLock<T>(
+  operation: () => T | Promise<T>,
+): Promise<T> {
+  if (!("locks" in navigator)) {
+    throw new Error("Safe cross-tab local data recovery is unavailable");
+  }
+  const options: LockOptions = { mode: "exclusive" };
+  return navigator.locks.request(LOCAL_DATA_STORAGE_LOCK, options, async () => {
+    try {
+      return await operation();
+    } finally {
+      localStorage.setItem(LOCAL_DATA_STORAGE_GENERATION, crypto.randomUUID());
+    }
+  });
+}
 
 function combineErrors(errors: BrowserDataDeletionErrors): Error {
   return new Error(errors.map((error) => error.message).join("; "));
@@ -234,21 +266,21 @@ export async function quiesceOtherTabsForLocalRecovery(): Promise<void> {
 export async function deleteLocalBrowserData(
   clearNookDatabases: () => Promise<void>,
 ): Promise<void> {
-  const errors: Error[] = [];
   await suspendWasmLogging();
   await quiesceOtherTabsForLocalRecovery();
-  try {
-    await clearNookDatabases();
-  } catch (error) {
-    errors.push(runtimeError(error));
-  }
-  try {
-    await clearBrowserManagedStorage();
-  } catch (error) {
-    errors.push(runtimeError(error));
-  }
-  if (errors.length > 0) {
-    throw combineErrors(errors);
-  }
+  await runWithExclusiveLocalDataStorageLock(async () => {
+    const errors: Error[] = [];
+    try {
+      await clearNookDatabases();
+    } catch (error) {
+      errors.push(runtimeError(error));
+    }
+    try {
+      await clearBrowserManagedStorage();
+    } catch (error) {
+      errors.push(runtimeError(error));
+    }
+    if (errors.length > 0) throw combineErrors(errors);
+  });
   window.location.replace(appPath("/"));
 }

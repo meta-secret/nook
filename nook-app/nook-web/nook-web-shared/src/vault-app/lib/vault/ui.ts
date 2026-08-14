@@ -195,12 +195,10 @@ export async function deleteLocalData(state: UiActionsContext): Promise<void> {
   state.stopVaultSync();
   try {
     const manager = state.requireManager();
+    await state.waitForStorageChain();
+    state.localDataDeletionStarted = true;
     await deleteLocalBrowserData(() => {
-      const deletion = state.enqueueStorage(() =>
-        manager.delete_local_browser_data(),
-      );
-      state.localDataDeletionStarted = true;
-      return deletion;
+      return manager.delete_local_browser_data();
     });
   } catch (error) {
     const managerWasZeroized = state.localDataDeletionStarted;

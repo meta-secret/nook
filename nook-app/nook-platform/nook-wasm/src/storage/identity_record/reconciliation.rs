@@ -254,10 +254,29 @@ pub(crate) async fn commit_identity_reconciliation_checkpoint(
 pub(super) async fn resolve_identity_epoch(
     store_id: &nook_core::StoreId,
     observed: nook_core::IdentityVaultDekEpoch,
+    verified_previous_key_epoch: Option<nook_core::IdentityVaultEventId>,
     committed_event_ids: &[nook_core::IdentityVaultEventId],
     checkpoint_ancestors: &[nook_core::IdentityVaultEventId],
 ) -> Result<IdentityEpochResolution, NookError> {
     let Some(raw) = idb_get_string(&identity_reconciliation_key(store_id)).await? else {
+        if let (
+            Some(previous_key_epoch),
+            nook_core::IdentityVaultDekEpoch::Known {
+                key_epoch,
+                checkpoint,
+            },
+        ) = (verified_previous_key_epoch, &observed)
+        {
+            return Ok(IdentityEpochResolution {
+                update: nook_core::IdentityVaultDekEpochUpdate::Rotate {
+                    previous_key_epoch,
+                    previous_checkpoint_ancestors: checkpoint_ancestors.to_vec(),
+                    key_epoch: key_epoch.clone(),
+                    checkpoint: checkpoint.clone(),
+                },
+                consumed_marker: None,
+            });
+        }
         return Ok(IdentityEpochResolution {
             update: nook_core::IdentityVaultDekEpochUpdate::Observe {
                 key_epoch: observed,
@@ -306,7 +325,7 @@ pub(super) async fn resolve_identity_epoch(
             Ok(IdentityEpochResolution {
                 update: nook_core::IdentityVaultDekEpochUpdate::Rotate {
                     previous_key_epoch: pending.previous_key_epoch,
-                    previous_checkpoint: pending.previous_checkpoint,
+                    previous_checkpoint_ancestors: checkpoint_ancestors.to_vec(),
                     key_epoch: key_epoch.clone(),
                     checkpoint: observed_checkpoint.clone(),
                 },
@@ -403,6 +422,7 @@ mod browser_tests {
                 key_epoch,
                 checkpoint: event_id('d')?,
             },
+            None,
             &[],
             &[],
         )
@@ -435,6 +455,7 @@ mod browser_tests {
                 key_epoch,
                 checkpoint: advanced_head.clone(),
             },
+            None,
             std::slice::from_ref(&checkpoint),
             std::slice::from_ref(&checkpoint),
         )
@@ -474,6 +495,7 @@ mod browser_tests {
                 key_epoch: first_epoch,
                 checkpoint: checkpoint.clone(),
             },
+            None,
             std::slice::from_ref(&checkpoint),
             &[],
         )

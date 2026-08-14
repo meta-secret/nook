@@ -402,7 +402,7 @@ export async function resetDeviceProtectionForRecovery(
   state.errorMsg = "";
   try {
     await quiesceOtherTabsForLocalRecovery();
-    await state.enqueueStorage(() =>
+    await state.enqueueExclusiveStorage(() =>
       state.requireManager().reset_device_protection_for_recovery(),
     );
     state.deviceProtectionStatus = DeviceProtectionStatus.Missing;

@@ -85,7 +85,7 @@ pub enum IdentityVaultDekEpochUpdate {
     },
     Rotate {
         previous_key_epoch: IdentityVaultEventId,
-        previous_checkpoint: IdentityVaultEventId,
+        previous_checkpoint_ancestors: Vec<IdentityVaultEventId>,
         key_epoch: IdentityVaultEventId,
         checkpoint: IdentityVaultEventId,
     },
@@ -165,13 +165,15 @@ impl IdentityVaultDek {
                 },
                 IdentityVaultDekEpochUpdate::Rotate {
                     previous_key_epoch,
-                    previous_checkpoint,
+                    previous_checkpoint_ancestors,
                     key_epoch,
                     checkpoint,
                 },
             ) if (current_epoch == previous_key_epoch
-                && current_checkpoint == previous_checkpoint)
-                || (current_epoch == key_epoch && current_checkpoint == checkpoint) =>
+                && previous_checkpoint_ancestors.contains(current_checkpoint))
+                || (current_epoch == key_epoch
+                    && (current_checkpoint == checkpoint
+                        || previous_checkpoint_ancestors.contains(current_checkpoint))) =>
             {
                 IdentityVaultDekEpoch::Known {
                     key_epoch: key_epoch.clone(),
@@ -184,10 +186,8 @@ impl IdentityVaultDek {
                         epoch_label(key_epoch)
                     }
                     IdentityVaultDekEpochUpdate::Rotate {
-                        previous_key_epoch,
-                        previous_checkpoint,
-                        ..
-                    } => format!("{previous_key_epoch}@{previous_checkpoint}"),
+                        previous_key_epoch, ..
+                    } => previous_key_epoch.to_string(),
                 };
                 return Err(MultiDeviceError::StaleVaultDekEpoch {
                     expected,
@@ -334,9 +334,18 @@ impl IdentityRecord {
                 "app key is already a member of this identity".to_owned(),
             ));
         }
+        self.add_prevalidated_member(member);
+        Ok(())
+    }
+
+    pub(crate) fn add_prevalidated_member(&mut self, member: IdentityMember) {
+        let is_new = self
+            .members
+            .iter()
+            .all(|existing| existing.app_id != member.app_id);
+        debug_assert!(is_new, "identity member must be validated before mutation");
         self.members.push(member);
         self.control_epoch = self.control_epoch.saturating_add(1);
-        Ok(())
     }
 
     pub fn remove_member(&mut self, app_id: &AppId) -> MultiDeviceResult<()> {
@@ -608,7 +617,7 @@ mod tests {
             &rotated,
             IdentityVaultDekEpochUpdate::Rotate {
                 previous_key_epoch: previous.clone(),
-                previous_checkpoint: previous_checkpoint.clone(),
+                previous_checkpoint_ancestors: vec![previous_checkpoint.clone()],
                 key_epoch: current.clone(),
                 checkpoint: current_checkpoint,
             },
@@ -652,7 +661,7 @@ mod tests {
             &keys,
             IdentityVaultDekEpochUpdate::Rotate {
                 previous_key_epoch: key_epoch.clone(),
-                previous_checkpoint: key_epoch.clone(),
+                previous_checkpoint_ancestors: vec![key_epoch.clone()],
                 key_epoch: key_epoch.clone(),
                 checkpoint: first_checkpoint.clone(),
             },

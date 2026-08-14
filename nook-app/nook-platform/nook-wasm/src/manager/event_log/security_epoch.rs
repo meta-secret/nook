@@ -236,10 +236,8 @@ impl NookVaultManager {
         self.activate_event_log_mode().await?;
         let previous_key_epoch =
             nook_core::IdentityVaultEventId::parse(&self.ensure_key_epoch().await?)?;
-        let previous_checkpoint = match self.load_event_heads().await?.last() {
-            Some(head) => nook_core::IdentityVaultEventId::parse(head)?,
-            None => previous_key_epoch.clone(),
-        };
+        let previous_checkpoint =
+            nook_core::IdentityVaultEventId::parse(&self.ensure_causal_event_checkpoint().await?)?;
         let prepared =
             self.prepare_security_epoch_rotation(previous_key_epoch, previous_checkpoint)?;
         let plan = self
@@ -258,10 +256,8 @@ impl NookVaultManager {
 
         let previous_key_epoch =
             nook_core::IdentityVaultEventId::parse(&self.ensure_key_epoch().await?)?;
-        let previous_checkpoint = match self.load_event_heads().await?.last() {
-            Some(head) => nook_core::IdentityVaultEventId::parse(head)?,
-            None => previous_key_epoch.clone(),
-        };
+        let previous_checkpoint =
+            nook_core::IdentityVaultEventId::parse(&self.ensure_causal_event_checkpoint().await?)?;
         let prepared =
             self.prepare_security_epoch_rotation(previous_key_epoch, previous_checkpoint)?;
         let envelope = nook_core::attach_password_envelope_with_work_factor(

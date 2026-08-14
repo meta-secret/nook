@@ -385,12 +385,12 @@ impl IdentityDirectory {
             }
         }
         let selected = self.selected_mut()?;
-        selected.add_member(IdentityMember {
+        selected.add_prevalidated_member(IdentityMember {
             app_id: app_key.app_id().clone(),
             auth_id: app_key.auth_id(),
             public_key: app_key.public_key(),
             label: None,
-        })?;
+        });
         Ok(selected.identity_id.clone())
     }
 
