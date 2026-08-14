@@ -49,9 +49,14 @@ type AgentWorkflowPlanAgent =
 type AgentWorkflowPlanJoin =
   (typeof CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.joins)[CortexAuditJoin];
 
+enum AgentWorkflowTransitionOutcome {
+  Completed = 'completed',
+  Failed = 'failed',
+}
+
 type AgentWorkflowTaskTransition = {
   readonly source: CortexAuditTask;
-  readonly outcome: 'completed' | 'failed';
+  readonly outcome: AgentWorkflowTransitionOutcome;
   readonly target: AgentWorkflowPlanTask['completed'];
 };
 
@@ -188,12 +193,12 @@ export function buildAgentWorkflowPlan(
     const task = workflow.tasks[taskName];
     const completedTransition: AgentWorkflowTaskTransition = {
       source: taskName,
-      outcome: 'completed',
+      outcome: AgentWorkflowTransitionOutcome.Completed,
       target: task.completed,
     };
     const failedTransition: AgentWorkflowTaskTransition = {
       source: taskName,
-      outcome: 'failed',
+      outcome: AgentWorkflowTransitionOutcome.Failed,
       target: task.failed,
     };
     taskTransitions.push(completedTransition, failedTransition);

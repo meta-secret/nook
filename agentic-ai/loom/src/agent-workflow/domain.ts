@@ -139,8 +139,13 @@ export type TaskResourcePatternPair = {
   readonly second: string;
 };
 
-type ResourceClaimKind =
-  'git' | 'exact' | 'subtree' | 'direct-glob' | 'recursive-basename';
+enum ResourceClaimKind {
+  Git = 'git',
+  Exact = 'exact',
+  Subtree = 'subtree',
+  DirectGlob = 'direct-glob',
+  RecursiveBasename = 'recursive-basename',
+}
 
 type ResourceClaimDescriptor = {
   readonly kind: ResourceClaimKind;
@@ -158,17 +163,20 @@ export function taskResourcePatternsOverlap(
   const first = parseResourceClaim(pair.first);
   const second = parseResourceClaim(pair.second);
   if (!first || !second) return false;
-  if (first.kind === 'git') {
-    return second.kind === 'git' && first.path === second.path;
+  if (first.kind === ResourceClaimKind.Git) {
+    return second.kind === ResourceClaimKind.Git && first.path === second.path;
   }
-  if (second.kind === 'git') return false;
+  if (second.kind === ResourceClaimKind.Git) return false;
   if (
-    first.kind === 'recursive-basename' ||
-    second.kind === 'recursive-basename'
+    first.kind === ResourceClaimKind.RecursiveBasename ||
+    second.kind === ResourceClaimKind.RecursiveBasename
   ) {
     return true;
   }
-  if (first.kind === 'direct-glob' || second.kind === 'direct-glob') {
+  if (
+    first.kind === ResourceClaimKind.DirectGlob ||
+    second.kind === ResourceClaimKind.DirectGlob
+  ) {
     const overlap: ResourceDescriptorPair = { first, second };
     return directGlobOverlaps(overlap);
   }
@@ -181,14 +189,18 @@ export function taskResourcePatternsOverlap(
 
 function parseResourceClaim(claim: string): ResourceClaimDescriptor | false {
   if (/^git:[A-Za-z0-9._/-]+$/.test(claim)) {
-    return { kind: 'git', path: claim, basename: '' };
+    return { kind: ResourceClaimKind.Git, path: claim, basename: '' };
   }
   const literalPath = '[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*';
   if (new RegExp(`^${literalPath}$`).test(claim)) {
-    return { kind: 'exact', path: claim, basename: '' };
+    return { kind: ResourceClaimKind.Exact, path: claim, basename: '' };
   }
   if (new RegExp(`^${literalPath}/\\*\\*$`).test(claim)) {
-    return { kind: 'subtree', path: claim.slice(0, -3), basename: '' };
+    return {
+      kind: ResourceClaimKind.Subtree,
+      path: claim.slice(0, -3),
+      basename: '',
+    };
   }
   const globBasename = '\\*(?:\\.[A-Za-z0-9_-]+)?';
   const directMatch = claim.match(
@@ -196,7 +208,7 @@ function parseResourceClaim(claim: string): ResourceClaimDescriptor | false {
   );
   if (directMatch?.[1] && directMatch[2]) {
     return {
-      kind: 'direct-glob',
+      kind: ResourceClaimKind.DirectGlob,
       path: directMatch[1],
       basename: directMatch[2],
     };
@@ -206,7 +218,7 @@ function parseResourceClaim(claim: string): ResourceClaimDescriptor | false {
   );
   if (recursiveMatch?.[1]) {
     return {
-      kind: 'recursive-basename',
+      kind: ResourceClaimKind.RecursiveBasename,
       path: '',
       basename: recursiveMatch[1],
     };
@@ -230,7 +242,10 @@ type ResourceDescriptorPair = {
 function directGlobOverlaps(pair: ResourceDescriptorPair): boolean {
   const first = pair.first;
   const second = pair.second;
-  if (first.kind === 'direct-glob' && second.kind === 'direct-glob') {
+  if (
+    first.kind === ResourceClaimKind.DirectGlob &&
+    second.kind === ResourceClaimKind.DirectGlob
+  ) {
     if (first.path === second.path) {
       const basenames: TaskResourcePatternPair = {
         first: first.basename,
@@ -244,7 +259,7 @@ function directGlobOverlaps(pair: ResourceDescriptorPair): boolean {
     };
     return pathsAreNested(paths);
   }
-  const glob = first.kind === 'direct-glob' ? first : second;
+  const glob = first.kind === ResourceClaimKind.DirectGlob ? first : second;
   const concrete = glob === first ? second : first;
   if (concrete.path === glob.path) return true;
   if (concrete.path.startsWith(`${glob.path}/`)) {
