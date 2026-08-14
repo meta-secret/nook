@@ -34,6 +34,8 @@ Default PR-first loop:
 1. **Record the interpreted task:**
    - Fetch `origin/main`.
    - Write the important requirements in the agent's own words.
+   - Apply [subagent-delegation.md](subagent-delegation.md).
+   - Record the delegation decision and planned joins.
    - Estimate authored changed lines.
    - Identify module and interface boundaries.
    - Publish the public-safe start snapshot to Nook Workbench.

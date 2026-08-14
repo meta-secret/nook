@@ -28,8 +28,9 @@ root/
 │   └── k0s/              (pinned single-node cluster and Hive manifests)
 ├── agentic-ai/
 │   ├── ci-agent/         (PR delivery agent)
+│   ├── loom/             (deterministic Cortex tool runner)
 │   └── minds/
-│       ├── lace/         (agent task graph)
+│       ├── lace/         (experimental graph code-generation fixture)
 │       └── hive/         (Kata-isolated embedded-Codex worker)
 ├── preflight/            (standalone Rust tests for whole-repository invariants)
 │   ├── Taskfile.yml      (`task preflight` Docker entrypoint)
@@ -1151,6 +1152,24 @@ Regenerate chef inputs after dependency changes:
 - Product verification runs on Actions.
 
 ## 8. Hive isolated agent platform
+
+Nook keeps agent workflow policy, scheduling, deterministic tools, and durable
+execution separate.
+
+- Cortex Markdown owns semantic delegation contracts.
+- Loom owns deterministic tools and the planned agent workflow engine.
+- Hive owns durable task state and isolated execution.
+- One delivery owner integrates results and mutates shared lifecycle state.
+
+The Loom `agentWorkflow` family is not implemented yet.
+
+Current capable Codex clients use native child workers.
+
+The experimental Lace fixture will be deleted after Loom owns the typed graph.
+
+See
+[design-docs/agent-workflow-orchestration.md](design-docs/agent-workflow-orchestration.md)
+for the staged architecture.
 
 Hive lives in `agentic-ai/minds/hive` and is deployed only through the
 domain-owned Hive commands flattened into the `infra/Taskfile.yml` command

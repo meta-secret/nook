@@ -378,6 +378,33 @@ overlap and wait for an explicit user, owner, or orchestrator handoff.
 Full policy:
 [dynamic-skills/agent-feature-ownership.md](dynamic-skills/agent-feature-ownership.md).
 
+## ⛔ Non-negotiable: delegate independent semantic work
+
+A capable agent environment MUST use child workers when a task contains at
+least two bounded semantic work units that can run independently.
+
+Each work unit must have:
+
+- the same immutable baseline;
+- a read-only or disjoint write scope;
+- explicit inputs and outputs;
+- independent acceptance evidence;
+- a parent-owned join.
+
+Simple deterministic steps belong in Loom, Task, or another tool.
+
+They do not need an AI worker.
+
+One delivery owner retains Workbench, branch, PR, review, validation, and merge
+authority.
+
+Child workers return evidence or isolated patches.
+
+They do not mutate shared lifecycle state.
+
+Full policy:
+[workflows/subagent-delegation.md](workflows/subagent-delegation.md).
+
 ## ⛔ Non-negotiable: implementation agents land their PRs
 
 Every task-owning implementation agent with GitHub write access must:
@@ -586,6 +613,16 @@ Preferred Task aliases:
 
 Policy and judgment stay in `.cortex`. Loom only runs deterministic steps.
 
+Loom owns the planned machine-managed agent workflow graph.
+
+Its `agentWorkflow` family will schedule Codex SDK workers.
+
+Until that family exists, capable Codex clients use native child workers under
+the delegation workflow.
+
+See
+[agent-workflow-orchestration.md](design-docs/agent-workflow-orchestration.md).
+
 ## ⛔ Non-negotiable: heavy agent work runs remotely
 
 `task format` is the only required local product transformation.
@@ -760,6 +797,7 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 ## 6. Workflows (`workflows/`)
 
 - [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task loom:pre-push`** → commit/push → Loom/Task validate → optional focused diagnosis → fix loop → readiness audit → automatic agent-owned squash merge).
+- [workflows/subagent-delegation.md](workflows/subagent-delegation.md) — **Mandatory bounded delegation rule**, child-worker contract, safe fan-out patterns, and parent-owned integration.
 - [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 - [`agentic-ai/loom/README.md`](../agentic-ai/loom/README.md) — **Loom**: YAML tool protocol for mechanical cortex rites.
 - [references/loom-tools.md](references/loom-tools.md) — Loom request/response contracts and examples.
@@ -784,6 +822,7 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 - [workflows/quality.md](workflows/quality.md) — Quality gates (Knip, jscpd, lint, coverage), **fix findings not silence them**, testing pyramid, and release.
 - [workflows/agent-statistics.md](workflows/agent-statistics.md) — Per-PR AI-agent timing/counter YAML, repository test inventory, historical comparison, waste analysis, and direct Workbench publication.
 - [workflows/main-build-statistics.md](workflows/main-build-statistics.md) — Post-completion Main run/job/step metrics and trusted automatic Workbench publication.
+- [design-docs/agent-workflow-orchestration.md](design-docs/agent-workflow-orchestration.md) — Cortex, Loom, Hive, and delivery-owner responsibility boundary.
 
 ## 7. Agent duties beyond code
 

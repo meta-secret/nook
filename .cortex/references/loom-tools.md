@@ -4,6 +4,14 @@ Loom is the Bun tool runner for mechanical cortex rites.
 
 Agents call it. Humans do not use it interactively.
 
+Loom's current tools are mechanical leaf operations.
+
+The planned `agentWorkflow` family adds deterministic graph scheduling and a
+Codex SDK worker adapter.
+
+See
+[agent-workflow-orchestration.md](../design-docs/agent-workflow-orchestration.md).
+
 Full package docs: [`agentic-ai/loom/README.md`](../../agentic-ai/loom/README.md).
 
 ## Invoke
