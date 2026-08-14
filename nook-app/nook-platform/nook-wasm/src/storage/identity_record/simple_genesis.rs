@@ -25,9 +25,37 @@ pub(crate) struct PendingSimpleGenesis {
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum PendingSimpleGenesisEvent {
     AwaitingEvent,
+    LegacyEventPinned {
+        #[serde(rename = "eventYaml")]
+        event_yaml: String,
+    },
     EventPinned {
         #[serde(rename = "eventYaml")]
         event_yaml: String,
+        #[serde(rename = "signingSeed")]
+        signing_seed: String,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct PinnedSimpleGenesisEvent {
+    pub(crate) event_yaml: String,
+    pub(crate) signing_seed: String,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+enum PendingSimpleGenesisEventWire {
+    AwaitingEvent,
+    LegacyEventPinned {
+        #[serde(rename = "eventYaml")]
+        event_yaml: String,
+    },
+    EventPinned {
+        #[serde(rename = "eventYaml")]
+        event_yaml: String,
+        #[serde(default, rename = "signingSeed")]
+        signing_seed: Option<String>,
     },
 }
 
@@ -39,7 +67,7 @@ struct PendingSimpleGenesisWire {
     #[serde(default = "legacy_simple_genesis_timestamp")]
     created_at: nook_core::IsoTimestamp,
     #[serde(default)]
-    event_state: Option<PendingSimpleGenesisEvent>,
+    event_state: Option<PendingSimpleGenesisEventWire>,
     #[serde(default)]
     event_yaml: Option<String>,
 }
@@ -51,8 +79,32 @@ impl<'de> Deserialize<'de> for PendingSimpleGenesis {
     {
         let wire = PendingSimpleGenesisWire::deserialize(deserializer)?;
         let event_state = match (wire.event_state, wire.event_yaml) {
-            (Some(state), None) => state,
-            (None, Some(event_yaml)) => PendingSimpleGenesisEvent::EventPinned { event_yaml },
+            (Some(PendingSimpleGenesisEventWire::AwaitingEvent), None) => {
+                PendingSimpleGenesisEvent::AwaitingEvent
+            }
+            (
+                Some(
+                    PendingSimpleGenesisEventWire::LegacyEventPinned { event_yaml }
+                    | PendingSimpleGenesisEventWire::EventPinned {
+                        event_yaml,
+                        signing_seed: None,
+                    },
+                ),
+                None,
+            )
+            | (None, Some(event_yaml)) => {
+                PendingSimpleGenesisEvent::LegacyEventPinned { event_yaml }
+            }
+            (
+                Some(PendingSimpleGenesisEventWire::EventPinned {
+                    event_yaml,
+                    signing_seed: Some(signing_seed),
+                }),
+                None,
+            ) => PendingSimpleGenesisEvent::EventPinned {
+                event_yaml,
+                signing_seed,
+            },
             (None, None) => PendingSimpleGenesisEvent::AwaitingEvent,
             (Some(_), Some(_)) => {
                 return Err(D::Error::custom(
@@ -74,7 +126,8 @@ impl PendingSimpleGenesis {
     fn event_yaml(&self) -> Option<&str> {
         match &self.event_state {
             PendingSimpleGenesisEvent::AwaitingEvent => None,
-            PendingSimpleGenesisEvent::EventPinned { event_yaml } => Some(event_yaml),
+            PendingSimpleGenesisEvent::LegacyEventPinned { event_yaml }
+            | PendingSimpleGenesisEvent::EventPinned { event_yaml, .. } => Some(event_yaml),
         }
     }
 }
@@ -155,7 +208,8 @@ pub(crate) async fn begin_or_resume_simple_genesis(
 pub(crate) async fn persist_simple_genesis_event(
     pending: &PendingSimpleGenesis,
     proposed_yaml: String,
-) -> Result<String, NookError> {
+    proposed_signing_seed: String,
+) -> Result<PinnedSimpleGenesisEvent, NookError> {
     let expected = pending.clone();
     let selected = Rc::new(RefCell::new(None));
     let captured = Rc::clone(&selected);
@@ -175,16 +229,37 @@ pub(crate) async fn persist_simple_genesis_event(
                     "Pending Simple genesis marker changed during event creation.".to_owned(),
                 ));
             }
-            let event_yaml = match &current.event_state {
+            let pinned = match current.event_state.clone() {
                 PendingSimpleGenesisEvent::AwaitingEvent => {
                     current.event_state = PendingSimpleGenesisEvent::EventPinned {
                         event_yaml: proposed_yaml.clone(),
+                        signing_seed: proposed_signing_seed.clone(),
                     };
-                    proposed_yaml
+                    PinnedSimpleGenesisEvent {
+                        event_yaml: proposed_yaml.clone(),
+                        signing_seed: proposed_signing_seed.clone(),
+                    }
                 }
-                PendingSimpleGenesisEvent::EventPinned { event_yaml } => event_yaml.clone(),
+                PendingSimpleGenesisEvent::LegacyEventPinned { event_yaml } => {
+                    validate_genesis_signing_seed(&event_yaml, &proposed_signing_seed)?;
+                    current.event_state = PendingSimpleGenesisEvent::EventPinned {
+                        event_yaml: event_yaml.clone(),
+                        signing_seed: proposed_signing_seed.clone(),
+                    };
+                    PinnedSimpleGenesisEvent {
+                        event_yaml: event_yaml.clone(),
+                        signing_seed: proposed_signing_seed.clone(),
+                    }
+                }
+                PendingSimpleGenesisEvent::EventPinned {
+                    event_yaml,
+                    signing_seed,
+                } => PinnedSimpleGenesisEvent {
+                    event_yaml,
+                    signing_seed,
+                },
             };
-            *captured.borrow_mut() = Some(event_yaml);
+            *captured.borrow_mut() = Some(pinned);
             encode_pending_simple_genesis(&current)
         },
     )
@@ -197,6 +272,17 @@ pub(crate) async fn persist_simple_genesis_event(
     selected.borrow_mut().take().ok_or_else(|| {
         NookError::IndexedDb("Pending Simple genesis event produced no result.".to_owned())
     })
+}
+
+fn validate_genesis_signing_seed(event_yaml: &str, signing_seed: &str) -> Result<(), NookError> {
+    let event = nook_core::parse_event_storage_bytes(event_yaml.as_bytes())?;
+    let signing = nook_core::SigningIdentity::from_seed_hex_stored(signing_seed)?;
+    if event.body.actor_signing_public_key != signing.public_key() {
+        return Err(NookError::Database(
+            "Pinned Simple genesis event does not match the stored signing seed.".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) async fn clear_pending_simple_genesis(
@@ -318,9 +404,20 @@ mod tests {
         clear_identity_directory_for_test().await?;
         let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
         let pending = begin_or_resume_simple_genesis(&app_key, "Personal").await?;
-        let first = persist_simple_genesis_event(&pending, "first-event\n".to_owned()).await?;
-        let resumed = persist_simple_genesis_event(&pending, "other-event\n".to_owned()).await?;
-        assert_eq!(resumed, first);
+        let first = persist_simple_genesis_event(
+            &pending,
+            "first-event\n".to_owned(),
+            "first-seed".to_owned(),
+        )
+        .await?;
+        let resumed = persist_simple_genesis_event(
+            &pending,
+            "other-event\n".to_owned(),
+            "other-seed".to_owned(),
+        )
+        .await?;
+        assert_eq!(resumed.event_yaml, first.event_yaml);
+        assert_eq!(resumed.signing_seed, first.signing_seed);
         clear_identity_directory_for_test().await
     }
 

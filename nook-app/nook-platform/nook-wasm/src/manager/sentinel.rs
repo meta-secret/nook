@@ -20,7 +20,7 @@ use crate::{
     NookSecretRecord, NookSentinelGenesisStatus, NookSentinelStoredDeliverySummary,
     NookSentinelUnlockSessionStatus,
 };
-use identity_association::StoredSentinelGenesisDelivery;
+use identity_association::{SentinelDeliveryIdentityBinding, StoredSentinelGenesisDelivery};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -61,7 +61,9 @@ impl NookVaultManager {
         let stored = StoredSentinelGenesisDelivery {
             request: package.request.clone(),
             delivery: package.delivery.clone(),
-            identity_id: Some(identity_id.clone()),
+            identity_binding: SentinelDeliveryIdentityBinding::Bound {
+                identity_id: identity_id.clone(),
+            },
         };
         identity_association::persist_delivery_identity_binding(&stored, &identity).await?;
         save_auth_providers(&identity, &accepted.provider_snapshot).await?;
@@ -466,7 +468,9 @@ impl NookVaultManager {
         let stored = StoredSentinelGenesisDelivery {
             request,
             delivery: delivery.clone(),
-            identity_id: Some(identity_id.clone()),
+            identity_binding: SentinelDeliveryIdentityBinding::Bound {
+                identity_id: identity_id.clone(),
+            },
         };
         identity_association::persist_delivery_identity_binding(&stored, &identity).await?;
 

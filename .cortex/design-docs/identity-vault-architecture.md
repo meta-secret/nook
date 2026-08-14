@@ -82,13 +82,14 @@ Verified connect completion removes the marker with a compare-and-delete
 transaction.
 An older tab cannot delete a newer genesis marker.
 The marker owns the genesis timestamp and complete signed event lifecycle.
-`eventState` is either `awaiting-event` or `event-pinned`. The pinned variant
-owns the signed event in `eventYaml` before the first event-log write. Retries
-reuse those exact bytes because encrypted DEK envelopes are randomized.
-Legacy markers without `createdAt` use the Unix epoch timestamp. Legacy markers
-without `eventState` decode as `awaiting-event`. The preceding top-level
-`eventYaml` field migrates into `eventState.event-pinned`. A successful read
-rewrites either legacy shape in the current schema within the same transaction.
+`eventState` is `awaiting-event`, `legacy-event-pinned`, or `event-pinned`.
+The current pinned variant owns the signed `eventYaml` and matching
+`signingSeed` before the first event-log write. Competing tabs therefore reuse
+one signer and one event even though encrypted DEK envelopes are randomized.
+Legacy markers without `createdAt` use the Unix epoch timestamp. Markers without
+`eventState` decode as `awaiting-event`. A preceding top-level `eventYaml`, or
+an `event-pinned` state without `signingSeed`, becomes `legacy-event-pinned`.
+That state upgrades only after the durable seed matches the pinned event signer.
 
 Recovery clears identity ownership but preserves retired app IDs. Every
 app-key operation rejects a retired ID. Atomic updates therefore prevent a
@@ -97,11 +98,15 @@ Before recovery mutates IndexedDB, the initiating tab quiesces storage work in
 every open Nook tab. It then serializes its own reset through the storage queue.
 
 Security-epoch rotation stores `storeId`, `previousKeyEpoch`,
-`previousCheckpoint`, and `keyEpoch` at
+`previousCheckpoint`, `keyEpoch`, and a named `checkpointState` at
 `pending_identity_reconciliation_v1:{store_id}` before installing rotated keys.
 Each identity DEK grant stores its committed key epoch.
-Reconciliation is a compare-and-swap from the previous epoch to the new epoch.
-An idempotent retry at the new epoch succeeds. An older observation fails.
+The initial `awaiting-checkpoint` state cannot authorize reconciliation.
+After the epoch checkpoint event is durable, the marker changes to `committed`
+and owns that exact event ID. Reconciliation is a compare-and-swap from the
+previous epoch to the committed epoch and checkpoint. An idempotent retry at
+the new epoch succeeds. An older epoch observation fails. Ordinary event heads
+may advance within the same key epoch without changing the DEK generation.
 Successful directory reconciliation clears that marker.
 Any later verified connect repeats the idempotent reconciliation and clears a
 marker left by an interrupted post-commit update.
@@ -109,12 +114,13 @@ The marker is local retry state and is safe for current builds to delete only
 after successful reconciliation.
 
 Verified Sentinel delivery records use
-`sentinel_genesis_share:{store_id}:{device_id}`. New records include an
-`identityId` that names the directory owner of the Sentinel vault. Legacy
-records without this field are accepted only when their app key identifies one
+`sentinel_genesis_share:{store_id}:{device_id}`. New records include a named
+`identityBinding`; its `bound` variant owns the required `identityId` naming
+the Sentinel vault's directory owner. Missing legacy bindings decode as
+`legacy-unbound` and are accepted only when their app key identifies one
 unambiguous local identity.
 A successful legacy read validates the relationship.
-It associates the vault and rewrites the delivery with `identityId`.
+It associates the vault and rewrites the delivery with a `bound` identity.
 If an association commits but delivery persistence is interrupted, retry
 recovers the validated owner from the directory before rewriting the delivery.
 

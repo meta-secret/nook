@@ -127,7 +127,7 @@ impl IdentityVaultDek {
             (
                 IdentityVaultDekEpoch::Known {
                     key_epoch: current_epoch,
-                    checkpoint: current_checkpoint,
+                    ..
                 },
                 IdentityVaultDekEpochUpdate::Observe {
                     key_epoch:
@@ -136,9 +136,10 @@ impl IdentityVaultDek {
                             checkpoint,
                         },
                 },
-            ) if current_epoch == key_epoch && current_checkpoint == checkpoint => {
-                self.key_epoch.clone()
-            }
+            ) if current_epoch == key_epoch => IdentityVaultDekEpoch::Known {
+                key_epoch: key_epoch.clone(),
+                checkpoint: checkpoint.clone(),
+            },
             (
                 IdentityVaultDekEpoch::LegacyUnknown,
                 IdentityVaultDekEpochUpdate::Rotate {
@@ -622,6 +623,49 @@ mod tests {
         assert_eq!(
             identity.open_or_generate_vault_dek(&app_key, store)?,
             rotated
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn same_dek_epoch_accepts_an_advanced_event_checkpoint() -> anyhow::Result<()> {
+        let app_key = AppKey::generate()?;
+        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let store = StoreId::parse("store_abcdefghijk")?;
+        let keys = identity.generate_vault_dek(store.clone())?;
+        let key_epoch = Sha256Hex::parse(&"1".repeat(64))?;
+        let first_checkpoint = Sha256Hex::parse(&"2".repeat(64))?;
+        let advanced_checkpoint = Sha256Hex::parse(&"3".repeat(64))?;
+        let first = reconciliation_for_keys(
+            &app_key,
+            &keys,
+            IdentityVaultDekEpochUpdate::Rotate {
+                previous_key_epoch: key_epoch.clone(),
+                previous_checkpoint: key_epoch.clone(),
+                key_epoch: key_epoch.clone(),
+                checkpoint: first_checkpoint,
+            },
+        )?;
+        identity.reconcile_legacy_vault_member(&app_key, &store, first)?;
+
+        let advanced = reconciliation_for_keys(
+            &app_key,
+            &keys,
+            IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: IdentityVaultDekEpoch::Known {
+                    key_epoch: key_epoch.clone(),
+                    checkpoint: advanced_checkpoint.clone(),
+                },
+            },
+        )?;
+        identity.reconcile_legacy_vault_member(&app_key, &store, advanced)?;
+
+        assert_eq!(
+            identity.vault_dek(&store).map(|dek| &dek.key_epoch),
+            Some(&IdentityVaultDekEpoch::Known {
+                key_epoch,
+                checkpoint: advanced_checkpoint,
+            })
         );
         Ok(())
     }

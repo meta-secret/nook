@@ -108,6 +108,18 @@ impl NookVaultManager {
             members_checkpoint_hash: prepared.members_checkpoint_hash,
         }])
         .await?;
+        let checkpoint = self.event_log.heads.last().ok_or_else(|| {
+            NookError::Database(
+                "Security epoch checkpoint did not produce an event head.".to_owned(),
+            )
+        })?;
+        let checkpoint = nook_core::Sha256Hex::parse(checkpoint)?;
+        crate::storage::identity_record::commit_identity_reconciliation_checkpoint(
+            &store_id,
+            &key_epoch,
+            &checkpoint,
+        )
+        .await?;
         let identity = self.device_identity()?;
         self.ensure_identity_after_connect(&identity).await?;
         crate::storage::identity_record::clear_identity_reconciliation_pending(&store_id).await

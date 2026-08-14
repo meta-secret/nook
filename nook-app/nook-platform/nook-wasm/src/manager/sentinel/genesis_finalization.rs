@@ -1,5 +1,5 @@
 use super::super::{CeremonyState, NookVaultManager, VaultNameState};
-use super::StoredSentinelGenesisDelivery;
+use super::{SentinelDeliveryIdentityBinding, StoredSentinelGenesisDelivery};
 use crate::storage::indexed_db::{
     clear_sentinel_genesis_finalization_pending, load_sentinel_genesis_finalization_pending,
     save_sentinel_genesis_finalization_pending, save_sentinel_genesis_share_delivery,
@@ -248,7 +248,9 @@ impl NookVaultManager {
         let stored_json = serde_json::to_string(&StoredSentinelGenesisDelivery {
             request: pending.request.clone(),
             delivery: own_delivery.clone(),
-            identity_id: Some(identity_id.clone()),
+            identity_binding: SentinelDeliveryIdentityBinding::Bound {
+                identity_id: identity_id.clone(),
+            },
         })
         .map_err(|error| NookError::Serialization(error.to_string()))?;
         save_sentinel_genesis_share_delivery(

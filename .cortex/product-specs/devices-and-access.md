@@ -70,12 +70,14 @@ The record contains `storeId`, `identityId`, `createdAt`, and `eventState`.
 It is durable before DEK creation and survives reloads.
 Successful verified connect removes only the matching marker.
 Legacy records without `createdAt` use the Unix epoch timestamp.
-`eventState` is either `awaiting-event` or `event-pinned`. The pinned variant
-owns the complete signed genesis event in `eventYaml` before its first
-event-log write. Retries reuse those exact bytes. A legacy marker without
-`eventState` is explicitly treated as `awaiting-event`. The preceding schema's
-top-level `eventYaml` is migrated into the `event-pinned` variant. Reading
-either legacy shape rewrites the current schema atomically.
+`eventState` is `awaiting-event`, `legacy-event-pinned`, or `event-pinned`.
+The current pinned variant owns both the complete signed genesis event in
+`eventYaml` and its matching `signingSeed` before the first event-log write.
+Retries reuse that exact pair. A legacy marker without `eventState` is treated
+as `awaiting-event`. A preceding top-level `eventYaml`, or an `event-pinned`
+state without `signingSeed`, migrates to `legacy-event-pinned`. It upgrades to
+the current pinned state only after the durable seed is verified against the
+event signer.
 
 Destructive local device recovery keeps retired app IDs in the directory.
 Atomic directory updates reject those app keys. This prevents a stale browser
@@ -85,12 +87,18 @@ initiating tab's storage queue.
 
 Security-epoch retry state uses
 `pending_identity_reconciliation_v1:{store_id}`.
-Its value pins `storeId`, `previousKeyEpoch`, `previousCheckpoint`, and
-`keyEpoch`.
+Its value pins `storeId`, `previousKeyEpoch`, `previousCheckpoint`, `keyEpoch`,
+and a named `checkpointState`.
 Each identity-owned Simple vault DEK also stores its committed key epoch.
-The app writes retry state before installing rotated keys and removes it only
-after the identity directory compare-and-swap succeeds. Stale observations
-cannot replace envelopes from a newer epoch.
+The app writes `awaiting-checkpoint` before installing rotated keys. It changes
+that state to `committed` with the exact checkpoint event ID only after the
+event is durable. Reconciliation consumes only that exact epoch and checkpoint.
+The marker is removed only after the identity directory compare-and-swap
+succeeds. Stale observations cannot replace envelopes from a newer epoch.
+
+Sentinel delivery records use a named `identityBinding`. Current records use
+`bound` with a required `identityId`. Missing legacy bindings decode as
+`legacy-unbound` and resolve only through one unambiguous app-key relationship.
 
 Sentinel finalization uses `sentinel_genesis_finalization_pending`.
 Its JSON payload contains `storeId`, `identityBinding`, vault metadata, the

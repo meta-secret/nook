@@ -5,7 +5,7 @@ use super::{
     fetch_github_event, fetch_icloud_event, iso_timestamp, list_drive_event_ids,
     list_github_event_ids, list_icloud_event_ids, load_local_event_store,
     put_drive_event_if_absent, put_github_event_if_absent, put_icloud_event_if_absent,
-    save_event_bytes, save_heads,
+    save_event_bytes, save_heads, save_signing_seed,
 };
 
 fn is_github_event_missing(message: &str) -> bool {
@@ -201,9 +201,15 @@ impl NookVaultManager {
         let bytes = if let Some(pending) = pending {
             let proposed_yaml = String::from_utf8(proposed_bytes)
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
-            crate::storage::identity_record::persist_simple_genesis_event(pending, proposed_yaml)
-                .await?
-                .into_bytes()
+            let pinned = crate::storage::identity_record::persist_simple_genesis_event(
+                pending,
+                proposed_yaml,
+                self.event_log.signing_seed.clone(),
+            )
+            .await?;
+            self.event_log.signing_seed.clone_from(&pinned.signing_seed);
+            save_signing_seed(&pinned.signing_seed).await?;
+            pinned.event_yaml.into_bytes()
         } else {
             proposed_bytes
         };
