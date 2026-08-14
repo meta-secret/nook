@@ -31,9 +31,14 @@ enum PendingIdentityReconciliationProgress {
     },
 }
 
-pub(crate) struct PendingIdentityRotation {
-    pub(crate) plan_envelope: nook_core::AgeArmoredCiphertext,
-    pub(crate) key_epoch: Option<nook_core::IdentityVaultEventId>,
+pub(crate) enum PendingIdentityRotation {
+    Prepared {
+        plan_envelope: nook_core::AgeArmoredCiphertext,
+    },
+    EpochCommitted {
+        key_epoch: nook_core::IdentityVaultEventId,
+        plan_envelope: nook_core::AgeArmoredCiphertext,
+    },
 }
 
 pub(super) struct IdentityEpochResolution {
@@ -125,17 +130,14 @@ pub(crate) async fn load_pending_identity_rotation(
     }
     Ok(match pending.progress {
         PendingIdentityReconciliationProgress::Prepared { plan_envelope } => {
-            Some(PendingIdentityRotation {
-                plan_envelope,
-                key_epoch: None,
-            })
+            Some(PendingIdentityRotation::Prepared { plan_envelope })
         }
         PendingIdentityReconciliationProgress::EpochCommitted {
             key_epoch,
             plan_envelope,
-        } => Some(PendingIdentityRotation {
+        } => Some(PendingIdentityRotation::EpochCommitted {
             plan_envelope,
-            key_epoch: Some(key_epoch),
+            key_epoch,
         }),
         PendingIdentityReconciliationProgress::Committed { .. } => None,
     })
@@ -409,13 +411,23 @@ mod browser_tests {
         let prepared = load_pending_identity_rotation(&store_id)
             .await?
             .ok_or_else(|| NookError::IndexedDb("Prepared rotation disappeared.".to_owned()))?;
-        assert_eq!(prepared.plan_envelope, plan_envelope);
-        assert_eq!(prepared.key_epoch, None);
+        assert!(matches!(
+            prepared,
+            PendingIdentityRotation::Prepared {
+                plan_envelope: stored
+            } if stored == plan_envelope
+        ));
         commit_identity_reconciliation_epoch(&store_id, &key_epoch).await?;
         let committed = load_pending_identity_rotation(&store_id)
             .await?
             .ok_or_else(|| NookError::IndexedDb("Committed epoch disappeared.".to_owned()))?;
-        assert_eq!(committed.key_epoch, Some(key_epoch.clone()));
+        assert!(matches!(
+            committed,
+            PendingIdentityRotation::EpochCommitted {
+                key_epoch: stored,
+                ..
+            } if stored == key_epoch
+        ));
         let result = resolve_identity_epoch(
             &store_id,
             nook_core::IdentityVaultDekEpoch::Known {

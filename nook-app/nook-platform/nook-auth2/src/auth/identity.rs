@@ -391,7 +391,7 @@ impl IdentityRecord {
         &mut self,
         app_key: &AppKey,
         store_id: &StoreId,
-        reconciliation: IdentityVaultDekReconciliation,
+        reconciliation: &IdentityVaultDekReconciliation,
     ) -> MultiDeviceResult<()> {
         let existing = self
             .members
@@ -414,49 +414,15 @@ impl IdentityRecord {
             })?;
         let vault_dek = &self.vault_deks[vault_dek_index];
         let next_epoch = vault_dek.next_epoch(&reconciliation.epoch_update)?;
-        let secrets_entry = vault_dek
-            .secrets_envelopes
-            .iter()
-            .position(|entry| entry.app_id == *app_key.app_id());
-        let members_entry = vault_dek
-            .members_envelopes
-            .iter()
-            .position(|entry| entry.app_id == *app_key.app_id());
-        match (secrets_entry, members_entry) {
-            (Some(secrets_index), Some(members_index)) => {
-                if vault_dek.secrets_envelopes[secrets_index].envelope
-                    != reconciliation.secrets_envelope
-                    || vault_dek.members_envelopes[members_index].envelope
-                        != reconciliation.members_envelope
-                    || vault_dek.key_epoch != next_epoch
-                {
-                    let vault_dek = &mut self.vault_deks[vault_dek_index];
-                    vault_dek.secrets_envelopes[secrets_index].envelope =
-                        reconciliation.secrets_envelope;
-                    vault_dek.members_envelopes[members_index].envelope =
-                        reconciliation.members_envelope;
-                    vault_dek.key_epoch = next_epoch;
-                    self.control_epoch = self.control_epoch.saturating_add(1);
-                }
-            }
-            (None, None) => {
-                let vault_dek = &mut self.vault_deks[vault_dek_index];
-                vault_dek.secrets_envelopes.push(MemberDekEnvelope {
-                    app_id: app_key.app_id().clone(),
-                    envelope: reconciliation.secrets_envelope,
-                });
-                vault_dek.members_envelopes.push(MemberDekEnvelope {
-                    app_id: app_key.app_id().clone(),
-                    envelope: reconciliation.members_envelope,
-                });
-                vault_dek.key_epoch = next_epoch;
-                self.control_epoch = self.control_epoch.saturating_add(1);
-            }
-            _ => {
-                return Err(MultiDeviceError::InvalidDeviceIdentity(
-                    "vault DEK envelope sets are inconsistent".to_owned(),
-                ));
-            }
+        let keys = VaultKeys {
+            secrets_key: app_key.decrypt_envelope(&reconciliation.secrets_envelope)?,
+            members_key: app_key.decrypt_envelope(&reconciliation.members_envelope)?,
+        };
+        let mut rewrapped = wrap_vault_keys_for_members(&keys, &self.members, store_id.clone())?;
+        rewrapped.key_epoch = next_epoch;
+        if *vault_dek != rewrapped {
+            self.vault_deks[vault_dek_index] = rewrapped;
+            self.control_epoch = self.control_epoch.saturating_add(1);
         }
         Ok(())
     }
@@ -564,7 +530,14 @@ mod tests {
     #[test]
     fn identity_generates_dek_for_members() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
+        let second_key = AppKey::generate()?;
         let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        identity.add_member(IdentityMember {
+            app_id: second_key.app_id().clone(),
+            auth_id: second_key.auth_id(),
+            public_key: second_key.public_key(),
+            label: None,
+        })?;
         let store = StoreId::parse("store_abcdefghijk")?;
         let keys = identity.generate_vault_dek(store.clone())?;
         let vault_dek = identity
@@ -579,7 +552,7 @@ mod tests {
         identity.reconcile_legacy_vault_member(
             &app_key,
             &store,
-            IdentityVaultDekReconciliation {
+            &IdentityVaultDekReconciliation {
                 secrets_envelope: crate::encrypt_for_recipient(
                     rotated.secrets_key.as_str().as_bytes(),
                     &app_key.public_key(),
@@ -595,7 +568,11 @@ mod tests {
             },
         )?;
         assert_eq!(
-            identity.open_or_generate_vault_dek(&app_key, store)?,
+            identity.open_or_generate_vault_dek(&app_key, store.clone())?,
+            rotated
+        );
+        assert_eq!(
+            identity.open_or_generate_vault_dek(&second_key, store)?,
             rotated
         );
         Ok(())
@@ -622,8 +599,8 @@ mod tests {
                 checkpoint: current_checkpoint,
             },
         )?;
-        identity.reconcile_legacy_vault_member(&app_key, &store, rotated_reconciliation.clone())?;
-        identity.reconcile_legacy_vault_member(&app_key, &store, rotated_reconciliation)?;
+        identity.reconcile_legacy_vault_member(&app_key, &store, &rotated_reconciliation)?;
+        identity.reconcile_legacy_vault_member(&app_key, &store, &rotated_reconciliation)?;
 
         let stale = reconciliation_for_keys(
             &app_key,
@@ -637,7 +614,7 @@ mod tests {
             },
         )?;
         assert!(matches!(
-            identity.reconcile_legacy_vault_member(&app_key, &store, stale),
+            identity.reconcile_legacy_vault_member(&app_key, &store, &stale),
             Err(MultiDeviceError::StaleVaultDekEpoch { .. })
         ));
         assert_eq!(
@@ -666,7 +643,7 @@ mod tests {
                 checkpoint: first_checkpoint.clone(),
             },
         )?;
-        identity.reconcile_legacy_vault_member(&app_key, &store, first)?;
+        identity.reconcile_legacy_vault_member(&app_key, &store, &first)?;
 
         let advanced = reconciliation_for_keys(
             &app_key,
@@ -679,7 +656,7 @@ mod tests {
                 checkpoint_ancestors: vec![first_checkpoint.clone()],
             },
         )?;
-        identity.reconcile_legacy_vault_member(&app_key, &store, advanced)?;
+        identity.reconcile_legacy_vault_member(&app_key, &store, &advanced)?;
 
         let stale = reconciliation_for_keys(
             &app_key,
@@ -693,7 +670,7 @@ mod tests {
             },
         )?;
         assert!(matches!(
-            identity.reconcile_legacy_vault_member(&app_key, &store, stale),
+            identity.reconcile_legacy_vault_member(&app_key, &store, &stale),
             Err(MultiDeviceError::StaleVaultDekEpoch { .. })
         ));
 

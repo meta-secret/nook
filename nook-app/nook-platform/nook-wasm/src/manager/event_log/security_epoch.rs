@@ -221,10 +221,19 @@ impl NookVaultManager {
         else {
             return Ok(false);
         };
-        let plan_json = Zeroizing::new(identity.open_utf8(&pending.plan_envelope)?);
+        let (plan_envelope, persisted_key_epoch) = match pending {
+            crate::storage::identity_record::PendingIdentityRotation::Prepared {
+                plan_envelope,
+            } => (plan_envelope, None),
+            crate::storage::identity_record::PendingIdentityRotation::EpochCommitted {
+                key_epoch,
+                plan_envelope,
+            } => (plan_envelope, Some(key_epoch)),
+        };
+        let plan_json = Zeroizing::new(identity.open_utf8(&plan_envelope)?);
         let plan: SecurityEpochRecoveryPlan = serde_json::from_str(&plan_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
-        self.execute_security_epoch_recovery_plan(plan, pending.key_epoch)
+        self.execute_security_epoch_recovery_plan(plan, persisted_key_epoch)
             .await?;
         Ok(true)
     }

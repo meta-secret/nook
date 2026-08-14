@@ -159,7 +159,7 @@ impl IdentityDirectory {
             self.identities[index].reconcile_legacy_vault_member(
                 app_key,
                 &store_id,
-                crate::IdentityVaultDekReconciliation {
+                &crate::IdentityVaultDekReconciliation {
                     secrets_envelope,
                     members_envelope,
                     epoch_update,
@@ -193,7 +193,7 @@ impl IdentityDirectory {
         &mut self,
         app_key: &AppKey,
         store_id: &StoreId,
-        reconciliation: crate::IdentityVaultDekReconciliation,
+        reconciliation: &crate::IdentityVaultDekReconciliation,
     ) -> MultiDeviceResult<IdentityId> {
         self.ensure_app_key_active(app_key)?;
         let identity = self

@@ -10,13 +10,14 @@ use crate::{NookError, storage::open_nook_database};
 
 mod reconciliation;
 mod simple_genesis;
+pub(crate) use reconciliation::{
+    PendingIdentityRotation, commit_identity_reconciliation_checkpoint,
+    commit_identity_reconciliation_epoch, load_pending_identity_rotation,
+    mark_identity_reconciliation_pending,
+};
 use reconciliation::{
     clear_consumed_identity_reconciliation, clear_pending_identity_reconciliation_for_recovery,
     resolve_identity_epoch,
-};
-pub(crate) use reconciliation::{
-    commit_identity_reconciliation_checkpoint, commit_identity_reconciliation_epoch,
-    load_pending_identity_rotation, mark_identity_reconciliation_pending,
 };
 pub(crate) use simple_genesis::{
     PendingSimpleGenesis, begin_or_resume_simple_genesis, clear_pending_simple_genesis,
@@ -204,11 +205,6 @@ pub(crate) async fn enroll_authenticated_app_key_for_vault_creation(
 ) -> Result<nook_core::IdentityRecord, NookError> {
     let app_key = app_key.clone();
     update_identity_directory(move |directory| {
-        if let Ok(selected) = directory.selected()
-            && (!selected.vault_deks.is_empty() || !selected.sentinel_vaults.is_empty())
-        {
-            return Ok(selected.clone());
-        }
         let identity_id = directory
             .enroll_selected_app_key_for_vault_creation(&app_key, "Personal")
             .map_err(|error| NookError::Database(error.to_string()))?;
