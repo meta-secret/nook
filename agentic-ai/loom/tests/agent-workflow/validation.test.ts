@@ -459,6 +459,15 @@ describe('static agent workflow validation', () => {
     }
   });
 
+  test('does not overlap direct globs in different directories', () => {
+    const pair = {
+      first: 'docs/*.md',
+      second: 'docs/nested/*.ts',
+    };
+
+    expect(taskResourcePatternsOverlap(pair)).toBe(false);
+  });
+
   test('overlaps recursive basename claims with matching names and extensions', () => {
     const overlappingPairs = [
       { first: 'nook-app/Taskfile.yml', second: '**/Taskfile.yml' },

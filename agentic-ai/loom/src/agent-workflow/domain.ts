@@ -270,18 +270,12 @@ function directGlobOverlaps(pair: ResourceDescriptorPair): boolean {
     first.kind === ResourceClaimKind.DirectGlob &&
     second.kind === ResourceClaimKind.DirectGlob
   ) {
-    if (first.path === second.path) {
-      const basenames: TaskResourcePatternPair = {
-        first: first.basename,
-        second: second.basename,
-      };
-      return globBasenamesOverlap(basenames);
-    }
-    const paths: TaskResourcePatternPair = {
-      first: first.path,
-      second: second.path,
+    if (first.path !== second.path) return false;
+    const basenames: TaskResourcePatternPair = {
+      first: first.basename,
+      second: second.basename,
     };
-    return pathsAreNested(paths);
+    return globBasenamesOverlap(basenames);
   }
   const glob = first.kind === ResourceClaimKind.DirectGlob ? first : second;
   const concrete = glob === first ? second : first;
