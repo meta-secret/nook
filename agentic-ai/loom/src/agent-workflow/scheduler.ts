@@ -18,6 +18,7 @@ import type {
 } from './domain.ts';
 import type { WorkflowEventWithoutMetadata } from './events.ts';
 import { WorkflowJournal } from './journal.ts';
+import { TaskStopReason, UnconfirmedTaskTeardownError } from './runtime.ts';
 import type {
   AgentWorkflowTaskInvocation,
   LoomLeafWorkflowTaskInvocation,
@@ -411,6 +412,9 @@ async function executeTask<TTask extends string, TAgent extends string>(
     };
     terminal = await withTimeout(timedExecution);
   } catch (error) {
+    if (error instanceof UnconfirmedTaskTeardownError) {
+      throw error;
+    }
     terminal = {
       kind: context.signal.aborted
         ? TaskTerminalKind.Cancelled
@@ -447,18 +451,20 @@ async function withTimeout<TTask extends string, TAgent extends string>(
   execution: TimedExecution<TTask, TAgent>,
 ): Promise<TaskTerminal<TTask>> {
   const timeoutControl = createTimeout(execution);
-  const runtimeCompletion = execution.runtime.execute(execution.invocation);
-  const consumedRuntimeCompletion = runtimeCompletion.then(
-    (terminal) => terminal,
-    () => false as const,
-  );
+  const attempt = execution.runtime.start(execution.invocation);
+  const runtimeCompletion = attempt.completion;
+  void runtimeCompletion.catch(() => false);
   try {
     const terminal = await Promise.race([
       runtimeCompletion,
       timeoutControl.terminal,
     ]);
     if (terminal.kind === TaskTerminalKind.TimedOut) {
-      await waitForCancellationBarrier(consumedRuntimeCompletion);
+      const stopRequest = {
+        reason: TaskStopReason.Timeout,
+        hardDeadlineMs: TASK_TEARDOWN_HARD_DEADLINE_MS,
+      } as const;
+      await attempt.stop(stopRequest);
     }
     return terminal;
   } finally {
@@ -467,21 +473,7 @@ async function withTimeout<TTask extends string, TAgent extends string>(
   }
 }
 
-const TASK_CANCELLATION_BARRIER_MS = 250;
-
-async function waitForCancellationBarrier<TTask extends string>(
-  runtimeCompletion: Promise<TaskTerminal<TTask> | false>,
-): Promise<void> {
-  let barrierHandle: ReturnType<typeof setTimeout> | false = false;
-  const barrier = new Promise<false>((resolve) => {
-    barrierHandle = setTimeout(
-      () => resolve(false),
-      TASK_CANCELLATION_BARRIER_MS,
-    );
-  });
-  await Promise.race([runtimeCompletion, barrier]);
-  if (barrierHandle) clearTimeout(barrierHandle);
-}
+const TASK_TEARDOWN_HARD_DEADLINE_MS = 10_000;
 
 type TimeoutControl<TTask extends string> = {
   readonly terminal: Promise<TaskTerminal<TTask>>;

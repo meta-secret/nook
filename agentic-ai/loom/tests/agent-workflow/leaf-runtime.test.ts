@@ -98,7 +98,8 @@ test('runs the mechanical audit from the invocation working directory', async ()
         includeDensityLint: false,
       },
     };
-    const terminal = await runtime.execute(invocation);
+    const attempt = runtime.start(invocation);
+    const terminal = await attempt.completion;
 
     expect(terminal.kind).toBe(TaskTerminalKind.Completed);
     if (terminal.kind !== TaskTerminalKind.Completed) {

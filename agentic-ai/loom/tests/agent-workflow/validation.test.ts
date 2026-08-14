@@ -43,6 +43,17 @@ type ExclusiveBranchWorkflow = StaticAgentWorkflowDefinition<
   never
 >;
 
+enum SharedOutcomeTask {
+  Root = 'root',
+  Shared = 'shared',
+  CompletedOnly = 'completed-only',
+}
+type SharedOutcomeWorkflow = StaticAgentWorkflowDefinition<
+  SharedOutcomeTask,
+  never,
+  never
+>;
+
 type WorkflowIssueAssertion = {
   readonly validation: WorkflowValidation;
   readonly kind: WorkflowValidationIssueKind;
@@ -418,6 +429,66 @@ describe('static agent workflow validation', () => {
     };
 
     expect(validation).toEqual(expectedValidation);
+  });
+
+  test('rejects conflicts when one outcome shares a descendant', () => {
+    const leafExecution = {
+      kind: WorkflowExecutorKind.LoomLeaf,
+      leaf: LoomLeafKind.VerifyGitBaseline,
+    } as const;
+    const workflow: SharedOutcomeWorkflow = {
+      name: CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.name,
+      version: 'shared-outcome-test',
+      entry: SharedOutcomeTask.Root,
+      taskNames: [
+        SharedOutcomeTask.Root,
+        SharedOutcomeTask.Shared,
+        SharedOutcomeTask.CompletedOnly,
+      ],
+      agentNames: [],
+      joinNames: [],
+      agents: {},
+      tasks: {
+        [SharedOutcomeTask.Root]: {
+          name: SharedOutcomeTask.Root,
+          execution: leafExecution,
+          completed: {
+            kind: TaskTargetKind.Parallel,
+            tasks: [SharedOutcomeTask.Shared, SharedOutcomeTask.CompletedOnly],
+          },
+          failed: {
+            kind: TaskTargetKind.Task,
+            task: SharedOutcomeTask.Shared,
+          },
+          resources: { read: [], write: [] },
+          timeoutMs: 1_000,
+        },
+        [SharedOutcomeTask.Shared]: {
+          name: SharedOutcomeTask.Shared,
+          execution: leafExecution,
+          completed: noTasks,
+          failed: noTasks,
+          resources: { read: ['docs/README.md'], write: [] },
+          timeoutMs: 1_000,
+        },
+        [SharedOutcomeTask.CompletedOnly]: {
+          name: SharedOutcomeTask.CompletedOnly,
+          execution: leafExecution,
+          completed: noTasks,
+          failed: noTasks,
+          resources: { read: [], write: ['docs/README.md'] },
+          timeoutMs: 1_000,
+        },
+      },
+      joins: {},
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    const assertion: WorkflowIssueAssertion = {
+      validation,
+      kind: WorkflowValidationIssueKind.ResourceConflict,
+    };
+
+    expectIssue(assertion);
   });
 
   test('supports recursive basename resource claims', () => {

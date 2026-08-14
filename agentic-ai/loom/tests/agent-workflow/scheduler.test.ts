@@ -27,9 +27,12 @@ import { WorkflowJournal } from '../../src/agent-workflow/journal.ts';
 import type { WorkflowJournalConfiguration } from '../../src/agent-workflow/journal.ts';
 import type {
   WorkflowDependencyOutput,
+  WorkflowTaskAttempt,
   WorkflowTaskInvocation,
   WorkflowTaskRuntime,
 } from '../../src/agent-workflow/runtime.ts';
+import type { TaskStopRequest } from '../../src/agent-workflow/runtime.ts';
+import { TaskTeardownKind } from '../../src/agent-workflow/runtime.ts';
 import { runStaticWorkflow } from '../../src/agent-workflow/scheduler.ts';
 import type { StaticWorkflowRunConfiguration } from '../../src/agent-workflow/scheduler.ts';
 
@@ -57,7 +60,14 @@ class ScriptedWorkflowRuntime implements WorkflowTaskRuntime<
     this.failedTask = configuration.failedTask;
   }
 
-  async execute(
+  start(
+    invocation: WorkflowTaskInvocation<CortexAuditTask, CortexAuditAgent>,
+  ): WorkflowTaskAttempt<CortexAuditTask> {
+    const completion = this.execute(invocation);
+    return confirmedAttempt(completion);
+  }
+
+  private async execute(
     invocation: WorkflowTaskInvocation<CortexAuditTask, CortexAuditAgent>,
   ): Promise<TaskTerminal<CortexAuditTask>> {
     this.started.push(invocation.task);
@@ -125,7 +135,14 @@ class LeafOnlyRuntime implements WorkflowTaskRuntime<LeafOnlyTask, never> {
     this.mode = configuration.mode;
   }
 
-  async execute(
+  start(
+    invocation: WorkflowTaskInvocation<LeafOnlyTask, never>,
+  ): WorkflowTaskAttempt<LeafOnlyTask> {
+    const completion = this.execute(invocation);
+    return confirmedAttempt(completion);
+  }
+
+  private async execute(
     invocation: WorkflowTaskInvocation<LeafOnlyTask, never>,
   ): Promise<TaskTerminal<LeafOnlyTask>> {
     this.sawAgentProfile = 'agentProfile' in invocation;
@@ -148,6 +165,18 @@ class LeafOnlyRuntime implements WorkflowTaskRuntime<LeafOnlyTask, never> {
       output,
     };
   }
+}
+
+function confirmedAttempt<TTask extends string>(
+  completion: Promise<TaskTerminal<TTask>>,
+): WorkflowTaskAttempt<TTask> {
+  return {
+    completion,
+    stop: async (_request: TaskStopRequest) => {
+      await completion.catch(() => false);
+      return { kind: TaskTeardownKind.Confirmed };
+    },
+  };
 }
 
 type LeafWorkflowFixtureConfiguration = {
@@ -420,7 +449,7 @@ describe('static workflow scheduler', () => {
     }
   });
 
-  test('returns after a bounded timeout barrier and consumes a late rejection', async () => {
+  test('records timeout only after the runtime confirms teardown', async () => {
     const fixtureRequest: LeafWorkflowFixtureConfiguration = {
       mode: LeafRuntimeMode.RejectAfterCancellationBarrier,
       timeoutMs: 5,
@@ -431,10 +460,10 @@ describe('static workflow scheduler', () => {
       const startedAt = performance.now();
       const terminal = await runStaticWorkflow(fixture.configuration);
       const elapsedMs = performance.now() - startedAt;
+      expect(elapsedMs).toBeGreaterThanOrEqual(450);
       expect(elapsedMs).toBeLessThan(900);
       expect(terminal.kind).toBe(WorkflowTerminalKind.CompletedWithFailures);
       expect(terminal.taskTerminals[0]?.kind).toBe(TaskTerminalKind.TimedOut);
-      await Bun.sleep(300);
     } finally {
       await rm(fixture.runRoot, removeOptions);
     }

@@ -12,6 +12,7 @@ import {
   WorkflowFindingSeverity,
   WorkflowResultKind,
 } from './domain.ts';
+import { TaskTeardownKind, UnconfirmedTaskTeardownError } from './runtime.ts';
 import type {
   CompletedTaskTerminal,
   StaticTaskExecution,
@@ -22,8 +23,10 @@ import type {
 import type {
   AgentTaskRuntime,
   WorkflowTaskInvocation,
+  WorkflowTaskAttempt,
   WorkflowTaskRuntime,
 } from './runtime.ts';
+import type { TaskStopRequest } from './runtime.ts';
 
 export class LocalWorkflowTaskRuntime<
   TTask extends string,
@@ -35,7 +38,35 @@ export class LocalWorkflowTaskRuntime<
     this.agentRuntime = agentRuntime;
   }
 
-  async execute(
+  start(
+    invocation: WorkflowTaskInvocation<TTask, TAgent>,
+  ): WorkflowTaskAttempt<TTask> {
+    const completion = this.execute(invocation);
+    return {
+      completion,
+      stop: async (request: TaskStopRequest) => {
+        let timeoutHandle: ReturnType<typeof setTimeout> | false = false;
+        const deadline = new Promise<false>((resolve) => {
+          timeoutHandle = setTimeout(
+            () => resolve(false),
+            request.hardDeadlineMs,
+          );
+        });
+        const settled = await Promise.race([
+          completion.then(
+            () => true,
+            () => true,
+          ),
+          deadline,
+        ]);
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+        if (!settled) throw new UnconfirmedTaskTeardownError(invocation.task);
+        return { kind: TaskTeardownKind.Confirmed };
+      },
+    };
+  }
+
+  private async execute(
     invocation: WorkflowTaskInvocation<TTask, TAgent>,
   ): Promise<TaskTerminal<TTask>> {
     if (

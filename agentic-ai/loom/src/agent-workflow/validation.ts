@@ -785,9 +785,15 @@ function tasksAreOutcomeExclusive<
     const completedDescendants = collectOutcomeDescendants(completedInspection);
     const failedDescendants = collectOutcomeDescendants(failedInspection);
     const leftCompletedRightFailed =
-      completedDescendants.has(leftNode) && failedDescendants.has(rightNode);
+      completedDescendants.has(leftNode) &&
+      !failedDescendants.has(leftNode) &&
+      failedDescendants.has(rightNode) &&
+      !completedDescendants.has(rightNode);
     const leftFailedRightCompleted =
-      failedDescendants.has(leftNode) && completedDescendants.has(rightNode);
+      failedDescendants.has(leftNode) &&
+      !completedDescendants.has(leftNode) &&
+      completedDescendants.has(rightNode) &&
+      !failedDescendants.has(rightNode);
     if (leftCompletedRightFailed || leftFailedRightCompleted) return true;
   }
   return false;

@@ -54,9 +54,39 @@ export interface WorkflowTaskRuntime<
   TTask extends string,
   TAgent extends string,
 > {
-  execute(
+  start(
     invocation: WorkflowTaskInvocation<TTask, TAgent>,
-  ): Promise<TaskTerminal<TTask>>;
+  ): WorkflowTaskAttempt<TTask>;
+}
+
+export enum TaskStopReason {
+  Timeout = 'timeout',
+  WorkflowCancellation = 'workflow-cancellation',
+}
+
+export type TaskStopRequest = {
+  readonly reason: TaskStopReason;
+  readonly hardDeadlineMs: number;
+};
+
+export enum TaskTeardownKind {
+  Confirmed = 'confirmed',
+}
+
+export type ConfirmedTaskTeardown = {
+  readonly kind: TaskTeardownKind.Confirmed;
+};
+
+export interface WorkflowTaskAttempt<TTask extends string> {
+  readonly completion: Promise<TaskTerminal<TTask>>;
+  stop(request: TaskStopRequest): Promise<ConfirmedTaskTeardown>;
+}
+
+export class UnconfirmedTaskTeardownError extends Error {
+  constructor(task: string) {
+    super(`Task ${task} did not confirm teardown before its hard deadline.`);
+    this.name = 'UnconfirmedTaskTeardownError';
+  }
 }
 
 export type AgentExecutionInvocation<
