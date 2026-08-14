@@ -16,6 +16,11 @@ fn read(path: &str) -> String {
         .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
 }
 
+fn read_fallible(path: &str) -> Result<String> {
+    fs::read_to_string(repository_root().join(path))
+        .with_context(|| format!("failed to read {path}"))
+}
+
 fn docker_stage<'a>(dockerfile: &'a str, stage: &str) -> &'a str {
     let marker = format!(" AS {stage}\n");
     let marker_start = dockerfile
@@ -71,6 +76,62 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
         !remote_tasks.contains("--raw-field \"command="),
         "remote execution must dispatch an allowlisted name, not arbitrary shell"
     );
+}
+
+#[test]
+fn complete_validation_starts_before_non_blocking_review_request() -> Result<()> {
+    let agentic_tasks = read_fallible(".task/agentic-ai.yml")?;
+    let direct_validation = read_fallible(".task/remote-execution.yml")?;
+    let direct_review_position = direct_validation
+        .find("if ! task pr:review PR=\"$REQUESTED_PR\"; then")
+        .context("direct validation must request review without making it a gate")?;
+    let head_recheck_position = direct_validation
+        .find(
+            "pre_review_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
+        )
+        .context("direct validation must recheck the PR head before requesting review")?;
+    let post_review_recheck_position = direct_validation
+        .find(
+            "post_review_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
+        )
+        .context("direct validation must recheck the PR head after requesting review")?;
+    let validation_label_position = direct_validation
+        .find("gh pr edit \"$REQUESTED_PR\" --add-label \"$validation_label\"")
+        .context("direct validation must apply its label")?;
+    assert!(
+        validation_label_position < head_recheck_position
+            && head_recheck_position < direct_review_position
+            && direct_review_position < post_review_recheck_position,
+        "validation must start before the non-blocking exact-head review request"
+    );
+    for required in [
+        "pr:review-local:",
+        "codex review --base origin/main",
+        "pr:review:",
+        "CI_AGENT_CMD=pr-review",
+    ] {
+        assert!(
+            agentic_tasks.contains(required),
+            "review delivery contract missing: {required}"
+        );
+    }
+    assert!(
+        direct_validation.contains("validation is already running"),
+        "review-request failure must not block validation"
+    );
+    assert!(
+        direct_validation.contains(
+            "changed head after validation dispatch; validate the replacement head explicitly.\" >&2\n          exit 2"
+        ),
+        "a head change after dispatch must fail so the replacement head is validated"
+    );
+    assert!(
+        direct_validation.contains(
+            "changed head while requesting review; validate the replacement head explicitly.\" >&2\n          exit 2"
+        ),
+        "a head change during the review request must fail so the replacement head is validated"
+    );
+    Ok(())
 }
 
 #[test]

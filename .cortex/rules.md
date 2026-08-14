@@ -307,15 +307,16 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 >
 > Linear `main` history is a project requirement, not a preference.
 
-> ## ⛔ INSPECT EXISTING FEEDBACK; DO NOT WAIT FOR REVIEWERS
+> ## ⛔ REQUEST CODEX REVIEW; DO NOT DELAY VALIDATION
 >
 > Before merge or handoff, inspect comments and findings that already exist and
 > address every active actionable item, regardless of whether it came from a
 > human or an external service. Reply with the fix, validation, or no-change
 > rationale and resolve each actionable thread. Every external-service review
-> comment already present must be inspected. Codex, Claude, Cursor, CodeRabbit,
-> and all other external reviewers are optional: do not request or wait for them
-> when no feedback is present. Optional review never means optional handling of
+> comment already present must be inspected. Complete validation dispatches
+> checks immediately. It then requests one idempotent exact-head Codex review.
+> Claude, Cursor, CodeRabbit, and other external reviewers remain optional. Do not
+> request or wait for them. Optional review never means optional handling of
 > feedback that already arrived.
 
 > ## ⛔ FORMAT LOCALLY; PRODUCT GATES ON GITHUB ACTIONS ONLY
@@ -324,8 +325,9 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 >
 > 1. **`task loom:pre-push`**
 > 2. **commit**
-> 3. **push**
-> 4. **optional allowlisted `task remote TASK_NAME=<name>` for isolated diagnostics**
+> 3. **advisory `task pr:review-local` before the first owner-authored push**
+> 4. **push**
+> 5. **optional allowlisted `task remote TASK_NAME=<name>` for isolated diagnostics**
 >
 > Heavy builds/tests do not run on the agent machine.
 > Ordinary pushes deliberately do not start the complete PR workflow.
@@ -358,10 +360,16 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
 - **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task.
-- Steps: fetch, branch from `origin/main`, implement, always run Loom pre-push,
-  commit and push/open/update the PR, use focused hosted tasks for useful
-  diagnostics, trigger complete validation at the final boundary, fix failures,
-  address comments and conflicts, require `task pr:ready`, and squash-merge.
+- Required delivery sequence:
+  1. Fetch and branch from `origin/main`.
+  2. Implement and **always run `task loom:pre-push`**.
+  3. Commit and run advisory local Codex review.
+  4. Push or update the PR.
+  5. Use focused hosted diagnostics only when useful.
+  6. Trigger complete PR validation and the exact-head Codex review request at
+     the final boundary.
+  7. Fix failures, comments, and conflicts.
+  8. Require `task pr:ready` and squash-merge automatically.
 - Do not stop at a ready-PR handoff or ask for separate merge permission.
 - Do not run heavy product checks locally.
 - **Finish at implementation PR merge.** A successful squash merge completes normal implementation delivery.
@@ -374,7 +382,15 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   gh pr merge <number> --squash
   ```
   Never use `gh pr merge --merge` or `gh pr merge --rebase`.
-- **Inspect feedback without waiting.** After opening or updating the PR at the final-validation boundary, monitor applicable repository-owned checks (format must already have been host-applied before the push) and inspect feedback already present. Do not request or wait for external reviews. Do not require a local product gate.
+- **Request review without delaying complete validation.**
+  - Run `task pr:review-local` on a coherent local head.
+  - When the head is ready for the final gate, run `task pr:validate`.
+  - It dispatches checks and then requests exact-head Codex review.
+  - Review-request failure does not stop those checks.
+  - Address findings that arrive while checks run.
+  - If none arrive by check completion, continue without waiting.
+  - Do not request or wait for other external reviews.
+  - Do not treat advisory local review as a product gate.
 - **Publish Workbench context after merge.** Follow
   [workflows/issues.md](workflows/issues.md) and
   [workflows/agent-statistics.md](workflows/agent-statistics.md): the task plan

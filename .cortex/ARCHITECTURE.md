@@ -634,11 +634,16 @@ Commands:
 
 - `task pr:preflight`
 - `task pr:review`
+- `task pr:review-local`
 - `task pr:ready`
 
 Review and audit behavior:
 
-- The optional review command posts an idempotent SHA-bound Codex request.
+- The local review command runs advisory Codex review against `origin/main`.
+- The review command posts an idempotent SHA-bound Codex request.
+- Complete validation immediately dispatches repository-owned checks.
+- It then requests exact-head review without making it a gate.
+- Review results are not required for readiness.
 - Audit commands emit machine-readable exact-head state.
 - Audit commands do not wait for an external reviewer.
 - Audit commands never merge a PR.

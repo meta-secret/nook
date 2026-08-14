@@ -111,6 +111,17 @@ test("buildPrAudit reports a dismissed exact-head Codex review without waiting",
   assert.deepEqual(audit.reasons, []);
 });
 
+test("buildPrAudit ignores the automated continuing-owner handoff", async () => {
+  const audit = await buildPrAudit(
+    mockOctokitWithAgentHandoff(),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, true);
+  assert.equal(audit.feedback.substantiveComments, 0);
+});
+
 test("buildPrAudit blocks a lookalike Codex status review", async () => {
   const audit = await buildPrAudit(
     mockOctokit({ codexReview: MockCodexReview.Impostor }),
@@ -232,7 +243,13 @@ enum MockJobConclusion {
   Success = "success",
 }
 
+enum MockAgentHandoff {
+  Excluded = "excluded",
+  Included = "included",
+}
+
 type MockOptions = {
+  agentHandoff: MockAgentHandoff;
   behindBy?: number;
   codexReview?: MockCodexReview;
   nativeConclusion?: MockJobConclusion;
@@ -241,7 +258,25 @@ type MockOptions = {
   unresolvedThreads?: number;
 };
 
-function mockOctokit(options: MockOptions = {}): Octokit {
+type MockOverrides = Omit<MockOptions, "agentHandoff">;
+
+function mockOctokit(overrides: MockOverrides = {}): Octokit {
+  return createMockOctokit({
+    ...overrides,
+    agentHandoff: MockAgentHandoff.Excluded,
+  });
+}
+
+function mockOctokitWithAgentHandoff(
+  overrides: MockOverrides = {},
+): Octokit {
+  return createMockOctokit({
+    ...overrides,
+    agentHandoff: MockAgentHandoff.Included,
+  });
+}
+
+function createMockOctokit(options: MockOptions): Octokit {
   const headSha = "0123456789abcdef0123456789abcdef01234567";
   const pulls = {
     get: async () => ({
@@ -345,6 +380,13 @@ function mockOctokit(options: MockOptions = {}): Octokit {
         {
           body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS",
         },
+        ...(options.agentHandoff === MockAgentHandoff.Included
+          ? [
+              {
+                body: "@octocat this workflow assigned you PR #410. Continue only this PR's recorded scope through review, exact-head validation, and squash merge.",
+              },
+            ]
+          : []),
       ],
     }),
   };

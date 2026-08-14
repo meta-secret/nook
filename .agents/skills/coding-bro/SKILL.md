@@ -7,8 +7,8 @@ description: >-
   contract when UI paths change), commit and push/open the PR, run focused
   allowlisted tasks on GitHub-hosted workers, then explicitly trigger complete
   exact-head PR validation; on failure fix from CI logs, format, push, and
-  trigger again until Nook's PR checks are green, resolve every actionable comment already present
-  without waiting for reviewers, then squash merge; afterward publish the issue
+  trigger again until Nook's PR checks are green, resolve every actionable comment already present,
+  then squash merge; afterward publish the issue
   update, linked worklog, and PR statistics to Nook Workbench. Always follow this
   pipeline for implementation work unless the user explicitly asks for a
   read-only or question-only answer.
@@ -18,7 +18,22 @@ description: >-
 
 **Default workflow for all implementation tasks.** System of record: [`.cortex/workflows/coding-bro.md`](../../.cortex/workflows/coding-bro.md).
 
-Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting. Follow the steps in the cortex doc — fetch, publish the Workbench task plan before implementation, branch, implement, **always `task loom:pre-push`**, commit and push, use `task remote` for focused hosted execution, run `task loom:pr-land` / `task pr:validate` when the head is ready, address and resolve every actionable comment already present, fix loop until exact-head checks are green, squash merge, publish the Workbench issue update/linked worklog/statistics, and report duration. Never request or wait for external reviews/checks. Never run heavy product work locally.
+Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting.
+
+Follow the delivery sequence in the cortex workflow:
+
+1. Fetch and publish the Workbench task plan.
+2. Branch, implement, and run `task loom:pre-push`.
+3. Commit and run advisory local Codex review.
+4. Push and use focused hosted execution when useful.
+5. Trigger complete validation and exact-head Cloud review through Loom.
+6. Resolve actionable feedback while repository-owned checks run.
+7. Fix until exact-head checks and readiness pass.
+8. Squash-merge and publish the Workbench completion records.
+9. Report duration.
+
+Never wait for a Codex result after repository-owned checks finish. Do not
+request other external reviews or checks. Never run heavy product work locally.
 
 Before any mutation, apply
 [agent-feature-ownership](../agent-feature-ownership/SKILL.md). Work only on the
@@ -41,8 +56,8 @@ contract:
 | 2 | Publish `plans/<feature>/<timestamp>-<task>.md`, then branch from `origin/main` |
 | 3 | Implement the published plan |
 | 4 | **Always** `task loom:pre-push` |
-| 5 | Commit + push/open or update PR |
-| 6 | Run focused `task remote` jobs as useful; then `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` |
+| 5 | Commit; run local review; then push/open or update PR. For a harness PR, run local review immediately after handoff |
+| 6 | Run focused `task remote` jobs as useful; then `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` to dispatch validation and request review |
 | 7 | Watch exact-head repository-owned checks and inspect feedback already present |
 | 8–10 | On failure: CI logs → fix → `task loom:pre-push` → commit/push → focused remote proof → explicit validation |
 | 11 | `gh pr merge --squash` when repository checks are green, threads are resolved, and Loom/Task readiness succeeds |

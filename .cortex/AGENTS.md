@@ -486,15 +486,24 @@ Do not make Main completion a prerequisite.
 
 Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 
-## ⛔ Non-negotiable: inspect existing feedback without waiting for reviewers
+## ⛔ Non-negotiable: request Codex review without delaying validation
+
+Run advisory local Codex review before the first owner-authored push. The
+bounded implementation harness is the exception. It commits and pushes after
+the worker exits. Its continuing owner runs local review immediately after
+handoff.
+
+When a coherent head is ready for complete validation, request one idempotent
+exact-head Codex Cloud review alongside that validation. The GitHub Actions
+runtime is the review window. If no review feedback exists when checks finish,
+continue to readiness without waiting. Use focused hosted tasks while iterating.
 
 Before merge or handoff, inspect the comments and review findings currently
 present and address every active actionable item from humans or external
 services. Reply with the fix, validation, or no-change rationale and resolve
-each actionable thread. Do not request or wait for Codex, Claude, Cursor,
-CodeRabbit, or any other optional reviewer when no feedback is present. A PR is
-ready when the applicable repository-owned checks are green, the branch is
-current and mergeable, and all feedback already present is addressed.
+each actionable thread. Do not request or wait for other optional reviewers.
+A PR is ready when the applicable repository-owned checks are green, the branch
+is current and mergeable, and all feedback already present is addressed.
 `task pr:ready` enforces the machine-checkable parts. Full policy:
 [rules.md §6](rules.md#6-git--pull-request-workflow).
 
@@ -643,6 +652,8 @@ See
 
 It host-applies formatting and checks the UI demo contract when UI paths change.
 
+Advisory local Codex review is part of delivery, but it is not a product gate.
+
 Every product check runs on **GitHub Actions**, not on the agent machine.
 
 Product checks include lint, clippy, unit tests, coverage, web build, Knip, jscpd, e2e, and the full PR mirror.
@@ -651,9 +662,12 @@ The normal loop:
 
 1. Pre-push hygiene
 2. Commit
-3. Push
-4. Optional focused `task remote` runs for isolated diagnostics
-5. Explicit `task pr:validate` when the head is ready for the final gate
+3. Advisory `task pr:review-local` before the first owner-authored push
+4. Push
+5. Optional focused `task remote` runs for isolated diagnostics
+6. Explicit `task pr:validate` when the head is ready for the final gate
+
+For a harness-created PR, the continuing owner runs local review after handoff.
 
 Ordinary PR pushes do not start the full PR workflow.
 
@@ -666,7 +680,13 @@ Heavy focused debugging runs through the allowlisted remote task catalog.
 Do not batch broad gates sequentially when complete PR validation runs them in
 parallel with a shorter critical path.
 
-Local execution is reserved for formatting, the UI demo contract, repository inspection, and interactive development sessions that require a persistent local server/browser.
+Permitted local execution is limited to:
+
+- formatting;
+- the UI demo contract;
+- advisory local Codex review;
+- repository inspection; and
+- interactive development that requires a persistent local server or browser.
 
 On a red remote run:
 
@@ -674,8 +694,9 @@ On a red remote run:
 2. Fix
 3. `task loom:pre-push`
 4. Commit
-5. Push
-6. Dispatch focused remote work, or repeat complete validation when replacing a
+5. Run local review when this is the first owner-authored push
+6. Push
+7. Dispatch focused remote work, or repeat complete validation when replacing a
    failed complete-gate head
 
 Full policy: [workflows/remote-execution.md](workflows/remote-execution.md) and [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
@@ -891,7 +912,8 @@ Re-query the PR and inspect again before merge or handoff.
 
 Every active actionable item must be handled.
 
-Do not request or wait for external reviewers or services.
+Do not wait for a Codex result after repository-owned checks finish. Do not
+request or wait for other external reviewers or services.
 
 See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
 

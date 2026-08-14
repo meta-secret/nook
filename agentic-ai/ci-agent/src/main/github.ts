@@ -487,9 +487,17 @@ function isRepositoryStatusComment(body: string): boolean {
     trimmed.startsWith("<!-- nook-ui-demo -->") ||
     trimmed.startsWith("<!-- nook-core-coverage -->") ||
     trimmed.includes("<!-- nook-codex-review:") ||
+    isAgentImplementationHandoffComment(trimmed) ||
     // Codex posts this when it cannot review; it is status, not a finding.
     trimmed.includes("Codex usage limits for code reviews")
   );
+}
+
+const AGENT_IMPLEMENTATION_HANDOFF_COMMENT =
+  /^@[a-z0-9-]+ this workflow assigned you PR #\d+\. Continue only this PR's recorded scope through review, exact-head validation, and squash merge\.$/;
+
+function isAgentImplementationHandoffComment(body: string): boolean {
+  return AGENT_IMPLEMENTATION_HANDOFF_COMMENT.test(body.trim());
 }
 
 function isCodexReviewer(actor: unknown): boolean {

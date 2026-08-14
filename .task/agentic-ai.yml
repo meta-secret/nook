@@ -462,7 +462,7 @@ tasks:
         task ci-agent:docker:run CI_AGENT_CMD=pr-ready'
 
   pr:review:
-    desc: Optionally request a Codex review for the exact PR head, idempotently (PR=<number>); never required for readiness.
+    desc: Request Codex review for the exact PR head, idempotently (PR=<number>); never waits and is not required for readiness.
     requires:
       vars: [PR]
     cmds:
@@ -472,3 +472,21 @@ tasks:
         export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
         export PR_NUMBER="{{.PR}}";
         task ci-agent:docker:run CI_AGENT_CMD=pr-review'
+
+  pr:review-local:
+    desc: Run an advisory local Codex review against origin/main; unavailable Codex access skips without blocking delivery.
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        if ! command -v codex >/dev/null 2>&1; then
+          echo "Codex CLI is unavailable; skipping advisory local review.";
+          exit 0;
+        fi;
+        if ! codex login status >/dev/null 2>&1; then
+          echo "Codex CLI is not authenticated; skipping advisory local review.";
+          exit 0;
+        fi;
+        git fetch origin main;
+        if ! codex review --base origin/main; then
+          echo "Codex local review was unavailable; continuing without blocking delivery.";
+        fi'

@@ -1,16 +1,59 @@
-# External Review Feedback Workflow
+# Review Request Workflow
 
-Codex, Claude, Cursor, CodeRabbit, and all other external review services are
-optional and non-blocking.
+Codex review runs alongside repository-owned GitHub Actions.
 
-## Non-blocking review rule
+It is not a merge gate. A missing or unavailable review result does not delay
+delivery after those checks finish.
+
+Other external review services remain optional. Do not request or wait for
+them unless the user explicitly asks.
+
+## Local review before the first owner-authored push
+
+Run the advisory local review on a coherent branch head:
+
+```bash
+task pr:review-local
+```
+
+The command compares the branch with current `origin/main`.
+
+If the Codex CLI or authentication is unavailable, it reports the skip and
+does not block delivery. Treat any actionable finding it does produce as normal
+implementation work. Run pre-push hygiene again after fixes.
+
+The bounded implementation worker cannot run Git. The harness commits and
+pushes its result after the worker exits. For that path, the continuing owner
+runs local review immediately after handoff. This is the only first-push
+exception.
+
+## Complete validation and Cloud review
+
+When the coherent head is ready, run complete validation:
+
+```bash
+task pr:validate PR=<number>
+```
+
+The command:
+
+1. Immediately dispatches repository-owned GitHub Actions.
+2. Rechecks that the PR head did not change after dispatch.
+3. Attempts one idempotent, exact-head Codex Cloud review request.
+
+Review-request failure does not fail validation. Do not wait for a result.
+
+Use `task pr:review PR=<number>` only when an exact-head review request is needed
+without complete validation. It is idempotent and does not wait for a result.
+
+## Actionable feedback priority
 
 Before merge, inspect feedback currently present. Agents must:
 
 - address every active actionable finding;
 - reply on the targeted thread before resolving it;
 - re-query until unresolved review threads are zero;
-- keep polling feedback while repository checks run after each push; and
+- keep polling feedback while repository checks run for the validation head; and
 - interrupt obsolete check waiting when actionable feedback requires another
   push.
 
@@ -28,12 +71,12 @@ When a new finding arrives:
 Use a focused task instead only when it isolates a known failure faster.
 
 Only let exact-head validation finish while the actionable feedback queue is
-empty.
+empty. Feedback that arrives while checks run takes priority.
 
 `task pr:ready` enforces unresolved-thread count alongside the exact-head
 deployment, branch state, and applicable repository-owned PR checks. It reports
-existing comments and reviews for inspection but does not wait for an optional
-reviewer to respond. Do not request an external review merely to satisfy a gate.
+existing comments and reviews for inspection. It does not require a Codex
+result and does not wait for one.
 
 ## Handling feedback that already exists
 
@@ -49,7 +92,8 @@ Cursor, CodeRabbit, or another service:
 4. Commit and push the completed fix.
 5. Use focused hosted tasks as useful.
 6. If complete validation was already requested, restart it for the replacement
-   head. Otherwise start it when that head is ready for the final gate.
+   head. This also requests exact-head Codex review. Otherwise start it when
+   that head is ready for the final gate.
 7. Reply on the original thread or comment with the fix and validation when a
    targeted reply is possible.
 8. Resolve only after the targeted reply is visible and the finding is fixed or
@@ -64,7 +108,8 @@ finding.
 
 After those items are handled, rerun the feedback query immediately before
 merge. If another actionable comment arrives while the agent is working,
-address it. Do not wait for external review services.
+address it. When repository-owned checks finish and no review feedback is
+present, continue to readiness without waiting.
 
 An external service may be asked to implement a finding only when the user
 explicitly requests that separate service to own the fix. The active agent
