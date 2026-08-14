@@ -67,25 +67,30 @@ The browser stores the local directory under `identity_directory_v1`.
 The directory contains:
 
 - zero or more `IdentityRecord` values; and
-- an explicit `Empty` or `Selected(identity_id)` state.
+- an explicit `Empty` or `Selected(identity_id)` state; and
+- app IDs retired by destructive local recovery.
 
 All directory updates use one IndexedDB read-write transaction.
 Concurrent tabs must not overwrite identity creation, selection, membership,
 or DEK changes.
 
 Simple vault creation stores `pending_simple_genesis_v1` in IndexedDB.
-Its JSON fields are `storeId`, `identityId`, `createdAt`, and optional
-`eventYaml`.
+Its JSON fields are `storeId`, `identityId`, `createdAt`, and `eventState`.
 The app writes the marker before it creates the identity-owned DEK.
 A reload resumes the same store and identity binding.
 Verified connect completion removes the marker with a compare-and-delete
 transaction.
 An older tab cannot delete a newer genesis marker.
-The marker owns the genesis timestamp and the complete signed event.
-Before the first event-log write, Nook stores the signed event in `eventYaml`.
-Retries reuse those exact bytes because encrypted DEK envelopes are randomized.
-Legacy markers without `createdAt` use the Unix epoch timestamp.
-Legacy markers without `eventYaml` are upgraded before genesis is published.
+The marker owns the genesis timestamp and complete signed event lifecycle.
+`eventState` is either `awaiting-event` or `event-pinned`. The pinned variant
+owns the signed event in `eventYaml` before the first event-log write. Retries
+reuse those exact bytes because encrypted DEK envelopes are randomized.
+Legacy markers without `createdAt` use the Unix epoch timestamp. Legacy markers
+without `eventState` decode as `awaiting-event`.
+
+Recovery clears identity ownership but preserves retired app IDs. Every
+app-key operation rejects a retired ID. Atomic updates therefore prevent a
+stale tab from writing old ownership back after recovery.
 
 Security-epoch rotation stores the vault ID at
 `pending_identity_reconciliation_v1:{store_id}` before it appends the

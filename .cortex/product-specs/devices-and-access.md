@@ -66,14 +66,18 @@ Its selection is an explicit `Empty` or `Selected(identity_id)` state.
 Updates use one IndexedDB read-write transaction.
 
 Simple vault genesis uses `pending_simple_genesis_v1`.
-The record contains `storeId`, `identityId`, `createdAt`, and optional
-`eventYaml`.
+The record contains `storeId`, `identityId`, `createdAt`, and `eventState`.
 It is durable before DEK creation and survives reloads.
 Successful verified connect removes only the matching marker.
 Legacy records without `createdAt` use the Unix epoch timestamp.
-The complete signed genesis event is stored in `eventYaml` before its first
-event-log write. Retries reuse those exact bytes. A legacy marker without the
-field is upgraded before publishing genesis.
+`eventState` is either `awaiting-event` or `event-pinned`. The pinned variant
+owns the complete signed genesis event in `eventYaml` before its first
+event-log write. Retries reuse those exact bytes. A legacy marker without
+`eventState` is explicitly treated as `awaiting-event`.
+
+Destructive local device recovery keeps retired app IDs in the directory.
+Atomic directory updates reject those app keys. This prevents a stale browser
+tab from recreating ownership after recovery.
 
 Security-epoch retry state uses
 `pending_identity_reconciliation_v1:{store_id}`.

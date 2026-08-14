@@ -461,6 +461,7 @@ impl NookVaultManager {
         self.storage.mode = nook_core::StorageMode::Local;
         indexed_db::delete_device_identity_for_recovery().await?;
         crate::storage::identity_record::delete_identity_directory_for_recovery().await?;
+        indexed_db::clear_sentinel_genesis_finalization_pending().await?;
         auth_providers::delete_auth_providers_db().await?;
         Ok(())
     }

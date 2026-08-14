@@ -1,9 +1,11 @@
 import type { Browser, BrowserContext, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
+  addVaultPassword,
   createIsolatedContext,
   disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  unlockVaultOnLogin,
   waitForPersistedAppLog,
 } from './helpers'
 
@@ -678,6 +680,7 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await addVaultPassword(page, 'Recovery', 'recovery-pass-99')
     await page.evaluate(() => {
       localStorage.setItem('nook_e2e_passkey_mode', 'cancel')
     })
@@ -720,5 +723,23 @@ test.describe('passkey device-key protection', () => {
     )
     expect(persisted.wrappedIdentityStored).toBe(false)
     expect(persisted.registry).toBeTruthy()
+
+    await page.evaluate(() => {
+      localStorage.setItem('nook_e2e_passkey_mode', 'unavailable')
+    })
+    await page.getByTestId('device-protection-use-existing-choice').click()
+    await expect(
+      page.getByTestId('device-protection-pin-setup-btn'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await page.getByTestId('device-protection-pin-input').fill('654321')
+    await page.getByTestId('device-protection-pin-confirm').fill('654321')
+    await page.getByTestId('device-protection-pin-setup-btn').click()
+    await unlockVaultOnLogin(page, {
+      password: 'recovery-pass-99',
+      entryLabel: 'Recovery',
+    })
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
   })
 })

@@ -24,8 +24,29 @@ pub(crate) struct PendingSimpleGenesis {
     pub(crate) identity_id: nook_core::IdentityId,
     #[serde(default = "legacy_simple_genesis_timestamp")]
     pub(crate) created_at: nook_core::IsoTimestamp,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) event_yaml: Option<String>,
+    #[serde(default)]
+    pub(crate) event_state: PendingSimpleGenesisEvent,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub(crate) enum PendingSimpleGenesisEvent {
+    #[default]
+    AwaitingEvent,
+    EventPinned {
+        #[serde(rename = "eventYaml")]
+        event_yaml: String,
+    },
+}
+
+impl PendingSimpleGenesis {
+    #[cfg(test)]
+    fn event_yaml(&self) -> Option<&str> {
+        match &self.event_state {
+            PendingSimpleGenesisEvent::AwaitingEvent => None,
+            PendingSimpleGenesisEvent::EventPinned { event_yaml } => Some(event_yaml),
+        }
+    }
 }
 
 fn legacy_simple_genesis_timestamp() -> nook_core::IsoTimestamp {
@@ -282,7 +303,7 @@ pub(crate) async fn begin_or_resume_simple_genesis(
         identity_id: identity.identity_id,
         created_at: nook_core::IsoTimestamp::parse(&wasm_iso_timestamp())
             .map_err(|error| NookError::Database(error.to_string()))?,
-        event_yaml: None,
+        event_state: PendingSimpleGenesisEvent::AwaitingEvent,
     };
     let proposed_json = serde_json::to_string(&proposed).map_err(|error| {
         NookError::IndexedDb(format!("Pending Simple genesis encode error: {error}"))
@@ -336,7 +357,15 @@ pub(crate) async fn persist_simple_genesis_event(
                     "Pending Simple genesis marker changed during event creation.".to_owned(),
                 ));
             }
-            let event_yaml = current.event_yaml.get_or_insert(proposed_yaml).clone();
+            let event_yaml = match &current.event_state {
+                PendingSimpleGenesisEvent::AwaitingEvent => {
+                    current.event_state = PendingSimpleGenesisEvent::EventPinned {
+                        event_yaml: proposed_yaml.clone(),
+                    };
+                    proposed_yaml
+                }
+                PendingSimpleGenesisEvent::EventPinned { event_yaml } => event_yaml.clone(),
+            };
             *captured.borrow_mut() = Some(event_yaml);
             serde_json::to_string(&current).map_err(|error| {
                 NookError::IndexedDb(format!("Pending Simple genesis encode error: {error}"))
@@ -574,6 +603,23 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    fn legacy_pending_genesis_without_event_state_is_awaiting() -> Result<(), NookError> {
+        let raw = serde_json::json!({
+            "storeId": nook_core::generate_store_id().map_err(map_domain_error)?,
+            "identityId": nook_core::IdentityId::generate().map_err(map_domain_error)?,
+            "createdAt": "2026-08-13T00:00:00.000Z"
+        })
+        .to_string();
+
+        let marker = decode_pending_simple_genesis(&raw)?;
+        assert!(matches!(
+            marker.event_state,
+            PendingSimpleGenesisEvent::AwaitingEvent
+        ));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
     async fn pending_genesis_reuses_first_complete_signed_event() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
         let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
@@ -588,7 +634,7 @@ mod tests {
         assert_eq!(
             pending_simple_genesis_for_store(pending.store_id.as_str())
                 .await?
-                .and_then(|marker| marker.event_yaml),
+                .and_then(|marker| marker.event_yaml().map(str::to_owned)),
             Some(first)
         );
         clear_identity_directory_for_test().await
@@ -608,6 +654,12 @@ mod tests {
         .await?;
 
         delete_identity_directory_for_recovery().await?;
+
+        let stale_result = ensure_local_identity_for_app_key(&inaccessible_key, "Stale").await;
+        assert!(matches!(
+            stale_result,
+            Err(NookError::Database(message)) if message.contains("retired")
+        ));
 
         let replacement_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
         let replacement = ensure_local_identity_for_app_key(&replacement_key, "Recovered").await?;
