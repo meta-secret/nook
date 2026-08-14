@@ -78,7 +78,7 @@ Does not apply to:
 - [ ] Verify each finding against current code before editing.
 - [ ] Use reviewer-provided agent prompts as context, not as blind patches.
 - [ ] Make the minimal correct fix, or prepare a concise no-change rationale.
-- [ ] Run `task format` when files changed; use focused `task remote` jobs as
+- [ ] Run `task loom:pre-push` when files changed; use focused `task remote` jobs as
       useful, then explicitly trigger complete PR validation.
 - [ ] Push the fix or rationale commit when code/docs changed.
 - [ ] Leave a GitHub reply explaining the fix, validation, or no-change

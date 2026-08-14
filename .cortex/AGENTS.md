@@ -402,6 +402,13 @@ Child workers return evidence or isolated patches.
 
 They do not mutate shared lifecycle state.
 
+Repeated agent workflows use reviewed static TypeScript graphs in Loom.
+
+Workflow topology must not come from YAML, prompts, or Markdown parsing.
+
+The first catalog entry is the read-only
+`cortex-full-garbage-collection` workflow.
+
 Full policy:
 [workflows/subagent-delegation.md](workflows/subagent-delegation.md).
 
@@ -601,22 +608,40 @@ Preferred Task aliases:
 | `task loom:skill-scaffold CONFIG=…` | Skill card request YAML |
 | `task loom:agent-stats CONFIG=…` | Stats assemble/validate/publish request |
 | `task loom:pr-land CONFIG=…` | PR land request YAML |
+| `task loom:agent-workflow:cortex-audit BASELINE=…` | Compiled read-only Cortex full-GC workflow |
 
-Policy and judgment stay in `.cortex`. Loom only runs deterministic steps.
+Policy and judgment stay in `.cortex`.
 
-Loom owns the planned machine-managed agent workflow graph.
+Loom runs deterministic leaf tools.
 
-Its `agentWorkflow` family will schedule Codex SDK workers.
+Loom also owns the isolated static agent-workflow module.
 
-Until that family exists, capable Codex clients use native child workers under
-the delegation workflow.
+That module contains reviewed TypeScript graph definitions.
+
+Its separate CLI selects a compiled workflow.
+
+It never accepts or generates graph topology from YAML, prompts, or Markdown.
+
+First static workflow:
+
+```bash
+task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
+```
+
+Local workflow runs use an append-only journal.
+
+The current implementation runs locally.
+
+Future Hive-backed runs will use Neo4j as their durable lifecycle authority.
 
 See
 [agent-workflow-orchestration.md](design-docs/agent-workflow-orchestration.md).
 
 ## ⛔ Non-negotiable: heavy agent work runs remotely
 
-**The only required local action is `task format`** (plus the light UI demo contract when UI paths change).
+**The only required local product action is `task loom:pre-push`.**
+
+It host-applies formatting and checks the UI demo contract when UI paths change.
 
 Every product check runs on **GitHub Actions**, not on the agent machine.
 
@@ -628,7 +653,7 @@ The normal loop:
 2. Commit
 3. Push
 4. Optional focused `task remote` runs for isolated diagnostics
-5. Explicit `task pr:validate` as soon as the coherent head is ready
+5. Explicit `task pr:validate` when the head is ready for the final gate
 
 Ordinary PR pushes do not start the full PR workflow.
 
@@ -647,10 +672,11 @@ On a red remote run:
 
 1. Read the failed logs (and app logs for web/e2e)
 2. Fix
-3. `task format`
+3. `task loom:pre-push`
 4. Commit
 5. Push
-6. Dispatch focused remote work or complete validation again
+6. Dispatch focused remote work, or repeat complete validation when replacing a
+   failed complete-gate head
 
 Full policy: [workflows/remote-execution.md](workflows/remote-execution.md) and [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
 

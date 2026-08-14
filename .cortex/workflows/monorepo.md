@@ -16,7 +16,8 @@ layer-focused PRs. Follow
 6. Add or update tests in the owning package (`nook-core` Rust tests for domain logic; Playwright for UI flows).
 7. Add new app routine commands to the nearest owning Taskfile: web-family tasks under `nook-app/nook-web/Taskfile.yml` , Docker tasks under `nook-app/nook-platform/docker/Taskfile.yml`, CI tasks under `nook-app/ci/Taskfile.yml`, and repo-level non-app commands under the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.
-9. Run `task format`, commit and push, then explicitly trigger and prove the exact head with green `pr.yml`.
+9. Run `task loom:pre-push`, commit, and push.
+   Trigger complete validation when the head is ready for the final gate.
    - Use a focused hosted task only when it shortens diagnosis of a known failure.
    - Do not run local `task check` for agent work.
 
@@ -40,7 +41,14 @@ Do not make `nook-core` depend on `nook-wasm`, browser, Svelte, Bun, IndexedDB,
 HTTP, or session concepts. `wasm-bindgen` annotations on simple core DTOs/enums
 are allowed when they preserve one typed domain model across Rust and web.
 
-Use Bun for JavaScript tooling and run project commands through Taskfile/Docker. Do not introduce npm command flows or npm lockfiles.
+Use Bun for Nook web and Loom JavaScript tooling.
+
+Run project commands through Taskfile/Docker.
+
+Do not introduce npm flows or lockfiles into Bun-owned packages.
+
+`agentic-ai/ci-agent` is the maintained Node/npm exception and owns its
+`package-lock.json`.
 
 ## New vault item type checklist
 

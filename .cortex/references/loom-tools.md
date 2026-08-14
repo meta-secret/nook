@@ -1,20 +1,72 @@
-# Reference: Loom domain YAML protocol
+# Reference: Loom tools and static agent workflows
 
 Loom is the Bun tool runner for mechanical cortex rites.
 
 Agents call it. Humans do not use it interactively.
 
-Loom's current tools are mechanical leaf operations.
+Loom's domain-YAML protocol exposes mechanical leaf operations.
 
-The planned `agentWorkflow` family adds deterministic graph scheduling and a
-Codex SDK worker adapter.
+Static agent workflows use a separate module and CLI.
+
+They may call these leaf operations through typed adapters.
 
 See
 [agent-workflow-orchestration.md](../design-docs/agent-workflow-orchestration.md).
 
 Full package docs: [`agentic-ai/loom/README.md`](../../agentic-ai/loom/README.md).
 
-## Invoke
+## Static agent workflow boundary
+
+Static workflows live under:
+
+```text
+agentic-ai/loom/src/agent-workflow/
+```
+
+Their topology is compiled TypeScript.
+
+The workflow CLI selects a reviewed catalog entry.
+
+It accepts bounded runtime inputs such as an exact source commit.
+
+It does not accept a YAML graph.
+
+It does not generate tasks or edges from prompts or Cortex prose.
+
+The first catalog entry is `cortex-full-garbage-collection`.
+
+Use the repository Task wrapper:
+
+```bash
+task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
+```
+
+Add `PLAN=1` for topology validation without worker execution.
+
+That workflow contains:
+
+- an exact-baseline task;
+- four fixed read-only agent audits and one mechanical audit in parallel;
+- an all-completed evidence join;
+- one finding-synthesis task;
+- the existing `cortexAudit` leaf.
+
+Each Codex attempt fails closed unless `HEAD` matches the requested baseline
+and the worktree is clean before and after execution.
+
+The cleanliness check includes untracked files.
+
+Local runs write `events.jsonl` as an append-only authority.
+
+Task terminal files and the final run result are projections of that journal.
+
+The current workflow implementation is local-only.
+
+Future Hive-backed execution will use Neo4j as the durable authority.
+
+The YAML rules below apply only to Loom leaf tools.
+
+## Invoke a leaf tool
 
 Exactly one form:
 

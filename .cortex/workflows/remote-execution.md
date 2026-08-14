@@ -118,7 +118,7 @@ Every remote result is tied to source GitHub can reproduce. Before dispatch, `ta
 The normal iteration is:
 
 ```bash
-task format
+task loom:pre-push
 git add -u
 git commit -m "Describe the coherent experiment"
 git push -u origin HEAD
@@ -219,14 +219,14 @@ If the tested commit is obsolete, cancel that run explicitly, push the complete 
 Focused task failure:
 
 ```text
-read failed run logs → fix → task format → commit → push
+read failed run logs → fix → task loom:pre-push → commit → push
 → dispatch the useful focused task again
 ```
 
 Complete PR validation failure:
 
 ```text
-read failed PR logs and app artifacts → fix → task format → commit → push
+read failed PR logs and app artifacts → fix → task loom:pre-push → commit → push
 → optional focused remote tasks → task pr:validate → monitor exact-head checks
 ```
 

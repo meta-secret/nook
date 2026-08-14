@@ -4,9 +4,46 @@ Status: Architecture decision with staged implementation.
 
 Nook separates semantic instructions from deterministic scheduling.
 
-Markdown and an agent runtime solve different problems.
+Cortex documents what a workflow means.
 
-They are complementary.
+Loom executes reviewed static workflow graphs.
+
+Hive owns durable distributed execution when a workflow moves onto Hive.
+
+## Static graph decision
+
+Agent workflow topology is authored as TypeScript in Loom.
+
+Each workflow has a fixed, reviewed graph.
+
+The compiled definition owns:
+
+- stable task IDs;
+- dependency edges;
+- explicit parallel targets;
+- joins;
+- read and write resource claims;
+- timeouts;
+- result types;
+- terminal transitions.
+
+Loom must not:
+
+- parse Cortex prose into a graph;
+- accept a workflow graph from YAML;
+- ask an agent to invent a graph;
+- add tasks from prompt contents;
+- infer parallelism from collection order.
+
+Runtime inputs may select a compiled workflow.
+
+They may also bind its exact source commit and other scalar inputs.
+
+They cannot change its topology.
+
+A conditional path uses a declared edge in the compiled graph.
+
+An unused declared path receives an explicit skipped result.
 
 ## Responsibilities
 
@@ -22,166 +59,292 @@ It defines:
 - read and write ownership;
 - security boundaries;
 - acceptance evidence;
-- parent integration responsibility.
+- delivery-owner responsibility.
 
 Markdown does not schedule workers.
 
 The canonical decision contract is
 [subagent-delegation.md](../workflows/subagent-delegation.md).
 
-### Machine-readable graph
+### Loom static workflow module
 
-A graph manifest owns execution structure.
+Agent workflows live in an isolated Loom module:
 
-It declares:
+```text
+agentic-ai/loom/src/agent-workflow/
+```
 
-- stable task IDs;
-- dependency edges;
-- explicit parallel groups;
-- resource scopes;
-- retries and timeouts;
-- result schemas;
-- join behavior.
+The module is separate from Loom's domain-YAML leaf-tool runner.
 
-The graph binds every node to an exact source commit.
+It may call existing Loom tools through typed adapters.
 
-### Loom agent workflows
+Existing leaf tools do not import the workflow module.
 
-Loom currently runs deterministic leaf tools.
+The workflow module owns:
 
-Expand Loom with an isolated `agentWorkflow` request family.
-
-That family will own:
-
+- the compiled workflow catalog;
 - graph validation;
 - deterministic ready-wave scheduling;
-- one disposable worker per reached task;
+- one disposable worker per reached task attempt;
 - typed result and artifact handoff;
-- retry and cancellation state;
-- resource-conflict serialization.
+- resource-conflict checks;
+- append-only workflow events;
+- terminal projections;
+- timeout and cancellation state.
 
-The scheduler and existing Loom tools share one typed YAML protocol.
+Retries are not implicit.
 
-Existing tools remain callable leaf nodes.
+A workflow that needs retries must declare and test that policy explicitly.
 
-Policy and semantic worker contracts remain in Cortex.
+A separate `loom-agent-workflow` CLI invokes the static catalog.
 
-The workflow engine does not invent product or architecture decisions.
+The CLI accepts a workflow name and bounded runtime inputs.
 
-Use the Codex SDK as an execution adapter for local worker threads.
+It does not accept a graph document.
 
-Choose the Codex integration boundary with a focused spike.
+The repository Task wrapper is the canonical entrypoint:
 
-The spike must prove:
+```bash
+task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
+```
 
-- subscription reuse;
+The bare `loom-agent-workflow` binary is an internal package entrypoint.
+
+### Codex worker adapter
+
+The Codex SDK is the local worker adapter.
+
+The adapter starts one Codex thread for one reached agent task attempt.
+
+The adapter has proven:
+
+- local ChatGPT subscription reuse without an API key;
+- exact-source binding;
 - cancellation;
 - streamed lifecycle events;
 - structured results;
-- one worker per reached task;
-- exact-source binding.
+- one worker per reached task attempt.
 
 The official Codex SDK can start, continue, and resume local Codex threads.
 
-The spike must still prove that the selected SDK path reuses the intended
-ChatGPT subscription session in Nook's local environment.
+The authentication proof used the logged-in local Codex session.
 
-Delete Lace after the Loom graph model is ready.
+An opt-in automated integration test remains future work.
 
-Do not retain its generated graph, recursive execution, default payloads, or
-no-op agent facade as compatibility layers.
+### Local journal
+
+A local Loom run writes an append-only event journal.
+
+The journal is the authority for that local run.
+
+It records:
+
+- the run ID;
+- workflow name and version;
+- exact source commit;
+- monotonic event sequence;
+- task eligibility;
+- task attempts;
+- runtime activity;
+- task terminal results;
+- successor activation;
+- workflow termination.
+
+Task and workflow result files are projections.
+
+The journal and its content-hashed terminal projections form the local run
+record.
+
+The current replay API validates identity, sequence, and terminal references.
+
+It does not yet rebuild scheduler eligibility or join state.
+
+Journal events are bounded and secret-sanitized.
+
+They must not contain:
+
+- prompts;
+- model reasoning;
+- credentials;
+- repository secrets;
+- raw command output.
+
+Runtime adapters normalize errors before appending events.
+
+An event records a bounded category and sanitized detail.
+
+It never serializes a raw SDK error, stack trace, or command failure object.
+
+Every event carries the workflow version and exact source commit.
+
+Sequence numbers increase without gaps within one run.
+
+Resume is not exposed in the first CLI slice.
+
+Before resume is added, a full reducer must rebuild eligibility and join state
+before scheduling new work.
+
+A task attempt receives one terminal result.
+
+Terminal result projections are content-hashed and referenced by the journal.
+
+The journal must not be treated as durable distributed coordination.
 
 ### Hive
 
-Hive is the durable isolated execution platform.
+Hive owns durable distributed workflow authority.
 
-Neo4j already owns task readiness, leases, attempts, results, and dependency
-artifacts.
+Neo4j already owns:
 
-One Hive Pod runs one embedded Codex thread for one task.
+- task readiness;
+- dependency state;
+- claims and leases;
+- attempts;
+- cancellation barriers;
+- results;
+- dependency artifacts.
 
-Do not quietly enable nested subagents inside a Hive worker.
+The current implementation is local-only.
 
-That would change its isolation, lease, artifact, and workspace model.
+It does not enqueue Hive tasks.
 
-Future durable graphs should materialize child work as separate Hive tasks.
+When a future Hive adapter materializes a static workflow, Neo4j replaces the
+local journal as the lifecycle authority.
 
-Each task should run in its own disposable Kata-backed Pod.
+Loom's event model may be mapped into Hive records.
+
+It must not create a second authoritative scheduler beside Neo4j.
+
+One Hive task runs in one disposable Kata-backed Pod.
+
+One Pod runs one embedded Codex thread.
+
+Durable graph nodes become separate Hive tasks.
+
+Nested subagents inside one Hive worker remain disabled.
 
 ### Delivery owner
 
-One delivery owner remains outside the worker fan-out.
+Exactly one delivery owner remains outside the worker fan-out.
 
-That owner controls synthesis, shared mutations, PR state, validation, and
-merge.
+That owner controls:
+
+- architectural synthesis;
+- shared-file edits;
+- Workbench state;
+- branch and pull-request state;
+- review replies and resolution;
+- validation requests;
+- readiness and merge.
 
 Workers return evidence or isolated patches.
 
-They do not compete for delivery ownership.
+They do not become delivery owners.
 
-## First workflow
+## First compiled workflow
 
-The first graph is a read-only Cortex semantic audit.
+The first catalog entry is `cortex-full-garbage-collection`.
 
-It contains three inventory nodes:
+It is read-only.
 
-1. workflows and references;
-2. design docs, product specs, and dynamic skills;
-3. code, Task, Loom, Minds, and CI evidence.
+Its topology is fixed in TypeScript.
 
-One synthesis node depends on all three inventories.
+The workflow contains:
 
-The synthesis node produces the proposed conflict resolutions.
+1. `resolve-baseline`;
+2. one parallel audit wave;
+3. `evidence-collected` join;
+4. `synthesize-findings`.
 
-The delivery owner authors the final documentation edit.
+The parallel wave contains these tasks:
 
-The pilot must measure:
+- `audit-workflows-and-references`;
+- `audit-design-docs-and-product-specs`;
+- `audit-dynamic-skills-and-entry-points`;
+- `audit-runtime-task-and-ci`;
+- `mechanical-cortex-audit`.
 
-- missed conflicts;
-- duplicate findings;
-- wall time;
-- integration effort;
-- result-schema failures.
+Every audit task uses the same exact source commit.
 
-The pilot has no code writes.
+Loom verifies that exact `HEAD` and a clean worktree before and after every
+Codex attempt.
 
-It has no GitHub or Workbench mutations.
+The cleanliness check includes untracked files.
+
+Every task returns typed evidence.
+
+The join waits for all declared arrivals.
+
+The synthesis task deduplicates findings and proposes corrections.
+
+The mechanical leaf reuses Loom's existing Cortex audit.
+
+Its evidence reaches the same join before synthesis.
+
+The workflow does not edit repository files.
+
+It does not mutate GitHub or Workbench state.
+
+The delivery owner reviews the report and authors any later correction.
+
+## Reviewed catalog growth
+
+The catalog grows one reviewed workflow at a time.
+
+The next candidates are:
+
+1. the fixed Coding Bro delivery state machine;
+2. fixed exact-head CI diagnosis lanes;
+3. fixed dependency inventory lanes.
+
+Do not add a generic workflow builder.
+
+Do not add prompt-defined task cardinality.
+
+Do not create a general graph language outside TypeScript.
 
 ## Adoption sequence
 
-1. Add the typed `agentWorkflow` family to Loom.
-2. Add manifest validation and dry-run planning.
-3. Reject missing dependencies, cycles, unreachable joins, and resource
-   conflicts.
-4. Emit deterministic ready waves and skipped nodes.
-5. Delete Lace and remove it from the Minds workspace.
-6. Add the Codex SDK adapter after subscription and cancellation proof.
-7. Execute the read-only Cortex graph with disposable workers.
-8. Add exact-head CI diagnosis and review-verification graphs.
-9. Prove isolated patch integration for one low-risk module workflow.
-10. Materialize durable graph nodes as separate Hive tasks.
+1. Define the static graph domain in the isolated Loom module.
+2. Define `cortex-full-garbage-collection` in TypeScript.
+3. Add graph validation and a dry-run projection.
+4. Add the append-only local journal and typed terminal projections.
+5. Add deterministic ready-wave execution.
+6. Add the Codex SDK adapter after auth and cancellation proof.
+7. Execute the read-only Cortex workflow.
+8. Delete Lace and remove it from the Minds workspace.
+9. Add the fixed Coding Bro delivery workflow.
+10. Map selected compiled workflows onto separate Hive tasks.
 
-Write-capable parallel execution is not the starting point.
+Write-capable worker execution is not the starting point.
 
-It begins only after baseline binding, resource scopes, result artifacts, and
-parent integration have been proven with read-only work.
+The first implementation rejects write-capable Codex worker profiles.
+
+It begins only after the read-only workflow proves:
+
+- baseline binding;
+- resource enforcement;
+- complete terminal results;
+- journal replay;
+- cancellation;
+- parent-owned integration.
 
 ## Non-goals
 
 This decision does not:
 
 - make model output deterministic;
-- replace Cortex prose with YAML;
-- move semantic policy or product judgment into Loom;
-- make Loom the durable task store or isolated worker platform;
+- replace Cortex policy with TypeScript;
+- execute graphs supplied by YAML;
+- generate graphs from prompts or Markdown;
+- make Loom a durable distributed task store;
 - allow concurrent writers in one worktree;
-- transfer Workbench or GitHub ownership to child workers;
+- transfer lifecycle ownership to child workers;
 - enable nested Hive workers.
 
 ## External evidence
 
 - [Codex subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents.md)
-  documents project-instruction-triggered delegation and recommends starting
-  with read-heavy parallel work.
+  documents project-instruction-triggered delegation.
 - [Codex SDK](https://learn.chatgpt.com/docs/codex-sdk.md) documents
-  programmatic local Codex threads for internal tools and workflows.
+  programmatic local Codex threads for internal workflows.

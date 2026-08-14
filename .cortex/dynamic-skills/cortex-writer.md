@@ -126,5 +126,5 @@ checklist above.
 Also run the consistency GC in
 [cortex-consistency.md](cortex-consistency.md) for the touched topic.
 
-For implementation tasks that include `.cortex` edits, run `task format`,
+For implementation tasks that include `.cortex` edits, run `task loom:pre-push`,
 commit and push, then use the normal hosted validation path.

@@ -98,6 +98,7 @@ When applying a skill to code:
 4. Preserve package boundaries in [`.cortex/ARCHITECTURE.md`](../ARCHITECTURE.md).
 5. Add or update tests when the refactor changes behavior or protects a durable
    invariant.
-6. Run `task format` before pushing. For implementation tasks, commit and push
-   the coherent iteration, run focused hosted tasks as useful, and explicitly
-   trigger complete validation with `task pr:validate`.
+6. Run `task loom:pre-push` before pushing. For implementation tasks, commit and
+   push the coherent iteration. Run focused hosted tasks as useful. Trigger
+   complete validation with `task pr:validate` when the head is ready for the
+   final gate.
