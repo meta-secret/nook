@@ -12,6 +12,7 @@ import {
   installPasskeyMock,
   openStorageSettings,
   uniqueSecretKey,
+  unlockVaultOnLogin,
   waitForVaultOperationsIdle,
 } from '../helpers'
 import {
@@ -23,6 +24,26 @@ const DEMO_BEAT_MS = 700
 
 async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
+}
+
+async function openExistingVaultProtectionOverlay(page: Page) {
+  const overlay = page.getByTestId('passkey-auth-overlay')
+  const unlockVaultButton = page.getByTestId('unlock-vault-btn')
+  await expect
+    .poll(
+      async () => {
+        if (await overlay.isVisible()) return 'overlay'
+        if (await unlockVaultButton.isVisible()) return 'unlock'
+        return 'waiting'
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .not.toBe('waiting')
+  if (await overlay.isVisible()) return
+  await unlockVaultButton.click()
+  await expect(overlay).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
 }
 
 test('offer PIN device protection when passkeys are unavailable', async ({
@@ -114,6 +135,55 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   })
   await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
   await expect(page.getByTestId('authenticated-shell')).toBeVisible()
+  await demoBeat(page)
+})
+
+test('replace an inaccessible device identity without losing vault recovery', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('nook_e2e_manual_passkey', 'true')
+  })
+  await installPasskeyMock(page)
+  await connectLocalVault(page)
+  await addVaultPassword(page, 'Recovery', 'demo-recovery-password')
+  await demoBeat(page)
+
+  await page.evaluate(() => {
+    localStorage.setItem('nook_e2e_passkey_mode', 'cancel')
+  })
+  await page.reload()
+  await openExistingVaultProtectionOverlay(page)
+  await expect(page.getByTestId('device-protection-gate')).toBeVisible()
+  await demoBeat(page)
+
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByTestId('device-protection-recovery-btn').click()
+  await expect(
+    page.getByTestId('device-protection-use-existing-choice'),
+  ).toHaveText('Authenticate')
+  await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
+  await demoBeat(page)
+
+  await page.evaluate(() => {
+    localStorage.setItem('nook_e2e_passkey_mode', 'unavailable')
+  })
+  await page.getByTestId('device-protection-use-existing-choice').click()
+  await expect(page.getByTestId('device-protection-pin-setup-btn')).toBeVisible(
+    { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+  )
+  await page.getByTestId('device-protection-pin-input').fill('654321')
+  await page.getByTestId('device-protection-pin-confirm').fill('654321')
+  await demoBeat(page)
+  await page.getByTestId('device-protection-pin-setup-btn').click()
+
+  await unlockVaultOnLogin(page, {
+    password: 'demo-recovery-password',
+    entryLabel: 'Recovery',
+  })
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
   await demoBeat(page)
 })
 
