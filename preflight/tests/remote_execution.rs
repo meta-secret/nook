@@ -108,6 +108,12 @@ fn complete_validation_starts_before_non_blocking_review_request() {
         direct_validation.contains("validation is already running"),
         "review-request failure must not block validation"
     );
+    assert!(
+        direct_validation.contains(
+            "changed head after validation dispatch; validate the replacement head explicitly.\" >&2\n          exit 2"
+        ),
+        "a head change after dispatch must fail so the replacement head is validated"
+    );
 }
 
 #[test]

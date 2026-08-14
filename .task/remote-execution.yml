@@ -115,8 +115,8 @@ tasks:
 
         current_pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
         if [ "$local_sha" != "$current_pr_sha" ]; then
-          echo "PR #$REQUESTED_PR changed head after validation dispatch; skipping Codex review request." >&2
-          exit 0
+          echo "PR #$REQUESTED_PR changed head after validation dispatch; validate the replacement head explicitly." >&2
+          exit 2
         fi
         if ! task pr:review PR="$REQUESTED_PR"; then
           echo "Codex review request was unavailable; validation is already running." >&2
