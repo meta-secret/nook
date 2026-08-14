@@ -308,9 +308,9 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 > address every active actionable item, regardless of whether it came from a
 > human or an external service. Reply with the fix, validation, or no-change
 > rationale and resolve each actionable thread. Every external-service review
-> comment already present must be inspected. Complete validation requests one
-> idempotent exact-head Codex review and dispatches checks immediately. Claude,
-> Cursor, CodeRabbit, and other external reviewers remain optional: do not
+> comment already present must be inspected. Complete validation dispatches
+> checks immediately. It then requests one idempotent exact-head Codex review.
+> Claude, Cursor, CodeRabbit, and other external reviewers remain optional. Do not
 > request or wait for them. Optional review never means optional handling of
 > feedback that already arrived.
 
@@ -320,8 +320,9 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 >
 > 1. **`task format`**
 > 2. **commit**
-> 3. **push**
-> 4. **optional allowlisted `task remote TASK_NAME=<name>` for isolated diagnostics**
+> 3. **advisory `task pr:review-local` before the first owner-authored push**
+> 4. **push**
+> 5. **optional allowlisted `task remote TASK_NAME=<name>` for isolated diagnostics**
 >
 > Heavy builds/tests do not run on the agent machine.
 > Ordinary pushes deliberately do not start the complete PR workflow.
@@ -378,7 +379,8 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 - **Request review without delaying complete validation.**
   - Run `task pr:review-local` on a coherent local head.
   - After opening or updating the PR, run `task pr:validate`.
-  - It requests exact-head Codex review and dispatches checks immediately.
+  - It dispatches checks and then requests exact-head Codex review.
+  - Review-request failure does not stop those checks.
   - Address findings that arrive while checks run.
   - If none arrive by check completion, continue without waiting.
   - Do not request or wait for other external reviews.

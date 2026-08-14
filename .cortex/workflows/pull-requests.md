@@ -46,7 +46,8 @@ ownership until merge or a concrete blocked handoff:
 5. **Request review and validate on GitHub Actions:**
    - Run focused `task remote TASK_NAME=<name>` jobs as useful.
    - Run `task pr:validate PR=<number>` after each coherent push.
-   - It requests exact-head Codex Cloud review and dispatches checks immediately.
+   - It dispatches checks and then requests exact-head Codex Cloud review.
+   - Review-request failure does not block those checks.
    - Fix every actionable finding that arrives while checks run.
    - If no feedback exists when checks finish, continue without waiting.
    - Do not request or wait for other optional reviewers.
@@ -279,9 +280,9 @@ See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
 Before the first owner-authored push, run `task pr:review-local` on the coherent
 branch head. For a harness-created PR, run it immediately after handoff.
-After each coherent push, run complete validation. It requests exact-head Codex
-review and dispatches checks immediately. Use focused remote tasks only when
-they shorten diagnosis of a known failure. See
+After each coherent push, run complete validation. It dispatches checks
+immediately. It then requests exact-head Codex review. Use focused remote tasks
+only when they shorten diagnosis of a known failure. See
 [code-review.md](code-review.md).
 
 ### 5. Hosted iteration and explicit validation
@@ -290,7 +291,7 @@ they shorten diagnosis of a known failure. See
 
 ```text
 implement/fix → task loom:pre-push → commit → local review → push/update PR
-→ Cloud review request and complete exact-head PR workflow
+→ complete exact-head PR workflow and Cloud review request
 ```
 
 **Required local action** (before every push):
@@ -549,7 +550,7 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–12 checklist.
 7. Push and open or update the PR.
 8. Use focused `task remote` jobs only for faster isolated diagnosis.
 9. Run Loom or Task validation on the ready head.
-10. It requests exact-head Codex review and dispatches checks immediately.
+10. It dispatches checks and then requests exact-head Codex review.
 11. Do not wait for review after checks finish or request optional reviews.
 12. Address and resolve actionable comments.
 13. On failure, fix the issue and repeat pre-push hygiene.

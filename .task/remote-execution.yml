@@ -59,7 +59,7 @@ tasks:
       - .github/scripts/remote-task-batch.sh --list
 
   pr:validate:
-    desc: Request exact-head Codex review, then immediately trigger required PR validation (PR=<number>, FULL_E2E=1 for a Main-fix browser gate).
+    desc: Trigger required PR validation immediately, then request non-blocking exact-head Codex review (PR=<number>, FULL_E2E=1 for a Main-fix browser gate).
     requires:
       vars: [PR]
     env:
@@ -101,16 +101,6 @@ tasks:
 
         .github/scripts/require-current-base.sh origin "$base_ref"
 
-        task pr:review PR="$REQUESTED_PR"
-
-        current_pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
-        if [ "$local_sha" != "$current_pr_sha" ]; then
-          echo "PR #$REQUESTED_PR changed head during the review request." >&2
-          echo "local: $local_sha" >&2
-          echo "PR:    $current_pr_sha" >&2
-          exit 2
-        fi
-
         validation_label="ci:validate"
         if [ "$REQUEST_FULL_E2E" = "1" ]; then
           validation_label="ci:full-e2e"
@@ -122,3 +112,12 @@ tasks:
         fi
         gh pr edit "$REQUESTED_PR" --add-label "$validation_label"
         echo "Triggered PR validation for $pr_sha with label $validation_label."
+
+        current_pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
+        if [ "$local_sha" != "$current_pr_sha" ]; then
+          echo "PR #$REQUESTED_PR changed head after validation dispatch; skipping Codex review request." >&2
+          exit 0
+        fi
+        if ! task pr:review PR="$REQUESTED_PR"; then
+          echo "Codex review request was unavailable; validation is already running." >&2
+        fi

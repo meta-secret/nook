@@ -27,7 +27,7 @@ pushes its result after the worker exits. For that path, the continuing owner
 runs local review immediately after handoff. This is the only first-push
 exception.
 
-## Cloud review and complete validation
+## Complete validation and Cloud review
 
 After each coherent push, run complete validation:
 
@@ -37,11 +37,11 @@ task pr:validate PR=<number>
 
 The command:
 
-1. Posts one idempotent, exact-head Codex Cloud review request.
-2. Rechecks that the PR head did not change during the request.
-3. Immediately dispatches repository-owned GitHub Actions.
+1. Immediately dispatches repository-owned GitHub Actions.
+2. Rechecks that the PR head did not change after dispatch.
+3. Attempts one idempotent, exact-head Codex Cloud review request.
 
-Do not wait for a review result before dispatching validation.
+Review-request failure does not fail validation. Do not wait for a result.
 
 Use `task pr:review PR=<number>` only when an exact-head review request is needed
 without complete validation. It is idempotent and does not wait for a result.

@@ -74,28 +74,24 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 }
 
 #[test]
-fn complete_validation_requests_review_without_waiting_before_dispatch() {
+fn complete_validation_starts_before_non_blocking_review_request() {
     let agentic_tasks = read(".task/agentic-ai.yml");
     let direct_validation = read(".task/remote-execution.yml");
     let direct_review_position = direct_validation
-        .find("task pr:review PR=\"$REQUESTED_PR\"")
-        .expect("direct validation must request review");
+        .find("if ! task pr:review PR=\"$REQUESTED_PR\"; then")
+        .expect("direct validation must request review without making it a gate");
     let head_recheck_position = direct_validation
         .find(
             "current_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
         )
-        .expect("direct validation must recheck the PR head after requesting review");
+        .expect("direct validation must recheck the PR head before requesting review");
     let validation_label_position = direct_validation
         .find("validation_label=\"ci:validate\"")
         .expect("direct validation must apply its label");
     assert!(
-        direct_review_position < validation_label_position,
-        "direct review request must happen before validation is dispatched"
-    );
-    assert!(
-        direct_review_position < head_recheck_position
-            && head_recheck_position < validation_label_position,
-        "validation must recheck the exact head between review request and dispatch"
+        validation_label_position < head_recheck_position
+            && head_recheck_position < direct_review_position,
+        "validation must start before the non-blocking exact-head review request"
     );
     for required in [
         "pr:review-local:",
@@ -109,8 +105,8 @@ fn complete_validation_requests_review_without_waiting_before_dispatch() {
         );
     }
     assert!(
-        direct_validation.contains("changed head during the review request"),
-        "direct validation must reject a head replacement during review request"
+        direct_validation.contains("validation is already running"),
+        "review-request failure must not block validation"
     );
 }
 

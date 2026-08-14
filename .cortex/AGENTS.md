@@ -642,7 +642,7 @@ The normal loop:
 3. Advisory `task pr:review-local` before the first owner-authored push
 4. Push
 5. Optional focused `task remote` runs for isolated diagnostics
-6. Explicit `task pr:validate` to request review and dispatch exact-head checks
+6. Explicit `task pr:validate` to dispatch checks and request review
 
 For a harness-created PR, the continuing owner runs local review after handoff.
 

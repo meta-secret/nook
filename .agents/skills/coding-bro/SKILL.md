@@ -26,7 +26,7 @@ Follow the delivery sequence in the cortex workflow:
 2. Branch, implement, and run `task loom:pre-push`.
 3. Commit and run advisory local Codex review.
 4. Push and use focused hosted execution when useful.
-5. Trigger exact-head Cloud review and complete validation through Loom.
+5. Trigger complete validation and exact-head Cloud review through Loom.
 6. Resolve actionable feedback while repository-owned checks run.
 7. Fix until exact-head checks and readiness pass.
 8. Squash-merge and publish the Workbench completion records.
@@ -57,7 +57,7 @@ contract:
 | 3 | Implement the published plan |
 | 4 | **Always** `task loom:pre-push` |
 | 5 | Commit; run local review; then push/open or update PR. For a harness PR, run local review immediately after handoff |
-| 6 | Run focused `task remote` jobs as useful; then `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` to request review and dispatch validation |
+| 6 | Run focused `task remote` jobs as useful; then `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` to dispatch validation and request review |
 | 7 | Watch exact-head repository-owned checks and inspect feedback already present |
 | 8–10 | On failure: CI logs → fix → `task loom:pre-push` → commit/push → focused remote proof → explicit validation |
 | 11 | `gh pr merge --squash` when repository checks are green, threads are resolved, and Loom/Task readiness succeeds |

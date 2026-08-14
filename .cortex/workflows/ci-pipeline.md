@@ -668,8 +668,9 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Agents use `task remote TASK_NAMES=<a>,<b>` to reuse one job for a batch.
 - When the branch is ready, agents run `task pr:validate PR=<number>` or add
   `FULL_E2E=1`.
-- Validation requests one idempotent exact-head Codex review.
-- It dispatches repository-owned checks immediately after the request.
+- Validation dispatches repository-owned checks immediately.
+- It then requests one idempotent exact-head Codex review.
+- Review-request failure does not block those checks.
 - They wait only for applicable repository-owned exact-head PR checks.
 - Ordinary pushes do not start `pr.yml`.
 - Every later push requires another explicit validation before readiness.

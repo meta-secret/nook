@@ -641,8 +641,8 @@ Review and audit behavior:
 
 - The local review command runs advisory Codex review against `origin/main`.
 - The review command posts an idempotent SHA-bound Codex request.
-- Complete validation requests exact-head review and immediately dispatches
-  repository-owned checks.
+- Complete validation immediately dispatches repository-owned checks.
+- It then requests exact-head review without making it a gate.
 - Review results are not required for readiness.
 - Audit commands emit machine-readable exact-head state.
 - Audit commands do not wait for an external reviewer.

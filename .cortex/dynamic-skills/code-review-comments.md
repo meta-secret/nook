@@ -6,8 +6,8 @@ Make PR review-comment handling auditable: every active actionable item from a
 human reviewer, Codex, or another automated reviewer must be verified, fixed or
 explicitly invalidated, and replied to on GitHub. Agents must leave their own
 targeted reply before resolving any PR comment or review conversation. This
-skill does not initiate reviews. The PR delivery workflow requests exact-head
-Codex review alongside complete validation.
+skill does not initiate reviews. The PR delivery workflow dispatches complete
+validation and requests exact-head Codex review.
 
 ## Problem Pattern
 
