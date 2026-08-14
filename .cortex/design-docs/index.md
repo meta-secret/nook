@@ -5,6 +5,7 @@ This directory contains design specifications, architecture rationales, and core
 | Document | Description | Status |
 |---|---|---|
 | [core-beliefs.md](core-beliefs.md) | Agent-first core operating principles | Verified |
+| [agent-workflow-orchestration.md](agent-workflow-orchestration.md) | Cortex, Loom, Hive, and delivery-owner boundaries for deterministic multi-agent workflows | Architecture decision |
 | [hive-isolated-agent-platform.md](hive-isolated-agent-platform.md) | Stateful k0s/Kata Hive architecture, components, trust boundaries, task DAG, Main repair delivery, caching, and Taskfile operations | Implemented |
 | [identity-vault-architecture.md](identity-vault-architecture.md) | Identity management, vault independence, encrypted DEK grants, onboarding, and the shared replication-provider boundary | Architecture decision |
 | [unified-vault.md](unified-vault.md) | Local-first vault model; scalar `vault_version` sync retained as historical context | Partially historical — provider sync superseded by [vault-event-log.md](vault-event-log.md) |

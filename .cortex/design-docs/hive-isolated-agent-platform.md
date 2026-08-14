@@ -26,7 +26,9 @@ Hive separates four responsibilities:
 3. **Embedded Codex performs repository work.** Hive uses the in-process Codex
    core API. It does not spawn a Codex CLI process or parse CLI JSONL. Every
    worker turn explicitly selects `gpt-5.6-terra` with `low` reasoning effort,
-   the non-UI representation of Codex Light.
+   the non-UI representation of Codex Light. One worker runs one Codex thread.
+   Nested subagents are disabled. Future multi-agent graphs materialize each
+   reached node as a separate Hive task and disposable Pod.
 4. **Codex agents are trusted operators.** Main-repair agents receive a scoped
    GitHub credential and use standard `git` and `gh` workflows directly. Hive
    must not introduce a custom publication broker, filesystem mailbox, signed

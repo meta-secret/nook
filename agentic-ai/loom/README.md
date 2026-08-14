@@ -5,6 +5,11 @@ Loom weaves mechanical `.cortex` agent rites into a Bun domain-YAML protocol.
 Policy stays in `.cortex`. Loom runs deterministic steps and returns YAML plus
 exit codes.
 
+Current Loom tools are mechanical leaf operations.
+
+The planned `agentWorkflow` family will add deterministic graph scheduling and
+a Codex SDK worker adapter.
+
 Humans do not use Loom interactively. AI agents and Task wrappers do.
 
 ## Prerequisites
