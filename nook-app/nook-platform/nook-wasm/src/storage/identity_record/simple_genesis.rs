@@ -4,7 +4,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 
-use super::ensure_local_identity_for_app_key;
+use super::{ensure_local_identity_for_app_key, staged_genesis::StagedSimpleGenesisIdentity};
 #[cfg(test)]
 use crate::storage::indexed_db::idb_delete_key;
 use crate::storage::indexed_db::{
@@ -21,6 +21,13 @@ pub(crate) struct PendingSimpleGenesis {
     pub(crate) identity_id: nook_core::IdentityId,
     pub(crate) created_at: nook_core::IsoTimestamp,
     pub(crate) event_state: PendingSimpleGenesisEvent,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) staged_identity: Option<StagedSimpleGenesisIdentity>,
+}
+
+pub(crate) struct SimpleGenesisCompletion<'a> {
+    pub(crate) pending: &'a PendingSimpleGenesis,
+    pub(crate) staged_signing_seed: Option<&'a str>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -36,6 +43,8 @@ pub(crate) enum PendingSimpleGenesisEvent {
         event_yaml: String,
         #[serde(rename = "signingSeedEnvelope")]
         signing_seed_envelope: nook_core::AgeArmoredCiphertext,
+        #[serde(default, rename = "memberSigningSeedEnvelopes")]
+        member_signing_seed_envelopes: Vec<nook_core::MemberDekEnvelope>,
     },
     #[serde(skip_serializing)]
     LegacyUnsealedEventPinned {
@@ -65,6 +74,8 @@ enum PendingSimpleGenesisEventWire {
         signing_seed_envelope: Option<nook_core::AgeArmoredCiphertext>,
         #[serde(default, rename = "signingSeed")]
         signing_seed: Option<String>,
+        #[serde(default, rename = "memberSigningSeedEnvelopes")]
+        member_signing_seed_envelopes: Vec<nook_core::MemberDekEnvelope>,
     },
 }
 
@@ -79,6 +90,8 @@ struct PendingSimpleGenesisWire {
     event_state: Option<PendingSimpleGenesisEventWire>,
     #[serde(default)]
     event_yaml: Option<String>,
+    #[serde(default)]
+    staged_identity: Option<StagedSimpleGenesisIdentity>,
 }
 
 impl<'de> Deserialize<'de> for PendingSimpleGenesis {
@@ -98,6 +111,7 @@ impl<'de> Deserialize<'de> for PendingSimpleGenesis {
                         event_yaml,
                         signing_seed_envelope: None,
                         signing_seed: None,
+                        ..
                     },
                 ),
                 None,
@@ -110,6 +124,7 @@ impl<'de> Deserialize<'de> for PendingSimpleGenesis {
                     event_yaml,
                     signing_seed_envelope: None,
                     signing_seed: Some(signing_seed),
+                    ..
                 }),
                 None,
             ) => PendingSimpleGenesisEvent::LegacyUnsealedEventPinned {
@@ -121,11 +136,13 @@ impl<'de> Deserialize<'de> for PendingSimpleGenesis {
                     event_yaml,
                     signing_seed_envelope: Some(signing_seed_envelope),
                     signing_seed: None,
+                    member_signing_seed_envelopes,
                 }),
                 None,
             ) => PendingSimpleGenesisEvent::EventPinned {
                 event_yaml,
                 signing_seed_envelope,
+                member_signing_seed_envelopes,
             },
             (
                 Some(PendingSimpleGenesisEventWire::EventPinned {
@@ -151,6 +168,7 @@ impl<'de> Deserialize<'de> for PendingSimpleGenesis {
             identity_id: wire.identity_id,
             created_at: wire.created_at,
             event_state,
+            staged_identity: wire.staged_identity,
         })
     }
 }
@@ -173,13 +191,15 @@ fn legacy_simple_genesis_timestamp() -> nook_core::IsoTimestamp {
     nook_core::IsoTimestamp::from_trusted("1970-01-01T00:00:00.000Z".to_owned())
 }
 
-fn decode_pending_simple_genesis(raw: &str) -> Result<PendingSimpleGenesis, NookError> {
+pub(super) fn decode_pending_simple_genesis(raw: &str) -> Result<PendingSimpleGenesis, NookError> {
     serde_json::from_str(raw).map_err(|error| {
         NookError::IndexedDb(format!("Pending Simple genesis decode error: {error}"))
     })
 }
 
-fn encode_pending_simple_genesis(pending: &PendingSimpleGenesis) -> Result<String, NookError> {
+pub(super) fn encode_pending_simple_genesis(
+    pending: &PendingSimpleGenesis,
+) -> Result<String, NookError> {
     serde_json::to_string(pending).map_err(|error| {
         NookError::IndexedDb(format!("Pending Simple genesis encode error: {error}"))
     })
@@ -203,6 +223,7 @@ fn seal_legacy_signing_seed(
     pending.event_state = PendingSimpleGenesisEvent::EventPinned {
         event_yaml: event_yaml.clone(),
         signing_seed_envelope,
+        member_signing_seed_envelopes: Vec::new(),
     };
     Ok(())
 }
@@ -241,6 +262,7 @@ pub(crate) async fn begin_or_resume_simple_genesis(
         created_at: nook_core::IsoTimestamp::parse(&wasm_iso_timestamp())
             .map_err(|error| NookError::Database(error.to_string()))?,
         event_state: PendingSimpleGenesisEvent::AwaitingEvent,
+        staged_identity: None,
     };
     let selected = Rc::new(RefCell::new(None));
     let captured = Rc::clone(&selected);
@@ -264,6 +286,40 @@ pub(crate) async fn begin_or_resume_simple_genesis(
     })
 }
 
+fn staged_signing_seed_envelopes(
+    pending: &PendingSimpleGenesis,
+    signing_seed: &str,
+) -> Result<Vec<nook_core::MemberDekEnvelope>, NookError> {
+    pending
+        .staged_identity
+        .as_ref()
+        .and_then(|staged| {
+            staged
+                .directory
+                .identities()
+                .iter()
+                .find(|identity| identity.identity_id == pending.identity_id)
+        })
+        .map(|identity| {
+            identity
+                .members
+                .iter()
+                .map(|member| {
+                    Ok(nook_core::MemberDekEnvelope {
+                        app_id: member.app_id.clone(),
+                        envelope: nook_core::encrypt_for_recipient(
+                            signing_seed.as_bytes(),
+                            &member.public_key,
+                        )?,
+                    })
+                })
+                .collect::<Result<Vec<_>, nook_core::MultiDeviceError>>()
+        })
+        .transpose()
+        .map_err(|error| NookError::Database(error.to_string()))
+        .map(Option::unwrap_or_default)
+}
+
 /// Pin the first complete signed Simple genesis event before any event-log write.
 pub(crate) async fn persist_simple_genesis_event(
     pending: &PendingSimpleGenesis,
@@ -274,6 +330,8 @@ pub(crate) async fn persist_simple_genesis_event(
     let proposed_signing_seed_envelope = app_key
         .seal_utf8(&proposed_signing_seed)
         .map_err(|error| NookError::Database(error.to_string()))?;
+    let proposed_member_signing_seed_envelopes =
+        staged_signing_seed_envelopes(pending, &proposed_signing_seed)?;
     let app_key = app_key.clone();
     let expected = pending.clone();
     let selected = Rc::new(RefCell::new(None));
@@ -299,6 +357,8 @@ pub(crate) async fn persist_simple_genesis_event(
                     current.event_state = PendingSimpleGenesisEvent::EventPinned {
                         event_yaml: proposed_yaml.clone(),
                         signing_seed_envelope: proposed_signing_seed_envelope.clone(),
+                        member_signing_seed_envelopes: proposed_member_signing_seed_envelopes
+                            .clone(),
                     };
                     PinnedSimpleGenesisEvent {
                         event_yaml: proposed_yaml.clone(),
@@ -310,6 +370,8 @@ pub(crate) async fn persist_simple_genesis_event(
                     current.event_state = PendingSimpleGenesisEvent::EventPinned {
                         event_yaml: event_yaml.clone(),
                         signing_seed_envelope: proposed_signing_seed_envelope.clone(),
+                        member_signing_seed_envelopes: proposed_member_signing_seed_envelopes
+                            .clone(),
                     };
                     PinnedSimpleGenesisEvent {
                         event_yaml: event_yaml.clone(),
@@ -319,10 +381,16 @@ pub(crate) async fn persist_simple_genesis_event(
                 PendingSimpleGenesisEvent::EventPinned {
                     event_yaml,
                     signing_seed_envelope,
+                    member_signing_seed_envelopes,
                 } => PinnedSimpleGenesisEvent {
                     event_yaml,
-                    signing_seed: app_key
-                        .open_utf8(&signing_seed_envelope)
+                    signing_seed: member_signing_seed_envelopes
+                        .iter()
+                        .find(|entry| entry.app_id == *app_key.app_id())
+                        .map_or_else(
+                            || app_key.open_utf8(&signing_seed_envelope),
+                            |entry| app_key.open_utf8(&entry.envelope),
+                        )
                         .map_err(|error| NookError::Database(error.to_string()))?,
                 },
                 PendingSimpleGenesisEvent::LegacyUnsealedEventPinned { .. } => {
@@ -346,6 +414,32 @@ pub(crate) async fn persist_simple_genesis_event(
     })
 }
 
+pub(crate) fn resume_staged_simple_genesis_signing_seed(
+    pending: &PendingSimpleGenesis,
+    app_key: &nook_core::AppKey,
+) -> Result<Option<String>, NookError> {
+    if pending.staged_identity.is_none() {
+        return Ok(None);
+    }
+    let PendingSimpleGenesisEvent::EventPinned {
+        signing_seed_envelope,
+        member_signing_seed_envelopes,
+        ..
+    } = &pending.event_state
+    else {
+        return Ok(None);
+    };
+    member_signing_seed_envelopes
+        .iter()
+        .find(|entry| entry.app_id == *app_key.app_id())
+        .map_or_else(
+            || app_key.open_utf8(signing_seed_envelope),
+            |entry| app_key.open_utf8(&entry.envelope),
+        )
+        .map(Some)
+        .map_err(|error| NookError::Database(error.to_string()))
+}
+
 fn validate_genesis_signing_seed(event_yaml: &str, signing_seed: &str) -> Result<(), NookError> {
     let event = nook_core::parse_event_storage_bytes(event_yaml.as_bytes())?;
     let signing = nook_core::SigningIdentity::from_seed_hex_stored(signing_seed)?;
@@ -358,8 +452,9 @@ fn validate_genesis_signing_seed(event_yaml: &str, signing_seed: &str) -> Result
 }
 
 pub(crate) async fn clear_pending_simple_genesis(
-    completed: &PendingSimpleGenesis,
+    completion: SimpleGenesisCompletion<'_>,
 ) -> Result<(), NookError> {
+    let completed = completion.pending;
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
@@ -378,7 +473,68 @@ pub(crate) async fn clear_pending_simple_genesis(
             NookError::IndexedDb(format!("Genesis cleanup decode error: {error:?}"))
         })?;
         let pending = decode_pending_simple_genesis(&raw)?;
-        if pending.store_id == completed.store_id && pending.identity_id == completed.identity_id {
+        if pending.store_id == completed.store_id
+            && pending.identity_id == completed.identity_id
+            && pending.created_at == completed.created_at
+        {
+            if let Some(staged) = &pending.staged_identity {
+                let directory_id = serde_wasm_bindgen::to_value(super::IDENTITY_DIRECTORY_KEY)
+                    .map_err(|error| {
+                        NookError::IndexedDb(format!("Genesis identity key error: {error:?}"))
+                    })?;
+                let current_directory = store.get(directory_id.clone()).await.map_err(|error| {
+                    NookError::IndexedDb(format!("Genesis identity read error: {error:?}"))
+                })?;
+                let current_directory = current_directory
+                    .filter(|value| !value.is_undefined() && !value.is_null())
+                    .map(|value| {
+                        let raw: String =
+                            serde_wasm_bindgen::from_value(value).map_err(|error| {
+                                NookError::IndexedDb(format!(
+                                    "Genesis identity decode error: {error:?}"
+                                ))
+                            })?;
+                        super::decode_directory(&raw)
+                    })
+                    .transpose()?
+                    .unwrap_or_else(nook_core::IdentityDirectory::empty);
+                if current_directory != staged.base_directory {
+                    return Err(NookError::IndexedDb(
+                        "Identity directory changed during staged vault genesis.".to_owned(),
+                    ));
+                }
+                let encoded = serde_json::to_string(&staged.directory).map_err(|error| {
+                    NookError::IndexedDb(format!("Genesis identity encode error: {error}"))
+                })?;
+                let encoded = serde_wasm_bindgen::to_value(&encoded).map_err(|error| {
+                    NookError::IndexedDb(format!("Genesis identity value error: {error:?}"))
+                })?;
+                store
+                    .put(&encoded, Some(&directory_id))
+                    .await
+                    .map_err(|error| {
+                        NookError::IndexedDb(format!("Genesis identity write error: {error:?}"))
+                    })?;
+                let signing_seed = completion.staged_signing_seed.ok_or_else(|| {
+                    NookError::IndexedDb(
+                        "Staged genesis completion is missing its signing seed.".to_owned(),
+                    )
+                })?;
+                let seed_key =
+                    serde_wasm_bindgen::to_value(crate::storage::event_db::SIGNING_SEED_KEY)
+                        .map_err(|error| {
+                            NookError::IndexedDb(format!("Genesis signing key error: {error:?}"))
+                        })?;
+                let seed_value = serde_wasm_bindgen::to_value(signing_seed).map_err(|error| {
+                    NookError::IndexedDb(format!("Genesis signing value error: {error:?}"))
+                })?;
+                store
+                    .put(&seed_value, Some(&seed_key))
+                    .await
+                    .map_err(|error| {
+                        NookError::IndexedDb(format!("Genesis signing write error: {error:?}"))
+                    })?;
+            }
             store.delete(id).await.map_err(|error| {
                 NookError::IndexedDb(format!("Genesis cleanup delete error: {error:?}"))
             })?;
@@ -436,7 +592,11 @@ mod tests {
         let resumed = begin_or_resume_simple_genesis(&app_key, "Ignored").await?;
         assert_eq!(resumed.store_id, pending.store_id);
         assert_eq!(resumed.identity_id, pending.identity_id);
-        clear_pending_simple_genesis(&pending).await?;
+        clear_pending_simple_genesis(SimpleGenesisCompletion {
+            pending: &pending,
+            staged_signing_seed: None,
+        })
+        .await?;
         let replacement = begin_or_resume_simple_genesis(&app_key, "Work").await?;
         assert_ne!(replacement.store_id, pending.store_id);
         clear_identity_directory_for_test().await
@@ -526,6 +686,7 @@ mod tests {
                 event_yaml,
                 signing_seed: mismatched_seed.as_str().to_owned(),
             },
+            staged_identity: None,
         };
 
         assert!(seal_legacy_signing_seed(&mut pending, &app_key).is_err());

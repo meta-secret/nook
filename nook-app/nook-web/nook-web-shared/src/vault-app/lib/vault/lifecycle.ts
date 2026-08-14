@@ -314,6 +314,11 @@ export async function authorizeWithExternalDeviceIdentity({
   try {
     await state.enqueueStorage(() => adopt(state.requireManager()));
     if (mode === ExternalDeviceIdentityAuthorizationMode.DeferInitialization) {
+      await state.enqueueStorage(() =>
+        state
+          .requireManager()
+          .mark_extension_identity_handoff_existing_vault_import(),
+      );
       const initDeviceIdentityRequest: DeviceIdentityInitialization = {
         state,
         mode: DeviceIdentityInitializationMode.AllowPendingAuthorization,
@@ -322,13 +327,13 @@ export async function authorizeWithExternalDeviceIdentity({
     } else {
       await continueInitializationAfterDeviceUnlock(state);
     }
-    const requiresVaultCreation = state
+    const requiresConnect = state
       .requireManager()
-      .extension_identity_handoff_requires_vault_creation();
-    await state.enqueueStorage(() =>
-      state.requireManager().commit_extension_identity_handoff(),
-    );
-    if (!requiresVaultCreation) {
+      .extension_identity_handoff_requires_connect();
+    if (!requiresConnect) {
+      await state.enqueueStorage(() =>
+        state.requireManager().commit_extension_identity_handoff(),
+      );
       await state.enqueueStorage(() =>
         state.requireManager().confirm_extension_identity_handoff(),
       );
@@ -345,9 +350,7 @@ export async function authorizeWithExternalDeviceIdentity({
     return true;
   } catch {
     try {
-      await state.enqueueStorage(() =>
-        state.requireManager().rollback_extension_identity_handoff(),
-      );
+      state.requireManager().rollback_extension_identity_handoff();
     } catch {
       log.warn("extension identity durable rollback failed");
     }

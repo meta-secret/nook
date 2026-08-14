@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use super::{
     EventId, NookError, NookVaultManager, VaultOperation, fetch_drive_event_optional,
     fetch_github_event, fetch_icloud_event, iso_timestamp, list_drive_event_ids,
-    list_github_event_ids, list_icloud_event_ids, load_local_event_store,
+    list_github_event_ids, list_icloud_event_ids, load_local_event_store, load_signing_seed,
     put_drive_event_if_absent, put_github_event_if_absent, put_icloud_event_if_absent,
     save_event_bytes, save_heads, save_signing_seed,
 };
@@ -43,17 +43,29 @@ async fn simple_genesis_operations(
             members_key_ciphertext: envelopes.members_key,
         }]);
     };
-    crate::storage::identity_record::set_identity_member_signing_public_key(
-        &pending.identity_id,
-        input.identity.device_id(),
-        input.signing_public_key,
-    )
-    .await?;
-    let identity_record = crate::storage::identity_record::load_identity(&pending.identity_id)
-        .await?
-        .ok_or_else(|| {
-            NookError::Database("Simple genesis identity no longer exists.".to_owned())
-        })?;
+    let identity_record = if let Some(staged) = &pending.staged_identity {
+        staged
+            .directory
+            .identities()
+            .iter()
+            .find(|identity| identity.identity_id == pending.identity_id)
+            .cloned()
+            .ok_or_else(|| {
+                NookError::Database("Staged Simple genesis identity no longer exists.".to_owned())
+            })?
+    } else {
+        crate::storage::identity_record::set_identity_member_signing_public_key(
+            &pending.identity_id,
+            input.identity.device_id(),
+            input.signing_public_key,
+        )
+        .await?;
+        crate::storage::identity_record::load_identity(&pending.identity_id)
+            .await?
+            .ok_or_else(|| {
+                NookError::Database("Simple genesis identity no longer exists.".to_owned())
+            })?
+    };
     nook_core::simple_identity_genesis_operations(
         &nook_core::SimpleIdentityGenesisOperationsInput {
             identity: &identity_record,
@@ -64,6 +76,51 @@ async fn simple_genesis_operations(
         },
     )
     .map_err(NookError::from)
+}
+
+async fn simple_genesis_signing_identity(
+    manager: &mut NookVaultManager,
+    pending: Option<&crate::storage::identity_record::PendingSimpleGenesis>,
+) -> Result<nook_core::SigningIdentity, NookError> {
+    let Some(pending) = pending.filter(|pending| pending.staged_identity.is_some()) else {
+        return manager.ensure_signing_identity().await;
+    };
+    let app_key = manager.device_identity()?;
+    if let Some(seed) = crate::storage::identity_record::resume_staged_simple_genesis_signing_seed(
+        pending, &app_key,
+    )? {
+        manager.event_log.signing_seed = seed;
+    }
+    if manager.event_log.signing_seed.is_empty() {
+        manager.event_log.signing_seed = load_signing_seed().await?.ok_or_else(|| {
+            NookError::Database(
+                "Staged Simple genesis requires an enrolled member signing key.".to_owned(),
+            )
+        })?;
+    }
+    let signing =
+        nook_core::SigningIdentity::from_seed_hex_stored(&manager.event_log.signing_seed)?;
+    let staged = pending.staged_identity.as_ref().ok_or_else(|| {
+        NookError::Database("Staged Simple genesis state disappeared.".to_owned())
+    })?;
+    let member = staged
+        .directory
+        .identities()
+        .iter()
+        .find(|identity| identity.identity_id == pending.identity_id)
+        .and_then(|identity| {
+            identity
+                .members
+                .iter()
+                .find(|member| member.app_id == *app_key.app_id())
+        })
+        .ok_or_else(|| NookError::Database("Staged genesis member disappeared.".to_owned()))?;
+    if member.signing_public_key != signing.public_key() {
+        return Err(NookError::Database(
+            "Staged genesis signer does not match the authorized member.".to_owned(),
+        ));
+    }
+    Ok(signing)
 }
 
 impl NookVaultManager {
@@ -198,7 +255,7 @@ impl NookVaultManager {
         pending: Option<&crate::storage::identity_record::PendingSimpleGenesis>,
     ) -> Result<(), NookError> {
         self.activate_event_log_mode().await?;
-        let signing = self.ensure_signing_identity().await?;
+        let signing = simple_genesis_signing_identity(self, pending).await?;
         let actor_id = signing.actor_id()?;
         let signing_public_key = signing.public_key();
         let key_epoch = self.ensure_key_epoch().await?;
@@ -262,7 +319,9 @@ impl NookVaultManager {
             )
             .await?;
             self.event_log.signing_seed.clone_from(&pinned.signing_seed);
-            save_signing_seed(&pinned.signing_seed).await?;
+            if pending.staged_identity.is_none() {
+                save_signing_seed(&pinned.signing_seed).await?;
+            }
             pinned.event_yaml.into_bytes()
         } else {
             proposed_bytes

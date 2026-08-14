@@ -229,7 +229,7 @@ export async function createLocalVaultWithDeviceKeys({
     await state.initDeviceIdentity();
     handoffAwaitingVaultCreation = state
       .requireManager()
-      .extension_identity_handoff_requires_vault_creation();
+      .extension_identity_handoff_requires_connect();
     const creatingAdditionalVault = state.localVaults.length > 0;
     if (creatingAdditionalVault) {
       await prepare_new_local_vault_slot();
@@ -246,9 +246,6 @@ export async function createLocalVaultWithDeviceKeys({
     })) as NookSecretRecord[];
     for (const record of rawRecords) record.free();
     if (handoffAwaitingVaultCreation) {
-      await state.enqueueStorage(() =>
-        state.requireManager().confirm_extension_identity_handoff(),
-      );
       handoffAwaitingVaultCreation = false;
     }
     const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
@@ -275,9 +272,7 @@ export async function createLocalVaultWithDeviceKeys({
   } catch (e) {
     if (handoffAwaitingVaultCreation) {
       try {
-        await state.enqueueStorage(() =>
-          state.requireManager().rollback_extension_identity_handoff(),
-        );
+        state.requireManager().rollback_extension_identity_handoff();
       } catch {
         log.warn("failed vault creation handoff rollback failed");
       }
