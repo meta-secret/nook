@@ -1,5 +1,41 @@
 # Completed Plan: Cortex Restructure & Docker Toolchain Upgrades
 
+## Relationships
+
+- [Nook Agent Map](../../AGENTS.md)
+  - Owns the Cortex entry point created by this completed plan.
+  - Read when interpreting the historical directory restructure.
+- [Nook Coding Rules & Golden Principles](../../rules.md)
+  - Owns the dependency-pinning rules added by this plan.
+  - Read when maintaining the historical package-policy outcome.
+- [Cross-Package Changes](../../workflows/monorepo.md)
+  - Owns the cross-package workflow produced by the restructure.
+  - Read when tracing where the former skill guidance moved.
+- [Quality and Release](../../workflows/quality.md)
+  - Owns the quality workflow produced by the restructure.
+  - Read when tracing the plan's CI and toolchain outcome.
+
+## Document map
+
+- [What Changed](#what-changed)
+  - Summarizes the five historical documentation and toolchain changes.
+  - Read when tracing what this completed plan delivered.
+  - [1. Cortex Directory Restructure](#1-cortex-directory-restructure)
+    - Restructured .cortex from an overengineered skill/subagent hierarchy into a flat, harness-engineering-style layout.
+    - Read before changing or relying on Cortex Directory Restructure.
+  - [2. Pinned Precise Versions](#2-pinned-precise-versions)
+    - Pinned all dependencies to exact versions (removed ^, ~, etc.) across: nook-app/nook-platform/nook-core/Cargo.toml (serde =.
+    - Read before changing or relying on Pinned Precise Versions.
+  - [3. Upgraded Outdated JS Packages](#3-upgraded-outdated-js-packages)
+    - Upgraded the 4 requested packages to their latest major versions inside nook-app/nook-web/package.json:@lucide/svelte: 0.561.0 ➔.
+    - Read before changing or relying on Upgraded Outdated JS Packages.
+  - [4. Relocated & Modernized Dockerfile](#4-relocated--modernized-dockerfile)
+    - Moved Dockerfile from .docker/build. Dockerfile to Dockerfile at the project root (removing pointless nesting in .docker/). Updated.
+    - Read before changing or relying on Relocated & Modernized Dockerfile.
+  - [5. Fixed table.grow WebAssembly Runtime Error](#5-fixed-tablegrow-webassembly-runtime-error)
+    - The Issue: The system-installed version of binaryen in Debian bookworm is version 108, which is outdated and corrupts/strips.
+    - Read before changing or relying on Fixed table.grow WebAssembly Runtime Error.
+
 ## What Changed
 
 ### 1. Cortex Directory Restructure
