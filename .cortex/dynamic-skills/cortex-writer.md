@@ -1,5 +1,44 @@
 # Cortex Writer — Low Cognitive Complexity
 
+## Relationships
+
+- [Cortex document navigation](cortex-document-map.md)
+  - Defines concise navigation summaries as part of every Cortex document.
+  - Apply whenever headings, relationships, or document maps change.
+- [Cortex consistency](cortex-consistency.md)
+  - Requires readable edits to remain current and non-contradictory.
+  - Apply whenever durable Cortex guidance changes.
+
+## Document map
+
+- [Priority](#priority)
+  - Establishes low-complexity prose as a P1 Cortex invariant.
+  - Read before authoring Cortex content.
+- [Purpose](#purpose)
+  - Explains the human and agent readability goal.
+  - Read when deciding how much detail one sentence should carry.
+- [Problem pattern](#problem-pattern)
+  - Lists warning signs for dense prose.
+  - Read while reviewing a Cortex diff.
+- [Preferred pattern](#preferred-pattern)
+  - Defines how to split facts, rules, and conditions.
+  - Apply while rewriting dense content.
+- [Mechanical lint](#mechanical-lint)
+  - Shows the Loom density-lint request and command.
+  - Read when running heuristic prose checks.
+- [Scope](#scope)
+  - Defines covered Cortex prose and narrow exclusions.
+  - Read when deciding whether the writing rule applies.
+- [Examples](#examples)
+  - Contrasts a dense cache-policy paragraph with readable facts.
+  - Read when a concrete rewrite pattern is useful.
+- [Application checklist](#application-checklist)
+  - Provides a short review checklist for every edit.
+  - Use before completing Cortex writing.
+- [Validation](#validation)
+  - Defines self-review, consistency, and focused checks.
+  - Run after editing Cortex prose.
+
 ## Priority
 
 This is a P1 documentation rule for every `.cortex` Markdown file.

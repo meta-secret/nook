@@ -3,6 +3,7 @@ name: Loom
 on:
   pull_request:
     paths:
+      - .cortex/**
       - .github/workflows/loom.yml
       - .task/agentic-ai.yml
       - agentic-ai/loom/**
@@ -10,6 +11,7 @@ on:
   push:
     branches: [main]
     paths:
+      - .cortex/**
       - .github/workflows/loom.yml
       - .task/agentic-ai.yml
       - agentic-ai/loom/**
@@ -50,6 +52,9 @@ jobs:
 
       - name: Verify Loom package quality
         run: task loom:verify
+
+      - name: Audit Cortex document structure
+        run: task loom:cortex-audit
 
       - name: Enforce authored TypeScript state invariants
         run: task preflight:typescript-state

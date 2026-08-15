@@ -238,6 +238,18 @@ export function mechanicalCortexAuditOutput(
     };
     findings.push(finding);
   }
+  for (const structureFinding of report.structureFindings) {
+    const finding: WorkflowFinding = {
+      severity: WorkflowFindingSeverity.Error,
+      title: 'Invalid Cortex document navigation',
+      summary: `${structureFinding.file}:${structureFinding.line} ${structureFinding.message}`,
+      evidence: [
+        `${structureFinding.code}: ${structureFinding.file}:${structureFinding.line}`,
+      ],
+      affectedPaths: [structureFinding.file],
+    };
+    findings.push(finding);
+  }
 
   const summary = report.auditOk
     ? 'Mechanical Cortex audit passed.'

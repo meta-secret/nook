@@ -8,6 +8,26 @@ Use this index before refactors, review handling, issue-scope decisions, or skil
 creation so agents apply the existing repo-specific guidance and keep related
 knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.cursor/skills/` and `.claude/skills/`) enable direct invocation across Antigravity, Cursor, Claude, and Codex; the `.cortex` card remains the source of truth.
 
+## Relationships
+
+- [Dynamic skill authoring](dynamic-skill-authoring.md)
+  - Defines how durable cards and executable wrappers enter this registry.
+  - Read when adding or revising a project skill.
+- [Cortex document navigation](cortex-document-map.md)
+  - Defines the mandatory graph and internal-map structure for every card.
+  - Apply whenever a registry document changes.
+
+## Document map
+
+- [Skill catalog](#skill-catalog)
+  - Lists every canonical card and its executable wrapper when one exists.
+  - Scan before a refactor or skill-creation task.
+- [How to add one](#how-to-add-one)
+  - Defines the scaffold, registration, wrapper, and audit sequence.
+  - Follow when adding a new project skill.
+
+## Skill catalog
+
 | Skill card | Purpose | Executable skill |
 |---|---|---|
 | [source-file-size.md](source-file-size.md) | **P1 / most critical structure rule:** every authored file, including Rust, has one 1,000-line ceiling; oversized Rust signals excessive domain responsibility and requires cohesive decomposition | [`.agents/skills/source-file-size/SKILL.md`](../../.agents/skills/source-file-size/SKILL.md) |
@@ -36,10 +56,11 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 | [prefer-popular-libraries.md](prefer-popular-libraries.md) | Before writing boilerplate, prefer mature high-adoption libraries; reject obscure low-star/low-download deps; validate with Loom `dependencyPopularity` | [`.agents/skills/prefer-popular-libraries/SKILL.md`](../../.agents/skills/prefer-popular-libraries/SKILL.md) |
 | [ui-design-skills.md](ui-design-skills.md) | Load `design-taste-frontend` for user-visible UI work; Impeccable is disabled by default and may be used only when the user explicitly requests it | |
 | [web-unused-code.md](web-unused-code.md) | Enable class-member analysis in every web Knip graph and remove every valid unused-code finding | |
+| [cortex-document-map.md](cortex-document-map.md) | Require standard relationship links and a hierarchical internal map in every Cortex document | [`.agents/skills/cortex-document-map/SKILL.md`](../../.agents/skills/cortex-document-map/SKILL.md) |
 
 [code-review-skill]: ../../.agents/skills/code-review-comments/SKILL.md
 
-## How To Add One
+## How to add one
 
 1. Scaffold with Loom using a `skillScaffold` domain request YAML.
 2. Fill in the problem pattern, preferred pattern, scope, examples, and
@@ -50,4 +71,4 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
    symlinks) pointing back to the `.cortex` card, then link it from the table.
 5. Verify with `task loom:cortex-audit`.
 
-See [loom-tools.md](../references/loom-tools.md).
+See [Loom tools](../references/loom-tools.md).
