@@ -71,8 +71,7 @@ interface StorageTimeoutRace<T> {
 
 /** Shared runtime, provider, locale, and queue capabilities for the vault facade. */
 export abstract class VaultRuntimeState extends VaultLifecycleState {
-  private readonly localDataStorageGeneration =
-    captureLocalDataStorageGeneration();
+  private localDataStorageGeneration = captureLocalDataStorageGeneration();
   secretPageGeneration = 0;
   secretPageRequestOffset = 0;
   architectureSecretCreationAllowed = $state(true);
@@ -189,6 +188,10 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
 
   resetStorageChain(): void {
     this.storageQueue.reset();
+  }
+
+  adoptLocalDataStorageGeneration(): void {
+    this.localDataStorageGeneration = captureLocalDataStorageGeneration();
   }
 
   static storageOpTimeoutMs = 20_000;

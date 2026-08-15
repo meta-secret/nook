@@ -68,18 +68,13 @@ Member records persist both encryption and event-signing public keys.
 Missing signing keys from older records are unavailable, not inferred.
 New Simple-vault genesis requires a verified signing key for every member.
 Simple vault genesis uses `pending_simple_genesis_v1`.
-The record contains `storeId`, `identityId`, `createdAt`, `eventState`, and
-`flow`.
-The flow is explicitly `ordinary` or `staged`.
-The staged variant owns the base directory and inactive candidate directory.
-Writers also emit the legacy `stagedIdentity` projection for already-open tabs.
-Current readers reject conflicting current and legacy staged state.
-The marker is durable before event creation and survives reloads.
-Successful verified connect publishes the staged directory and matching signing
-seed, then removes the marker in one compare-and-write transaction.
-Unrelated concurrent identity changes are preserved by a Rust-domain rebase.
-The rebase also preserves the current identity selection.
-A concurrent change to the staged target fails closed and retains the marker.
+The record adds an `ordinary` or `staged` `flow` to its existing fields.
+Staged flow owns base and candidate directories.
+Writers retain the legacy projection, but readers reject conflicts.
+The durable marker survives reloads.
+Verified connect atomically publishes the candidate, signer, and marker removal.
+Rust rebases unrelated identities and selection.
+Target conflicts fail closed and retain the marker.
 Legacy records without `createdAt` use the Unix epoch timestamp.
 `eventState` is `awaiting-event`, `legacy-event-pinned`, or `event-pinned`.
 The current pinned variant owns the complete signed genesis event in
@@ -99,30 +94,6 @@ after verified connect establishes the owning identity and validates the active
 signed roster.
 Legacy-vault DEK reconciliation uses only active signed event approvals after
 revocation replay.
-
-Destructive local device recovery is atomic. Every tab first stops storage work
-and zeroizes its app key. One IndexedDB transaction then removes the wrapped app
-key, clears ownership and pending work, and permanently records retired app IDs.
-Unreadable metadata cannot block recovery; failure leaves prior state intact.
-Security-epoch retry state uses
-`pending_identity_reconciliation_v2:{store_id}`. It progresses from an
-app-key-encrypted `prepared` plan, through `epoch-committed`, to `committed`.
-Connect resumes unfinished plans before reconciliation. Identity-owned DEKs
-carry known epoch and checkpoint event IDs; missing legacy fields remain the
-explicit `legacy-unknown` compatibility variant.
-Reconciliation accepts only verified history, advances same-epoch checkpoints
-through verified ancestry, and compare-deletes the exact consumed marker. If a
-later verified rotation follows an interrupted one, the directory advances to
-the latest epoch only when the intermediate checkpoint remains an ancestor.
-Providers publish checkpoints before their triggers. Visibility gates and
-local quarantine keep incomplete triggers and descendants out of the active
-graph. Concurrent old-frontier mutations are blocking security conflicts, and
-remote unions are validated and written atomically. Simple vaults adopt
-authorized imported keys before replay; missing authorization clears keys,
-while Sentinel requires a new share ceremony.
-Schema `3` checkpoints replace secrets, rewrapped metadata, and password
-entries. Schema `2` remains readable, but older writers cannot append to schema
-`3` history. The architecture document defines the detailed durable protocol.
 
 On first read, the app migrates `identity_record_v1` into the directory.
 It deletes the legacy key only after the new directory is durable.

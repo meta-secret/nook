@@ -405,6 +405,7 @@ export async function resetDeviceProtectionForRecovery(
     await state.enqueueExclusiveStorage(() =>
       state.requireManager().reset_device_protection_for_recovery(),
     );
+    state.adoptLocalDataStorageGeneration();
     state.deviceProtectionStatus = DeviceProtectionStatus.Missing;
     state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey;
     state.deviceId = "";

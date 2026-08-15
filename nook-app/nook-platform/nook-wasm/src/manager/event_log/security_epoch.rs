@@ -385,9 +385,34 @@ mod tests {
     fn detects_a_verified_epoch_after_the_prepared_epoch() -> anyhow::Result<()> {
         let planned = nook_core::EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let latest = nook_core::EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
-        let mut projection = nook_core::VaultProjection::default();
-        projection.epoch = nook_core::ProjectionEpoch::Current(nook_core::KeyEpoch(latest));
+        let projection = nook_core::VaultProjection {
+            epoch: nook_core::ProjectionEpoch::Current(nook_core::KeyEpoch(latest)),
+            ..Default::default()
+        };
         assert!(projection_advanced_past(&projection, &planned));
+        Ok(())
+    }
+
+    #[test]
+    fn replaces_a_legacy_target_before_epoch_rewrap() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let legacy = serde_json::from_value(serde_json::json!({
+            "id": "pwdentry001", "label": "Legacy", "created_at": "2026-08-15T00:00:00Z",
+            "envelope": { "version": 1, "kdf": "scrypt", "work_factor": 10, "ciphertext": "old" }
+        }))?;
+        let envelope = nook_core::attach_password_envelope_with_work_factor(&keys, "updated", 10)?;
+        let entries = rewrap_password_entries(
+            &[legacy],
+            &keys,
+            &VaultOperation::PasswordRotated {
+                entry_id: nook_core::PasswordEntryId::parse("pwdentry001")?,
+                envelope,
+            },
+        )?;
+        assert_eq!(
+            nook_core::resolve_keys_from_entry(&entries[0], "updated")?,
+            keys
+        );
         Ok(())
     }
 }

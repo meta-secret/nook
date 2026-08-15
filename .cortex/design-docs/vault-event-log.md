@@ -186,32 +186,12 @@ then repairs the provider by uploading any local event-store events missing from
 that provider. During pull, fetched remote events are hash/signature-validated
 and ignored when their signed body belongs to another `store_id`.
 
-Security epoch pairs use a visibility gate across providers that cannot commit
-multiple files atomically. The checkpoint is published before its trigger. A
-checkpoint whose trigger is not visible remains pending. A trigger whose
-checkpoint is not visible is not admitted to the local graph. Descendants
-therefore cannot extend an incomplete key transition.
-
-Event schema v3 owns checkpoint replacement fields. Current readers accept
-legacy v2 events, while pre-v3 readers reject new events before persistence.
-Legacy password-envelope upgrades use a non-epoch operation; password rotation
-remains a complete trigger/checkpoint transition.
-
-Provider publication may leave the old frontier temporarily appendable. Any
-event concurrent with an epoch trigger, including an access grant or ordinary
-vault mutation, becomes a blocking security conflict.
-
-Provider imports revalidate the complete union in the IndexedDB transaction
-that writes bytes and heads, serializing with local appends and epoch commits.
-
-The import quarantines a legacy local trigger and every descendant when the
-trigger lacks a verified checkpoint. The active index and future outbox flushes
-exclude that transition before it can become remotely appendable.
-
-An unlocked Simple-vault session adopts the projected epoch's rewrapped auth
-envelopes and persists the new key-epoch marker before projection replay. A
-revoked device, missing envelope, or Sentinel epoch transition clears in-memory
-vault keys and requires the appropriate unlock ceremony before writes resume.
+Publish epoch checkpoints before triggers. Quarantine incomplete pairs and
+descendants. Old-frontier concurrency is a blocking conflict. Import unions are
+one IndexedDB transaction. Schema v3 owns replacements while v2 stays readable.
+Simple vaults adopt authorized keys before replay; missing authorization clears
+keys, and Sentinel requires a new ceremony. Password rotation uses a complete
+trigger/checkpoint pair.
 
 Provider connect and sync paths must classify the provider event set before
 writing outbox or repair events.

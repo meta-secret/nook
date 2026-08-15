@@ -280,8 +280,11 @@ impl IdentityRecord {
             {
                 authorized_members.push(member.clone());
             }
-            self.vault_deks[index] =
+            let key_epoch = self.vault_deks[index].key_epoch.clone();
+            let mut replacement =
                 wrap_vault_keys_for_members(keys, &authorized_members, store_id.clone())?;
+            replacement.key_epoch = key_epoch;
+            self.vault_deks[index] = replacement;
         }
         if !keys_by_store.is_empty() {
             self.control_epoch = self.control_epoch.saturating_add(1);

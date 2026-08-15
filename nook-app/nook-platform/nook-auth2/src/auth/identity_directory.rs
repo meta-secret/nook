@@ -103,6 +103,11 @@ impl IdentityDirectory {
         &self.selection
     }
 
+    #[must_use]
+    pub fn retired_app_ids(&self) -> &[crate::AppId] {
+        &self.retired_app_ids
+    }
+
     pub fn create_identity(
         &mut self,
         label: &str,
@@ -502,6 +507,16 @@ mod tests {
     use super::*;
     use crate::IdentityVaultDekReconciliation;
 
+    fn known_epoch(epoch: char, checkpoint: char) -> anyhow::Result<crate::IdentityVaultDekEpoch> {
+        let id = |fill: char| {
+            crate::IdentityVaultEventId::parse(&format!("sha256u:{}", fill.to_string().repeat(43)))
+        };
+        Ok(crate::IdentityVaultDekEpoch::Known {
+            key_epoch: id(epoch)?,
+            checkpoint: id(checkpoint)?,
+        })
+    }
+
     #[test]
     fn creates_and_selects_independent_identities() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
@@ -579,6 +594,8 @@ mod tests {
         let owner_id = directory.create_identity("Personal", &website_key, None)?;
         let store_id = crate::generate_store_id()?;
         let expected_keys = directory.open_or_generate_vault_dek(&website_key, store_id.clone())?;
+        let epoch = known_epoch('a', 'b')?;
+        directory.selected_mut()?.vault_deks[0].key_epoch = epoch.clone();
         let selected_id = directory.create_identity("Work", &website_key, None)?;
 
         let enrolled_id =
@@ -591,6 +608,7 @@ mod tests {
             expected_keys
         );
         assert_eq!(directory.selected()?.members.len(), 1);
+        assert_eq!(directory.identities()[0].vault_deks[0].key_epoch, epoch);
         Ok(())
     }
 

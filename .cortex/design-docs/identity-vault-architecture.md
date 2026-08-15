@@ -80,31 +80,21 @@ Concurrent tabs must not overwrite identity creation, selection, membership,
 or DEK changes.
 Extension identity adoption remains staged through vault initialization.
 
-- Fresh-vault membership remains in the genesis marker until connect succeeds.
-- The marker also owns staged signing keys and per-vault DEK envelopes.
-- Completion compares the marker's base directory with the current directory.
-- A match publishes the candidate directory and signing seed atomically.
-- The same transaction removes the completed marker.
-- An unrelated concurrent directory update is rebased in Rust.
-- The rebase preserves unrelated identities and the current selection.
-- A concurrent change to the staged target fails closed and retains the marker.
-- Failed creation clears decrypted host state and stops background sync.
-- Failed creation does not rewind event stores or active identity state.
+- The genesis marker owns staged membership, signing keys, and DEK envelopes.
+- Completion atomically publishes its candidate and removes the marker.
+- Rust rebases unrelated identities and the current selection.
+- Target conflicts fail closed and retain the marker.
+- Failure clears decrypted host state and sync without rewinding durable state.
 
-Existing-vault imports use a distinct pending handoff state. Verified connect
-first synthesizes the vault owner from active signed envelopes. It then verifies
-the extension signing key against the active event roster. The final transaction
-commits the member signer and adopted signing seed.
+Existing-vault imports validate the active signed roster before synthesizing
+ownership. A final transaction commits the member signer and signing seed.
 Legacy-vault reconciliation derives DEK recipients from the signed event
 graph's active approvals after revocations, not from stale encrypted auth rows.
 
-Simple vault creation stores `pending_simple_genesis_v1` in IndexedDB.
-Its JSON fields are `storeId`, `identityId`, `createdAt`, `eventState`, and
-`flow`. The flow is explicitly `ordinary` or `staged`. The staged variant owns
-the base directory and inactive candidate directory. The candidate owns the
-identity DEK envelopes. Writers also emit the legacy `stagedIdentity` projection
-for already-open tabs. Current readers reject markers that contain conflicting
-current and legacy staged state.
+Simple vault creation stores `pending_simple_genesis_v1` in IndexedDB. Its
+`flow` is `ordinary` or `staged`; staged flow owns the base and candidate
+directories. Writers retain the legacy `stagedIdentity` projection for open
+tabs, while readers reject conflicting projections.
 The app writes the marker before any event-log state.
 A reload resumes the same store and identity binding.
 Verified connect completion removes the marker with a compare-and-delete
@@ -122,61 +112,10 @@ an `event-pinned` state without seed material becomes `legacy-event-pinned`.
 That state upgrades only after the durable seed matches the pinned event signer.
 The same signer check applies before sealing a legacy plaintext seed.
 
-Recovery clears identity ownership and preserves retired app IDs. Every app-key
-operation rejects a retired ID. One IndexedDB transaction:
-
-- removes the wrapped app key;
-- resets `identity_directory_v1`;
-- deletes matching reconciliation markers;
-- deletes pending Simple and Sentinel genesis state; and
-- preserves encrypted vault projections.
-
-A failure leaves prior device and ownership state intact. Unreadable or future
-identity data is replaced with the empty current schema. Valid vault registry
-IDs are used when available; corrupt entries are ignored. The separately stored
-app ID is retired even when the directory is unreadable. Before mutation, every
-tab quiesces storage work and zeroizes credentials. The initiating tab then
-serializes its reset through the storage queue.
-
-Security-epoch rotation stores `storeId`, `previousKeyEpoch`,
-`previousCheckpoint`, and a tagged `progress` value at
-`pending_identity_reconciliation_v2:{store_id}` before the access-changing
-trigger event is persisted. `prepared` contains an app-key-encrypted recovery
-plan with the exact signed trigger and checkpoint events plus the key material
-needed to resume. `epoch-committed` adds `key_epoch` and retains that encrypted
-`plan_envelope`. `committed` retains `key_epoch` and the exact checkpoint event
-ID but drops the plan. Prepared and epoch-committed states must resume.
-If the frontier changes before the atomic event-pair write, the writer
-compare-deletes only its exact `prepared` marker and retries. It never aborts an
-`epoch-committed` marker, and ordinary connect cannot discard unfinished work.
-Each identity DEK grant serializes `key_epoch`. A missing field decodes as the
-tagged `legacy-unknown` variant. Current writes use `known` with `key_epoch` and
-`checkpoint` event IDs. Reconciliation upgrades legacy-unknown only from a
-verified observation. Current writers do not remove this compatibility variant.
-The `identity_directory_v1` record serializes retired installation keys in
-`retired_app_ids`. Existing records that omit the field decode it as an empty
-list. Destructive device recovery appends every removed member app ID before it
-clears identities. Current writers retain those IDs for the lifetime of the
-directory so a stale installation key cannot restore ownership.
-After the checkpoint is durable, reconciliation compares and swaps the previous
-epoch. Its checkpoint must be in verified history. Same-epoch heads advance the
-stored checkpoint only through verified ancestry. New-epoch retries are
-idempotent, older epochs fail, and success compare-deletes only the consumed
-marker.
-If a later verified rotation commits before an interrupted marker reconciles,
-the marker's checkpoint must remain a verified ancestor. Reconciliation then
-adopts the latest observed epoch and checkpoint directly instead of requiring
-the observed epoch to equal the marker's intermediate epoch.
-Later verified connects repeat reconciliation. Current builds delete this local
-retry state only after success or explicit destructive device recovery.
-
-Remote providers publish epoch pairs as separate immutable files. The
-visibility gate hides a trigger until its checkpoint is visible and quarantines
-legacy incomplete triggers plus descendants. A remote installation may append
-from the old frontier during publication; projection reports that concurrency
-as a blocking security conflict. A checkpoint never silently erases or
-resurrects the concurrent mutation.
-
+Recovery clears ownership atomically while a retired-ID ledger survives corruption.
+Tabs quiesce first. Separate auth cleanup can be retried after partial failure.
+DEK grants store known epochs; legacy omissions require verified reconciliation.
+The v2 reconciliation marker preserves resumable progress.
 The first directory read migrates `identity_record_v1` when present:
 
 1. decode the singleton record;

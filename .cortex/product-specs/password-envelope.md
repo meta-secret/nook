@@ -139,16 +139,11 @@ password_entries:
 
 ### Envelope migration
 
-- Version 1 remains readable for existing vaults.
-- Version 2 is written for every new or explicitly rotated password entry.
-- Version 1 cannot be rewrapped without its password.
-- Updating a version-1 entry explicitly upgrades that entry to version 2.
-- The upgrade keeps the current vault keys.
-- Users may therefore upgrade several legacy entries one at a time.
-- A security-epoch transition fails closed while any surviving version-1 entry
-  remains.
-- Every epoch checkpoint replaces the projected password-entry set with
-  version-2 envelopes rewrapped to the new vault keys.
+- Version 1 remains readable but cannot be rewrapped without its password.
+- New and rotated entries use version 2.
+- Updating version 1 migrates it and rotates the epoch.
+- Rotation fails while another surviving version-1 entry remains.
+- Checkpoints replace entries with version-2 envelopes for the new keys.
 
 ### Credential effects
 

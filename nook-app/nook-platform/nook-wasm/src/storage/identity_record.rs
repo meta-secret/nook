@@ -30,6 +30,7 @@ pub(crate) use staged_genesis::{StagedSimpleGenesisInput, begin_or_resume_staged
 
 pub(super) const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
 pub(super) const LEGACY_IDENTITY_RECORD_KEY: &str = "identity_record_v1";
+const RETIRED_APP_IDS_KEY: &str = "retired_app_ids_v1";
 
 fn map_domain_error(error: nook_core::MultiDeviceError) -> NookError {
     let message = error.to_string();
@@ -120,6 +121,23 @@ fn decode_directory(raw: &str) -> Result<nook_core::IdentityDirectory, NookError
         .validate()
         .map_err(|error| NookError::Database(error.to_string()))?;
     Ok(directory)
+}
+
+async fn load_retired_app_ids(store: &rexie::Store) -> Result<Vec<nook_core::AppId>, NookError> {
+    let key = serde_wasm_bindgen::to_value(RETIRED_APP_IDS_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs key error: {error:?}")))?;
+    let Some(value) = store
+        .get(key)
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs read error: {error:?}")))?
+        .filter(|value| !value.is_undefined() && !value.is_null())
+    else {
+        return Ok(Vec::new());
+    };
+    let raw: String = serde_wasm_bindgen::from_value(value)
+        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs value error: {error:?}")))?;
+    serde_json::from_str(&raw)
+        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs decode error: {error}")))
 }
 
 pub(crate) async fn update_identity_directory<F, T>(update: F) -> Result<T, NookError>
@@ -473,6 +491,9 @@ async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
         }
         None => nook_core::IdentityDirectory::empty(),
     };
+    for app_id in load_retired_app_ids(&store).await? {
+        directory.retire_app_id(app_id);
+    }
     let persisted_app_id = super::indexed_db::read_string_preferring(
         &store,
         super::indexed_db::APP_ID_KEY,
@@ -494,10 +515,20 @@ async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
         .map_err(|error| NookError::IndexedDb(format!("Identity reset encode error: {error}")))?;
     let value = serde_wasm_bindgen::to_value(&encoded)
         .map_err(|error| NookError::IndexedDb(format!("Identity reset value error: {error:?}")))?;
+    let retired = serde_json::to_string(directory.retired_app_ids())
+        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs encode error: {error}")))?;
+    let retired = serde_wasm_bindgen::to_value(&retired)
+        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs value error: {error:?}")))?;
+    let retired_key = serde_wasm_bindgen::to_value(RETIRED_APP_IDS_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs key error: {error:?}")))?;
     store
         .put(&value, Some(&directory_key))
         .await
         .map_err(|error| NookError::IndexedDb(format!("Identity reset write error: {error:?}")))?;
+    store
+        .put(&retired, Some(&retired_key))
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs write error: {error:?}")))?;
     for key in reconciliation_keys.into_iter().chain([
         LEGACY_IDENTITY_RECORD_KEY.to_owned(),
         simple_genesis::PENDING_SIMPLE_GENESIS_KEY.to_owned(),
@@ -529,6 +560,7 @@ pub(crate) async fn delete_identity_directory_for_recovery() -> Result<(), NookE
 pub(crate) async fn clear_identity_directory_for_test() -> Result<(), NookError> {
     idb_delete_key(IDENTITY_DIRECTORY_KEY).await?;
     idb_delete_key(LEGACY_IDENTITY_RECORD_KEY).await?;
+    idb_delete_key(RETIRED_APP_IDS_KEY).await?;
     simple_genesis::clear_pending_simple_genesis_for_test().await
 }
 
@@ -619,6 +651,13 @@ mod tests {
         clear_identity_directory_for_test().await?;
         let store_id = nook_core::generate_store_id().map_err(map_domain_error)?;
         let stale_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let earlier_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        idb_put_string(
+            RETIRED_APP_IDS_KEY,
+            &serde_json::to_string(&vec![earlier_key.app_id()])
+                .map_err(|error| NookError::IndexedDb(error.to_string()))?,
+        )
+        .await?;
         idb_put_string(
             "vault_registry",
             &format!(r#"{{"vaults":[{{"store_id":"{store_id}","label":""}}]}}"#),
@@ -652,6 +691,11 @@ mod tests {
             ensure_local_identity_for_app_key(&stale_key, "Stale").await,
             Err(NookError::Database(message)) if message.contains("retired")
         ));
+        assert!(
+            ensure_local_identity_for_app_key(&earlier_key, "Earlier")
+                .await
+                .is_err()
+        );
         idb_delete_key("vault_registry").await?;
         clear_identity_directory_for_test().await
     }
