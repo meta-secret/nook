@@ -265,6 +265,12 @@ enrol another device.
 `set_vault_password(password)` remains as a compatibility wrapper that creates a
 default-labelled entry.
 
+Legacy version-1 password entries cannot be rewrapped across a key epoch. An
+unlocked vault upgrades them one at a time with
+`PasswordEnvelopeUpgraded`. That operation preserves the current vault keys.
+After every retained entry is version 2, later password updates and removals
+use the security-epoch rotation path below.
+
 ### 4.2 Rotate or remove backup password
 
 ```

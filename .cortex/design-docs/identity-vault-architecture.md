@@ -155,10 +155,12 @@ signing public key. Older records decode a missing signing key as unavailable.
 They cannot enter a new signed Simple-vault genesis roster until an authenticated
 handoff or the local signer supplies that public key.
 
-Destructive device recovery retires the persisted app identity and deletes its
-durable event-signing seed in the same IndexedDB transaction. A malformed
-retired-app ledger cannot block recovery; recovery replaces it with valid
-retirement evidence before a replacement identity may enroll.
+Destructive device recovery retires only the persisted app identity whose local
+protection became inaccessible. It does not retire paired website, extension,
+or peer installation identities. Recovery deletes the inaccessible
+installation's durable event-signing seed in the same IndexedDB transaction. A
+malformed retired-app ledger cannot block recovery; recovery replaces it with
+valid retirement evidence before a replacement identity may enroll.
 
 - **Directory concurrency:**
   - Apply every directory update in one IndexedDB read-write transaction.
@@ -236,8 +238,13 @@ Simple vault creation uses the following marker contract:
 
 Destructive recovery clears identity ownership atomically while retaining a
 fail-closed ledger of retired app IDs. Tabs quiesce before recovery. Separate
-auth cleanup remains retryable after a partial failure. Identity DEK grants
-store known epochs; legacy omissions require verified reconciliation. The v2
+auth cleanup remains retryable after a partial failure. The exclusive recovery
+lock advances the storage generation on success or failure. The initiating tab
+adopts that generation before it performs another queued storage operation.
+Identity DEK grants
+store the verified observed epoch during import. Legacy omissions require
+verified reconciliation. Locked remote sync persists the verified projected
+epoch before password self-enrollment can append a membership event. The v2
 reconciliation marker preserves resumable progress across reloads.
 
 The first directory read migrates `identity_record_v1` when present:

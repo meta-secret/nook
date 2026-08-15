@@ -449,18 +449,12 @@ impl IdentityDirectory {
     /// Drop directory ownership sealed to an inaccessible installation key.
     /// Encrypted vault storage remains outside this portable record and may be
     /// rebound only after a recovery credential proves access.
-    pub fn reset_for_device_recovery(&mut self) {
-        for app_id in self
-            .identities
-            .iter()
-            .flat_map(|identity| identity.members.iter().map(|member| member.app_id.clone()))
-        {
-            if !self.retired_app_ids.contains(&app_id) {
-                self.retired_app_ids.push(app_id);
-            }
-        }
+    pub fn reset_for_device_recovery(&mut self, recovered_app_id: Option<crate::AppId>) {
         self.identities.clear();
         self.selection = IdentitySelection::Empty;
+        if let Some(app_id) = recovered_app_id {
+            self.retire_app_id(app_id);
+        }
     }
 
     /// Permanently reject one installation key discovered outside a readable directory.
@@ -762,17 +756,21 @@ mod tests {
             "Imported",
             &app_key,
             store_id.clone(),
-            legacy_reconciliation(&app_key, secrets_envelope.clone(), members_envelope.clone()),
+            observed_reconciliation(&app_key, secrets_envelope.clone(), members_envelope.clone())?,
         )?;
         assert_eq!(imported_id, personal);
         assert_eq!(directory.identities().len(), 1);
         assert_eq!(directory.selected()?.identity_id, imported_id);
+        assert_eq!(
+            directory.selected()?.vault_deks[0].key_epoch,
+            known_epoch('e', 'f')?
+        );
 
         let same_id = directory.import_legacy_vault(
             "Ignored",
             &app_key,
             store_id,
-            legacy_reconciliation(&app_key, secrets_envelope, members_envelope),
+            observed_reconciliation(&app_key, secrets_envelope, members_envelope)?,
         )?;
         assert_eq!(same_id, imported_id);
         assert_eq!(directory.identities().len(), 1);
@@ -794,11 +792,11 @@ mod tests {
             "Ignored",
             &recovered_app_key,
             imported_vault.store_id,
-            legacy_reconciliation(
+            observed_reconciliation(
                 &recovered_app_key,
                 recovered_secrets_envelope,
                 recovered_members_envelope,
-            ),
+            )?,
         );
         assert!(matches!(
             result,
@@ -821,20 +819,20 @@ mod tests {
         Ok(())
     }
 
-    fn legacy_reconciliation(
+    fn observed_reconciliation(
         app_key: &AppKey,
         secrets_envelope: crate::AgeArmoredCiphertext,
         members_envelope: crate::AgeArmoredCiphertext,
-    ) -> crate::IdentityVaultDekReconciliation {
-        crate::IdentityVaultDekReconciliation {
+    ) -> anyhow::Result<crate::IdentityVaultDekReconciliation> {
+        Ok(crate::IdentityVaultDekReconciliation {
             secrets_envelope,
             members_envelope,
             epoch_update: crate::IdentityVaultDekEpochUpdate::Observe {
-                key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
+                key_epoch: known_epoch('e', 'f')?,
                 checkpoint_ancestors: Vec::new(),
             },
             authorized_auth_ids: vec![app_key.auth_id()],
-        }
+        })
     }
 
     #[test]
@@ -843,13 +841,21 @@ mod tests {
         let store_id = crate::generate_store_id()?;
         let mut directory = IdentityDirectory::empty();
         let identity_id = directory.create_identity("Personal", &inaccessible_key, None)?;
+        let peer_key = AppKey::generate()?;
+        directory.selected_mut()?.add_member(IdentityMember {
+            app_id: peer_key.app_id().clone(),
+            auth_id: peer_key.auth_id(),
+            public_key: peer_key.public_key(),
+            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
+            label: None,
+        })?;
         let _ = directory.open_or_generate_vault_dek_for_identity(
             &identity_id,
             &inaccessible_key,
             store_id.clone(),
         )?;
 
-        directory.reset_for_device_recovery();
+        directory.reset_for_device_recovery(Some(inaccessible_key.app_id().clone()));
 
         assert!(directory.identities().is_empty());
         assert_eq!(directory.selection(), &IdentitySelection::Empty);
@@ -857,6 +863,7 @@ mod tests {
             directory.create_identity("Stale", &inaccessible_key, None),
             Err(MultiDeviceError::RetiredAppKey)
         ));
+        directory.create_identity("Peer", &peer_key, None)?;
         let replacement_key = AppKey::generate()?;
         directory.validate_vault_enrollment(&replacement_key, &store_id)?;
         Ok(())

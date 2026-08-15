@@ -13,6 +13,20 @@ fn outbox_event_is_current(local_ids: Option<&BTreeSet<EventId>>, event_id: &Eve
 }
 
 impl NookVaultManager {
+    async fn persist_projected_key_epoch(
+        &mut self,
+        projection: &nook_core::VaultProjection,
+    ) -> Result<(), NookError> {
+        let nook_core::ProjectionEpoch::Current(nook_core::KeyEpoch(key_epoch)) = &projection.epoch
+        else {
+            return Ok(());
+        };
+        let next_epoch = key_epoch.as_str().to_owned();
+        save_key_epoch(&self.vault.store_id, &next_epoch).await?;
+        self.event_log.key_epoch = next_epoch;
+        Ok(())
+    }
+
     fn projected_epoch_keys(
         meta: &nook_core::VaultMetaState,
         identity: &nook_core::DeviceIdentity,
@@ -36,7 +50,7 @@ impl NookVaultManager {
         else {
             return Ok(());
         };
-        if self.event_log.key_epoch == key_epoch.as_str() {
+        if self.event_log.key_epoch == key_epoch.as_str() && self.vault.crypto.is_unlocked() {
             return Ok(());
         }
         if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
@@ -380,6 +394,7 @@ impl NookVaultManager {
             self.adopt_projected_security_epoch(&projection).await?;
             self.apply_event_projection_to_session().await?;
         } else if persist_locked_projection {
+            self.persist_projected_key_epoch(&projection).await?;
             self.hydrate_locked_projection_from_events().await?;
         }
         if unlocked || persist_locked_projection {

@@ -402,10 +402,13 @@ export async function resetDeviceProtectionForRecovery(
   state.errorMsg = "";
   try {
     await quiesceOtherTabsForLocalRecovery();
-    await state.enqueueExclusiveStorage(() =>
-      state.requireManager().reset_device_protection_for_recovery(),
-    );
-    state.adoptLocalDataStorageGeneration();
+    try {
+      await state.enqueueExclusiveStorage(() =>
+        state.requireManager().reset_device_protection_for_recovery(),
+      );
+    } finally {
+      state.adoptLocalDataStorageGeneration();
+    }
     state.deviceProtectionStatus = DeviceProtectionStatus.Missing;
     state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey;
     state.deviceId = "";

@@ -463,11 +463,9 @@ impl IdentityRecord {
                 "importing app key is not authorized for this vault".to_owned(),
             ));
         }
-        self.vault_deks.push(wrap_vault_keys_for_members(
-            &keys,
-            &authorized_members,
-            store_id,
-        )?);
+        let mut vault_dek = wrap_vault_keys_for_members(&keys, &authorized_members, store_id)?;
+        vault_dek.key_epoch = reconciliation.epoch_update.committed_epoch();
+        self.vault_deks.push(vault_dek);
         self.control_epoch = self.control_epoch.saturating_add(1);
         Ok(())
     }

@@ -60,10 +60,7 @@ async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
     .ok()
     .flatten()
     .and_then(|raw| nook_core::AppId::parse(&raw).ok());
-    directory.reset_for_device_recovery();
-    if let Some(app_id) = persisted_app_id {
-        directory.retire_app_id(app_id);
-    }
+    directory.reset_for_device_recovery(persisted_app_id);
     directory
         .validate()
         .map_err(|error| NookError::Database(error.to_string()))?;
@@ -142,6 +139,11 @@ mod tests {
         let marker_v1 = format!("pending_identity_reconciliation_v1:{store_id}");
         idb_put_string(&marker_v2, "stale-v2").await?;
         idb_put_string(&marker_v1, "stale-v1").await?;
+        idb_put_string(
+            crate::storage::indexed_db::APP_ID_KEY,
+            inaccessible_key.app_id().as_str(),
+        )
+        .await?;
 
         delete_identity_directory_for_recovery().await?;
 
