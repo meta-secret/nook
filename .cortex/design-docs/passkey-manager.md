@@ -62,31 +62,37 @@ explicit fallback action. Conditional mediation is left to the browser.
 
 ## Ceremony rules
 
-Registration accepts only canonical bounded base64url values and ES256 (`-7`).
-The RP ID must be `localhost` or a registrable DNS name, must not be a public
-suffix, and must equal the origin host or be its domain suffix. Production
-origins require HTTPS; loopback development may use `http://localhost`.
-Credentials are discoverable and backup-eligible because their encrypted key
-material is designed to replicate through Nook.
-
-Assertions hash the RP ID into authenticator data and sign
-`authenticatorData || SHA-256(clientDataJSON)` with the stored P-256 private
-key. The user-presence flag represents the explicit extension consent action.
-The user-verification flag is set only when the website requested verification
-and the extension vault is in its passkey/PIN-authorized unlocked session. The
-session expires after 15 minutes; a locked session falls back to the browser.
-
-Registration is committed as `SecretCreated` before a response is returned.
-Each assertion commits the incremented counter as `SecretReplaced` before its
-response. A remote-provider failure does not invalidate an already committed
-local WebAuthn ceremony; the immutable local event remains available to the
-next provider flush.
-
-Concurrent devices can produce multiple encrypted revisions for one WebAuthn
-credential. Lookup accepts those revisions only when all credential and key
-material is identical, resumes from the highest observed counter, and appends
-one replacement plus tombstones for stale revisions. Different discoverable
-credentials still require explicit account selection.
+- **Registration input and RP validation:**
+  - Accept only canonical bounded base64url values and ES256 (`-7`).
+  - Require the RP ID to be `localhost` or a registrable DNS name.
+  - Reject a public suffix.
+  - Require the RP ID to equal the origin host or be its domain suffix.
+  - Require HTTPS for production origins. Loopback development may use
+    `http://localhost`.
+  - Mark credentials discoverable and backup-eligible because their encrypted
+    key material is designed to replicate through Nook.
+- **Assertion construction and session flags:**
+  - Hash the RP ID into authenticator data.
+  - Sign `authenticatorData || SHA-256(clientDataJSON)` with the stored P-256
+    private key.
+  - Use the user-presence flag for the explicit extension consent action.
+  - Set user verification only when the website requested verification and the
+    extension vault has a passkey/PIN-authorized unlocked session.
+  - Expire that session after 15 minutes. A locked session falls back to the
+    browser.
+- **Commit ordering and provider failure:**
+  - Commit registration as `SecretCreated` before returning its response.
+  - Commit each incremented assertion counter as `SecretReplaced` before
+    returning its response.
+  - Do not invalidate a locally committed ceremony after a remote-provider
+    failure. The immutable local event remains available to the next provider
+    flush.
+- **Concurrent revisions:**
+  - Accept multiple encrypted revisions for one WebAuthn credential only when
+    all credential and key material is identical.
+  - Resume from the highest observed counter.
+  - Append one replacement plus tombstones for stale revisions.
+  - Require explicit account selection for different discoverable credentials.
 
 ## Threat model
 
