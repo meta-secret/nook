@@ -4,9 +4,9 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const root = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 const expected = JSON.parse(
-  readFileSync(join(root, '.codex/ai-debug-allowed-origins.json'), 'utf8'),
+  readFileSync(join(root, '.github/scripts/ai-debug/allowed-origins.json'), 'utf8'),
 )
 
 function fail(message) {
@@ -27,7 +27,7 @@ function assertSameOrigins(actual, label) {
   const extra = actual.filter((origin) => !expected.includes(origin))
   if (missing.length > 0 || extra.length > 0) {
     fail(
-      `${label} origins drift from .codex/ai-debug-allowed-origins.json.\n` +
+      `${label} origins drift from .github/scripts/ai-debug/allowed-origins.json.\n` +
         `missing: ${missing.join(', ') || '(none)'}\n` +
         `extra: ${extra.join(', ') || '(none)'}`,
     )
@@ -49,14 +49,14 @@ function fileExists(path) {
 const schemes = new Set(expected.map((origin) => new URL(origin).protocol))
 for (const required of ['http:', 'https:', 'ws:', 'wss:']) {
   if (!schemes.has(required)) {
-    fail(`.codex/ai-debug-allowed-origins.json must include ${required} origins.`)
+    fail(`.github/scripts/ai-debug/allowed-origins.json must include ${required} origins.`)
   }
 }
 
-const localOnly = readFileSync(join(root, '.codex/playwright-local-only.ts'), 'utf8')
+const localOnly = readFileSync(join(root, '.github/scripts/ai-debug/local-only.ts'), 'utf8')
 for (const origin of expected) {
   if (!localOnly.includes(`'${origin}'`)) {
-    fail(`.codex/playwright-local-only.ts is missing origin ${origin}.`)
+    fail(`.github/scripts/ai-debug/local-only.ts is missing origin ${origin}.`)
   }
 }
 
@@ -81,8 +81,8 @@ if (fileExists(cursorMcpPath)) {
     fail('.cursor/mcp.json playwright.command must be bash.')
   }
   const args = playwright.args ?? []
-  if (args[0] !== '.codex/run-playwright-mcp.sh') {
-    fail('.cursor/mcp.json must launch .codex/run-playwright-mcp.sh.')
+  if (args[0] !== '.github/scripts/ai-debug/run-playwright-mcp.sh') {
+    fail('.cursor/mcp.json must launch .github/scripts/ai-debug/run-playwright-mcp.sh.')
   }
   if (!args.includes('--caps=devtools')) {
     fail('.cursor/mcp.json must enable --caps=devtools.')
@@ -118,7 +118,7 @@ try {
   if (
     server.transport?.type !== 'stdio' ||
     server.transport.command !== 'bash' ||
-    server.transport.args?.[0] !== '.codex/run-playwright-mcp.sh' ||
+    server.transport.args?.[0] !== '.github/scripts/ai-debug/run-playwright-mcp.sh' ||
     !server.transport.args?.includes('--caps=devtools') ||
     !server.transport.args?.includes('--ignore-https-errors')
   ) {
