@@ -41,6 +41,7 @@ test('returns mechanical inconsistencies as typed completed evidence', () => {
     orphanIndexRows: [],
     missingExecutableSkills: ['missing-wrapper'],
     densityFindings: [],
+    structureFindings: [],
     auditOk: false,
   };
   const output = mechanicalCortexAuditOutput(report);
@@ -60,6 +61,7 @@ test('allows a clean mechanical report with zero findings', () => {
     orphanIndexRows: [],
     missingExecutableSkills: [],
     densityFindings: [],
+    structureFindings: [],
     auditOk: true,
   };
   const output = mechanicalCortexAuditOutput(report);
@@ -78,6 +80,10 @@ test('runs the mechanical audit from the invocation working directory', async ()
       '[Missing](missing.md)\n',
     );
     await writeFile(join(skillsDirectory, 'index.md'), '# Skills\n');
+    await writeFile(
+      join(repositoryRoot, '.cortex', 'document-map-migration.txt'),
+      '.cortex/AGENTS.md\n.cortex/dynamic-skills/index.md\n',
+    );
 
     const runtime = new LocalWorkflowTaskRuntime<string, never>(
       new UnusedAgentRuntime(),
