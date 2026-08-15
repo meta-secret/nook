@@ -192,14 +192,12 @@ Default PR-first loop:
 
 ### ⛔ Pre-push hygiene — always format (the only required local action)
 
-Before every push, run Loom pre-push **unconditionally**.
-
-Do not skip it for "tiny" edits.
-
-**`task loom:pre-push` is the only required local product action.**
-
-Do not run `task check`, `task ci:pr`, full suites, builds, or e2e as a
-merge/handoff gate. Those run exclusively on GitHub Actions.
+- Before every push, run Loom pre-push **unconditionally**.
+  - Do not skip it for "tiny" edits.
+- **`task loom:pre-push` is the only required local product action.**
+- Do not run `task check`, `task ci:pr`, full suites, builds, or e2e as a
+  merge or handoff gate.
+  - Those run exclusively on GitHub Actions.
 
 ```bash
 task loom:pre-push
@@ -380,22 +378,21 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
     - See [issues.md](issues.md) and [agent-statistics.md](agent-statistics.md).
 12. **Finish** — report the task duration after the implementation PR and Workbench records are published and any required performance PR is landed.
 
-When a feature has multiple planned slices, return to step 1 for the next ready
-issue after each merge.
+For a feature with multiple planned slices:
 
-Start every next slice from current `origin/main`.
-
-Finish only when the full feature acceptance criteria are complete.
+1. Return to step 1 for the next ready issue after each merge.
+2. Start the next slice from current `origin/main`.
+3. Finish only when the full feature acceptance criteria are complete.
 
 See
 [pull-requests.md § Pull request size and modularity](pull-requests.md#pull-request-size-and-modularity).
 
-All branch, PR, review, check, and merge actions in this flow apply only to the
-current task's owned feature and focused issue set.
-
-Do not take over a related task merely because it has open comments or failing
-checks. Require an explicit handoff first. See
-[agent-feature-ownership.md](../dynamic-skills/agent-feature-ownership.md).
+- All branch, PR, review, check, and merge actions apply only to the current
+  task's owned feature and focused issue set.
+- Do not take over a related task because it has open comments or failing
+  checks.
+  - Require an explicit handoff first.
+  - See [Agent feature ownership](../dynamic-skills/agent-feature-ownership.md).
 
 For `agent-implement.yml` PRs, the `## Ownership` section records the handoff.
 
@@ -447,25 +444,20 @@ Use a descriptive branch name (`feat/…`, `fix/…`, `chore/…`).
 
 ### 4–6 — Format, push, execute remotely, and validate explicitly
 
-GitHub Actions is the agent execution environment for lint, tests, coverage,
-builds, and e2e.
-
-Format on the host with Loom, commit and push, use focused `task remote` jobs,
-then explicitly validate when the exact head is ready.
-
-Run `task pr:review-local` on a coherent local head before the first
-owner-authored push.
-
-For a harness-created PR, run it after handoff instead.
-
-When the coherent head is ready, run `task pr:validate PR=<number>`.
-
-It immediately dispatches complete validation. It then requests exact-head
-Codex review. Fix actionable feedback that arrives while checks run.
-
-If no review feedback exists when checks finish, continue without waiting.
-
-Do not request or wait for other external reviewers.
+- GitHub Actions is the execution environment for lint, tests, coverage,
+  builds, and e2e.
+- Delivery sequence:
+  1. Format on the host with Loom.
+  2. Commit and push.
+  3. Use focused `task remote` jobs when useful.
+  4. Run `task pr:validate PR=<number>` when the exact head is ready.
+- Review sequence:
+  - Run `task pr:review-local` before the first owner-authored push.
+  - For a harness-created PR, run it after handoff instead.
+  - Complete validation requests exact-head Codex review.
+  - Fix actionable feedback that arrives while checks run.
+  - If no feedback exists when checks finish, continue without waiting.
+  - Do not request or wait for other external reviewers.
 
 Follow [code-review.md](code-review.md).
 
@@ -554,11 +546,14 @@ Squash merge only. See [rules.md §6](../rules.md#6-git--pull-request-workflow).
 
 ### 11 — Publish Workbench records
 
-After the implementation PR merges, follow [issues.md](issues.md) and [agent-statistics.md](agent-statistics.md).
+After the implementation PR merges:
 
-The task-start plan must already be published.
-
-Update the associated issue and add a worklog linked to that plan. Summarize progress, implementation problems, decisions, validation, and remaining work.
+1. Follow [Issues](issues.md) and [Agent statistics](agent-statistics.md).
+2. Confirm the task-start plan is already published.
+3. Update the associated issue.
+4. Add a worklog linked to the plan.
+   - Summarize progress, implementation problems, decisions, validation, and
+     remaining work.
 
 Create the YAML from current Nook `main`:
 
@@ -566,7 +561,8 @@ Create the YAML from current Nook `main`:
 - compare it with comparable prior records
 - publish it to `meta-secret/nook-workbench` as `stats/ai-agent/<pr>.yaml`
 
-Do not wait for post-merge Main. Any performance fix belongs in a separate normal Nook PR.
+- Do not wait for post-merge Main.
+- Put any performance fix in a separate normal Nook PR.
 
 ## Non-negotiables
 

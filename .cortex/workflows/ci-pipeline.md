@@ -587,15 +587,15 @@ task hive:verify
 - the complete local-provider Playwright suite;
 - extension e2e.
 
-The additional targets validate the separate fuzz workspace. They also compile,
-lint, and test both Hive and Lace in the Minds workspace.
-
-Credentialed real-provider `sync-live` e2e remains a separate manual validation.
-It creates disposable external-provider state. It also requires provider
-secrets.
-
-No workflow merges the harness-owned PR from a check event. A task-owning agent
-must run the standard readiness audit. The agent squash-merges when it succeeds.
+- The additional targets validate the separate fuzz workspace.
+  - They also compile, lint, and test Hive and Lace in the Minds workspace.
+- Credentialed real-provider `sync-live` e2e remains a separate manual
+  validation.
+  - It creates disposable external-provider state.
+  - It requires provider secrets.
+- No workflow merges the harness-owned PR from a check event.
+  - A task-owning agent runs the standard readiness audit.
+  - The agent squash-merges when readiness succeeds.
 
 **One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
 
@@ -607,11 +607,15 @@ Do **not** spin up multiple Nook servers for parallel e2e unless debugging port 
 
 ## PR UI demo videos
 
-UI-facing changes under the web apps, shared vault UI, or extension browser
-surfaces must add or update a focused spec under
-`nook-web-app/e2e/demos/*.demo.spec.ts`. The PR contract script rejects a UI
-change without a changed demo. Only those changed demo specs run, serially with
-one worker, so PR CI does not inherit the cost of the full browser suite.
+UI demo rules:
+
+- UI-facing changes under web apps, shared vault UI, or extension browser
+  surfaces must add or update a focused
+  `nook-web-app/e2e/demos/*.demo.spec.ts`.
+- The PR contract rejects a UI change without a changed demo.
+- Only changed demo specs run.
+  - They run serially with one worker.
+  - PR CI avoids the cost of the full browser suite.
 
 **Run the contract on the host before the first push** (and after any later UI
 edit) so Verify does not discover a missing demo:
@@ -627,25 +631,26 @@ Combine with unconditional `task format` — see
 The `ui-demo` Playwright project runs Chromium headlessly at 1280x720.
 It always records WebM video.
 The pull-request demo job starts beside web verification.
-It starts after the WASM handoff is ready.
-Its browser-image solve is read-only.
-After Playwright succeeds, a dedicated cache-only publisher exports the warm
-graph to the isolated exact-head scope.
-Demo-only waits are allowed to hold meaningful before/after
-states long enough for a reviewer to understand them; ordinary regression specs
-must remain full-speed. CI keeps the GitHub Actions result for 90 days and, after
-a successful recording, uploads the 10 largest WebMs to Linear's private file storage. A
-deterministic Linear issue in the `nook-ui` project owns all recordings for one
-GitHub PR, with one idempotent comment per head SHA. The PR comment links both
-the Actions fallback and the Linear archive. Merging completes that Linear issue;
-closing without merge cancels it. Linear publication and lifecycle transitions
-are best-effort so an external tracker outage does not invalidate authoritative
-Playwright assertions or block the product gate.
+- The demo job starts after the WASM handoff is ready.
+- Its browser-image solve is read-only.
+- After Playwright succeeds, a cache-only publisher exports the warm graph to
+  the isolated exact-head scope.
+- Demo-only waits may hold meaningful before and after states for review.
+  - Ordinary regression specs remain full-speed.
+- CI retains the Actions result for 90 days.
+- After successful recording, CI uploads the 10 largest WebMs to Linear's
+  private file storage.
+  - One deterministic `nook-ui` issue owns all recordings for a GitHub PR.
+  - One idempotent comment represents each head SHA.
+  - The PR comment links the Actions fallback and Linear archive.
+  - Merge completes the issue; close without merge cancels it.
+  - Linear publication is best-effort and cannot invalidate Playwright
+    assertions or block the product gate.
 
-Main runs the complete UI-demo project and retains every resulting WebM in its
-90-day Actions artifact. It adds only the 10 largest recordings to the Linear
-issue for the PR associated with that Main commit, then leaves the issue in
-Done. This keeps the issue reviewable while preserving the full recording set.
+- Main runs the complete UI-demo project.
+  - It retains every WebM in the 90-day Actions artifact.
+  - It adds only the 10 largest recordings to the associated Linear issue.
+  - It leaves the issue in Done.
 
 The trusted post-workflow and Main workflow require the repository Actions
 secret `LINEAR_API_KEY`; the unmerged `pull_request` workflow never receives it
@@ -1045,24 +1050,22 @@ do not assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 `NOOK_GITHUB_PAT` so the PR is attributed to the PAT owner and `pr.yml` runs.
 Merge still requires the standard exact-head readiness audit.
 
-Required secrets: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT` (classic PAT with `repo`
-scope, or fine-grained with contents + pull requests write on this repo).
-
-The `ci-agent:implement` job runs **`task setup`** (bake sealed
-`nook-web:local`) then **`task ci-agent:implement`**, which builds and runs the
-**`nook-ci-agent:local`** image. That container includes both the Docker CLI and
-the Buildx CLI plugin because repository Task targets use `docker buildx bake`.
-It uses **`docker run --init`**, bind-mounts the checkout, and mounts
-**`/var/run/docker.sock`** so the agent can spawn sibling containers on the
-host Docker daemon (not Docker-in-Docker).
-
-**Runner placement:** `agent-implement.yml` runs on GitHub-hosted
-**`ubuntu-latest`**, like delivery CI, so concurrent work scales across hosted
-capacity. Host Node is not required for this job.
-
-After the agent finishes, ci-agent **awaits** `agent[Symbol.asyncDispose]()` (not fire-and-forget `close()`), then calls `process.exit` (and best-effort SIGKILL of direct child PIDs) so orphaned SDK children cannot keep the container alive.
-
-Optional env: `CI_AGENT_PROMPT_FILE` (agent instructions), `CI_FIX_LABEL` (PR title/body label), `DOCKER_SOCK` (default `/var/run/docker.sock`).
+- **Required secrets:** `CURSOR_API_KEY` and `NOOK_GITHUB_PAT`.
+  - The PAT is classic with `repo` scope or fine-grained with contents and pull
+    requests write on this repository.
+- **Execution:**
+  1. Run `task setup` to bake sealed `nook-web:local`.
+  2. Run `task ci-agent:implement` to build and start `nook-ci-agent:local`.
+  3. Use Docker CLI and Buildx in the container for repository Task targets.
+  4. Start with `docker run --init`, bind-mount the checkout, and mount
+     `/var/run/docker.sock` for sibling containers on the host daemon.
+- **Runner:** `agent-implement.yml` uses GitHub-hosted `ubuntu-latest`.
+  - Concurrent work scales across hosted capacity.
+  - Host Node is not required.
+- **Teardown:** await `agent[Symbol.asyncDispose]()`, call `process.exit`, and
+  best-effort kill direct child PIDs.
+- **Optional environment:** `CI_AGENT_PROMPT_FILE`, `CI_FIX_LABEL`, and
+  `DOCKER_SOCK` with default `/var/run/docker.sock`.
 
 ### Logging
 
@@ -1087,28 +1090,26 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 | Level     | `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR`                                                                          |
 | Component | `ci-agent/<module>` — e.g. `fix`, `run-agent`, `agent-wait`, `git`, `github`, `cursor`, `cursor/agent`, `cursor/shell` |
 
-Set `CI_AGENT_LOG_LEVEL=DEBUG` in the job env to include step/turn traces (`step started`, `turn ended`).
-
-Tool starts, shell output, and command results are always logged at **INFO**.
-
-Heartbeat interval: `CI_AGENT_HEARTBEAT_MS` (default 60s).
-
-The harness's local/default agent timeout is 90 minutes.
+- Set `CI_AGENT_LOG_LEVEL=DEBUG` for step and turn traces.
+- Log tool starts, shell output, and command results at **INFO**.
+- Set heartbeat with `CI_AGENT_HEARTBEAT_MS` (default 60 seconds).
+- The local/default agent timeout is 90 minutes.
 
 `agent-implement.yml` sets:
 
 - `timeout-minutes: 360` for the complete job;
 - `CI_AGENT_TIMEOUT_MS=18000000` for a five-hour agent run.
 
-The remaining hour covers setup and result publication.
-
-The job exits after opening the PR and publishing its bounded handoff.
-
-`task pr:preflight` and `task pr:ready` are read-only audits. No hosted continuation or CLI command merges based on their result.
-
-The ci-agent entrypoint calls `process.exit` after `runCiFix()` completes. Without an explicit exit, the Cursor SDK local executor can leave child processes and open handles that keep the Node event loop alive after the agent opens its PR.
-
-Smoke coverage: [`.github/workflows/ci-agent-smoke.yml`](../../.github/workflows/ci-agent-smoke.yml) runs unit tests plus an `exitCiAgent` open-handle check on `ubuntu-latest` through `workflow_dispatch`.
+- The remaining hour covers setup and result publication.
+- The job exits after opening the PR and publishing its bounded handoff.
+- `task pr:preflight` and `task pr:ready` are read-only audits.
+  - No hosted continuation or CLI command merges from their result.
+- The ci-agent entrypoint calls `process.exit` after `runCiFix()` completes.
+  - Without it, Cursor SDK child processes and open handles can retain the Node
+    event loop after PR creation.
+- [CI agent smoke](../../.github/workflows/ci-agent-smoke.yml) runs unit tests
+  and an `exitCiAgent` open-handle check on `ubuntu-latest` through
+  `workflow_dispatch`.
 
 ## Agent implement (Workbench issue / manual prompt)
 
