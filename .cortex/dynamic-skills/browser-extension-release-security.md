@@ -29,9 +29,9 @@
 - [Examples](#examples)
   - Contrasts rejected and preferred forms.
   - Read when the rule needs a concrete illustration.
-- [Application Checklist](#application-checklist)
-  - Lists the steps needed to apply and maintain the skill.
-  - Use during implementation and review.
+- [Application procedure](#application-procedure)
+  - Orders the fast gate, boundary checks, isolation, and full validation.
+  - Follow during implementation and release review.
 - [Validation](#validation)
   - Names the smallest relevant mechanical and semantic proof.
   - Run before completing the task.
@@ -86,19 +86,24 @@ Does not apply to:
 - After: retry exact-head metadata and archive verification with a bounded
   propagation window.
 
-## Application Checklist
+## Application procedure
 
-- [ ] Run the host-cached fast extension gate.
-- [ ] Verify channel origin and extension identity together.
-- [ ] Verify injection exclusions for every vault boundary.
-- [ ] Verify archive and redirect safety before activation.
-- [ ] Keep profiles isolated by channel/PR.
-- [ ] Run `task format`, commit and push, use focused hosted tasks as useful,
-      then explicitly trigger complete GitHub Actions validation.
+1. Run the host-cached fast extension gate.
+2. Verify channel origin and extension identity together.
+3. Verify injection exclusions for every vault boundary.
+4. Verify archive and redirect safety before activation.
+5. Keep profiles isolated by channel and PR.
+6. Run `task format`, commit, and push.
+7. Use focused hosted tasks as useful, then explicitly trigger complete GitHub
+   Actions validation.
 
 ## Validation
 
-For implementation tasks, run `task format`, commit and push, dispatch the
-allowlisted extension task as useful, then run `task pr:validate` and monitor
-the repository-owned PR workflow. Deployment verification must prove the exact head SHA, selected
-channel, selected origins, checksum, and packaged manifest.
+Deployment verification must prove:
+
+- the exact head SHA;
+- the selected channel and origins;
+- the checksum; and
+- the packaged manifest.
+
+Run `task pr:validate` and monitor the repository-owned PR workflow.

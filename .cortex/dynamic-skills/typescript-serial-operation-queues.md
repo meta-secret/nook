@@ -37,11 +37,14 @@ chains throughout application state.
 
 ## Problem Pattern
 
-Application classes manually append work to a public promise field and replace
-the field with success/error callbacks that both discard the result. The code
-works, but its queue invariant is implicit, callers can depend on or mutate the
-raw tail, and queue lifecycle operations require casts or duplicated promise
-plumbing.
+The rejected shape has these properties:
+
+- An application class appends work to a public promise field.
+- Success and error callbacks both replace the field and discard the result.
+- Callers can depend on or mutate the raw queue tail.
+- Queue lifecycle operations require casts or duplicated promise plumbing.
+
+The code may run correctly while keeping its serialization invariant implicit.
 
 ## Preferred Pattern
 
@@ -59,10 +62,14 @@ not JavaScript promise coordination.
 
 ## Scope
 
-Apply this rule to authored TypeScript queues that serialize asynchronous
-browser, storage, or WASM operations. Do not replace a scheduler that needs
-priorities, cancellation, expiration, backpressure, or close semantics with the
-minimal serial queue.
+- Apply this rule to authored TypeScript queues that serialize asynchronous
+  browser, storage, or WASM operations.
+- Keep a richer scheduler when it needs:
+  - priorities;
+  - cancellation;
+  - expiration;
+  - backpressure; or
+  - close semantics.
 
 ## Validation
 
