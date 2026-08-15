@@ -250,6 +250,18 @@ export function mechanicalCortexAuditOutput(
     };
     findings.push(finding);
   }
+  for (const articleFinding of report.articleStructureFindings) {
+    const finding: WorkflowFinding = {
+      severity: WorkflowFindingSeverity.Error,
+      title: 'Invalid Cortex article structure',
+      summary: `${articleFinding.file}:${articleFinding.line} ${articleFinding.message}`,
+      evidence: [
+        `${articleFinding.code}: ${articleFinding.file}:${articleFinding.line}`,
+      ],
+      affectedPaths: [articleFinding.file],
+    };
+    findings.push(finding);
+  }
 
   const summary = report.auditOk
     ? 'Mechanical Cortex audit passed.'

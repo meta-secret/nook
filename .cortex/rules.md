@@ -17,6 +17,9 @@
 - [Pre-Push Hygiene](dynamic-skills/pre-push-hygiene.md)
   - Defines formatting and UI-demo checks required before every push.
   - Apply when implementation or delivery reaches this workflow boundary.
+- [Cortex Structured Articles](dynamic-skills/cortex-article-structure.md)
+  - Defines semantic hierarchy for Cortex explanations and instructions.
+  - Apply whenever Cortex article bodies or headings change.
 - [Reference: Application Logging](references/logging.md)
   - Defines application, test, and CI logging and troubleshooting evidence.
   - Consult when the task needs this operational reference.

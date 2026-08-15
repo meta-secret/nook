@@ -21,6 +21,11 @@ import {
   type CortexDocumentSource,
   type CortexStructureFinding,
 } from '../lib/cortex-document-structure.ts';
+import {
+  auditCortexArticleStructure,
+  type AuditCortexArticleStructureArgs,
+  type CortexArticleFinding,
+} from '../lib/cortex-article-structure.ts';
 export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[];
   readonly missingFromIndex: string[];
@@ -28,6 +33,7 @@ export type CortexAuditReport = {
   readonly missingExecutableSkills: string[];
   readonly densityFindings: DensityFinding[];
   readonly structureFindings: CortexStructureFinding[];
+  readonly articleStructureFindings: CortexArticleFinding[];
   readonly auditOk: boolean;
 };
 
@@ -87,13 +93,35 @@ export async function runCortexAuditFromDirectory(
     }
   }
 
+  const documentMapBaselineArgs: MigrationBaselineEntriesArgs = {
+    ledgerPath: DOCUMENT_MAP_MIGRATION_LEDGER_PATH,
+    markerPath: DOCUMENT_MAP_SKILL_PATH,
+    repoRoot,
+  };
   const structureAuditArgs: AuditCortexDocumentStructureArgs = {
     documents,
-    migrationBaselineEntries: migrationBaselineEntries(repoRoot),
+    migrationBaselineEntries: migrationBaselineEntries(documentMapBaselineArgs),
     migrationLedgerPath: path.join(cortexRoot, 'document-map-migration.txt'),
     repoRoot,
   };
   const structureFindings = auditCortexDocumentStructure(structureAuditArgs);
+  const articleBaselineArgs: MigrationBaselineEntriesArgs = {
+    ledgerPath: ARTICLE_MIGRATION_LEDGER_PATH,
+    markerPath: ARTICLE_STRUCTURE_SKILL_PATH,
+    repoRoot,
+  };
+  const articleStructureAuditArgs: AuditCortexArticleStructureArgs = {
+    documents,
+    migrationBaselineEntries: migrationBaselineEntries(articleBaselineArgs),
+    migrationLedgerPath: path.join(
+      cortexRoot,
+      'article-structure-migration.txt',
+    ),
+    repoRoot,
+  };
+  const articleStructureFindings = auditCortexArticleStructure(
+    articleStructureAuditArgs,
+  );
 
   const skillsDir = path.join(cortexRoot, 'dynamic-skills');
   const skillFiles = readdirSync(skillsDir)
@@ -144,18 +172,23 @@ export async function runCortexAuditFromDirectory(
     missingExecutableSkills,
     densityFindings,
     structureFindings,
+    articleStructureFindings,
     auditOk:
       brokenLinks.length === 0 &&
       missingFromIndex.length === 0 &&
       orphanIndexRows.length === 0 &&
       missingExecutableSkills.length === 0 &&
       densityFindings.length === 0 &&
-      structureFindings.length === 0,
+      structureFindings.length === 0 &&
+      articleStructureFindings.length === 0,
   };
 }
 
-const MIGRATION_LEDGER_PATH = '.cortex/document-map-migration.txt';
+const DOCUMENT_MAP_MIGRATION_LEDGER_PATH = '.cortex/document-map-migration.txt';
 const DOCUMENT_MAP_SKILL_PATH = '.cortex/dynamic-skills/cortex-document-map.md';
+const ARTICLE_MIGRATION_LEDGER_PATH = '.cortex/article-structure-migration.txt';
+const ARTICLE_STRUCTURE_SKILL_PATH =
+  '.cortex/dynamic-skills/cortex-article-structure.md';
 
 type ReadGitTextArgs = {
   readonly relativePath: string;
@@ -163,59 +196,70 @@ type ReadGitTextArgs = {
   readonly revision: string;
 };
 
-function migrationBaselineEntries(repoRoot: string): readonly string[] | false {
+type MigrationBaselineEntriesArgs = {
+  readonly ledgerPath: string;
+  readonly markerPath: string;
+  readonly repoRoot: string;
+};
+
+function migrationBaselineEntries(
+  args: MigrationBaselineEntriesArgs,
+): readonly string[] | false {
   const headLedgerArgs: ReadGitTextArgs = {
-    relativePath: MIGRATION_LEDGER_PATH,
-    repoRoot,
+    relativePath: args.ledgerPath,
+    repoRoot: args.repoRoot,
     revision: 'HEAD',
   };
   const headLedger = readGitText(headLedgerArgs);
   if (headLedger === false) {
-    const headSkillArgs: GitRevisionHasDocumentMapSkillArgs = {
-      repoRoot,
+    const headSkillArgs: GitRevisionHasMarkerArgs = {
+      markerPath: args.markerPath,
+      repoRoot: args.repoRoot,
       revision: 'HEAD',
     };
-    return gitRevisionHasDocumentMapSkill(headSkillArgs) ? [] : false;
+    return gitRevisionHasMarker(headSkillArgs) ? [] : false;
   }
-  if (!worktreeLedgerMatchesHead(repoRoot)) {
+  if (!worktreeLedgerMatchesHead(args)) {
     return ledgerEntries(headLedger);
   }
   const parentLedgerArgs: ReadGitTextArgs = {
-    relativePath: MIGRATION_LEDGER_PATH,
-    repoRoot,
+    relativePath: args.ledgerPath,
+    repoRoot: args.repoRoot,
     revision: 'HEAD^',
   };
   const parentLedger = readGitText(parentLedgerArgs);
   if (parentLedger !== false) {
     return ledgerEntries(parentLedger);
   }
-  const parentSkillArgs: GitRevisionHasDocumentMapSkillArgs = {
-    repoRoot,
+  const parentSkillArgs: GitRevisionHasMarkerArgs = {
+    markerPath: args.markerPath,
+    repoRoot: args.repoRoot,
     revision: 'HEAD^',
   };
-  return gitRevisionHasDocumentMapSkill(parentSkillArgs) ? [] : false;
+  return gitRevisionHasMarker(parentSkillArgs) ? [] : false;
 }
 
-type GitRevisionHasDocumentMapSkillArgs = {
+type GitRevisionHasMarkerArgs = {
+  readonly markerPath: string;
   readonly repoRoot: string;
   readonly revision: string;
 };
 
-function gitRevisionHasDocumentMapSkill(
-  args: GitRevisionHasDocumentMapSkillArgs,
-): boolean {
+function gitRevisionHasMarker(args: GitRevisionHasMarkerArgs): boolean {
   const readArgs: ReadGitTextArgs = {
-    relativePath: DOCUMENT_MAP_SKILL_PATH,
+    relativePath: args.markerPath,
     repoRoot: args.repoRoot,
     revision: args.revision,
   };
   return readGitText(readArgs) !== false;
 }
 
-function worktreeLedgerMatchesHead(repoRoot: string): boolean {
-  const commandArgs = ['diff', '--quiet', 'HEAD', '--', MIGRATION_LEDGER_PATH];
+function worktreeLedgerMatchesHead(
+  args: MigrationBaselineEntriesArgs,
+): boolean {
+  const commandArgs = ['diff', '--quiet', 'HEAD', '--', args.ledgerPath];
   const options: ExecFileSyncOptionsWithStringEncoding = {
-    cwd: repoRoot,
+    cwd: args.repoRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'ignore', 'ignore'],
   };

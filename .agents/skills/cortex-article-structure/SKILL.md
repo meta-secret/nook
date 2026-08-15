@@ -1,0 +1,25 @@
+---
+name: cortex-article-structure
+description: >-
+  Require Cortex article bodies to expose semantic structure through meaningful
+  headings, ordered procedures, parallel rule lists, nested branches, and owned
+  explanation. Use whenever creating, editing, restructuring, or auditing
+  .cortex Markdown.
+---
+
+# Cortex Structured Articles
+
+Read and follow the canonical project rule at
+[`.cortex/dynamic-skills/cortex-article-structure.md`](../../../.cortex/dynamic-skills/cortex-article-structure.md).
+
+Every Cortex edit must make the body's real hierarchy visible.
+
+## Required response while writing
+
+1. Identify whether each article primarily explains, defines rules, gives a
+   procedure, or provides reference data.
+2. Use ordered steps only when action order matters.
+3. Use flat bullets for peers and nested bullets for owned branches or substeps.
+4. Keep detailed rationale as prose inside a clearly owned article.
+5. Update the document map whenever the heading hierarchy changes.
+6. Run the structured-article and consistency checks before completion.

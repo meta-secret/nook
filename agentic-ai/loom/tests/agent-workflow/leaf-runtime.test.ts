@@ -42,6 +42,7 @@ test('returns mechanical inconsistencies as typed completed evidence', () => {
     missingExecutableSkills: ['missing-wrapper'],
     densityFindings: [],
     structureFindings: [],
+    articleStructureFindings: [],
     auditOk: false,
   };
   const output = mechanicalCortexAuditOutput(report);
@@ -62,6 +63,7 @@ test('allows a clean mechanical report with zero findings', () => {
     missingExecutableSkills: [],
     densityFindings: [],
     structureFindings: [],
+    articleStructureFindings: [],
     auditOk: true,
   };
   const output = mechanicalCortexAuditOutput(report);

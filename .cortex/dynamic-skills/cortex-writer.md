@@ -5,6 +5,9 @@
 - [Cortex document navigation](cortex-document-map.md)
   - Defines concise navigation summaries as part of every Cortex document.
   - Apply whenever headings, relationships, or document maps change.
+- [Cortex structured articles](cortex-article-structure.md)
+  - Defines when prose, rules, procedures, and reference structures apply.
+  - Apply whenever sentence-level cleanup changes an article body.
 - [Cortex consistency](cortex-consistency.md)
   - Requires readable edits to remain current and non-contradictory.
   - Apply whenever durable Cortex guidance changes.
@@ -78,6 +81,10 @@ Split the idea before writing the final prose.
 3. Use a bullet list when several units share one topic.
 4. Use a nested list only when a parent item owns clear children.
 5. Keep table cells short. Move long detail under the table or into bullets.
+
+Use [Cortex structured articles](cortex-article-structure.md) to choose the body
+shape. This rule governs sentence complexity. The structured-article rule
+governs semantic hierarchy.
 
 Checklist for every new or edited `.cortex` sentence:
 

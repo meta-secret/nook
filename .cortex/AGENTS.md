@@ -44,6 +44,9 @@
 - [Cortex Writer — Low Cognitive Complexity](dynamic-skills/cortex-writer.md)
   - Defines the Cortex Writer — Low Cognitive Complexity context used by this document.
   - Apply when implementation or delivery reaches this workflow boundary.
+- [Cortex Structured Articles](dynamic-skills/cortex-article-structure.md)
+  - Defines the semantic body grammar for Cortex manuals and reference documents.
+  - Apply whenever `.cortex` content or hierarchy changes.
 - [GitHub-Hosted Execution and Validation](dynamic-skills/github-actions-only-validation.md)
   - Defines the boundary between local formatting and hosted validation.
   - Apply when implementation or delivery reaches this workflow boundary.
@@ -176,6 +179,9 @@
 - [⛔ P1 — most critical `.cortex` writing rule: keep cognitive complexity low](#-p1--most-critical-cortex-writing-rule-keep-cognitive-complexity-low)
   - Requires short, low-complexity prose in every `.cortex` document.
   - Apply whenever `.cortex` Markdown changes.
+- [⛔ P1 — Cortex articles must expose their semantic structure](#-p1--cortex-articles-must-expose-their-semantic-structure)
+  - Requires visible explanation, rule, procedure, and reference shapes.
+  - Apply whenever Cortex article bodies or headings change.
 - [⛔ P1 — most critical `.cortex` integrity rule: keep docs consistent](#-p1--most-critical-cortex-integrity-rule-keep-docs-consistent)
   - Requires `.cortex`, code, and related guidance to remain consistent.
   - Apply to durable architecture, product, and workflow changes.
@@ -313,6 +319,22 @@ Dense multi-clause prose is a P1 documentation finding.
 
 Full contract:
 [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md).
+
+## ⛔ P1 — Cortex articles must expose their semantic structure
+
+Every Cortex article must make its real hierarchy visible.
+
+- Use prose for rationale and connected explanation.
+- Use bullets for parallel rules, facts, choices, and failure conditions.
+- Use ordered lists for actions whose sequence matters.
+- Use nested lists only for owned substeps or conditional branches.
+- Use headings for substantial navigable subarticles, not cosmetic labels.
+
+Detailed explanations do not need to be short. They must live inside a clear
+article shape and keep one idea per sentence.
+
+Full contract:
+[dynamic-skills/cortex-article-structure.md](dynamic-skills/cortex-article-structure.md).
 
 ## ⛔ P1 — most critical `.cortex` integrity rule: keep docs consistent
 
@@ -1116,6 +1138,7 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 - [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
 - [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
 - [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md) — **P1 `.cortex` writing rule:** short sentences, bullets, and lists over dense multi-clause prose.
+- [dynamic-skills/cortex-article-structure.md](dynamic-skills/cortex-article-structure.md) — **P1 `.cortex` article rule:** semantic headings, ordered procedures, parallel rule lists, and nested ownership.
 - [dynamic-skills/cortex-consistency.md](dynamic-skills/cortex-consistency.md) — **P1 `.cortex` GC rule:** docs must stay current, mutually consistent, and aligned with code.
 - [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
 - [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; run focused tasks and complete gates explicitly on GitHub-hosted workers**.
@@ -1150,6 +1173,7 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 * When prompts, dialogues, test runs, or PRs reveal **durable** facts (invariants, tooling behavior, architectural decisions, coverage gaps), **write them into `.cortex` in the same task** — do not leave knowledge only in chat history.
 * Follow [design-docs/core-beliefs.md §10](design-docs/core-beliefs.md#10-grow-cortex-dynamically): update the most specific existing doc; keep entries concise and linked to code/tests.
 * Follow [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md) for every `.cortex` edit: short sentences, bullets, and lists over dense multi-clause prose.
+* Follow [dynamic-skills/cortex-article-structure.md](dynamic-skills/cortex-article-structure.md): expose the real explanation, rule, procedure, and reference hierarchy.
 * Follow [dynamic-skills/cortex-consistency.md](dynamic-skills/cortex-consistency.md): garbage-collect obsolete facts, resolve cross-doc conflicts, and fix docs that disagree with code.
 * For recurring refactor, review, boundary, or code-organization feedback, use [workflows/dynamic-skills.md](workflows/dynamic-skills.md) and update [dynamic-skills/index.md](dynamic-skills/index.md).
 
