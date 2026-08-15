@@ -67,26 +67,29 @@ not recover on its own.
 Unused TypeScript and Svelte code is enforced by `bun run unused` (Knip) in both
 `nook-web-app` and `nook-web-research`. Copy/paste clones are enforced by
 `bun run duplicates` (jscpd) from the app lint path across authored `nook-app`
-and `preflight` sources. Both run under `bun run lint` / `task check` for the
-vault app; the research package's `bun run check` and research-only workflow run
-its workspace-scoped Knip graph with the correct local `$lib` mapping. Knip
-rejects unreachable files and exports. The production app graph stays pinned to
-5.88 until the sibling vault and extension packages become a real root
-workspace. Its graph enables `classMembers`.
+and `preflight` sources. Unused-code ownership is split as follows:
 
-The isolated research graph uses Knip 6. Knip 6 removed the `classMembers` issue
-type, so research relies on TypeScript and ESLint for unused declarations plus a
-manual caller audit for exported class members.
-
-TypeScript and ESLint reject unused locals and parameters inside `.ts`,
-`.svelte.ts`, and `.svelte` files. The extension `check` script explicitly lints
-its build scripts, Playwright config, and E2E spec. Treat each finding as a
-call-graph result. Delete confirmed dead members instead of adding ignores.
-
-**Agent duty:** Knip unused findings and jscpd clone findings are hard failures.
-Delete or wire unused code; extract shared helpers for clones. Do not raise
-thresholds, add authored-code ignores, or leave the task done while either gate
-is red. See [quality.md § Fix check findings](../workflows/quality.md#fix-check-findings--not-silence-them).
+- **Vault app graph:** Run under `bun run lint` / `task check`.
+  - Reject unreachable files and exports.
+  - Keep the production graph pinned to Knip 5.88 until sibling vault and
+    extension packages become a real root workspace.
+  - Enable `classMembers`.
+- **Research graph:** Run its workspace-scoped Knip 6 graph through package
+  `bun run check` and the research-only workflow with the correct `$lib` mapping.
+  - Knip 6 removed `classMembers`.
+  - Use TypeScript and ESLint for unused declarations plus manual caller audit
+    for exported class members.
+- **TypeScript and ESLint:** Reject unused locals and parameters in `.ts`,
+  `.svelte.ts`, and `.svelte`.
+  - The extension `check` script also lints build scripts, Playwright config,
+    and E2E specs.
+  - Treat each finding as a call-graph result and delete confirmed dead members.
+- **Agent duty:** Knip unused and jscpd clone findings are hard failures.
+  - Delete or wire unused code.
+  - Extract shared helpers for clones.
+  - Do not raise thresholds, add authored-code ignores, or mark the task done
+    while either gate is red.
+  - See [quality.md § Fix check findings](../workflows/quality.md#fix-check-findings--not-silence-them).
 
 - **Human interactive single-spec debug:** `E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file`. Agents use the hosted remote catalog.
 - Full stub Playwright: `task web:test:e2e` runs the `stable` IndexedDB group at
