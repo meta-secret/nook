@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fromMarkdown } from 'mdast-util-from-markdown';
 import type { Heading, Root, RootContent } from 'mdast';
+import remarkGfm from 'remark-gfm';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
 import type { CortexDocumentSource } from './cortex-document-structure.ts';
 
 export enum CortexArticleFindingCode {
@@ -86,7 +88,11 @@ export function auditCortexArticleStructure(
 }
 
 function parseDocument(document: CortexDocumentSource): ParsedArticleDocument {
-  return { ...document, root: fromMarkdown(document.content) };
+  const root = unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .parse(document.content);
+  return { ...document, root };
 }
 
 function readMigrationExemptions(
@@ -251,11 +257,7 @@ function ownedSectionNodes(
 }
 
 function auditArticle(args: AuditArticleArgs): void {
-  if (
-    !args.sectionNodes.some(
-      (node) => node.type !== 'heading' && !isInvisibleHtmlComment(node),
-    )
-  ) {
+  if (!args.sectionNodes.some(isVisibleArticleNode)) {
     const findingArgs: AddFindingArgs = {
       findings: args.findings,
       code: CortexArticleFindingCode.EmptyArticle,
@@ -269,6 +271,14 @@ function auditArticle(args: AuditArticleArgs): void {
 
   auditConsecutiveParagraphs(args);
   auditProcedure(args);
+}
+
+function isVisibleArticleNode(node: RootContent): boolean {
+  return (
+    node.type !== 'heading' &&
+    node.type !== 'definition' &&
+    !isInvisibleHtmlComment(node)
+  );
 }
 
 function auditConsecutiveParagraphs(args: AuditArticleArgs): void {

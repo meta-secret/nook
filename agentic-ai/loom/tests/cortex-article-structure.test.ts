@@ -314,6 +314,67 @@ Fourth paragraph.
   );
 });
 
+test('treats a GFM table as visible article structure', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/table-structure.md',
+    content: `# Table structure
+
+## Relationships
+
+- None.
+
+## Document map
+
+- [Reference](#reference)
+  - Presents structured facts.
+  - Read while comparing values.
+
+## Reference
+
+Introductory paragraph.
+
+| Shape | Use |
+| --- | --- |
+| Rule | Parallel constraints |
+| Procedure | Ordered actions |
+
+Second paragraph.
+
+Third paragraph.
+
+Fourth paragraph.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document])).toEqual([]);
+});
+
+test('does not count a link definition as article content', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/definition-only.md',
+    content: `# Definition only
+
+## Relationships
+
+- None.
+
+## Document map
+
+- [Empty article](#empty-article)
+  - Names the empty article.
+  - Read to find the failure.
+
+## Empty article
+
+[manual]: https://example.com
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document]).map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.EmptyArticle,
+  );
+});
+
 test('ignores procedure-like headings inside examples and quotes', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/examples.md',
