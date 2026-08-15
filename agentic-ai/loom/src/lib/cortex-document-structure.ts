@@ -79,8 +79,13 @@ type ValidateNavigationEntriesArgs = {
   readonly entries: readonly NavigationEntry[];
   readonly file: string;
   readonly findings: CortexStructureFinding[];
-  readonly kind: 'relationship' | 'map';
+  readonly kind: CortexNavigationKind;
 };
+
+enum CortexNavigationKind {
+  Relationship = 'relationship',
+  Map = 'map',
+}
 
 type ResolveRelationshipArgs = {
   readonly document: ParsedDocument;
@@ -200,15 +205,15 @@ function validateDocument(args: ValidateDocumentArgs): void {
       findings: args.findings,
       code: CortexStructureFindingCode.InvalidTitle,
       file: args.document.relativePath,
-      line: nodeLine(h1s[0]),
+      line: nodeLine(h1s[0] ?? false),
       message: 'Document must begin with exactly one H1 title.',
     };
     addFinding(findingArgs);
   }
 
   const rootH2s = headings.filter((heading) => heading.depth === 2);
-  const relationshipsHeading = rootH2s[0];
-  const mapHeading = rootH2s[1];
+  const relationshipsHeading = rootH2s[0] ?? false;
+  const mapHeading = rootH2s[1] ?? false;
   if (nodeTextOrEmpty(relationshipsHeading) !== 'Relationships') {
     const findingArgs: AddFindingArgs = {
       findings: args.findings,
@@ -230,8 +235,8 @@ function validateDocument(args: ValidateDocumentArgs): void {
     addFinding(findingArgs);
   }
   if (
-    relationshipsHeading === undefined ||
-    mapHeading === undefined ||
+    relationshipsHeading === false ||
+    mapHeading === false ||
     nodeTextOrEmpty(relationshipsHeading) !== 'Relationships' ||
     nodeTextOrEmpty(mapHeading) !== 'Document map'
   ) {
@@ -292,7 +297,7 @@ function validateRelationships(args: ValidateRelationshipsArgs): void {
       findings: args.findings,
       code: CortexStructureFindingCode.InvalidRelationship,
       file: args.document.relativePath,
-      line: nodeLine(args.nodes[0]),
+      line: nodeLine(args.nodes[0] ?? false),
       message: '`None.` cannot appear alongside linked relationships.',
     };
     addFinding(findingArgs);
@@ -302,7 +307,7 @@ function validateRelationships(args: ValidateRelationshipsArgs): void {
       findings: args.findings,
       code: CortexStructureFindingCode.InvalidRelationship,
       file: args.document.relativePath,
-      line: nodeLine(args.nodes[0]),
+      line: nodeLine(args.nodes[0] ?? false),
       message:
         'Relationships must contain linked entries or an explicit `None.` item.',
     };
@@ -313,7 +318,7 @@ function validateRelationships(args: ValidateRelationshipsArgs): void {
     entries,
     file: args.document.relativePath,
     findings: args.findings,
-    kind: 'relationship',
+    kind: CortexNavigationKind.Relationship,
   };
   validateNavigationEntries(navigationArgs);
   const seen = new Set<string>();
@@ -376,7 +381,7 @@ function validateMap(args: ValidateMapArgs): void {
     entries,
     file: args.document.relativePath,
     findings: args.findings,
-    kind: 'map',
+    kind: CortexNavigationKind.Map,
   };
   validateNavigationEntries(navigationArgs);
   const expectedArgs: ExpectedMapEntriesArgs = {
@@ -396,9 +401,9 @@ function validateMap(args: ValidateMapArgs): void {
   }
   const count = Math.max(entries.length, expected.length);
   for (let index = 0; index < count; index += 1) {
-    const actual = entries[index];
-    const wanted = expected[index];
-    if (actual === undefined || wanted === undefined) {
+    const actual = entries[index] ?? false;
+    const wanted = expected[index] ?? false;
+    if (actual === false || wanted === false) {
       continue;
     }
     const actualFragment = decodeFragment(actual.url);
@@ -542,7 +547,7 @@ function validateNavigationEntries(args: ValidateNavigationEntriesArgs): void {
       const findingArgs: AddFindingArgs = {
         findings: args.findings,
         code:
-          args.kind === 'map'
+          args.kind === CortexNavigationKind.Map
             ? CortexStructureFindingCode.InvalidMapEntry
             : CortexStructureFindingCode.InvalidRelationship,
         file: args.file,
@@ -551,7 +556,7 @@ function validateNavigationEntries(args: ValidateNavigationEntriesArgs): void {
       };
       addFinding(findingArgs);
     }
-    if (args.kind === 'map' && !entry.url.startsWith('#')) {
+    if (args.kind === CortexNavigationKind.Map && !entry.url.startsWith('#')) {
       const findingArgs: AddFindingArgs = {
         findings: args.findings,
         code: CortexStructureFindingCode.InvalidMapEntry,
@@ -601,8 +606,8 @@ type ValidateResolvedFragmentArgs = {
 };
 
 function validateResolvedFragment(args: ValidateResolvedFragmentArgs): void {
-  const target = args.catalog.get(args.targetPath);
-  if (target === undefined) {
+  const target = args.catalog.get(args.targetPath) ?? false;
+  if (target === false) {
     return;
   }
   if (args.fragment !== false && !target.fragments.has(args.fragment)) {
@@ -637,12 +642,12 @@ function nodeText(node: Parent): string {
   return text;
 }
 
-function nodeTextOrEmpty(node: Heading | undefined): string {
-  return node === undefined ? '' : nodeText(node);
+function nodeTextOrEmpty(node: Heading | false): string {
+  return node === false ? '' : nodeText(node);
 }
 
-function nodeLine(node: RootContent | Heading | Link | undefined): number {
-  return node?.position?.start.line ?? 1;
+function nodeLine(node: RootContent | Heading | Link | false): number {
+  return node === false ? 1 : (node.position?.start.line ?? 1);
 }
 
 function addFinding(args: AddFindingArgs): void {
