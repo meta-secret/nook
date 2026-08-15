@@ -83,26 +83,25 @@
 
 ## Overview
 
-Status: Draft design for #260. Implementation is split across issues #261, #262, #263, #264, and #265.
-
-This spec defines Nook's first decentralized vault recovery flow: exactly three
-enrolled devices hold one recovery share each, and any two devices can help a
-locked or new device recover. The exchange is direct and out-of-band through QR
-or pasted payloads. Nook sync providers never carry recovery requests or share
-responses.
-
-Related:
-[decentralized-auth.md](decentralized-auth.md),
-[password-envelope.md](password-envelope.md),
-[ARCHITECTURE.md](../ARCHITECTURE.md) section 2,
-[#259](https://github.com/meta-secret/nook/issues/259).
-
-This fixed 2-of-3 recovery protocol is distinct from Sentinel genesis. Sentinel uses
-a separately typed reverse-onboarding ceremony and a configurable `T-of-N`
-access policy before the vault exists. The two features may share audited
-SLIP-0039 primitives, but they must not share payload types, identifiers,
-policy constants, or lifecycle state. See
-[sentinel-genesis.md](../design-docs/sentinel-genesis.md).
+- **Status:** Draft design for #260, split across issues #261 through #265.
+- **Recovery model:** Exactly three enrolled devices hold one recovery share
+  each, and any two can help a locked or new device recover.
+  - Exchange requests and responses directly out of band through QR or pasted
+    payloads.
+  - Never carry them through Nook sync providers.
+- **Related context:**
+  - [Decentralized auth](decentralized-auth.md)
+  - [Password envelope](password-envelope.md)
+  - [Architecture section 2](../ARCHITECTURE.md)
+  - [Issue #259](https://github.com/meta-secret/nook/issues/259)
+- **Sentinel separation:** Fixed 2-of-3 recovery is distinct from Sentinel
+  genesis.
+  - Sentinel uses a separately typed reverse-onboarding ceremony and a
+    configurable `T-of-N` policy before the vault exists.
+  - The features may share audited SLIP-0039 primitives.
+  - They must not share payload types, identifiers, policy constants, or
+    lifecycle state.
+  - See [Sentinel genesis](../design-docs/sentinel-genesis.md).
 
 ---
 

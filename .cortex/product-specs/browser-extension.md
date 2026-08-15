@@ -398,100 +398,92 @@ submit stay out of scope. See
 
 ## Device-Key And Storage Boundary
 
-The extension creates its own installation-specific Nook device key instead of
-reusing or scraping the `simple.nokey.sh` browser device private key. Existing
-code and wire fields call this a device identity; the target identity model
-treats it as a key acting for a selected virtual identity. The separate key
-provides a distinct approval/revocation boundary and limits compromise blast
-radius.
-
-TypeScript performs browser ceremonies and message transport. Rust/WASM owns
-device option construction, PRF validation, key wrapping, authorization
-envelopes, vault validation, domain matching, and secret selection.
-
-Pairing metadata is not equivalent to an independently usable vault. Initial
-approval transfers the immutable encrypted event log, and Rust/WASM rebuilds
-the extension-owned projection in extension-origin IndexedDB. No decrypted
-vault values, event-log contents, or provider credentials may be stored in
-browser-vendor storage, exposed to ordinary-site content scripts, or written to
-logs.
-
-The website and extension cannot share an origin or an IndexedDB database. A
-dedicated content script on the configured Simple Vault origin bridges typed
-local-change notifications from the page to the extension service worker. Each
-notification carries the encrypted signed event-log snapshot; Rust validates
-and idempotently merges it. This gives the extension immediate local updates
-without requiring a sync provider. Sync providers remain responsible for
-global changes from other browsers/devices; after a provider pull, Simple Vault
-publishes the resulting event log through the same local bridge.
-
-The extension private device key stays separately wrapped in
-extension-origin IndexedDB by WebAuthn PRF. Event replication may occur while
-that key is locked, but decrypting, matching, or filling requires an
-extension-origin unlock ceremony. The passkey is bound to the stable extension
-runtime id, not to the Simple Vault website origin.
-
-The extension database does not need the website private key. Its canonical
-encrypted event log contains the vault-key envelope addressed to the extension
-public key. The extension passkey unlocks the extension age device key, and
-Rust/WASM uses that key to open the envelope and decrypt the local
-projection. Non-secret grant and selected-vault status metadata also remain in
-WASM-managed extension-origin Rexie/IndexedDB; browser-vendor storage is not a
-vault persistence boundary. An upgrade may read the legacy
-`chrome.storage.local` pairing rows once, validate and copy the selected grant
-into Rexie, then delete the matching legacy setup and selected-grant rows.
-Unselected or incomplete legacy grant rows remain quarantined and are ignored
-while Rexie state exists; they have no setup selector and cannot be migrated on
-their own. A failed cleanup is retried when the Rexie copy matches the completed
-migration. Quarantined rows are removed when the user clears the extension's
-browser storage. Ongoing pairing reads and writes use Rexie only.
-
-The `/extension-connect` creation path may temporarily use the unlocked
-extension identity.
-The website first creates a one-time age recipient.
-The private key remains inside its WASM manager.
-The extension encrypts its age private key and event-signing seed to that
-recipient.
-The website's Rust/WASM boundary decrypts the envelope.
-It validates the route nonce and advertised device id/public keys.
-It keeps the adopted material staged until authorization completes.
-Extension-first creation writes an inactive, resumable genesis transaction with
-both members, their public keys, and authorized DEK envelopes. Verified connect
-publishes that directory and its matching signing seed atomically only when its
-base still matches current identity state. Partial genesis resumes instead of
-rewinding event stores.
-Failure clears decrypted web state and stops sync.
-Staged existing-vault imports use an explicit Rust handoff state. They publish
-the extension member and signer only after verified connect establishes the
-vault owner and confirms active signed-roster access.
-Raw private material never appears in URL parameters, TypeScript values,
-browser-vendor storage, website IndexedDB, or logs.
-Reloading the website requests a new handoff from the unlocked extension.
-That includes when the user arrived at the normal vault route rather than
-`/extension-connect`.
-The website discovers the pairing by the local vault store id.
-The extension returns a handoff only when it holds a current grant for that exact
-vault.
-The extension launcher must also honor an explicit pairing intent from an
-authenticated vault that is not paired.
-A cached ready record for a different or deleted vault must not hide the pairing
-action.
-It must not trap the user in an open-vault loop.
-The extension records each issued nonce, vault store id, and public device tuple
-in extension-only `chrome.storage.session`.
-It consumes the nonce before sealing.
-It returns a freshly issued nonce for a later lock/unlock.
-Only the service worker may invoke the offscreen secret-sealing command.
-A failed website adoption resets both device identity and event-log signing state
-before another authorization attempt.
-
-Deleting Simple Vault's local website data does not revoke or erase the
-extension device. The extension remains independently paired to its encrypted
-projection and its own sync-provider grants. Reopening a local-folder vault
-with the same `vaultStoreId` discovers that existing pairing automatically.
-Creating or opening a different vault produces an explicit different-vault
-state; only a newly validated approval switches the extension's active vault,
-and an invalid approval must not reset the current unlocked session.
+- **Installation key:** Create an extension-specific Nook device key instead of
+  reusing or scraping the `simple.nokey.sh` browser private key.
+  - Existing wire fields call it a device identity.
+  - The target model treats it as a key acting for a selected virtual identity.
+  - Keep its approval and revocation boundary separate to limit blast radius.
+- **Runtime ownership:** TypeScript performs browser ceremonies and message
+  transport.
+  - Rust/WASM owns device options, PRF validation, key wrapping, authorization
+    envelopes, vault validation, domain matching, and secret selection.
+- **Pairing state:** Pairing metadata is not an independently usable vault.
+  - Initial approval transfers the immutable encrypted event log.
+  - Rust/WASM rebuilds an extension-owned projection in extension-origin
+    IndexedDB.
+  - Store no decrypted vault values, event-log contents, or provider credentials
+    in browser-vendor storage, ordinary-site content scripts, or logs.
+- **Local event bridge:** The website and extension share neither origin nor
+  IndexedDB.
+  - A dedicated Simple Vault content script bridges typed local-change
+    notifications to the extension service worker.
+  - Each notification carries the encrypted signed event-log snapshot.
+  - Rust validates and idempotently merges the snapshot.
+  - This supplies immediate local updates without a sync provider.
+  - Sync providers remain responsible for other-device changes.
+  - After provider pull, publish the resulting log through the same bridge.
+- **Extension unlock:** Wrap the private device key in extension-origin
+  IndexedDB with WebAuthn PRF.
+  - Event replication may run while it is locked.
+  - Decrypting, matching, or filling requires extension-origin unlock.
+  - Bind the passkey to the stable extension runtime ID, not the website origin.
+- **Projection decryption:** The extension database does not need the website
+  private key.
+  1. The event log carries a vault-key envelope for the extension public key.
+  2. The extension passkey unlocks its age device key.
+  3. Rust/WASM opens the envelope and decrypts the local projection.
+- **Extension metadata:** Keep non-secret grant and selected-vault status in
+  WASM-managed extension-origin Rexie/IndexedDB.
+  - Browser-vendor storage is not a vault persistence boundary.
+- **Legacy pairing migration:**
+  1. Read legacy `chrome.storage.local` pairing rows once.
+  2. Validate and copy the selected grant into Rexie.
+  3. Delete matching legacy setup and selected-grant rows.
+  - Quarantine unselected or incomplete rows while Rexie exists.
+  - They have no setup selector and cannot migrate independently.
+  - Retry failed cleanup when Rexie matches the completed migration.
+  - Remove quarantined rows when the user clears extension browser storage.
+  - Use Rexie only for ongoing pairing reads and writes.
+- **Extension-first creation:** `/extension-connect` may temporarily use the
+  unlocked extension identity.
+  1. The website creates a one-time age recipient whose private key remains in
+     its WASM manager.
+  2. The extension encrypts its age private key and event-signing seed to that
+     recipient.
+  3. Website Rust/WASM decrypts the envelope and validates the route nonce plus
+     advertised device ID and public keys.
+  4. Keep adopted material staged until authorization completes.
+  5. Write an inactive, resumable genesis transaction with both members, public
+     keys, and authorized DEK envelopes.
+  6. On verified connect, publish the directory and matching signing seed
+     atomically only when its base matches current identity state.
+  - Resume partial genesis instead of rewinding event stores.
+  - On failure, clear decrypted web state and stop sync.
+- **Existing-vault handoff:** Use an explicit Rust handoff state.
+  - Publish the extension member and signer only after verified connect
+    establishes the vault owner and active signed-roster access.
+  - Never place raw private material in URLs, TypeScript, browser-vendor storage,
+    website IndexedDB, or logs.
+- **Handoff discovery:** Request a new handoff after website reload, including
+  arrival at the normal vault route.
+  - Discover pairing by local vault store ID.
+  - Return a handoff only for a current grant to that exact vault.
+  - Honor explicit pairing intent from an authenticated unpaired vault.
+  - Do not let a cached different/deleted-vault record hide pairing or trap the
+    user in an open-vault loop.
+- **Nonce ownership:** Record each nonce, vault store ID, and public device tuple
+  in extension-only `chrome.storage.session`.
+  - Consume the nonce before sealing.
+  - Issue a fresh nonce for later lock/unlock.
+  - Only the service worker invokes offscreen secret sealing.
+  - After failed adoption, reset device identity and event-log signing state
+    before another attempt.
+- **Website-data deletion:** Do not revoke or erase the extension device.
+  - Keep its encrypted projection and sync-provider grants independently paired.
+  - Reopen the same local-folder `vaultStoreId` by discovering that pairing.
+  - Show explicit different-vault state for another vault.
+  - Switch active vault only after newly validated approval.
+  - Invalid approval must not reset the current unlocked session.
 
 When both devices exist, unlock selection is deterministic:
 
