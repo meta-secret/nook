@@ -134,6 +134,8 @@ It merges every identity connected by a shared app key.
 The selected identity survives when it belongs to that group.
 An identity referenced by `pending_simple_genesis_v1` takes precedence over
 the selection so a resumable genesis marker cannot become orphaned.
+When the marker is staged, the same transaction normalizes its base and
+candidate directory snapshots before rewriting the live directory.
 All distinct members and vault DEK grants survive the merge.
 The normalized directory is rewritten before unique app-key ownership is
 enforced.
@@ -171,6 +173,8 @@ handoff or the local signer supplies that public key.
     roster.
   - Reject the roster snapshot if its event index names a missing event or an
     invalid event ID.
+  - Reject matching event rows absent from the index. This closes the
+    pre-upgrade two-transaction writer window before authorization is trusted.
   - Commit the member signer and adopted signing seed atomically.
 - **Legacy-vault reconciliation:** Derive DEK recipients from the signed event
   graph's active approvals after revocations, not from stale encrypted auth

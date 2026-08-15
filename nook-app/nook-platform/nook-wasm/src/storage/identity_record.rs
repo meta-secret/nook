@@ -33,9 +33,9 @@ fn map_domain_error(error: nook_core::MultiDeviceError) -> NookError {
     NookError::Database(message)
 }
 
-async fn load_pending_genesis_identity_id(
+async fn load_pending_genesis(
     store: &rexie::Store,
-) -> Result<Option<nook_core::IdentityId>, NookError> {
+) -> Result<Option<PendingSimpleGenesis>, NookError> {
     let pending_id = serde_wasm_bindgen::to_value(PENDING_SIMPLE_GENESIS_KEY)
         .map_err(|error| NookError::IndexedDb(format!("Pending genesis key error: {error:?}")))?;
     let pending = store
@@ -47,10 +47,45 @@ async fn load_pending_genesis_identity_id(
         .map(serde_wasm_bindgen::from_value::<String>)
         .transpose()
         .map_err(|error| NookError::IndexedDb(format!("Pending genesis value error: {error:?}")))?
-        .map(|raw| {
-            simple_genesis::decode_pending_simple_genesis(&raw).map(|pending| pending.identity_id)
-        })
+        .map(|raw| simple_genesis::decode_pending_simple_genesis(&raw))
         .transpose()
+}
+
+fn migrate_staged_genesis_directories(
+    pending: &mut PendingSimpleGenesis,
+) -> Result<bool, NookError> {
+    let genesis_flow::PendingSimpleGenesisFlow::Staged(staged) = &mut pending.flow else {
+        return Ok(false);
+    };
+    let (base_directory, base_changed) = staged
+        .base_directory
+        .clone()
+        .migrate_legacy_duplicate_app_key_ownership_preserving(&pending.identity_id)
+        .map_err(map_domain_error)?;
+    let (directory, directory_changed) = staged
+        .directory
+        .clone()
+        .migrate_legacy_duplicate_app_key_ownership_preserving(&pending.identity_id)
+        .map_err(map_domain_error)?;
+    staged.base_directory = base_directory;
+    staged.directory = directory;
+    Ok(base_changed || directory_changed)
+}
+
+async fn persist_pending_genesis(
+    store: &rexie::Store,
+    pending: &PendingSimpleGenesis,
+) -> Result<(), NookError> {
+    let key = serde_wasm_bindgen::to_value(PENDING_SIMPLE_GENESIS_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Pending genesis key error: {error:?}")))?;
+    let encoded = simple_genesis::encode_pending_simple_genesis(pending)?;
+    let value = serde_wasm_bindgen::to_value(&encoded)
+        .map_err(|error| NookError::IndexedDb(format!("Pending genesis value error: {error:?}")))?;
+    store
+        .put(&value, Some(&key))
+        .await
+        .map(|_| ())
+        .map_err(|error| NookError::IndexedDb(format!("Pending genesis write error: {error:?}")))
 }
 
 async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, NookError> {
@@ -74,12 +109,18 @@ async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, Nook
             NookError::IndexedDb(format!("Identity directory value error: {error:?}"))
         })?;
         let directory = decode_directory_value(&persisted_raw)?;
-        let preserved_identity_id = if directory.has_legacy_duplicate_app_key_ownership() {
-            load_pending_genesis_identity_id(&store).await?
+        let mut pending = if directory.has_legacy_duplicate_app_key_ownership() {
+            load_pending_genesis(&store).await?
         } else {
             None
         };
-        let (directory, migrated) = migrate_directory(directory, preserved_identity_id.as_ref())?;
+        let preserved_identity_id = pending.as_ref().map(|pending| &pending.identity_id);
+        let (directory, migrated) = migrate_directory(directory, preserved_identity_id)?;
+        if let Some(pending) = &mut pending
+            && migrate_staged_genesis_directories(pending)?
+        {
+            persist_pending_genesis(&store, pending).await?;
+        }
         let raw = if migrated {
             let normalized = serde_json::to_string(&directory).map_err(|error| {
                 NookError::IndexedDb(format!("Identity directory encode error: {error}"))
@@ -480,6 +521,78 @@ mod tests {
             .await?
             .ok_or_else(|| NookError::Database("Pending genesis marker is missing.".to_owned()))?;
         assert_eq!(pending.identity_id, pending_identity_id);
+        clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn migration_normalizes_staged_genesis_snapshots_atomically() -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let mut legacy = nook_core::IdentityDirectory::empty();
+        let pending_identity_id = legacy
+            .create_identity("Pending genesis", &app_key, None)
+            .map_err(map_domain_error)?;
+        legacy
+            .create_identity("Selected", &app_key, None)
+            .map_err(map_domain_error)?;
+        let store_id = nook_core::generate_store_id().map_err(map_domain_error)?;
+        let mut candidate = legacy.clone();
+        candidate
+            .open_or_generate_vault_dek_for_identity(
+                &pending_identity_id,
+                &app_key,
+                store_id.clone(),
+            )
+            .map_err(map_domain_error)?;
+        let pending = PendingSimpleGenesis {
+            store_id: store_id.clone(),
+            identity_id: pending_identity_id.clone(),
+            created_at: nook_core::IsoTimestamp::parse("2026-08-15T00:00:00.000Z")
+                .map_err(|error| NookError::Database(error.to_string()))?,
+            event_state: simple_genesis::PendingSimpleGenesisEvent::AwaitingEvent,
+            flow: genesis_flow::PendingSimpleGenesisFlow::Staged(
+                staged_genesis::StagedSimpleGenesisIdentity {
+                    base_directory: legacy.clone(),
+                    directory: candidate,
+                },
+            ),
+        };
+        idb_put_string(
+            IDENTITY_DIRECTORY_KEY,
+            &serde_json::to_string(&legacy)
+                .map_err(|error| NookError::IndexedDb(error.to_string()))?,
+        )
+        .await?;
+        idb_put_string(
+            PENDING_SIMPLE_GENESIS_KEY,
+            &simple_genesis::encode_pending_simple_genesis(&pending)?,
+        )
+        .await?;
+
+        let migrated = load_identity_directory().await?;
+        let normalized_raw = idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
+            .await?
+            .ok_or_else(|| NookError::Database("Staged marker is missing.".to_owned()))?;
+        let normalized = simple_genesis::decode_pending_simple_genesis(&normalized_raw)?;
+        let staged = normalized
+            .staged_identity()
+            .ok_or_else(|| NookError::Database("Staged snapshots are missing.".to_owned()))?;
+        assert_eq!(migrated.identities().len(), 1);
+        assert_eq!(staged.base_directory.identities().len(), 1);
+        assert_eq!(staged.directory.identities().len(), 1);
+        clear_pending_simple_genesis(SimpleGenesisCompletion::Staged {
+            pending: &normalized,
+            signing_seed: "staged-migration-signing-seed",
+        })
+        .await?;
+        let published = load_identity_directory().await?;
+        assert!(
+            published
+                .selected()
+                .map_err(map_domain_error)?
+                .owns_vault(&store_id)
+        );
+        idb_delete_key(crate::storage::event_db::SIGNING_SEED_KEY).await?;
         clear_identity_directory_for_test().await
     }
 

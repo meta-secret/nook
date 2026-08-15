@@ -1,5 +1,7 @@
 //! `IndexedDB` persistence for the immutable vault event log.
 
+use std::collections::HashSet;
+
 use crate::{NookError, storage::open_nook_database};
 use nook_core::{EventId, LocalEventStore};
 
@@ -183,31 +185,62 @@ pub(crate) async fn load_local_event_store_from_store(
     let mut local = LocalEventStore::new();
     let index_key = serde_wasm_bindgen::to_value(&format!("event_index:{store_id}"))
         .map_err(|error| NookError::IndexedDb(format!("Event index key error: {error:?}")))?;
-    let Some(index_value) = store
+    let index_value = store
         .get(index_key)
         .await
         .map_err(|error| NookError::IndexedDb(format!("Event index read error: {error:?}")))?
-        .filter(|value| !value.is_undefined() && !value.is_null())
-    else {
-        return Ok(local);
+        .filter(|value| !value.is_undefined() && !value.is_null());
+    let ids: Vec<String> = match index_value {
+        Some(index_value) => {
+            let index_json: String =
+                serde_wasm_bindgen::from_value(index_value).map_err(|error| {
+                    NookError::IndexedDb(format!("Event index decode error: {error:?}"))
+                })?;
+            serde_json::from_str(&index_json)
+                .map_err(|error| NookError::Serialization(error.to_string()))?
+        }
+        None => Vec::new(),
     };
-    let index_json: String = serde_wasm_bindgen::from_value(index_value)
-        .map_err(|error| NookError::IndexedDb(format!("Event index decode error: {error:?}")))?;
-    let ids: Vec<String> = serde_json::from_str(&index_json)
-        .map_err(|error| NookError::Serialization(error.to_string()))?;
+    let indexed_ids = ids.iter().cloned().collect::<HashSet<_>>();
+    if indexed_ids.len() != ids.len() {
+        return Err(NookError::IndexedDb(
+            "Event index contains duplicate event IDs.".to_owned(),
+        ));
+    }
+    let event_prefix = format!("event:{store_id}:");
+    let mut stored_ids = HashSet::new();
+    for key in store
+        .get_all_keys(None, None)
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Event key scan error: {error:?}")))?
+    {
+        let key: String = serde_wasm_bindgen::from_value(key)
+            .map_err(|error| NookError::IndexedDb(format!("Event key decode error: {error:?}")))?;
+        if let Some(event_id) = key.strip_prefix(&event_prefix) {
+            stored_ids.insert(event_id.to_owned());
+        }
+    }
+    if let Some(event_id) = indexed_ids.difference(&stored_ids).next() {
+        return Err(NookError::IndexedDb(format!(
+            "Event index references missing event {event_id}."
+        )));
+    }
+    if let Some(event_id) = stored_ids.difference(&indexed_ids).next() {
+        return Err(NookError::IndexedDb(format!(
+            "Event row {event_id} is missing from the index."
+        )));
+    }
     for raw_id in ids {
         let key = serde_wasm_bindgen::to_value(&event_key(store_id, &raw_id))
             .map_err(|error| NookError::IndexedDb(format!("Event key error: {error:?}")))?;
-        let Some(value) = store
+        let value = store
             .get(key)
             .await
             .map_err(|error| NookError::IndexedDb(format!("Event read error: {error:?}")))?
             .filter(|value| !value.is_undefined() && !value.is_null())
-        else {
-            return Err(NookError::IndexedDb(format!(
-                "Event index references missing event {raw_id}."
-            )));
-        };
+            .ok_or_else(|| {
+                NookError::IndexedDb(format!("Event index references missing event {raw_id}."))
+            })?;
         let bytes: String = serde_wasm_bindgen::from_value(value)
             .map_err(|error| NookError::IndexedDb(format!("Event decode error: {error:?}")))?;
         let event_id = EventId::parse(&raw_id).map_err(|error| {
@@ -405,8 +438,41 @@ mod tests {
         })?;
         store_delete(STORE_EVENTS, &index_key).await?;
 
-        let error = result.expect_err("missing indexed event must fail closed");
+        let Err(error) = result else {
+            return Err(NookError::Database(
+                "Missing indexed event did not fail closed.".to_owned(),
+            ));
+        };
         assert!(error.to_string().contains("references missing event"));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn transactional_loader_rejects_unindexed_event_row() -> Result<(), NookError> {
+        let store_id = "unindexed-event-test";
+        let event_id = "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo";
+        let row_key = event_key(store_id, event_id);
+        store_put(STORE_EVENTS, &row_key, "event bytes").await?;
+
+        let rexie = open_nook_database().await?;
+        let transaction = rexie
+            .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadOnly)
+            .map_err(|error| NookError::IndexedDb(format!("Test transaction error: {error:?}")))?;
+        let store = transaction.store(STORE_EVENTS).map_err(|error| {
+            NookError::IndexedDb(format!("Test transaction store error: {error:?}"))
+        })?;
+        let result = load_local_event_store_from_store(&store, store_id).await;
+        transaction.done().await.map_err(|error| {
+            NookError::IndexedDb(format!("Test transaction completion error: {error:?}"))
+        })?;
+        store_delete(STORE_EVENTS, &row_key).await?;
+
+        let Err(error) = result else {
+            return Err(NookError::Database(
+                "Unindexed event row did not fail closed.".to_owned(),
+            ));
+        };
+        assert!(error.to_string().contains("missing from the index"));
         Ok(())
     }
 }

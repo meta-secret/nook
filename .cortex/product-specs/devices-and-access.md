@@ -103,6 +103,8 @@ It is never shown as stored on one physical laptop.
   - Prefer the selected identity as survivor unless a pending genesis marker
     durably references another identity in the connected group.
   - Retain every member and vault grant during the merge.
+  - Normalize staged marker base and candidate directories in the same
+    transaction so completion compares migrated snapshots.
   - Do not decode a pending marker for a valid directory without duplicate
     ownership.
   - Persist both encryption and event-signing public keys for members.
@@ -144,6 +146,8 @@ It is never shown as stored on one physical laptop.
     validates the active signed roster.
   - Require every event named by the roster index to exist and have a valid
     event ID; missing or malformed evidence fails authorization closed.
+  - Reject event rows absent from the index so a pre-upgrade split write cannot
+    hide newer authorization evidence.
   - Reconcile legacy-vault DEKs only from active signed approvals after
     revocation replay.
 - **Singleton migration:** On first read, move `identity_record_v1` into the
