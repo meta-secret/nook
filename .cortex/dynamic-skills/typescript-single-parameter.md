@@ -29,8 +29,8 @@
 - [Enforcement](#enforcement)
   - Explains the mechanical guard that protects the rule.
   - Read when changing checks or handling a failure.
-- [Application Checklist](#application-checklist)
-  - Lists the steps needed to apply and maintain the skill.
+- [Review checklist](#review-checklist)
+  - Lists the peer checks that prove a compliant API shape.
   - Use during implementation and review.
 
 ## Purpose
@@ -40,21 +40,15 @@ Multi-argument APIs must use a named object type.
 
 ## Scope
 
-Applies to:
-
-- `agentic-ai/loom` authored TypeScript;
-- all authored production TypeScript and Svelte under `nook-app/nook-web`.
-
-Generated bindings are excluded.
-
-Host callback signatures may require multiple positional values.
-
-Keep that boundary narrow.
-
-Use a focused ESLint suppression with a reason when the host owns the callback
-shape.
-
-Do not suppress a Nook-authored API.
+- Apply to:
+  - `agentic-ai/loom` authored TypeScript;
+  - all authored production TypeScript and Svelte under `nook-app/nook-web`.
+- Exclude generated bindings.
+- Host callback signatures may require multiple positional values.
+  - Keep that boundary narrow.
+  - Use a focused ESLint suppression with a reason when the host owns the
+    callback shape.
+  - Do not suppress a Nook-authored API.
 
 ## Problem Pattern
 
@@ -90,25 +84,25 @@ writeAgentStatsFile(args)
 
 Rules:
 
-1. Maximum one parameter per authored function, method, constructor, or arrow
-   function.
-2. Every object-shaped parameter uses a named semantic `type`, `interface`, or
-   Rust-generated boundary type. Object-shaped includes object literals,
-   mapped types such as `Pick<T, K>` and `Omit<T, K>`, arrays, tuples, maps,
-   sets, and records.
-3. Inline object parameter annotations are prohibited, including for local
-   helpers, destructured parameters, `T[]`, tuples, `Array<T>`, and
-   `ReadonlyArray<T>`.
-4. Generic or operation-only contract names such as `Args`, `CallbackArgs`,
-   `PutArgs`, or names derived from line numbers are prohibited. Name the
-   contract after its domain value or request.
-5. Do not use optional `undefined` parameters to fake multi-arg APIs. Model
-   omitted fields with domain unions or required object fields.
-6. Default values belong at the call site or inside the function body after
-   reading the object, not as a second positional parameter.
-7. A function-valued parameter may return an inline object type. That return
-   value is not the parameter contract. Object-shaped callback parameters still
-   require named semantic contracts.
+- Maximum one parameter per authored function, method, constructor, or arrow
+  function.
+- Every object-shaped parameter uses a named semantic `type`, `interface`, or
+  Rust-generated boundary type.
+  - Object-shaped includes object literals, mapped types such as `Pick<T, K>`
+    and `Omit<T, K>`, arrays, tuples, maps, sets, and records.
+- Inline object parameter annotations are prohibited, including for local
+  helpers, destructured parameters, `T[]`, tuples, `Array<T>`, and
+  `ReadonlyArray<T>`.
+- Generic or operation-only contract names such as `Args`, `CallbackArgs`,
+  `PutArgs`, or names derived from line numbers are prohibited.
+  - Name the contract after its domain value or request.
+- Do not use optional `undefined` parameters to fake multi-argument APIs.
+  - Model omitted fields with domain unions or required object fields.
+- Default values belong at the call site or inside the function body after
+  reading the object, not as a second positional parameter.
+- A function-valued parameter may return an inline object type.
+  - That return value is not the parameter contract.
+  - Object-shaped callback parameters still require named semantic contracts.
 
 ## Enforcement
 
@@ -123,7 +117,7 @@ task loom:verify
 bun run --cwd agentic-ai/loom lint
 ```
 
-## Application Checklist
+## Review checklist
 
 - [ ] New authored functions take zero or one parameter.
 - [ ] Multi-value inputs use a typed object argument.

@@ -29,9 +29,9 @@
 - [Examples](#examples)
   - Contrasts rejected and preferred forms.
   - Read when the rule needs a concrete illustration.
-- [Application Checklist](#application-checklist)
-  - Lists the steps needed to apply and maintain the skill.
-  - Use during implementation and review.
+- [Application procedure](#application-procedure)
+  - Orders inventory, classification, expansion, preservation, and proof.
+  - Follow during implementation and review.
 - [Validation](#validation)
   - Names the smallest relevant mechanical and semantic proof.
   - Run before completing the task.
@@ -86,16 +86,16 @@ Does not apply to:
 - After: call sites construct `HiveError` and return it through ordinary Rust
   control flow.
 
-## Application Checklist
+## Application procedure
 
-- [ ] Inventory definitions and all call sites before editing.
-- [ ] Classify compiler/ecosystem integration separately from
-      repository-defined abstraction.
-- [ ] Expand each redundant macro into explicit items or control flow.
-- [ ] Preserve serialized representations, error text, and public APIs.
-- [ ] Add or update syntax-aware preflight coverage.
-- [ ] Confirm no authored macro definition remains without a documented
-      architecture exception.
+1. Inventory definitions and all call sites before editing.
+2. Classify compiler and ecosystem integration separately from
+   repository-defined abstraction.
+3. Expand each redundant macro into explicit items or control flow.
+4. Preserve serialized representations, error text, and public APIs.
+5. Add or update syntax-aware preflight coverage.
+6. Confirm no authored macro definition remains without a documented
+   architecture exception.
 
 ## Validation
 

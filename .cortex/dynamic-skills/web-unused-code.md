@@ -37,9 +37,13 @@ enum members, class members, and dependencies.
 
 ## Problem Pattern
 
-TypeScript and ESLint catch unused local declarations. The production Knip 5
-graph also checks `classMembers`. Knip 6 removed that issue type, so the isolated
-research graph cannot rely on Knip to find abandoned public methods and fields.
+The two project graphs expose different evidence:
+
+- TypeScript and ESLint catch unused local declarations.
+- The production Knip 5 graph also checks `classMembers`.
+- Knip 6 removed that issue type.
+  - The isolated research graph cannot rely on Knip to find abandoned public
+    methods and fields.
 
 ## Preferred Pattern
 
@@ -68,9 +72,9 @@ research graph cannot rely on Knip to find abandoned public methods and fields.
 
 ## Scope
 
-Applies to all authored TypeScript and Svelte code under `nook-app/nook-web`.
-Generated WASM declarations and third-party/vendor code remain outside the
-authored project graph.
+- Apply to all authored TypeScript and Svelte code under `nook-app/nook-web`.
+- Exclude generated WASM declarations and third-party or vendor code from the
+  authored project graph.
 
 ## Validation
 
