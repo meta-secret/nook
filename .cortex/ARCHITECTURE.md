@@ -155,17 +155,15 @@ This document provides a comprehensive guide to Nook's architecture, package bou
 
 ## 1. Monorepo Structure & Dependency flow
 
-Nook is a modular monorepo with strict uni-directional dependency flow.
-
-App code lives under `nook-app/`.
-
-That directory contains the Rust platform crates under `nook-platform/`, the WASM bridge, web app, browser-extension package, and Docker build definitions for the split Rust/WASM and web images.
-
-This layout prevents architectural drift.
-
-It keeps concerns separated.
-
-It isolates WebAssembly bindings from core domain code.
+- **Dependency direction:** Nook is a modular monorepo with strict
+  uni-directional dependency flow.
+- **Application scope:** App code lives under `nook-app/`.
+  - It contains the Rust platform crates under `nook-platform/`.
+  - It contains the WASM bridge, web app, and browser-extension package.
+  - It contains Docker definitions for the split Rust/WASM and web images.
+- **Architectural effects:** This layout prevents architectural drift.
+  - It keeps concerns separated.
+  - It isolates WebAssembly bindings from core domain code.
 
 ```
 root/
@@ -258,36 +256,22 @@ identity -> owns per-vault DEK envelopes -> vault secrets log
 replication provider -> encrypted vault event log
 ```
 
-An identity is a logical account.
-
-It possesses passkeys and therefore app keys.
-
-It owns each vault DEK.
-
-One person may use multiple identities.
-
-An installation holds one local app private key (`app_id`).
-
-Passkeys protect app keys.
-
-Identity records replicate app public keys and passkey credential records.
-
-Private app keys remain local.
-
-A vault owns its `store_id`, secret ciphertext, signed event log, and
-projection.
-
-A vault cannot exist without an authorizing identity.
-
-A vault cannot hold a DEK by itself.
-
-Passwords are vault content.
-
-A provider is a caller-supplied replication adapter.
-
-It is never an identity or unlock factor.
-
-Provider credentials stay sealed to a local app key.
+- **Identity:** An identity is a logical account.
+  - It possesses passkeys and therefore app keys.
+  - It owns each vault DEK.
+  - One person may use multiple identities.
+- **Installation:** An installation holds one local app private key (`app_id`).
+  - Passkeys protect app keys.
+  - Identity records replicate app public keys and passkey credential records.
+  - Private app keys remain local.
+- **Vault:** A vault owns its `store_id`, secret ciphertext, signed event log,
+  and projection.
+  - It cannot exist without an authorizing identity.
+  - It cannot hold a DEK by itself.
+  - Passwords are vault content.
+- **Provider:** A provider is a caller-supplied replication adapter.
+  - It is never an identity or unlock factor.
+  - Its credentials stay sealed to a local app key.
 
 The normative model is in
 [identity-vault-architecture.md](design-docs/identity-vault-architecture.md).
@@ -920,22 +904,18 @@ Local on-demand images:
 
 ### Container limits and host prerequisites
 
-Nook runtime containers set `nofile=1048576`.
+- **Container file descriptors:** Nook runtime containers set
+  `nofile=1048576`.
+  - `DOCKER_NOFILE_LIMIT` can override that value.
+- **Inotify ownership:** Inotify sysctls are kernel-wide.
+  - Docker rejects them as per-container `--sysctl` options.
+- **Linux prerequisites:** Developers configure the documented host values:
 
-`DOCKER_NOFILE_LIMIT` can override that value.
+  - At least `fs.inotify.max_user_instances=2500`.
+  - At least `fs.inotify.max_user_watches=10485760`.
 
-Inotify sysctls are kernel-wide.
-
-Docker rejects them as per-container `--sysctl` options.
-
-Linux developers configure documented host prerequisites:
-
-- At least `fs.inotify.max_user_instances=2500`.
-- At least `fs.inotify.max_user_watches=10485760`.
-
-The shared GitHub Actions Docker setup raises those values when needed.
-
-It does not lower larger runner defaults.
+- **GitHub Actions:** The shared Docker setup raises those values when needed.
+  - It does not lower larger runner defaults.
 
 macOS behavior:
 
@@ -952,25 +932,20 @@ macOS host-wide file-descriptor ceilings:
 
 ### Build export: host artifact boundary + docker driver
 
-The old combined `nook-web` filesystem was about 9 GB.
-
-It inherited warm Rust `target/`, the compiler, Cargo registry, web dependencies, and Playwright.
-
-The split keeps those caches in independent BuildKit lineages.
-
-Only the WASM package and coverage outputs cross from Rust to web.
-
-They cross through the commit-scoped, invocation-isolated host directory.
-
-The common runtime image contains no Rust toolchain or `target/`.
-
-The normal **`docker` driver** builder writes the web result directly to the containerd image store.
-
-It avoids an extra archive/import cycle.
-
-Hosted delivery validation uses an ephemeral `docker-container` builder.
-
-It restores the independent lineages from `registry.dev.nokey.sh`.
+- **Old combined image:** The `nook-web` filesystem was about 9 GB.
+  - It inherited warm Rust `target/`, the compiler, Cargo registry, web
+    dependencies, and Playwright.
+- **Split lineages:** Rust and web caches remain in independent BuildKit
+  lineages.
+  - Only the WASM package and coverage outputs cross from Rust to web.
+  - They cross through the commit-scoped, invocation-isolated host directory.
+  - The common runtime image contains no Rust toolchain or `target/`.
+- **Local export:** The normal **`docker` driver** writes the web result directly
+  to the containerd image store.
+  - It avoids an extra archive/import cycle.
+- **Hosted export:** Delivery validation uses an ephemeral `docker-container`
+  builder.
+  - It restores the independent lineages from `registry.dev.nokey.sh`.
 
 **Builder selection**
 
@@ -1036,17 +1011,15 @@ Explicit Remote tasks:
 - They cannot publish branch-controlled objects.
 - New Remote dependency results persist in task-scoped Zot OCI layers.
 
-Trusted Main, local, and Hive builds publish new compiler objects.
-
-Traefik terminates publicly trusted TLS on `:443`.
-
-It forwards only to loopback SeaweedFS S3 (`127.0.0.1:8333`).
-
-Runtime Docker commands and compiler vertices mount stable secret IDs.
-
-Secret values do not participate in BuildKit cache checksums.
-
-Fork, release, and other arbitrary-ref jobs receive no S3 credentials.
+- **Trusted publishers:** Main, local, and Hive builds publish new compiler
+  objects.
+- **Network boundary:** Traefik terminates publicly trusted TLS on `:443`.
+  - It forwards only to loopback SeaweedFS S3 (`127.0.0.1:8333`).
+- **Secret handling:** Runtime Docker commands and compiler vertices mount
+  stable secret IDs.
+  - Secret values do not participate in BuildKit cache checksums.
+- **Untrusted refs:** Fork, release, and other arbitrary-ref jobs receive no S3
+  credentials.
 
 **Main cache visibility**
 
@@ -1082,13 +1055,13 @@ Fork, release, and other arbitrary-ref jobs receive no S3 credentials.
 
 ### Docker cache model
 
-Nook does not use named volumes for `target/`, Cargo registries, or `node_modules`.
-
-Those correctness-relevant build inputs stay in normal image layers and the selected builder's local content store.
-
-The cache-service exception is SeaweedFS S3-backed `sccache`.
-
-Authorized callers can use the authenticated HTTPS endpoint:
+- **Named-volume prohibition:** Nook does not use named volumes for `target/`,
+  Cargo registries, or `node_modules`.
+  - Those correctness-relevant build inputs stay in normal image layers and
+    the selected builder's local content store.
+- **Cache-service exception:** SeaweedFS S3-backed `sccache` provides the
+  authenticated HTTPS endpoint.
+- **Authorized callers:**
 
 - Local runtime builds
 - Hive
@@ -1300,37 +1273,27 @@ Regenerate chef inputs after dependency changes:
 
 ## 8. Hive isolated agent platform
 
-Nook keeps agent workflow policy, scheduling, deterministic tools, and durable
-execution separate.
-
-- Cortex Markdown owns semantic delegation contracts.
-- Loom owns deterministic tools and the static agent workflow engine.
-- Hive owns durable task state and isolated execution.
-- One delivery owner integrates results and mutates shared lifecycle state.
-
-Loom agent workflows are compiled TypeScript definitions.
-
-They live in the isolated `agentic-ai/loom/src/agent-workflow/` module.
-
-The separate workflow CLI selects one reviewed catalog entry.
-
-It does not accept graph topology from YAML.
-
-It does not generate topology from prompts or Cortex prose.
-
-The first entry is the read-only `cortex-full-garbage-collection` workflow.
-
-Local runs use an append-only event journal as their run authority.
-
-The current static workflow implementation runs locally.
-
-It does not materialize Hive tasks.
-
-A future Hive adapter will use Neo4j for durable lifecycle authority.
-
-The local journal must not compete with Neo4j for scheduling authority.
-
-The experimental Lace fixture will be deleted after Loom runs the static graph.
+- **Ownership boundaries:** Agent workflow policy, scheduling, deterministic
+  tools, and durable execution remain separate.
+  - Cortex Markdown owns semantic delegation contracts.
+  - Loom owns deterministic tools and the static agent workflow engine.
+  - Hive owns durable task state and isolated execution.
+  - One delivery owner integrates results and mutates shared lifecycle state.
+- **Compiled topology:** Loom agent workflows are compiled TypeScript
+  definitions in `agentic-ai/loom/src/agent-workflow/`.
+  - The separate workflow CLI selects one reviewed catalog entry.
+  - It does not accept graph topology from YAML.
+  - It does not generate topology from prompts or Cortex prose.
+  - The first entry is the read-only `cortex-full-garbage-collection` workflow.
+- **Current authority:** Local runs use an append-only event journal as their
+  run authority.
+  - The current static workflow implementation runs locally.
+  - It does not materialize Hive tasks.
+- **Future authority:** A future Hive adapter will use Neo4j for durable
+  lifecycle authority.
+  - The local journal must not compete with Neo4j for scheduling authority.
+  - The experimental Lace fixture will be deleted after Loom runs the static
+    graph.
 
 See
 [design-docs/agent-workflow-orchestration.md](design-docs/agent-workflow-orchestration.md)
