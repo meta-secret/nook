@@ -7,7 +7,6 @@ use crate::epoch::{
     EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
     concurrent_epoch_rotations_conflict, operation_starts_epoch,
 };
-use crate::event::VaultEventSchemaVersion;
 use crate::graph::EventGraph;
 use crate::{EventError, EventResult};
 use crate::{PasswordUnlockEntry, SecretFingerprint};
@@ -138,7 +137,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
         if event.body.store_id != expected_store {
             return Err(EventError::ProjectionStoreMismatch);
         }
-        if event.body.schema_version != VaultEventSchemaVersion::CURRENT {
+        if !event.body.schema_version.is_supported() {
             projection.unresolved_schema = true;
             continue;
         }

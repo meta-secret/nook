@@ -86,6 +86,7 @@ pub fn operation_starts_epoch(operation: &VaultOperation) -> EpochTransition {
         | VaultOperation::JoinDenied { .. }
         | VaultOperation::MemberRenamed { .. }
         | VaultOperation::PasswordAdded { .. }
+        | VaultOperation::PasswordEnvelopeUpgraded { .. }
         | VaultOperation::VaultCleared => EpochTransition::Unchanged,
     }
 }

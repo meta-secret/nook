@@ -23,7 +23,13 @@ pub struct VaultEventSchemaVersion(u32);
 
 impl VaultEventSchemaVersion {
     pub const V2: Self = Self(2);
-    pub const CURRENT: Self = Self::V2;
+    pub const V3: Self = Self(3);
+    pub const CURRENT: Self = Self::V3;
+
+    #[must_use]
+    pub const fn is_supported(self) -> bool {
+        self.0 >= Self::V2.0 && self.0 <= Self::CURRENT.0
+    }
 
     #[must_use]
     pub const fn get(self) -> u32 {
@@ -173,6 +179,10 @@ pub enum VaultOperation {
         entry_id: PasswordEntryId,
         envelope: PasswordEnvelope,
     },
+    PasswordEnvelopeUpgraded {
+        entry_id: PasswordEntryId,
+        envelope: PasswordEnvelope,
+    },
     PasswordRemoved {
         entry_id: PasswordEntryId,
     },
@@ -273,7 +283,7 @@ impl VaultEvent {
     }
 
     pub fn validate_envelope(&self, expected_store_id: &StoreId) -> EventResult<EventId> {
-        if self.body.schema_version != VaultEventSchemaVersion::CURRENT {
+        if !self.body.schema_version.is_supported() {
             return Err(EventError::UnsupportedSchemaVersion {
                 version: self.body.schema_version.get(),
             });
@@ -427,6 +437,10 @@ mod tests {
     fn schema_one_event_is_rejected() -> anyhow::Result<()> {
         let signing_key = test_signing_key();
         let mut event = empty_genesis_event(&signing_key)?;
+        event.body.schema_version = VaultEventSchemaVersion::V2;
+        let event = VaultEvent::sign(event.body, &signing_key)?;
+        event.validate_envelope(&StoreId::parse("store_testtoken11")?)?;
+        let mut event = event;
         event.body.schema_version = VaultEventSchemaVersion(1);
 
         let err = event
@@ -513,7 +527,7 @@ mod tests {
         )?;
 
         let yaml = String::from_utf8(serialize_event_storage_yaml(&event)?)?;
-        assert!(yaml.starts_with("schema_version: 2\n"));
+        assert!(yaml.starts_with("schema_version: 3\n"));
         assert!(yaml.contains("operations:\n- type: vault-imported\n"));
         assert!(yaml.contains("\n  secrets:\n  - id: secret_abc12345678\n"));
         assert!(yaml.contains("fingerprint: hmac-sha256:v1:"));

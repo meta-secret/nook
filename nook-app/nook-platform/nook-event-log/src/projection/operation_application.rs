@@ -105,7 +105,8 @@ pub(super) fn apply_operation(
                 },
             );
         }
-        VaultOperation::PasswordRotated { entry_id, envelope } => {
+        VaultOperation::PasswordRotated { entry_id, envelope }
+        | VaultOperation::PasswordEnvelopeUpgraded { entry_id, envelope } => {
             if let Some(entry) = projection
                 .password_entries
                 .iter_mut()
@@ -326,6 +327,19 @@ mod tests {
         assert_eq!(
             projection.password_entries[0].envelope.ciphertext,
             "rotated"
+        );
+        apply_operation(
+            &mut projection,
+            &actor,
+            &VaultOperation::PasswordEnvelopeUpgraded {
+                entry_id: entry_id.clone(),
+                envelope: password_envelope("upgraded"),
+            },
+            &mut replacements,
+        );
+        assert_eq!(
+            projection.password_entries[0].envelope.ciphertext,
+            "upgraded"
         );
 
         apply_operation(

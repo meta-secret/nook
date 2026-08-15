@@ -221,7 +221,7 @@ impl NookVaultManager {
                 .find(|entry| entry.id == entry_id)
                 .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
             target.envelope.clone_from(&envelope);
-            self.persist_vault_change(vec![nook_core::VaultOperation::PasswordRotated {
+            self.persist_vault_change(vec![nook_core::VaultOperation::PasswordEnvelopeUpgraded {
                 entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
                 envelope,
             }])

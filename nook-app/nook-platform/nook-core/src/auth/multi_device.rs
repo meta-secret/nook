@@ -142,18 +142,7 @@ pub fn apply_vault_meta_operation(
             state.joins.remove(device_id);
         }
         VaultOperation::SentinelSharesIssued { shares } => {
-            for share in shares {
-                state.sentinel_shares.insert(
-                    share.device_id.clone(),
-                    SentinelShareEnvelope {
-                        version: share.version,
-                        threshold: share.threshold,
-                        required_participants: share.required_participants,
-                        share_index: share.share_index,
-                        ciphertext: share.ciphertext.clone(),
-                    },
-                );
-            }
+            apply_sentinel_shares(state, shares);
         }
         VaultOperation::MemberRenamed { device_id, label } => {
             if let Some(participant) = state.sentinel_participants.get_mut(device_id) {
@@ -181,11 +170,27 @@ pub fn apply_vault_meta_operation(
         | VaultOperation::SecretConflictResolved { .. }
         | VaultOperation::PasswordAdded { .. }
         | VaultOperation::PasswordRotated { .. }
+        | VaultOperation::PasswordEnvelopeUpgraded { .. }
         | VaultOperation::PasswordRemoved { .. }
         | VaultOperation::VaultCleared
         | VaultOperation::EpochCheckpoint { .. } => {}
     }
     Ok(())
+}
+
+fn apply_sentinel_shares(state: &mut VaultMetaState, shares: &[crate::SentinelShareIssuedPayload]) {
+    for share in shares {
+        state.sentinel_shares.insert(
+            share.device_id.clone(),
+            SentinelShareEnvelope {
+                version: share.version,
+                threshold: share.threshold,
+                required_participants: share.required_participants,
+                share_index: share.share_index,
+                ciphertext: share.ciphertext.clone(),
+            },
+        );
+    }
 }
 
 /// Replay core event-log meta operations from the event graph in topological order.

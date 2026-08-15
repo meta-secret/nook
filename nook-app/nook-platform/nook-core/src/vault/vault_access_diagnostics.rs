@@ -248,7 +248,8 @@ fn encrypted_payload_count(operation: &VaultOperation) -> usize {
         VaultOperation::SecretCreated { .. }
         | VaultOperation::SecretReplaced { .. }
         | VaultOperation::PasswordAdded { .. }
-        | VaultOperation::PasswordRotated { .. } => 1,
+        | VaultOperation::PasswordRotated { .. }
+        | VaultOperation::PasswordEnvelopeUpgraded { .. } => 1,
         VaultOperation::JoinApproved { .. } => 2,
         VaultOperation::SentinelSharesIssued { shares } => shares.len(),
         VaultOperation::SecretDeleted { .. }

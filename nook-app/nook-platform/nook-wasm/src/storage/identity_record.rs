@@ -442,6 +442,7 @@ async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
     // corrupt or future-incompatible directory must never block destructive
     // device recovery.
     let _ = load_identity_directory().await;
+    let registry_store_ids = super::indexed_db::list_vault_registry_entries().await?;
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
@@ -472,6 +473,12 @@ async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
     {
         if !store_ids.contains(store_id) {
             store_ids.push(store_id.clone());
+        }
+    }
+    for entry in registry_store_ids {
+        let store_id = nook_core::StoreId::parse(&entry.store_id)?;
+        if !store_ids.contains(&store_id) {
+            store_ids.push(store_id);
         }
     }
     directory.reset_for_device_recovery();
@@ -609,6 +616,14 @@ mod tests {
     #[wasm_bindgen_test]
     async fn destructive_recovery_bypasses_a_corrupt_identity_directory() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
+        let store_id = "store_corruptrecovery1";
+        idb_put_string(
+            "vault_registry",
+            &format!(r#"{{"vaults":[{{"store_id":"{store_id}","label":""}}]}}"#),
+        )
+        .await?;
+        let marker = format!("pending_identity_reconciliation_v2:{store_id}");
+        idb_put_string(&marker, "inaccessible-plan").await?;
         idb_put_string(IDENTITY_DIRECTORY_KEY, "{future-or-corrupt").await?;
         idb_put_string(
             crate::storage::indexed_db::APP_KEY_WRAPPED_KEY,
@@ -623,8 +638,10 @@ mod tests {
                 .await?
                 .is_none()
         );
+        assert!(idb_get_string(&marker).await?.is_none());
         let recovered = load_identity_directory().await?;
         assert!(recovered.identities().is_empty());
+        idb_delete_key("vault_registry").await?;
         clear_identity_directory_for_test().await
     }
 

@@ -141,8 +141,10 @@ That transaction:
 A transaction failure leaves the prior device and ownership state intact.
 Destructive recovery treats an unreadable or future-incompatible identity
 directory as inaccessible ownership state. It replaces that directory with an
-empty current schema and still removes the wrapped app key. Corrupt metadata
-must not trap a user outside the recovery escape hatch.
+empty current schema and still removes the wrapped app key. The preserved vault
+registry supplies store IDs so reconciliation markers are deleted even when
+the directory cannot be decoded. Corrupt metadata must not trap a user outside
+the recovery escape hatch.
 Before recovery mutates IndexedDB, the initiating tab quiesces storage work in
 every open Nook tab. Each responding tab zeroizes its app key and storage
 credentials before acknowledging readiness. The initiating tab then serializes

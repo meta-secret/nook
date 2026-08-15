@@ -21,6 +21,16 @@ pub struct VaultEventSession {
     pub signing_seed: String,
 }
 
+pub struct VaultSecurityEpochRotationInput<'a> {
+    pub trigger: VaultOperation,
+    pub user_records: &'a [StoredSecretRecord],
+    pub old_secrets_key: &'a crate::SymmetricKey,
+    pub members_records: &'a [StoredSecretRecord],
+    pub rewrapped_password_entries: Vec<crate::PasswordUnlockEntry>,
+    pub created_at: &'a str,
+    pub provider_id: Option<&'a str>,
+}
+
 impl VaultEventSession {
     #[must_use]
     pub fn new(store_id: String, signing: SigningIdentity, signing_seed: String) -> Self {
@@ -128,13 +138,17 @@ impl VaultEventSession {
 
     pub fn rotate_security_epoch(
         &mut self,
-        trigger: VaultOperation,
-        user_records: &[StoredSecretRecord],
-        old_secrets_key: &crate::SymmetricKey,
-        members_records: &[StoredSecretRecord],
-        created_at: &str,
-        provider_id: Option<&str>,
+        input: VaultSecurityEpochRotationInput<'_>,
     ) -> VaultResult<(String, String)> {
+        let VaultSecurityEpochRotationInput {
+            trigger,
+            user_records,
+            old_secrets_key,
+            members_records,
+            rewrapped_password_entries,
+            created_at,
+            provider_id,
+        } = input;
         let trigger_id = self.append_operations(vec![trigger], created_at, provider_id)?;
         trigger_id.as_str().clone_into(&mut self.key_epoch);
         let (new_keys, secrets) = rotate_vault_keys_with_secrets(user_records, old_secrets_key)?;
@@ -145,7 +159,7 @@ impl VaultEventSession {
                 secrets,
                 members_checkpoint_hash,
                 rotated_meta_records: Vec::new(),
-                password_entries: crate::EpochPasswordState::Replace(Vec::new()),
+                password_entries: crate::EpochPasswordState::Replace(rewrapped_password_entries),
             }],
             created_at,
             provider_id,

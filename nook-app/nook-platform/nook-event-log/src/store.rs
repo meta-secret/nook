@@ -2,8 +2,8 @@
 
 use crate::canonical::EventId;
 use crate::event::{
-    VaultEvent, VaultEventSchemaVersion, parse_event_storage_bytes,
-    parse_remote_event_storage_bytes, serialize_event_storage_yaml,
+    VaultEvent, parse_event_storage_bytes, parse_remote_event_storage_bytes,
+    serialize_event_storage_yaml,
 };
 use crate::graph::{EventGraph, EventInsertStatus};
 use crate::{EventError, EventResult};
@@ -188,7 +188,7 @@ pub fn remote_event_store_id(event_id: &EventId, bytes: &[u8]) -> EventResult<St
             event_id: event_id.as_str().to_owned(),
         });
     }
-    if event.body.schema_version != VaultEventSchemaVersion::CURRENT {
+    if !event.body.schema_version.is_supported() {
         return Err(EventError::UnsupportedSchemaVersion {
             version: event.body.schema_version.get(),
         });

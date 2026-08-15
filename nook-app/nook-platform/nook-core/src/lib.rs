@@ -363,7 +363,7 @@ pub use vault_epoch_crypto::{
     rewrap_vault_meta_for_epoch, rewrapped_vault_meta_records_for_epoch,
     rotate_vault_keys_with_secrets,
 };
-pub use vault_event_session::VaultEventSession;
+pub use vault_event_session::{VaultEventSession, VaultSecurityEpochRotationInput};
 pub use vault_format::{
     VaultFormat, VaultName, VaultNameRef, VaultStoreIdentity, VaultStoreIdentityRef,
     VaultVersionWrite, current_vault_schema_version, default_vault_name_for_store_id,

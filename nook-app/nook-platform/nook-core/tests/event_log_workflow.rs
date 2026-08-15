@@ -11,8 +11,8 @@ use harness::{
 use nook_core::{
     AppendEventInput, EncryptedSecretPayload, EventError, EventId, IsoTimestamp, OpaqueCiphertext,
     SecretFingerprint, SecretId, SecretType, SecretValue, SecureNoteSecret, StoreId, SymmetricKey,
-    VaultOperation, VaultResult, build_signed_event, encrypted_secret_from_armored,
-    secret_fingerprint, secret_identity_fingerprint,
+    VaultOperation, VaultResult, VaultSecurityEpochRotationInput, build_signed_event,
+    encrypted_secret_from_armored, secret_fingerprint, secret_identity_fingerprint,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -489,14 +489,18 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
         device_id: nook_core::DeviceId::parse("abcd1234ef567890")?,
     };
     let old_secrets = nook_core::SymmetricKey::parse(&device.secrets_key)?;
-    let (new_secrets, _new_members) = device.session.rotate_security_epoch(
-        trigger,
-        &user_records,
-        &old_secrets,
-        &[],
-        TS,
-        Some("github"),
-    )?;
+    let (new_secrets, _new_members) =
+        device
+            .session
+            .rotate_security_epoch(VaultSecurityEpochRotationInput {
+                trigger,
+                user_records: &user_records,
+                old_secrets_key: &old_secrets,
+                members_records: &[],
+                rewrapped_password_entries: Vec::new(),
+                created_at: TS,
+                provider_id: Some("github"),
+            })?;
     assert_ne!(new_secrets, device.secrets_key);
     device.secrets_key = new_secrets.clone();
     device.crypto = nook_core::VaultCrypto::new(&nook_core::SymmetricKey::parse(&new_secrets)?)?;

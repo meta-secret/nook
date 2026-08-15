@@ -198,6 +198,11 @@ checkpoint whose trigger is not visible remains pending. A trigger whose
 checkpoint is not visible is not admitted to the local graph. Descendants
 therefore cannot extend an incomplete key transition.
 
+Event schema v3 owns checkpoint replacement fields. Current readers accept
+legacy v2 events, while pre-v3 readers reject new events before persistence.
+Legacy password-envelope upgrades use a non-epoch operation; password rotation
+remains a complete trigger/checkpoint transition.
+
 Provider publication may leave the old frontier temporarily appendable.
 
 Any event concurrent with an epoch trigger becomes a blocking security
