@@ -139,75 +139,90 @@ credentials grant storage access only.
 
 ## Sentinel Lifecycle
 
-Sentinel setup is pre-genesis state. It gathers all configured participant public
-keys before generating the Sentinel root or creating the vault. Genesis then
-issues the complete encrypted SLIP-0039 share set atomically. The initiator has
-no permanent threshold bypass and Sentinel never writes a per-device full-key
-envelope.
-
-Password unlock is forbidden as the sole unlock path. Session hydrate from
-projection YAML must fail closed and never resolve a full-key auth envelope.
-Possession of the local cache or sync-provider credentials is insufficient.
-
-An issued share set must be complete, use unique participant/share indexes, and
-match the persisted `T-of-N` policy. Partial, malformed-prefix, stale-generation,
-or mixed share sets fail closed. No Sentinel vault session exists until actual
-share records exist and at least `T` participant contributions reconstruct the
-root. Gating only secret creation is insufficient.
-
-After genesis, browser unlock is a signed, encrypted, session-bound ceremony:
-each participating device opens its own protected local share inside Rust and
-returns an opaque contribution encrypted to the requester. The requester
-combines at least `T` distinct verified contributions inside Rust/WASM. Peer
-`DeviceIdentity` secrets and plaintext shares never cross browsers, and raw
-SLIP-0039 mnemonics never cross the WASM boundary.
-
-Sentinel uses a Nook-owned current-format extendable (`ext=1`), single-group
-SLIP-0039 implementation with the user-selected `T-of-N` policy. One random
-32-byte Sentinel root derives `secrets_key` and `members_key` through
-domain-separated HKDF-SHA256. Official extendable 256-bit vectors cover the
-codec. This is distinct from the fixed-policy recovery flow in
-[slip39-recovery.md](../product-specs/slip39-recovery.md).
-
-Generic revocation/key rotation cannot leave the new epoch behind old shares or
-write a full current-device envelope. Sentinel participant replacement therefore
-requires atomic roster replacement plus share rotation.
+- **Pre-genesis setup:**
+  - Gather every configured participant public key before generating the
+    Sentinel root or creating the vault.
+  - Issue the complete encrypted SLIP-0039 share set atomically during genesis.
+  - Give the initiator no permanent threshold bypass.
+  - Never write a per-device full-key envelope.
+- **Unlock boundary:**
+  - Forbid password unlock as the sole unlock path.
+  - Fail closed during session hydrate from projection YAML.
+  - Never resolve a full-key auth envelope.
+  - Treat possession of the local cache or sync-provider credentials as
+    insufficient.
+- **Share-set validity:**
+  - Require a complete set with unique participant and share indexes.
+  - Require the set to match the persisted `T-of-N` policy.
+  - Fail closed on partial, malformed-prefix, stale-generation, or mixed sets.
+  - Create no Sentinel vault session until share records exist and at least `T`
+    participant contributions reconstruct the root.
+  - Do not treat secret-creation gating alone as sufficient.
+- **Post-genesis browser unlock:**
+  1. Each participating device opens its protected local share inside Rust.
+  2. It returns a signed, session-bound opaque contribution encrypted to the
+     requester.
+  3. The requester combines at least `T` distinct verified contributions inside
+     Rust/WASM.
+  - Peer `DeviceIdentity` secrets and plaintext shares never cross browsers.
+  - Raw SLIP-0039 mnemonics never cross the WASM boundary.
+- **Cryptographic format:**
+  - Use Nook's current-format extendable (`ext=1`), single-group SLIP-0039
+    implementation with the user-selected `T-of-N` policy.
+  - Derive `secrets_key` and `members_key` from one random 32-byte Sentinel root
+    through domain-separated HKDF-SHA256.
+  - Cover the codec with official extendable 256-bit vectors.
+  - Keep this separate from the fixed-policy recovery flow in
+    [slip39-recovery.md](../product-specs/slip39-recovery.md).
+- **Participant replacement:** Atomically replace the roster and rotate shares.
+  Generic revocation or key rotation must not leave the new epoch behind old
+  shares or write a full current-device envelope.
 
 ## Provider Capabilities
 
-Provider capability affects only storage setup and transport. Examples include
-whether a provider can use app-private storage, grant a shared folder, or bind
-a connection to an external account identity. Unsupported provider operations
-must fail closed in Rust, but they do not create a `personal` or `shared` vault
-mode.
+- Provider capability affects only storage setup and transport.
+  - Examples include app-private storage, shared-folder grants, and binding a
+    connection to an external account identity.
+  - Unsupported provider operations fail closed in Rust.
+  - Provider capabilities do not create a `personal` or `shared` vault mode.
 
-The Google Drive `private` / `shared` choice is a provider feature independent
-of vault architecture. Private mode uses app-private storage (`drive.appdata`);
-shared mode uses a visible folder and the following grant flow:
+- **Google Drive:** The `private` / `shared` choice is independent of vault
+  architecture.
+  - Private mode uses app-private storage (`drive.appdata`).
+  - Shared mode uses a visible folder and this grant flow:
 
-1. the owner creates a folder and grants the joiner's external identity
-   (`drive.file` + `permissions.create` when the token allows it);
-2. the connection records the folder target without embedding owner tokens;
-3. the joiner uses its own OAuth account to access the same encrypted replica.
+    1. The owner creates a folder and grants the joiner's external identity
+       (`drive.file` plus `permissions.create` when the token allows it).
+    2. The connection records the folder target without embedding owner tokens.
+    3. The joiner uses its own OAuth account to access the same encrypted
+       replica.
 
-If automatic grant cannot run (missing owner token, token lacks `drive.file`,
-or Drive API error), the outcome is `ManualGrantRequired`: the UI shows
-localized manual-share instructions and may still bind an already-created
-`folderId`. See [auth-providers.md](auth-providers.md#google-drive-modes).
+  - If automatic grant cannot run because the owner token is missing, lacks
+    `drive.file`, or encounters a Drive API error, return
+    `ManualGrantRequired`.
+  - Show localized manual-share instructions and permit binding an
+    already-created `folderId`.
+  - See [auth-providers.md](auth-providers.md#google-drive-modes).
 
-This provider-account flow must not be used as Sentinel membership or quorum.
+  - Never use this provider-account flow as Sentinel membership or quorum.
 
-Live coverage outside Playwright Drive stubs is opt-in under
-`nook-web-app/e2e/live/google-drive-shared-grant.smoke.spec.ts` (requires
-`NOOK_GOOGLE_E2E_ACCESS_TOKEN` and `NOOK_GOOGLE_E2E_JOINER_EMAIL`; optional
-`NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN` proves joiner access under that folder).
+- **Google Drive live coverage:** The smoke test outside Playwright Drive stubs
+  is opt-in under
+  `nook-web-app/e2e/live/google-drive-shared-grant.smoke.spec.ts`.
+  - Require `NOOK_GOOGLE_E2E_ACCESS_TOKEN` and
+    `NOOK_GOOGLE_E2E_JOINER_EMAIL`.
+  - Use optional `NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN` to prove joiner access
+    under that folder.
 
-iCloud exposes the same provider-level private/shared choice through CloudKit
-rather than a directory ACL. The owner creates a custom-zone root share, and a
-participant accepts its stable share identifier with a separate Apple sign-in.
-The persisted provider target carries CloudKit zone/root routing but no account
-credential. Owners route event I/O through the private database; participants
-route the same hierarchy through the shared database.
+- **iCloud:** Expose the same provider-level private/shared choice through
+  CloudKit instead of a directory ACL.
+  - The owner creates a custom-zone root share.
+  - A participant accepts its stable share identifier with a separate Apple
+    sign-in.
+  - The persisted provider target carries CloudKit zone/root routing but no
+    account credential.
+  - Owners route event I/O through the private database.
+  - Participants route the same hierarchy through the shared database.
 
 ## Web Boundary
 

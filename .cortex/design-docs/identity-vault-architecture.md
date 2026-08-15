@@ -143,57 +143,65 @@ signing public key. Older records decode a missing signing key as unavailable.
 They cannot enter a new signed Simple-vault genesis roster until an authenticated
 handoff or the local signer supplies that public key.
 
-All directory updates use one IndexedDB read-write transaction.
-Concurrent tabs must not overwrite identity creation, selection, membership,
-or DEK changes.
-Extension identity adoption remains staged through vault initialization.
+- **Directory concurrency:**
+  - Apply every directory update in one IndexedDB read-write transaction.
+  - Prevent concurrent tabs from overwriting identity creation, selection,
+    membership, or DEK changes.
+- **Fresh-vault extension adoption:**
+  - Stage extension identity adoption through vault initialization.
+  - Keep fresh-vault membership, signing keys, and per-vault DEK envelopes only
+    in the resumable genesis marker until verified connect succeeds.
+  - Compare the marker's base directory with the current directory during
+    completion.
+  - Publish the staged directory and matching signing seed, then remove the
+    marker atomically.
+  - Retain unrelated concurrent identity and selection changes through a typed
+    three-way rebase.
+  - Abort publication when the staged identity changed concurrently or app-key
+    ownership overlaps another identity.
+  - Retain a rejected marker so retry resumes the same candidate.
+  - After a failed create, clear decrypted host state and stop background sync
+    without rolling back event stores or active identity state.
+- **Existing-vault import:**
+  - Use a distinct pending handoff state.
+  - During verified connect, synthesize the vault owner from active signed
+    envelopes and verify the extension signing key against the active event
+    roster.
+  - Commit the member signer and adopted signing seed atomically.
+- **Legacy-vault reconciliation:** Derive DEK recipients from the signed event
+  graph's active approvals after revocations, not from stale encrypted auth
+  rows.
 
-- Fresh-vault membership remains in the genesis marker until connect succeeds.
-- The marker also owns staged signing keys and per-vault DEK envelopes.
-- Completion compares the marker's base directory with the current directory.
-- A match publishes the candidate directory and signing seed atomically.
-- The same transaction removes the completed marker.
-- Unrelated concurrent identity and selection changes are retained during a
-  typed three-way rebase.
-- A concurrent change to the staged identity aborts publication.
-- Cross-identity app-key overlap also aborts publication.
-- A rejected marker remains available for retry.
-- A retry resumes the retained candidate instead of losing ownership state.
-- Failed creation clears decrypted host state and stops background sync.
-- Failed creation does not rewind event stores or active identity state.
+Simple vault creation uses the following marker contract:
 
-Existing-vault imports use a distinct pending handoff state.
-
-Verified connect first validates the extension encryption and signing keys
-against the active signed event roster. One transaction binds that roster
-snapshot to ownership synthesis. The transaction then commits the identity
-member signer and adopted signing seed.
-Legacy-vault reconciliation derives DEK recipients from the signed event
-graph's active approvals after revocations, not from stale encrypted auth rows.
-
-Simple vault creation stores `pending_simple_genesis_v1` in IndexedDB.
-Its JSON fields are `storeId`, `identityId`, `createdAt`, `eventState`, and
-`flow`. The flow is explicitly `ordinary` or `staged`. The staged variant owns
-the base directory and inactive candidate directory. The candidate owns the
-identity DEK envelopes. Writers also emit the legacy `stagedIdentity` projection
-for already-open tabs. Current readers reject markers that contain conflicting
-current and legacy staged state.
-The app writes the marker before any event-log state.
-A reload resumes the same store and identity binding.
-Verified connect completion removes the marker with a compare-and-delete
-transaction.
-An older tab cannot delete a newer genesis marker.
-The marker owns the genesis timestamp and complete signed event lifecycle.
-`eventState` is `awaiting-event`, `legacy-event-pinned`, or `event-pinned`.
-The current pinned variant owns the signed `eventYaml`, an app-key-sealed
-`signingSeedEnvelope`, and staged-member signer envelopes before the first
-event-log write. Either authorized staged member can resume the exact signer
-and event after a reload.
-Legacy markers without `createdAt` use the Unix epoch timestamp. Markers without
-`eventState` decode as `awaiting-event`. A preceding top-level `eventYaml`, or
-an `event-pinned` state without seed material becomes `legacy-event-pinned`.
-That state upgrades only after the durable seed matches the pinned event signer.
-The same signer check applies before sealing a legacy plaintext seed.
+- Store `pending_simple_genesis_v1` in IndexedDB before any event-log state.
+- Record `storeId`, `identityId`, `createdAt`, `eventState`, and `flow`.
+  - `flow` is explicitly `ordinary` or `staged`.
+  - The staged flow carries the base directory and inactive candidate directory
+    with identity-owned DEK envelopes.
+  - Writers also emit the legacy `stagedIdentity` projection for already-open
+    tabs.
+  - Reject conflicting current and legacy staged state.
+- Resume the same store and identity binding after a reload.
+- Remove the marker with a compare-and-delete transaction after verified
+  connect completes.
+  - An older tab cannot delete a newer genesis marker.
+- Let the marker own the genesis timestamp and complete signed event lifecycle.
+- Set `eventState` to `awaiting-event`, `legacy-event-pinned`, or
+  `event-pinned`.
+  - The current pinned variant owns the signed `eventYaml`, an app-key-sealed
+    `signingSeedEnvelope`, and staged-member signer envelopes before the first
+    event-log write.
+  - Either authorized staged member can resume the exact signer and event after
+    a reload.
+- Decode legacy variants conservatively:
+  - A marker without `createdAt` uses the Unix epoch timestamp.
+  - A marker without `eventState` becomes `awaiting-event`.
+  - A preceding top-level `eventYaml`, or an `event-pinned` state without seed
+    material, becomes `legacy-event-pinned`.
+  - Upgrade that state only after the durable seed matches the pinned event
+    signer.
+  - Apply the same signer check before sealing a legacy plaintext seed.
 
 The first directory read migrates `identity_record_v1` when present:
 
