@@ -45,6 +45,9 @@ pub enum MultiDeviceError {
     #[error("Identity directory selection does not match its contents.")]
     InvalidIdentitySelection,
 
+    #[error("Identity {identity_id} changed while staged vault ownership was pending.")]
+    StagedIdentityConflict { identity_id: String },
+
     #[error("Provider credential is not age-encrypted.")]
     UnsealedProviderCredential,
 

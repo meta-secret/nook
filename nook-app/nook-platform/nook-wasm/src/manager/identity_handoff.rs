@@ -54,6 +54,34 @@ impl NookVaultManager {
     pub(in crate::manager) async fn finalize_existing_vault_import_handoff(
         &mut self,
     ) -> Result<(), NookError> {
+        if self.pending_existing_vault_import().is_none() {
+            return Ok(());
+        }
+        let identity = self.device_identity()?;
+        let pending = self
+            .device
+            .pending_extension_handoff
+            .as_ref()
+            .ok_or_else(|| NookError::Database("Identity handoff disappeared.".to_owned()))?;
+        crate::storage::identity_record::commit_authenticated_identity_handoff(
+            crate::storage::identity_record::IdentityHandoffCommit {
+                app_key: &identity,
+                signing_public_key: &pending.signing_public_key,
+                authorizer_signing: None,
+                enrollment: &pending.enrollment,
+                signing_seed: pending
+                    .persist_signing_seed
+                    .then_some(self.event_log.signing_seed.as_str()),
+            },
+        )
+        .await?;
+        self.device.pending_extension_handoff = None;
+        Ok(())
+    }
+
+    pub(in crate::manager) async fn validate_existing_vault_import_handoff(
+        &self,
+    ) -> Result<(), NookError> {
         let Some(store_id) = self.pending_existing_vault_import() else {
             return Ok(());
         };
@@ -71,29 +99,16 @@ impl NookVaultManager {
         let graph = crate::storage::event_db::load_local_event_store(store_id.as_str())
             .await?
             .load_graph(store_id.as_str())?;
-        if !nook_core::event_graph_has_active_device_access(
+        if nook_core::event_graph_has_active_device_access(
             &graph,
             identity.device_id(),
             &identity.public_key(),
             &pending.signing_public_key,
         )? {
-            return Err(NookError::Database(
-                "Imported extension identity is not active in the signed vault roster.".to_owned(),
-            ));
+            return Ok(());
         }
-        crate::storage::identity_record::commit_authenticated_identity_handoff(
-            crate::storage::identity_record::IdentityHandoffCommit {
-                app_key: &identity,
-                signing_public_key: &pending.signing_public_key,
-                authorizer_signing: None,
-                enrollment: &pending.enrollment,
-                signing_seed: pending
-                    .persist_signing_seed
-                    .then_some(self.event_log.signing_seed.as_str()),
-            },
-        )
-        .await?;
-        self.device.pending_extension_handoff = None;
-        Ok(())
+        Err(NookError::Database(
+            "Imported extension identity is not active in the signed vault roster.".to_owned(),
+        ))
     }
 }

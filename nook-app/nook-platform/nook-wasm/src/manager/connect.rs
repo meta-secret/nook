@@ -371,6 +371,7 @@ impl NookVaultManager {
         let staged_genesis = pending_cleanup
             .as_ref()
             .is_some_and(PendingSimpleGenesis::is_staged);
+        self.validate_existing_vault_import_handoff().await?;
         if !staged_genesis {
             self.ensure_identity_after_connect(identity).await?;
         }

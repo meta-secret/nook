@@ -107,17 +107,52 @@ Do not exclude tests or delete-heavy refactors from the authored estimate.
 
 Do not pad, compress, or mechanically reorganize code to fit the number.
 
+Treat 4,000 authored changed lines as a mandatory split-planning warning.
+
+Stop implementation and re-estimate the complete requested outcome.
+
+If the remaining work may cross the ceiling, define at least two semantic PR
+slices in Workbench before continuing.
+
+Each slice must own complete capabilities or module responsibilities together
+with their tests and documentation.
+
 If the estimate approaches the ceiling, reduce scope before implementation.
 
 If implementation crosses the ceiling, stop expanding that PR.
 
-Remove or defer enough authored changes to return the current PR to 5,000 lines
-or fewer.
+Do not optimize the current diff to make the number pass.
 
-Preserve a coherent bounded portion.
+Compression, test removal, documentation removal, completed-behavior deletion,
+and cosmetic churn are not scope management.
 
-Record a superseding plan for every deferred deliverable in the remaining PR
-sequence.
+Before changing the first PR after it reaches the warning or ceiling:
+
+1. Identify the last full-work commit and publish a superseding Workbench plan.
+2. Divide the complete outcome along domain, capability, package, layer, or
+   stable-interface boundaries.
+3. Materialize every slice as an ordered focused issue.
+4. Record which complete implementation, tests, migrations, and documentation
+   belong to each slice.
+5. Branch the successor from the full-work commit and open it as a linked draft
+   PR before changing the first PR.
+6. Cross-link all PR descriptions and Workbench records.
+7. Prove every file and behavior exists in the ordered PR sequence, using the
+   Workbench checklist plus `numstat`, `name-status`, or `range-diff` evidence.
+8. Rebuild the first PR as the smallest independently useful semantic slice.
+
+Local Git history is not preservation; a linked draft successor is.
+
+Preserve a coherent bounded capability, not a line-count-selected portion.
+
+Complete the first PR before its successor. Then update from `origin/main`,
+change the successor's temporary stacked base to `main`, re-measure, and
+validate. Continue until the complete Workbench outcome is merged.
+
+The same agent owns every PR in the declared sequence unless Workbench records
+an explicit owner handoff.
+
+Scope reduction without a linked preservation PR is a P1 delivery failure.
 
 ### Required plan
 

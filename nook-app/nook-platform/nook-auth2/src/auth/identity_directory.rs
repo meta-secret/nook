@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{AppKey, IdentityId, IdentityMember, IdentityRecord, StoreId};
 
+mod staged_rebase;
+
 /// Explicit identity-selection state. Empty directories cannot have a selection.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", content = "identityId", rename_all = "kebab-case")]
