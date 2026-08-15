@@ -84,6 +84,25 @@ async fn persist_pending_genesis(
         .map_err(|error| NookError::IndexedDb(format!("Pending genesis write error: {error:?}")))
 }
 
+async fn migrate_directory_in_store(
+    store: &rexie::Store,
+    directory: nook_core::IdentityDirectory,
+) -> Result<(nook_core::IdentityDirectory, bool), NookError> {
+    let mut pending = if directory.has_legacy_duplicate_app_key_ownership() {
+        load_pending_genesis(store).await?
+    } else {
+        None
+    };
+    let preserved_identity_id = pending.as_ref().map(|pending| &pending.identity_id);
+    let (directory, migrated) = migrate_directory(directory, preserved_identity_id)?;
+    if let Some(pending) = &mut pending
+        && migrate_staged_genesis_directories(pending)?
+    {
+        persist_pending_genesis(store, pending).await?;
+    }
+    Ok((directory, migrated))
+}
+
 async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
@@ -105,18 +124,7 @@ async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, Nook
             NookError::IndexedDb(format!("Identity directory value error: {error:?}"))
         })?;
         let directory = decode_directory_value(&persisted_raw)?;
-        let mut pending = if directory.has_legacy_duplicate_app_key_ownership() {
-            load_pending_genesis(&store).await?
-        } else {
-            None
-        };
-        let preserved_identity_id = pending.as_ref().map(|pending| &pending.identity_id);
-        let (directory, migrated) = migrate_directory(directory, preserved_identity_id)?;
-        if let Some(pending) = &mut pending
-            && migrate_staged_genesis_directories(pending)?
-        {
-            persist_pending_genesis(&store, pending).await?;
-        }
+        let (directory, migrated) = migrate_directory_in_store(&store, directory).await?;
         let raw = if migrated {
             let normalized = serde_json::to_string(&directory).map_err(|error| {
                 NookError::IndexedDb(format!("Identity directory encode error: {error}"))
@@ -210,26 +218,16 @@ fn migrate_directory(
     .map_err(|error| NookError::Database(error.to_string()))
 }
 
-pub(crate) async fn update_identity_directory<F, T>(update: F) -> Result<T, NookError>
-where
-    F: FnOnce(&mut nook_core::IdentityDirectory) -> Result<T, NookError>,
-{
-    let rexie = open_nook_database().await?;
-    let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
-        .map_err(|error| NookError::IndexedDb(format!("Identity update error: {error:?}")))?;
-    let store = transaction
-        .store("vault")
-        .map_err(|error| NookError::IndexedDb(format!("Identity update store error: {error:?}")))?;
+async fn load_directory_for_write(
+    store: &rexie::Store,
+) -> Result<nook_core::IdentityDirectory, NookError> {
     let current_id = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY)
         .map_err(|error| NookError::IndexedDb(format!("Identity update key error: {error:?}")))?;
-    let legacy_id = serde_wasm_bindgen::to_value(LEGACY_IDENTITY_RECORD_KEY)
-        .map_err(|error| NookError::IndexedDb(format!("Legacy update key error: {error:?}")))?;
     let current = store
-        .get(current_id.clone())
+        .get(current_id)
         .await
         .map_err(|error| NookError::IndexedDb(format!("Identity update read error: {error:?}")))?;
-    let mut directory = if let Some(value) =
+    let directory = if let Some(value) =
         current.filter(|value| !value.is_undefined() && !value.is_null())
     {
         let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
@@ -237,7 +235,9 @@ where
         })?;
         decode_directory_value(&raw)?
     } else {
-        let legacy = store.get(legacy_id.clone()).await.map_err(|error| {
+        let legacy_id = serde_wasm_bindgen::to_value(LEGACY_IDENTITY_RECORD_KEY)
+            .map_err(|error| NookError::IndexedDb(format!("Legacy update key error: {error:?}")))?;
+        let legacy = store.get(legacy_id).await.map_err(|error| {
             NookError::IndexedDb(format!("Legacy identity update read error: {error:?}"))
         })?;
         legacy
@@ -258,18 +258,27 @@ where
             .transpose()?
             .unwrap_or_else(nook_core::IdentityDirectory::empty)
     };
-    let mut pending = if directory.has_legacy_duplicate_app_key_ownership() {
-        load_pending_genesis(&store).await?
-    } else {
-        None
-    };
-    let preserved_identity_id = pending.as_ref().map(|pending| &pending.identity_id);
-    (directory, _) = migrate_directory(directory, preserved_identity_id)?;
-    if let Some(pending) = &mut pending
-        && migrate_staged_genesis_directories(pending)?
-    {
-        persist_pending_genesis(&store, pending).await?;
-    }
+    migrate_directory_in_store(store, directory)
+        .await
+        .map(|(directory, _)| directory)
+}
+
+pub(crate) async fn update_identity_directory<F, T>(update: F) -> Result<T, NookError>
+where
+    F: FnOnce(&mut nook_core::IdentityDirectory) -> Result<T, NookError>,
+{
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| NookError::IndexedDb(format!("Identity update error: {error:?}")))?;
+    let store = transaction
+        .store("vault")
+        .map_err(|error| NookError::IndexedDb(format!("Identity update store error: {error:?}")))?;
+    let current_id = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Identity update key error: {error:?}")))?;
+    let legacy_id = serde_wasm_bindgen::to_value(LEGACY_IDENTITY_RECORD_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Legacy update key error: {error:?}")))?;
+    let mut directory = load_directory_for_write(&store).await?;
     let value = update(&mut directory)?;
     directory.validate().map_err(map_domain_error)?;
     let encoded = serde_json::to_string(&directory).map_err(|error| {

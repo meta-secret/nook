@@ -291,6 +291,57 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    async fn unchanged_base_rejects_invalid_staged_candidate() -> Result<(), NookError> {
+        super::super::clear_identity_directory_for_test().await?;
+        let selected_key = nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;
+        let overlapping_key =
+            nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;
+        let mut base = nook_core::IdentityDirectory::empty();
+        let selected_id = base
+            .create_identity("Selected", &selected_key, None)
+            .map_err(super::super::map_domain_error)?;
+        base.create_identity("Other", &overlapping_key, None)
+            .map_err(super::super::map_domain_error)?;
+        base.select(&selected_id)
+            .map_err(super::super::map_domain_error)?;
+        crate::storage::indexed_db::idb_put_string(
+            super::super::IDENTITY_DIRECTORY_KEY,
+            &serde_json::to_string(&base)
+                .map_err(|error| NookError::Serialization(error.to_string()))?,
+        )
+        .await?;
+        let (signing, _) = nook_core::SigningIdentity::generate()?;
+        let (pending, _, _) = begin_or_resume_staged_simple_genesis(StagedSimpleGenesisInput {
+            app_key: &overlapping_key,
+            signing_public_key: &signing.public_key(),
+            authorizer: None,
+            authorizer_signing: None,
+            label: "Selected",
+        })
+        .await?;
+
+        let result = super::super::clear_pending_simple_genesis(
+            super::super::SimpleGenesisCompletion::Staged {
+                pending: &pending,
+                signing_seed: "invalid-candidate-seed",
+            },
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(NookError::Database(message)) if message.contains("more than one local identity")
+        ));
+        assert_eq!(super::super::load_identity_directory().await?, base);
+        assert!(
+            super::super::pending_simple_genesis_for_store(pending.store_id.as_str())
+                .await?
+                .is_some()
+        );
+        super::super::clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
     async fn staged_signer_marker_resumes_with_authorizer_key() -> Result<(), NookError> {
         super::super::clear_identity_directory_for_test().await?;
         let authorizer = nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;

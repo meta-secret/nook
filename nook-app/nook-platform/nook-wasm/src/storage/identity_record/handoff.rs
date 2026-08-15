@@ -1,6 +1,8 @@
 //! Atomic identity handoff persistence and authorization checks.
 
-use super::{IDENTITY_DIRECTORY_KEY, decode_directory, load_identity_directory, map_domain_error};
+#[cfg(test)]
+use super::load_identity_directory;
+use super::{IDENTITY_DIRECTORY_KEY, map_domain_error};
 use crate::{NookError, storage::open_nook_database};
 
 pub(crate) struct IdentityHandoffCommit<'a> {
@@ -123,7 +125,6 @@ async fn persist_handoff_signing_seed(
 pub(crate) async fn commit_authenticated_identity_handoff(
     input: IdentityHandoffCommit<'_>,
 ) -> Result<IdentityHandoffCommitResult, NookError> {
-    let _ = load_identity_directory().await?;
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(
@@ -136,19 +137,9 @@ pub(crate) async fn commit_authenticated_identity_handoff(
     })?;
     let directory_key = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY)
         .map_err(|error| NookError::IndexedDb(format!("Handoff key error: {error:?}")))?;
-    let directory_value = store.get(directory_key.clone()).await.map_err(|error| {
-        NookError::IndexedDb(format!("Handoff directory read error: {error:?}"))
-    })?;
-    let mut directory = directory_value
-        .filter(|value| !value.is_undefined() && !value.is_null())
-        .map(|value| {
-            let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
-                NookError::IndexedDb(format!("Handoff directory decode error: {error:?}"))
-            })?;
-            decode_directory(&raw)
-        })
-        .transpose()?
-        .unwrap_or_else(nook_core::IdentityDirectory::empty);
+    let legacy_key = serde_wasm_bindgen::to_value(super::LEGACY_IDENTITY_RECORD_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Handoff legacy key error: {error:?}")))?;
+    let mut directory = super::load_directory_for_write(&store).await?;
     let (identity_id, existing_vault_keys) = match input.enrollment {
         crate::manager::PendingExtensionIdentityEnrollment::VaultCreation { .. } => {
             return Err(NookError::Database(
@@ -204,6 +195,10 @@ pub(crate) async fn commit_authenticated_identity_handoff(
         .put(&encoded_value, Some(&directory_key))
         .await
         .map_err(|error| NookError::IndexedDb(format!("Handoff write error: {error:?}")))?;
+    store
+        .delete(legacy_key)
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Handoff legacy delete error: {error:?}")))?;
     persist_handoff_signing_seed(&store, input.signing_seed).await?;
     transaction.done().await.map_err(|error| {
         NookError::IndexedDb(format!("Handoff transaction completion error: {error:?}"))
@@ -455,6 +450,70 @@ mod tests {
                 .map_err(map_domain_error)?,
             events.replacement_keys
         );
+        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
+        clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn handoff_transaction_preserves_pending_identity_during_migration()
+    -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        let fixture = import_fixture()?;
+        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
+        let events = signed_access_events(&fixture)?;
+        event_db::save_event_bytes(
+            fixture.store_id.as_str(),
+            events.approval_id.as_str(),
+            &events.approval_bytes,
+        )
+        .await?;
+        let mut directory = nook_core::IdentityDirectory::empty();
+        let pending_identity_id = directory
+            .create_identity("Pending", &fixture.identity, None)
+            .map_err(map_domain_error)?;
+        directory
+            .create_identity("Concurrent duplicate", &fixture.identity, None)
+            .map_err(map_domain_error)?;
+        crate::storage::indexed_db::idb_put_string(
+            IDENTITY_DIRECTORY_KEY,
+            &serde_json::to_string(&directory)
+                .map_err(|error| NookError::Serialization(error.to_string()))?,
+        )
+        .await?;
+        crate::storage::indexed_db::idb_put_string(
+            super::super::PENDING_SIMPLE_GENESIS_KEY,
+            &serde_json::json!({
+                "storeId": fixture.store_id.as_str(),
+                "identityId": pending_identity_id.as_str(),
+            })
+            .to_string(),
+        )
+        .await?;
+        let enrollment = crate::manager::PendingExtensionIdentityEnrollment::ExistingVaultImport {
+            store_id: fixture.store_id.clone(),
+        };
+
+        commit_authenticated_identity_handoff(IdentityHandoffCommit {
+            app_key: &fixture.identity,
+            signing_public_key: &events.signing_public_key,
+            authorizer_signing: None,
+            enrollment: &enrollment,
+            signing_seed: None,
+            existing_vault: Some(ExistingVaultImportCommit {
+                device_id: fixture.identity.device_id().clone(),
+                label: "Imported".to_owned(),
+            }),
+        })
+        .await?;
+
+        let current = load_identity_directory().await?;
+        let pending = super::super::pending_simple_genesis_for_store(fixture.store_id.as_str())
+            .await?
+            .ok_or_else(|| NookError::Database("Pending marker disappeared.".to_owned()))?;
+        assert_eq!(current.identities().len(), 1);
+        assert_eq!(current.selected()?.identity_id, pending_identity_id);
+        assert!(current.selected()?.owns_vault(&fixture.store_id));
+        assert_eq!(pending.identity_id, pending_identity_id);
         event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
         clear_identity_directory_for_test().await
     }

@@ -137,8 +137,9 @@ the selection so a resumable genesis marker cannot become orphaned.
 When the marker is staged, the same transaction normalizes its base and
 candidate directory snapshots before rewriting the live directory.
 Every later directory update repeats this marker-aware migration within its
-write transaction. A concurrent pre-upgrade writer cannot absorb the pending
-identity between preflight migration and mutation.
+write transaction. Authenticated handoff uses the same loader. A concurrent
+pre-upgrade writer cannot absorb the pending identity between preflight
+migration and mutation.
 All distinct members and vault DEK grants survive the merge.
 The normalized directory is rewritten before unique app-key ownership is
 enforced.
@@ -174,6 +175,8 @@ handoff or the local signer supplies that public key.
   - During verified connect, synthesize the vault owner from active signed
     envelopes and verify the extension signing key against the active event
     roster.
+  - If the authorized app key already belongs to an identity, add the imported
+    vault grant to that identity rather than synthesizing a duplicate owner.
   - Reject the roster snapshot if its event index names a missing event or an
     invalid event ID.
   - Reject matching event rows absent from the index. This closes the
@@ -185,6 +188,8 @@ handoff or the local signer supplies that public key.
   - Commit the member signer and adopted signing seed atomically.
   - Return the transactionally selected DEKs and install them in the live vault
     session before clearing the pending handoff.
+  - Validate a staged candidate before both unchanged-base publication and
+    three-way rebase publication.
 - **Legacy-vault reconciliation:** Derive DEK recipients from the signed event
   graph's active approvals after revocations, not from stale encrypted auth
   rows.

@@ -523,7 +523,9 @@ pub(crate) async fn clear_pending_simple_genesis(
                     .transpose()?
                     .unwrap_or_else(nook_core::IdentityDirectory::empty);
                 let directory = if current_directory == staged.base_directory {
-                    staged.directory.clone()
+                    let candidate = staged.directory.clone();
+                    candidate.validate().map_err(super::map_domain_error)?;
+                    candidate
                 } else {
                     current_directory
                         .rebase_staged_vault_creation(

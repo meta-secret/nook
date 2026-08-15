@@ -106,7 +106,8 @@ It is never shown as stored on one physical laptop.
   - Normalize staged marker base and candidate directories in the same
     transaction so completion compares migrated snapshots.
   - Repeat that marker-aware normalization inside every directory write
-    transaction so a pre-upgrade tab cannot race the initial migration.
+    transaction, including authenticated handoff, so a pre-upgrade tab cannot
+    race the initial migration.
   - Do not decode a pending marker for a valid directory without duplicate
     ownership.
   - Persist both encryption and event-signing public keys for members.
@@ -117,11 +118,15 @@ It is never shown as stored on one physical laptop.
   - Require every stored event's computed ID to match its index and row key.
   - Apply the transactionally selected vault DEKs to the live session before
     reporting a successful handoff.
+  - Attach an imported vault to the identity that already owns the authorized
+    app key instead of synthesizing duplicate identity ownership.
 - **Simple genesis marker:** Use `pending_simple_genesis_v1`.
   - Store `storeId`, `identityId`, `createdAt`, `eventState`, and `flow`.
   - Make `flow` explicitly `ordinary` or `staged`.
   - Let the staged flow own the base directory, inactive candidate directory,
     signing keys, and identity-owned DEK envelopes.
+  - Validate the staged candidate even when the live directory still equals its
+    base snapshot.
   - Emit the legacy `stagedIdentity` projection for already-open tabs and reject
     conflicting current and legacy staged state.
   - Make the marker durable before event creation and resume it after reload.
