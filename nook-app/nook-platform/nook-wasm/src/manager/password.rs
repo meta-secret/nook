@@ -263,13 +263,20 @@ impl NookVaultManager {
         if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
             return Err(nook_core::MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
-        self.vault
+        let remaining_entries = self
+            .vault
             .password_entries
-            .retain(|entry| entry.id != entry_id);
+            .iter()
+            .filter(|entry| entry.id != entry_id)
+            .cloned()
+            .collect();
         self.ensure_event_log_ready().await?;
-        self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
-            entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
-        })
+        self.rotate_security_epoch_with_password_entries(
+            nook_core::VaultOperation::PasswordRemoved {
+                entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
+            },
+            remaining_entries,
+        )
         .await?;
         Ok(())
     }
@@ -285,12 +292,14 @@ impl NookVaultManager {
             .iter()
             .map(|entry| entry.id.clone())
             .collect();
-        self.vault.password_entries.clear();
         self.ensure_event_log_ready().await?;
         if let Some(first_id) = entry_ids.first() {
-            self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
-                entry_id: nook_core::PasswordEntryId::parse(first_id)?,
-            })
+            self.rotate_security_epoch_with_password_entries(
+                nook_core::VaultOperation::PasswordRemoved {
+                    entry_id: nook_core::PasswordEntryId::parse(first_id)?,
+                },
+                Vec::new(),
+            )
             .await?;
         }
         Ok(())

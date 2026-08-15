@@ -125,6 +125,7 @@ impl NookVaultManager {
         &mut self,
         prepared: PreparedEpochRotation,
         trigger: VaultOperation,
+        password_entries: &[nook_core::PasswordUnlockEntry],
     ) -> Result<PersistedSecurityEpochRecoveryPlan, NookError> {
         let previous_key_epoch = prepared.previous_key_epoch.clone();
         let previous_checkpoint = prepared.previous_checkpoint.clone();
@@ -140,7 +141,7 @@ impl NookVaultManager {
             ));
         }
         let password_entries =
-            rewrap_password_entries(&self.vault.password_entries, &prepared.new_keys, &trigger)?;
+            rewrap_password_entries(password_entries, &prepared.new_keys, &trigger)?;
         let previous_epoch = nook_core::EventId::parse(prepared.previous_key_epoch.as_str())?;
         let trigger_event = self
             .build_vault_operations_event(vec![trigger], parents, previous_epoch)
@@ -315,6 +316,16 @@ impl NookVaultManager {
         &mut self,
         trigger: VaultOperation,
     ) -> Result<(), NookError> {
+        let password_entries = self.vault.password_entries.clone();
+        self.rotate_security_epoch_with_password_entries(trigger, password_entries)
+            .await
+    }
+
+    pub(in crate::manager) async fn rotate_security_epoch_with_password_entries(
+        &mut self,
+        trigger: VaultOperation,
+        password_entries: Vec<nook_core::PasswordUnlockEntry>,
+    ) -> Result<(), NookError> {
         self.activate_event_log_mode().await?;
         let previous_key_epoch =
             nook_core::IdentityVaultEventId::parse(&self.ensure_key_epoch().await?)?;
@@ -323,7 +334,7 @@ impl NookVaultManager {
         let prepared =
             self.prepare_security_epoch_rotation(previous_key_epoch, previous_checkpoint)?;
         let persisted = self
-            .persist_security_epoch_recovery_plan(prepared, trigger)
+            .persist_security_epoch_recovery_plan(prepared, trigger, &password_entries)
             .await?;
         self.execute_security_epoch_recovery_plan(persisted.plan, &persisted.plan_envelope, None)
             .await
@@ -349,6 +360,7 @@ impl NookVaultManager {
             work_factor,
         )?;
 
+        let password_entries = self.vault.password_entries.clone();
         let persisted = self
             .persist_security_epoch_recovery_plan(
                 prepared,
@@ -356,6 +368,7 @@ impl NookVaultManager {
                     entry_id,
                     envelope: envelope.clone(),
                 },
+                &password_entries,
             )
             .await?;
         self.execute_security_epoch_recovery_plan(persisted.plan, &persisted.plan_envelope, None)

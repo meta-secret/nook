@@ -12,7 +12,7 @@ export type ExtensionVaultEventPayload = {
     created_at: string;
     key_epoch: string;
     operations: (
-        | { type: "vault-imported"; source_content_hash: string; secrets: { id: string; type: "login" | "api-key" | "seed-phrase" | "secure-note" | "passkey" | "authenticator" | "credit-card" | "file-attachment"; ciphertext: string; identity_fingerprint: string; fingerprint: string }[]; password_entries: { id: string; label: string; created_at: string; envelope: { version: number; kdf: string; work_factor: number; ciphertext: string } }[] }
+        | { type: "vault-imported"; source_content_hash: string; secrets: { id: string; type: "login" | "api-key" | "seed-phrase" | "secure-note" | "passkey" | "authenticator" | "credit-card" | "file-attachment"; ciphertext: string; identity_fingerprint: string; fingerprint: string }[]; password_entries: { id: string; label: string; created_at: string; envelope: { version: number; kdf: string; work_factor: number; recipient?: string; wrapped_keys?: string; ciphertext: string } }[] }
         | { type: "secret-created"; secret: { id: string; type: "login" | "api-key" | "seed-phrase" | "secure-note" | "passkey" | "authenticator" | "credit-card" | "file-attachment"; ciphertext: string; identity_fingerprint: string; fingerprint: string } }
         | { type: "secret-deleted"; secret_id: string }
         | { type: "secret-replaced"; old_id: string; new_secret: { id: string; type: "login" | "api-key" | "seed-phrase" | "secure-note" | "passkey" | "authenticator" | "credit-card" | "file-attachment"; ciphertext: string; identity_fingerprint: string; fingerprint: string } }
@@ -24,11 +24,12 @@ export type ExtensionVaultEventPayload = {
         | { type: "join-denied"; device_id: string }
         | { type: "member-renamed"; device_id: string; label: string }
         | { type: "device-revoked"; device_id: string }
-        | { type: "password-added"; entry_id: string; label: string; created_at: string; envelope: { version: number; kdf: string; work_factor: number; ciphertext: string } }
-        | { type: "password-rotated"; entry_id: string; envelope: { version: number; kdf: string; work_factor: number; ciphertext: string } }
+        | { type: "password-added"; entry_id: string; label: string; created_at: string; envelope: { version: number; kdf: string; work_factor: number; recipient?: string; wrapped_keys?: string; ciphertext: string } }
+        | { type: "password-rotated"; entry_id: string; envelope: { version: number; kdf: string; work_factor: number; recipient?: string; wrapped_keys?: string; ciphertext: string } }
+        | { type: "password-envelope-upgraded"; entry_id: string; envelope: { version: number; kdf: string; work_factor: number; recipient?: string; wrapped_keys?: string; ciphertext: string } }
         | { type: "password-removed"; entry_id: string }
         | { type: "vault-cleared" }
-        | { type: "epoch-checkpoint"; secrets: { id: string; type: "login" | "api-key" | "seed-phrase" | "secure-note" | "passkey" | "authenticator" | "credit-card" | "file-attachment"; ciphertext: string; identity_fingerprint: string; fingerprint: string }[]; members_checkpoint_hash: string }
+        | { type: "epoch-checkpoint"; secrets: { id: string; type: "login" | "api-key" | "seed-phrase" | "secure-note" | "passkey" | "authenticator" | "credit-card" | "file-attachment"; ciphertext: string; identity_fingerprint: string; fingerprint: string }[]; members_checkpoint_hash: string; rotated_meta_records?: { id: string; type?: "login" | "api-key" | "seed-phrase" | "secure-note" | "passkey" | "authenticator" | "credit-card" | "file-attachment"; data: string }[]; password_entries?: { id: string; label: string; created_at: string; envelope: { version: number; kdf: string; work_factor: number; recipient?: string; wrapped_keys?: string; ciphertext: string } }[] }
     )[];
     signature: string;
 };
@@ -43,3 +44,20 @@ export type ExtensionVaultEventPayload = {
 #[serde(transparent)]
 #[tsify(type = "ExtensionVaultEventPayload")]
 pub struct ExtensionVaultEventPayload(nook_event_log::VaultEvent);
+
+#[cfg(test)]
+mod tests {
+    use super::EXTENSION_VAULT_EVENT_TYPESCRIPT;
+
+    #[test]
+    fn typescript_contract_covers_schema_v3() {
+        for token in [
+            "password-envelope-upgraded",
+            "wrapped_keys?",
+            "rotated_meta_records?",
+            "password_entries?",
+        ] {
+            assert!(EXTENSION_VAULT_EVENT_TYPESCRIPT.contains(token));
+        }
+    }
+}

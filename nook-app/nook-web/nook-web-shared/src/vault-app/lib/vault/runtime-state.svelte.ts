@@ -71,6 +71,8 @@ interface StorageTimeoutRace<T> {
 
 /** Shared runtime, provider, locale, and queue capabilities for the vault facade. */
 export abstract class VaultRuntimeState extends VaultLifecycleState {
+  private readonly localDataStorageGeneration =
+    captureLocalDataStorageGeneration();
   secretPageGeneration = 0;
   secretPageRequestOffset = 0;
   architectureSecretCreationAllowed = $state(true);
@@ -163,9 +165,8 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     if (this.localDataDeletionStarted) {
       return Promise.reject(new Error("Local browser data deletion is active"));
     }
-    const generation = captureLocalDataStorageGeneration();
     const storageOperation: LocalDataStorageOperation<T> = {
-      generation,
+      generation: this.localDataStorageGeneration,
       generationChangedMessage: this.t(
         I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
       ),
