@@ -1,5 +1,35 @@
 # UI Design Skill
 
+## Relationships
+
+- [Cortex document navigation](cortex-document-map.md)
+  - Defines the mandatory relationship and internal-map structure.
+  - Apply whenever this skill card changes.
+- [Cortex writer](cortex-writer.md)
+  - Keeps the card and its navigation summaries concise.
+  - Apply while editing or reviewing this guidance.
+- [Cortex consistency](cortex-consistency.md)
+  - Requires the card to agree with related guidance and current code.
+  - Apply when rules, paths, commands, or examples change.
+
+## Document map
+
+- [Rule](#rule)
+  - States the invariant in its normative form.
+  - Read before authoring or reviewing affected code.
+- [Impeccable Is Opt-In](#impeccable-is-opt-in)
+  - Keeps Impeccable outside the default Nook design workflow.
+  - Read when deciding whether that optional skill may run.
+- [Apply It In Nook](#apply-it-in-nook)
+  - Defines the repository-specific design and implementation sequence.
+  - Follow while changing a Nook user interface.
+- [Nook Takes Precedence](#nook-takes-precedence)
+  - Preserves Cortex, Svelte, Rust/WASM, and product authority.
+  - Read when generic design advice conflicts with Nook rules.
+- [Review And Validation](#review-and-validation)
+  - Defines the review and proof required before delivery.
+  - Use after implementation and before push.
+
 ## Rule
 
 Every task that designs, implements, or reviews user-visible UI must first read
