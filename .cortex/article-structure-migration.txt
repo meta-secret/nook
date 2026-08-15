@@ -2,15 +2,4 @@
 # Remove entries as documents migrate. Do not add entries after this baseline.
 .cortex/AGENTS.md
 .cortex/ARCHITECTURE.md
-.cortex/exec-plans/completed/cortex-restructure.md
-.cortex/exec-plans/mobile-core-reuse.md
-.cortex/exec-plans/tech-debt-tracker.md
-.cortex/exec-plans/ts-domain-to-rust-remaining.md
-.cortex/exec-plans/unified-vault-ui-rollout.md
-.cortex/references/ai-debugging.md
-.cortex/references/bun-svelte.md
-.cortex/references/cloudflare-operations.md
-.cortex/references/logging.md
-.cortex/references/loom-tools.md
-.cortex/references/rust-wasm.md
 .cortex/rules.md
