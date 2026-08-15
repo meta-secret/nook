@@ -16,6 +16,9 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 - [Cortex document navigation](cortex-document-map.md)
   - Defines the mandatory graph and internal-map structure for every card.
   - Apply whenever a registry document changes.
+- [Cortex structured articles](cortex-article-structure.md)
+  - Defines the semantic body grammar for every Cortex document.
+  - Apply whenever article content or hierarchy changes.
 
 ## Document map
 
@@ -32,6 +35,7 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 |---|---|---|
 | [source-file-size.md](source-file-size.md) | **P1 / most critical structure rule:** every authored file, including Rust, has one 1,000-line ceiling; oversized Rust signals excessive domain responsibility and requires cohesive decomposition | [`.agents/skills/source-file-size/SKILL.md`](../../.agents/skills/source-file-size/SKILL.md) |
 | [cortex-writer.md](cortex-writer.md) | **P1 / critical `.cortex` writing rule:** split long dense sentences into short sentences, bullets, and lists to reduce cognitive complexity | [`.agents/skills/cortex-writer/SKILL.md`](../../.agents/skills/cortex-writer/SKILL.md) |
+| [cortex-article-structure.md](cortex-article-structure.md) | **P1 / critical `.cortex` article rule:** expose explanation, rules, procedures, branches, and reference data through semantic hierarchy | [`.agents/skills/cortex-article-structure/SKILL.md`](../../.agents/skills/cortex-article-structure/SKILL.md) |
 | [cortex-consistency.md](cortex-consistency.md) | **P1 / critical `.cortex` GC rule:** verify docs are current, agree with each other, and agree with the code | [`.agents/skills/cortex-consistency/SKILL.md`](../../.agents/skills/cortex-consistency/SKILL.md) |
 | [agent-feature-ownership.md](agent-feature-ownership.md) | Keep every agent inside its assigned feature and focused issue set | [`.agents/skills/agent-feature-ownership/SKILL.md`](../../.agents/skills/agent-feature-ownership/SKILL.md) |
 | [code-review-comments.md](code-review-comments.md) | Address active actionable feedback and resolve its review conversations | [executable skill][code-review-skill] |

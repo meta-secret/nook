@@ -98,6 +98,10 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
 fn loom_workflow_audits_every_cortex_change() {
     let root = repository_root();
     let workflow = read(&root, ".github/workflows/loom.yml");
+    assert!(
+        workflow.contains("fetch-depth: 2"),
+        "Loom checkout must retain the baseline parent for migration-ledger shrink-only checks"
+    );
 
     assert_eq!(
         workflow.matches("      - .cortex/**").count(),

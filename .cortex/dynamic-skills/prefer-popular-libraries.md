@@ -29,8 +29,8 @@
 - [Examples](#examples)
   - Contrasts rejected and preferred forms.
   - Read when the rule needs a concrete illustration.
-- [Application Checklist](#application-checklist)
-  - Lists the steps needed to apply and maintain the skill.
+- [Decision checklist](#decision-checklist)
+  - Summarizes the peer checks required before adopting a dependency.
   - Use during implementation and review.
 - [Validation](#validation)
   - Names the smallest relevant mechanical and semantic proof.
@@ -92,7 +92,7 @@ Does not apply to:
 - Before: hand-written YAML value-kind switches and recursive object diffs
 - After: `diff` (`jsdiff`) unified patches for blueprint-vs-received YAML
 
-## Application Checklist
+## Decision checklist
 
 - [ ] Ask whether a popular library already solves the commodity problem.
 - [ ] Check stars/downloads before adding a dependency.

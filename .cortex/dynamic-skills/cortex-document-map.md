@@ -8,6 +8,9 @@ structure before detailed prose begins.
 - [Cortex writer](cortex-writer.md)
   - Keeps navigation summaries short and readable.
   - Apply whenever a Cortex document is created or edited.
+- [Cortex structured articles](cortex-article-structure.md)
+  - Defines the semantic hierarchy represented by mapped headings.
+  - Apply whenever an article is split, nested, or reordered.
 - [Cortex consistency](cortex-consistency.md)
   - Prevents navigation from preserving stale or contradictory guidance.
   - Apply when relationships or durable document content changes.

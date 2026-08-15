@@ -26,9 +26,9 @@
 - [Examples](#examples)
   - Contrasts the rejected and preferred forms.
   - Read when the rule needs a concrete illustration.
-- [Application checklist](#application-checklist)
-  - Lists the steps needed to apply and maintain the skill.
-  - Use during implementation and review.
+- [Application procedure](#application-procedure)
+  - Orders discovery, correction, coverage, and card maintenance.
+  - Follow during implementation and review.
 - [Validation](#validation)
   - Names the smallest relevant proof.
   - Run before completing the task.
@@ -63,13 +63,13 @@ Does not apply to:
 - Before: `<file or symbol reference, or concise pseudocode>`
 - After: `<file or symbol reference, or concise pseudocode>`
 
-## Application checklist
+## Application procedure
 
-- [ ] Search for the problem pattern in the requested scope.
-- [ ] Refactor to the preferred pattern without broad unrelated cleanup.
-- [ ] Update tests or checks that protect the invariant.
-- [ ] Update this card if the refactor reveals a sharper rule.
-- [ ] Keep relationships and the document map synchronized with the card.
+1. Search for the problem pattern in the requested scope.
+2. Refactor to the preferred pattern without broad unrelated cleanup.
+3. Update tests or checks that protect the invariant.
+4. Update this card if the refactor reveals a sharper rule.
+5. Keep relationships and the document map synchronized with the card.
 
 ## Validation
 
