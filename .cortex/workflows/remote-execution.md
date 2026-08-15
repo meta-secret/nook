@@ -63,51 +63,37 @@ Dispatch several tasks in one hosted job:
 task remote TASK_NAMES=rust:test,web:check,web:test
 ```
 
-The batch provisions one runner and performs Docker setup once.
+Batch behavior:
 
-Tasks run sequentially in the requested order.
+- Provision one runner and perform Docker setup once.
+- Run tasks sequentially in the requested order.
+- Accept at most eight tasks.
+- Continue after a task fails and fail the final job when any selection failed.
+- Keep each task's 15-to-45-minute timeout.
+- On timeout:
+  1. send `TERM` to the task and its process group;
+  2. force termination after a one-minute grace period;
+  3. remove Docker containers created by the task;
+  4. restart the job-scoped BuildKit container;
+  5. restore tracked source and remove non-ignored untracked files; and
+  6. continue to later selections after marking the timed-out task failed.
+- After every task, reselect the job-scoped hosted Buildx builder.
+  - This prevents temporary builders from affecting later selections.
+- Report every task result in the GitHub job summary.
 
-One batch accepts at most eight tasks.
+Security and cache rules:
 
-The batch continues after a task fails. Its final status fails when any selected
-task failed.
-
-Each task keeps its former 15-to-45-minute timeout.
-
-A timed-out task and its process group receive `TERM` followed by forced
-termination after a one-minute grace period.
-
-A timeout also removes Docker containers created by that task.
-
-It restarts the job-scoped BuildKit container to cancel daemon-owned solves.
-
-It restores tracked source and removes non-ignored untracked files.
-
-A timed-out task fails without blocking later selections.
-
-After each task, the runner reselects the job-scoped hosted Buildx builder.
-This prevents temporary builders created by one task from affecting later
-selections.
-
-The GitHub job summary reports every task result.
-
-The command accepts only catalog names.
-
-Each name maps to a literal Taskfile command in
-`.github/scripts/remote-task-batch.sh`.
-
-User input is never evaluated as shell.
-
-Remote jobs receive read-only repository and Actions permissions.
-
-They import a present exact BuildKit lineage alone.
-
-When an exact scope is absent, they seed it from source-free dependency scopes
-and trusted Main.
-
-They write git-commit Zot cache refs (`-git-<sha>`) under `nook/remote-buildcache/**`.
-
-Zot repository authorization gives the Remote identity read-only access to `nook/buildcache/**`. Tag selection alone is not the Main security boundary.
+- Accept only catalog names.
+  - Each name maps to a literal Taskfile command in
+    `.github/scripts/remote-task-batch.sh`.
+  - Never evaluate user input as shell.
+- Grant remote jobs read-only repository and Actions permissions.
+- Import an exact BuildKit lineage alone when it exists.
+- When the exact scope is absent, seed it from source-free dependency scopes
+  and trusted Main.
+- Write git-commit Zot refs under `nook/remote-buildcache/**`.
+- Give the Remote identity read-only access to `nook/buildcache/**`.
+  - Tag selection alone is not the Main security boundary.
 
 **SeaweedFS identity:**
 
@@ -174,17 +160,13 @@ Prefer one batch when several tasks need the same pushed head:
 task remote TASK_NAMES=rust:test,wasm:test,web:test
 ```
 
-This avoids repeated checkout, Docker setup, and cache connection work.
-
-Use separate dispatches when true parallel compute is more valuable than runner
-startup cost.
-
-The workflow does not accept arbitrary environment variables or commands.
-
-Its only credentials are the reviewed Zot login and scoped SeaweedFS build
-identity.
-
-Add a reviewed catalog entry when another stable remote capability is needed.
+- A batch avoids repeated checkout, Docker setup, and cache connection work.
+- Use separate dispatches when parallel compute is more valuable than runner
+  startup cost.
+- The workflow accepts neither arbitrary environment variables nor commands.
+- Its only credentials are the reviewed Zot login and scoped SeaweedFS build
+  identity.
+- Add a reviewed catalog entry for any new stable remote capability.
 
 ## Explicit complete PR validation
 
@@ -205,46 +187,47 @@ The command verifies local `HEAD` equals the PR head, then removes and re-adds t
 - `ci:validate` for normal validation;
 - `ci:full-e2e` for Main-fix validation.
 
-GitHub Actions does not support filtering `pull_request` triggers by label name before creating the workflow run.
-
-`pr.yml` therefore:
+GitHub Actions cannot filter `pull_request` triggers by label name before
+creating a workflow run. Therefore `pr.yml`:
 
 - listens for label events
 - runs a small request guard that rejects every unsupported label
 - allocates product-validation workers only for these two labels
 
-Agents must use the Task command so an already-present label is toggled and produces a new event.
+- Agents must use the Task command so an existing label is toggled and produces
+  a new event.
+- When `ci:full-e2e` remains on a Main-fix PR:
+  - every later validation keeps browser and extension gates active; and
+  - `ci:validate` cannot downgrade Main-equivalent coverage.
 
-When `ci:full-e2e` remains on a Main-fix PR, every later validation request keeps the browser and extension gates active. A normal `ci:validate` event cannot downgrade a PR that is already marked for Main-equivalent coverage.
+- Remote browser tasks preserve Playwright `test-results` as run artifacts.
+  - Artifacts include traces, screenshots, videos, and attached
+    `nook-app-logs.json`.
+  - They remain available when a selected task fails.
 
-Remote browser tasks preserve Playwright `test-results` as run artifacts.
+- Before dispatching `web:e2e`, `extension:e2e`, `check`, `ci:pr`, or
+  `ci:pr:e2e`, the Task command:
+  - refreshes `origin/main`; and
+  - fails closed unless the local exact head contains it.
+- `task pr:validate` applies the same guard to the PR's declared base branch
+  before toggling a validation label.
+- Update, format, and push a stale branch before spending an expensive hosted
+  cycle.
 
-These include traces, screenshots, videos, and attached `nook-app-logs.json`.
+- Cheap focused tasks remain available for isolated diagnosis.
+  - They are not a prerequisite for complete PR validation.
+- Prefer complete validation when parallel PR jobs have a shorter critical path
+  than a sequential focused batch.
 
-The artifacts remain available when a selected task fails.
-
-Before dispatching `web:e2e`, `extension:e2e`, `check`, `ci:pr`, or `ci:pr:e2e`, the Task command refreshes `origin/main` and fails closed unless the local exact head contains it.
-
-`task pr:validate` applies the same guard to the PR's declared base branch before toggling a validation label.
-
-Update, format, and push a stale branch before spending an expensive hosted cycle.
-
-Cheap focused tasks remain available for isolated diagnosis.
-
-They are not a prerequisite for complete PR validation.
-
-Prefer complete validation when parallel PR jobs have a shorter critical path
-than a sequential focused batch.
-
-The final readiness audit still detects the unavoidable case where the base advances after a run has already started.
-
-Any later push changes the PR head.
-
-Checks and deployment for the earlier SHA do not authorize the new head. `task pr:ready` must reject it until the agent triggers validation again.
-
-Do not push while a complete validation is running.
-
-If the tested commit is obsolete, cancel that run explicitly, push the complete replacement, and trigger a fresh validation.
+- The final readiness audit detects when the base advances after a run starts.
+- Any later push changes the PR head.
+  - Checks and deployment for the earlier SHA do not authorize the new head.
+  - `task pr:ready` must reject it until validation runs again.
+- Do not push while complete validation is running.
+- When the tested commit is obsolete:
+  1. cancel that run explicitly;
+  2. push the complete replacement; and
+  3. trigger fresh validation.
 
 ## Failure loop
 

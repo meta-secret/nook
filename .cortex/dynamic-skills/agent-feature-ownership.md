@@ -76,19 +76,14 @@ An agent owns only:
 
 Treat every other active task as foreign work.
 
-A child worker is not another delivery owner.
-
-The task owner may assign a bounded child worker:
-
-- an exact immutable baseline;
-- a read-only evidence surface; or
-- an isolated and disjoint write scope.
-
-The child returns its result to the task owner.
-
-It must not mutate Workbench, branch, PR, review, check, or merge state.
-
-Its ownership ends when the result is handed back.
+- A child worker is not another delivery owner.
+- The task owner may assign a bounded child worker:
+  - an exact immutable baseline;
+  - a read-only evidence surface; or
+  - an isolated and disjoint write scope.
+- The child returns its result to the task owner.
+  - It must not mutate Workbench, branch, PR, review, check, or merge state.
+  - Its ownership ends when the result is handed back.
 
 See [subagent-delegation.md](../workflows/subagent-delegation.md).
 
@@ -163,11 +158,9 @@ For a bounded worker:
 
 ## Validation
 
-Review the task plan, Workbench owner, branch, and pull request together.
-
-They must identify one coherent owned scope.
-
-Run `task loom:cortex-audit` after guidance changes.
+- Review the task plan, Workbench owner, branch, and pull request together.
+  - They must identify one coherent owned scope.
+- Run `task loom:cortex-audit` after guidance changes.
 
 The repository preflight contract must retain the ownership guard in:
 

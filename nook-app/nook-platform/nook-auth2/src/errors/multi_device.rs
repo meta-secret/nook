@@ -48,6 +48,9 @@ pub enum MultiDeviceError {
     #[error("Vault DEK epoch is stale: expected {expected}, found {actual}.")]
     StaleVaultDekEpoch { expected: String, actual: String },
 
+    #[error("App key {app_id} belongs to more than one local identity.")]
+    DuplicateAppKeyOwnership { app_id: String },
+
     #[error("Identity directory selection does not match its contents.")]
     InvalidIdentitySelection,
 

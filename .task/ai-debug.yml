@@ -19,7 +19,7 @@ tasks:
       - >-
         test "$(npx -y @playwright/mcp@{{.PLAYWRIGHT_MCP_VERSION}} --version)"
         = "Version {{.PLAYWRIGHT_MCP_VERSION}}"
-      - node .codex/check-ai-debug-origins.mjs
+      - node .github/scripts/ai-debug/check-origins.mjs
       - >-
         printf '%s\n' \
           "AI-debug ready URL: https://localhost:{{.WEB_DEV_PORT}}/app/" \

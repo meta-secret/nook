@@ -1,5 +1,55 @@
 # Workbench Issue Management
 
+## Relationships
+
+- [Agent Feature Ownership](../dynamic-skills/agent-feature-ownership.md)
+  - Defines the Agent Feature Ownership context used by this document.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Pull Request Workflow](pull-requests.md)
+  - Defines pull-request size, validation, readiness, review, and merge requirements.
+  - Apply when implementation or delivery reaches this workflow boundary.
+
+## Document map
+
+- [Overview](#overview)
+  - Preserves oversized, risky, blocked, or deferred work in Nook Workbench.
+  - Read when required work cannot safely remain in the current pull request.
+- [Repository boundary](#repository-boundary)
+  - Separates product artifacts from Workbench planning and delivery records.
+  - Read before deciding where new context belongs.
+- [Multi-PR feature sequences](#multi-pr-feature-sequences)
+  - Defines ordered feature, issue, plan, worklog, and PR relationships.
+  - Read when work must be split across multiple pull requests.
+- [Trigger](#trigger)
+  - Lists the statements and conditions that activate this workflow.
+  - Read before deferring, blocking, or excluding required work.
+- [Search first](#search-first)
+  - Requires searching existing Workbench context with product and code vocabulary.
+  - Read before creating a feature or focused issue.
+- [Required issue shape](#required-issue-shape)
+  - Defines required issue metadata, acceptance criteria, dependencies, and evidence.
+  - Read when creating or auditing a focused issue record.
+- [Choose update versus create](#choose-update-versus-create)
+  - Distinguishes extending the owning record from creating a new deliverable.
+  - Read after search results identify related Workbench context.
+- [Publishing changes](#publishing-changes)
+  - Defines the direct-to-main publication path for Workbench records.
+  - Read before committing and pushing planning context.
+- [Team safety](#team-safety)
+  - Prevents agents from claiming or overwriting another owner's active record.
+  - Read before updating shared Workbench state.
+- [Task-start plan requirement](#task-start-plan-requirement)
+  - Requires a validated Workbench plan before implementation edits.
+  - Read at the start of every task-owning implementation.
+- [Worklog requirement](#worklog-requirement)
+  - Requires one outcome-focused worklog before completion or blocker handoff.
+  - Read when recording final evidence and remaining work.
+- [Required handoff](#required-handoff)
+  - Defines the plan, issue, worklog, and PR links required in a handoff.
+  - Read before reporting completion or a blocker.
+
+## Overview
+
 Use this workflow whenever a task reveals missing functionality that is too
 large, risky, blocked, or outside the current PR's safe scope. Agents must not
 hide unfinished work in chat history or PR summaries.
@@ -36,13 +86,10 @@ index. Focused Markdown files replace sub-issues.
 
 ## Multi-PR feature sequences
 
-One feature may require many focused issues and pull requests.
+Create a focused sequence when either condition holds:
 
-Create a sequence when the complete feature is expected to exceed 5,000
-authored changed lines.
-
-Also create a sequence when separate module ownership makes independent slices
-safer, even below that size.
+- the complete feature is expected to exceed 5,000 authored changed lines; or
+- separate module ownership makes independent slices safer below that size.
 
 The feature `README.md` must record:
 
@@ -61,15 +108,12 @@ documentation to a named PR slice.
 
 Line-count optimization is not a valid split strategy.
 
-Each focused issue must own one cohesive module, package, layer, or
-architectural responsibility.
-
-Each issue should normally map to one pull request.
-
-Every issue must be independently testable and mergeable.
-
-Later issues must consume stable interfaces from earlier slices instead of
-repeatedly rewriting them.
+- Each focused issue owns one cohesive module, package, layer, or architectural
+  responsibility.
+- Each issue normally maps to one pull request.
+- Every issue is independently testable and mergeable.
+- Later issues consume stable interfaces from earlier slices instead of
+  repeatedly rewriting them.
 
 After a slice merges:
 
@@ -82,9 +126,8 @@ After a slice merges:
    `automation: agent`.
 6. In that case, the current agent must not also start the issue.
 
-The feature remains incomplete while any required issue remains incomplete.
-
-Do not convert remaining requested functionality into an optional follow-up.
+- The feature remains incomplete while any required issue remains incomplete.
+- Do not convert remaining requested functionality into an optional follow-up.
 
 See
 [pull-requests.md](pull-requests.md#pull-request-size-and-modularity) for the
@@ -149,18 +192,13 @@ automation: agent
 owner: <nook-github-collaborator>
 ```
 
-The owner must be an assignable Nook GitHub collaborator with write access.
-
-The scheduled scan skips candidate records with a missing or unassigned owner.
-An explicitly requested ownerless record fails without implementation.
-
-Creating or editing any other record must not start implementation.
-
-The worker claims an eligible record by committing `status: in_progress`
-before it runs.
-
-Main-failure handoff records instead use `status: ready` with `automation:
-hive`.
+- The owner must be an assignable Nook GitHub collaborator with write access.
+- The scheduled scan skips a missing or unassigned owner.
+  - An explicitly requested ownerless record fails without implementation.
+- Creating or editing any other record must not start implementation.
+- The worker claims an eligible record by committing `status: in_progress`
+  before it runs.
+- Main-failure handoff records use `status: ready` with `automation: hive`.
 
 A single token-free dispatcher reconciles those records into Neo4j by failed Main
 SHA. The isolated task owns:
@@ -283,21 +321,17 @@ NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \
   "plan: start <task>"
 ```
 
-The source-task file stays outside the checkout.
-
-It lets the publisher reject copied prompt text.
-
-Do not publish that file.
-
-The scheduled implementation worker uses a dedicated planning LLM turn,
-validates and publishes the plan, and only then begins its implementation turn.
-A missing or rejected plan blocks implementation.
-
-A valid multi-PR plan also blocks scheduled implementation.
-
-Materialize its Workbench feature summary and focused issues first.
-
-Then dispatch the first focused issue with a bounded one-PR plan.
+- Keep the source-task file outside the checkout.
+  - It lets the publisher reject copied prompt text.
+  - Do not publish it.
+- The scheduled worker:
+  1. uses a dedicated planning LLM turn;
+  2. validates and publishes the plan; and
+  3. begins implementation only after publication.
+- A missing or rejected plan blocks implementation.
+- A valid multi-PR plan also blocks scheduled implementation.
+  1. Materialize the Workbench feature summary and focused issues.
+  2. Dispatch the first focused issue with a bounded one-PR plan.
 
 ## Worklog requirement
 

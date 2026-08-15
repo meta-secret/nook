@@ -166,7 +166,7 @@ cancels it. If the developer cannot see the windows:
 
 AI-debug mode supports **Codex** and **Cursor**. Both hosts launch the same
 pinned Playwright MCP profile through
-[`.codex/run-playwright-mcp.sh`](../../.codex/run-playwright-mcp.sh).
+[`.github/scripts/ai-debug/run-playwright-mcp.sh`](../../.github/scripts/ai-debug/run-playwright-mcp.sh).
 
 ### Codex
 
@@ -194,7 +194,7 @@ task ai-debug:check
 `ai-debug:check` accepts either a working Codex Playwright server or the checked-in
 Cursor `mcp.json`. It also verifies that HTTP/HTTPS and WS/WSS origins for ports
 `5173`/`5175` stay aligned across `.codex/config.toml`, `.cursor/mcp.json`, and
-[`.codex/playwright-local-only.ts`](../../.codex/playwright-local-only.ts).
+[`.github/scripts/ai-debug/local-only.ts`](../../.github/scripts/ai-debug/local-only.ts).
 
 The project configuration:
 
@@ -225,7 +225,7 @@ does not mean sessions share browser state:
 
 - `--isolated` gives every MCP server process its own in-memory browser profile,
   so cookies, IndexedDB, and other browser state are not reused;
-- [`.codex/run-playwright-mcp.sh`](../../.codex/run-playwright-mcp.sh) creates an
+- [`.github/scripts/ai-debug/run-playwright-mcp.sh`](../../.github/scripts/ai-debug/run-playwright-mcp.sh) creates an
   atomic, mode-`0700` `.playwright-mcp/session.*` directory for that process's
   screenshots, annotations, snapshots, and console artifacts, then removes it
   when the MCP process exits or is interrupted;

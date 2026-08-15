@@ -1,19 +1,54 @@
 # Devices & access
 
+## Relationships
+
+- [Identity, App Keys, Passkeys, and Vault DEKs](../design-docs/identity-vault-architecture.md)
+  - Separates identity, app-key, vault-key, onboarding, and grant responsibilities.
+  - Read before changing the related architecture or security boundary.
+- [Vault Event Log](../design-docs/vault-event-log.md)
+  - Defines immutable vault events, ordering, concurrency, and provider synchronization.
+  - Read before changing the related architecture or security boundary.
+- [Browser Extension Product Spec](browser-extension.md)
+  - Defines the companion extension boundary, approval, authentication surfaces, and storage rules.
+  - Read when this document touches the related product behavior or user flow.
+- [Nook Coding Rules & Golden Principles](../rules.md)
+  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
+  - Apply throughout implementation and review.
+
+## Document map
+
+- [Product statement](#product-statement)
+  - Defines Devices & access as an identity-management surface, not a vault list.
+  - Read before changing the dashboard's purpose or terminology.
+- [Identity and access model](#identity-and-access-model)
+  - Defines the person, identity, vault-grant, provider, and app-installation graph.
+  - Read when changing authorization relationships or navigation.
+- [Evidence and provenance](#evidence-and-provenance)
+  - Separates verified facts, user labels, browser observations, and unknowns.
+  - Read before displaying, persisting, or inferring access information.
+- [Persistence boundary](#persistence-boundary)
+  - Defines Rust-owned unlock records and browser-local identity metadata.
+  - Read before changing storage, imports, app keys, or local reconciliation.
+- [Interaction requirements](#interaction-requirements)
+  - Specifies the identity-centric canvas, detail panels, labels, and access actions.
+  - Read before implementing or reviewing Devices & access UI.
+- [Related records](#related-records)
+  - Routes to architecture and product records that own adjacent decisions.
+  - Read when work crosses identity, vault, extension, or UX boundaries.
+
 ## Product statement
 
-**Devices & access** is Nook's identity-management surface.
-An identity is a logical account.
-It possesses passkeys and therefore app keys.
-It owns per-vault DEKs.
-The surface is available before a vault exists, while every vault is locked,
-and while a vault is open.
-
-It explains identity, passkeys, app keys, and vaults that identity can open.
-It is not a universal passkey manager.
-
-The browser extension is another installation with its own app key.
-Extension setup enrolls that app key into a selected identity.
+- **Surface:** **Devices & access** is Nook's identity-management surface.
+  - It is available before a vault exists, while every vault is locked, and
+    while a vault is open.
+- **Identity:** An identity is a logical account.
+  - It possesses passkeys and therefore app keys.
+  - It owns per-vault DEKs.
+- **Scope:** Explain identity, passkeys, app keys, and the vaults that identity
+  can open.
+  - Do not present this as a universal passkey manager.
+- **Browser extension:** Treat it as another installation with its own app key.
+  - Extension setup enrolls that app key into a selected identity.
 
 See
 [identity-vault-architecture.md](../design-docs/identity-vault-architecture.md).
@@ -55,55 +90,93 @@ It is never shown as stored on one physical laptop.
 
 ## Persistence boundary
 
-Unlock-critical records use `app_id` and `app_key_wrapped`.
-Legacy `device_id` and `device_identity_wrapped` dual-read during migration
-only.
-Descriptive dashboard metadata uses a separately versioned access profile.
-Missing descriptive data must not prevent app-key unlock.
-
-The local identity directory uses `identity_directory_v1`.
-Its selection is an explicit `Empty` or `Selected(identity_id)` state.
-Updates use one IndexedDB read-write transaction.
-Member records persist both encryption and event-signing public keys.
-Missing signing keys from older records are unavailable, not inferred.
-New Simple-vault genesis requires a verified signing key for every member.
-Simple vault genesis uses `pending_simple_genesis_v1`.
-The record adds an `ordinary` or `staged` `flow` to its existing fields.
-Staged flow owns base and candidate directories.
-Writers retain the legacy projection, but readers reject conflicts.
-The durable marker survives reloads.
-Verified connect atomically publishes the candidate, signer, and marker removal.
-Rust rebases unrelated identities and selection.
-Target conflicts fail closed and retain the marker.
-Legacy records without `createdAt` use the Unix epoch timestamp.
-`eventState` is `awaiting-event`, `legacy-event-pinned`, or `event-pinned`.
-The current pinned variant owns the complete signed genesis event in
-`eventYaml`, an app-key-sealed `signingSeedEnvelope`, and signer envelopes for
-the staged members before the first event-log write. Retries by either staged
-member open and reuse that exact pair.
-A legacy marker without `eventState` is treated as `awaiting-event`.
-A preceding top-level `eventYaml`, or an `event-pinned` state without seed
-material, migrates to `legacy-event-pinned`. It upgrades to the current pinned
-state only after the durable seed is verified against the event signer.
-Legacy plaintext seed migration performs that verification before sealing.
-Failed extension-first creation leaves active identity state unchanged.
-Pre-event attempts remain staged; pinned or partially written genesis resumes
-from the same marker. Decrypted UI state and sync are cleared before the failure
-is shown. Existing-vault imports use a separate pending state and publish only
-after verified connect establishes the owning identity and validates the active
-signed roster.
-Legacy-vault DEK reconciliation uses only active signed event approvals after
-revocation replay.
-
-On first read, the app migrates `identity_record_v1` into the directory.
-It deletes the legacy key only after the new directory is durable.
-Downgrading to a pre-directory build is unsupported after migration.
-The local directory is separate from the future replicated identity control
-log.
-
-The dashboard may persist only non-secret metadata.
-Private app keys, PRF output, PIN/passphrases, vault DEKs, backup-password
-values, and plaintext vault contents are forbidden.
+- **Unlock-critical records:** Use `app_id` and `app_key_wrapped`.
+  - Dual-read legacy `device_id` and `device_identity_wrapped` only during
+    migration.
+  - Store descriptive dashboard data in a separately versioned access profile.
+  - Missing descriptive data must not prevent app-key unlock.
+- **Local identity directory:** Use `identity_directory_v1`.
+  - Represent selection as explicit `Empty` or `Selected(identity_id)`.
+  - Apply updates in one IndexedDB read-write transaction.
+  - Normalize legacy identities connected by a shared app key before enforcing
+    unique ownership.
+  - Prefer the selected identity as survivor unless a pending genesis marker
+    durably references another identity in the connected group.
+  - Retain every member and vault grant during the merge.
+  - Normalize staged marker base and candidate directories in the same
+    transaction so completion compares migrated snapshots.
+  - Trigger staged snapshot normalization when either the live directory or
+    staged base contains legacy duplicate ownership. Candidate-only duplicate
+    ownership is a new invalid state and must fail closed.
+  - Repeat that marker-aware normalization inside every directory write
+    transaction, including authenticated handoff and staged genesis cleanup, so
+    a pre-upgrade tab cannot race the initial migration.
+  - Do not decode a pending marker for a valid directory without duplicate
+    ownership.
+  - Persist both encryption and event-signing public keys for members.
+  - Treat missing signing keys from older records as unavailable, not inferred.
+  - Require a verified signing key for every member in new Simple-vault genesis.
+  - Reject an existing-vault handoff while any signed roster event is pending
+    causal ancestry.
+  - Require every stored event's computed ID to match its index and row key.
+  - Validate the event index before writing a new event row.
+  - On rejected handoff cleanup, scan by the vault event-row prefix.
+  - Remove indexed and unindexed rows even when the index is malformed.
+  - Apply the transactionally selected vault DEKs to the live session before
+    reporting a successful handoff.
+  - Attach an imported vault to the identity that already owns the authorized
+    app key instead of synthesizing duplicate identity ownership.
+- **Simple genesis marker:** Use `pending_simple_genesis_v1`.
+  - Store `storeId`, `identityId`, `createdAt`, `eventState`, and `flow`.
+  - Make `flow` explicitly `ordinary` or `staged`.
+  - Let the staged flow own the base directory, inactive candidate directory,
+    signing keys, and identity-owned DEK envelopes.
+  - Validate the staged candidate even when the live directory still equals its
+    base snapshot.
+  - Emit the legacy `stagedIdentity` projection for already-open tabs and reject
+    conflicting current and legacy staged state.
+  - Make the marker durable before event creation and resume it after reload.
+  - On verified connect, publish the staged directory and matching signing seed,
+    then remove the marker in one compare-and-write transaction.
+  - Fail closed on concurrent identity changes without overwriting them.
+  - Retain unrelated concurrent changes through a typed three-way rebase.
+  - Reject a staged-identity conflict or cross-identity app-key overlap.
+- **Genesis event state:** Use `awaiting-event`, `legacy-event-pinned`, or
+  `event-pinned`.
+  - Let the current pinned variant own the complete signed `eventYaml`, an
+    app-key-sealed `signingSeedEnvelope`, and staged-member signer envelopes
+    before the first event-log write.
+  - Let either staged member retry by opening and reusing that exact pair.
+- **Legacy marker compatibility:**
+  - Use the Unix epoch when `createdAt` is absent.
+  - Treat a missing `eventState` as `awaiting-event`.
+  - Migrate a preceding top-level `eventYaml`, or `event-pinned` without seed
+    material, to `legacy-event-pinned`.
+  - Upgrade only after verifying the durable seed against the event signer.
+  - Verify a legacy plaintext seed before sealing it.
+- **Failed or imported genesis:**
+  - Leave active identity state unchanged after failed extension-first creation.
+  - Keep pre-event attempts staged.
+  - Resume pinned or partially written genesis from the same marker.
+  - Clear decrypted UI state and sync before showing the failure.
+  - Use a separate pending state for existing-vault imports.
+  - Publish only after verified connect establishes the owning identity and
+    validates the active signed roster.
+  - Require every event named by the roster index to exist and have a valid
+    event ID; missing or malformed evidence fails authorization closed.
+  - Reject event rows absent from the index so a pre-upgrade split write cannot
+    hide newer authorization evidence.
+  - Reconcile legacy-vault DEKs only from active signed approvals after
+    revocation replay.
+- **Singleton migration:** On first read, move `identity_record_v1` into the
+  directory.
+  - Delete the legacy key only after the new directory is durable.
+  - Do not support downgrade to a pre-directory build after migration.
+  - Keep the local directory separate from the future replicated identity
+    control log.
+- **Dashboard persistence:** Store non-secret metadata only.
+  - Never persist private app keys, PRF output, PIN/passphrases, vault DEKs,
+    backup-password values, or plaintext vault contents.
 
 ## Interaction requirements
 

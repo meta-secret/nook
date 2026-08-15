@@ -25,7 +25,7 @@ impl IdentityDirectory {
         let base_target = base.identity(identity_id);
         let base_others = base.identities_without(identity_id);
         let candidate_others = candidate.identities_without(identity_id);
-        if base_others != candidate_others {
+        if base_others != candidate_others || base.retired_app_ids != candidate.retired_app_ids {
             return Err(Self::staged_identity_conflict(identity_id));
         }
 
@@ -138,23 +138,19 @@ mod tests {
     }
 
     #[test]
-    fn rebase_preserves_retired_app_ids() -> anyhow::Result<()> {
+    fn rebase_rejects_app_key_added_to_another_identity() -> anyhow::Result<()> {
         let owner = AppKey::generate()?;
-        let retired = AppKey::generate()?;
-        let store_id = crate::generate_store_id()?;
+        let overlapping = AppKey::generate()?;
         let mut base = IdentityDirectory::empty();
         let identity_id = base.create_identity("Personal", &owner, None)?;
         let mut candidate = base.clone();
-        let _ =
-            candidate.open_or_generate_vault_dek_for_identity(&identity_id, &owner, store_id)?;
+        candidate.enroll_selected_app_key_for_vault_creation(&overlapping, "Personal")?;
         let mut current = base.clone();
-        current.retired_app_ids.push(retired.app_id().clone());
-
-        let mut rebased = current.rebase_staged_vault_creation(&base, &candidate, &identity_id)?;
+        current.create_identity("Work", &overlapping, None)?;
 
         assert!(matches!(
-            rebased.create_identity("Retired", &retired, None),
-            Err(MultiDeviceError::RetiredAppKey)
+            current.rebase_staged_vault_creation(&base, &candidate, &identity_id),
+            Err(MultiDeviceError::DuplicateAppKeyOwnership { .. })
         ));
         Ok(())
     }

@@ -223,6 +223,23 @@ pub fn event_graph_has_active_device_access(
     expected_public_key: &crate::DevicePublicKey,
     expected_signing_public_key: &crate::DeviceSigningPublicKey,
 ) -> nook_auth2::MultiDeviceResult<bool> {
+    Ok(event_graph_active_device_envelopes(
+        graph,
+        expected_device_id,
+        expected_public_key,
+        expected_signing_public_key,
+    )?
+    .is_some())
+}
+
+/// Return current DEK envelopes only when the signed graph grants this exact
+/// device encryption and signing key tuple access.
+pub fn event_graph_active_device_envelopes(
+    graph: &crate::EventGraph,
+    expected_device_id: &crate::DeviceId,
+    expected_public_key: &crate::DevicePublicKey,
+    expected_signing_public_key: &crate::DeviceSigningPublicKey,
+) -> nook_auth2::MultiDeviceResult<Option<AuthEnvelopes>> {
     let derived_device_id = nook_auth2::device_id_from_public_key(expected_public_key)?;
     if &derived_device_id != expected_device_id {
         return Err(nook_auth2::MultiDeviceError::InvalidDeviceIdentity(
@@ -230,7 +247,7 @@ pub fn event_graph_has_active_device_access(
         ));
     }
 
-    let mut active = false;
+    let mut active = None;
     let order = graph
         .topological_order()
         .map_err(|error| nook_auth2::MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
@@ -246,13 +263,19 @@ pub fn event_graph_has_active_device_access(
                     device_id,
                     encryption_public_key,
                     signing_public_key,
+                    secrets_key_ciphertext,
+                    members_key_ciphertext,
                     ..
                 } if device_id == expected_device_id => {
-                    active = encryption_public_key == expected_public_key
-                        && signing_public_key == expected_signing_public_key;
+                    active = (encryption_public_key == expected_public_key
+                        && signing_public_key == expected_signing_public_key)
+                        .then(|| AuthEnvelopes {
+                            secrets_key: secrets_key_ciphertext.clone(),
+                            members_key: members_key_ciphertext.clone(),
+                        });
                 }
                 VaultOperation::DeviceRevoked { device_id } if device_id == expected_device_id => {
-                    active = false;
+                    active = None;
                 }
                 _ => {}
             }
@@ -364,6 +387,39 @@ mod tests {
             },
             signing.signing_key(),
         )?)
+    }
+
+    fn owner_access_graph(
+        owner: &DeviceIdentity,
+        signing: &SigningIdentity,
+        store_id: &StoreId,
+        envelopes: AuthEnvelopes,
+    ) -> anyhow::Result<(EventGraph, EventId)> {
+        let root = signed_event(
+            signing,
+            store_id,
+            vec![],
+            vec![
+                VaultOperation::VaultImported {
+                    source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                    secrets: vec![],
+                    password_entries: vec![],
+                },
+                VaultOperation::JoinApproved {
+                    device_id: owner.device_id().clone(),
+                    encryption_public_key: owner.public_key(),
+                    signing_public_key: signing.public_key(),
+                    label: MemberLabel::from_trusted("Owner".to_owned()),
+                    secrets_key_ciphertext: envelopes.secrets_key,
+                    members_key_ciphertext: envelopes.members_key,
+                },
+            ],
+            "2026-08-15T00:00:00Z",
+        )?;
+        let root_id = root.id()?;
+        let mut graph = EventGraph::new();
+        graph.insert(root, store_id.as_str())?;
+        Ok((graph, root_id))
     }
 
     #[test]
@@ -549,6 +605,104 @@ mod tests {
             &signing.public_key(),
         )?);
         assert!(event_graph_active_auth_ids(&graph)?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn active_device_envelopes_follow_revocation_and_reapproval() -> anyhow::Result<()> {
+        let owner = DeviceIdentity::generate()?;
+        let extension = DeviceIdentity::generate()?;
+        let (owner_signing, _) = SigningIdentity::generate()?;
+        let (extension_signing, _) = SigningIdentity::generate()?;
+        let store_id = crate::generate_store_id()?;
+        let owner_keys = crate::generate_vault_keys()?;
+        let owner_auth = crate::parse_auth_envelopes(
+            crate::genesis_auth_record(&owner, &owner_keys.secrets_key, &owner_keys.members_key)?
+                .value
+                .as_str(),
+        )?;
+        let (mut graph, root_id) =
+            owner_access_graph(&owner, &owner_signing, &store_id, owner_auth)?;
+
+        let old_keys = crate::generate_vault_keys()?;
+        let old_auth = crate::parse_auth_envelopes(
+            crate::genesis_auth_record(&extension, &old_keys.secrets_key, &old_keys.members_key)?
+                .value
+                .as_str(),
+        )?;
+        let approval = signed_event(
+            &owner_signing,
+            &store_id,
+            vec![root_id],
+            vec![VaultOperation::JoinApproved {
+                device_id: extension.device_id().clone(),
+                encryption_public_key: extension.public_key(),
+                signing_public_key: extension_signing.public_key(),
+                label: MemberLabel::from_trusted("Extension".to_owned()),
+                secrets_key_ciphertext: old_auth.secrets_key,
+                members_key_ciphertext: old_auth.members_key,
+            }],
+            "2026-08-15T00:01:00Z",
+        )?;
+        let approval_id = approval.id()?;
+        graph.insert(approval, store_id.as_str())?;
+        let revocation = signed_event(
+            &owner_signing,
+            &store_id,
+            vec![approval_id],
+            vec![VaultOperation::DeviceRevoked {
+                device_id: extension.device_id().clone(),
+            }],
+            "2026-08-15T00:02:00Z",
+        )?;
+        let revocation_id = revocation.id()?;
+        graph.insert(revocation, store_id.as_str())?;
+        assert!(
+            event_graph_active_device_envelopes(
+                &graph,
+                extension.device_id(),
+                &extension.public_key(),
+                &extension_signing.public_key(),
+            )?
+            .is_none()
+        );
+
+        let replacement_keys = crate::generate_vault_keys()?;
+        let replacement_auth = crate::parse_auth_envelopes(
+            crate::genesis_auth_record(
+                &extension,
+                &replacement_keys.secrets_key,
+                &replacement_keys.members_key,
+            )?
+            .value
+            .as_str(),
+        )?;
+        let expected = replacement_auth.clone();
+        let reapproval = signed_event(
+            &owner_signing,
+            &store_id,
+            vec![revocation_id],
+            vec![VaultOperation::JoinApproved {
+                device_id: extension.device_id().clone(),
+                encryption_public_key: extension.public_key(),
+                signing_public_key: extension_signing.public_key(),
+                label: MemberLabel::from_trusted("Extension".to_owned()),
+                secrets_key_ciphertext: replacement_auth.secrets_key,
+                members_key_ciphertext: replacement_auth.members_key,
+            }],
+            "2026-08-15T00:03:00Z",
+        )?;
+        graph.insert(reapproval, store_id.as_str())?;
+
+        assert_eq!(
+            event_graph_active_device_envelopes(
+                &graph,
+                extension.device_id(),
+                &extension.public_key(),
+                &extension_signing.public_key(),
+            )?,
+            Some(expected)
+        );
         Ok(())
     }
 }

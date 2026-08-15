@@ -17,6 +17,9 @@
 - [Pre-Push Hygiene](dynamic-skills/pre-push-hygiene.md)
   - Defines formatting and UI-demo checks required before every push.
   - Apply when implementation or delivery reaches this workflow boundary.
+- [Cortex Structured Articles](dynamic-skills/cortex-article-structure.md)
+  - Defines semantic hierarchy for Cortex explanations and instructions.
+  - Apply whenever Cortex article bodies or headings change.
 - [Reference: Application Logging](references/logging.md)
   - Defines application, test, and CI logging and troubleshooting evidence.
   - Consult when the task needs this operational reference.
@@ -191,13 +194,13 @@ This document defines the strict development standards, architectural boundaries
 
 ### Unit tests carry ~99% of functional coverage
 
-**E2e tests are smoke tests, not a substitute for domain coverage.**
-
-Playwright flows exercise a thin slice of user paths.
-
-They cover happy paths and a few conflict screens.
-
-They do **not** prove correctness of event sourcing, causal DAG merge, projection replay, epoch rotation, crypto, or multi-device sync.
+- **E2e role:** E2e tests are smoke tests, not a substitute for domain
+  coverage.
+  - Playwright flows exercise a thin slice of user paths.
+  - They cover happy paths and a few conflict screens.
+- **Coverage limitation:** E2e tests do **not** prove correctness of event
+  sourcing, causal DAG merge, projection replay, epoch rotation, crypto, or
+  multi-device sync.
 
 | Layer                         | Target                                                                            | Where                                                        |
 | ----------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
@@ -205,7 +208,9 @@ They do **not** prove correctness of event sourcing, causal DAG merge, projectio
 | **Integration harness tests** | Multi-device decentralized sync, provider union, session orchestration            | `nook-app/nook-platform/nook-core/tests/event_log_*.rs`, `multi_device_workflow.rs` |
 | **E2e (Playwright)**          | Critical UI smoke only — unlock, save, local-provider sync, conflict UX           | `nook-app/nook-web/nook-web-app/e2e/`                                  |
 
-When adding or changing domain logic, **add Rust tests first** (or in the same PR). Do not rely on e2e to catch regressions in sync or projection.
+- **Rust-first requirement:** When adding or changing domain logic, add Rust
+  tests first or in the same PR.
+  - Do not rely on e2e to catch regressions in sync or projection.
 
 ### Every bug fix requires a regression test
 

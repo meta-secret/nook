@@ -71,18 +71,16 @@
 
 ## Overview
 
-**Superseded for provider sync:** event-log vaults use immutable YAML events
-under `nook-log/v1/events/`. See [vault-event-log.md](vault-event-log.md).
-
-The scalar `vault_version` model below is retained as historical context for
-local projection and migration behavior.
-
-This historical document defines Nook's local-first **vault** and provider
-replica model.
-
-The current cross-domain ownership of identities, independent vault DEKs,
-authorization grants, onboarding, and provider mounts is defined in
-[identity-vault-architecture.md](identity-vault-architecture.md).
+- **Provider-sync status:** Superseded. Event-log vaults use immutable YAML
+  events under `nook-log/v1/events/`. See
+  [vault-event-log.md](vault-event-log.md).
+- **Historical scope:** Retain the scalar `vault_version` model as context for
+  local projection and migration behavior.
+  - This document defines the historical local-first **vault** and provider
+    replica model.
+- **Current ownership:** Identity, independent vault DEK, authorization grant,
+  onboarding, and provider-mount ownership is defined in
+  [identity-vault-architecture.md](identity-vault-architecture.md).
 
 **Related:** [auth-providers.md](auth-providers.md), [vault-session-and-lock.md](vault-session-and-lock.md), [secret-store-identity.md](secret-store-identity.md), [ARCHITECTURE.md](../ARCHITECTURE.md) §4, [exec-plans/unified-vault-ui-rollout.md](../exec-plans/unified-vault-ui-rollout.md).
 

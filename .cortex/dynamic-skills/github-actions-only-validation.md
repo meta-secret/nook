@@ -56,15 +56,14 @@ wastes hosted concurrency before the branch is ready.
 
 ## Preferred Pattern
 
-**Required locally:** `task loom:pre-push` only.
+Validation has three layers:
 
-**Focused diagnosis:** after pushing an exact branch head, use
-`task remote TASK_NAME=<name>` only when one isolated gate gives faster
-feedback than complete validation.
-
-Do not batch broad gates sequentially before complete validation.
-
-**Required remotely:** explicitly trigger complete exact-head PR validation.
+- **Required locally:** run `task loom:pre-push` only.
+- **Focused diagnosis:** after pushing an exact branch head, use
+  `task remote TASK_NAME=<name>` only when one isolated gate gives faster
+  feedback than complete validation.
+  - Do not batch broad gates sequentially before complete validation.
+- **Required remotely:** explicitly trigger complete exact-head PR validation.
 
 Validate request example:
 
@@ -82,20 +81,23 @@ git push -u origin HEAD
 task loom:pr-land CONFIG=/tmp/pr-land-validate.yaml
 ```
 
-For Main-fix PRs, set `runFullE2e: true` in the `prLand.validate` request.
-
-See [loom-tools.md](../references/loom-tools.md).
-
-Expensive remote tasks and complete PR validation refresh their base branch and
-refuse dispatch when the local head is stale.
-
-Merge the reported `origin/<base>`, run `task loom:pre-push`, push, and retry.
-
-On a red remote run: read `gh run view <id> --log-failed` → fix →
-`task loom:pre-push` → commit → push → focused remote work or complete
-validation again.
-
-Ordinary pushes do not refresh complete PR checks.
+- For Main-fix PRs, set `runFullE2e: true` in the `prLand.validate` request.
+- See [Loom tools](../references/loom-tools.md).
+- Expensive remote tasks and complete PR validation:
+  - refresh their base branch; and
+  - refuse dispatch when the local head is stale.
+- When the head is stale:
+  1. merge the reported `origin/<base>`;
+  2. run `task loom:pre-push`;
+  3. push; and
+  4. retry.
+- On a red remote run:
+  1. read `gh run view <id> --log-failed`;
+  2. fix the cause;
+  3. run `task loom:pre-push`;
+  4. commit and push; and
+  5. use focused remote work or complete validation again.
+- Ordinary pushes do not refresh complete PR checks.
 
 ## Scope
 

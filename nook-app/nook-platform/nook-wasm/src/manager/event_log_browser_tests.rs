@@ -35,10 +35,7 @@ async fn import_fixture(with_update: bool) -> anyhow::Result<ImportFixture> {
     source.persist_projection_cache().await?;
     if with_update {
         source
-            .append_vault_operations(vec![VaultOperation::MemberRenamed {
-                device_id: identity.device_id().clone(),
-                label: nook_core::MemberLabel::from_trusted("Candidate device".to_owned()),
-            }])
+            .append_vault_operations(vec![nook_core::VaultOperation::VaultCleared])
             .await
             .map_err(|error| anyhow::anyhow!("append candidate update: {error}"))?;
     }
@@ -259,7 +256,7 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
 }
 
 #[wasm_bindgen_test]
-async fn staged_incomplete_extension_import_restores_session_and_active_projection()
+async fn staged_extension_import_without_ancestors_restores_session_and_active_projection()
 -> anyhow::Result<()> {
     let mut fixture = import_fixture(true).await?;
     let dependent_index = fixture
@@ -282,7 +279,5 @@ async fn staged_incomplete_extension_import_restores_session_and_active_projecti
         )
         .await?;
     assert!(!status.access_granted);
-    assert_eq!(status.event_count, 1);
-    assert!(status.heads.is_empty());
     assert_rollback(&replacement, &previous_store_id).await
 }

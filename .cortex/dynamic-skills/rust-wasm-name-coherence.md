@@ -29,9 +29,9 @@
 - [Examples](#examples)
   - Contrasts rejected and preferred forms.
   - Read when the rule needs a concrete illustration.
-- [Application Checklist](#application-checklist)
-  - Lists the steps needed to apply and maintain the skill.
-  - Use during implementation and review.
+- [Application procedure](#application-procedure)
+  - Orders inventory, classification, renaming, and verification.
+  - Follow during implementation and review.
 - [Validation](#validation)
   - Names the smallest relevant mechanical and semantic proof.
   - Run before completing the task.
@@ -77,15 +77,15 @@ Does not apply to:
 - After: `#[wasm_bindgen] pub fn classify_extension_persistence_databases(...)`
 - TypeScript after: `classify_extension_persistence_databases(...)`
 
-## Application Checklist
+## Application procedure
 
-- [ ] Inventory callable `js_name` attributes in the requested scope.
-- [ ] Distinguish exported callables from properties and imports.
-- [ ] Remove callable renames and update every generated-binding consumer.
-- [ ] Remove aliases from generated-WASM imports and re-exports.
-- [ ] Check direct bindings and imports through local facade modules.
-- [ ] Keep behavior unchanged and preserve typed Rust/WASM boundaries.
-- [ ] Require the syntax-aware preflight inventory to be empty.
+1. Inventory callable `js_name` attributes in the requested scope.
+2. Distinguish exported callables from properties and imports.
+3. Remove callable renames and update every generated-binding consumer.
+4. Remove aliases from generated-WASM imports and re-exports.
+5. Check direct bindings and imports through local facade modules.
+6. Confirm behavior is unchanged and typed Rust/WASM boundaries remain intact.
+7. Require the syntax-aware preflight inventory to be empty.
 
 ## Validation
 

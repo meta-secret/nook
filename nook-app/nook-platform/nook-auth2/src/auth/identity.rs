@@ -429,6 +429,49 @@ impl IdentityRecord {
         Ok(())
     }
 
+    pub fn import_legacy_vault(
+        &mut self,
+        app_key: &AppKey,
+        store_id: StoreId,
+        reconciliation: &IdentityVaultDekReconciliation,
+    ) -> MultiDeviceResult<()> {
+        let existing = self
+            .members
+            .iter()
+            .find(|member| member.app_id == *app_key.app_id())
+            .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
+        if existing.auth_id != app_key.auth_id() || existing.public_key != app_key.public_key() {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "existing app id has different key material".to_owned(),
+            ));
+        }
+        let keys = VaultKeys {
+            secrets_key: app_key.decrypt_envelope(&reconciliation.secrets_envelope)?,
+            members_key: app_key.decrypt_envelope(&reconciliation.members_envelope)?,
+        };
+        let authorized_members = self
+            .members
+            .iter()
+            .filter(|member| reconciliation.authorized_auth_ids.contains(&member.auth_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !authorized_members
+            .iter()
+            .any(|member| member.app_id == *app_key.app_id())
+        {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "importing app key is not authorized for this vault".to_owned(),
+            ));
+        }
+        self.vault_deks.push(wrap_vault_keys_for_members(
+            &keys,
+            &authorized_members,
+            store_id,
+        )?);
+        self.control_epoch = self.control_epoch.saturating_add(1);
+        Ok(())
+    }
+
     /// Synthesize an identity from a legacy vault member + auth envelopes.
     pub fn synthesize_from_legacy_vault(
         label: impl Into<String>,

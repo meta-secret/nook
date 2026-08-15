@@ -1,5 +1,109 @@
 # Coding Bro — Default Agent Workflow
 
+## Relationships
+
+- [Nook System Architecture Specification](../ARCHITECTURE.md)
+  - Defines system-wide package ownership, dependency flow, storage, and execution boundaries.
+  - Read before changing a durable cross-component boundary.
+- [Agent Feature Ownership](../dynamic-skills/agent-feature-ownership.md)
+  - Defines the Agent Feature Ownership context used by this document.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [GitHub-Hosted Execution and Validation](../dynamic-skills/github-actions-only-validation.md)
+  - Defines the boundary between local formatting and hosted validation.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Pre-Push Hygiene](../dynamic-skills/pre-push-hygiene.md)
+  - Defines formatting and UI-demo checks required before every push.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Reference: Application Logging](../references/logging.md)
+  - Defines application, test, and CI logging and troubleshooting evidence.
+  - Consult when the task needs this operational reference.
+- [Nook Coding Rules & Golden Principles](../rules.md)
+  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
+  - Apply throughout implementation and review.
+- [AI Agent PR Statistics](agent-statistics.md)
+  - Defines the post-merge agent statistics record and publication workflow.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [CI / GitHub Actions Pipeline](ci-pipeline.md)
+  - Defines CI entry points, validation ownership, and hosted execution behavior.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Review Request Workflow](code-review.md)
+  - Defines the Review Request Workflow context used by this document.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Workbench Issue Management](issues.md)
+  - Defines focused issue ownership and durable Workbench scope records.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Cross-Package Changes](monorepo.md)
+  - Defines the Cross-Package Changes context used by this document.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Pull Request Workflow](pull-requests.md)
+  - Defines pull-request size, validation, readiness, review, and merge requirements.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Quality and Release](quality.md)
+  - Defines quality gates and the required response to check findings.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [GitHub-Hosted Remote Execution](remote-execution.md)
+  - Defines GitHub-hosted focused validation and remote execution.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Subagent Delegation](subagent-delegation.md)
+  - Defines the Subagent Delegation context used by this document.
+  - Apply when implementation or delivery reaches this workflow boundary.
+
+## Document map
+
+- [Overview](#overview)
+  - Establishes the default implementation and delivery workflow.
+  - Read before starting any coding task.
+- [PR-first mandate](#pr-first-mandate)
+  - Requires implementation work to begin with a deliverable pull-request path.
+  - Read before editing, branching, or defining task scope.
+- [Testing strategy — GitHub Actions only](#testing-strategy--github-actions-only)
+  - Routes product builds and tests to GitHub-hosted workers.
+  - Read before selecting validation for an implementation.
+  - [⛔ Pre-push hygiene — always format (the only required local action)](#-pre-push-hygiene--always-format-the-only-required-local-action)
+    - Requires host formatting and UI-demo checks before every push.
+    - Apply when preparing any pushable commit.
+  - [⛔ Format, push, execute on GitHub-hosted workers](#-format-push-execute-on-github-hosted-workers)
+    - Defines the commit, push, focused-hosted-task, and exact-head validation sequence.
+    - Read when an implementation iteration is ready for remote execution.
+- [Debug information — always check app logs](#debug-information--always-check-app-logs)
+  - Orders test output, static findings, and app logs as debugging evidence.
+  - Read after a hosted check or runtime behavior fails.
+- [How it works](#how-it-works)
+  - Describes the complete lifecycle from request interpretation through Workbench publication.
+  - Read for the rationale and required outcomes behind the command checklist.
+- [Commands](#commands)
+  - Provides the executable branch, validation, merge, and publication sequence.
+  - Use while delivering a concrete implementation task.
+  - [1 — Fetch](#1--fetch)
+    - Refreshes remote state before planning or branching.
+    - Run at task start and before final readiness checks.
+  - [2 — Branch](#2--branch)
+    - Creates an owned feature branch from current `origin/main`.
+    - Run before implementation edits.
+  - [4–6 — Format, push, execute remotely, and validate explicitly](#46--format-push-execute-remotely-and-validate-explicitly)
+    - Runs formatting locally and all substantial validation on hosted workers.
+    - Use for each coherent implementation revision.
+  - [7 — Fix loop (after any remote CI failure)](#7--fix-loop-after-any-remote-ci-failure)
+    - Requires log-based diagnosis, correction, and exact-head revalidation after failure.
+    - Use after every red hosted build.
+  - [5–7 — Push, open PR, monitor](#57--push-open-pr-monitor)
+    - Opens the PR and monitors applicable checks, review, and readiness.
+    - Use after the first coherent push and after each correction.
+  - [10 — Merge](#10--merge)
+    - Squash-merges only a current, reviewed, exact-head-ready pull request.
+    - Use after all applicable repository-owned gates pass.
+  - [11 — Publish Workbench records](#11--publish-workbench-records)
+    - Publishes the final issue, worklog, and delivery statistics.
+    - Use immediately after merge.
+- [Non-negotiables](#non-negotiables)
+  - Collects the branch, validation, review, ownership, and merge invariants.
+  - Read before deviating from the normal delivery sequence.
+- [Related docs](#related-docs)
+  - Routes to detailed pull-request, review, issue, and statistics workflows.
+  - Read when this checklist delegates a delivery responsibility.
+
+## Overview
+
 **System of record** for how every AI agent handles implementation tasks in this repository. The Cursor skill at [`.cursor/skills/coding-bro/SKILL.md`](../../.cursor/skills/coding-bro/SKILL.md) mirrors this doc for auto-invocation.
 
 Use this pipeline for **every coding request** unless the user explicitly wants a read-only answer, review-only feedback, or a question with no code changes.
@@ -95,14 +199,12 @@ Default PR-first loop:
 
 ### ⛔ Pre-push hygiene — always format (the only required local action)
 
-Before every push, run Loom pre-push **unconditionally**.
-
-Do not skip it for "tiny" edits.
-
-**`task loom:pre-push` is the only required local product action.**
-
-Do not run `task check`, `task ci:pr`, full suites, builds, or e2e as a
-merge/handoff gate. Those run exclusively on GitHub Actions.
+- Before every push, run Loom pre-push **unconditionally**.
+  - Do not skip it for "tiny" edits.
+- **`task loom:pre-push` is the only required local product action.**
+- Do not run `task check`, `task ci:pr`, full suites, builds, or e2e as a
+  merge or handoff gate.
+  - Those run exclusively on GitHub Actions.
 
 ```bash
 task loom:pre-push
@@ -283,22 +385,22 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
     - See [issues.md](issues.md) and [agent-statistics.md](agent-statistics.md).
 12. **Finish** — report the task duration after the implementation PR and Workbench records are published and any required performance PR is landed.
 
-When a feature has multiple planned slices, return to step 1 for the next ready
-issue after each merge.
+For a feature with multiple planned slices:
 
-Start every next slice from current `origin/main`.
-
-Finish only when the full feature acceptance criteria are complete.
+1. Return to step 1 for the next ready issue after each merge.
+2. Start the next slice from current `origin/main`.
+3. Finish only when the full feature acceptance criteria are complete.
 
 See
 [pull-requests.md § Pull request size and modularity](pull-requests.md#pull-request-size-and-modularity).
 
-All branch, PR, review, check, and merge actions in this flow apply only to the
-current task's owned feature and focused issue set.
+Ownership boundary: current task's owned feature and focused issue set.
 
-Do not take over a related task merely because it has open comments or failing
-checks. Require an explicit handoff first. See
-[agent-feature-ownership.md](../dynamic-skills/agent-feature-ownership.md).
+- Keep every branch, PR, review, check, and merge action inside this boundary.
+- Do not take over a related task because it has open comments or failing
+  checks.
+  - Require an explicit handoff first.
+  - See [Agent feature ownership](../dynamic-skills/agent-feature-ownership.md).
 
 For `agent-implement.yml` PRs, the `## Ownership` section records the handoff.
 
@@ -350,25 +452,20 @@ Use a descriptive branch name (`feat/…`, `fix/…`, `chore/…`).
 
 ### 4–6 — Format, push, execute remotely, and validate explicitly
 
-GitHub Actions is the agent execution environment for lint, tests, coverage,
-builds, and e2e.
-
-Format on the host with Loom, commit and push, use focused `task remote` jobs,
-then explicitly validate when the exact head is ready.
-
-Run `task pr:review-local` on a coherent local head before the first
-owner-authored push.
-
-For a harness-created PR, run it after handoff instead.
-
-When the coherent head is ready, run `task pr:validate PR=<number>`.
-
-It immediately dispatches complete validation. It then requests exact-head
-Codex review. Fix actionable feedback that arrives while checks run.
-
-If no review feedback exists when checks finish, continue without waiting.
-
-Do not request or wait for other external reviewers.
+- GitHub Actions is the execution environment for lint, tests, coverage,
+  builds, and e2e.
+- Delivery sequence:
+  1. Format on the host with Loom.
+  2. Commit and push.
+  3. Use focused `task remote` jobs when useful.
+  4. Run `task pr:validate PR=<number>` when the exact head is ready.
+- Review sequence:
+  - Run `task pr:review-local` before the first owner-authored push.
+  - For a harness-created PR, run it after handoff instead.
+  - Complete validation requests exact-head Codex review.
+  - Fix actionable feedback that arrives while checks run.
+  - If no feedback exists when checks finish, continue without waiting.
+  - Do not request or wait for other external reviewers.
 
 Follow [code-review.md](code-review.md).
 
@@ -457,11 +554,14 @@ Squash merge only. See [rules.md §6](../rules.md#6-git--pull-request-workflow).
 
 ### 11 — Publish Workbench records
 
-After the implementation PR merges, follow [issues.md](issues.md) and [agent-statistics.md](agent-statistics.md).
+After the implementation PR merges:
 
-The task-start plan must already be published.
-
-Update the associated issue and add a worklog linked to that plan. Summarize progress, implementation problems, decisions, validation, and remaining work.
+1. Follow [Issues](issues.md) and [Agent statistics](agent-statistics.md).
+2. Confirm the task-start plan is already published.
+3. Update the associated issue.
+4. Add a worklog linked to the plan.
+   - Summarize progress, implementation problems, decisions, validation, and
+     remaining work.
 
 Create the YAML from current Nook `main`:
 
@@ -469,7 +569,8 @@ Create the YAML from current Nook `main`:
 - compare it with comparable prior records
 - publish it to `meta-secret/nook-workbench` as `stats/ai-agent/<pr>.yaml`
 
-Do not wait for post-merge Main. Any performance fix belongs in a separate normal Nook PR.
+- Do not wait for post-merge Main.
+- Put any performance fix in a separate normal Nook PR.
 
 ## Non-negotiables
 

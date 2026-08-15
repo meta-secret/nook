@@ -26,9 +26,9 @@
 - [Trigger](#trigger)
   - Defines the conditions that activate this skill.
   - Read while classifying the requested task.
-- [Checklist](#checklist)
-  - Lists the checks needed for a compliant result.
-  - Use before completing the task.
+- [Application procedure](#application-procedure)
+  - Orders discovery, creation, lifecycle, and publication actions.
+  - Follow while organizing feature work.
 - [Safety](#safety)
   - Defines security and operational boundaries for application.
   - Read before making a risky or externally visible change.
@@ -41,38 +41,44 @@ Issues or chat history.
 
 ## Preferred pattern
 
-Create one `issues/<feature>/` directory in
-`meta-secret/nook-workbench`. Its `README.md` is the feature boundary and owns
-the goal, current state, shared decisions, references, and issue index. Each
-independently deliverable slice is a focused Markdown issue beside it.
+Use one durable hierarchy:
 
-Feature directories replace milestones and aggregate issues. Focused files
-replace sub-issues. Worklogs record what actually happened during execution.
+- `issues/<feature>/` is the feature boundary in
+  `meta-secret/nook-workbench`.
+  - Its `README.md` owns the goal, current state, shared decisions, references,
+    and issue index.
+  - Each independently deliverable slice is a focused Markdown issue beside
+    it.
+- Feature directories replace milestones and aggregate issues.
+- Focused files replace sub-issues.
+- Worklogs record what actually happened during execution.
 
 ## Trigger
 
 Apply whenever the user asks to create, organize, or plan issue-level work for a
 Nook feature.
 
-## Checklist
+## Application procedure
 
-- [ ] Search existing Workbench issues and worklogs before creating anything.
-- [ ] Choose one stable, lowercase kebab-case feature directory.
-- [ ] Create or update the feature `README.md` from the Workbench template.
-- [ ] Record product decisions, open questions, current state, and references.
-- [ ] Create focused issue files with testable acceptance criteria.
-- [ ] Link dependencies explicitly; order the feature index by execution need.
-- [ ] Leave drafts `status: proposed` and `automation: manual`.
-- [ ] Set `status: ready` only when decisions and acceptance criteria are
-      sufficient to start.
-- [ ] Set `automation: agent` only when automated execution is explicitly
-      intended.
-- [ ] Run Workbench validation and verify the rendered files on `main`.
+1. Search existing Workbench issues and worklogs before creating anything.
+2. Choose one stable, lowercase kebab-case feature directory.
+3. Create or update the feature `README.md` from the Workbench template.
+4. Record product decisions, open questions, current state, and references.
+5. Create focused issue files with testable acceptance criteria.
+6. Link dependencies explicitly and order the feature index by execution need.
+7. Assign lifecycle state:
+   - Leave drafts `status: proposed` and `automation: manual`.
+   - Set `status: ready` only when decisions and acceptance criteria are
+     sufficient to start.
+   - Set `automation: agent` only when automated execution is explicitly
+     intended.
+8. Run Workbench validation and verify the rendered files on `main`.
 
 ## Safety
 
-Do not flatten multiple features into `issues/backlog`, erase historical
-findings, or copy prompts, chats, secrets, credentials, vault data, private user
-information, environment values, or raw logs.
+- Do not flatten multiple features into `issues/backlog`.
+- Do not erase historical findings.
+- Do not copy prompts, chats, secrets, credentials, vault data, private user
+  information, environment values, or raw logs.
 
 Full workflow: [workflows/issues.md](../workflows/issues.md).

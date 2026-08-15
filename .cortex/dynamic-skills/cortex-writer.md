@@ -5,6 +5,9 @@
 - [Cortex document navigation](cortex-document-map.md)
   - Defines concise navigation summaries as part of every Cortex document.
   - Apply whenever headings, relationships, or document maps change.
+- [Cortex structured articles](cortex-article-structure.md)
+  - Defines when prose, rules, procedures, and reference structures apply.
+  - Apply whenever sentence-level cleanup changes an article body.
 - [Cortex consistency](cortex-consistency.md)
   - Requires readable edits to remain current and non-contradictory.
   - Apply whenever durable Cortex guidance changes.
@@ -78,6 +81,10 @@ Split the idea before writing the final prose.
 3. Use a bullet list when several units share one topic.
 4. Use a nested list only when a parent item owns clear children.
 5. Keep table cells short. Move long detail under the table or into bullets.
+
+Use [Cortex structured articles](cortex-article-structure.md) to choose the body
+shape. This rule governs sentence complexity. The structured-article rule
+governs semantic hierarchy.
 
 Checklist for every new or edited `.cortex` sentence:
 
@@ -154,16 +161,15 @@ Full rewritten example:
 
 ## Validation
 
-Review the diff for sentence length and branching clauses.
-
-A reviewer should be able to extract each rule without re-parsing a compound
-sentence.
-
-Docs-only captures need link checks and a short self-review against the
-checklist above.
-
-Also run the consistency GC in
-[cortex-consistency.md](cortex-consistency.md) for the touched topic.
-
-For implementation tasks that include `.cortex` edits, run `task loom:pre-push`,
-commit and push, then use the normal hosted validation path.
+- Review the diff for sentence length and branching clauses.
+  - A reviewer should be able to extract each rule without re-parsing a
+    compound sentence.
+- For docs-only captures:
+  - run link checks; and
+  - self-review against the checklist above.
+- Run the consistency GC in
+  [Cortex consistency](cortex-consistency.md) for the touched topic.
+- For implementation tasks that include `.cortex` edits:
+  1. run `task loom:pre-push`;
+  2. commit and push; and
+  3. use the normal hosted validation path.

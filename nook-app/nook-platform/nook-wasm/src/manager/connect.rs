@@ -323,10 +323,6 @@ impl NookVaultManager {
         }
 
         self.purge_legacy_plaintext_search_catalog().await?;
-        if let Err(error) = self.resume_pending_security_epoch_rotation(&identity).await {
-            self.reset_vault_session();
-            return Err(error.into());
-        }
         let records = VerifiedVaultAccessFlow::Connect
             .complete(
                 self.get_records(),
@@ -375,7 +371,6 @@ impl NookVaultManager {
         let staged_genesis = pending_cleanup
             .as_ref()
             .is_some_and(PendingSimpleGenesis::is_staged);
-        self.validate_existing_vault_import_handoff().await?;
         if !staged_genesis {
             self.ensure_identity_after_connect(identity).await?;
         }
