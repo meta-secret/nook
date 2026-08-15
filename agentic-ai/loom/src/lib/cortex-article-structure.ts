@@ -59,7 +59,7 @@ type AuditArticleArgs = AuditDocumentArgs & {
 
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
 const PROCEDURE_HEADING =
-  /\b(procedure|runbook|steps|ordered delivery|delivery sequence)\b/i;
+  /\b(procedures?|runbooks?|steps|ordered deliver(?:y|ies)|delivery sequences?)\b/i;
 
 export function auditCortexArticleStructure(
   args: AuditCortexArticleStructureArgs,
@@ -274,11 +274,7 @@ function auditArticle(args: AuditArticleArgs): void {
 }
 
 function isVisibleArticleNode(node: RootContent): boolean {
-  return (
-    node.type !== 'heading' &&
-    node.type !== 'definition' &&
-    !isInvisibleHtmlComment(node)
-  );
+  return node.type !== 'heading' && !isTransparentArticleNode(node);
 }
 
 function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
@@ -287,7 +283,7 @@ function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
     if (node.type === 'heading') {
       break;
     }
-    if (isInvisibleHtmlComment(node)) {
+    if (isTransparentArticleNode(node)) {
       continue;
     }
     if (node.type !== 'paragraph') {
@@ -306,6 +302,10 @@ function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
       addFinding(findingArgs);
     }
   }
+}
+
+function isTransparentArticleNode(node: RootContent): boolean {
+  return node.type === 'definition' || isInvisibleHtmlComment(node);
 }
 
 function isInvisibleHtmlComment(node: RootContent): boolean {

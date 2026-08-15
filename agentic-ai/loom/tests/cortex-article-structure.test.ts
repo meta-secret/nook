@@ -144,6 +144,10 @@ test('recognizes qualified procedure and runbook headings', () => {
     'Release steps',
     'Staged delivery sequence',
     'Ordered delivery for production',
+    'Recovery procedures',
+    'Deployment runbooks',
+    'Delivery sequences for recovery',
+    'Ordered deliveries for production',
   ];
   for (const heading of headings) {
     const anchor = heading.toLowerCase().replaceAll(/[^a-z]+/g, '-');
@@ -372,6 +376,44 @@ test('does not count a link definition as article content', () => {
   const document = makeDocument(documentArgs);
   expect(audit([document]).map((finding) => finding.code)).toContain(
     CortexArticleFindingCode.EmptyArticle,
+  );
+});
+
+test('treats link definitions as transparent to dense prose runs', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/defined-prose.md',
+    content: `# Defined prose
+
+## Relationships
+
+- None.
+
+## Document map
+
+- [Explanation](#explanation)
+  - Explains the topic.
+  - Read for rationale.
+
+## Explanation
+
+First paragraph.
+
+[first]: https://example.com/first
+
+Second paragraph.
+
+[second]: https://example.com/second
+
+Third paragraph.
+
+[third]: https://example.com/third
+
+Fourth paragraph.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document]).map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.DenseArticle,
   );
 });
 
