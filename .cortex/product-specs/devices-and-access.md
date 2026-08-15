@@ -105,6 +105,9 @@ It is never shown as stored on one physical laptop.
   - Retain every member and vault grant during the merge.
   - Normalize staged marker base and candidate directories in the same
     transaction so completion compares migrated snapshots.
+  - Trigger staged snapshot normalization when either the live directory or
+    staged base contains legacy duplicate ownership. Candidate-only duplicate
+    ownership is a new invalid state and must fail closed.
   - Repeat that marker-aware normalization inside every directory write
     transaction, including authenticated handoff and staged genesis cleanup, so
     a pre-upgrade tab cannot race the initial migration.

@@ -136,6 +136,9 @@ An identity referenced by `pending_simple_genesis_v1` takes precedence over
 the selection so a resumable genesis marker cannot become orphaned.
 When the marker is staged, the same transaction normalizes its base and
 candidate directory snapshots before rewriting the live directory.
+Cleanup repeats that snapshot migration when either the live directory or the
+staged base contains legacy duplicate ownership. Duplicate ownership introduced
+only by the candidate remains invalid and is rejected.
 Every later directory update repeats this marker-aware migration within its
 write transaction. Authenticated handoff and staged genesis cleanup preserve the
 pending identity inside their transactions. A concurrent pre-upgrade writer

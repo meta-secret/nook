@@ -28,7 +28,12 @@ async fn publish_staged_identity(
         })
         .transpose()?
         .unwrap_or_else(nook_core::IdentityDirectory::empty);
-    let migrate_staged = current.has_legacy_duplicate_app_key_ownership();
+    let migrate_staged = current.has_legacy_duplicate_app_key_ownership()
+        || pending.staged_identity().is_some_and(|staged| {
+            staged
+                .base_directory
+                .has_legacy_duplicate_app_key_ownership()
+        });
     let (current, _) = migrate_directory(current, Some(&pending.identity_id))?;
     if migrate_staged {
         migrate_staged_genesis_directories(pending)?;

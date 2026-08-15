@@ -350,6 +350,76 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    async fn genesis_cleanup_normalizes_stale_staged_snapshots_after_live_migration()
+    -> Result<(), NookError> {
+        super::super::clear_identity_directory_for_test().await?;
+        let app_key = nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;
+        let mut legacy = nook_core::IdentityDirectory::empty();
+        let pending_identity_id = legacy
+            .create_identity("Pending", &app_key, None)
+            .map_err(super::super::map_domain_error)?;
+        let duplicate_id = legacy
+            .create_identity("Concurrent duplicate", &app_key, None)
+            .map_err(super::super::map_domain_error)?;
+        legacy
+            .select(&duplicate_id)
+            .map_err(super::super::map_domain_error)?;
+        let store_id = nook_core::generate_store_id().map_err(super::super::map_domain_error)?;
+        let mut candidate = legacy.clone();
+        let _ = candidate
+            .open_or_generate_vault_dek_for_identity(
+                &pending_identity_id,
+                &app_key,
+                store_id.clone(),
+            )
+            .map_err(super::super::map_domain_error)?;
+        let pending = PendingSimpleGenesis {
+            store_id,
+            identity_id: pending_identity_id.clone(),
+            created_at: nook_core::IsoTimestamp::parse("2026-08-15T00:00:00.000Z")
+                .map_err(|error| NookError::Database(error.to_string()))?,
+            event_state: PendingSimpleGenesisEvent::AwaitingEvent,
+            flow: PendingSimpleGenesisFlow::Staged(StagedSimpleGenesisIdentity {
+                base_directory: legacy.clone(),
+                directory: candidate,
+            }),
+        };
+        let (normalized, _) = legacy
+            .migrate_legacy_duplicate_app_key_ownership_preserving(&pending_identity_id)
+            .map_err(super::super::map_domain_error)?;
+        crate::storage::indexed_db::idb_put_string(
+            super::super::IDENTITY_DIRECTORY_KEY,
+            &serde_json::to_string(&normalized)
+                .map_err(|error| NookError::Serialization(error.to_string()))?,
+        )
+        .await?;
+        crate::storage::indexed_db::idb_put_string(
+            PENDING_SIMPLE_GENESIS_KEY,
+            &encode_pending_simple_genesis(&pending)?,
+        )
+        .await?;
+
+        super::super::clear_pending_simple_genesis(super::super::SimpleGenesisCompletion::Staged {
+            pending: &pending,
+            signing_seed: "staged-signing-seed",
+        })
+        .await?;
+
+        let published = super::super::load_identity_directory().await?;
+        assert_eq!(published.identities().len(), 1);
+        assert_eq!(published.selected()?.identity_id, pending_identity_id);
+        assert!(published.selected()?.owns_vault(&pending.store_id));
+        assert!(
+            super::super::pending_simple_genesis_for_store(pending.store_id.as_str())
+                .await?
+                .is_none()
+        );
+        crate::storage::indexed_db::idb_delete_key(crate::storage::event_db::SIGNING_SEED_KEY)
+            .await?;
+        super::super::clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
     async fn unchanged_base_rejects_invalid_staged_candidate() -> Result<(), NookError> {
         super::super::clear_identity_directory_for_test().await?;
         let selected_key = nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;
