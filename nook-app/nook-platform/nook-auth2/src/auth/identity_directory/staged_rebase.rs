@@ -29,20 +29,33 @@ impl IdentityDirectory {
             return Err(Self::staged_identity_conflict(identity_id));
         }
 
-        let mut identities = self.identities.clone();
-        match (
+        let identities = match (
             base_target,
-            identities
+            self.identities
                 .iter()
                 .position(|record| &record.identity_id == identity_id),
         ) {
-            (Some(_), Some(index)) if identities[index] == *target => {}
-            (Some(base_record), Some(index)) if identities[index] == *base_record => {
-                identities[index] = target.clone();
-            }
-            (None, None) => identities.push(target.clone()),
+            (Some(_), Some(index)) if self.identities[index] == *target => self.identities.clone(),
+            (Some(base_record), Some(index)) if self.identities[index] == *base_record => self
+                .identities
+                .iter()
+                .enumerate()
+                .map(|(current_index, record)| {
+                    if current_index == index {
+                        target.clone()
+                    } else {
+                        record.clone()
+                    }
+                })
+                .collect(),
+            (None, None) => self
+                .identities
+                .iter()
+                .cloned()
+                .chain(std::iter::once(target.clone()))
+                .collect(),
             _ => return Err(Self::staged_identity_conflict(identity_id)),
-        }
+        };
         let rebased = Self {
             identities,
             selection: self.selection.clone(),
