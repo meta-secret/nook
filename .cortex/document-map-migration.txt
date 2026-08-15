@@ -1,25 +1,12 @@
 # Temporary shrinking ledger for the Cortex document-navigation migration.
 # Remove a path in the same PR that makes that document compliant.
 .cortex/AGENTS.md
-.cortex/ARCHITECTURE.md
 .cortex/design-docs/identity-vault-architecture.md
 .cortex/design-docs/vault-architecture-modes.md
 .cortex/design-docs/vault-event-log.md
 .cortex/dynamic-skills/issue-scope-management.md
-.cortex/product-specs/authenticator-items.md
-.cortex/product-specs/browser-extension.md
-.cortex/product-specs/credit-card-items.md
-.cortex/product-specs/decentralized-auth.md
 .cortex/product-specs/devices-and-access.md
-.cortex/product-specs/file-attachments.md
-.cortex/product-specs/index.md
-.cortex/product-specs/monorepo-setup.md
 .cortex/product-specs/password-envelope.md
-.cortex/product-specs/password-manager.md
-.cortex/product-specs/secure-notes.md
-.cortex/product-specs/slip39-recovery.md
-.cortex/product-specs/vault-app-isolation.md
-.cortex/rules.md
 .cortex/workflows/coding-bro.md
 .cortex/workflows/issues.md
 .cortex/workflows/pull-requests.md
