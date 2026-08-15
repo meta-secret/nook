@@ -42,15 +42,8 @@
 .cortex/references/loom-tools.md
 .cortex/references/rust-wasm.md
 .cortex/rules.md
-.cortex/workflows/agent-statistics.md
 .cortex/workflows/ci-pipeline.md
-.cortex/workflows/code-review.md
 .cortex/workflows/coding-bro.md
-.cortex/workflows/dynamic-skills.md
 .cortex/workflows/issues.md
-.cortex/workflows/main-build-statistics.md
-.cortex/workflows/monorepo.md
 .cortex/workflows/pull-requests.md
 .cortex/workflows/quality.md
-.cortex/workflows/remote-execution.md
-.cortex/workflows/subagent-delegation.md

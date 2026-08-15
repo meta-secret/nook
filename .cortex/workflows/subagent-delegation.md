@@ -17,7 +17,7 @@
 - [Decision rule](#decision-rule)
   - States the durable principles and invariants for this area.
   - Use while making design and review decisions.
-- [Do not delegate deterministic steps](#do-not-delegate-deterministic-steps)
+- [Deterministic work belongs to tools](#deterministic-work-belongs-to-tools)
   - Separates mechanical Loom or Task work from agent-shaped reasoning.
   - Read before assigning a deterministic step to a worker.
 - [Delivery owner](#delivery-owner)
@@ -59,14 +59,10 @@
 
 ## Overview
 
-Use this workflow when a task may contain independent reasoning or
-implementation units.
-
-One task-owning agent remains the delivery owner.
-
-Child workers are bounded contributors.
-
-They do not become independent delivery owners.
+- Use this workflow when a task may contain independent reasoning or
+  implementation units.
+- Keep one task-owning agent as the delivery owner.
+- Treat child workers as bounded contributors, not independent delivery owners.
 
 ## Decision rule
 
@@ -79,18 +75,14 @@ A capable agent environment MUST delegate when all of these conditions hold:
 5. Each work unit has its own acceptance evidence.
 6. The parent can define the join before workers start.
 
-The immutable baseline is normally an exact Git commit.
+- Use an exact Git commit as the normal immutable baseline.
+  - Do not use a movable branch name as a worker baseline.
+- Record the delegation decision in the task plan.
+- If the host has no bounded worker capability:
+  - execute the work serially; and
+  - do not invent an undocumented runner.
 
-Do not use branch names as worker baselines when the branch can move.
-
-The delivery owner records the delegation decision in the task plan.
-
-If the host has no bounded worker capability, the owner executes the work
-serially.
-
-The owner must not invent an undocumented runner.
-
-## Do not delegate deterministic steps
+## Deterministic work belongs to tools
 
 Simple does not mean agent-shaped.
 
@@ -162,9 +154,8 @@ Do not create a second worker for the same task and attempt.
 
 A retry is a new attempt of the same logical task.
 
-The worker returns a bounded result to the parent.
-
-The result should contain:
+- The worker returns a bounded result to the parent.
+- The result contains:
 
 - status;
 - summary;
@@ -174,9 +165,8 @@ The result should contain:
 - risks;
 - notes for the parent.
 
-The parent validates the result against the current task state.
-
-The parent does not merge worker conclusions blindly.
+- The parent validates the result against current task state.
+- The parent does not merge worker conclusions blindly.
 
 ## Safe delegation patterns
 
@@ -208,14 +198,13 @@ lower-layer contract is stable.
 
 ### Independent CI failures
 
-Two or more unrelated failed job families MUST use one diagnostic worker per
-family.
-
-Workers inspect exact-head evidence.
-
-The delivery owner correlates root causes and implements the fixes.
-
-Workers do not push or trigger replacement checks.
+- Two or more unrelated failed job families MUST use one diagnostic worker per
+  family.
+- Workers inspect exact-head evidence.
+- The delivery owner:
+  - correlates root causes; and
+  - implements the fixes.
+- Workers do not push or trigger replacement checks.
 
 ### Review findings
 
@@ -254,21 +243,17 @@ Keep one owner when work is:
 - changing shared GitHub or Workbench state;
 - reading secrets that are not required by the child task.
 
-Concurrent writers must not share one worktree.
-
-Write-capable workers need isolated worktrees or disposable workspaces.
-
-Their file scopes must be disjoint.
-
-The parent still owns integration.
+- Concurrent writers must not share one worktree.
+- Write-capable workers need isolated worktrees or disposable workspaces.
+- Their file scopes must be disjoint.
+- The parent still owns integration.
 
 ## Machine-managed workflows
 
 Repeated and stable graphs should become compiled Loom workflows.
 
-Each workflow is a fixed TypeScript definition.
-
-The definition owns:
+- Each workflow is a fixed TypeScript definition.
+- The definition owns:
 
 - task IDs;
 - dependencies;
@@ -279,34 +264,22 @@ The definition owns:
 - join rules;
 - skipped-task reporting.
 
-Do not accept workflow topology from YAML.
-
-Do not generate workflow topology from prompts or Cortex prose.
-
-Do not ask an agent to invent tasks or edges at runtime.
-
-Runtime input may select a reviewed catalog entry.
-
-It may bind the exact source commit and bounded scalar inputs.
-
-It must not change the compiled topology.
-
-Do not infer parallelism from collection order.
-
-Only reachable tasks execute.
-
-Every declared but unreached branch receives an explicit skipped result.
-
-Local runs use Loom's append-only event journal as their run authority.
-
-Hive-backed runs use Neo4j as their durable lifecycle authority.
-
-Do not run two authoritative schedulers for one workflow.
-
-The first compiled workflow is `cortex-full-garbage-collection`.
-
-It contains one fixed parallel evidence wave, one join, one synthesis task, and
-the existing mechanical Cortex audit leaf.
+- Do not accept workflow topology from YAML, prompts, or Cortex prose.
+- Do not ask an agent to invent tasks or edges at runtime.
+- Runtime input may:
+  - select a reviewed catalog entry; and
+  - bind the exact source commit and bounded scalar inputs.
+- Runtime input must not change compiled topology.
+- Do not infer parallelism from collection order.
+- Execute only reachable tasks.
+  - Give every declared but unreached branch an explicit skipped result.
+- Use one lifecycle authority:
+  - local runs use Loom's append-only event journal;
+  - Hive-backed runs use Neo4j; and
+  - no workflow runs two authoritative schedulers.
+- The first compiled workflow is `cortex-full-garbage-collection`.
+  - It contains one fixed parallel evidence wave, one join, one synthesis task,
+    and the existing mechanical Cortex audit leaf.
 
 The architecture boundary is defined in
 [agent-workflow-orchestration.md](../design-docs/agent-workflow-orchestration.md).
