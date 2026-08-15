@@ -1,5 +1,64 @@
 # Identity, App Keys, Passkeys, and Vault DEKs
 
+## Relationships
+
+- [Auth Providers, Sync, and Login UX](auth-providers.md)
+  - Defines provider credential persistence, login UX, and provider transport boundaries.
+  - Read before changing the related architecture or security boundary.
+- [Vault Event Log](vault-event-log.md)
+  - Defines immutable vault events, ordering, concurrency, and provider synchronization.
+  - Read before changing the related architecture or security boundary.
+- [Vault Session, Lock, and Multi-Vault Model](vault-session-and-lock.md)
+  - Defines vault sessions, unlock, lock semantics, and multi-vault state.
+  - Read before changing the related architecture or security boundary.
+- [Browser Extension Product Spec](../product-specs/browser-extension.md)
+  - Defines the companion extension boundary, approval, authentication surfaces, and storage rules.
+  - Read when this document touches the related product behavior or user flow.
+- [Devices & access](../product-specs/devices-and-access.md)
+  - Defines identity, device protection evidence, onboarding, and verified vault grants.
+  - Read when this document touches the related product behavior or user flow.
+
+## Document map
+
+- [Overview](#overview)
+  - States the architecture decision, current status, and identity-first direction.
+  - Read before changing identity, vault, device, or passkey ownership.
+- [Normative vocabulary](#normative-vocabulary)
+  - Separates people, identities, passkeys, app keys, vaults, providers, and devices.
+  - Read when naming domain entities or defining their authority.
+- [Domain map](#domain-map)
+  - Shows ownership and authorization relationships among identity-domain entities.
+  - Read when tracing which entity creates, wraps, grants, or stores a key.
+- [Identity domain](#identity-domain)
+  - Defines identity records, app installations, and local evidence boundaries.
+  - Read when implementing identity discovery, enrollment, or device labeling.
+  - [Local directory phase](#local-directory-phase)
+    - Documents the current browser-local identity directory and migration boundary.
+    - Read when changing local identity persistence or reconciliation.
+- [DEK ownership](#dek-ownership)
+  - Assigns vault DEK creation and grant authority to identities.
+  - Read when changing vault creation, membership, or key wrapping.
+- [Vault domain](#vault-domain)
+  - Defines vault content as subordinate to identity-owned authorization.
+  - Read when changing vault metadata, grants, providers, or projections.
+- [Passkey locality](#passkey-locality)
+  - Keeps passkey portability claims within browser-reported evidence.
+  - Read when presenting or persisting passkey and device facts.
+- [Onboarding](#onboarding)
+  - Sequences identity selection before vault creation and provider setup.
+  - Read when changing onboarding or first-vault flows.
+- [Browser extension boundary](#browser-extension-boundary)
+  - Treats the extension as an installation with its own app identity and key.
+  - Read when pairing, authorizing, or labeling extension access.
+- [Invariants](#invariants)
+  - Collects the non-negotiable identity, key, and evidence constraints.
+  - Read before accepting an architecture or migration design.
+- [Related records](#related-records)
+  - Routes to product and architecture records that refine this model.
+  - Read when work crosses identity, access, extension, or vault-event boundaries.
+
+## Overview
+
 **Status:** Architecture decision in implementation.
 The local identity directory and identity-owned DEKs are implemented.
 Replicated identity control remains an active delivery target.
