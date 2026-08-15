@@ -489,14 +489,17 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
         device_id: nook_core::DeviceId::parse("abcd1234ef567890")?,
     };
     let old_secrets = nook_core::SymmetricKey::parse(&device.secrets_key)?;
+    let new_keys = nook_core::generate_vault_keys()?;
     let (new_secrets, _new_members) =
         device
             .session
             .rotate_security_epoch(VaultSecurityEpochRotationInput {
                 trigger,
+                new_keys: &new_keys,
                 user_records: &user_records,
                 old_secrets_key: &old_secrets,
                 members_records: &[],
+                rotated_meta_records: Vec::new(),
                 rewrapped_password_entries: Vec::new(),
                 created_at: TS,
                 provider_id: Some("github"),

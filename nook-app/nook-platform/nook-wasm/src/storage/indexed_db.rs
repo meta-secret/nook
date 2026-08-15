@@ -495,7 +495,7 @@ pub(crate) async fn save_secret_search_catalog_buckets(
     Ok(())
 }
 
-async fn read_string_preferring(
+pub(crate) async fn read_string_preferring(
     store: &rexie::Store,
     preferred_key: &str,
     legacy_key: &str,

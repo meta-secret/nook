@@ -6,8 +6,8 @@ use crate::vault_wire::{IsoTimestamp, Sha256Hex};
 use crate::{
     AppendEventInput, Database, EventId, LocalEventStore, ObservedHeads, SigningIdentity,
     StoredSecretRecord, VaultCrypto, VaultMetaState, VaultOperation, VaultProjection,
-    build_members_records, build_signed_event, project_vault, resolve_member_roster,
-    rotate_vault_keys_with_secrets, sha256_hex, union_remote_events,
+    build_members_records, build_signed_event, project_vault, reencrypt_user_secrets_for_epoch,
+    resolve_member_roster, sha256_hex, union_remote_events,
 };
 
 /// In-memory event-log session state shared by WASM adapters and integration tests.
@@ -23,9 +23,11 @@ pub struct VaultEventSession {
 
 pub struct VaultSecurityEpochRotationInput<'a> {
     pub trigger: VaultOperation,
+    pub new_keys: &'a crate::VaultKeys,
     pub user_records: &'a [StoredSecretRecord],
     pub old_secrets_key: &'a crate::SymmetricKey,
     pub members_records: &'a [StoredSecretRecord],
+    pub rotated_meta_records: Vec<StoredSecretRecord>,
     pub rewrapped_password_entries: Vec<crate::PasswordUnlockEntry>,
     pub created_at: &'a str,
     pub provider_id: Option<&'a str>,
@@ -142,31 +144,34 @@ impl VaultEventSession {
     ) -> VaultResult<(String, String)> {
         let VaultSecurityEpochRotationInput {
             trigger,
+            new_keys,
             user_records,
             old_secrets_key,
             members_records,
+            rotated_meta_records,
             rewrapped_password_entries,
             created_at,
             provider_id,
         } = input;
         let trigger_id = self.append_operations(vec![trigger], created_at, provider_id)?;
         trigger_id.as_str().clone_into(&mut self.key_epoch);
-        let (new_keys, secrets) = rotate_vault_keys_with_secrets(user_records, old_secrets_key)?;
+        let secrets =
+            reencrypt_user_secrets_for_epoch(user_records, old_secrets_key, &new_keys.secrets_key)?;
         let members_checkpoint_hash =
             Self::members_checkpoint_hash(members_records, &new_keys.members_key)?;
         self.append_operations(
             vec![VaultOperation::EpochCheckpoint {
                 secrets,
                 members_checkpoint_hash,
-                rotated_meta_records: Vec::new(),
+                rotated_meta_records,
                 password_entries: crate::EpochPasswordState::Replace(rewrapped_password_entries),
             }],
             created_at,
             provider_id,
         )?;
         Ok((
-            new_keys.secrets_key.into_inner(),
-            new_keys.members_key.into_inner(),
+            new_keys.secrets_key.as_str().to_owned(),
+            new_keys.members_key.as_str().to_owned(),
         ))
     }
 }

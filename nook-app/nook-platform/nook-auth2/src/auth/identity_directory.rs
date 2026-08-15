@@ -437,6 +437,13 @@ impl IdentityDirectory {
         self.selection = IdentitySelection::Empty;
     }
 
+    /// Permanently reject one installation key discovered outside a readable directory.
+    pub fn retire_app_id(&mut self, app_id: crate::AppId) {
+        if !self.retired_app_ids.contains(&app_id) {
+            self.retired_app_ids.push(app_id);
+        }
+    }
+
     fn ensure_app_key_active(&self, app_key: &AppKey) -> MultiDeviceResult<()> {
         if self.retired_app_ids.contains(app_key.app_id()) {
             return Err(MultiDeviceError::RetiredAppKey);

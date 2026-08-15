@@ -8,6 +8,10 @@ use super::{
     remove_outbox_entry, save_key_epoch, write_local_folder_event_files,
 };
 
+fn outbox_event_is_current(local_ids: Option<&BTreeSet<EventId>>, event_id: &EventId) -> bool {
+    local_ids.is_none_or(|ids| ids.contains(event_id))
+}
+
 impl NookVaultManager {
     fn projected_epoch_keys(
         meta: &nook_core::VaultMetaState,
@@ -24,7 +28,7 @@ impl NookVaultManager {
         })
     }
 
-    async fn adopt_projected_security_epoch(
+    pub(in crate::manager) async fn adopt_projected_security_epoch(
         &mut self,
         projection: &nook_core::VaultProjection,
     ) -> Result<(), NookError> {
@@ -214,6 +218,17 @@ impl NookVaultManager {
         let mut remote_ids = self.list_current_provider_event_ids().await?;
         self.guard_current_provider_writable_for_active_store(&remote_ids)
             .await?;
+        let local_ids = if self.vault.store_id.is_empty() {
+            None
+        } else {
+            Some(
+                load_local_event_store(&self.vault.store_id)
+                    .await?
+                    .event_ids()
+                    .into_iter()
+                    .collect::<BTreeSet<_>>(),
+            )
+        };
         let mut pending = load_outbox(&provider_id)
             .await?
             .into_iter()
@@ -221,6 +236,10 @@ impl NookVaultManager {
             .collect::<Result<Vec<_>, NookError>>()?;
         nook_core::order_remote_events_for_visibility(&mut pending)?;
         for (event_id, bytes) in pending {
+            if !outbox_event_is_current(local_ids.as_ref(), &event_id) {
+                remove_outbox_entry(&provider_id, event_id.as_str()).await?;
+                continue;
+            }
             // Always put-if-absent: a listed remote name may be unreadable junk.
             // Only drop the outbox row after a successful idempotent publish.
             self.put_current_provider_event_if_absent(&event_id, &bytes)
@@ -506,6 +525,16 @@ mod tests {
         let resolved = NookVaultManager::projected_epoch_keys(&meta, &identity)?;
 
         assert_eq!(resolved, keys);
+        Ok(())
+    }
+
+    #[test]
+    fn durable_outbox_rejects_an_event_removed_from_the_active_index() -> anyhow::Result<()> {
+        let retained = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let quarantined = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
+        let local_ids = BTreeSet::from([retained.clone()]);
+        assert!(outbox_event_is_current(Some(&local_ids), &retained));
+        assert!(!outbox_event_is_current(Some(&local_ids), &quarantined));
         Ok(())
     }
 

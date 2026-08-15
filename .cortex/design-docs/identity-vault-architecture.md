@@ -142,9 +142,9 @@ A transaction failure leaves the prior device and ownership state intact.
 Destructive recovery treats an unreadable or future-incompatible identity
 directory as inaccessible ownership state. It replaces that directory with an
 empty current schema and still removes the wrapped app key. The preserved vault
-registry supplies store IDs so reconciliation markers are deleted even when
-the directory cannot be decoded. Corrupt metadata must not trap a user outside
-the recovery escape hatch.
+registry supplies valid store IDs when readable; corrupt entries are ignored.
+The separately persisted app ID is retired even if the directory is unreadable.
+Corrupt metadata must not trap a user outside the recovery escape hatch.
 Before recovery mutates IndexedDB, the initiating tab quiesces storage work in
 every open Nook tab. Each responding tab zeroizes its app key and storage
 credentials before acknowledging readiness. The initiating tab then serializes
@@ -190,20 +190,12 @@ marker left by an interrupted post-commit update.
 The marker is local retry state. Current builds delete it only after successful
 reconciliation or explicit destructive device recovery.
 
-Remote providers publish epoch pairs as separate immutable files.
-
-The visibility gate hides an epoch trigger until its checkpoint is visible.
-
-It also quarantines incomplete triggers already present in legacy local event
-storage and their descendants.
-
-A remote installation may append from the old frontier during publication.
-
-Such an event is concurrent with the epoch trigger.
-
-The projection reports that concurrency as a blocking security conflict.
-
-The checkpoint never silently erases or resurrects the concurrent mutation.
+Remote providers publish epoch pairs as separate immutable files. The
+visibility gate hides a trigger until its checkpoint is visible and quarantines
+legacy incomplete triggers plus descendants. A remote installation may append
+from the old frontier during publication; projection reports that concurrency
+as a blocking security conflict. A checkpoint never silently erases or
+resurrects the concurrent mutation.
 
 The first directory read migrates `identity_record_v1` when present:
 

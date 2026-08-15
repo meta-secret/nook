@@ -143,93 +143,123 @@ pub(crate) async fn abort_prepared_identity_reconciliation(
     store_id: &nook_core::StoreId,
     expected_plan_envelope: &nook_core::AgeArmoredCiphertext,
 ) -> Result<(), NookError> {
-    let rexie = open_nook_database().await?;
-    let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
-        .map_err(|error| NookError::IndexedDb(format!("Reconciliation abort error: {error:?}")))?;
-    let store = transaction.store("vault").map_err(|error| {
-        NookError::IndexedDb(format!("Reconciliation abort store error: {error:?}"))
-    })?;
-    let key = identity_reconciliation_key(store_id);
-    let id = serde_wasm_bindgen::to_value(&key).map_err(|error| {
-        NookError::IndexedDb(format!("Reconciliation abort key error: {error:?}"))
-    })?;
-    let current = store.get(id.clone()).await.map_err(|error| {
-        NookError::IndexedDb(format!("Reconciliation abort read error: {error:?}"))
-    })?;
-    if let Some(current) = current.filter(|value| !value.is_undefined() && !value.is_null()) {
-        let raw: String = serde_wasm_bindgen::from_value(current).map_err(|error| {
-            NookError::IndexedDb(format!("Reconciliation abort decode error: {error:?}"))
-        })?;
-        let pending = decode_pending(&raw)?;
-        if pending.store_id == *store_id
+    delete_reconciliation_marker_if(store_id, |raw| {
+        let pending = decode_pending(raw)?;
+        Ok(pending.store_id == *store_id
             && matches!(
                 pending.progress,
                 PendingIdentityReconciliationProgress::Prepared { ref plan_envelope }
                     if plan_envelope == expected_plan_envelope
-            )
-        {
+            ))
+    })
+    .await
+}
+
+async fn delete_reconciliation_marker_if<F>(
+    store_id: &nook_core::StoreId,
+    predicate: F,
+) -> Result<(), NookError>
+where
+    F: FnOnce(&str) -> Result<bool, NookError>,
+{
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Reconciliation cleanup error: {error:?}"))
+        })?;
+    let store = transaction.store("vault").map_err(|error| {
+        NookError::IndexedDb(format!("Reconciliation cleanup store error: {error:?}"))
+    })?;
+    let key = identity_reconciliation_key(store_id);
+    let id = serde_wasm_bindgen::to_value(&key).map_err(|error| {
+        NookError::IndexedDb(format!("Reconciliation cleanup key error: {error:?}"))
+    })?;
+    let current = store.get(id.clone()).await.map_err(|error| {
+        NookError::IndexedDb(format!("Reconciliation cleanup read error: {error:?}"))
+    })?;
+    if let Some(current) = current.filter(|value| !value.is_undefined() && !value.is_null()) {
+        let raw: String = serde_wasm_bindgen::from_value(current).map_err(|error| {
+            NookError::IndexedDb(format!("Reconciliation cleanup decode error: {error:?}"))
+        })?;
+        if predicate(&raw)? {
             store.delete(id).await.map_err(|error| {
-                NookError::IndexedDb(format!("Reconciliation abort delete error: {error:?}"))
+                NookError::IndexedDb(format!("Reconciliation cleanup delete error: {error:?}"))
             })?;
         }
     }
     transaction.done().await.map(|_| ()).map_err(|error| {
-        NookError::IndexedDb(format!("Reconciliation abort completion error: {error:?}"))
+        NookError::IndexedDb(format!(
+            "Reconciliation cleanup completion error: {error:?}"
+        ))
     })
+}
+
+async fn update_reconciliation<F>(
+    store_id: &nook_core::StoreId,
+    stage: &str,
+    update: F,
+) -> Result<(), NookError>
+where
+    F: FnOnce(PendingIdentityReconciliation) -> Result<PendingIdentityReconciliation, NookError>,
+{
+    let expected_store_id = store_id.clone();
+    let disposition = idb_update_string(
+        &identity_reconciliation_key(store_id),
+        StringUpdateGuard::Unconditional,
+        move |raw| {
+            let pending = decode_pending(&raw.ok_or_else(|| {
+                NookError::IndexedDb("Identity reconciliation marker disappeared.".to_owned())
+            })?)?;
+            if pending.store_id != expected_store_id {
+                return Err(NookError::IndexedDb(
+                    "Identity reconciliation marker names another vault.".to_owned(),
+                ));
+            }
+            encode_pending(&update(pending)?)
+        },
+    )
+    .await?;
+    if disposition != StringUpdateResult::Applied {
+        return Err(NookError::IndexedDb(format!(
+            "Identity reconciliation {stage} update was rejected."
+        )));
+    }
+    Ok(())
 }
 
 pub(crate) async fn commit_identity_reconciliation_epoch(
     store_id: &nook_core::StoreId,
     key_epoch: &nook_core::IdentityVaultEventId,
 ) -> Result<(), NookError> {
-    let expected_store_id = store_id.clone();
     let expected_key_epoch = key_epoch.clone();
-    let disposition = idb_update_string(
-        &identity_reconciliation_key(store_id),
-        StringUpdateGuard::Unconditional,
-        move |raw| {
-            let raw = raw.ok_or_else(|| {
-                NookError::IndexedDb("Identity reconciliation marker disappeared.".to_owned())
-            })?;
-            let mut pending = decode_pending(&raw)?;
-            if pending.store_id != expected_store_id {
-                return Err(NookError::IndexedDb(
-                    "Identity reconciliation marker changed before epoch commit.".to_owned(),
-                ));
-            }
-            pending.progress = match pending.progress {
-                PendingIdentityReconciliationProgress::Prepared { plan_envelope } => {
-                    PendingIdentityReconciliationProgress::EpochCommitted {
-                        key_epoch: expected_key_epoch.clone(),
-                        plan_envelope,
-                    }
+    update_reconciliation(store_id, "epoch", move |mut pending| {
+        pending.progress = match pending.progress {
+            PendingIdentityReconciliationProgress::Prepared { plan_envelope } => {
+                PendingIdentityReconciliationProgress::EpochCommitted {
+                    key_epoch: expected_key_epoch,
+                    plan_envelope,
                 }
+            }
+            PendingIdentityReconciliationProgress::EpochCommitted {
+                key_epoch,
+                plan_envelope,
+            } if key_epoch == expected_key_epoch => {
                 PendingIdentityReconciliationProgress::EpochCommitted {
                     key_epoch,
                     plan_envelope,
-                } if key_epoch == expected_key_epoch => {
-                    PendingIdentityReconciliationProgress::EpochCommitted {
-                        key_epoch,
-                        plan_envelope,
-                    }
                 }
-                _ => {
-                    return Err(NookError::IndexedDb(
-                        "Identity reconciliation epoch changed unexpectedly.".to_owned(),
-                    ));
-                }
-            };
-            encode_pending(&pending)
-        },
-    )
-    .await?;
-    if disposition != StringUpdateResult::Applied {
-        return Err(NookError::IndexedDb(
-            "Identity reconciliation epoch update was rejected.".to_owned(),
-        ));
-    }
-    Ok(())
+            }
+            PendingIdentityReconciliationProgress::EpochCommitted { .. }
+            | PendingIdentityReconciliationProgress::Committed { .. } => {
+                return Err(NookError::IndexedDb(
+                    "Identity reconciliation epoch changed unexpectedly.".to_owned(),
+                ));
+            }
+        };
+        Ok(pending)
+    })
+    .await
 }
 
 pub(crate) async fn commit_identity_reconciliation_checkpoint(
@@ -237,56 +267,36 @@ pub(crate) async fn commit_identity_reconciliation_checkpoint(
     key_epoch: &nook_core::IdentityVaultEventId,
     checkpoint: &nook_core::IdentityVaultEventId,
 ) -> Result<(), NookError> {
-    let expected_store_id = store_id.clone();
     let expected_key_epoch = key_epoch.clone();
     let committed_checkpoint = checkpoint.clone();
-    let disposition = idb_update_string(
-        &identity_reconciliation_key(store_id),
-        StringUpdateGuard::Unconditional,
-        move |raw| {
-            let raw = raw.ok_or_else(|| {
-                NookError::IndexedDb("Identity reconciliation marker disappeared.".to_owned())
-            })?;
-            let mut pending = decode_pending(&raw)?;
-            if pending.store_id != expected_store_id {
-                return Err(NookError::IndexedDb(
-                    "Identity reconciliation marker changed before checkpoint commit.".to_owned(),
-                ));
-            }
-            pending.progress = match pending.progress {
-                PendingIdentityReconciliationProgress::EpochCommitted { key_epoch, .. }
-                    if key_epoch == expected_key_epoch =>
-                {
-                    PendingIdentityReconciliationProgress::Committed {
-                        key_epoch,
-                        checkpoint: committed_checkpoint.clone(),
-                    }
+    update_reconciliation(store_id, "checkpoint", move |mut pending| {
+        pending.progress = match pending.progress {
+            PendingIdentityReconciliationProgress::EpochCommitted { key_epoch, .. }
+                if key_epoch == expected_key_epoch =>
+            {
+                PendingIdentityReconciliationProgress::Committed {
+                    key_epoch,
+                    checkpoint: committed_checkpoint,
                 }
+            }
+            PendingIdentityReconciliationProgress::Committed {
+                key_epoch,
+                checkpoint,
+            } if key_epoch == expected_key_epoch && checkpoint == committed_checkpoint => {
                 PendingIdentityReconciliationProgress::Committed {
                     key_epoch,
                     checkpoint,
-                } if key_epoch == expected_key_epoch && checkpoint == committed_checkpoint => {
-                    PendingIdentityReconciliationProgress::Committed {
-                        key_epoch,
-                        checkpoint,
-                    }
                 }
-                _ => {
-                    return Err(NookError::IndexedDb(
-                        "Identity reconciliation checkpoint changed unexpectedly.".to_owned(),
-                    ));
-                }
-            };
-            encode_pending(&pending)
-        },
-    )
-    .await?;
-    if disposition != StringUpdateResult::Applied {
-        return Err(NookError::IndexedDb(
-            "Identity reconciliation checkpoint update was rejected.".to_owned(),
-        ));
-    }
-    Ok(())
+            }
+            _ => {
+                return Err(NookError::IndexedDb(
+                    "Identity reconciliation checkpoint changed unexpectedly.".to_owned(),
+                ));
+            }
+        };
+        Ok(pending)
+    })
+    .await
 }
 
 pub(super) async fn resolve_identity_epoch(
@@ -377,37 +387,7 @@ pub(super) async fn clear_consumed_identity_reconciliation(
     store_id: &nook_core::StoreId,
     consumed_marker: &str,
 ) -> Result<(), NookError> {
-    let rexie = open_nook_database().await?;
-    let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
-        .map_err(|error| {
-            NookError::IndexedDb(format!("Reconciliation cleanup error: {error:?}"))
-        })?;
-    let store = transaction.store("vault").map_err(|error| {
-        NookError::IndexedDb(format!("Reconciliation cleanup store error: {error:?}"))
-    })?;
-    let key = identity_reconciliation_key(store_id);
-    let id = serde_wasm_bindgen::to_value(&key).map_err(|error| {
-        NookError::IndexedDb(format!("Reconciliation cleanup key error: {error:?}"))
-    })?;
-    let current = store.get(id.clone()).await.map_err(|error| {
-        NookError::IndexedDb(format!("Reconciliation cleanup read error: {error:?}"))
-    })?;
-    if let Some(current) = current.filter(|value| !value.is_undefined() && !value.is_null()) {
-        let raw: String = serde_wasm_bindgen::from_value(current).map_err(|error| {
-            NookError::IndexedDb(format!("Reconciliation cleanup decode error: {error:?}"))
-        })?;
-        if raw == consumed_marker {
-            store.delete(id).await.map_err(|error| {
-                NookError::IndexedDb(format!("Reconciliation cleanup delete error: {error:?}"))
-            })?;
-        }
-    }
-    transaction.done().await.map(|_| ()).map_err(|error| {
-        NookError::IndexedDb(format!(
-            "Reconciliation cleanup completion error: {error:?}"
-        ))
-    })
+    delete_reconciliation_marker_if(store_id, |raw| Ok(raw == consumed_marker)).await
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]

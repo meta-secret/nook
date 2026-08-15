@@ -53,13 +53,8 @@ The feature `README.md` must record:
 - feature-level acceptance criteria;
 - current completion status.
 
-When an existing PR is split after implementation begins, it must also record:
-
-- the full-work commit used to create the successor;
-- the predecessor and successor PR links;
-- the ordered dependency between those PRs;
-- a preservation checklist for every removed file and behavior; and
-- the owner responsible for completing the sequence.
+For a split, record the full-work commit, PR links and order, completing owner,
+and a checklist covering every removed file and behavior.
 
 Each focused issue must own one cohesive module, package, layer, or
 architectural responsibility.
@@ -86,8 +81,7 @@ The feature remains incomplete while any required issue remains incomplete.
 
 Do not convert remaining requested functionality into an optional follow-up.
 
-Do not remove implementation from a predecessor until its successor draft PR
-and Workbench issue are visible.
+Do not remove work until its successor draft and Workbench issue are visible.
 
 See
 [pull-requests.md](pull-requests.md#pull-request-size-and-modularity) for the

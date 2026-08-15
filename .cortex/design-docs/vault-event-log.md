@@ -60,23 +60,17 @@ artifact for event-log vaults.
 | Duplicate identical event | success (idempotent) |
 | Same path, different bytes | quarantine (corruption) |
 
-Current event schema `2` binds each event to `actor_signing_public_key`. The
+Current event schema `3` binds each event to `actor_signing_public_key`. The
 actor id must be the SHA-256 digest of that Ed25519 public key. The event
 signature must verify over the canonical body before a current-schema remote
 event enters the local event set.
 
-An `epoch-checkpoint` operation persists `secrets`,
-`members_checkpoint_hash`, `rotated_meta_records`, and `password_entries`.
-`rotated_meta_records` is the complete replacement set of rewrapped auth and
-member `StoredSecretRecord` values. `password_entries` is the complete
-replacement set of surviving version-2 password credentials rewrapped to the
-new epoch keys. Projection replaces the prior sets with these checkpoint
-values. Signed legacy checkpoints retain password entries when that field is
-omitted. Current identity-rotation writers must include both replacement sets. A pre-field
-client may ignore unknown fields, but it cannot safely reopen or extend that
-rotated epoch. It must upgrade before operating on the vault. These fields
-remain part of event schema `2` until an explicit event-schema migration
-replaces this compatibility contract.
+An `epoch-checkpoint` persists `secrets`, `members_checkpoint_hash`, and the
+complete rewrapped `rotated_meta_records` and `password_entries` sets.
+Projection replaces the prior sets; legacy checkpoints that omit password state
+retain it. Schema `3` owns these fields, while current readers still accept
+pre-replacement schema `2` events. Older readers reject schema `3` before
+persistence instead of extending an epoch they cannot interpret.
 
 Non-genesis events are also checked against the event's causal past. An actor is
 accepted only if it is:
@@ -203,21 +197,16 @@ legacy v2 events, while pre-v3 readers reject new events before persistence.
 Legacy password-envelope upgrades use a non-epoch operation; password rotation
 remains a complete trigger/checkpoint transition.
 
-Provider publication may leave the old frontier temporarily appendable.
+Provider publication may leave the old frontier temporarily appendable. Any
+event concurrent with an epoch trigger, including an access grant or ordinary
+vault mutation, becomes a blocking security conflict.
 
-Any event concurrent with an epoch trigger becomes a blocking security
-conflict.
+Provider imports revalidate the complete union in the IndexedDB transaction
+that writes bytes and heads, serializing with local appends and epoch commits.
 
-This includes access grants and ordinary vault mutations.
-
-Provider imports revalidate the complete union inside the same IndexedDB
-transaction that writes event bytes and derived heads.
-
-The transaction serializes imports with local appends and epoch commits.
-
-The import also quarantines a legacy local trigger and every descendant when
-the trigger has no verified checkpoint. The active event index excludes that
-incomplete transition before any remote descendant can become appendable.
+The import quarantines a legacy local trigger and every descendant when the
+trigger lacks a verified checkpoint. The active index and future outbox flushes
+exclude that transition before it can become remotely appendable.
 
 An unlocked Simple-vault session adopts the projected epoch's rewrapped auth
 envelopes and persists the new key-epoch marker before projection replay. A

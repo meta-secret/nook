@@ -1,5 +1,5 @@
 use super::{
-    BuiltVaultEvent, NookError, NookVaultManager, VaultOperation,
+    BuiltVaultEvent, NookError, NookVaultManager, VaultOperation, load_local_event_store,
     members_checkpoint_hash_from_roster, rewrapped_vault_meta_records_for_epoch, save_key_epoch,
 };
 use serde::{Deserialize, Serialize};
@@ -65,6 +65,16 @@ fn built_event_from_yaml(yaml: &str) -> Result<BuiltVaultEvent, NookError> {
     let bytes = yaml.as_bytes().to_vec();
     let event = nook_core::parse_event_storage_bytes(&bytes)?;
     Ok(BuiltVaultEvent { event, bytes })
+}
+
+fn projection_advanced_past(
+    projection: &nook_core::VaultProjection,
+    planned_epoch: &nook_core::EventId,
+) -> bool {
+    matches!(
+        &projection.epoch,
+        nook_core::ProjectionEpoch::Current(nook_core::KeyEpoch(epoch)) if epoch != planned_epoch
+    )
 }
 
 impl NookVaultManager {
@@ -220,6 +230,28 @@ impl NookVaultManager {
                 )));
             }
         };
+        let local = load_local_event_store(&self.vault.store_id).await?;
+        let graph = local.load_graph(&self.vault.store_id)?;
+        let projection = nook_core::project_vault(&graph, &self.vault.store_id)?;
+        if projection_advanced_past(&projection, &trigger_event_id) {
+            crate::storage::identity_record::commit_identity_reconciliation_epoch(
+                &store_id, &key_epoch,
+            )
+            .await?;
+            crate::storage::identity_record::commit_identity_reconciliation_checkpoint(
+                &store_id,
+                &key_epoch,
+                &checkpoint,
+            )
+            .await?;
+            nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+            self.adopt_projected_security_epoch(&projection).await?;
+            self.apply_event_projection_to_session().await?;
+            self.persist_projection_cache().await?;
+            let identity = self.device_identity()?;
+            self.ensure_identity_after_connect(&identity).await?;
+            return Ok(());
+        }
         crate::storage::identity_record::commit_identity_reconciliation_epoch(
             &store_id, &key_epoch,
         )
@@ -329,5 +361,20 @@ impl NookVaultManager {
         self.execute_security_epoch_recovery_plan(persisted.plan, &persisted.plan_envelope, None)
             .await?;
         Ok(envelope)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_a_verified_epoch_after_the_prepared_epoch() -> anyhow::Result<()> {
+        let planned = nook_core::EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let latest = nook_core::EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
+        let mut projection = nook_core::VaultProjection::default();
+        projection.epoch = nook_core::ProjectionEpoch::Current(nook_core::KeyEpoch(latest));
+        assert!(projection_advanced_past(&projection, &planned));
+        Ok(())
     }
 }

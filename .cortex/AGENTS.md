@@ -65,18 +65,12 @@ reducing its scope.
 
 The agent must:
 
-1. Publish a superseding Workbench plan.
-2. Materialize every remaining slice as an ordered focused issue.
-3. Create a successor branch from the last commit that still contains the full
-   work.
-4. Open the successor as a linked draft pull request.
-5. Verify that every removed file and behavior exists in a linked successor.
-6. Only then reduce the first pull request.
-7. Merge the first pull request before completing the successor.
-8. Continue until the feature acceptance criteria are complete.
+1. Publish a superseding Workbench plan with ordered focused issues.
+2. Branch a linked draft successor from the last full-work commit.
+3. Prove every removed file and behavior exists in that successor.
+4. Only then reduce, merge, and complete each PR in order.
 
-A scope reduction without a linked preservation pull request is a P1 delivery
-failure.
+Scope reduction without a linked preservation PR is a P1 delivery failure.
 
 Each pull request must:
 

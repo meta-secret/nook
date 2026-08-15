@@ -141,9 +141,9 @@ that stored checkpoint only when it is a verified ancestor of the observed
 head. The marker is compare-deleted only
 after the identity directory compare-and-swap succeeds. Stale observations
 cannot replace envelopes from a newer epoch.
-If another verified epoch follows the marker's committed checkpoint before
-reconciliation, the app advances directly to that descendant epoch and latest
-checkpoint. The intermediate checkpoint must remain in verified ancestry.
+If the pair is persisted and another verified epoch follows its checkpoint
+before marker or identity reconciliation, the app advances directly to the
+latest epoch. The intermediate checkpoint must remain in verified ancestry.
 
 Remote epoch publication cannot atomically create two provider files.
 
@@ -167,8 +167,8 @@ The signed `epoch-checkpoint` operation stores `secrets`,
 Projection replaces the previous auth and member envelopes when that set is
 non-empty. Omitted legacy fields decode as an empty list and retain the prior
 metadata behavior. Clients that predate this field must upgrade before they
-open or append to a rotated epoch. Current event schema `2` retains the field
-until an explicit event-schema migration supersedes it.
+open or append to a rotated epoch. Event schema `3` owns the replacement
+fields; schema `2` remains readable for pre-replacement events.
 
 On first read, the app migrates `identity_record_v1` into the directory.
 It deletes the legacy key only after the new directory is durable.

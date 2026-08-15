@@ -1,11 +1,11 @@
 use wasm_bindgen::prelude::wasm_bindgen;
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use super::idb_delete_keys;
 use super::{
     APP_ID_KEY, APP_KEY_WRAPPED_KEY, DEVICE_ID_KEY, NookError, WRAPPED_DEVICE_IDENTITY_KEY,
     idb_get_string, open_nook_database, read_string_preferring,
 };
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-use super::{idb_delete_key, idb_delete_keys};
 
 pub(crate) async fn device_identity_protection_status()
 -> Result<nook_core::DeviceProtectionStatus, NookError> {
@@ -251,9 +251,10 @@ mod tests {
 
         assert!(load_wrapped_device_identity().await?.is_none());
         assert!(
-            idb_get_string(crate::storage::identity_record::IDENTITY_DIRECTORY_KEY)
+            crate::storage::identity_record::load_identity_directory()
                 .await?
-                .is_none()
+                .identities()
+                .is_empty()
         );
         assert!(
             idb_get_string(
