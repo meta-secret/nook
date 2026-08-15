@@ -208,24 +208,22 @@ generation to repair a partially persisted result.
 
 ### Round 2: deliver participant shares
 
-After atomic genesis, Nook presents a distinct encrypted-share delivery for
-every remote participant. Each delivery is bound to the Round 1 request and to
-the participant public key collected in Round 1. It contains no sync-provider
-credential or transferable browser handle.
-
-Delivery acceptance verifies the genesis session, policy, initiator signing
-key, participant identity, public key, and share signature. Only the matching
-device can accept and persist its share. The initiator then enters the normal
-Sentinel quorum unlock ceremony. After unlock, the owner may add sync providers
-from vault settings; provider access is never sufficient to open the vault.
-
-This second direction is cryptographically required: collecting public keys
-alone does not deliver the generated shares back to their owners.
-
-After delivering the share set, Device A clears the plaintext Sentinel root,
-derived vault keys, and plaintext shares. Opening the newly created vault then
-uses the same quorum ceremony as every later open; genesis must not leave a
-single-device unlocked-session exception.
+- **Delivery artifact:** After atomic genesis, present one distinct encrypted
+  share delivery for every remote participant.
+  - Bind each delivery to the Round 1 request and participant public key.
+  - Include no sync-provider credential or transferable browser handle.
+- **Acceptance:** Verify the genesis session, policy, initiator signing key,
+  participant identity, public key, and share signature.
+  - Only the matching device may accept and persist its share.
+  - The initiator then enters the normal Sentinel quorum unlock ceremony.
+  - After unlock, the owner may add sync providers from vault settings.
+  - Provider access is never sufficient to open the vault.
+- **Cryptographic direction:** Collecting participant public keys does not
+  deliver generated shares back to their owners. Round 2 is therefore required.
+- **Post-delivery cleanup:** Device A clears the plaintext Sentinel root,
+  derived vault keys, and plaintext shares.
+  - Open the new vault through the same quorum ceremony as every later open.
+  - Genesis must not leave a single-device unlocked-session exception.
 
 ## Sentinel Open Invariant
 

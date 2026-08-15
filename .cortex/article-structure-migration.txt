@@ -2,13 +2,6 @@
 # Remove entries as documents migrate. Do not add entries after this baseline.
 .cortex/AGENTS.md
 .cortex/ARCHITECTURE.md
-.cortex/design-docs/agent-workflow-orchestration.md
-.cortex/design-docs/auth-providers.md
-.cortex/design-docs/hive-isolated-agent-platform.md
-.cortex/design-docs/sentinel-genesis.md
-.cortex/design-docs/unified-vault.md
-.cortex/design-docs/vault-event-log.md
-.cortex/design-docs/vault-session-and-lock.md
 .cortex/exec-plans/completed/cortex-restructure.md
 .cortex/exec-plans/mobile-core-reuse.md
 .cortex/exec-plans/tech-debt-tracker.md

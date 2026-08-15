@@ -57,11 +57,9 @@ Status: Architecture decision with staged implementation.
 
 Nook separates semantic instructions from deterministic scheduling.
 
-Cortex documents what a workflow means.
-
-Loom executes reviewed static workflow graphs.
-
-Hive owns durable distributed execution when a workflow moves onto Hive.
+- **Cortex** documents what a workflow means.
+- **Loom** executes reviewed static workflow graphs.
+- **Hive** owns durable distributed execution when a workflow moves onto Hive.
 
 ## Static graph decision
 
@@ -88,15 +86,13 @@ Loom must not:
 - add tasks from prompt contents;
 - infer parallelism from collection order.
 
-Runtime inputs may select a compiled workflow.
+Runtime inputs have bounded authority:
 
-They may also bind its exact source commit and other scalar inputs.
-
-They cannot change its topology.
-
-A conditional path uses a declared edge in the compiled graph.
-
-An unused declared path receives an explicit skipped result.
+- They may select a compiled workflow.
+- They may bind its exact source commit and other scalar inputs.
+- They cannot change its topology.
+- A conditional path uses a declared edge in the compiled graph.
+- An unused declared path receives an explicit skipped result.
 
 ## Responsibilities
 
@@ -127,11 +123,11 @@ Agent workflows live in an isolated Loom module:
 agentic-ai/loom/src/agent-workflow/
 ```
 
-The module is separate from Loom's domain-YAML leaf-tool runner.
+The module boundary is one-way:
 
-It may call existing Loom tools through typed adapters.
-
-Existing leaf tools do not import the workflow module.
+- It remains separate from Loom's domain-YAML leaf-tool runner.
+- It may call existing Loom tools through typed adapters.
+- Existing leaf tools do not import the workflow module.
 
 The workflow module owns:
 
@@ -145,15 +141,11 @@ The workflow module owns:
 - terminal projections;
 - timeout and cancellation state.
 
-Retries are not implicit.
-
-A workflow that needs retries must declare and test that policy explicitly.
-
-A separate `loom-agent-workflow` CLI invokes the static catalog.
-
-The CLI accepts a workflow name and bounded runtime inputs.
-
-It does not accept a graph document.
+- **Retries:** Retries are not implicit. A workflow that needs them must declare
+  and test that policy explicitly.
+- **CLI:** A separate `loom-agent-workflow` CLI invokes the static catalog.
+  - It accepts a workflow name and bounded runtime inputs.
+  - It does not accept a graph document.
 
 The repository Task wrapper is the canonical entrypoint:
 
@@ -161,7 +153,8 @@ The repository Task wrapper is the canonical entrypoint:
 task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
 ```
 
-The bare `loom-agent-workflow` binary is an internal package entrypoint.
+- The repository Task wrapper is the canonical entrypoint.
+- The bare `loom-agent-workflow` binary is an internal package entrypoint.
 
 ### Codex worker adapter
 
@@ -203,18 +196,14 @@ It records:
 - successor activation;
 - workflow termination.
 
-Task and workflow result files are projections.
+- **Projection authority:** Task and workflow result files are projections.
+  - The journal and its content-hashed terminal projections form the local run
+    record.
+- **Current replay:** The replay API validates identity, sequence, and terminal
+  references.
+  - It does not yet rebuild scheduler eligibility or join state.
 
-The journal and its content-hashed terminal projections form the local run
-record.
-
-The current replay API validates identity, sequence, and terminal references.
-
-It does not yet rebuild scheduler eligibility or join state.
-
-Journal events are bounded and secret-sanitized.
-
-They must not contain:
+Journal events are bounded and secret-sanitized. They must not contain:
 
 - prompts;
 - model reasoning;
@@ -222,26 +211,18 @@ They must not contain:
 - repository secrets;
 - raw command output.
 
-Runtime adapters normalize errors before appending events.
-
-An event records a bounded category and sanitized detail.
-
-It never serializes a raw SDK error, stack trace, or command failure object.
-
-Every event carries the workflow version and exact source commit.
-
-Sequence numbers increase without gaps within one run.
-
-Resume is not exposed in the first CLI slice.
-
-Before resume is added, a full reducer must rebuild eligibility and join state
-before scheduling new work.
-
-A task attempt receives one terminal result.
-
-Terminal result projections are content-hashed and referenced by the journal.
-
-The journal must not be treated as durable distributed coordination.
+- **Error records:** Runtime adapters normalize errors before appending events.
+  - An event records a bounded category and sanitized detail.
+  - It never serializes a raw SDK error, stack trace, or command failure object.
+- **Event identity:** Every event carries the workflow version and exact source
+  commit. Sequence numbers increase without gaps within one run.
+- **Resume:** Resume is not exposed in the first CLI slice.
+  - Before adding it, a full reducer must rebuild eligibility and join state
+    before scheduling new work.
+- **Terminal results:** A task attempt receives one terminal result.
+  - Terminal result projections are content-hashed and journal-referenced.
+- **Durability boundary:** Do not treat the journal as durable distributed
+  coordination.
 
 ### Hive
 
@@ -257,24 +238,16 @@ Neo4j already owns:
 - results;
 - dependency artifacts.
 
-The current implementation is local-only.
-
-It does not enqueue Hive tasks.
-
-When a future Hive adapter materializes a static workflow, Neo4j replaces the
-local journal as the lifecycle authority.
-
-Loom's event model may be mapped into Hive records.
-
-It must not create a second authoritative scheduler beside Neo4j.
-
-One Hive task runs in one disposable Kata-backed Pod.
-
-One Pod runs one embedded Codex thread.
-
-Durable graph nodes become separate Hive tasks.
-
-Nested subagents inside one Hive worker remain disabled.
+- **Current state:** The implementation is local-only and does not enqueue Hive
+  tasks.
+- **Future authority:** When a Hive adapter materializes a static workflow,
+  Neo4j replaces the local journal as lifecycle authority.
+  - Loom's event model may map into Hive records.
+  - It must not create a second authoritative scheduler beside Neo4j.
+- **Execution unit:** One Hive task runs in one disposable Kata-backed Pod.
+  - One Pod runs one embedded Codex thread.
+  - Durable graph nodes become separate Hive tasks.
+  - Nested subagents inside one Hive worker remain disabled.
 
 ### Delivery owner
 
@@ -296,11 +269,11 @@ They do not become delivery owners.
 
 ## First compiled workflow
 
-The first catalog entry is `cortex-full-garbage-collection`.
+The first catalog entry has this contract:
 
-It is read-only.
-
-Its topology is fixed in TypeScript.
+- Name: `cortex-full-garbage-collection`.
+- Capability: read-only.
+- Topology owner: fixed TypeScript.
 
 The workflow contains:
 
@@ -317,28 +290,18 @@ The parallel wave contains these tasks:
 - `audit-runtime-task-and-ci`;
 - `mechanical-cortex-audit`.
 
-Every audit task uses the same exact source commit.
-
-Loom verifies that exact `HEAD` and a clean worktree before and after every
-Codex attempt.
-
-The cleanliness check includes untracked files.
-
-Every task returns typed evidence.
-
-The join waits for all declared arrivals.
-
-The synthesis task deduplicates findings and proposes corrections.
-
-The mechanical leaf reuses Loom's existing Cortex audit.
-
-Its evidence reaches the same join before synthesis.
-
-The workflow does not edit repository files.
-
-It does not mutate GitHub or Workbench state.
-
-The delivery owner reviews the report and authors any later correction.
+- **Source binding:** Every audit task uses the same exact source commit.
+  - Loom verifies that exact `HEAD` and a clean worktree before and after every
+    Codex attempt.
+  - The cleanliness check includes untracked files.
+- **Evidence flow:** Every task returns typed evidence.
+  - The join waits for all declared arrivals.
+  - The synthesis task deduplicates findings and proposes corrections.
+  - The mechanical leaf reuses Loom's existing Cortex audit and reaches the
+    same join before synthesis.
+- **Mutation boundary:** The workflow edits no repository file and mutates no
+  GitHub or Workbench state.
+  - The delivery owner reviews the report and authors any later correction.
 
 ## Reviewed catalog growth
 
