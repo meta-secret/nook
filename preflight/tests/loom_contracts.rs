@@ -93,3 +93,19 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         );
     }
 }
+
+#[test]
+fn loom_workflow_audits_every_cortex_change() {
+    let root = repository_root();
+    let workflow = read(&root, ".github/workflows/loom.yml");
+
+    assert_eq!(
+        workflow.matches("      - .cortex/**").count(),
+        2,
+        "Loom must trigger for Cortex changes on pull requests and main pushes"
+    );
+    assert!(
+        workflow.contains("run: task loom:cortex-audit"),
+        "Loom must run the mechanical Cortex audit"
+    );
+}
