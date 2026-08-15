@@ -1,5 +1,0 @@
-# Legacy Cortex documents awaiting structured-article migration.
-# Remove entries as documents migrate. Do not add entries after this baseline.
-.cortex/AGENTS.md
-.cortex/ARCHITECTURE.md
-.cortex/rules.md
