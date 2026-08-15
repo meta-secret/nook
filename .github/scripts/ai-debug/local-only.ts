@@ -1,5 +1,5 @@
-// Keep in sync with .codex/ai-debug-allowed-origins.json (enforced by
-// .codex/check-ai-debug-origins.mjs / `task ai-debug:check`).
+// Keep in sync with allowed-origins.json (enforced by check-origins.mjs and
+// `task ai-debug:check`).
 const allowedOrigins = new Set([
   'http://127.0.0.1:5173',
   'http://localhost:5173',

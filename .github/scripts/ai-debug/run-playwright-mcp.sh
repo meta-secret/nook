@@ -6,7 +6,7 @@ set -euo pipefail
 # atomic, private output directory. Browser state is separately isolated in
 # memory by the required --isolated argument supplied from config.toml.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "$script_dir/.." && pwd)"
+repo_root="$(cd "$script_dir/../../.." && pwd)"
 
 umask 077
 mkdir -p "$repo_root/.playwright-mcp"
