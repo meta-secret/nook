@@ -1,5 +1,41 @@
 # Rust Macro Minimization
 
+## Relationships
+
+- [Cortex document navigation](cortex-document-map.md)
+  - Defines the mandatory relationship and internal-map structure.
+  - Apply whenever this skill card changes.
+- [Cortex writer](cortex-writer.md)
+  - Keeps the card and its navigation summaries concise.
+  - Apply while editing or reviewing this guidance.
+- [Cortex consistency](cortex-consistency.md)
+  - Requires the card to agree with related guidance and current code.
+  - Apply when rules, paths, commands, or examples change.
+
+## Document map
+
+- [Purpose](#purpose)
+  - Explains why the skill exists and what invariant it protects.
+  - Read first to decide whether the skill applies.
+- [Problem Pattern](#problem-pattern)
+  - Identifies the recurring rejected pattern and its warning signs.
+  - Read while locating or reviewing violations.
+- [Preferred Pattern](#preferred-pattern)
+  - Defines the required structure or behavior.
+  - Read before implementing a correction.
+- [Scope](#scope)
+  - Sets the applicable paths and explicit boundaries.
+  - Read before expanding the task.
+- [Examples](#examples)
+  - Contrasts rejected and preferred forms.
+  - Read when the rule needs a concrete illustration.
+- [Application Checklist](#application-checklist)
+  - Lists the steps needed to apply and maintain the skill.
+  - Use during implementation and review.
+- [Validation](#validation)
+  - Names the smallest relevant mechanical and semantic proof.
+  - Run before completing the task.
+
 ## Purpose
 
 Keep authored Rust explicit and locally readable. Repository-defined macros are
