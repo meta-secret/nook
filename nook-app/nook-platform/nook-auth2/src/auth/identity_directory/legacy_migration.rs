@@ -31,12 +31,40 @@ impl IdentityDirectory {
         self.migrate_legacy_duplicate_app_key_ownership_inner(Some(identity_id))
     }
 
+    /// Merge only duplicate ownership relationships inherited from `base`.
+    ///
+    /// Staged candidates can add members. A duplicate introduced only by the
+    /// candidate is a conflict, not legacy state, and must remain fail-closed.
+    pub fn migrate_legacy_duplicate_app_key_ownership_from_base(
+        mut self,
+        base: &Self,
+        preserved_identity_id: &IdentityId,
+    ) -> MultiDeviceResult<(Self, bool)> {
+        let components = base.legacy_identity_components();
+        let mut changed = false;
+        while let Some((left, right, app_id)) = self.duplicate_app_key_owners() {
+            let left_component = components.get(&self.identities[left].identity_id);
+            let right_component = components.get(&self.identities[right].identity_id);
+            if left_component.is_none() || left_component != right_component {
+                return Err(MultiDeviceError::DuplicateAppKeyOwnership {
+                    app_id: app_id.to_string(),
+                });
+            }
+            let (survivor, absorbed) =
+                self.preferred_merge_order(left, right, Some(preserved_identity_id));
+            self.merge_identity_records(survivor, absorbed)?;
+            changed = true;
+        }
+        self.validate()?;
+        Ok((self, changed))
+    }
+
     fn migrate_legacy_duplicate_app_key_ownership_inner(
         mut self,
         preserved_identity_id: Option<&IdentityId>,
     ) -> MultiDeviceResult<(Self, bool)> {
         let mut changed = false;
-        while let Some((left, right)) = self.duplicate_app_key_owners() {
+        while let Some((left, right, _)) = self.duplicate_app_key_owners() {
             let (survivor, absorbed) =
                 self.preferred_merge_order(left, right, preserved_identity_id);
             self.merge_identity_records(survivor, absorbed)?;
@@ -46,18 +74,41 @@ impl IdentityDirectory {
         Ok((self, changed))
     }
 
-    fn duplicate_app_key_owners(&self) -> Option<(usize, usize)> {
+    fn duplicate_app_key_owners(&self) -> Option<(usize, usize, AppId)> {
         let mut owners = HashMap::<&AppId, usize>::new();
         for (index, identity) in self.identities.iter().enumerate() {
             for member in &identity.members {
                 if let Some(owner) = owners.insert(&member.app_id, index)
                     && owner != index
                 {
-                    return Some((owner, index));
+                    return Some((owner, index, member.app_id.clone()));
                 }
             }
         }
         None
+    }
+
+    fn legacy_identity_components(&self) -> HashMap<IdentityId, usize> {
+        let mut components = (0..self.identities.len()).collect::<Vec<_>>();
+        let mut owners = HashMap::<&AppId, usize>::new();
+        for (index, identity) in self.identities.iter().enumerate() {
+            for member in &identity.members {
+                if let Some(owner) = owners.insert(&member.app_id, index) {
+                    let from = components[index];
+                    let into = components[owner];
+                    for component in &mut components {
+                        if *component == from {
+                            *component = into;
+                        }
+                    }
+                }
+            }
+        }
+        self.identities
+            .iter()
+            .zip(components)
+            .map(|(identity, component)| (identity.identity_id.clone(), component))
+            .collect()
     }
 
     fn preferred_merge_order(
@@ -217,6 +268,25 @@ mod tests {
         assert!(changed);
         assert_eq!(migrated.identities().len(), 1);
         assert_eq!(migrated.selected()?.identity_id, pending_identity_id);
+        Ok(())
+    }
+
+    #[test]
+    fn staged_migration_rejects_candidate_only_duplicate_ownership() -> anyhow::Result<()> {
+        let legacy_key = AppKey::generate()?;
+        let candidate_key = AppKey::generate()?;
+        let mut base = IdentityDirectory::empty();
+        let preserved_id = base.create_identity("Pending", &legacy_key, None)?;
+        base.create_identity("Legacy duplicate", &legacy_key, None)?;
+        base.select(&preserved_id)?;
+        let mut candidate = base.clone();
+        candidate.enroll_selected_app_key_for_vault_creation(&candidate_key, "Pending")?;
+        candidate.create_identity("Candidate overlap", &candidate_key, None)?;
+
+        assert!(matches!(
+            candidate.migrate_legacy_duplicate_app_key_ownership_from_base(&base, &preserved_id),
+            Err(MultiDeviceError::DuplicateAppKeyOwnership { .. })
+        ));
         Ok(())
     }
 }

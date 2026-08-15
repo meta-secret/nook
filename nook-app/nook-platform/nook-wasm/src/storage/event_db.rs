@@ -265,16 +265,31 @@ pub(crate) async fn load_local_event_store_from_store(
 /// quarantined partial import cannot permanently block later approvals.
 pub(crate) async fn clear_local_event_store(store_id: &str) -> Result<(), NookError> {
     let index_key = format!("event_index:{store_id}");
-    let ids: Vec<String> = match store_get(STORE_EVENTS, &index_key).await? {
-        None => Vec::new(),
-        Some(json) => {
-            serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))?
+    let event_prefix = format!("event:{store_id}:");
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| NookError::IndexedDb(format!("Event cleanup error: {error:?}")))?;
+    let store = transaction
+        .store(STORE_EVENTS)
+        .map_err(|error| NookError::IndexedDb(format!("Event cleanup store error: {error:?}")))?;
+    for key in store
+        .get_all_keys(None, None)
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Event cleanup scan error: {error:?}")))?
+    {
+        let raw: String = serde_wasm_bindgen::from_value(key.clone()).map_err(|error| {
+            NookError::IndexedDb(format!("Event cleanup key decode error: {error:?}"))
+        })?;
+        if raw == index_key || raw.starts_with(&event_prefix) {
+            store.delete(key).await.map_err(|error| {
+                NookError::IndexedDb(format!("Event cleanup delete error: {error:?}"))
+            })?;
         }
-    };
-    for event_id in ids {
-        store_delete(STORE_EVENTS, &event_key(store_id, &event_id)).await?;
     }
-    store_delete(STORE_EVENTS, &index_key).await?;
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!("Event cleanup completion error: {error:?}"))
+    })?;
     store_delete(STORE_PROJECTIONS, &heads_key(store_id)).await?;
     store_delete(STORE_PROJECTIONS, &epoch_key(store_id)).await?;
     Ok(())
@@ -306,17 +321,6 @@ pub(crate) async fn save_event_bytes_to_store(
 ) -> Result<(), NookError> {
     let value = String::from_utf8(bytes.to_vec())
         .map_err(|e| NookError::Serialization(format!("Event bytes not UTF-8: {e}")))?;
-    let event_key = serde_wasm_bindgen::to_value(&event_key(store_id, event_id))
-        .map_err(|error| NookError::IndexedDb(format!("Event key error: {error:?}")))?;
-    let event_value = serde_wasm_bindgen::to_value(&value)
-        .map_err(|error| NookError::IndexedDb(format!("Event value error: {error:?}")))?;
-    store
-        .put(&event_value, Some(&event_key))
-        .await
-        .map_err(|error| {
-            NookError::IndexedDb(format!("Event transaction write error: {error:?}"))
-        })?;
-
     let index_key = serde_wasm_bindgen::to_value(&format!("event_index:{store_id}"))
         .map_err(|error| NookError::IndexedDb(format!("Event index key error: {error:?}")))?;
     let index_value = store
@@ -334,6 +338,16 @@ pub(crate) async fn save_event_bytes_to_store(
                     .map_err(|error| NookError::Serialization(error.to_string()))?
             }
         };
+    let event_key = serde_wasm_bindgen::to_value(&event_key(store_id, event_id))
+        .map_err(|error| NookError::IndexedDb(format!("Event key error: {error:?}")))?;
+    let event_value = serde_wasm_bindgen::to_value(&value)
+        .map_err(|error| NookError::IndexedDb(format!("Event value error: {error:?}")))?;
+    store
+        .put(&event_value, Some(&event_key))
+        .await
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Event transaction write error: {error:?}"))
+        })?;
     if !ids.iter().any(|id| id == event_id) {
         ids.push(event_id.to_owned());
         ids.sort();
@@ -482,6 +496,38 @@ mod tests {
         };
         assert!(error.to_string().contains("missing from the index"));
         Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn cleanup_removes_orphan_rows_even_with_malformed_index() -> Result<(), NookError> {
+        let store_id = "malformed-cleanup-test";
+        let row_key = event_key(store_id, "orphan");
+        let index_key = format!("event_index:{store_id}");
+        store_put(STORE_EVENTS, &row_key, "event bytes").await?;
+        store_put(STORE_EVENTS, &index_key, "not-json").await?;
+
+        clear_local_event_store(store_id).await?;
+
+        assert!(store_get(STORE_EVENTS, &row_key).await?.is_none());
+        assert!(store_get(STORE_EVENTS, &index_key).await?.is_none());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn malformed_index_is_rejected_before_event_row_write() -> Result<(), NookError> {
+        let store_id = "malformed-save-test";
+        let event_id = "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo";
+        let row_key = event_key(store_id, event_id);
+        let index_key = format!("event_index:{store_id}");
+        store_put(STORE_EVENTS, &index_key, "not-json").await?;
+
+        assert!(
+            save_event_bytes(store_id, event_id, b"event bytes")
+                .await
+                .is_err()
+        );
+        assert!(store_get(STORE_EVENTS, &row_key).await?.is_none());
+        clear_local_event_store(store_id).await
     }
 
     #[wasm_bindgen_test]

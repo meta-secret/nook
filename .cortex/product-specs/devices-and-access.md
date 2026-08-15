@@ -119,6 +119,9 @@ It is never shown as stored on one physical laptop.
   - Reject an existing-vault handoff while any signed roster event is pending
     causal ancestry.
   - Require every stored event's computed ID to match its index and row key.
+  - Validate the event index before writing a new event row.
+  - On rejected handoff cleanup, scan by the vault event-row prefix.
+  - Remove indexed and unindexed rows even when the index is malformed.
   - Apply the transactionally selected vault DEKs to the live session before
     reporting a successful handoff.
   - Attach an imported vault to the identity that already owns the authorized

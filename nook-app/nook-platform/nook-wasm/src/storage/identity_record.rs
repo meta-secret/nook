@@ -54,6 +54,7 @@ fn migrate_staged_genesis_directories(
     let genesis_flow::PendingSimpleGenesisFlow::Staged(staged) = &mut pending.flow else {
         return Ok(false);
     };
+    let legacy_base = staged.base_directory.clone();
     let (base_directory, base_changed) = staged
         .base_directory
         .clone()
@@ -62,7 +63,7 @@ fn migrate_staged_genesis_directories(
     let (directory, directory_changed) = staged
         .directory
         .clone()
-        .migrate_legacy_duplicate_app_key_ownership_preserving(&pending.identity_id)
+        .migrate_legacy_duplicate_app_key_ownership_from_base(&legacy_base, &pending.identity_id)
         .map_err(map_domain_error)?;
     staged.base_directory = base_directory;
     staged.directory = directory;

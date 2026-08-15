@@ -420,6 +420,85 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    async fn genesis_cleanup_rejects_candidate_only_overlap_during_legacy_migration()
+    -> Result<(), NookError> {
+        super::super::clear_identity_directory_for_test().await?;
+        let legacy_key = nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;
+        let candidate_key =
+            nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;
+        let mut legacy = nook_core::IdentityDirectory::empty();
+        let pending_identity_id = legacy
+            .create_identity("Pending", &legacy_key, None)
+            .map_err(super::super::map_domain_error)?;
+        legacy
+            .create_identity("Legacy duplicate", &legacy_key, None)
+            .map_err(super::super::map_domain_error)?;
+        legacy
+            .select(&pending_identity_id)
+            .map_err(super::super::map_domain_error)?;
+        let store_id = nook_core::generate_store_id().map_err(super::super::map_domain_error)?;
+        let mut candidate = legacy.clone();
+        candidate
+            .enroll_selected_app_key_for_vault_creation(&candidate_key, "Pending")
+            .map_err(super::super::map_domain_error)?;
+        candidate
+            .create_identity("Candidate overlap", &candidate_key, None)
+            .map_err(super::super::map_domain_error)?;
+        candidate
+            .open_or_generate_vault_dek_for_identity(
+                &pending_identity_id,
+                &legacy_key,
+                store_id.clone(),
+            )
+            .map_err(super::super::map_domain_error)?;
+        let pending = PendingSimpleGenesis {
+            store_id,
+            identity_id: pending_identity_id.clone(),
+            created_at: nook_core::IsoTimestamp::parse("2026-08-15T00:00:00.000Z")
+                .map_err(|error| NookError::Database(error.to_string()))?,
+            event_state: PendingSimpleGenesisEvent::AwaitingEvent,
+            flow: PendingSimpleGenesisFlow::Staged(StagedSimpleGenesisIdentity {
+                base_directory: legacy.clone(),
+                directory: candidate,
+            }),
+        };
+        let (normalized, _) = legacy
+            .migrate_legacy_duplicate_app_key_ownership_preserving(&pending_identity_id)
+            .map_err(super::super::map_domain_error)?;
+        crate::storage::indexed_db::idb_put_string(
+            super::super::IDENTITY_DIRECTORY_KEY,
+            &serde_json::to_string(&normalized)
+                .map_err(|error| NookError::Serialization(error.to_string()))?,
+        )
+        .await?;
+        crate::storage::indexed_db::idb_put_string(
+            PENDING_SIMPLE_GENESIS_KEY,
+            &encode_pending_simple_genesis(&pending)?,
+        )
+        .await?;
+
+        let result = super::super::clear_pending_simple_genesis(
+            super::super::SimpleGenesisCompletion::Staged {
+                pending: &pending,
+                signing_seed: "candidate-overlap-seed",
+            },
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(NookError::Database(message)) if message.contains("more than one local identity")
+        ));
+        assert_eq!(super::super::load_identity_directory().await?, normalized);
+        assert!(
+            super::super::pending_simple_genesis_for_store(pending.store_id.as_str())
+                .await?
+                .is_some()
+        );
+        super::super::clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
     async fn unchanged_base_rejects_invalid_staged_candidate() -> Result<(), NookError> {
         super::super::clear_identity_directory_for_test().await?;
         let selected_key = nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;
