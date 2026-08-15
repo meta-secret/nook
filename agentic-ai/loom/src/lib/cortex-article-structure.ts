@@ -158,10 +158,11 @@ function invalidLedgerMessage(args: InvalidLedgerMessageArgs): string | false {
 
 function auditDocument(args: AuditDocumentArgs): void {
   const headings = args.document.root.children.filter(isHeading);
-  const mapHeading = headings.find(
-    (heading) => heading.depth === 2 && nodeText(heading) === 'Document map',
-  );
-  if (typeof mapHeading === 'undefined') {
+  const mapHeading =
+    headings.find(
+      (heading) => heading.depth === 2 && nodeText(heading) === 'Document map',
+    ) ?? false;
+  if (mapHeading === false) {
     return;
   }
   const mapIndex = args.document.root.children.indexOf(mapHeading);
@@ -176,8 +177,8 @@ function auditDocument(args: AuditDocumentArgs): void {
 
   const children = args.document.root.children;
   for (let index = contentStart; index < children.length; index += 1) {
-    const node = children[index];
-    if (typeof node === 'undefined' || node.type !== 'heading') {
+    const node = children[index] ?? false;
+    if (node === false || node.type !== 'heading') {
       continue;
     }
     const sectionNodeArgs: OwnedSectionNodesArgs = {
@@ -222,8 +223,8 @@ type OwnedSectionNodesArgs = {
 function ownedSectionNodes(
   args: OwnedSectionNodesArgs,
 ): readonly RootContent[] {
-  const heading = args.children[args.headingIndex];
-  if (typeof heading === 'undefined' || heading.type !== 'heading') {
+  const heading = args.children[args.headingIndex] ?? false;
+  if (heading === false || heading.type !== 'heading') {
     return [];
   }
   let end = args.children.length;
