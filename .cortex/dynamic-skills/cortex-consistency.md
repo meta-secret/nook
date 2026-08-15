@@ -41,13 +41,11 @@
 
 ## Priority
 
-This is a P1 documentation integrity rule.
+This is a P1 documentation integrity rule:
 
-Stale `.cortex` guidance is a defect.
-
-Conflicting `.cortex` guidance is a defect.
-
-`.cortex` guidance that disagrees with the code is a defect.
+- stale `.cortex` guidance is a defect;
+- conflicting `.cortex` guidance is a defect; and
+- `.cortex` guidance that disagrees with the code is a defect.
 
 ## Purpose
 
@@ -114,13 +112,12 @@ Default task scope:
 - follow links one hop from those docs;
 - do not rewrite the entire `.cortex` tree unless the user asks for a full GC.
 
-A full-tree GC follows
-[subagent-delegation.md](../workflows/subagent-delegation.md).
+A full-tree GC follows this ownership model:
 
-When two or more document families are in scope, delegate read-only evidence
-collection by family.
-
-One task owner resolves conflicts and authors the final edit.
+1. Follow [subagent-delegation.md](../workflows/subagent-delegation.md).
+2. When multiple document families are in scope, delegate read-only evidence
+   collection by family.
+3. Keep one task owner responsible for conflict resolution and the final edit.
 
 Does not apply to:
 
@@ -164,9 +161,8 @@ After:
 
 ## Validation
 
-Proof is a docs diff that restores agreement.
-
-Name the checked docs and the code or Task paths used as evidence.
+- The proof is a docs diff that restores agreement.
+- Name the checked docs and the code or Task paths used as evidence.
 
 Run the mechanical link and index audit:
 
@@ -181,18 +177,18 @@ cortexAudit:
 task loom:cortex-audit
 ```
 
-For density findings, set `includeDensityLint: true` in the cortexAudit request.
+- For density findings, set `includeDensityLint: true` in the cortexAudit
+  request.
+- See [Loom tools](../references/loom-tools.md).
+- Loom checks broken relative links, skill-index sync, and executable skill
+  paths.
+- Semantic conflicts still require agent judgment.
+- For implementation tasks:
+  1. run `task loom:pre-push`;
+  2. commit and push; and
+  3. use the normal hosted validation path.
 
-See [loom-tools.md](../references/loom-tools.md).
-
-Loom checks broken relative links, skill-index sync, and executable skill paths.
-
-Semantic conflicts still require agent judgment.
-
-For implementation tasks, run `task loom:pre-push`, commit and push, then use
-the normal hosted validation path.
-
-For a full cortex GC request, report:
+For a full Cortex GC request, report:
 
 - obsolete facts removed or rewritten;
 - cross-doc conflicts resolved;

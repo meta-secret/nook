@@ -74,21 +74,19 @@ gh pr merge <number> --squash
 
 See [loom-tools.md](../references/loom-tools.md).
 
-Do not run `task check` / `task ci:pr` as a local product gate.
+Delivery rules:
 
-`task loom:pr-land CONFIG=<pr-land-merge-check-request.yaml>` summarizes readiness.
-
-Loom never squash-merges. The task-owning agent merges after readiness succeeds.
-
-Loom immediately dispatches complete validation. It then requests exact-head
-Codex review. A failed request or missing result is non-blocking.
-
-Inspect feedback again at the readiness boundary.
-
-A later push invalidates the audit.
-
-Do not monitor the resulting Main workflow unless the user explicitly requested
-deployment or Main-failure work.
+- Do not run `task check` or `task ci:pr` as a local product gate.
+- `task loom:pr-land CONFIG=<pr-land-merge-check-request.yaml>` summarizes
+  readiness.
+- Loom never squash-merges.
+  - The task-owning agent merges after readiness succeeds.
+- Loom dispatches complete validation and then requests exact-head Codex review.
+  - A failed request or missing result is non-blocking.
+- Inspect feedback again at the readiness boundary.
+- A later push invalidates the audit.
+- Do not monitor the resulting Main workflow unless the user explicitly
+  requested deployment or Main-failure work.
 
 ## Scope
 
@@ -129,11 +127,11 @@ Does not apply to:
 
 ## Validation
 
-Run `task loom:test` and `cd agentic-ai/ci-agent && npm test`.
-
-The readiness audit must reject stale heads, missing/failed Nook runs, missing
-exact-head deployment, and feedback requiring handling.
-
-The audit stays read-only.
-
-The task-owning agent performs the squash merge after it succeeds.
+- Run `task loom:test` and `cd agentic-ai/ci-agent && npm test`.
+- The readiness audit must reject:
+  - stale heads;
+  - missing or failed Nook runs;
+  - missing exact-head deployment; and
+  - feedback requiring handling.
+- The audit stays read-only.
+- The task-owning agent performs the squash merge after readiness succeeds.
