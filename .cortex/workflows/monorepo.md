@@ -47,15 +47,12 @@ layer-focused PRs. Follow
    - Use a focused hosted task only when it shortens diagnosis of a known failure.
    - Do not run local `task check` for agent work.
 
-When multiple packages need separate PRs, introduce or stabilize the narrowest
-owning interface first.
+For multiple package PRs:
 
-Merge that slice before changing its consumers.
-
-Start each consumer slice from current `origin/main`.
-
-Do not combine unrelated package changes merely because they belong to the same
-feature.
+1. Introduce or stabilize the narrowest owning interface first.
+2. Merge that slice before changing its consumers.
+3. Start each consumer slice from current `origin/main`.
+4. Keep unrelated package changes separate even when they belong to one feature.
 
 Dependency direction must stay:
 
@@ -63,18 +60,15 @@ Dependency direction must stay:
 nook-core → nook-wasm → nook-web
 ```
 
-Do not make `nook-core` depend on `nook-wasm`, browser, Svelte, Bun, IndexedDB,
-HTTP, or session concepts. `wasm-bindgen` annotations on simple core DTOs/enums
-are allowed when they preserve one typed domain model across Rust and web.
-
-Use Bun for Nook web and Loom JavaScript tooling.
-
-Run project commands through Taskfile/Docker.
-
-Do not introduce npm flows or lockfiles into Bun-owned packages.
-
-`agentic-ai/ci-agent` is the maintained Node/npm exception and owns its
-`package-lock.json`.
+- Do not make `nook-core` depend on `nook-wasm`, browser, Svelte, Bun,
+  IndexedDB, HTTP, or session concepts.
+  - `wasm-bindgen` annotations on simple core DTOs and enums are allowed when
+    they preserve one typed domain model across Rust and web.
+- Use Bun for Nook web and Loom JavaScript tooling.
+- Run project commands through Taskfile and Docker.
+- Do not introduce npm flows or lockfiles into Bun-owned packages.
+  - `agentic-ai/ci-agent` is the maintained Node/npm exception and owns its
+    `package-lock.json`.
 
 ## New vault item type checklist
 
