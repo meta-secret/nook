@@ -116,12 +116,13 @@
 
 ## Overview
 
-Use this checklist for every change that lands on `main`. **AI agents must follow [coding-bro.md](coding-bro.md)** — the default implement-to-merge pipeline — and the detailed [agent pipeline](#agent-pipeline) below. Do not stop at push.
-
-This workflow applies only to the current task's owned feature and focused
-issues.
-
-Another active task's branch and pull request are read-only.
+- Use this checklist for every change that lands on `main`.
+- AI agents must follow [Coding bro](coding-bro.md) and the detailed
+  [agent pipeline](#agent-pipeline) below.
+  - Do not stop at push.
+- Apply this workflow only to the current task's owned feature and focused
+  issues.
+- Treat another active task's branch and pull request as read-only.
 
 Without an explicit handoff, do not:
 
@@ -183,17 +184,12 @@ ownership until merge or a concrete blocked handoff:
 
 ### Size boundary
 
-An implementation pull request must target no more than **5,000 authored
-changed lines**.
-
-This is a planning ceiling.
-
-It exists because review, validation, conflict resolution, and repair cost
-rise sharply once a change becomes too large to reason about as one unit.
-
-Estimate the size before implementation.
-
-Re-estimate when the design changes or the diff grows unexpectedly.
+- An implementation pull request targets no more than **5,000 authored changed
+  lines**.
+- Treat this as a planning ceiling because review, validation, conflict
+  resolution, and repair costs rise sharply above it.
+- Estimate before implementation.
+- Re-estimate when design changes or the diff grows unexpectedly.
 
 Count additions and deletions against the intended base for:
 
@@ -203,12 +199,10 @@ Count additions and deletions against the intended base for:
 - configuration;
 - scripts and workflow code.
 
-During implementation, use `git diff --numstat <base>` for tracked working-tree
-changes.
-
-Count untracked authored files separately.
-
-After every change is committed, use `git diff --numstat <base>...HEAD`.
+- During implementation, use `git diff --numstat <base>` for tracked
+  working-tree changes.
+- Count untracked authored files separately.
+- After commit, use `git diff --numstat <base>...HEAD`.
 
 Report these separately because they do not represent authored functionality:
 
@@ -219,28 +213,18 @@ Report these separately because they do not represent authored functionality:
 - binary artifacts;
 - pure renames with no content change.
 
-Do not exclude tests or delete-heavy refactors from the authored estimate.
-
-Do not pad, compress, or mechanically reorganize code to fit the number.
-
-Treat 4,000 authored changed lines as a mandatory split-planning warning.
-
-Stop implementation and re-estimate the complete requested outcome.
-
-If the remaining work may cross the ceiling, define at least two semantic PR
-slices in Workbench before continuing.
-
-Each slice must own complete capabilities or module responsibilities together
-with their tests and documentation.
-
-If the estimate approaches the ceiling, reduce scope before implementation.
-
-If implementation crosses the ceiling, stop expanding that PR.
-
-Do not optimize the current diff to make the number pass.
-
-Compression, test removal, documentation removal, completed-behavior deletion,
-and cosmetic churn are not scope management.
+- Do not exclude tests or delete-heavy refactors from the authored estimate.
+- Do not pad, compress, or mechanically reorganize code to fit the number.
+- Treat 4,000 authored changed lines as a mandatory split-planning warning.
+- Stop implementation and re-estimate the complete requested outcome.
+- If the remaining work may cross the ceiling, define at least two semantic PR
+  slices in Workbench before continuing.
+- Each slice owns complete capabilities or module responsibilities together
+  with their tests and documentation.
+- If implementation crosses the ceiling, stop expanding that PR.
+- Do not optimize the current diff to make the number pass.
+- Compression, test removal, documentation removal, completed-behavior deletion,
+  and cosmetic churn are not scope management.
 
 Before changing the first PR after the re-estimate requires a split, or after
 implementation crosses the ceiling:
@@ -258,18 +242,17 @@ implementation crosses the ceiling:
    Workbench checklist plus `numstat`, `name-status`, or `range-diff` evidence.
 8. Rebuild the first PR as the smallest independently useful semantic slice.
 
-Local Git history is not preservation; a linked draft successor is.
+Sequence rules:
 
-Preserve a coherent bounded capability, not a line-count-selected portion.
-
-Complete the first PR before its successor. Then update from `origin/main`,
-change the successor's temporary stacked base to `main`, re-measure, and
-validate. Continue until the complete Workbench outcome is merged.
-
-The same agent owns every PR in the declared sequence unless Workbench records
-an explicit owner handoff.
-
-Scope reduction without a linked preservation PR is a P1 delivery failure.
+- Local Git history is not preservation; a linked draft successor is.
+- Preserve a coherent bounded capability, not a line-count-selected portion.
+- Complete the first PR before its successor.
+- After the first PR merges, update the successor from `origin/main`, change its
+  temporary stacked base to `main`, re-measure, and validate.
+- Continue until the complete Workbench outcome is merged.
+- The same agent owns every PR in the declared sequence unless Workbench records
+  an explicit owner handoff.
+- Scope reduction without a linked preservation PR is a P1 delivery failure.
 
 ### Required plan
 
@@ -302,11 +285,9 @@ Apply SOLID principles as concrete review questions:
 - Do higher-level policies depend on stable abstractions?
 - Are internal details hidden behind the owning module?
 
-Public interfaces should change less often than internal implementations.
-
-Design the narrow boundary before dependent slices begin.
-
-Do not expose speculative APIs for work that has no planned consumer.
+- Public interfaces should change less often than internal implementations.
+- Design the narrow boundary before dependent slices begin.
+- Do not expose speculative APIs without a planned consumer.
 
 Each slice must be:
 
@@ -316,20 +297,16 @@ Each slice must be:
 - compatible with the previous merged slice;
 - small enough for focused review and repair.
 
-A slice may prepare an interface or migrate one module before the complete user
-flow is available.
-
-Its acceptance criteria must still be independently observable.
+- A slice may prepare an interface or migrate one module before the complete
+  user flow exists.
+  - Its acceptance criteria must still be independently observable.
 
 ### Multi-PR feature delivery
 
-A feature may require many issues and pull requests.
-
-Use one Workbench feature summary for the full outcome.
-
-Create one focused issue for each independently mergeable slice.
-
-Record dependencies and order in the feature index.
+- A feature may require many issues and pull requests.
+- Use one Workbench feature summary for the full outcome.
+- Create one focused issue for each independently mergeable slice.
+- Record dependencies and order in the feature index.
 
 Then repeat this loop:
 
@@ -340,12 +317,9 @@ Then repeat this loop:
 5. Start the next ready issue on a new branch.
 6. Continue until the feature acceptance criteria are complete.
 
-Remaining slices are required delivery work.
-
-Do not label them optional follow-up work merely because the first pull request
-merged.
-
-Do not keep one long-lived branch for the full sequence.
+- Remaining slices are required delivery work.
+  - Do not label them optional because the first pull request merged.
+- Do not keep one long-lived branch for the full sequence.
 
 See [issues.md](issues.md#multi-pr-feature-sequences) for Workbench ownership.
 
@@ -403,24 +377,32 @@ Never commit directly on `main`.
 
 ### 1. Prepare the PR path
 
-Before editing, complete the size and modularity plan above.
-
-Decide the branch name and the first PR's scope, title, and body.
-
-The PR may be opened after the first coherent commit.
-
-The work must already be organized around getting that slice green and merged.
+1. Complete the size and modularity plan above.
+2. Decide the branch name and the first PR's scope, title, and body.
+3. Organize work around getting that slice green and merged.
+4. Open the PR after the first coherent commit when useful.
 
 ### 2. Implement
 
+Implement only the bounded slice described by the task plan and preserve its
+owning interfaces and acceptance evidence.
+
 ### 3. Push an exact remote-executable commit
 
-When the branch has a coherent implementation, prepare the exact remote commit.
-Run pre-push hygiene, commit, and run advisory local review. Then push and open
-or update the PR. This makes the source available to focused hosted tasks. It
-does not start complete validation.
+Prepare an exact remote commit:
 
-Never run `task check`, a full test suite, build, e2e, or post-fix product validation as a required local gate before or after the push. This is not a license to push half-finished or unformatted work: always run `task loom:pre-push` before the push, and push once the branch is coherent enough to validate.
+1. Make the implementation coherent.
+2. Run pre-push hygiene.
+3. Commit and run advisory local review.
+4. Push and open or update the PR.
+
+This exposes the source to focused hosted tasks but does not start complete
+validation.
+
+- Never require `task check`, a full test suite, build, e2e, or post-fix
+  product validation as a local gate.
+- Always run `task loom:pre-push` before push.
+- Push only when the branch is coherent enough to validate.
 
 ```bash
 task loom:pre-push
@@ -432,21 +414,16 @@ gh pr create --title "…" --body "…"
 
 See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
-Before the first owner-authored push, run `task pr:review-local` on the coherent
-branch head. For a harness-created PR, run it immediately after handoff.
-
-After each coherent push, inspect feedback already present.
-
-Use focused remote tasks when they shorten diagnosis.
-
-Trigger complete validation only when the head is ready for the final gate. It
-dispatches checks immediately, then requests exact-head Codex review.
-
-After a complete-gate failure, validate the completed replacement head again.
-
-Do not wait for Codex review. Do not request or wait for other external
-reviewers. See
-[code-review.md](code-review.md).
+- Before the first owner-authored push, run `task pr:review-local` on the
+  coherent head.
+  - For a harness-created PR, run it immediately after handoff.
+- After each coherent push, inspect feedback already present.
+- Use focused remote tasks when they shorten diagnosis.
+- Trigger complete validation only when the head is ready for the final gate.
+  - It dispatches checks immediately and requests exact-head Codex review.
+- After a complete-gate failure, validate the completed replacement head again.
+- Do not wait for Codex or request other external reviewers.
+  - See [Code review](code-review.md).
 
 The feedback inspection and readiness audit replace any blind review-batching grace period.
 
@@ -492,11 +469,13 @@ task pr:validate PR=<number> FULL_E2E=1
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci) and [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md).
 
-Workflow cancellation must follow the scopes in [ci-pipeline.md § Workflow concurrency policy](ci-pipeline.md#workflow-concurrency-policy).
-
-Explicit validation cancels only an older labeled run for the same PR. Unrelated PRs keep independent required checks.
-
-Any cancellable live-provider job must also keep its external-resource cleanup in a separate `if: always()` step. An interrupted test process must not leak provider state.
+- Follow [workflow concurrency policy](ci-pipeline.md#workflow-concurrency-policy)
+  for cancellation.
+- Explicit validation cancels only an older labeled run for the same PR.
+  - Unrelated PRs keep independent required checks.
+- Every cancellable live-provider job keeps external-resource cleanup in a
+  separate `if: always()` step.
+  - An interrupted test must not leak provider state.
 
 ### 5.1. Main-fix browser validation
 
@@ -539,24 +518,27 @@ Agents do not run full e2e locally. Use the remote catalog for focused browser f
 - `PR`
 - `Web research` when `.github/workflows/web-research.yml` or `nook-app/nook-web/nook-web-research/**` changes
 
-Never use an all-check watcher that can remain blocked on external services. If neither repository workflow applies to the changed paths, there is no remote check to wait for.
+- Never use an all-check watcher that can remain blocked on external services.
+- If neither repository workflow applies to the changed paths, there is no
+  remote check to wait for.
 
 ```bash
 task pr:preflight PR=<number>
 ```
 
-Use `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` (or `task pr:ready`) for a read-only exact-head readiness assertion. The command never merges by itself. Its success is the final signal for the task-owning agent to squash-merge immediately.
-
-Codex review is not a readiness requirement. Do not wait for it after
-repository-owned checks finish. Do not request or wait for Claude, Cursor,
-CodeRabbit, or other optional external reviews/checks. Repository-owned checks and exact-head
-deployment remain required.
-
-Before treating a PR as mergeable, **always verify the branch against the latest `origin/main`**.
-
-Do this every time, even when all visible checks are green.
-
-If a green PR cannot merge, assume the first and most likely blocker is that `main` advanced and the PR branch is stale.
+- Use `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` or
+  `task pr:ready` for read-only exact-head readiness.
+  - The command never merges by itself.
+  - Success tells the task owner to squash-merge immediately.
+- Codex review is not a readiness requirement.
+  - Do not wait for it after repository checks finish.
+  - Do not request or wait for optional external reviews or checks.
+- Repository-owned checks and exact-head deployment remain required when
+  applicable.
+- Before merge, always verify the branch against latest `origin/main` even when
+  all visible checks are green.
+- If a green PR cannot merge, first suspect a stale branch after `main`
+  advanced.
 
 GitHub may surface that stale-branch state as:
 
@@ -564,7 +546,11 @@ GitHub may surface that stale-branch state as:
 - `mergeStateStatus: BLOCKED`
 - a missing active check because the green run belongs to an older base
 
-Fetch `main`, compare divergence, and update the PR branch before chasing other branch-policy explanations:
+Before chasing other branch-policy explanations:
+
+1. Fetch `main`.
+2. Compare divergence.
+3. Update the PR branch when stale.
 
 ```bash
 git fetch origin main
@@ -572,7 +558,12 @@ git rev-list --left-right --count HEAD...origin/main
 gh pr view <number> --json mergeStateStatus,baseRefOid,headRefOid,statusCheckRollup
 ```
 
-If the branch is behind `origin/main`, merge the base branch into the PR branch, push, then explicitly validate Nook's workflows on the new head SHA. Do not merge until this freshness check passes:
+If the branch is behind `origin/main`:
+
+1. Merge the base branch into the PR branch.
+2. Push the new head.
+3. Explicitly validate applicable workflows.
+4. Do not merge until freshness passes.
 
 ```bash
 git merge origin/main --no-edit
@@ -583,9 +574,12 @@ task pr:ready PR=<number>
 
 ### 6.1. Address review comments
 
-Actionable PR feedback that already exists must be handled, whether it comes from a human reviewer, Codex, or another automated reviewer. Follow [code-review-comments.md](../dynamic-skills/code-review-comments.md) for the full checklist.
-
-Agents must leave their own GitHub reply explaining the fix, validation, or no-change rationale before resolving any PR comment or review conversation. Do not resolve comments silently. Inspect submitted review bodies as well as inline review threads and PR comments:
+- Handle all actionable feedback already present, regardless of author.
+  - Follow [Code review comments](../dynamic-skills/code-review-comments.md).
+- Before resolving a conversation, leave an agent-authored reply with the fix,
+  validation, or no-change rationale.
+  - Do not resolve silently.
+- Inspect submitted review bodies, inline threads, and PR comments:
 
 ```bash
 gh pr view <pr-number> --comments
@@ -594,21 +588,19 @@ gh api repos/meta-secret/nook/pulls/<pr-number>/reviews \
   --jq ".[] | {user: .user.login, state, body, html_url, commit_id, current_head: (.commit_id == \"$head_sha\")}"
 ```
 
-Treat actionable submitted-review bodies as current only when `current_head` is `true`.
-
-Keep older review bodies as audit context. Use thread `isOutdated` state plus the current code when deciding whether an older inline finding still needs a reply.
-
-Use the GitHub review-thread GraphQL query from the [code-review-comments skill](../dynamic-skills/code-review-comments.md) to inspect unresolved inline conversations.
-
-Reply only on actual review threads/comments that support targeted replies.
-
-Track actionable submitted review-body items without a threaded reply target in the checklist/final handoff rather than creating comment spam.
-
-Resolve all actionable threads and re-query immediately before merge.
-
-Do not wait for Codex after repository-owned checks finish. Do not request
-other optional external reviews or status changes. See
-[code-review.md](code-review.md).
+- Treat a submitted-review body as current only when `current_head` is `true`.
+- Keep older bodies as audit context.
+  - Use `isOutdated` and current code to decide whether an older inline finding
+    still needs a reply.
+- Use the review-thread GraphQL query from the review-comments skill to inspect
+  unresolved inline conversations.
+- Reply only where a real thread or comment supports a targeted reply.
+- Track unthreaded submitted-review items in the checklist and handoff instead
+  of creating comment spam.
+- Resolve all actionable threads and re-query immediately before merge.
+- Do not wait for Codex after repository checks finish or request optional
+  external status changes.
+  - See [Code review](code-review.md).
 
 ### 7. Fix loop on failure
 
@@ -679,11 +671,14 @@ Completed Main attempts independently commit one automated `stats/main-build/<ru
 
 ### 10. Task completion report
 
-Every agent turn that **finishes a user-assigned task** must end with a short **completion report** that includes **how long the work took**.
-
-**When to report:** After the task is done — merged implementation PR, delivered answer, or explicit handoff. Do not wait for a post-merge Main run unless deployment/live verification was explicitly requested. Do not omit this on multi-step work that spans monitor/fix/merge cycles; report once at the very end.
-
-**What to measure:** Wall-clock time from when you **started working on the user's request** (first implementation step or investigation for that assignment) until you send the final message. Include CI wait time if you monitored checks as part of the task.
+- Every turn that finishes a user-assigned task ends with a short completion
+  report that includes duration.
+- **When:** after merged delivery, delivered answer, or explicit handoff.
+  - Do not wait for post-merge Main unless live verification was requested.
+  - For a multi-step monitor/fix/merge cycle, report once at the end.
+- **Measurement:** wall-clock time from first implementation or investigation
+  through the final message.
+  - Include CI wait time that the agent monitored.
 
 **Format** — add a `## Duration` line (or equivalent) in the final reply:
 

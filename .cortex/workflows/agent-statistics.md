@@ -56,12 +56,16 @@ It is not a free-form task diary.
 
 ## Mechanical entrypoint — Loom
 
-Keep judgment in this doc.
-
-Run assemble / validate / publish through Loom YAML requests.
-
-Scratch JSON must include `started_at`, `change_surface`, `local_executions`,
-`pr_retriggers`, `merge_attempts`, `comparison`, and `waste_assessment`.
+- Keep judgment in this document.
+- Run assemble, validate, and publish through Loom YAML requests.
+- Scratch JSON must include:
+  - `started_at`;
+  - `change_surface`;
+  - `local_executions`;
+  - `pr_retriggers`;
+  - `merge_attempts`;
+  - `comparison`; and
+  - `waste_assessment`.
 
 Assemble request:
 
@@ -78,19 +82,15 @@ agentStats:
 task loom:agent-stats CONFIG=/tmp/assemble-request.yaml
 ```
 
-Validate / publish use `agentStats.validate` / `agentStats.publish` with
-`statsFile: /tmp/123.yaml`.
-
-Examples:
-[`agentic-ai/loom/params/agent-stats/`](../../agentic-ai/loom/params/agent-stats/).
-
-Protocol: [loom-tools.md](../references/loom-tools.md).
-
-Loom fills PR metadata, Actions runs, optional test inventory, and summary
-derivations.
-
-The agent still owns comparison quality and waste assessment text in the scratch
-log before assemble.
+- **Validate and publish:** use `agentStats.validate` or `agentStats.publish`
+  with `statsFile: /tmp/123.yaml`.
+- **Examples:**
+  [`agentic-ai/loom/params/agent-stats/`](../../agentic-ai/loom/params/agent-stats/).
+- **Protocol:** [Loom tools](../references/loom-tools.md).
+- **Loom owns:** PR metadata, Actions runs, optional test inventory, and summary
+  derivations.
+- **The agent owns:** comparison quality and waste-assessment text in the
+  scratch log before assembly.
 
 ## What to measure
 
@@ -144,13 +144,10 @@ Required top-level keys:
 - `comparison`
 - `waste_assessment`
 
-`summary` values must be derivable from the detailed lists.
-
-`test_inventory.total` must equal the sum of `by_type`.
-
-`test_inventory.head_sha` must match `source_pr.head_sha`.
-
-Historical schema versions `1` and `2` remain valid baselines.
+- `summary` values must be derivable from the detailed lists.
+- `test_inventory.total` must equal the sum of `by_type`.
+- `test_inventory.head_sha` must match `source_pr.head_sha`.
+- Historical schema versions `1` and `2` remain valid baselines.
 
 ## Comparison and required action
 

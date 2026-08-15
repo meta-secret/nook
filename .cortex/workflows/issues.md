@@ -86,13 +86,10 @@ index. Focused Markdown files replace sub-issues.
 
 ## Multi-PR feature sequences
 
-One feature may require many focused issues and pull requests.
+Create a focused sequence when either condition holds:
 
-Create a sequence when the complete feature is expected to exceed 5,000
-authored changed lines.
-
-Also create a sequence when separate module ownership makes independent slices
-safer, even below that size.
+- the complete feature is expected to exceed 5,000 authored changed lines; or
+- separate module ownership makes independent slices safer below that size.
 
 The feature `README.md` must record:
 
@@ -111,15 +108,12 @@ documentation to a named PR slice.
 
 Line-count optimization is not a valid split strategy.
 
-Each focused issue must own one cohesive module, package, layer, or
-architectural responsibility.
-
-Each issue should normally map to one pull request.
-
-Every issue must be independently testable and mergeable.
-
-Later issues must consume stable interfaces from earlier slices instead of
-repeatedly rewriting them.
+- Each focused issue owns one cohesive module, package, layer, or architectural
+  responsibility.
+- Each issue normally maps to one pull request.
+- Every issue is independently testable and mergeable.
+- Later issues consume stable interfaces from earlier slices instead of
+  repeatedly rewriting them.
 
 After a slice merges:
 
@@ -132,9 +126,8 @@ After a slice merges:
    `automation: agent`.
 6. In that case, the current agent must not also start the issue.
 
-The feature remains incomplete while any required issue remains incomplete.
-
-Do not convert remaining requested functionality into an optional follow-up.
+- The feature remains incomplete while any required issue remains incomplete.
+- Do not convert remaining requested functionality into an optional follow-up.
 
 See
 [pull-requests.md](pull-requests.md#pull-request-size-and-modularity) for the
@@ -199,18 +192,13 @@ automation: agent
 owner: <nook-github-collaborator>
 ```
 
-The owner must be an assignable Nook GitHub collaborator with write access.
-
-The scheduled scan skips candidate records with a missing or unassigned owner.
-An explicitly requested ownerless record fails without implementation.
-
-Creating or editing any other record must not start implementation.
-
-The worker claims an eligible record by committing `status: in_progress`
-before it runs.
-
-Main-failure handoff records instead use `status: ready` with `automation:
-hive`.
+- The owner must be an assignable Nook GitHub collaborator with write access.
+- The scheduled scan skips a missing or unassigned owner.
+  - An explicitly requested ownerless record fails without implementation.
+- Creating or editing any other record must not start implementation.
+- The worker claims an eligible record by committing `status: in_progress`
+  before it runs.
+- Main-failure handoff records use `status: ready` with `automation: hive`.
 
 A single token-free dispatcher reconciles those records into Neo4j by failed Main
 SHA. The isolated task owns:
@@ -333,21 +321,17 @@ NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \
   "plan: start <task>"
 ```
 
-The source-task file stays outside the checkout.
-
-It lets the publisher reject copied prompt text.
-
-Do not publish that file.
-
-The scheduled implementation worker uses a dedicated planning LLM turn,
-validates and publishes the plan, and only then begins its implementation turn.
-A missing or rejected plan blocks implementation.
-
-A valid multi-PR plan also blocks scheduled implementation.
-
-Materialize its Workbench feature summary and focused issues first.
-
-Then dispatch the first focused issue with a bounded one-PR plan.
+- Keep the source-task file outside the checkout.
+  - It lets the publisher reject copied prompt text.
+  - Do not publish it.
+- The scheduled worker:
+  1. uses a dedicated planning LLM turn;
+  2. validates and publishes the plan; and
+  3. begins implementation only after publication.
+- A missing or rejected plan blocks implementation.
+- A valid multi-PR plan also blocks scheduled implementation.
+  1. Materialize the Workbench feature summary and focused issues.
+  2. Dispatch the first focused issue with a bounded one-PR plan.
 
 ## Worklog requirement
 
