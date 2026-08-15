@@ -32,6 +32,9 @@
 - [3. Vault file additions](#3-vault-file-additions)
   - Adds `password_entries` while preserving the existing device-key vault schema.
   - Read before changing the persisted vault format or migration behavior.
+  - [Envelope migration](#envelope-migration)
+    - Defines the event-log migration from legacy password-only metadata.
+    - Read before changing password-envelope schema compatibility.
   - [Credential effects](#credential-effects)
     - Defines the key-rotation effects of adding, rotating, and removing a password.
     - Read before implementing credential mutation.

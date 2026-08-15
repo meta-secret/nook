@@ -381,22 +381,6 @@ Preservation rules:
 - Do not compress documentation, remove tests, delete completed behavior, or
   perform cosmetic churn to make a PR fit the limit.
 
-If an in-progress pull request reaches the limit, the agent must:
-
-1. Stop implementation and publish a semantic split plan to Workbench.
-2. Branch a linked draft successor from the last full-work commit before
-   changing the first PR.
-3. Assign complete capabilities, modules, tests, and documentation to each PR.
-4. Prove all work exists in the ordered PR sequence.
-5. Complete the first PR, then continue and complete its successor.
-
-Reducing scope without that linked preservation PR is a P1 delivery failure.
-
-Shrinking a diff is not a semantic split.
-
-Do not compress documentation, remove tests, delete completed behavior, or
-perform cosmetic churn to make a PR fit the limit.
-
 Each pull request must:
 
 - own one cohesive module, package, layer, or architectural responsibility;

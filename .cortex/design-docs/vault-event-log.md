@@ -130,18 +130,19 @@ actor id must be the SHA-256 digest of that Ed25519 public key. The event
 signature must verify over the canonical body before a current-schema remote
 event enters the local event set.
 
-An `epoch-checkpoint` persists `secrets`, `members_checkpoint_hash`, and the
-complete rewrapped `rotated_meta_records` and `password_entries` sets.
-Projection replaces the prior sets. Explicit empty arrays clear them.
-Legacy checkpoints that omit metadata or password state retain the prior set.
-Schema `3` owns these fields, while current readers still accept
-pre-replacement schema `2` events. Older readers reject schema `3` before
-persistence instead of extending an epoch they cannot interpret.
+Checkpoint and visibility rules:
 
-Remote security triggers remain hidden until their authorized checkpoint is
-visible. Every causal descendant of a hidden trigger is hidden with it.
-When rejected events contract the accepted graph, metadata is rebuilt from an
-empty state so removed grants cannot survive in session caches.
+- An `epoch-checkpoint` persists `secrets`, `members_checkpoint_hash`, and the
+  complete rewrapped `rotated_meta_records` and `password_entries` sets.
+- Projection replaces the prior sets. Explicit empty arrays clear them.
+- Legacy checkpoints that omit metadata or password state retain the prior set.
+- Schema `3` owns these fields. Current readers still accept pre-replacement
+  schema `2` events. Older readers reject schema `3` before persistence instead
+  of extending an epoch they cannot interpret.
+- Remote security triggers remain hidden until their authorized checkpoint is
+  visible. Every causal descendant of a hidden trigger is hidden with it.
+- When rejected events contract the accepted graph, metadata is rebuilt from an
+  empty state so removed grants cannot survive in session caches.
 
 Non-genesis events are also checked against the event's causal past. An actor is
 accepted only if it is:
@@ -253,21 +254,23 @@ put_event_if_absent(provider, store_id, event_id, bytes)
 
 No `update_event` or `delete_event` in v1.
 
-The active provider adapters are GitHub, Google Drive, and iCloud. During
-outbox flush, the manager first uploads queued events that are absent remotely,
-then repairs the provider by uploading any local event-store events missing from
-that provider. During pull, fetched remote events are hash/signature-validated
-and ignored when their signed body belongs to another `store_id`.
+The active provider adapters are GitHub, Google Drive, and iCloud.
 
-Publish epoch checkpoints before triggers. Quarantine incomplete pairs and
-descendants. Old-frontier concurrency is a blocking conflict. Import unions are
-one IndexedDB transaction. Schema v3 owns replacements while v2 stays readable.
-Simple vaults adopt authorized keys before replay; missing authorization clears
-keys, and Sentinel requires a new ceremony. Password rotation uses a complete
-trigger/checkpoint pair.
+Provider synchronization rules:
 
-Provider connect and sync paths must classify the provider event set before
-writing outbox or repair events.
+- During outbox flush, upload queued events that are absent remotely. Then
+  repair the provider with any missing local event-store events.
+- During pull, validate fetched remote event hashes and signatures. Ignore
+  events whose signed body belongs to another `store_id`.
+- Publish epoch checkpoints before triggers. Quarantine incomplete pairs and
+  descendants.
+- Treat old-frontier concurrency as a blocking conflict. Commit import unions
+  in one IndexedDB transaction.
+- Keep schema v2 readable while schema v3 owns replacements.
+- Let Simple vaults adopt authorized keys before replay. Clear missing
+  authorization. Require a new Sentinel ceremony.
+- Use a complete trigger/checkpoint pair for password rotation.
+- Classify the provider event set before writing outbox or repair events.
 
 | Provider state | Action |
 | --- | --- |
