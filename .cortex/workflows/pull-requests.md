@@ -107,32 +107,50 @@ Do not exclude tests or delete-heavy refactors from the authored estimate.
 
 Do not pad, compress, or mechanically reorganize code to fit the number.
 
-Treat 4,000 authored changed lines as a planning warning. Stop adding unrelated
-responsibilities. Re-estimate the work, identify a stable slice interface, and
-prepare an ordered Workbench sequence if the slice may cross the hard ceiling.
+Treat 4,000 authored changed lines as a mandatory split-planning warning.
+
+Stop implementation and re-estimate the complete requested outcome.
+
+If the remaining work may cross the ceiling, define at least two semantic PR
+slices in Workbench before continuing.
+
+Each slice must own complete capabilities or module responsibilities together
+with their tests and documentation.
 
 If the estimate approaches the ceiling, reduce scope before implementation.
 
 If implementation crosses the ceiling, stop expanding that PR.
 
-Do not delete, revert, or defer authored work merely to make the number pass.
-Before reducing the PR:
+Do not optimize the current diff to make the number pass.
+
+Compression, test removal, documentation removal, completed-behavior deletion,
+and cosmetic churn are not scope management.
+
+Before changing the first PR after it reaches the warning or ceiling:
 
 1. Identify the last full-work commit and publish a superseding Workbench plan.
-2. Materialize every remaining slice as an ordered focused issue.
-3. Branch the successor from that commit and open it as a linked draft PR.
-4. Cross-link both PR descriptions and Workbench records.
-5. Prove every removed file and behavior exists in a successor, using the
+2. Divide the complete outcome along domain, capability, package, layer, or
+   stable-interface boundaries.
+3. Materialize every slice as an ordered focused issue.
+4. Record which complete implementation, tests, migrations, and documentation
+   belong to each slice.
+5. Branch the successor from the full-work commit and open it as a linked draft
+   PR before changing the first PR.
+6. Cross-link all PR descriptions and Workbench records.
+7. Prove every file and behavior exists in the ordered PR sequence, using the
    Workbench checklist plus `numstat`, `name-status`, or `range-diff` evidence.
-6. Only after that proof, reduce the first PR to 5,000 lines or fewer.
+8. Rebuild the first PR as the smallest independently useful semantic slice.
 
 Local Git history is not preservation; a linked draft successor is.
 
-Preserve a coherent bounded portion.
+Preserve a coherent bounded capability, not a line-count-selected portion.
 
 Complete the first PR before its successor. Then update from `origin/main`,
-change a temporary stacked base to `main`, re-measure, and validate. If still
-too large, repeat this protocol before removing work.
+change the successor's temporary stacked base to `main`, re-measure, and
+validate. Continue until the complete Workbench outcome is merged.
+
+The same agent owns every PR in the declared sequence unless Workbench records
+an explicit owner handoff.
 
 Scope reduction without a linked preservation PR is a P1 delivery failure.
 

@@ -13,8 +13,12 @@ AI agents must treat every implementation task as PR-bound from the start.
 - Estimate authored changed lines and identify the owning module or layer.
 - Split work expected to exceed 5,000 authored changed lines into an ordered
   Workbench issue and PR sequence.
+- At 4,000 lines, stop and decide the semantic PR sequence before more scope is
+  added.
 - If work reaches the limit, follow the linked-successor preservation protocol
   in [pull-requests.md](pull-requests.md#pull-request-size-and-modularity).
+- Never compress docs, remove tests, or delete completed behavior to optimize a
+  PR's line count.
 - Create a feature branch and plan the PR title/body/scope.
 - Open or update the PR as soon as there is a coherent commit to show, then keep working on that same PR branch.
 
@@ -42,8 +46,9 @@ Default PR-first loop:
    - Identify module and interface boundaries.
    - Publish the public-safe start snapshot to Nook Workbench.
    - Never copy the raw prompt or chat transcript.
-2. **Prepare the PR path** — if the feature is expected to exceed 5,000
-   authored changed lines, publish an ordered issue and PR sequence. Create a
+2. **Prepare the PR path** — if the feature may approach 5,000 authored changed
+   lines, publish an ordered semantic issue and PR sequence. Map complete
+   capabilities, tests, migrations, and documentation to each slice. Create a
    feature branch for the first cohesive slice and decide whether its PR will
    be draft or normal.
 3. **Implement functionality** — make the module-focused changes for the
