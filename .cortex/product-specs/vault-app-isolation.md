@@ -91,35 +91,32 @@ link back to Simple for users leaving the quorum-only product.
 
 ## Deployment
 
-Production releases publish `nokey.sh` as the public site and deploy the two
-vault projects to separate Cloudflare Pages projects. Release automation
-attaches and verifies both custom domains and their proxied CNAME records.
-
-Main deploys the same three artifacts independently. The landing and both vault
-custom domains point to the `development` branch aliases of their Pages
-projects, so Main cannot replace any project's production branch. PRs deploy
-branch `pr-<number>` to all three projects and expose only Cloudflare-native
-aliases; they do not create branded DNS records.
-
-The release gate verifies the app-kind marker, CSP and anti-sniffing headers,
-exact release commit, a working Simple extension route, and a `404` response for
-that route on Sentinel. Both vault artifacts are built from the same checkout
-and receive identical release metadata before either custom domain is accepted
-as healthy.
-
-Required external OAuth configuration is deliberately explicit: provider
-consoles must register both `https://simple.nokey.sh` and
-`https://sentinel.nokey.sh` when that provider is offered in both apps. OAuth
-clients that are meant only for Simple must not register Sentinel. Wildcard
-subdomains do not satisfy browser OAuth origin checks. WebAuthn does not share
-an RP across the apps: each ceremony uses the current hostname as its RP ID.
-The two stable Main vault origins are registered with browser providers. PR
-aliases are deliberately provider-disabled and receive no OAuth credentials.
-
-Rollback is a new immutable release from the selected known-good commit; tags
-are never moved. Run the production release workflow with a new semantic
-version and the known-good ref. The workflow redeploys all three surfaces and
-refuses a mixed release where either vault hostname reports a different commit.
-
-Cross-app links call the Rust/WASM lock path before navigation and carry no
-vault payload, provider credential, or session token in the URL.
+- **Production release:** Publish `nokey.sh` as the public site and deploy the
+  two vaults to separate Cloudflare Pages projects.
+  - Attach and verify both custom domains and their proxied CNAME records.
+- **Main and PR deployment:** Deploy all three artifacts independently.
+  - Point the landing and both vault custom domains at their Pages
+    `development` branch aliases so Main cannot replace a production branch.
+  - Deploy PR branch `pr-<number>` to all three projects.
+  - Expose only Cloudflare-native PR aliases; create no branded DNS records.
+- **Release gate:** Verify the app-kind marker, CSP, anti-sniffing headers, exact
+  release commit, working Simple extension route, and Sentinel `404` for that
+  route.
+  - Build both vault artifacts from the same checkout.
+  - Give both identical release metadata before accepting either custom domain
+    as healthy.
+- **External OAuth and WebAuthn:** Register both vault origins when a provider is
+  offered in both apps.
+  - A Simple-only OAuth client must not register Sentinel.
+  - Wildcard subdomains do not satisfy browser OAuth origin checks.
+  - WebAuthn ceremonies use the current hostname as RP ID; the apps do not share
+    an RP.
+  - Register both stable Main vault origins with browser providers.
+  - Keep PR aliases provider-disabled and give them no OAuth credentials.
+- **Rollback:** Create a new immutable release from the selected known-good
+  commit; never move tags.
+  1. Run the production workflow with a new semantic version and known-good ref.
+  2. Redeploy all three surfaces.
+  3. Refuse a mixed release when vault hostnames report different commits.
+- **Cross-app navigation:** Call the Rust/WASM lock path before navigation.
+  - Carry no vault payload, provider credential, or session token in the URL.

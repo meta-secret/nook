@@ -139,49 +139,52 @@ discovered again.
 
 **Refresh:** `sessionStorage` flag `nook_vault_session_locked` blocks `shouldAutoUnlock()` until the user unlocks again (`markVaultUnlocked()` clears the flag). Device-key vaults still auto-unlock on reload when the user did **not** lock.
 
-**Unlock ordering:** Device-key unlock runs
-`loadProviders({ ensureLocalRow: false })` before `markVaultUnlocked()`.
-The explicit policy loads only the persisted provider snapshot. It does not
-create a local provider row during unlock. Fan-out after local save uses
-`syncProviders`. Unlocking that path earlier lets a fast edit push with an
-empty provider list and leave the remote event log stale. Backup-password
-unlock is the exception. It may open the local vault while the device identity
-and its sealed provider credentials remain locked. Remote fan-out stays
-disabled until device authorization.
-
-After lock, the app stays in **`LoginGate`** without opening a passkey prompt.
-When the user explicitly chooses **This device's keys**, a stored passkey wrapper
-starts browser passkey authorization directly from that click. Successful
-authorization restores the identity in WASM memory and continues that same
-vault-unlock action automatically. `DeviceProtectionGate` in
-`PasskeyAuthOverlay` remains the interactive surface for PIN input, missing
-identity/passkey recovery, and failed or cancelled passkey attempts. **Backup
-password** is an alternative vault-key credential and must open the local vault
-directly without presenting the passkey/PIN form.
-
-The gate presents itself as **Device setup — Step 1 of 2**, not as vault login.
-Its copy explains that it prepares or unlocks the browser's protected device
-identity and that vault selection, creation, or import follows in the next step.
-Device protection mode is chosen only here; vault creation reuses the persisted
-device choice and must not render another device-protection selector.
-
-When no local passkey-protected device record exists, `DeviceProtectionGate`
-shows **Authenticate** as the primary action. It launches discoverable-passkey
-recovery immediately and must not open a second confirmation widget. Passkey
-creation is an explicit secondary choice; device mode and label controls remain
-hidden until the user chooses it. A failed or cancelled authentication must not
-auto-create a credential because WebAuthn does not reliably distinguish no
-matching passkey from cancellation, timeout, or authenticator refusal. When
-`device_identity_wrapped` already identifies passkey protection, the gate is a
-retry/recovery surface after a failed or cancelled direct authorization; it
-shows authorization only and never renders passkey creation.
-
-When the gate is embedded in `PasskeyAuthOverlay`, the overlay owns the single
-visible border, radius, and elevation. The embedded gate stays flat so the setup
-surface does not read as a card nested inside another card.
-Browsers do not expose a general API for enumerating whether an RP already has a
-discoverable passkey, so the missing-record state must retain the explicit existing-
-passkey recovery action.
+- **Unlock ordering:** Run `loadProviders({ ensureLocalRow: false })` before
+  `markVaultUnlocked()` for device-key unlock.
+  - Load only the persisted provider snapshot.
+  - Do not create a local provider row during unlock.
+  - Use `syncProviders` for fan-out after local save.
+  - Unlocking that path earlier lets a fast edit push with an empty provider
+    list and leave the remote event log stale.
+  - Backup-password unlock is the exception. It may open the local vault while
+    the device identity and sealed provider credentials remain locked.
+  - Keep remote fan-out disabled until device authorization.
+- **Post-lock action:** Keep the app in **`LoginGate`** without opening a passkey
+  prompt.
+  - When the user chooses **This device's keys**, start stored-passkey browser
+    authorization directly from that click.
+  - On success, restore identity in WASM memory and continue the same unlock
+    action automatically.
+  - Keep `DeviceProtectionGate` in `PasskeyAuthOverlay` as the interactive
+    surface for PIN input, missing identity/passkey recovery, and failed or
+    cancelled passkey attempts.
+  - Treat **Backup password** as an alternative vault-key credential. Open the
+    local vault directly without the passkey/PIN form.
+- **Gate meaning:** Present **Device setup — Step 1 of 2**, not vault login.
+  - Explain that it prepares or unlocks the browser's protected device identity.
+  - Explain that vault selection, creation, or import follows.
+  - Choose device protection mode only here.
+  - Vault creation reuses that persisted choice and does not render another
+    selector.
+- **Missing local passkey record:** Show **Authenticate** as the primary action.
+  - Launch discoverable-passkey recovery immediately without a second
+    confirmation widget.
+  - Keep passkey creation as an explicit secondary choice.
+  - Hide device mode and label controls until the user chooses creation.
+  - Never auto-create after failed or cancelled authentication. WebAuthn cannot
+    reliably distinguish no matching passkey from cancellation, timeout, or
+    authenticator refusal.
+- **Known passkey wrapper:** When `device_identity_wrapped` identifies passkey
+  protection, use the gate only for retry or recovery after failed direct
+  authorization.
+  - Show authorization only and never render passkey creation.
+- **Visual ownership:** When embedded in `PasskeyAuthOverlay`, let the overlay
+  own the only visible border, radius, and elevation.
+  - Keep the embedded gate flat.
+- **Browser limitation:** Browsers cannot generally enumerate whether an RP has
+  a discoverable passkey.
+  - Keep an explicit existing-passkey recovery action in the missing-record
+    state.
 
 - **Multiple local vaults** → vault picker (`login-vault-picker`); unlock chosen vault.
 - **Single local vault** → unlock with device keys and/or backup password.
@@ -191,59 +194,55 @@ passkey recovery action.
   wrapped device identity or its sealed sync-provider credentials.
 - **No local vault yet** → create on device or connect a sync provider to pull an existing vault. Choosing Simple creates locally; choosing Sentinel starts the pre-vault reverse-onboarding ceremony in [sentinel-genesis.md](sentinel-genesis.md).
 
-Existing-vault import must recover an authorized device identity before it
-attempts `connect`.
-
-The provider preflight may discover the remote `store_id` from signed encrypted
-events without decrypting the vault. Simple Vault uses that identifier to ask an
-already-paired extension for its memory-only identity. A locked extension owns
-and displays its unlock window.
-
-Only when no paired extension is available does the website present its own
-passkey/PIN device gate.
-
-Discovery is a bounded busy operation. A missing `store_id` rejects an empty or
-incorrect provider before device authorization.
-
-The discovered identifier remains staged. It must not replace the active local
-vault until that exact provider vault connects successfully.
-
-The same preflight projects only safe recovery metadata from signed events:
+- **Existing-vault import:** Recover an authorized device identity before
+  attempting `connect`.
+- **Provider preflight:** Discover the remote `store_id` from signed encrypted
+  events without decrypting the vault.
+  - Simple Vault uses the identifier to ask a paired extension for its
+    memory-only identity.
+  - A locked extension owns and displays its unlock window.
+  - Only when no paired extension is available may the website show its own
+    passkey/PIN device gate.
+  - Treat discovery as a bounded busy operation.
+  - Reject an empty or incorrect provider when `store_id` is missing, before
+    device authorization.
+  - Keep the discovered identifier staged until that exact provider vault
+    connects successfully.
+- **Safe recovery metadata:** Project only these values from signed events:
 
 - active device labels/IDs (matching the `device …` suffix written into Nook
   passkey display names);
 - backup-password labels; and
 - whether Sentinel quorum is required.
 
-Device authorization may reload sealed provider state. The exact staged provider
-credentials or local-folder handle must remain in memory. The successful
-ceremony must resume that staged import without asking the user to choose the
-provider again.
-
-The flow must never call provider connect first and surface the internal
-`authorization_required` error to the user.
-
-The login vault surface presents **Open existing**, **Create new**, and **Import**
-as mutually exclusive workflows rather than consecutive sections. With local
-vaults, Open existing is the default: choose a vault first, then authorize its
-unlock. Create and Import replace the open/unlock controls while selected.
-
-Lock is the safe “step away from this browser” action — analogous to logging out of a password manager while keeping the encrypted database file.
+- **Staged credential continuity:** Device authorization may reload sealed
+  provider state.
+  - Keep the exact staged credentials or local-folder handle in memory.
+  - Resume the staged import after successful authorization without asking the
+    user to choose the provider again.
+  - Never call provider connect first and expose internal
+    `authorization_required` to the user.
+- **Login workflow choice:** Present **Open existing**, **Create new**, and
+  **Import** as mutually exclusive workflows.
+  - With local vaults, default to Open existing: choose a vault, then authorize
+    its unlock.
+  - Create and Import replace open/unlock controls while selected.
+- **Lock purpose:** Treat Lock as the safe “step away from this browser” action.
+  It keeps the encrypted database file like password-manager logout.
 
 ### Extension device session
 
-The browser extension has a separate, revocable device identity. After its
-passkey or PIN authorization, an offscreen extension document keeps that
-identity in WASM memory for a fixed 15-minute session. Reopening the toolbar
-popup does not repeat the ceremony.
-
-It never persists the decrypted identity, PIN, or passkey PRF output to
-`chrome.storage`. Expiry or browser shutdown zeroizes the manager and requires
-authorization again.
-
-Simple Vault silently checks a paired extension every three seconds while both
-the site and extension identity are locked. Automatic discovery must never open
-an authentication surface.
+- **Session lifetime:** The extension has a separate, revocable device identity.
+  - After passkey or PIN authorization, keep it in WASM memory in an offscreen
+    document for 15 minutes.
+  - Reopening the toolbar popup does not repeat the ceremony.
+- **Persistence boundary:** Never persist decrypted identity, PIN, or passkey
+  PRF output to `chrome.storage`.
+  - Expiry or browser shutdown zeroizes the manager and requires authorization
+    again.
+- **Automatic discovery:** Simple Vault checks a paired extension every three
+  seconds while both site and extension identity are locked.
+  - Automatic discovery must never open an authentication surface.
 
 When the user explicitly chooses **Unlock**:
 
@@ -251,9 +250,8 @@ When the user explicitly chooses **Unlock**:
 - the website waits for the extension's memory-only identity handoff; and
 - the website must not fall through to a second website passkey ceremony.
 
-Site-to-extension requests have a bounded five-second response deadline. A
-suspended or broken runtime cannot leave the website unlock action pending
-forever.
+- **Response deadline:** Bound site-to-extension requests to five seconds.
+  - A suspended or broken runtime cannot leave website unlock pending forever.
 
 ---
 

@@ -298,16 +298,17 @@ for every owning repair:
 - ancestry; and
 - successful containing Main run.
 
-It intentionally does not require the owner's later review, deployment, or
-Workbench completion steps. Those remain part of the owning task's terminal
-delivery verifier and may wait on this blocker. Prompt compliance alone cannot
-retire a live prerequisite.
+Exceptional retirement has bounded effects:
 
-A refused retirement releases the lease and retry consumption. Another worker can
-then re-evaluate the updated ownership.
-
-The schema-8 terminal result marks this exceptional path explicitly with
-`obsolete: true`. Hive persists that marker on both the task and attempt.
+- It does not require the owner's later review, deployment, or Workbench
+  completion steps.
+  - Those remain part of the owning task's terminal delivery verifier and may
+    wait on this blocker.
+  - Prompt compliance alone cannot retire a live prerequisite.
+- A refused retirement releases the lease and retry consumption so another
+  worker can re-evaluate updated ownership.
+- A successful schema-8 terminal result records `obsolete: true` on both the
+  task and attempt.
 
 **Rearming obsolete blockers**
 
@@ -329,16 +330,16 @@ Rearming:
 - extends the maximum by three attempts; and
 - derives each task's state from its direct dependencies.
 
-A normally completed root remains satisfied even if historical obsolete
-descendants are still attached.
+Rearming preserves these completion boundaries:
 
-Normal completion, including a real patch produced while owners change, bypasses
-the retirement-only guard and persists normally.
-
-The shared-owner, mixed-owner, late-owner, future-owner, and genuine-completion
-race cases are behavior-tested in
-`agentic-ai/minds/hive/tests/neo4j_store.rs` and its focused `rearm.rs`
-integration capability.
+- A normally completed root remains satisfied even if historical obsolete
+  descendants are still attached.
+- Normal completion, including a real patch produced while owners change,
+  bypasses the retirement-only guard and persists normally.
+- Shared-owner, mixed-owner, late-owner, future-owner, and genuine-completion
+  races are behavior-tested in
+  `agentic-ai/minds/hive/tests/neo4j_store.rs` and its focused `rearm.rs`
+  integration capability.
 
 ### Durable results
 
@@ -426,49 +427,49 @@ A later failed rerun:
 - clears prior completion evidence; and
 - creates a new task generation keyed by workflow run and attempt.
 
-If an earlier generation is still active, the dispatcher cancels it before
-enqueueing the new generation. The next worker receives the latest failed-job
-evidence without creating competing repairs.
+- **Earlier active generation:** The dispatcher cancels it before enqueueing the
+  new generation.
+  - The next worker receives the latest failed-job evidence without creating
+    competing repairs.
+- **Cancellation handshake:** The dispatcher aborts that reconciliation cycle
+  after requesting cancellation. The running worker then:
 
-The dispatcher aborts that reconciliation cycle after requesting cancellation.
-The running worker then:
+  - stops its Codex execution; and
+  - atomically acknowledges termination in Neo4j.
 
-- stops its Codex execution; and
-- atomically acknowledges termination in Neo4j.
-
-In parallel, the dispatcher asks the credential-gated lifecycle controller to
-delete the exact worker Pod recorded for every cancelling root or exclusive
-blocker. The controller validates the worker label. It waits for Kubernetes to
-confirm deletion before the dispatcher finalizes cancellation. This provides
-durable recovery when a worker crashes before acknowledging.
-
-The old generation and its cancelling descendants remain active until that
-proof. No replacement can become claimable merely because time elapsed.
-
-Reconciliation of the already-current run/attempt generation is idempotent. It
-never cancels it.
-
-Cancellation also cancels blockers exclusive to the superseded delivery. Shared
-blockers remain available to other live dependents.
-
-Publication branches, plans, and worklogs are generation-specific. The incident
-path remains keyed by source SHA. Completed or failed generations and their
-publication history remain immutable.
-
-The token-free dispatcher maintains a shallow public Git checkout of Workbench
-and reconciles only when its revision changes, rather than repeatedly spending
-GitHub Contents API requests on unchanged incidents. It remembers already
-reconciled incident filenames for the life of the Pod. Before enqueueing, the
-dispatcher fetches the referenced workflow run once and requires repository
-`meta-secret/nook`, workflow `Main`, push event, branch
-`main`, and the incident's exact source SHA. Run IDs and attempts are ordered
-across the complete incident history, so an older workflow run cannot
-supersede newer evidence. A later successful rerun marks an existing incident
-retired; the same Pod-termination barrier stops any active repair before the
-revision becomes a no-op. A success observed before any failure handoff writes
-a completed tombstone so delayed older failures remain stale. Retirement
-cancels only the current active generation; completed and failed generations
-remain immutable. Kubernetes Pod API calls use bounded request timeouts.
+- **Pod deletion proof:** In parallel, the dispatcher asks the credential-gated
+  lifecycle controller to delete the exact worker Pod recorded for every
+  cancelling root or exclusive blocker.
+  - The controller validates the worker label.
+  - It waits for Kubernetes to confirm deletion before the dispatcher finalizes
+    cancellation.
+  - This provides durable recovery when a worker crashes before acknowledging.
+- **Replacement barrier:** The old generation and its cancelling descendants
+  remain active until deletion proof.
+  - No replacement becomes claimable merely because time elapsed.
+  - Reconciliation of the current run/attempt generation is idempotent and
+    never cancels it.
+- **Blocker scope:** Cancellation also cancels blockers exclusive to the
+  superseded delivery. Shared blockers remain available to other live
+  dependents.
+- **Publication history:** Branches, plans, and worklogs are generation-specific.
+  - The incident path remains keyed by source SHA.
+  - Completed or failed generations and their publication history remain
+    immutable.
+- **Dispatcher reconciliation:** Maintain a shallow public Git checkout of
+  Workbench and reconcile only when its revision changes.
+  - Remember reconciled incident filenames for the life of the Pod.
+  - Fetch the referenced workflow run once before enqueueing.
+  - Require repository `meta-secret/nook`, workflow `Main`, push event, branch
+    `main`, and the incident's exact source SHA.
+  - Order run IDs and attempts across the complete incident history so older
+    runs cannot supersede newer evidence.
+  - A later successful rerun retires an existing incident only after the same
+    Pod-termination barrier stops active repair.
+  - A success observed before failure handoff writes a completed tombstone so
+    delayed older failures remain stale.
+  - Retirement cancels only the current active generation.
+  - Use bounded timeouts for Kubernetes Pod API calls.
 
 One logical Hive task owns the entire repair. Opening a PR is intermediate
 state, not completion. The task must:
@@ -513,33 +514,33 @@ After repairing the platform, the explicit
 
 ### GitHub delivery recovery
 
-The base branch is deterministic: `codex/hive-<task-id>`. If a prior repair PR
-is closed or merged but the durable task still requires work, the agent creates
-`-g2`, `-g3`, and later generations instead of trying to reuse a closed PR.
-Replacement Pods inspect GitHub for the latest generation and merged commit,
-then resume Main verification without creating a duplicate PR.
-
-The GitHub token is mounted into the Main-repair worker and exposed to Codex
-through the conventional `GH_TOKEN` environment contract. A single shared,
-repository-scoped token is acceptable; per-agent or short-lived tokens may be
-used when operationally convenient, but are not required as an additional
-security boundary. Repository permissions remain the authorization boundary.
-
-Codex uses standard `git` and `gh` commands for branch publication, pull-request
-creation and inspection, targeted replies, thread resolution, exact-head
-squash merge, Main verification, and Workbench updates. It must traverse all
-relevant check, review, comment, and thread pages and continue to follow the
-repository's normal readiness rules. Because the sealed guest intentionally has
-no Docker socket, it runs the existing TypeScript readiness audit through
-`task hive:guest:pr:ready PR=<number>` instead of the Docker-backed host wrapper.
-Hive must prefer these established tools over a custom typed publication API.
-
-The agent is trusted with both the credential and the task checkout. Hive does
-not need a broker-owned private checkout, request signing, mailbox correlation,
-or defenses against the agent substituting its own publication requests.
-Ordinary protections against accidental secret disclosure still apply:
-credentials remain in Kubernetes Secrets or process environment, never in
-repository files, logs, Workbench records, or pull-request content.
+- **Branch generations:** Use deterministic base branch
+  `codex/hive-<task-id>`.
+  - If a repair PR is closed or merged while durable work remains, create
+    `-g2`, `-g3`, and later generations instead of reusing a closed PR.
+  - Replacement Pods inspect GitHub for the latest generation and merged commit,
+    then resume Main verification without a duplicate PR.
+- **GitHub authorization:** Mount the GitHub token into the Main-repair worker
+  and expose it through `GH_TOKEN`.
+  - A shared repository-scoped token is acceptable.
+  - Per-agent or short-lived tokens are optional operational choices, not an
+    additional required security boundary.
+  - Repository permissions remain the authorization boundary.
+- **Publication tools:** Codex uses standard `git` and `gh` commands for branch
+  publication, PR creation and inspection, replies, thread resolution,
+  exact-head squash merge, Main verification, and Workbench updates.
+  - Traverse every relevant check, review, comment, and thread page.
+  - Follow the repository's normal readiness rules.
+  - Because the sealed guest has no Docker socket, run
+    `task hive:guest:pr:ready PR=<number>` instead of the Docker-backed host
+    wrapper.
+  - Prefer these established tools over a custom typed publication API.
+- **Trust boundary:** The agent is trusted with both the credential and task
+  checkout.
+  - Hive does not need a broker-owned private checkout, request signing, mailbox
+    correlation, or defenses against agent-substituted publication requests.
+  - Credentials remain in Kubernetes Secrets or process environment, never in
+    repository files, logs, Workbench records, or pull-request content.
 
 ## 7. Isolation and credential design
 
@@ -604,46 +605,40 @@ TypeScript PR audit without Docker.
 | Reaper controller credential | Pod reaper, Workbench dispatcher, and dedicated controller only | No |
 | Kubernetes auth-refresh token | Auth broker only | No |
 
-The Pod disables automatic service-account token mounting. Its service account
-can patch only the Codex-auth Secret, and that projected token is mounted only
-by the auth broker. The reaper has no Kubernetes token: it calls a dedicated
-controller with an opaque credential. The controller has a distinct workload
-identity restricted to `get`/`delete` labeled Hive Pods, reading only the
-Neo4j Service and Endpoints, and patching only the worker and dispatcher egress
-NetworkPolicies plus the observer egress NetworkPolicy used by the read-only
-Control Center.
-It continuously reconciles the post-DNAT Neo4j Pod address, so an automatic
-StatefulSet or kubelet replacement cannot leave workers or the dispatcher
-pinned to a stale endpoint. While Neo4j is unready, it removes the stale Pod
-address and retains only the stable Service address. Resource-version
-preconditions and bounded
-conflict retries prevent reconciliation from overwriting a concurrent policy
-change. The controller reloads both its projected Kubernetes token and the
-opaque reaper credential for every request, so normal token projection and
-Secret rotation do not require a controller restart.
-
-Embedded Codex validation commands produce typed, secret-sanitized JSONL events
-outside the repository checkout. Hive records their category, timestamps,
-duration, outcome, and bounded command identity in the immutable Workbench
-statistics record.
-
-The same typed event stream feeds the bounded `TaskActivity` projection used by
-the Control Center. Its network-facing HTTP container has no graph credential;
-it can request only the overview or one task detail from a private Unix-socket
-coordinator sidecar. The credential-bearing sidecar reads only current workers,
-at most 200 tasks, and at most 100 recent activity entries for each task in a
-response. Task detail uses a direct task lookup, so completed work remains
-inspectable after it leaves the overview window.
-
-Completion, failure, release, blocker discovery, and heartbeat mutations are
-lease-token guarded. Blocker discovery additionally requires an unexpired
-lease, preventing a stale worker from changing dependencies after replacement
-has become eligible to claim the task.
-
-Secrets are encrypted at rest by the k0s API server with a host-generated
-AES-GCM encryption provider. Neo4j recovery material is authenticated and
-encrypted under that host-held key. Secret checksums are placed in the Pod
-template so credential rotation replaces the warm pool.
+- **Service-account tokens:** Disable automatic mounting.
+  - The service account may patch only the Codex-auth Secret.
+  - Mount that projected token only in the auth broker.
+  - The reaper has no Kubernetes token and calls a dedicated controller with an
+    opaque credential.
+- **Lifecycle-controller identity:** Restrict it to `get` and `delete` for
+  labeled Hive Pods, reads of the Neo4j Service and Endpoints, and patches of
+  the worker, dispatcher, and read-only observer egress NetworkPolicies.
+  - Continuously reconcile the post-DNAT Neo4j Pod address.
+  - While Neo4j is unready, remove its stale Pod address and retain only the
+    stable Service address.
+  - Use resource-version preconditions and bounded conflict retries.
+  - Reload the projected Kubernetes token and opaque reaper credential for each
+    request so rotation does not require restart.
+- **Validation activity:** Embedded Codex commands emit typed,
+  secret-sanitized JSONL outside the repository checkout.
+  - Record category, timestamps, duration, outcome, and bounded command identity
+    in the immutable Workbench statistics record.
+- **Control Center projection:** Feed the same typed stream into bounded
+  `TaskActivity` records.
+  - Give the network-facing HTTP container no graph credential.
+  - Permit only overview or one-task detail requests through a private
+    Unix-socket coordinator sidecar.
+  - Limit the credential-bearing sidecar to current workers, 200 tasks, and 100
+    recent activity entries per task in a response.
+  - Use direct task lookup so completed work remains inspectable after leaving
+    the overview window.
+- **Lease guards:** Guard completion, failure, release, blocker discovery, and
+  heartbeat mutations with the lease token.
+  - Blocker discovery also requires an unexpired lease.
+- **Encryption at rest:** Use the k0s API server's host-generated AES-GCM
+  provider.
+  - Authenticate and encrypt Neo4j recovery material under that host-held key.
+  - Put Secret checksums in the Pod template so rotation replaces the warm pool.
 
 ### Network boundary
 
@@ -801,42 +796,38 @@ task infra:hive:deploy
 task infra:deploy
 ```
 
-`task infra:deploy` is the complete entrypoint: it deploys the private
-infrastructure services, syncs the repository-owned k0s configuration, installs
-and verifies k0s/Kata, deploys persistent Neo4j, builds and publishes the exact
-Hive image to the public Zot registry, preserves cluster-rotated credentials,
-deploys the warm pool, and verifies Pod replacement.
-
-The encryption-provider file remains `root:root 0600`; a read-only POSIX ACL
-grants the dedicated `kube-apiserver` OS user access without granting ownership
-or write authority. If the API server cannot start,
-`task infra:k0s:diagnose` emits bounded service, listener, permission, ACL, and
-journal evidence without reading secret contents.
-
-The host firewall keeps its default-drop input and forward policies. k0s adds
-only persisted rules for traffic sourced from the cluster Pod CIDR
-`10.244.0.0/16` arriving on the kube-router `kube-bridge`:
+- **Complete deployment:** `task infra:deploy` deploys private infrastructure,
+  syncs repository-owned k0s configuration, installs and verifies k0s/Kata,
+  deploys Neo4j, publishes the exact Hive image, preserves cluster-rotated
+  credentials, deploys the warm pool, and verifies Pod replacement.
+- **Encryption-provider permissions:** Keep the file `root:root 0600`.
+  - Grant the dedicated `kube-apiserver` user read-only access through a POSIX
+    ACL without ownership or write authority.
+  - If the API server cannot start, use `task infra:k0s:diagnose` for bounded
+    service, listener, permission, ACL, and journal evidence without secret
+    contents.
+- **Host firewall:** Keep default-drop input and forward policies. Add only
+  persisted k0s rules for cluster Pod CIDR `10.244.0.0/16` traffic arriving on
+  `kube-bridge`:
 
 - local control-plane access on TCP `6443`/`8132`;
 - kubelet access on `10250`; and
 - Pod egress.
 
-Kube-router masquerades traffic leaving the cluster. CoreDNS and intentionally
-allowlisted worker egress receive replies through the node. These rules do not
-expose any control-plane port on the public interface.
-
-The installer uses a temporary owned rule while k0s starts. It restores the
-previous live and persisted firewall state if installation errors, exits, or
-receives a termination signal. The rollback transaction flushes and recreates
-both managed host chains from a complete ordered snapshot. It preserves unrelated
-rule positions.
-
-It records the existing CNI state before restarting k0s. A controller rewrite
-cannot hide an `ipMasq` migration. Migrations automatically replace existing
-Hive, dispatcher, and lifecycle-controller Pod sandboxes.
-
-The API server's stable loopback address is `10.201.0.1`. The worker egress
-template uses its exact `/32` rather than a deployment-time endpoint lookup.
+  - Kube-router masquerades cluster egress.
+  - CoreDNS and allowlisted worker egress receive replies through the node.
+  - Do not expose a control-plane port on the public interface.
+- **Installer rollback:** Use a temporary owned rule while k0s starts.
+  - Restore previous live and persisted firewall state on error, exit, or
+    termination.
+  - Flush and recreate both managed host chains from a complete ordered
+    snapshot while preserving unrelated rule positions.
+- **CNI migration:** Record existing CNI state before restarting k0s.
+  - A controller rewrite cannot hide an `ipMasq` migration.
+  - Replace existing Hive, dispatcher, and lifecycle-controller Pod sandboxes
+    automatically during migration.
+- **Stable API address:** Use `10.201.0.1` and its exact `/32` in the worker
+  egress template instead of deployment-time endpoint lookup.
 
 The `nook-k0s-api-address.service` systemd unit:
 
@@ -852,18 +843,22 @@ HIVE_CODEX_AUTH_FILE=/absolute/path/to/auth.json
 HIVE_GITHUB_TOKEN_FILE=/absolute/path/to/token
 ```
 
-Copying these credentials into encrypted Kubernetes Secrets is a
-security-sensitive deployment action and requires immediate user confirmation
-before the initial `task infra:deploy` or `task infra:hive:deploy` is invoked.
-Routine public-Zot image deployments preserve the existing
-`hive-codex-auth` Secret because Hive refreshes and persists that credential in
-the cluster. Replacing it from a local bootstrap file is a separate explicit
-operation. Rotation, Hive deployment, and Neo4j TLS rotation share a remote
-mutation lock so no infrastructure operation can recreate brokers between
-quiescence and Secret publication. Credential bytes stream from SSH stdin
-through remote validation directly into `kubectl apply` without a regular-file
-staging copy. Bootstrap rechecks the cluster Secret after acquiring the lock
-and skips publication when another waiter has already supplied it:
+Credential bootstrap follows these rules:
+
+- Copying credentials into encrypted Kubernetes Secrets is security-sensitive
+  and requires immediate user confirmation before the initial
+  `task infra:deploy` or `task infra:hive:deploy`.
+- Routine public-Zot image deployments preserve the existing
+  `hive-codex-auth` Secret because Hive refreshes and persists it in-cluster.
+- Replacing that Secret from a local bootstrap file is a separate explicit
+  operation.
+- Rotation, Hive deployment, and Neo4j TLS rotation share a remote mutation
+  lock so infrastructure cannot recreate brokers between quiescence and Secret
+  publication.
+- Credential bytes stream from SSH stdin through remote validation directly
+  into `kubectl apply` without regular-file staging.
+- Bootstrap rechecks the cluster Secret after acquiring the lock and skips
+  publication if another waiter already supplied it:
 
 ```sh
 HIVE_CODEX_AUTH_FILE=/absolute/path/to/auth.json task infra:hive:auth:rotate
