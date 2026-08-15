@@ -42,8 +42,3 @@
 .cortex/references/loom-tools.md
 .cortex/references/rust-wasm.md
 .cortex/rules.md
-.cortex/workflows/ci-pipeline.md
-.cortex/workflows/coding-bro.md
-.cortex/workflows/issues.md
-.cortex/workflows/pull-requests.md
-.cortex/workflows/quality.md
