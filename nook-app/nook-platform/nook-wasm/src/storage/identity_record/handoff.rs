@@ -18,6 +18,15 @@ pub(crate) struct ExistingVaultImportCommit {
     pub(crate) label: String,
 }
 
+pub(crate) struct IdentityHandoffCommitResult {
+    pub(crate) existing_vault_keys: Option<nook_core::VaultKeys>,
+}
+
+struct ExistingVaultHandoffResult {
+    identity_id: nook_core::IdentityId,
+    vault_keys: nook_core::VaultKeys,
+}
+
 struct ExistingVaultHandoff<'a> {
     directory: &'a mut nook_core::IdentityDirectory,
     events: &'a rexie::Store,
@@ -29,13 +38,18 @@ struct ExistingVaultHandoff<'a> {
 
 async fn import_existing_vault_handoff(
     input: ExistingVaultHandoff<'_>,
-) -> Result<nook_core::IdentityId, NookError> {
+) -> Result<ExistingVaultHandoffResult, NookError> {
     let graph = crate::storage::event_db::load_local_event_store_from_store(
         input.events,
         input.store_id.as_str(),
     )
     .await?
     .load_graph(input.store_id.as_str())?;
+    if !graph.pending_events().is_empty() {
+        return Err(NookError::Database(
+            "Imported extension identity has an incomplete signed vault event graph.".to_owned(),
+        ));
+    }
     let envelopes = nook_core::event_graph_active_device_envelopes(
         &graph,
         &input.existing.device_id,
@@ -47,7 +61,7 @@ async fn import_existing_vault_handoff(
             "Imported extension identity is not active in the signed vault roster.".to_owned(),
         )
     })?;
-    input
+    let identity_id = input
         .directory
         .import_legacy_vault(
             &input.existing.label,
@@ -59,7 +73,19 @@ async fn import_existing_vault_handoff(
                 authorized_auth_ids: nook_core::event_graph_active_auth_ids(&graph)?,
             },
         )
-        .map_err(map_domain_error)
+        .map_err(map_domain_error)?;
+    let vault_keys = input
+        .directory
+        .open_or_generate_vault_dek_for_identity(
+            &identity_id,
+            input.app_key,
+            input.store_id.clone(),
+        )
+        .map_err(map_domain_error)?;
+    Ok(ExistingVaultHandoffResult {
+        identity_id,
+        vault_keys,
+    })
 }
 
 fn handoff_store_names(
@@ -75,10 +101,28 @@ fn handoff_store_names(
     }
 }
 
+async fn persist_handoff_signing_seed(
+    store: &rexie::Store,
+    signing_seed: Option<&str>,
+) -> Result<(), NookError> {
+    let Some(seed) = signing_seed else {
+        return Ok(());
+    };
+    let seed_key = serde_wasm_bindgen::to_value(crate::storage::event_db::SIGNING_SEED_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Handoff seed key error: {error:?}")))?;
+    let seed_value = serde_wasm_bindgen::to_value(seed)
+        .map_err(|error| NookError::IndexedDb(format!("Handoff seed value error: {error:?}")))?;
+    store
+        .put(&seed_value, Some(&seed_key))
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Handoff seed write error: {error:?}")))?;
+    Ok(())
+}
+
 /// Commit identity membership and its matching event signer in one transaction.
 pub(crate) async fn commit_authenticated_identity_handoff(
     input: IdentityHandoffCommit<'_>,
-) -> Result<(), NookError> {
+) -> Result<IdentityHandoffCommitResult, NookError> {
     let _ = load_identity_directory().await?;
     let rexie = open_nook_database().await?;
     let transaction = rexie
@@ -105,7 +149,7 @@ pub(crate) async fn commit_authenticated_identity_handoff(
         })
         .transpose()?
         .unwrap_or_else(nook_core::IdentityDirectory::empty);
-    let identity_id = match input.enrollment {
+    let (identity_id, existing_vault_keys) = match input.enrollment {
         crate::manager::PendingExtensionIdentityEnrollment::VaultCreation { .. } => {
             return Err(NookError::Database(
                 "Vault-creation identity must publish with verified genesis.".to_owned(),
@@ -114,9 +158,12 @@ pub(crate) async fn commit_authenticated_identity_handoff(
         crate::manager::PendingExtensionIdentityEnrollment::PairedVault {
             authorizer,
             store_id,
-        } => directory
-            .enroll_app_key_for_owned_vault(authorizer, input.app_key, store_id)
-            .map_err(map_domain_error)?,
+        } => (
+            directory
+                .enroll_app_key_for_owned_vault(authorizer, input.app_key, store_id)
+                .map_err(map_domain_error)?,
+            None,
+        ),
         crate::manager::PendingExtensionIdentityEnrollment::ExistingVaultImport { store_id } => {
             let existing = input.existing_vault.ok_or_else(|| {
                 NookError::Database("Existing-vault handoff material is missing.".to_owned())
@@ -124,7 +171,7 @@ pub(crate) async fn commit_authenticated_identity_handoff(
             let events = transaction.store("events").map_err(|error| {
                 NookError::IndexedDb(format!("Handoff event store error: {error:?}"))
             })?;
-            import_existing_vault_handoff(ExistingVaultHandoff {
+            let imported = import_existing_vault_handoff(ExistingVaultHandoff {
                 directory: &mut directory,
                 events: &events,
                 store_id,
@@ -132,7 +179,8 @@ pub(crate) async fn commit_authenticated_identity_handoff(
                 signing_public_key: input.signing_public_key,
                 existing,
             })
-            .await?
+            .await?;
+            (imported.identity_id, Some(imported.vault_keys))
         }
     };
     directory
@@ -156,23 +204,13 @@ pub(crate) async fn commit_authenticated_identity_handoff(
         .put(&encoded_value, Some(&directory_key))
         .await
         .map_err(|error| NookError::IndexedDb(format!("Handoff write error: {error:?}")))?;
-    if let Some(seed) = input.signing_seed {
-        let seed_key = serde_wasm_bindgen::to_value(crate::storage::event_db::SIGNING_SEED_KEY)
-            .map_err(|error| NookError::IndexedDb(format!("Handoff seed key error: {error:?}")))?;
-        let seed_value = serde_wasm_bindgen::to_value(seed).map_err(|error| {
-            NookError::IndexedDb(format!("Handoff seed value error: {error:?}"))
-        })?;
-        store
-            .put(&seed_value, Some(&seed_key))
-            .await
-            .map_err(|error| {
-                NookError::IndexedDb(format!("Handoff seed write error: {error:?}"))
-            })?;
-    }
+    persist_handoff_signing_seed(&store, input.signing_seed).await?;
     transaction.done().await.map_err(|error| {
         NookError::IndexedDb(format!("Handoff transaction completion error: {error:?}"))
     })?;
-    Ok(())
+    Ok(IdentityHandoffCommitResult {
+        existing_vault_keys,
+    })
 }
 
 #[cfg(test)]
@@ -256,6 +294,8 @@ mod tests {
         replacement_keys: nook_core::VaultKeys,
         revocation_id: nook_core::EventId,
         revocation_bytes: Vec<u8>,
+        pending_revocation_id: nook_core::EventId,
+        pending_revocation_bytes: Vec<u8>,
     }
 
     fn signed_access_events(fixture: &ImportFixture) -> Result<SignedAccessEvents, NookError> {
@@ -339,6 +379,22 @@ mod tests {
                 }],
             })
             .map_err(|error| NookError::Database(error.to_string()))?;
+        let missing_parent =
+            nook_core::EventId::parse("sha256u:rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrro")
+                .map_err(|error| NookError::Database(error.to_string()))?;
+        let (pending_revocation, pending_revocation_bytes) =
+            nook_core::build_signed_event(nook_core::AppendEventInput {
+                store_id: &fixture.store_id,
+                actor_id: &actor_id,
+                signing_identity: &signing,
+                parents: vec![missing_parent],
+                key_epoch: &key_epoch,
+                created_at: &created_at,
+                operations: vec![nook_core::VaultOperation::DeviceRevoked {
+                    device_id: fixture.identity.device_id().clone(),
+                }],
+            })
+            .map_err(|error| NookError::Database(error.to_string()))?;
         Ok(SignedAccessEvents {
             signing_public_key,
             approval_id,
@@ -352,6 +408,10 @@ mod tests {
                 .id()
                 .map_err(|error| NookError::Database(error.to_string()))?,
             revocation_bytes,
+            pending_revocation_id: pending_revocation
+                .id()
+                .map_err(|error| NookError::Database(error.to_string()))?,
+            pending_revocation_bytes,
         })
     }
 
@@ -371,7 +431,7 @@ mod tests {
             store_id: fixture.store_id.clone(),
         };
 
-        commit_authenticated_identity_handoff(IdentityHandoffCommit {
+        let committed = commit_authenticated_identity_handoff(IdentityHandoffCommit {
             app_key: &fixture.identity,
             signing_public_key: &events.signing_public_key,
             authorizer_signing: None,
@@ -383,6 +443,10 @@ mod tests {
             }),
         })
         .await?;
+        assert_eq!(
+            committed.existing_vault_keys,
+            Some(events.replacement_keys.clone())
+        );
 
         let mut directory = load_identity_directory().await?;
         assert_eq!(
@@ -391,6 +455,46 @@ mod tests {
                 .map_err(map_domain_error)?,
             events.replacement_keys
         );
+        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
+        clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn rejects_handoff_with_pending_roster_event() -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        let fixture = import_fixture()?;
+        let signing_seed_before = event_db::load_signing_seed().await?;
+        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
+        let events = signed_access_events(&fixture)?;
+        for (event_id, bytes) in [
+            (&events.approval_id, &events.approval_bytes),
+            (
+                &events.pending_revocation_id,
+                &events.pending_revocation_bytes,
+            ),
+        ] {
+            event_db::save_event_bytes(fixture.store_id.as_str(), event_id.as_str(), bytes).await?;
+        }
+        let enrollment = crate::manager::PendingExtensionIdentityEnrollment::ExistingVaultImport {
+            store_id: fixture.store_id.clone(),
+        };
+        let signing_seed = "33".repeat(32);
+
+        let result = commit_authenticated_identity_handoff(IdentityHandoffCommit {
+            app_key: &fixture.identity,
+            signing_public_key: &events.signing_public_key,
+            authorizer_signing: None,
+            enrollment: &enrollment,
+            signing_seed: Some(&signing_seed),
+            existing_vault: Some(ExistingVaultImportCommit {
+                device_id: fixture.identity.device_id().clone(),
+                label: "Imported".to_owned(),
+            }),
+        })
+        .await;
+
+        assert!(result.is_err());
+        assert_nothing_published(&signing_seed_before).await?;
         event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
         clear_identity_directory_for_test().await
     }

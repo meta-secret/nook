@@ -125,7 +125,7 @@
 - Another active task's branch and pull request are read-only without an explicit
   handoff.
 
-Do not:
+Without an explicit handoff, do not:
 
 - push to it;
 - reply to its reviews;

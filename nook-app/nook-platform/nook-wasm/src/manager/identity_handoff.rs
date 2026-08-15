@@ -12,6 +12,16 @@ pub(in crate::manager) struct PendingVaultCreationHandoff {
 }
 
 impl NookVaultManager {
+    fn adopt_existing_vault_handoff_keys(
+        &mut self,
+        vault_keys: &nook_core::VaultKeys,
+    ) -> Result<(), NookError> {
+        self.apply_vault_keys(
+            vault_keys.secrets_key.as_str(),
+            vault_keys.members_key.as_str(),
+        )
+    }
+
     pub(in crate::manager) fn defers_identity_reconciliation_until_handoff(&self) -> bool {
         self.device
             .pending_extension_handoff
@@ -76,7 +86,7 @@ impl NookVaultManager {
             .pending_extension_handoff
             .as_ref()
             .ok_or_else(|| NookError::Database("Identity handoff disappeared.".to_owned()))?;
-        crate::storage::identity_record::commit_authenticated_identity_handoff(
+        let committed = crate::storage::identity_record::commit_authenticated_identity_handoff(
             crate::storage::identity_record::IdentityHandoffCommit {
                 app_key: &identity,
                 signing_public_key: &pending.signing_public_key,
@@ -92,7 +102,31 @@ impl NookVaultManager {
             },
         )
         .await?;
+        let vault_keys = committed.existing_vault_keys.ok_or_else(|| {
+            NookError::Database("Existing-vault handoff did not return committed keys.".to_owned())
+        })?;
+        self.adopt_existing_vault_handoff_keys(&vault_keys)?;
         self.device.pending_extension_handoff = None;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn adopts_transactional_handoff_keys_into_live_session() -> Result<(), NookError> {
+        let mut manager = NookVaultManager::new();
+        manager.vault.secrets_key = "stale-secrets".to_owned();
+        manager.vault.members_key = "stale-members".to_owned();
+        let keys = nook_core::generate_vault_keys()?;
+
+        manager.adopt_existing_vault_handoff_keys(&keys)?;
+
+        assert_eq!(manager.vault.secrets_key, keys.secrets_key.as_str());
+        assert_eq!(manager.vault.members_key, keys.members_key.as_str());
+        assert!(manager.vault.crypto.is_unlocked());
         Ok(())
     }
 }

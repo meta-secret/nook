@@ -175,7 +175,11 @@ handoff or the local signer supplies that public key.
     invalid event ID.
   - Reject matching event rows absent from the index. This closes the
     pre-upgrade two-transaction writer window before authorization is trusted.
+  - Reject a graph with pending events. A known revocation awaiting a missing
+    parent must not leave an older approval usable for handoff.
   - Commit the member signer and adopted signing seed atomically.
+  - Return the transactionally selected DEKs and install them in the live vault
+    session before clearing the pending handoff.
 - **Legacy-vault reconciliation:** Derive DEK recipients from the signed event
   graph's active approvals after revocations, not from stale encrypted auth
   rows.

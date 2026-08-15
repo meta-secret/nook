@@ -110,6 +110,10 @@ It is never shown as stored on one physical laptop.
   - Persist both encryption and event-signing public keys for members.
   - Treat missing signing keys from older records as unavailable, not inferred.
   - Require a verified signing key for every member in new Simple-vault genesis.
+  - Reject an existing-vault handoff while any signed roster event is pending
+    causal ancestry.
+  - Apply the transactionally selected vault DEKs to the live session before
+    reporting a successful handoff.
 - **Simple genesis marker:** Use `pending_simple_genesis_v1`.
   - Store `storeId`, `identityId`, `createdAt`, `eventState`, and `flow`.
   - Make `flow` explicitly `ordinary` or `staged`.
