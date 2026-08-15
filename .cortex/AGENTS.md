@@ -667,7 +667,7 @@ Without an explicit handoff, an agent must not:
 - If ownership is absent or ambiguous:
   1. Stop mutating the target.
   2. Report the overlap.
-  3. Wait for an explicit user, owner, or orchestrator handoff.
+  3. Stop and wait for an explicit user, owner, or orchestrator handoff.
 
 Full policy:
 [dynamic-skills/agent-feature-ownership.md](dynamic-skills/agent-feature-ownership.md).
