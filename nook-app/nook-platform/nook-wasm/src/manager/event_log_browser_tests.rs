@@ -32,11 +32,12 @@ async fn import_fixture(with_update: bool) -> anyhow::Result<ImportFixture> {
     source.initialize_genesis_vault(&identity)?;
     source.vault.store_id = nook_core::generate_store_id()?.to_string();
     source.bootstrap_event_log_genesis().await?;
+    source.persist_projection_cache().await?;
     if with_update {
         source
-            .set_vault_name("Candidate vault")
+            .append_vault_operations(vec![nook_core::VaultOperation::VaultCleared])
             .await
-            .map_err(|error| anyhow::anyhow!("append candidate update: {error:?}"))?;
+            .map_err(|error| anyhow::anyhow!("append candidate update: {error}"))?;
     }
     let signing_public_key = source.ensure_signing_identity().await?.public_key();
     let records = source
@@ -255,28 +256,28 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
 }
 
 #[wasm_bindgen_test]
-async fn staged_extension_import_error_restores_session_and_active_projection() -> anyhow::Result<()>
-{
+async fn staged_extension_import_without_ancestors_restores_session_and_active_projection()
+-> anyhow::Result<()> {
     let mut fixture = import_fixture(true).await?;
-    let dependent = fixture
+    let dependent_index = fixture
         .records
-        .pop()
+        .iter()
+        .position(|record| !record.event.body.parents.is_empty())
         .ok_or_else(|| anyhow::anyhow!("candidate update event is missing"))?;
+    let dependent = fixture.records.remove(dependent_index);
     for record in &fixture.records {
         crate::storage::event_db::remove_event_fixture(&fixture.store_id, &record.event_id).await?;
     }
     let (mut replacement, previous_store_id) = replacement_manager(&fixture).await?;
-    assert!(
-        replacement
-            .import_extension_event_log_records(
-                &fixture.store_id,
-                &fixture.device_id,
-                fixture.device_public_key.as_str(),
-                fixture.signing_public_key.as_str(),
-                vec![dependent],
-            )
-            .await
-            .is_err()
-    );
+    let status = replacement
+        .import_extension_event_log_records(
+            &fixture.store_id,
+            &fixture.device_id,
+            fixture.device_public_key.as_str(),
+            fixture.signing_public_key.as_str(),
+            vec![dependent],
+        )
+        .await?;
+    assert!(!status.access_granted);
     assert_rollback(&replacement, &previous_store_id).await
 }

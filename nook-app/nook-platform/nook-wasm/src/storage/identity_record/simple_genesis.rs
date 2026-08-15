@@ -611,10 +611,11 @@ mod tests {
         clear_identity_directory_for_test().await?;
         let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
         let pending = begin_or_resume_simple_genesis(&app_key, "Personal").await?;
-        let another_key = app_key.clone();
+        let another_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let selected_key = another_key.clone();
         update_identity_directory(move |directory| {
             directory
-                .create_identity("Work", &another_key, None)
+                .create_identity("Work", &selected_key, None)
                 .map_err(map_domain_error)?;
             Ok(())
         })
@@ -624,7 +625,7 @@ mod tests {
         assert_eq!(resumed.identity_id, pending.identity_id);
         clear_pending_simple_genesis(SimpleGenesisCompletion::Ordinary { pending: &pending })
             .await?;
-        let replacement = begin_or_resume_simple_genesis(&app_key, "Work").await?;
+        let replacement = begin_or_resume_simple_genesis(&another_key, "Work").await?;
         assert_ne!(replacement.store_id, pending.store_id);
         clear_identity_directory_for_test().await
     }

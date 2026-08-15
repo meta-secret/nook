@@ -242,7 +242,8 @@ Do not optimize the current diff to make the number pass.
 Compression, test removal, documentation removal, completed-behavior deletion,
 and cosmetic churn are not scope management.
 
-Before changing the first PR after it reaches the warning or ceiling:
+Before changing the first PR after the re-estimate requires a split, or after
+implementation crosses the ceiling:
 
 1. Identify the last full-work commit and publish a superseding Workbench plan.
 2. Divide the complete outcome along domain, capability, package, layer, or

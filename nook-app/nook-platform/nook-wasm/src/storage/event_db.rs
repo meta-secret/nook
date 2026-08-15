@@ -241,24 +241,66 @@ pub(crate) async fn save_event_bytes(
     event_id: &str,
     bytes: &[u8],
 ) -> Result<(), NookError> {
-    let key = event_key(store_id, event_id);
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| NookError::IndexedDb(format!("Event transaction error: {error:?}")))?;
+    let store = transaction.store(STORE_EVENTS).map_err(|error| {
+        NookError::IndexedDb(format!("Event transaction store error: {error:?}"))
+    })?;
+    save_event_bytes_to_store(&store, store_id, event_id, bytes).await?;
+    transaction.done().await.map(|_| ()).map_err(|error| {
+        NookError::IndexedDb(format!("Event transaction completion error: {error:?}"))
+    })
+}
+
+pub(crate) async fn save_event_bytes_to_store(
+    store: &rexie::Store,
+    store_id: &str,
+    event_id: &str,
+    bytes: &[u8],
+) -> Result<(), NookError> {
     let value = String::from_utf8(bytes.to_vec())
         .map_err(|e| NookError::Serialization(format!("Event bytes not UTF-8: {e}")))?;
-    store_put(STORE_EVENTS, &key, &value).await?;
+    let event_key = serde_wasm_bindgen::to_value(&event_key(store_id, event_id))
+        .map_err(|error| NookError::IndexedDb(format!("Event key error: {error:?}")))?;
+    let event_value = serde_wasm_bindgen::to_value(&value)
+        .map_err(|error| NookError::IndexedDb(format!("Event value error: {error:?}")))?;
+    store
+        .put(&event_value, Some(&event_key))
+        .await
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Event transaction write error: {error:?}"))
+        })?;
 
-    let index_key = format!("event_index:{store_id}");
-    let mut ids: Vec<String> = match store_get(STORE_EVENTS, &index_key).await? {
-        None => Vec::new(),
-        Some(json) => {
-            serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))?
-        }
-    };
+    let index_key = serde_wasm_bindgen::to_value(&format!("event_index:{store_id}"))
+        .map_err(|error| NookError::IndexedDb(format!("Event index key error: {error:?}")))?;
+    let index_value = store
+        .get(index_key.clone())
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Event index read error: {error:?}")))?;
+    let mut ids: Vec<String> =
+        match index_value.filter(|value| !value.is_undefined() && !value.is_null()) {
+            None => Vec::new(),
+            Some(value) => {
+                let json: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
+                    NookError::IndexedDb(format!("Event index decode error: {error:?}"))
+                })?;
+                serde_json::from_str(&json)
+                    .map_err(|error| NookError::Serialization(error.to_string()))?
+            }
+        };
     if !ids.iter().any(|id| id == event_id) {
         ids.push(event_id.to_owned());
         ids.sort();
         let json =
             serde_json::to_string(&ids).map_err(|e| NookError::Serialization(e.to_string()))?;
-        store_put(STORE_EVENTS, &index_key, &json).await?;
+        let index_value = serde_wasm_bindgen::to_value(&json)
+            .map_err(|error| NookError::IndexedDb(format!("Event index value error: {error:?}")))?;
+        store
+            .put(&index_value, Some(&index_key))
+            .await
+            .map_err(|error| NookError::IndexedDb(format!("Event index write error: {error:?}")))?;
     }
     Ok(())
 }
