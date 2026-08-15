@@ -60,17 +60,14 @@ Agents must estimate the change before implementation.
 If the complete feature is larger, split it into an ordered series of pull
 requests before editing.
 
-If an in-progress pull request reaches the limit, preserve the work before
-reducing its scope.
+If an in-progress pull request reaches the limit, the agent must:
 
-The agent must:
+1. Publish a Workbench plan and branch its linked draft successor from the
+   last full-work commit.
+2. Prove every removed file and behavior exists in that successor.
+3. Only then reduce, merge, and complete each PR in order.
 
-1. Publish a superseding Workbench plan with ordered focused issues.
-2. Branch a linked draft successor from the last full-work commit.
-3. Prove every removed file and behavior exists in that successor.
-4. Only then reduce, merge, and complete each PR in order.
-
-Scope reduction without a linked preservation PR is a P1 delivery failure.
+Reducing scope without that linked preservation PR is a P1 delivery failure.
 
 Each pull request must:
 

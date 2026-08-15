@@ -53,8 +53,8 @@ The feature `README.md` must record:
 - feature-level acceptance criteria;
 - current completion status.
 
-For a split, record the full-work commit, PR links and order, completing owner,
-and a checklist covering every removed file and behavior.
+For a split, record the full-work commit, ordered PR links, completing owner,
+and preservation checklist before removing work.
 
 Each focused issue must own one cohesive module, package, layer, or
 architectural responsibility.
@@ -80,8 +80,6 @@ After a slice merges:
 The feature remains incomplete while any required issue remains incomplete.
 
 Do not convert remaining requested functionality into an optional follow-up.
-
-Do not remove work until its successor draft and Workbench issue are visible.
 
 See
 [pull-requests.md](pull-requests.md#pull-request-size-and-modularity) for the

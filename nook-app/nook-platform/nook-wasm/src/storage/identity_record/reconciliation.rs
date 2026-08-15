@@ -6,6 +6,11 @@ use crate::{NookError, storage::open_nook_database};
 const PENDING_IDENTITY_RECONCILIATION_PREFIX: &str = "pending_identity_reconciliation_v2:";
 const LEGACY_IDENTITY_RECONCILIATION_PREFIX: &str = "pending_identity_reconciliation_v1:";
 
+pub(super) fn is_identity_reconciliation_key(key: &str) -> bool {
+    key.starts_with(PENDING_IDENTITY_RECONCILIATION_PREFIX)
+        || key.starts_with(LEGACY_IDENTITY_RECONCILIATION_PREFIX)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PendingIdentityReconciliation {
@@ -48,15 +53,6 @@ pub(super) struct IdentityEpochResolution {
 
 fn identity_reconciliation_key(store_id: &nook_core::StoreId) -> String {
     format!("{PENDING_IDENTITY_RECONCILIATION_PREFIX}{store_id}")
-}
-
-pub(super) fn identity_reconciliation_keys_for_recovery(
-    store_id: &nook_core::StoreId,
-) -> [String; 2] {
-    [
-        identity_reconciliation_key(store_id),
-        format!("{LEGACY_IDENTITY_RECONCILIATION_PREFIX}{store_id}"),
-    ]
 }
 
 fn decode_pending(raw: &str) -> Result<PendingIdentityReconciliation, NookError> {

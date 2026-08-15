@@ -19,8 +19,7 @@ pub(crate) use reconciliation::{
     load_pending_identity_rotation, mark_identity_reconciliation_pending,
 };
 use reconciliation::{
-    clear_consumed_identity_reconciliation, identity_reconciliation_keys_for_recovery,
-    resolve_identity_epoch,
+    clear_consumed_identity_reconciliation, is_identity_reconciliation_key, resolve_identity_epoch,
 };
 pub(crate) use simple_genesis::{
     PendingSimpleGenesis, begin_or_resume_simple_genesis, clear_pending_simple_genesis,
@@ -442,9 +441,6 @@ async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
     // corrupt or future-incompatible directory must never block destructive
     // device recovery.
     let _ = load_identity_directory().await;
-    let registry_store_ids = super::indexed_db::list_vault_registry_entries()
-        .await
-        .unwrap_or_default();
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
@@ -452,6 +448,16 @@ async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
     let store = transaction
         .store("vault")
         .map_err(|error| NookError::IndexedDb(format!("Identity reset store error: {error:?}")))?;
+    let reconciliation_keys: Vec<String> = store
+        .get_all_keys(None, None)
+        .await
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Identity reset key enumeration error: {error:?}"))
+        })?
+        .into_iter()
+        .filter_map(|value| serde_wasm_bindgen::from_value::<String>(value).ok())
+        .filter(|key| is_identity_reconciliation_key(key))
+        .collect();
     let directory_key = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY)
         .map_err(|error| NookError::IndexedDb(format!("Identity reset key error: {error:?}")))?;
     let raw = store
@@ -477,24 +483,6 @@ async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
     .ok()
     .flatten()
     .and_then(|raw| nook_core::AppId::parse(&raw).ok());
-    let mut store_ids = Vec::new();
-    for store_id in directory
-        .identities()
-        .iter()
-        .flat_map(|identity| identity.vault_deks.iter().map(|dek| &dek.store_id))
-    {
-        if !store_ids.contains(store_id) {
-            store_ids.push(store_id.clone());
-        }
-    }
-    for store_id in registry_store_ids
-        .into_iter()
-        .filter_map(|entry| nook_core::StoreId::parse(&entry.store_id).ok())
-    {
-        if !store_ids.contains(&store_id) {
-            store_ids.push(store_id);
-        }
-    }
     directory.reset_for_device_recovery();
     if let Some(app_id) = persisted_app_id {
         directory.retire_app_id(app_id);
@@ -510,20 +498,16 @@ async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
         .put(&value, Some(&directory_key))
         .await
         .map_err(|error| NookError::IndexedDb(format!("Identity reset write error: {error:?}")))?;
-    for key in store_ids
-        .iter()
-        .flat_map(identity_reconciliation_keys_for_recovery)
-        .chain([
-            LEGACY_IDENTITY_RECORD_KEY.to_owned(),
-            simple_genesis::PENDING_SIMPLE_GENESIS_KEY.to_owned(),
-            crate::storage::device_access::DEVICE_ACCESS_PROFILE_KEY.to_owned(),
-            super::indexed_db::APP_KEY_WRAPPED_KEY.to_owned(),
-            super::indexed_db::APP_ID_KEY.to_owned(),
-            super::indexed_db::WRAPPED_DEVICE_IDENTITY_KEY.to_owned(),
-            super::indexed_db::DEVICE_ID_KEY.to_owned(),
-            super::indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY.to_owned(),
-        ])
-    {
+    for key in reconciliation_keys.into_iter().chain([
+        LEGACY_IDENTITY_RECORD_KEY.to_owned(),
+        simple_genesis::PENDING_SIMPLE_GENESIS_KEY.to_owned(),
+        crate::storage::device_access::DEVICE_ACCESS_PROFILE_KEY.to_owned(),
+        super::indexed_db::APP_KEY_WRAPPED_KEY.to_owned(),
+        super::indexed_db::APP_ID_KEY.to_owned(),
+        super::indexed_db::WRAPPED_DEVICE_IDENTITY_KEY.to_owned(),
+        super::indexed_db::DEVICE_ID_KEY.to_owned(),
+        super::indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY.to_owned(),
+    ]) {
         let key = serde_wasm_bindgen::to_value(&key).map_err(|error| {
             NookError::IndexedDb(format!("Identity reset delete key error: {error:?}"))
         })?;
@@ -673,9 +657,14 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    async fn destructive_recovery_bypasses_a_corrupt_vault_registry() -> Result<(), NookError> {
+    async fn destructive_recovery_bypasses_corrupt_indexes_and_deletes_markers()
+    -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
+        let store_id = nook_core::generate_store_id().map_err(map_domain_error)?;
+        let marker = format!("pending_identity_reconciliation_v2:{store_id}");
+        idb_put_string(IDENTITY_DIRECTORY_KEY, "{corrupt").await?;
         idb_put_string("vault_registry", "{corrupt").await?;
+        idb_put_string(&marker, "inaccessible-plan").await?;
         idb_put_string(
             crate::storage::indexed_db::APP_KEY_WRAPPED_KEY,
             "inaccessible",
@@ -687,6 +676,7 @@ mod tests {
                 .await?
                 .is_none()
         );
+        assert!(idb_get_string(&marker).await?.is_none());
         idb_delete_key("vault_registry").await?;
         clear_identity_directory_for_test().await
     }

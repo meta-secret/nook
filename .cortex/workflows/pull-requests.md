@@ -181,10 +181,6 @@ Each slice must be:
 - compatible with the previous merged slice;
 - small enough for focused review and repair.
 
-Each split preserves implementation continuity: predecessor and successor PRs
-cross-link, Workbench records their order and dependencies, and the feature
-stays `in_progress` until all merge. Tests and docs count as preserved work.
-
 A slice may prepare an interface or migrate one module before the complete user
 flow is available.
 
@@ -215,8 +211,6 @@ Do not label them optional follow-up work merely because the first pull request
 merged.
 
 Do not keep one long-lived branch for the full sequence.
-
-A temporary branch may preserve work until the first PR merges; then update it.
 
 See [issues.md](issues.md#multi-pr-feature-sequences) for Workbench ownership.
 

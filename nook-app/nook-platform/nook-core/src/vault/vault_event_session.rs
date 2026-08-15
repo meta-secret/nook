@@ -153,22 +153,21 @@ impl VaultEventSession {
             created_at,
             provider_id,
         } = input;
-        let trigger_id = self.append_operations(vec![trigger], created_at, provider_id)?;
-        trigger_id.as_str().clone_into(&mut self.key_epoch);
         let secrets =
             reencrypt_user_secrets_for_epoch(user_records, old_secrets_key, &new_keys.secrets_key)?;
         let members_checkpoint_hash =
             Self::members_checkpoint_hash(members_records, &new_keys.members_key)?;
-        self.append_operations(
-            vec![VaultOperation::EpochCheckpoint {
-                secrets,
-                members_checkpoint_hash,
-                rotated_meta_records,
-                password_entries: crate::EpochPasswordState::Replace(rewrapped_password_entries),
-            }],
-            created_at,
-            provider_id,
-        )?;
+        let checkpoint = VaultOperation::EpochCheckpoint {
+            secrets,
+            members_checkpoint_hash,
+            rotated_meta_records,
+            password_entries: crate::EpochPasswordState::Replace(rewrapped_password_entries),
+        };
+        let mut staged = self.clone();
+        let trigger_id = staged.append_operations(vec![trigger], created_at, provider_id)?;
+        trigger_id.as_str().clone_into(&mut staged.key_epoch);
+        staged.append_operations(vec![checkpoint], created_at, provider_id)?;
+        *self = staged;
         Ok((
             new_keys.secrets_key.as_str().to_owned(),
             new_keys.members_key.as_str().to_owned(),
