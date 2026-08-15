@@ -246,7 +246,15 @@ pub(crate) async fn load_local_event_store_from_store(
         let event_id = EventId::parse(&raw_id).map_err(|error| {
             NookError::Serialization(format!("Invalid indexed event id {raw_id}: {error}"))
         })?;
-        local.put_event(event_id, bytes.into_bytes());
+        let bytes = bytes.into_bytes();
+        let stored_event = nook_core::parse_event_storage_bytes(&bytes)?;
+        let stored_event_id = stored_event.id()?;
+        if stored_event_id != event_id {
+            return Err(NookError::IndexedDb(format!(
+                "Event row {raw_id} contains event {stored_event_id}."
+            )));
+        }
+        local.put_event(event_id, bytes);
     }
     Ok(local)
 }
@@ -473,6 +481,66 @@ mod tests {
             ));
         };
         assert!(error.to_string().contains("missing from the index"));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn transactional_loader_rejects_event_row_with_wrong_id() -> Result<(), NookError> {
+        let store_id = nook_core::generate_store_id()?;
+        let indexed_id = "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo";
+        let (signing, _) = nook_core::SigningIdentity::generate()?;
+        let actor_id = signing.actor_id()?;
+        let key_epoch = nook_core::EventId::parse(indexed_id)?;
+        let (_, event_bytes) = nook_core::build_signed_event(nook_core::AppendEventInput {
+            store_id: &store_id,
+            actor_id: &actor_id,
+            signing_identity: &signing,
+            parents: Vec::new(),
+            key_epoch: &key_epoch,
+            created_at: &nook_core::IsoTimestamp::from_trusted("2026-08-15T00:00:00Z".to_owned()),
+            operations: vec![nook_core::VaultOperation::VaultImported {
+                source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
+                secrets: Vec::new(),
+                password_entries: Vec::new(),
+            }],
+        })?;
+        let index_key = format!("event_index:{store_id}");
+        let row_key = event_key(store_id.as_str(), indexed_id);
+        store_put(
+            STORE_EVENTS,
+            &index_key,
+            &serde_json::to_string(&vec![indexed_id])
+                .map_err(|error| NookError::Serialization(error.to_string()))?,
+        )
+        .await?;
+        store_put(
+            STORE_EVENTS,
+            &row_key,
+            &String::from_utf8(event_bytes)
+                .map_err(|error| NookError::Serialization(error.to_string()))?,
+        )
+        .await?;
+
+        let rexie = open_nook_database().await?;
+        let transaction = rexie
+            .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadOnly)
+            .map_err(|error| NookError::IndexedDb(format!("Test transaction error: {error:?}")))?;
+        let store = transaction.store(STORE_EVENTS).map_err(|error| {
+            NookError::IndexedDb(format!("Test transaction store error: {error:?}"))
+        })?;
+        let result = load_local_event_store_from_store(&store, store_id.as_str()).await;
+        transaction.done().await.map_err(|error| {
+            NookError::IndexedDb(format!("Test transaction completion error: {error:?}"))
+        })?;
+        store_delete(STORE_EVENTS, &row_key).await?;
+        store_delete(STORE_EVENTS, &index_key).await?;
+
+        let Err(error) = result else {
+            return Err(NookError::Database(
+                "Mismatched event row did not fail closed.".to_owned(),
+            ));
+        };
+        assert!(error.to_string().contains("contains event"));
         Ok(())
     }
 }

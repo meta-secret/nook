@@ -105,6 +105,8 @@ It is never shown as stored on one physical laptop.
   - Retain every member and vault grant during the merge.
   - Normalize staged marker base and candidate directories in the same
     transaction so completion compares migrated snapshots.
+  - Repeat that marker-aware normalization inside every directory write
+    transaction so a pre-upgrade tab cannot race the initial migration.
   - Do not decode a pending marker for a valid directory without duplicate
     ownership.
   - Persist both encryption and event-signing public keys for members.
@@ -112,6 +114,7 @@ It is never shown as stored on one physical laptop.
   - Require a verified signing key for every member in new Simple-vault genesis.
   - Reject an existing-vault handoff while any signed roster event is pending
     causal ancestry.
+  - Require every stored event's computed ID to match its index and row key.
   - Apply the transactionally selected vault DEKs to the live session before
     reporting a successful handoff.
 - **Simple genesis marker:** Use `pending_simple_genesis_v1`.

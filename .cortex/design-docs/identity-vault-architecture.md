@@ -136,6 +136,9 @@ An identity referenced by `pending_simple_genesis_v1` takes precedence over
 the selection so a resumable genesis marker cannot become orphaned.
 When the marker is staged, the same transaction normalizes its base and
 candidate directory snapshots before rewriting the live directory.
+Every later directory update repeats this marker-aware migration within its
+write transaction. A concurrent pre-upgrade writer cannot absorb the pending
+identity between preflight migration and mutation.
 All distinct members and vault DEK grants survive the merge.
 The normalized directory is rewritten before unique app-key ownership is
 enforced.
@@ -175,6 +178,8 @@ handoff or the local signer supplies that public key.
     invalid event ID.
   - Reject matching event rows absent from the index. This closes the
     pre-upgrade two-transaction writer window before authorization is trusted.
+  - Parse every event row and require its computed event ID to match the index
+    and row key before treating it as authorization evidence.
   - Reject a graph with pending events. A known revocation awaiting a missing
     parent must not leave an older approval usable for handoff.
   - Commit the member signer and adopted signing seed atomically.

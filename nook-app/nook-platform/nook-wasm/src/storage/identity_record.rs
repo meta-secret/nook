@@ -1,9 +1,5 @@
 //! Local identity-directory persistence, independent of vault `store_id`.
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
-use super::indexed_db::{StringUpdateGuard, StringUpdateResult, idb_update_string};
 #[cfg(test)]
 use super::indexed_db::{idb_delete_key, idb_get_string, idb_put_string};
 use crate::{NookError, storage::open_nook_database};
@@ -218,38 +214,82 @@ pub(crate) async fn update_identity_directory<F, T>(update: F) -> Result<T, Nook
 where
     F: FnOnce(&mut nook_core::IdentityDirectory) -> Result<T, NookError>,
 {
-    // Complete legacy migration before entering the atomic current-key update.
-    let _ = load_identity_directory().await?;
-    let result = Rc::new(RefCell::new(None));
-    let captured_result = Rc::clone(&result);
-    let disposition = idb_update_string(
-        IDENTITY_DIRECTORY_KEY,
-        StringUpdateGuard::Unconditional,
-        move |raw| {
-            let mut directory = match raw {
-                Some(raw) => decode_directory(&raw)?,
-                None => nook_core::IdentityDirectory::empty(),
-            };
-            let value = update(&mut directory)?;
-            directory
-                .validate()
-                .map_err(|error| NookError::Database(error.to_string()))?;
-            let encoded = serde_json::to_string(&directory).map_err(|error| {
-                NookError::IndexedDb(format!("Identity directory encode error: {error}"))
-            })?;
-            *captured_result.borrow_mut() = Some(value);
-            Ok(encoded)
-        },
-    )
-    .await?;
-    if disposition != StringUpdateResult::Applied {
-        return Err(NookError::IndexedDb(
-            "Identity directory update was rejected.".to_owned(),
-        ));
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| NookError::IndexedDb(format!("Identity update error: {error:?}")))?;
+    let store = transaction
+        .store("vault")
+        .map_err(|error| NookError::IndexedDb(format!("Identity update store error: {error:?}")))?;
+    let current_id = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Identity update key error: {error:?}")))?;
+    let legacy_id = serde_wasm_bindgen::to_value(LEGACY_IDENTITY_RECORD_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Legacy update key error: {error:?}")))?;
+    let current = store
+        .get(current_id.clone())
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Identity update read error: {error:?}")))?;
+    let mut directory = if let Some(value) =
+        current.filter(|value| !value.is_undefined() && !value.is_null())
+    {
+        let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
+            NookError::IndexedDb(format!("Identity update value error: {error:?}"))
+        })?;
+        decode_directory_value(&raw)?
+    } else {
+        let legacy = store.get(legacy_id.clone()).await.map_err(|error| {
+            NookError::IndexedDb(format!("Legacy identity update read error: {error:?}"))
+        })?;
+        legacy
+            .filter(|value| !value.is_undefined() && !value.is_null())
+            .map(serde_wasm_bindgen::from_value::<String>)
+            .transpose()
+            .map_err(|error| NookError::IndexedDb(format!("Legacy update value error: {error:?}")))?
+            .map(|raw| {
+                serde_json::from_str(&raw)
+                    .map_err(|error| {
+                        NookError::IndexedDb(format!("Legacy update decode error: {error}"))
+                    })
+                    .and_then(|record| {
+                        nook_core::IdentityDirectory::from_legacy_record(record)
+                            .map_err(map_domain_error)
+                    })
+            })
+            .transpose()?
+            .unwrap_or_else(nook_core::IdentityDirectory::empty)
+    };
+    let mut pending = if directory.has_legacy_duplicate_app_key_ownership() {
+        load_pending_genesis(&store).await?
+    } else {
+        None
+    };
+    let preserved_identity_id = pending.as_ref().map(|pending| &pending.identity_id);
+    (directory, _) = migrate_directory(directory, preserved_identity_id)?;
+    if let Some(pending) = &mut pending
+        && migrate_staged_genesis_directories(pending)?
+    {
+        persist_pending_genesis(&store, pending).await?;
     }
-    result.borrow_mut().take().ok_or_else(|| {
-        NookError::IndexedDb("Identity directory update produced no result.".to_owned())
-    })
+    let value = update(&mut directory)?;
+    directory.validate().map_err(map_domain_error)?;
+    let encoded = serde_json::to_string(&directory).map_err(|error| {
+        NookError::IndexedDb(format!("Identity directory encode error: {error}"))
+    })?;
+    let encoded = serde_wasm_bindgen::to_value(&encoded)
+        .map_err(|error| NookError::IndexedDb(format!("Identity update value error: {error:?}")))?;
+    store
+        .put(&encoded, Some(&current_id))
+        .await
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Identity directory write error: {error:?}"))
+        })?;
+    store.delete(legacy_id).await.map_err(|error| {
+        NookError::IndexedDb(format!("Legacy identity delete error: {error:?}"))
+    })?;
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!("Identity update completion error: {error:?}"))
+    })?;
+    Ok(value)
 }
 
 pub(crate) async fn load_selected_identity() -> Result<Option<nook_core::IdentityRecord>, NookError>

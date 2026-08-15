@@ -239,6 +239,58 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    async fn directory_update_preserves_pending_identity_during_fallback_migration()
+    -> Result<(), NookError> {
+        super::super::clear_identity_directory_for_test().await?;
+        let app_key = nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;
+        let mut directory = nook_core::IdentityDirectory::empty();
+        let pending_identity_id = directory
+            .create_identity("Pending", &app_key, None)
+            .map_err(super::super::map_domain_error)?;
+        directory
+            .create_identity("Concurrent duplicate", &app_key, None)
+            .map_err(super::super::map_domain_error)?;
+        let store_id = nook_core::generate_store_id().map_err(super::super::map_domain_error)?;
+        let pending = PendingSimpleGenesis {
+            store_id,
+            identity_id: pending_identity_id.clone(),
+            created_at: nook_core::IsoTimestamp::parse("2026-08-15T00:00:00.000Z")
+                .map_err(|error| NookError::Database(error.to_string()))?,
+            event_state: PendingSimpleGenesisEvent::AwaitingEvent,
+            flow: PendingSimpleGenesisFlow::Staged(StagedSimpleGenesisIdentity {
+                base_directory: directory.clone(),
+                directory: directory.clone(),
+            }),
+        };
+        crate::storage::indexed_db::idb_put_string(
+            super::super::IDENTITY_DIRECTORY_KEY,
+            &serde_json::to_string(&directory)
+                .map_err(|error| NookError::Serialization(error.to_string()))?,
+        )
+        .await?;
+        crate::storage::indexed_db::idb_put_string(
+            PENDING_SIMPLE_GENESIS_KEY,
+            &encode_pending_simple_genesis(&pending)?,
+        )
+        .await?;
+
+        super::super::update_identity_directory(|_| Ok(())).await?;
+
+        let current = super::super::load_identity_directory().await?;
+        let normalized = super::super::pending_simple_genesis_for_store(pending.store_id.as_str())
+            .await?
+            .ok_or_else(|| NookError::Database("Pending marker disappeared.".to_owned()))?;
+        let staged = normalized
+            .staged_identity()
+            .ok_or_else(|| NookError::Database("Staged snapshots disappeared.".to_owned()))?;
+        assert_eq!(current.identities().len(), 1);
+        assert_eq!(current.selected()?.identity_id, pending_identity_id);
+        assert_eq!(staged.base_directory.identities().len(), 1);
+        assert_eq!(staged.directory.identities().len(), 1);
+        super::super::clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
     async fn staged_signer_marker_resumes_with_authorizer_key() -> Result<(), NookError> {
         super::super::clear_identity_directory_for_test().await?;
         let authorizer = nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;
