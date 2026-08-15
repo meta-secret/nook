@@ -132,6 +132,8 @@ Older versions allowed one app key to appear in several identities.
 Load migrates those records in the existing IndexedDB transaction.
 It merges every identity connected by a shared app key.
 The selected identity survives when it belongs to that group.
+An identity referenced by `pending_simple_genesis_v1` takes precedence over
+the selection so a resumable genesis marker cannot become orphaned.
 All distinct members and vault DEK grants survive the merge.
 The normalized directory is rewritten before unique app-key ownership is
 enforced.

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use super::IdentityDirectory;
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
-use crate::{AppId, IdentityMember, IdentitySelection};
+use crate::{AppId, IdentityId, IdentityMember, IdentitySelection};
 
 impl IdentityDirectory {
     /// Merge legacy identities connected by a shared app key.
@@ -13,10 +13,26 @@ impl IdentityDirectory {
     /// identities. Those records were not cryptographically independent. The
     /// lossless migration keeps every member and vault grant in one identity,
     /// preferring the selected identity as the surviving local identity.
-    pub fn migrate_legacy_duplicate_app_key_ownership(mut self) -> MultiDeviceResult<(Self, bool)> {
+    pub fn migrate_legacy_duplicate_app_key_ownership(self) -> MultiDeviceResult<(Self, bool)> {
+        self.migrate_legacy_duplicate_app_key_ownership_inner(None)
+    }
+
+    /// Merge legacy duplicate owners without absorbing a durable identity reference.
+    pub fn migrate_legacy_duplicate_app_key_ownership_preserving(
+        self,
+        identity_id: &IdentityId,
+    ) -> MultiDeviceResult<(Self, bool)> {
+        self.migrate_legacy_duplicate_app_key_ownership_inner(Some(identity_id))
+    }
+
+    fn migrate_legacy_duplicate_app_key_ownership_inner(
+        mut self,
+        preserved_identity_id: Option<&IdentityId>,
+    ) -> MultiDeviceResult<(Self, bool)> {
         let mut changed = false;
         while let Some((left, right)) = self.duplicate_app_key_owners() {
-            let (survivor, absorbed) = self.preferred_merge_order(left, right);
+            let (survivor, absorbed) =
+                self.preferred_merge_order(left, right, preserved_identity_id);
             self.merge_identity_records(survivor, absorbed)?;
             changed = true;
         }
@@ -38,7 +54,22 @@ impl IdentityDirectory {
         None
     }
 
-    fn preferred_merge_order(&self, left: usize, right: usize) -> (usize, usize) {
+    fn preferred_merge_order(
+        &self,
+        left: usize,
+        right: usize,
+        preserved_identity_id: Option<&IdentityId>,
+    ) -> (usize, usize) {
+        if preserved_identity_id
+            .is_some_and(|identity_id| self.identities[right].identity_id == *identity_id)
+        {
+            return (right, left);
+        }
+        if preserved_identity_id
+            .is_some_and(|identity_id| self.identities[left].identity_id == *identity_id)
+        {
+            return (left, right);
+        }
         match &self.selection {
             IdentitySelection::Selected(selected)
                 if self.identities[right].identity_id == *selected =>
@@ -57,6 +88,10 @@ impl IdentityDirectory {
         let absorbed = self.identities.remove(absorbed_index);
         if absorbed_index < survivor_index {
             survivor_index -= 1;
+        }
+        let survivor_identity_id = self.identities[survivor_index].identity_id.clone();
+        if self.selection == IdentitySelection::Selected(absorbed.identity_id.clone()) {
+            self.selection = IdentitySelection::Selected(survivor_identity_id);
         }
         let survivor = &mut self.identities[survivor_index];
         survivor.control_epoch = survivor.control_epoch.max(absorbed.control_epoch);
@@ -159,6 +194,23 @@ mod tests {
 
         assert!(!changed);
         assert_eq!(migrated, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn preserves_durably_referenced_identity_over_selected_identity() -> anyhow::Result<()> {
+        let shared = AppKey::generate()?;
+        let mut directory = IdentityDirectory::empty();
+        let pending_identity_id = directory.create_identity("Pending genesis", &shared, None)?;
+        let selected_identity_id = directory.create_identity("Selected", &shared, None)?;
+        assert_ne!(pending_identity_id, selected_identity_id);
+
+        let (migrated, changed) = directory
+            .migrate_legacy_duplicate_app_key_ownership_preserving(&pending_identity_id)?;
+
+        assert!(changed);
+        assert_eq!(migrated.identities().len(), 1);
+        assert_eq!(migrated.selected()?.identity_id, pending_identity_id);
         Ok(())
     }
 }
