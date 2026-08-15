@@ -1,5 +1,29 @@
 # Reference: Svelte + Vite + Bun
 
+## Relationships
+
+- [Quality and Release](../workflows/quality.md)
+  - Defines the Quality and Release workflow referenced here.
+  - Read before performing that workflow.
+- [GitHub-Hosted Remote Execution](../workflows/remote-execution.md)
+  - Defines the GitHub-Hosted Remote Execution workflow referenced here.
+  - Read before performing that workflow.
+
+## Document map
+
+- [1. Package Manager](#1-package-manager)
+  - Defines Bun as the supported JavaScript package manager.
+  - Read before installing dependencies or running package scripts.
+- [2. Dev Server and Build](#2-dev-server-and-build)
+  - Explains the build and automation behavior for this area.
+  - Read when changing or diagnosing automation.
+  - [Blank page after WASM changes](#blank-page-after-wasm-changes)
+    - Explains the stale-WASM blank-page failure mode.
+    - Read when a rebuild produces an empty application page.
+- [3. E2e tests](#3-e2e-tests)
+  - Defines the evidence and checks required for completion.
+  - Use before declaring the work complete.
+
 ## 1. Package Manager
 
 - Nook web and Loom use Bun for JavaScript/TypeScript tooling.

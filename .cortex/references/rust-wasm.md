@@ -1,5 +1,41 @@
 # Reference: Rust + WebAssembly (wasm-bindgen)
 
+## Relationships
+
+- [Typed Newtypes (Domain IDs & Wire Strings)](../design-docs/typed-newtypes.md)
+  - Provides the Typed Newtypes (Domain IDs & Wire Strings) architecture context.
+  - Read when changing the related design.
+- [Quality and Release](../workflows/quality.md)
+  - Defines the Quality and Release workflow referenced here.
+  - Read before performing that workflow.
+
+## Document map
+
+- [1. Wasm Bindgen Setup](#1-wasm-bindgen-setup)
+  - Defines the Rust-to-WASM binding setup.
+  - Read before exposing Rust behavior to the web layer.
+- [2. Compiling for the web](#2-compiling-for-the-web)
+  - Lists the supported web compilation path.
+  - Read when building or refreshing generated WASM artifacts.
+- [3. Session state (NookVaultManager)](#3-session-state-nookvaultmanager)
+  - Defines session-state ownership in `NookVaultManager`.
+  - Read before changing vault lifecycle state across WASM.
+- [3a. Browser API boundaries](#3a-browser-api-boundaries)
+  - Defines what the guidance covers and where its ownership ends.
+  - Read before expanding or assigning the work.
+- [4. Typed WASM boundary (nook-app/nook-platform/nook-wasm/src/types.rs)](#4-typed-wasm-boundary-nook-appnook-platformnook-wasmsrctypesrs)
+  - Defines what the guidance covers and where its ownership ends.
+  - Read before expanding or assigning the work.
+- [5. Vault secrets at the JS boundary](#5-vault-secrets-at-the-js-boundary)
+  - Defines what the guidance covers and where its ownership ends.
+  - Read before expanding or assigning the work.
+  - [Adding a new secret type](#adding-a-new-secret-type)
+    - Lists the required core, WASM, web, and test changes.
+    - Follow from the start of new vault-item implementation.
+- [6. Testing](#6-testing)
+  - Defines the evidence and checks required for completion.
+  - Use before declaring the work complete.
+
 ## 1. Wasm Bindgen Setup
 - Use `wasm-bindgen = "0.2.127"` (see workspace
   `nook-app/nook-platform/Cargo.toml`).
