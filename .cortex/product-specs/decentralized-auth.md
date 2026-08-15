@@ -1,5 +1,73 @@
 # Multi-Device Decentralized Auth Specification
 
+## Relationships
+
+- [Nook System Architecture Specification](../ARCHITECTURE.md)
+  - Defines system-wide package ownership, dependency flow, storage, and execution boundaries.
+  - Read before changing a durable cross-component boundary.
+- [Password Unlock & QR-Based Device Join](password-envelope.md)
+  - Defines password-wrapped vault keys and the one-step device-join envelope.
+  - Read when this document touches the related product behavior or user flow.
+- [SLIP-0039 Device Quorum Recovery](slip39-recovery.md)
+  - Defines fixed-quorum device recovery and its session-only QR exchange.
+  - Read when this document touches the related product behavior or user flow.
+- [Nook Coding Rules & Golden Principles](../rules.md)
+  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
+  - Apply throughout implementation and review.
+
+## Document map
+
+- [Overview](#overview)
+  - Defines the roles of `secrets_key` and `members_key`.
+  - Read first to understand the scope and intent of Overview.
+- [1. Goals](#1-goals)
+  - Multi-device E2E: Any enrolled device can decrypt the same vault file from GitHub or local storage.
+  - Read first to understand the scope and intent of 1. Goals.
+- [2. Key hierarchy](#2-key-hierarchy)
+  - Defines the multi-device key hierarchy.
+  - Read before changing the security or key boundary described by 2. Key hierarchy.
+  - [2.1 Local device-key protection](#21-local-device-key-protection)
+    - Before any provider credential or device-key operation, the browser runs WebAuthn with required user verification and the PRF extension.
+    - Read before changing the security or key boundary described by 2.1 Local device-key protection.
+  - [2.2 Browser and authenticator support (2026-07-03)](#22-browser-and-authenticator-support-2026-07-03)
+    - PRF support is a property of the complete browser + OS + authenticator path, not merely the presence of PublicKeyCredential.
+    - Read before changing or relying on 2.2 Browser and authenticator support (2026-07-03).
+- [3. Vault file layout](#3-vault-file-layout)
+  - Defines the encrypted vault authorization layout.
+  - Read before changing the persisted or wire representation in 3. Vault file layout.
+  - [Example](#example)
+    - Shows a complete encrypted vault representation.
+    - Read before changing or relying on Example.
+- [4. Design decisions](#4-design-decisions)
+  - `secrets_key` protects `secrets`; `members_key` protects `members`.
+  - Read before changing or relying on 4. Design decisions.
+  - [4.1 Explicit key names (not DEK/MEK/CEK…)](#41-explicit-key-names-not-dekmekcek)
+    - Preserves explicit `secrets_key` and `members_key` names.
+    - Read before changing the security or key boundary described by 4.1 Explicit key names (not DEK/MEK/CEK…).
+  - [4.2 Auth pk_id = SHA256(public key)](#42-auth-pk_id--sha256public-key)
+    - Stores `pk_id` as the SHA-256 digest of the public key.
+    - Read before changing the security or key boundary described by 4.2 Auth pk_id = SHA256(public key).
+  - [4.3 Join approval distributes both keys](#43-join-approval-distributes-both-keys)
+    - Defines the key distribution performed during join approval.
+    - Read before changing the security or key boundary described by 4.3 Join approval distributes both keys.
+  - [4.4 Shared members_key roster](#44-shared-members_key-roster)
+    - Defines the `members` roster encrypted by `members_key`.
+    - Read before changing the security or key boundary described by 4.4 Shared members_key roster.
+  - [4.5 Device labels and revocation](#45-device-labels-and-revocation)
+    - Member rows may include an optional user-facing label.
+    - Read before changing or relying on 4.5 Device labels and revocation.
+- [5. Auth API (`nook-auth2/src/auth/multi_device.rs`)](#5-auth-api-nook-auth2srcauthmulti_devicers)
+  - `nook-auth2` owns the portable authorization API.
+  - Read before changing the portable multi-device authorization API.
+- [6. Phase status](#6-phase-status)
+  - Records current multi-device implementation status.
+  - Read when assessing the current state of 6. Phase status.
+- [7. Backup password unlock (cross-link)](#7-backup-password-unlock-cross-link)
+  - Device keys remain the primary access path.
+  - Read before changing or relying on 7. Backup password unlock (cross-link).
+
+## Overview
+
 Nook vaults use **`secrets_key`** to encrypt user secrets and **`members_key`** to encrypt member catalog entries.
 
 **Per-device X25519 identities** distribute both keys across devices via event-sourced auth metadata.
