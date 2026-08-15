@@ -138,7 +138,13 @@ test('requires procedure-like articles to expose ordered actions', () => {
 });
 
 test('recognizes qualified procedure and runbook headings', () => {
-  const headings = ['Procedure for recovery', 'Runbook: release'];
+  const headings = [
+    'Procedure for recovery',
+    'Runbook: release',
+    'Release steps',
+    'Staged delivery sequence',
+    'Ordered delivery for production',
+  ];
   for (const heading of headings) {
     const anchor = heading.toLowerCase().replaceAll(/[^a-z]+/g, '-');
     const documentArgs: MakeDocumentArgs = {

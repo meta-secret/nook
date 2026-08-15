@@ -57,7 +57,7 @@ type AuditArticleArgs = AuditDocumentArgs & {
 
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
 const PROCEDURE_HEADING =
-  /\b(procedure|runbook)\b|^(steps|ordered delivery|delivery sequence)$/i;
+  /\b(procedure|runbook|steps|ordered delivery|delivery sequence)\b/i;
 
 export function auditCortexArticleStructure(
   args: AuditCortexArticleStructureArgs,
