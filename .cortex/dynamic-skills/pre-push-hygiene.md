@@ -86,12 +86,10 @@ Invoke:
 task loom:pre-push
 ```
 
-Committed default:
-[`agentic-ai/loom/params/pre-push/default.yaml`](../../agentic-ai/loom/params/pre-push/default.yaml).
-
-Success means `ok: true` and `result.formatOk` / `result.uiDemoOk` are true.
-
-On YAML decode errors, run `task loom:tools-list` and fix the request.
+- **Committed default:**
+  [`agentic-ai/loom/params/pre-push/default.yaml`](../../agentic-ai/loom/params/pre-push/default.yaml).
+- **Success:** `ok: true`, `result.formatOk: true`, and `result.uiDemoOk: true`.
+- **Decode failure:** run `task loom:tools-list` and fix the YAML request.
 
 Loom always:
 

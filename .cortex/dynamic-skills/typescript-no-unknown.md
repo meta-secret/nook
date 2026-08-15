@@ -38,14 +38,11 @@
 
 ## Purpose
 
-Do not author the `object` type in linted TypeScript or Svelte code.
-
-Do not author the `unknown` type except at an unavoidable untyped transport
-boundary that narrows it immediately.
-
-Do not replace it with another generic value in domain or application code.
-
-Model concrete domain values.
+- Do not author the `object` type in linted TypeScript or Svelte code.
+- Do not author the `unknown` type except at an unavoidable untyped transport
+  boundary that narrows it immediately.
+- Do not replace it with another generic value in domain or application code.
+- Model concrete domain values.
 
 ## Scope
 
@@ -66,16 +63,12 @@ export function decodeDependencyPopularityRequest(value: unknown)
 export type UnknownRecord = Record<string, unknown>
 ```
 
-`unknown` is an unnamed top type.
-
-`object` is an unnamed non-primitive type.
-
-It claims that some structure exists without naming or proving that structure.
-
-`ExternalValue` is also generic.
-
-Either type can erase domain meaning when it escapes a parser or transport
-adapter.
+- `unknown` is an unnamed top type.
+- `object` is an unnamed non-primitive type.
+- Either claims structure without naming or proving that structure.
+- `ExternalValue` is also generic.
+- Any of these types can erase domain meaning after escaping a parser or
+  transport adapter.
 
 ## Preferred Pattern
 
@@ -92,31 +85,28 @@ export function evaluateDependencyPopularity(
 
 Rules:
 
-1. Do not write the `unknown` type token in enforced sources.
-2. Do not write the `object` type token in enforced sources.
-3. Do not substitute `Object`, `{}`, `Record<string, ...>`, broad index
-   signatures, `any`, or recursive generic values.
-4. Do not use `ExternalValue`, `ExternalObject`, `JsonValue`, or equivalent
-   recursive value bags as domain models.
-5. Do not store generic values in application state.
-6. Do not expose generic values through commands, services, or UI APIs.
-7. Define concrete structs, enums, unions, and identifiers for domain data.
-8. Catch bindings stay unannotated or use concrete error types (`LoomFailure`,
-   `Error`), never `catch (error: unknown)`.
-9. Command results use domain result unions. They must not use
-   `Promise<unknown>` or `Promise<ExternalValue>`.
+- Do not write the `unknown` or `object` type token in enforced sources.
+- Do not substitute `Object`, `{}`, `Record<string, ...>`, broad index
+  signatures, `any`, or recursive generic values.
+- Do not use `ExternalValue`, `ExternalObject`, `JsonValue`, or equivalent
+  recursive value bags as domain models.
+- Do not store generic values in application state.
+- Do not expose generic values through commands, services, or UI APIs.
+- Define concrete structs, enums, unions, and identifiers for domain data.
+- Keep catch bindings unannotated or use concrete error types such as
+  `LoomFailure` or `Error`.
+  - Never write `catch (error: unknown)`.
+- Use domain result unions for command results.
+  - Do not use `Promise<unknown>` or `Promise<ExternalValue>`.
 
 ## Narrow Boundary Exception
 
-The `object` type has no boundary exception.
-
-It asserts that the input is non-primitive before validation.
-
-Use `unknown` when a host API unavoidably provides untyped JSON, YAML, WASM, or
-browser IPC data.
-
-The exception must stay inside a dedicated parser, codec, message guard, or
-contiguous boundary-decoding pipeline.
+- The `object` type has no boundary exception.
+  - It asserts that the input is non-primitive before validation.
+- Use `unknown` only when a host API unavoidably provides untyped JSON, YAML,
+  WASM, or browser IPC data.
+- Keep the exception inside a dedicated parser, codec, message guard, or
+  contiguous boundary-decoding pipeline.
 
 The adapter must:
 
@@ -128,11 +118,9 @@ The adapter must:
 - avoid passing the generic value into domain or application services;
 - keep casts at the host boundary.
 
-Do not treat this exception as the preferred application type.
-
-If a concrete platform input type exists, use it instead.
-
-The transport type may appear only at that boundary.
+- Do not treat this exception as the preferred application type.
+- If a concrete platform input type exists, use it instead.
+- The transport type may appear only at that boundary.
 
 Name the source or format when it improves clarity:
 
