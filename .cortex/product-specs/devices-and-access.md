@@ -100,75 +100,29 @@ signed roster.
 Legacy-vault DEK reconciliation uses only active signed event approvals after
 revocation replay.
 
-Destructive local device recovery keeps retired app IDs in the directory.
-Atomic directory updates reject those app keys. This prevents a stale browser
-tab from recreating ownership after recovery. The initiating tab first asks
-every open Nook tab to stop queued storage work and zeroize its app key. The
-reset then runs inside the initiating tab's storage queue.
-One IndexedDB transaction removes the wrapped app key and resets the directory.
-An unreadable identity directory cannot block this destructive recovery. The
-reset replaces it with an empty valid directory and removes the inaccessible
-wrapped app key.
-
-The same transaction deletes current and legacy reconciliation markers.
-
-It also deletes pending Simple and Sentinel genesis state.
-
-A failure cannot remove the app key while preserving stale ownership.
-
+Destructive local device recovery is atomic. Every tab first stops storage work
+and zeroizes its app key. One IndexedDB transaction then removes the wrapped app
+key, clears ownership and pending work, and permanently records retired app IDs.
+Unreadable metadata cannot block recovery; failure leaves prior state intact.
 Security-epoch retry state uses
-`pending_identity_reconciliation_v2:{store_id}`.
-Its value pins `storeId`, `previousKeyEpoch`, `previousCheckpoint`, and tagged
-`progress`. `prepared` contains an app-key-encrypted resumable plan with exact
-signed trigger and checkpoint events. `epoch-committed` adds `key_epoch` and
-retains `plan_envelope`. `committed` replaces the plan with the exact checkpoint
-event ID. Connect must
-resume prepared work before identity reconciliation.
-Each identity-owned Simple vault DEK serializes `key_epoch`. Missing legacy
-fields decode as tagged `legacy-unknown`; current `known` values carry both
-`key_epoch` and `checkpoint` event IDs. Verified reconciliation performs the
-upgrade, and current writers retain the compatibility variant.
-The `identity_directory_v1` record stores retired installation keys in
-`retired_app_ids`. Omitted legacy fields decode as an empty list. Destructive
-device recovery appends removed member app IDs before clearing identities, and
-current writers preserve the list permanently. A retired key cannot recreate
-or reclaim identity ownership.
-The app writes `prepared` before persisting the access-changing trigger. An
-advanced epoch cannot be observed until the checkpoint is committed. That
-checkpoint must remain in verified event history, while the
-directory records the latest observed head. Same-epoch observations advance
-that stored checkpoint only when it is a verified ancestor of the observed
-head. The marker is compare-deleted only
-after the identity directory compare-and-swap succeeds. Stale observations
-cannot replace envelopes from a newer epoch.
-If the pair is persisted and another verified epoch follows its checkpoint
-before marker or identity reconciliation, the app advances directly to the
-latest epoch. The intermediate checkpoint must remain in verified ancestry.
-
-Remote epoch publication cannot atomically create two provider files.
-
-The trigger stays hidden until its checkpoint is visible.
-
-Incomplete triggers already stored by a legacy local build, plus their
-descendants, are quarantined from the active event index.
-
-A mutation appended from the old frontier becomes a blocking security
-conflict.
-
-Remote import validates and writes its union in one local transaction.
-
-An unlocked Simple-vault session unwraps and persists the imported epoch keys
-before it replays the projection. Missing authorization clears the old keys and
-locks the session. Sentinel epoch changes require a fresh share ceremony.
-
-The signed `epoch-checkpoint` operation stores `secrets`,
-`members_checkpoint_hash`, and `rotated_meta_records`. Identity rotations fill
-`rotated_meta_records` with the complete rewrapped auth and member record set.
-Projection replaces the previous auth and member envelopes when that set is
-non-empty. Omitted legacy fields decode as an empty list and retain the prior
-metadata behavior. Clients that predate this field must upgrade before they
-open or append to a rotated epoch. Event schema `3` owns the replacement
-fields; schema `2` remains readable for pre-replacement events.
+`pending_identity_reconciliation_v2:{store_id}`. It progresses from an
+app-key-encrypted `prepared` plan, through `epoch-committed`, to `committed`.
+Connect resumes unfinished plans before reconciliation. Identity-owned DEKs
+carry known epoch and checkpoint event IDs; missing legacy fields remain the
+explicit `legacy-unknown` compatibility variant.
+Reconciliation accepts only verified history, advances same-epoch checkpoints
+through verified ancestry, and compare-deletes the exact consumed marker. If a
+later verified rotation follows an interrupted one, the directory advances to
+the latest epoch only when the intermediate checkpoint remains an ancestor.
+Providers publish checkpoints before their triggers. Visibility gates and
+local quarantine keep incomplete triggers and descendants out of the active
+graph. Concurrent old-frontier mutations are blocking security conflicts, and
+remote unions are validated and written atomically. Simple vaults adopt
+authorized imported keys before replay; missing authorization clears keys,
+while Sentinel requires a new share ceremony.
+Schema `3` checkpoints replace secrets, rewrapped metadata, and password
+entries. Schema `2` remains readable, but older writers cannot append to schema
+`3` history. The architecture document defines the detailed durable protocol.
 
 On first read, the app migrates `identity_record_v1` into the directory.
 It deletes the legacy key only after the new directory is durable.

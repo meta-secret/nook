@@ -122,15 +122,8 @@ an `event-pinned` state without seed material becomes `legacy-event-pinned`.
 That state upgrades only after the durable seed matches the pinned event signer.
 The same signer check applies before sealing a legacy plaintext seed.
 
-Recovery clears identity ownership.
-
-It preserves retired app IDs.
-
-Every app-key operation rejects a retired ID.
-
-One IndexedDB transaction performs all security-critical recovery writes.
-
-That transaction:
+Recovery clears identity ownership and preserves retired app IDs. Every app-key
+operation rejects a retired ID. One IndexedDB transaction:
 
 - removes the wrapped app key;
 - resets `identity_directory_v1`;
@@ -138,17 +131,12 @@ That transaction:
 - deletes pending Simple and Sentinel genesis state; and
 - preserves encrypted vault projections.
 
-A transaction failure leaves the prior device and ownership state intact.
-Destructive recovery treats an unreadable or future-incompatible identity
-directory as inaccessible ownership state. It replaces that directory with an
-empty current schema and still removes the wrapped app key. The preserved vault
-registry supplies valid store IDs when readable; corrupt entries are ignored.
-The separately persisted app ID is retired even if the directory is unreadable.
-Corrupt metadata must not trap a user outside the recovery escape hatch.
-Before recovery mutates IndexedDB, the initiating tab quiesces storage work in
-every open Nook tab. Each responding tab zeroizes its app key and storage
-credentials before acknowledging readiness. The initiating tab then serializes
-its own reset through the storage queue.
+A failure leaves prior device and ownership state intact. Unreadable or future
+identity data is replaced with the empty current schema. Valid vault registry
+IDs are used when available; corrupt entries are ignored. The separately stored
+app ID is retired even when the directory is unreadable. Before mutation, every
+tab quiesces storage work and zeroizes credentials. The initiating tab then
+serializes its reset through the storage queue.
 
 Security-epoch rotation stores `storeId`, `previousKeyEpoch`,
 `previousCheckpoint`, and a tagged `progress` value at
@@ -158,11 +146,9 @@ plan with the exact signed trigger and checkpoint events plus the key material
 needed to resume. `epoch-committed` adds `key_epoch` and retains that encrypted
 `plan_envelope`. `committed` retains `key_epoch` and the exact checkpoint event
 ID but drops the plan. Prepared and epoch-committed states must resume.
-If the event frontier changes before the atomic trigger-checkpoint write, the
-writer compare-deletes only its exact `prepared` marker. No event was committed,
-so the user can retry against the new verified frontier. An `epoch-committed`
-marker is never aborted this way.
-An ordinary connect cannot consume them as abandoned work.
+If the frontier changes before the atomic event-pair write, the writer
+compare-deletes only its exact `prepared` marker and retries. It never aborts an
+`epoch-committed` marker, and ordinary connect cannot discard unfinished work.
 Each identity DEK grant serializes `key_epoch`. A missing field decodes as the
 tagged `legacy-unknown` variant. Current writes use `known` with `key_epoch` and
 `checkpoint` event IDs. Reconciliation upgrades legacy-unknown only from a
@@ -172,23 +158,17 @@ The `identity_directory_v1` record serializes retired installation keys in
 list. Destructive device recovery appends every removed member app ID before it
 clears identities. Current writers retain those IDs for the lifetime of the
 directory so a stale installation key cannot restore ownership.
-After the epoch checkpoint event is durable, reconciliation compares and swaps
-the previous epoch for the committed epoch. The committed checkpoint must
-appear in verified event history. Reconciliation records the latest observed
-head. Ordinary event heads may advance within the same key epoch without
-blocking recovery. Same-epoch observations advance the stored checkpoint only
-when it is a verified ancestor of the observed head. An idempotent
-retry at the new epoch succeeds. An older epoch
-observation fails. Successful directory reconciliation compare-deletes only
-the exact marker it consumed.
+After the checkpoint is durable, reconciliation compares and swaps the previous
+epoch. Its checkpoint must be in verified history. Same-epoch heads advance the
+stored checkpoint only through verified ancestry. New-epoch retries are
+idempotent, older epochs fail, and success compare-deletes only the consumed
+marker.
 If a later verified rotation commits before an interrupted marker reconciles,
 the marker's checkpoint must remain a verified ancestor. Reconciliation then
 adopts the latest observed epoch and checkpoint directly instead of requiring
 the observed epoch to equal the marker's intermediate epoch.
-Any later verified connect repeats the idempotent reconciliation and clears a
-marker left by an interrupted post-commit update.
-The marker is local retry state. Current builds delete it only after successful
-reconciliation or explicit destructive device recovery.
+Later verified connects repeat reconciliation. Current builds delete this local
+retry state only after success or explicit destructive device recovery.
 
 Remote providers publish epoch pairs as separate immutable files. The
 visibility gate hides a trigger until its checkpoint is visible and quarantines
