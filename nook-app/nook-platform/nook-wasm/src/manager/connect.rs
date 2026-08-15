@@ -323,6 +323,10 @@ impl NookVaultManager {
         }
 
         self.purge_legacy_plaintext_search_catalog().await?;
+        if let Err(error) = self.resume_pending_security_epoch_rotation(&identity).await {
+            self.reset_vault_session();
+            return Err(error.into());
+        }
         let records = VerifiedVaultAccessFlow::Connect
             .complete(
                 self.get_records(),

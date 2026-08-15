@@ -39,10 +39,10 @@ pub use epoch::{
 };
 pub use errors::{EventError, EventResult};
 pub use event::{
-    EncryptedSecretPayload, EpochPasswordState, GenesisImportPayload, SentinelShareIssuedPayload,
-    VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
-    build_genesis_import_event, parse_event_storage_bytes, parse_remote_event_storage_bytes,
-    serialize_event_storage_yaml,
+    EncryptedSecretPayload, EpochMetadataState, EpochPasswordState, GenesisImportPayload,
+    SentinelShareIssuedPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion,
+    VaultOperation, build_genesis_import_event, parse_event_storage_bytes,
+    parse_remote_event_storage_bytes, serialize_event_storage_yaml,
 };
 pub use fingerprint::SecretFingerprint;
 pub use graph::{EventGraph, EventInsertStatus, EventPendingReason};

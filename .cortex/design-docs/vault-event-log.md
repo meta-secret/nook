@@ -132,10 +132,16 @@ event enters the local event set.
 
 An `epoch-checkpoint` persists `secrets`, `members_checkpoint_hash`, and the
 complete rewrapped `rotated_meta_records` and `password_entries` sets.
-Projection replaces the prior sets; legacy checkpoints that omit password state
-retain it. Schema `3` owns these fields, while current readers still accept
+Projection replaces the prior sets. Explicit empty arrays clear them.
+Legacy checkpoints that omit metadata or password state retain the prior set.
+Schema `3` owns these fields, while current readers still accept
 pre-replacement schema `2` events. Older readers reject schema `3` before
 persistence instead of extending an epoch they cannot interpret.
+
+Remote security triggers remain hidden until their authorized checkpoint is
+visible. Every causal descendant of a hidden trigger is hidden with it.
+When rejected events contract the accepted graph, metadata is rebuilt from an
+empty state so removed grants cannot survive in session caches.
 
 Non-genesis events are also checked against the event's causal past. An actor is
 accepted only if it is:
@@ -234,6 +240,8 @@ The implemented epoch path creates fresh vault keys, re-encrypts live secrets,
 rewraps auth/member metadata for remaining authorized entries, and appends an
 immutable `epoch-checkpoint`. Concurrent security rotations are detected in the
 projection, surfaced through WASM/UI, and fail closed for further local edits.
+Revocation metadata remains staged until the trigger/checkpoint pair commits.
+A failed commit leaves the live session metadata unchanged.
 
 ## Provider interface (target)
 

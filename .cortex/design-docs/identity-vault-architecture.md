@@ -155,6 +155,11 @@ signing public key. Older records decode a missing signing key as unavailable.
 They cannot enter a new signed Simple-vault genesis roster until an authenticated
 handoff or the local signer supplies that public key.
 
+Destructive device recovery retires the persisted app identity and deletes its
+durable event-signing seed in the same IndexedDB transaction. A malformed
+retired-app ledger cannot block recovery; recovery replaces it with valid
+retirement evidence before a replacement identity may enroll.
+
 - **Directory concurrency:**
   - Apply every directory update in one IndexedDB read-write transaction.
   - Prevent concurrent tabs from overwriting identity creation, selection,

@@ -433,22 +433,40 @@ impl NookVaultManager {
                     .map(|member| member.device_id.to_string())
             })
             .unwrap_or_default();
+        let revoked_device_id = (!is_self)
+            .then(|| nook_core::DeviceId::parse(&device_id))
+            .transpose()?;
         let updated = nook_core::revoke_vault_member(&records, &members_key, &parsed_auth_id)?;
-        self.vault.meta = nook_core::VaultMetaState::from_stored_records(&updated);
+        let staged_meta = nook_core::VaultMetaState::from_stored_records(&updated);
 
         if is_self {
-            self.persist_vault_change(Vec::new()).await?;
+            let live_meta = std::mem::replace(&mut self.vault.meta, staged_meta);
+            if let Err(error) = self.persist_vault_change(Vec::new()).await {
+                self.vault.meta = live_meta;
+                return Err(error.into());
+            }
             self.vault.secrets_key.clear();
             self.vault.members_key.clear();
             self.vault.crypto = VaultCryptoState::Locked;
             return Ok(Vec::new());
         }
 
+        let revoked_device_id = revoked_device_id.ok_or_else(|| {
+            nook_core::MultiDeviceError::InvalidDeviceIdentity(
+                "Revoked vault member has no device id.".to_owned(),
+            )
+        })?;
         self.ensure_event_log_ready().await?;
-        self.rotate_security_epoch(nook_core::VaultOperation::DeviceRevoked {
-            device_id: nook_core::DeviceId::parse(&device_id)?,
-        })
-        .await?;
+        let live_meta = std::mem::replace(&mut self.vault.meta, staged_meta);
+        if let Err(error) = self
+            .rotate_security_epoch(nook_core::VaultOperation::DeviceRevoked {
+                device_id: revoked_device_id,
+            })
+            .await
+        {
+            self.vault.meta = live_meta;
+            return Err(error.into());
+        }
 
         Ok(self.get_records()?)
     }

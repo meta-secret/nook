@@ -267,10 +267,13 @@ mod tests {
     }
 
     async fn assert_nothing_published(
-        signing_seed_before: &Option<String>,
+        signing_seed_before: Option<&String>,
     ) -> Result<(), NookError> {
         assert!(load_identity_directory().await?.identities().is_empty());
-        assert_eq!(&event_db::load_signing_seed().await?, signing_seed_before);
+        assert_eq!(
+            event_db::load_signing_seed().await?.as_ref(),
+            signing_seed_before
+        );
         Ok(())
     }
 
@@ -299,7 +302,7 @@ mod tests {
         .await;
 
         assert!(result.is_err());
-        assert_nothing_published(&signing_seed_before).await?;
+        assert_nothing_published(signing_seed_before.as_ref()).await?;
         clear_identity_directory_for_test().await?;
         Ok(())
     }
@@ -317,6 +320,7 @@ mod tests {
         pending_revocation_bytes: Vec<u8>,
     }
 
+    #[allow(clippy::too_many_lines)] // One fixture keeps the causal access-event chain auditable.
     fn signed_access_events(fixture: &ImportFixture) -> Result<SignedAccessEvents, NookError> {
         let (signing, _) = nook_core::SigningIdentity::generate()
             .map_err(|error| NookError::Database(error.to_string()))?;
@@ -577,7 +581,7 @@ mod tests {
         .await;
 
         assert!(result.is_err());
-        assert_nothing_published(&signing_seed_before).await?;
+        assert_nothing_published(signing_seed_before.as_ref()).await?;
         event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
         clear_identity_directory_for_test().await
     }
@@ -646,7 +650,7 @@ mod tests {
 
         revocation_result?;
         assert!(handoff_result.is_err());
-        assert_nothing_published(&signing_seed_before).await?;
+        assert_nothing_published(signing_seed_before.as_ref()).await?;
         let revoked_graph = event_db::load_local_event_store(fixture.store_id.as_str())
             .await?
             .load_graph(fixture.store_id.as_str())?;

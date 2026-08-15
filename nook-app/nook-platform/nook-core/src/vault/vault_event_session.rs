@@ -160,7 +160,7 @@ impl VaultEventSession {
         let checkpoint = VaultOperation::EpochCheckpoint {
             secrets,
             members_checkpoint_hash,
-            rotated_meta_records,
+            rotated_meta_records: crate::EpochMetadataState::Replace(rotated_meta_records),
             password_entries: crate::EpochPasswordState::Replace(rewrapped_password_entries),
         };
         let mut staged = self.clone();

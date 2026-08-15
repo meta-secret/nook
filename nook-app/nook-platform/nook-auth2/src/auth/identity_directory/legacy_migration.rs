@@ -226,6 +226,7 @@ mod tests {
         let legacy = IdentityDirectory {
             identities: vec![personal, work],
             selection: IdentitySelection::Selected(selected_id.clone()),
+            retired_app_ids: Vec::new(),
         };
 
         let (mut migrated, changed) = legacy.migrate_legacy_duplicate_app_key_ownership()?;

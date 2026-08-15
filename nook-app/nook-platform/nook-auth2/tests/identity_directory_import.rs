@@ -1,6 +1,7 @@
 use nook_auth2::{
-    AgeArmoredCiphertext, AppKey, IdentityDirectory, IdentityVaultDekReconciliation, VaultKeys,
-    encrypt_for_recipient, generate_store_id, generate_vault_keys,
+    AgeArmoredCiphertext, AppKey, IdentityDirectory, IdentityVaultDekEpoch,
+    IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, VaultKeys, encrypt_for_recipient,
+    generate_store_id, generate_vault_keys,
 };
 
 fn envelopes_for(
@@ -35,6 +36,10 @@ fn imported_vault_reuses_identity_that_owns_app_key() -> anyhow::Result<()> {
         IdentityVaultDekReconciliation {
             secrets_envelope,
             members_envelope,
+            epoch_update: IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: IdentityVaultDekEpoch::LegacyUnknown,
+                checkpoint_ancestors: Vec::new(),
+            },
             authorized_auth_ids: vec![app_key.auth_id()],
         },
     )?;

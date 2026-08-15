@@ -376,7 +376,7 @@ mod tests {
             &VaultOperation::EpochCheckpoint {
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
-                rotated_meta_records: Vec::new(),
+                rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
                 password_entries: crate::EpochPasswordState::Replace(vec![replacement.clone()]),
             },
             &mut BTreeMap::new(),

@@ -152,7 +152,9 @@ impl NookVaultManager {
                 vec![VaultOperation::EpochCheckpoint {
                     secrets: prepared.secrets.clone(),
                     members_checkpoint_hash: prepared.members_checkpoint_hash.clone(),
-                    rotated_meta_records: prepared.rotated_meta_records,
+                    rotated_meta_records: nook_core::EpochMetadataState::Replace(
+                        prepared.rotated_meta_records,
+                    ),
                     password_entries: nook_core::EpochPasswordState::Replace(password_entries),
                 }],
                 vec![trigger_event_id.clone()],

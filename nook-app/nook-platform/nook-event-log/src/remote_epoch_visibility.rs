@@ -65,8 +65,8 @@ pub(crate) fn incomplete_security_transition_events(
         .filter(|event_id| !committed.contains(event_id))
         .collect::<Vec<_>>();
     Ok(graph
-        .topological_order()?
-        .into_iter()
+        .events()
+        .map(|(event_id, _)| event_id.clone())
         .filter(|event_id| {
             incomplete
                 .iter()
@@ -83,7 +83,11 @@ pub(crate) fn visibility_gated_remote_events(
     remote_events: &[(EventId, Vec<u8>)],
     store_id: &str,
 ) -> EventResult<Vec<(EventId, Vec<u8>)>> {
-    let committed = authorized_checkpoint_parents(local, remote_events, store_id)?;
+    let mut candidate = local.clone();
+    for (event_id, bytes) in remote_events {
+        candidate.put_event(event_id.clone(), bytes.clone());
+    }
+    let hidden = incomplete_security_transition_events(&candidate, store_id)?;
     remote_events
         .iter()
         .map(|(event_id, bytes)| {
@@ -97,9 +101,7 @@ pub(crate) fn visibility_gated_remote_events(
         .map(|events| {
             events
                 .into_iter()
-                .filter(|(event_id, _, event)| {
-                    !starts_security_epoch(event) || committed.contains(event_id)
-                })
+                .filter(|(event_id, _, _)| !hidden.contains(event_id))
                 .map(|(event_id, bytes, _)| (event_id, bytes))
                 .collect()
         })
@@ -204,7 +206,7 @@ mod tests {
             VaultOperation::EpochCheckpoint {
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
-                rotated_meta_records: Vec::new(),
+                rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
                 password_entries: crate::EpochPasswordState::Replace(Vec::new()),
             },
         )?;
@@ -254,7 +256,7 @@ mod tests {
             VaultOperation::EpochCheckpoint {
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
-                rotated_meta_records: Vec::new(),
+                rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
                 password_entries: crate::EpochPasswordState::Replace(Vec::new()),
             },
         )?;
@@ -266,6 +268,25 @@ mod tests {
         let visible = visibility_gated_remote_events(&local, &remote, STORE)?;
 
         assert!(!visible.iter().any(|(event_id, _)| event_id == &trigger.0));
+        Ok(())
+    }
+
+    #[test]
+    fn hides_a_remote_trigger_and_every_remote_descendant_until_checkpoint() -> EventResult<()> {
+        let (local, trigger, _) = epoch_pair()?;
+        let signing_key = crate::test_support::signing_key();
+        let descendant = signed_event(
+            &signing_key,
+            vec![trigger.0.clone()],
+            trigger.0.clone(),
+            VaultOperation::VaultCleared,
+        )?;
+        let remote = vec![
+            trigger,
+            (descendant.id()?, serialize_event_storage_yaml(&descendant)?),
+        ];
+
+        assert!(visibility_gated_remote_events(&local, &remote, STORE)?.is_empty());
         Ok(())
     }
 

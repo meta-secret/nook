@@ -45,7 +45,9 @@ async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
         }
         None => nook_core::IdentityDirectory::empty(),
     };
-    for app_id in load_retired_app_ids(&store).await? {
+    // A damaged auxiliary ledger must not trap a user behind an inaccessible
+    // device identity. The transaction rewrites a valid ledger below.
+    for app_id in load_retired_app_ids(&store).await.unwrap_or_default() {
         directory.retire_app_id(app_id);
     }
     let persisted_app_id = crate::storage::indexed_db::read_string_preferring(
@@ -92,6 +94,7 @@ async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
         crate::storage::indexed_db::WRAPPED_DEVICE_IDENTITY_KEY.to_owned(),
         crate::storage::indexed_db::DEVICE_ID_KEY.to_owned(),
         crate::storage::indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY.to_owned(),
+        crate::storage::event_db::SIGNING_SEED_KEY.to_owned(),
     ]) {
         let key = serde_wasm_bindgen::to_value(&key).map_err(|error| {
             NookError::IndexedDb(format!("Identity reset delete key error: {error:?}"))
@@ -225,19 +228,28 @@ mod tests {
         let marker = format!("pending_identity_reconciliation_v2:{store_id}");
         idb_put_string(IDENTITY_DIRECTORY_KEY, "{corrupt").await?;
         idb_put_string("vault_registry", "{corrupt").await?;
+        idb_put_string(RETIRED_APP_IDS_KEY, "{corrupt").await?;
         idb_put_string(&marker, "inaccessible-plan").await?;
         idb_put_string(
             crate::storage::indexed_db::APP_KEY_WRAPPED_KEY,
             "inaccessible",
         )
         .await?;
+        idb_put_string(crate::storage::event_db::SIGNING_SEED_KEY, &"11".repeat(32)).await?;
         delete_identity_directory_for_recovery().await?;
         assert!(
             idb_get_string(crate::storage::indexed_db::APP_KEY_WRAPPED_KEY)
                 .await?
                 .is_none()
         );
+        assert!(
+            idb_get_string(crate::storage::event_db::SIGNING_SEED_KEY)
+                .await?
+                .is_none()
+        );
         assert!(idb_get_string(&marker).await?.is_none());
+        let recovered = load_identity_directory().await?;
+        assert!(recovered.retired_app_ids().is_empty());
         idb_delete_key("vault_registry").await?;
         clear_identity_directory_for_test().await
     }
