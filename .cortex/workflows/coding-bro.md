@@ -394,8 +394,9 @@ For a feature with multiple planned slices:
 See
 [pull-requests.md § Pull request size and modularity](pull-requests.md#pull-request-size-and-modularity).
 
-- All branch, PR, review, check, and merge actions apply only to the current
-  task's owned feature and focused issue set.
+Ownership boundary: current task's owned feature and focused issue set.
+
+- Keep every branch, PR, review, check, and merge action inside this boundary.
 - Do not take over a related task because it has open comments or failing
   checks.
   - Require an explicit handoff first.

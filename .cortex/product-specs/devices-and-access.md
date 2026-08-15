@@ -106,6 +106,8 @@ If `pending_simple_genesis_v1` references a connected identity, that durable
 identity survives instead and becomes selected.
 The same transaction retains every member and vault grant, then rewrites the
 normalized directory before enforcing unique app-key ownership.
+A valid directory without duplicate app-key ownership does not decode or depend
+on the pending-genesis marker.
 Member records persist both encryption and event-signing public keys.
 Missing signing keys from older records are unavailable, not inferred.
 New Simple-vault genesis requires a verified signing key for every member.
@@ -142,6 +144,8 @@ is shown.
 Existing-vault imports use a separate pending state. One transaction validates
 the active signed roster, synthesizes identity ownership, and commits the member
 signer and adopted signing seed.
+Every event named by the transactional roster index must exist and have a valid
+event ID. Missing or malformed indexed evidence fails authorization closed.
 Legacy-vault DEK reconciliation uses only active signed event approvals after
 revocation replay.
 

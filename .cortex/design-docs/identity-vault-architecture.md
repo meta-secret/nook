@@ -137,6 +137,8 @@ the selection so a resumable genesis marker cannot become orphaned.
 All distinct members and vault DEK grants survive the merge.
 The normalized directory is rewritten before unique app-key ownership is
 enforced.
+A valid directory without duplicate app-key ownership remains usable without
+decoding a malformed or future pending-genesis marker.
 
 Each identity member stores its X25519 encryption public key and Ed25519 event
 signing public key. Older records decode a missing signing key as unavailable.
@@ -167,6 +169,8 @@ handoff or the local signer supplies that public key.
   - During verified connect, synthesize the vault owner from active signed
     envelopes and verify the extension signing key against the active event
     roster.
+  - Reject the roster snapshot if its event index names a missing event or an
+    invalid event ID.
   - Commit the member signer and adopted signing seed atomically.
 - **Legacy-vault reconciliation:** Derive DEK recipients from the signed event
   graph's active approvals after revocations, not from stale encrypted auth

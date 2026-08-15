@@ -204,13 +204,16 @@ pub(crate) async fn load_local_event_store_from_store(
             .map_err(|error| NookError::IndexedDb(format!("Event read error: {error:?}")))?
             .filter(|value| !value.is_undefined() && !value.is_null())
         else {
-            continue;
+            return Err(NookError::IndexedDb(format!(
+                "Event index references missing event {raw_id}."
+            )));
         };
         let bytes: String = serde_wasm_bindgen::from_value(value)
             .map_err(|error| NookError::IndexedDb(format!("Event decode error: {error:?}")))?;
-        if let Ok(event_id) = EventId::parse(&raw_id) {
-            local.put_event(event_id, bytes.into_bytes());
-        }
+        let event_id = EventId::parse(&raw_id).map_err(|error| {
+            NookError::Serialization(format!("Invalid indexed event id {raw_id}: {error}"))
+        })?;
+        local.put_event(event_id, bytes.into_bytes());
     }
     Ok(local)
 }
@@ -367,4 +370,43 @@ pub(crate) async fn remove_outbox_entry(
         store_put(STORE_OUTBOX, &index_key, &json).await?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn transactional_loader_rejects_missing_indexed_event() -> Result<(), NookError> {
+        let store_id = "missing-indexed-event-test";
+        let event_id = "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo";
+        let index_key = format!("event_index:{store_id}");
+        store_put(
+            STORE_EVENTS,
+            &index_key,
+            &serde_json::to_string(&vec![event_id])
+                .map_err(|error| NookError::Serialization(error.to_string()))?,
+        )
+        .await?;
+
+        let rexie = open_nook_database().await?;
+        let transaction = rexie
+            .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadOnly)
+            .map_err(|error| NookError::IndexedDb(format!("Test transaction error: {error:?}")))?;
+        let store = transaction.store(STORE_EVENTS).map_err(|error| {
+            NookError::IndexedDb(format!("Test transaction store error: {error:?}"))
+        })?;
+        let result = load_local_event_store_from_store(&store, store_id).await;
+        transaction.done().await.map_err(|error| {
+            NookError::IndexedDb(format!("Test transaction completion error: {error:?}"))
+        })?;
+        store_delete(STORE_EVENTS, &index_key).await?;
+
+        let error = result.expect_err("missing indexed event must fail closed");
+        assert!(error.to_string().contains("references missing event"));
+        Ok(())
+    }
 }

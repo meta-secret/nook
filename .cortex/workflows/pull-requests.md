@@ -122,9 +122,10 @@
   - Do not stop at push.
 - Apply this workflow only to the current task's owned feature and focused
   issues.
-- Treat another active task's branch and pull request as read-only.
+- Another active task's branch and pull request are read-only without an explicit
+  handoff.
 
-Without an explicit handoff, do not:
+Do not:
 
 - push to it;
 - reply to its reviews;

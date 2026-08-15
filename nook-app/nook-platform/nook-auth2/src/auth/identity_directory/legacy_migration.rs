@@ -7,6 +7,12 @@ use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{AppId, IdentityId, IdentityMember, IdentitySelection};
 
 impl IdentityDirectory {
+    /// Whether this directory predates unique app-key ownership enforcement.
+    #[must_use]
+    pub fn has_legacy_duplicate_app_key_ownership(&self) -> bool {
+        self.duplicate_app_key_owners().is_some()
+    }
+
     /// Merge legacy identities connected by a shared app key.
     ///
     /// Older directories allowed one installation key to appear in several

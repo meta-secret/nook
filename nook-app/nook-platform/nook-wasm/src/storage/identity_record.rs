@@ -70,12 +70,16 @@ async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, Nook
         NookError::IndexedDb(format!("Identity directory read error: {error:?}"))
     })?;
     if let Some(value) = current.filter(|value| !value.is_undefined() && !value.is_null()) {
-        let preserved_identity_id = load_pending_genesis_identity_id(&store).await?;
         let persisted_raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
             NookError::IndexedDb(format!("Identity directory value error: {error:?}"))
         })?;
-        let (directory, migrated) =
-            decode_directory_with_migration(&persisted_raw, preserved_identity_id.as_ref())?;
+        let directory = decode_directory_value(&persisted_raw)?;
+        let preserved_identity_id = if directory.has_legacy_duplicate_app_key_ownership() {
+            load_pending_genesis_identity_id(&store).await?
+        } else {
+            None
+        };
+        let (directory, migrated) = migrate_directory(directory, preserved_identity_id.as_ref())?;
         let raw = if migrated {
             let normalized = serde_json::to_string(&directory).map_err(|error| {
                 NookError::IndexedDb(format!("Identity directory encode error: {error}"))
@@ -148,16 +152,18 @@ pub(crate) async fn load_identity_directory() -> Result<nook_core::IdentityDirec
 }
 
 fn decode_directory(raw: &str) -> Result<nook_core::IdentityDirectory, NookError> {
-    decode_directory_with_migration(raw, None).map(|(directory, _)| directory)
+    migrate_directory(decode_directory_value(raw)?, None).map(|(directory, _)| directory)
 }
 
-fn decode_directory_with_migration(
-    raw: &str,
+fn decode_directory_value(raw: &str) -> Result<nook_core::IdentityDirectory, NookError> {
+    serde_json::from_str(raw)
+        .map_err(|error| NookError::IndexedDb(format!("Identity directory decode error: {error}")))
+}
+
+fn migrate_directory(
+    directory: nook_core::IdentityDirectory,
     preserved_identity_id: Option<&nook_core::IdentityId>,
 ) -> Result<(nook_core::IdentityDirectory, bool), NookError> {
-    let directory: nook_core::IdentityDirectory = serde_json::from_str(raw).map_err(|error| {
-        NookError::IndexedDb(format!("Identity directory decode error: {error}"))
-    })?;
     match preserved_identity_id {
         Some(identity_id) => {
             directory.migrate_legacy_duplicate_app_key_ownership_preserving(identity_id)
@@ -474,6 +480,36 @@ mod tests {
             .await?
             .ok_or_else(|| NookError::Database("Pending genesis marker is missing.".to_owned()))?;
         assert_eq!(pending.identity_id, pending_identity_id);
+        clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn valid_directory_ignores_malformed_pending_genesis_marker() -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let mut directory = nook_core::IdentityDirectory::empty();
+        let identity_id = directory
+            .create_identity("Personal", &app_key, None)
+            .map_err(map_domain_error)?;
+        idb_put_string(
+            IDENTITY_DIRECTORY_KEY,
+            &serde_json::to_string(&directory)
+                .map_err(|error| NookError::IndexedDb(error.to_string()))?,
+        )
+        .await?;
+        let malformed_marker = "{\"futureFormat\":true}";
+        idb_put_string(PENDING_SIMPLE_GENESIS_KEY, malformed_marker).await?;
+
+        let loaded = load_identity_directory().await?;
+
+        assert_eq!(
+            loaded.selected().map_err(map_domain_error)?.identity_id,
+            identity_id
+        );
+        assert_eq!(
+            idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?.as_deref(),
+            Some(malformed_marker)
+        );
         clear_identity_directory_for_test().await
     }
 
