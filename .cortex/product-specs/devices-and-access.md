@@ -1,5 +1,41 @@
 # Devices & access
 
+## Relationships
+
+- [Identity, App Keys, Passkeys, and Vault DEKs](../design-docs/identity-vault-architecture.md)
+  - Separates identity, app-key, vault-key, onboarding, and grant responsibilities.
+  - Read before changing the related architecture or security boundary.
+- [Vault Event Log](../design-docs/vault-event-log.md)
+  - Defines immutable vault events, ordering, concurrency, and provider synchronization.
+  - Read before changing the related architecture or security boundary.
+- [Browser Extension Product Spec](browser-extension.md)
+  - Defines the companion extension boundary, approval, authentication surfaces, and storage rules.
+  - Read when this document touches the related product behavior or user flow.
+- [Nook Coding Rules & Golden Principles](../rules.md)
+  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
+  - Apply throughout implementation and review.
+
+## Document map
+
+- [Product statement](#product-statement)
+  - Defines Devices & access as an identity-management surface, not a vault list.
+  - Read before changing the dashboard's purpose or terminology.
+- [Identity and access model](#identity-and-access-model)
+  - Defines the person, identity, vault-grant, provider, and app-installation graph.
+  - Read when changing authorization relationships or navigation.
+- [Evidence and provenance](#evidence-and-provenance)
+  - Separates verified facts, user labels, browser observations, and unknowns.
+  - Read before displaying, persisting, or inferring access information.
+- [Persistence boundary](#persistence-boundary)
+  - Defines Rust-owned unlock records and browser-local identity metadata.
+  - Read before changing storage, imports, app keys, or local reconciliation.
+- [Interaction requirements](#interaction-requirements)
+  - Specifies the identity-centric canvas, detail panels, labels, and access actions.
+  - Read before implementing or reviewing Devices & access UI.
+- [Related records](#related-records)
+  - Routes to architecture and product records that own adjacent decisions.
+  - Read when work crosses identity, vault, extension, or UX boundaries.
+
 ## Product statement
 
 **Devices & access** is Nook's identity-management surface.

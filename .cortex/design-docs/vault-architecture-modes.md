@@ -1,5 +1,52 @@
 # Vault Architecture Modes
 
+## Relationships
+
+- [Auth Providers, Sync, and Login UX](auth-providers.md)
+  - Defines provider credential persistence, login UX, and provider transport boundaries.
+  - Read before changing the related architecture or security boundary.
+- [Identity, App Keys, Passkeys, and Vault DEKs](identity-vault-architecture.md)
+  - Separates identity, app-key, vault-key, onboarding, and grant responsibilities.
+  - Read before changing the related architecture or security boundary.
+- [Sentinel Genesis and Reverse Onboarding](sentinel-genesis.md)
+  - Defines Sentinel genesis material and recovery-related trust boundaries.
+  - Read before changing the related architecture or security boundary.
+- [SLIP-0039 Device Quorum Recovery](../product-specs/slip39-recovery.md)
+  - Defines fixed-quorum device recovery and its session-only QR exchange.
+  - Read when this document touches the related product behavior or user flow.
+
+## Document map
+
+- [Overview](#overview)
+  - Distinguishes implemented vault modes from the target identity lifecycle.
+  - Read before changing vault creation, import, or mode selection.
+- [Architecture Groups](#architecture-groups)
+  - Defines the independent typed choices that form a vault architecture.
+  - Read when adding a mode, policy, provider, or import source.
+- [Creation and Import UX](#creation-and-import-ux)
+  - Separates new-vault creation from importing existing vault data.
+  - Read when changing the vault chooser or onboarding flow.
+- [Defaults and Persistence](#defaults-and-persistence)
+  - Defines default selections and their durable Rust-owned representation.
+  - Read when changing defaults, storage, or typed bindings.
+- [Simple Lifecycle](#simple-lifecycle)
+  - Describes immediate local creation for a single-device Simple vault.
+  - Read when changing the Simple creation or unlock path.
+- [Sentinel Lifecycle](#sentinel-lifecycle)
+  - Defines pre-genesis ceremony, threshold policy, and activation rules.
+  - Read when changing Sentinel participants, shares, or state transitions.
+- [Provider Capabilities](#provider-capabilities)
+  - Keeps provider selection independent from vault security semantics.
+  - Read when adding provider capabilities or setup requirements.
+- [Web Boundary](#web-boundary)
+  - Separates Svelte presentation from Rust-owned validation and transitions.
+  - Read before changing web state or WASM APIs for vault architecture.
+- [Implemented Boundaries](#implemented-boundaries)
+  - Records current Rust ownership and Sentinel threshold limits.
+  - Read when assessing implemented behavior against the target model.
+
+## Overview
+
 **Status:** Vault modes implemented; virtual identity lifecycle is target
 architecture and is not yet implemented.
 
