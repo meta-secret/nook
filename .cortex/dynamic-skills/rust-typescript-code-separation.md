@@ -285,7 +285,7 @@ pub struct NookEnrollmentProvider {
 }
 ```
 
-Before: TypeScript computes provider identity or storage-mode rules.
+- **Before:** TypeScript computes provider identity or storage-mode rules.
 
 ```ts
 export function syncProviderTargetKey(provider: StorageProvider): string | undefined {
@@ -296,21 +296,22 @@ export function syncProviderTargetKey(provider: StorageProvider): string | undef
 }
 ```
 
-After: Rust owns provider rules (`StorageProviderType`, `OauthFilePreset`,
-`SyncProviderTarget`, labels, Drive refs, storage-mode mapping) and wasm exports
-thin helpers. TypeScript may keep the browser IndexedDB snapshot shape, but
-calls wasm for the app/domain decision.
-
-Before: TypeScript inspects an IndexedDB database list and returns a workflow
-status.
-
-After: TypeScript calls `indexedDB.databases()` and collects concrete database
-name observations. Companion Rust decides whether the required database is
-present. The typed WASM result names the workflow outcome.
-
-Authored TypeScript/Svelte uses neither `undefined` nor `null` for absence. When
-a browser or generated WASM API returns either sentinel, classify the outcome
-at the boundary and return a meaningfully named discriminated union.
+- **After:** Rust owns provider rules (`StorageProviderType`,
+  `OauthFilePreset`, `SyncProviderTarget`, labels, Drive refs, and storage-mode
+  mapping) and WASM exports thin helpers.
+  - TypeScript may keep the browser IndexedDB snapshot shape.
+  - TypeScript calls WASM for the app or domain decision.
+- **Before:** TypeScript inspects an IndexedDB database list and returns a
+  workflow status.
+- **After:** TypeScript calls `indexedDB.databases()` and collects concrete
+  database-name observations.
+  - Companion Rust decides whether the required database is present.
+  - The typed WASM result names the workflow outcome.
+- **Absence:** Authored TypeScript and Svelte use neither `undefined` nor `null`
+  for absence.
+  - When a browser or generated WASM API returns either sentinel, classify the
+    outcome at the boundary.
+  - Return a meaningfully named discriminated union.
 
 ### Model sum types as an enum-of-structs, wrap it for wasm
 

@@ -70,28 +70,30 @@ type SelectionState =
 let selection = $state<SelectionState>({ kind: SelectionKind.NotSelected })
 ```
 
-Put data only on the variant that owns it. Group fields that transition
-together into one union so illegal combinations cannot compile. Closed portable
-domain workflows belong in Rust/WASM; component-local visual and browser
-lifecycle states may use TypeScript discriminated unions.
+Modeling rules:
 
-Optionality does not justify erasing the value's domain type. Put generated
-semantic identifiers such as `StoreId` and `PasswordEntryId` inside the
-explicit variant, never widen them to `string`, when Rust owns that identifier.
+- Put data only on the variant that owns it.
+- Group fields that transition together into one union so illegal combinations
+  cannot compile.
+- Keep closed portable domain workflows in Rust/WASM.
+  - Component-local visual and browser lifecycle states may use TypeScript
+    discriminated unions.
+- Optionality does not justify erasing the value's domain type.
+  - Put generated semantic identifiers such as `StoreId` and `PasswordEntryId`
+    inside the explicit variant.
+  - Never widen them to `string` when Rust owns the identifier.
+- Do not encode closed domain workflows as string-literal rune state.
+  - Use generated Rust/WASM enums for authentication, unlock, recovery,
+    Sentinel, provider, and session phases.
+  - Use meaningfully named TypeScript enums for visual component state such as
+    panel, tab, accordion, or form-view selection.
+- Do not use zero-argument `$state<T>()` for modeled state.
+  - DOM element bindings also use a named `unmounted/mounted` state when
+    authored code reads or mutates the reference.
+- Convert browser or generated API absence directly into a semantic state.
+  - Do not normalize one forbidden absence sentinel into another.
 
-Do not encode closed domain workflows as string-literal rune state. Use
-generated Rust/WASM enums for authentication, unlock, recovery, Sentinel,
-provider, and session phases. Use meaningfully named TypeScript enums for
-visual component state such as panel, tab, accordion, or form-view selection.
-
-Do not use zero-argument `$state<T>()` for modeled state. DOM element bindings
-also use a named `unmounted/mounted` state when authored code reads or mutates
-the reference.
-
-Convert browser or generated API absence directly into a semantic state; do
-not normalize one forbidden absence sentinel into another.
-
-Use an explicit initializer when the state has a concrete initial value:
+Use an explicit initializer when state has a concrete initial value:
 
 ```ts
 let items = $state<Item[]>([])

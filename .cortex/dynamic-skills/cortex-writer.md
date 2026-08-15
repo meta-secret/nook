@@ -161,16 +161,15 @@ Full rewritten example:
 
 ## Validation
 
-Review the diff for sentence length and branching clauses.
-
-A reviewer should be able to extract each rule without re-parsing a compound
-sentence.
-
-Docs-only captures need link checks and a short self-review against the
-checklist above.
-
-Also run the consistency GC in
-[cortex-consistency.md](cortex-consistency.md) for the touched topic.
-
-For implementation tasks that include `.cortex` edits, run `task loom:pre-push`,
-commit and push, then use the normal hosted validation path.
+- Review the diff for sentence length and branching clauses.
+  - A reviewer should be able to extract each rule without re-parsing a
+    compound sentence.
+- For docs-only captures:
+  - run link checks; and
+  - self-review against the checklist above.
+- Run the consistency GC in
+  [Cortex consistency](cortex-consistency.md) for the touched topic.
+- For implementation tasks that include `.cortex` edits:
+  1. run `task loom:pre-push`;
+  2. commit and push; and
+  3. use the normal hosted validation path.

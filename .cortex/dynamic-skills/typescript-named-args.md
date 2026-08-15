@@ -103,56 +103,63 @@ const includeDensityLint = expectBoolean(includeDensityLintArgs);
 
 Rules:
 
-1. Every object-shaped function or method parameter uses a named semantic
-   `type`, `interface`, or Rust-generated boundary type. Object-shaped includes
-   object literals, mapped types such as `Pick<T, K>` and `Omit<T, K>`, arrays,
-   tuples, maps, sets, and records.
-2. Inline object parameter annotations are prohibited, including destructured
-   parameters, local helpers, `T[]`, tuples, `Array<T>`, and
-   `ReadonlyArray<T>`.
-3. Generic or operation-only names such as `Args`, `CallbackArgs`, `PutArgs`,
-   and line-number-derived names are prohibited. The name must identify the
-   domain value or request.
-4. Every call argument that is an object must be a named variable or constant.
-5. That name should carry an explicit type (`ExpectFieldArgs<...>`,
-   `ObjectJsonSchemaArgs`, `FieldErrorArgs`, etc.).
-6. Object literals remain allowed when constructing that named value, and when
-   returning a value from a function/`build` callback.
-7. Do not bypass the rule with `fn({ ... } as SomeType)` — name the value
-   first, then cast if a host boundary truly requires it.
-8. Direct object arguments to Svelte's `$state`, `$state.raw`, `$derived`, and
-   `$bindable` compiler runes are the narrow exception. Moving those values can
-   violate rune placement or freeze reactive capture. This exception does not
-   apply to `$state.snapshot` or ordinary calls.
-9. A function-valued parameter may return an inline object type. That return
-   value is not the parameter contract. Object-shaped parameters declared
-   inside the callback still require named semantic contracts.
+- Every object-shaped function or method parameter uses a named semantic
+  `type`, `interface`, or Rust-generated boundary type.
+  - Object-shaped includes object literals, mapped types such as `Pick<T, K>`
+    and `Omit<T, K>`, arrays, tuples, maps, sets, and records.
+- Inline object parameter annotations are prohibited, including destructured
+  parameters, local helpers, `T[]`, tuples, `Array<T>`, and
+  `ReadonlyArray<T>`.
+- Generic or operation-only names such as `Args`, `CallbackArgs`, `PutArgs`,
+  and line-number-derived names are prohibited.
+  - The name must identify the domain value or request.
+- Every call argument that is an object must be a named variable or constant.
+  - The name should carry an explicit type such as `ExpectFieldArgs<...>`,
+    `ObjectJsonSchemaArgs`, or `FieldErrorArgs`.
+- Object literals remain allowed:
+  - when constructing that named value; and
+  - when returning a value from a function or `build` callback.
+- Do not bypass the rule with `fn({ ... } as SomeType)`.
+  - Name the value first, then cast if a host boundary truly requires it.
+- Direct object arguments to Svelte's `$state`, `$state.raw`, `$derived`, and
+  `$bindable` compiler runes are the narrow exception.
+  - Moving those values can violate rune placement or freeze reactive capture.
+  - This exception does not apply to `$state.snapshot` or ordinary calls.
+- A function-valued parameter may return an inline object type.
+  - That return value is not the parameter contract.
+  - Object-shaped parameters declared inside the callback still require named
+    semantic contracts.
 
 ## Enforcement
 
-Loom's ESLint `loom/no-raw-object-arguments` rule rejects call arguments that
-are object literals, including statically resolvable spread-array elements and
-literals selected by assignment, conditional, logical, or sequence results.
-Its walk stops at function boundaries, so object literals returned by
-function-valued arguments remain valid.
+The two linters enforce one contract:
 
-Nook web's `nook-typed-api/no-raw-object-arguments` rule enforces the same
-contract. It rejects inline object parameter types and requires an explicit
-type on named object-literal arguments. Both implementations also reject
-direct parameter references whose names are generic or operation-only, such as
-`Args`, `WriteArgs`, `PickArgs`, and `PutArgs`. Parameter contract names must
-identify the domain value or request. They recursively inspect wrapped and
-qualified type references. They reject inline array and tuple annotations in
-both shorthand and generic form. Built-in maps, sets, and records also require
-named semantic contracts. Imported generic names do not bypass enforcement.
-They reject object-valued parameter defaults, including literals, arrays,
-constructed class values, named bindings, and factory calls whose return
-contract is object-shaped. Apply defaults at the call site or inside the
-function body after reading the named contract.
-
-Both rules reject object literals behind TypeScript wrappers and call-site
-assignment, conditional, logical, or sequence expressions. Loom also rejects
-statically resolvable object values expanded from spread arrays.
+- **Loom:** `loom/no-raw-object-arguments` rejects object-literal call
+  arguments.
+  - It includes statically resolvable spread-array elements.
+  - It includes literals selected by assignment, conditional, logical, or
+    sequence results.
+  - Its walk stops at function boundaries, so object literals returned by
+    function-valued arguments remain valid.
+- **Nook web:** `nook-typed-api/no-raw-object-arguments` enforces the same call
+  contract.
+- **Both implementations:**
+  - reject inline object parameter types;
+  - require an explicit type on named object-literal arguments;
+  - reject generic or operation-only parameter names such as `Args`,
+    `WriteArgs`, `PickArgs`, and `PutArgs`;
+  - recursively inspect wrapped and qualified type references;
+  - reject inline array and tuple annotations in shorthand and generic form;
+  - require named semantic contracts for maps, sets, and records;
+  - reject imported generic names as bypasses; and
+  - reject object-valued parameter defaults, including literals, arrays,
+    constructed class values, named bindings, and object-returning factory
+    calls.
+- **Defaults:** apply them at the call site or inside the function body after
+  reading the named contract.
+- **Wrapped expressions:** both rules inspect TypeScript wrappers and call-site
+  assignment, conditional, logical, or sequence expressions.
+  - Loom also inspects statically resolvable object values from spread arrays.
 
 The rule is configured in:
 
