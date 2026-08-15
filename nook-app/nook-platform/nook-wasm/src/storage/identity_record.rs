@@ -14,9 +14,9 @@ pub(crate) mod simple_genesis;
 mod staged_genesis;
 pub(crate) use genesis_flow::SimpleGenesisCompletion;
 pub(crate) use reconciliation::{
-    PendingIdentityRotation, commit_identity_reconciliation_checkpoint,
-    commit_identity_reconciliation_epoch, load_pending_identity_rotation,
-    mark_identity_reconciliation_pending,
+    PendingIdentityRotation, abort_prepared_identity_reconciliation,
+    commit_identity_reconciliation_checkpoint, commit_identity_reconciliation_epoch,
+    load_pending_identity_rotation, mark_identity_reconciliation_pending,
 };
 use reconciliation::{
     clear_consumed_identity_reconciliation, identity_reconciliation_keys_for_recovery,
@@ -438,8 +438,10 @@ pub(crate) async fn validate_vault_identity_enrollment(
 /// Forget identity state sealed to the inaccessible app key while preserving
 /// encrypted vault projections for password-backed recovery.
 async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
-    // Complete legacy migration before the atomic current-directory reset.
-    let _ = load_identity_directory().await?;
+    // Best-effort legacy migration preserves known reconciliation keys. A
+    // corrupt or future-incompatible directory must never block destructive
+    // device recovery.
+    let _ = load_identity_directory().await;
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
@@ -458,7 +460,7 @@ async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
             let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
                 NookError::IndexedDb(format!("Identity reset value error: {error:?}"))
             })?;
-            decode_directory(&raw)?
+            decode_directory(&raw).unwrap_or_else(|_| nook_core::IdentityDirectory::empty())
         }
         None => nook_core::IdentityDirectory::empty(),
     };
@@ -601,6 +603,28 @@ mod tests {
                 .await?
                 .is_none()
         );
+        clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn destructive_recovery_bypasses_a_corrupt_identity_directory() -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        idb_put_string(IDENTITY_DIRECTORY_KEY, "{future-or-corrupt").await?;
+        idb_put_string(
+            crate::storage::indexed_db::APP_KEY_WRAPPED_KEY,
+            "inaccessible",
+        )
+        .await?;
+
+        delete_identity_directory_for_recovery().await?;
+
+        assert!(
+            idb_get_string(crate::storage::indexed_db::APP_KEY_WRAPPED_KEY)
+                .await?
+                .is_none()
+        );
+        let recovered = load_identity_directory().await?;
+        assert!(recovered.identities().is_empty());
         clear_identity_directory_for_test().await
     }
 

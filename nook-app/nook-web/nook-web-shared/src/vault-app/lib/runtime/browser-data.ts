@@ -49,6 +49,7 @@ type BrowserDataDeletionErrors = Error[];
 
 export type LocalDataStorageOperation<T> = {
   readonly generation: string;
+  readonly generationChangedMessage: string;
   readonly operation: () => T | Promise<T>;
 };
 
@@ -66,7 +67,7 @@ export async function runWithLocalDataStorageLock<T>(
       (localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION) ?? "") !==
       input.generation
     ) {
-      throw new Error("Local browser data changed in another Nook tab");
+      throw new Error(input.generationChangedMessage);
     }
     return input.operation();
   });

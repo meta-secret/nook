@@ -388,6 +388,12 @@ impl NookVaultManager {
         Ok(())
     }
 
+    pub(in crate::manager) fn clear_vault_keys(&mut self) {
+        self.vault.secrets_key.zeroize();
+        self.vault.members_key.zeroize();
+        self.vault.crypto = VaultCryptoState::Locked;
+    }
+
     /// Restore `VaultCrypto` from the local projection-cache YAML when the in-memory
     /// session lost it (for example after switching sync providers).
     pub(in crate::manager) async fn ensure_vault_crypto_from_cache(

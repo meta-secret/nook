@@ -106,6 +106,9 @@ tab from recreating ownership after recovery. The initiating tab first asks
 every open Nook tab to stop queued storage work and zeroize its app key. The
 reset then runs inside the initiating tab's storage queue.
 One IndexedDB transaction removes the wrapped app key and resets the directory.
+An unreadable identity directory cannot block this destructive recovery. The
+reset replaces it with an empty valid directory and removes the inaccessible
+wrapped app key.
 
 The same transaction deletes current and legacy reconciliation markers.
 
@@ -138,15 +141,25 @@ that stored checkpoint only when it is a verified ancestor of the observed
 head. The marker is compare-deleted only
 after the identity directory compare-and-swap succeeds. Stale observations
 cannot replace envelopes from a newer epoch.
+If another verified epoch follows the marker's committed checkpoint before
+reconciliation, the app advances directly to that descendant epoch and latest
+checkpoint. The intermediate checkpoint must remain in verified ancestry.
 
 Remote epoch publication cannot atomically create two provider files.
 
 The trigger stays hidden until its checkpoint is visible.
 
+Incomplete triggers already stored by a legacy local build, plus their
+descendants, are quarantined from the active event index.
+
 A mutation appended from the old frontier becomes a blocking security
 conflict.
 
 Remote import validates and writes its union in one local transaction.
+
+An unlocked Simple-vault session unwraps and persists the imported epoch keys
+before it replays the projection. Missing authorization clears the old keys and
+locks the session. Sentinel epoch changes require a fresh share ceremony.
 
 The signed `epoch-checkpoint` operation stores `secrets`,
 `members_checkpoint_hash`, and `rotated_meta_records`. Identity rotations fill

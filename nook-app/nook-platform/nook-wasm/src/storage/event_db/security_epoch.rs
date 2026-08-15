@@ -276,7 +276,7 @@ pub(crate) async fn save_verified_remote_events(
     let projections = transaction.store(STORE_PROJECTIONS).map_err(|error| {
         NookError::IndexedDb(format!("Remote projections store error: {error:?}"))
     })?;
-    let (mut ids, mut local) = load_local_store(&events, store_id).await?;
+    let (persisted_ids, mut local) = load_local_store(&events, store_id).await?;
     let heads = nook_core::union_remote_events_and_heads(&mut local, remote_events, store_id)?;
     let graph = local.load_graph(store_id)?;
     if !nook_core::project_vault(&graph, store_id)?
@@ -288,7 +288,9 @@ pub(crate) async fn save_verified_remote_events(
         ));
     }
     for (event_id, bytes) in remote_events {
-        if local.get_bytes(event_id).is_none() || ids.iter().any(|id| id == event_id.as_str()) {
+        if local.get_bytes(event_id).is_none()
+            || persisted_ids.iter().any(|id| id == event_id.as_str())
+        {
             continue;
         }
         let value = String::from_utf8(bytes.clone())
@@ -300,8 +302,12 @@ pub(crate) async fn save_verified_remote_events(
             "Remote event",
         )
         .await?;
-        ids.push(event_id.as_str().to_owned());
     }
+    let mut ids = local
+        .event_ids()
+        .into_iter()
+        .map(|event_id| event_id.as_str().to_owned())
+        .collect::<Vec<_>>();
     ids.sort();
     put_string(
         &events,

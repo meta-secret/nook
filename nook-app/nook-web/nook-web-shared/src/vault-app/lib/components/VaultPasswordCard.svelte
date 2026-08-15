@@ -50,6 +50,7 @@
     onClearCode,
     embedded = false,
     allowIssueCode = true,
+    canManageExistingPasswords = true,
     initialPanel = VaultPasswordPanel.Idle,
     showWarningBanner = true,
   }: {
@@ -67,6 +68,7 @@
     onClearCode: () => void
     embedded?: boolean
     allowIssueCode?: boolean
+    canManageExistingPasswords?: boolean
     initialPanel?: VaultPasswordPanel
     showWarningBanner?: boolean
   } = $props()
@@ -177,7 +179,7 @@
 
   async function submitRotatePassword() {
     localError = ''
-    if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
+    if (!canManageExistingPasswords || activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
     if (!is_vault_password_long_enough(passwordInput)) {
       localError = vault.t(I18N_KEYS.VaultPasswordsMinLengthError)
       return
@@ -197,7 +199,7 @@
 
   async function submitRemove() {
     localError = ''
-    if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
+    if (!canManageExistingPasswords || activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
     try {
       await onRemovePassword(activeEntryId.entryId)
       closePanel()
@@ -316,7 +318,10 @@
                 variant="ghost"
                 size="sm"
                 class="h-9 px-2.5"
-                disabled={isBusy}
+                disabled={isBusy || !canManageExistingPasswords}
+                title={!canManageExistingPasswords
+                  ? vault.t(I18N_KEYS.VaultPasswordsDeviceUnlockRequired)
+                  : vault.t(I18N_KEYS.VaultPasswordsRotate)}
                 onclick={() =>
                   (() => { const openPanelArgs: Parameters<typeof openPanel>[0] = { target: VaultPasswordPanel.Rotate, selection: {
                     kind: ActivePasswordEntryKind.Selected,
@@ -355,7 +360,10 @@
                 variant="ghost"
                 size="sm"
                 class="h-9 px-2.5 text-destructive hover:text-destructive"
-                disabled={isBusy}
+                disabled={isBusy || !canManageExistingPasswords}
+                title={!canManageExistingPasswords
+                  ? vault.t(I18N_KEYS.VaultPasswordsDeviceUnlockRequired)
+                  : vault.t(I18N_KEYS.CommonRemove)}
                 onclick={() =>
                   (() => { const openPanelArgs3: Parameters<typeof openPanel>[0] = { target: VaultPasswordPanel.Remove, selection: {
                     kind: ActivePasswordEntryKind.Selected,

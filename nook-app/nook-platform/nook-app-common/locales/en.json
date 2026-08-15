@@ -1059,6 +1059,7 @@
   },
   "errors": {
     "validation": {
+      "local_data_changed_in_another_tab": "Local browser data changed in another Nook tab.",
       "github_pat_empty": "Enter a GitHub personal access token to connect.",
       "oauth_access_token_empty": "Sign in with Google to connect Google Drive.",
       "shared_joiner_identity_required": "Enter the joiner provider identity before issuing an onboarding code.",
@@ -1135,6 +1136,7 @@
     "show": "Show",
     "min_chars": "Minimum 5 characters.",
     "working": "Working…",
+    "device_unlock_required": "Unlock this browser's device identity before rotating or removing a vault password.",
     "add_password": "Add password",
     "rotate": "Rotate",
     "rotating_for_prefix": "Rotating password for ",

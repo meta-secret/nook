@@ -210,6 +210,15 @@ transaction that writes event bytes and derived heads.
 
 The transaction serializes imports with local appends and epoch commits.
 
+The import also quarantines a legacy local trigger and every descendant when
+the trigger has no verified checkpoint. The active event index excludes that
+incomplete transition before any remote descendant can become appendable.
+
+An unlocked Simple-vault session adopts the projected epoch's rewrapped auth
+envelopes and persists the new key-epoch marker before projection replay. A
+revoked device, missing envelope, or Sentinel epoch transition clears in-memory
+vault keys and requires the appropriate unlock ceremony before writes resume.
+
 Provider connect and sync paths must classify the provider event set before
 writing outbox or repair events.
 

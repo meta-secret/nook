@@ -3,12 +3,72 @@ use std::collections::BTreeSet;
 use super::{
     EventId, EventLogStorageRecord, EventLogSyncIssueState, ExternalEventLogRecord,
     LocalFolderEventWrite, NookError, NookVaultManager, RemoteEventLogClassification,
-    append_outbox_index, classify_remote_event_log, load_from_indexed_db, load_local_event_store,
-    load_outbox, queue_outbox_entry, read_local_folder_event_files, remove_outbox_entry,
-    write_local_folder_event_files,
+    VaultCryptoState, append_outbox_index, classify_remote_event_log, load_from_indexed_db,
+    load_local_event_store, load_outbox, queue_outbox_entry, read_local_folder_event_files,
+    remove_outbox_entry, save_key_epoch, write_local_folder_event_files,
 };
 
 impl NookVaultManager {
+    fn projected_epoch_keys(
+        meta: &nook_core::VaultMetaState,
+        identity: &nook_core::DeviceIdentity,
+    ) -> Result<nook_core::VaultKeys, NookError> {
+        let envelopes = meta.auth.get(&identity.auth_id()).ok_or_else(|| {
+            NookError::Database(
+                "The current security epoch no longer authorizes this device.".to_owned(),
+            )
+        })?;
+        Ok(nook_core::VaultKeys {
+            secrets_key: identity.decrypt_envelope(&envelopes.secrets_key)?,
+            members_key: identity.decrypt_envelope(&envelopes.members_key)?,
+        })
+    }
+
+    async fn adopt_projected_security_epoch(
+        &mut self,
+        projection: &nook_core::VaultProjection,
+    ) -> Result<(), NookError> {
+        let nook_core::ProjectionEpoch::Current(nook_core::KeyEpoch(key_epoch)) = &projection.epoch
+        else {
+            return Ok(());
+        };
+        if self.event_log.key_epoch == key_epoch.as_str() {
+            return Ok(());
+        }
+        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
+            let error = NookError::from(nook_core::MultiDeviceError::SentinelCeremonyRequired);
+            self.clear_vault_keys();
+            return Err(error);
+        }
+        let keys = match self
+            .device_identity()
+            .and_then(|identity| Self::projected_epoch_keys(&self.vault.meta, &identity))
+        {
+            Ok(keys) => keys,
+            Err(error) => {
+                self.clear_vault_keys();
+                return Err(error);
+            }
+        };
+        let crypto = match nook_core::VaultCrypto::new(&keys.secrets_key) {
+            Ok(crypto) => crypto,
+            Err(error) => {
+                self.clear_vault_keys();
+                return Err(error.into());
+            }
+        };
+        let next_epoch = key_epoch.as_str().to_owned();
+        if let Err(error) = save_key_epoch(&self.vault.store_id, &next_epoch).await {
+            self.clear_vault_keys();
+            return Err(error);
+        }
+        self.vault.secrets_key = keys.secrets_key.as_str().to_owned();
+        self.vault.members_key = keys.members_key.as_str().to_owned();
+        self.vault.crypto = VaultCryptoState::Unlocked(crypto);
+        self.event_log.key_epoch = next_epoch;
+        Ok(())
+    }
+
     pub(super) async fn queue_event_outbox_for_current_provider(
         &mut self,
         event_id: &EventId,
@@ -293,10 +353,12 @@ impl NookVaultManager {
         self.event_log.heads = heads.clone();
         let graph = local.load_graph(&self.vault.store_id)?;
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        let projection = nook_core::project_vault(&graph, &self.vault.store_id)?;
         self.ensure_sentinel_architecture_from_shares()?;
         let unlocked =
             self.vault.crypto.is_unlocked() || self.ensure_vault_crypto_from_cache().await.is_ok();
         if unlocked {
+            self.adopt_projected_security_epoch(&projection).await?;
             self.apply_event_projection_to_session().await?;
         } else if persist_locked_projection {
             self.hydrate_locked_projection_from_events().await?;
@@ -433,6 +495,19 @@ impl NookVaultManager {
 mod tests {
     use super::*;
     use wasm_bindgen::JsError;
+
+    #[test]
+    fn projected_epoch_keys_use_the_current_auth_envelopes() -> anyhow::Result<()> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let keys = nook_core::generate_vault_keys()?;
+        let auth = nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
+        let meta = nook_core::VaultMetaState::from_stored_records(&[auth]);
+
+        let resolved = NookVaultManager::projected_epoch_keys(&meta, &identity)?;
+
+        assert_eq!(resolved, keys);
+        Ok(())
+    }
 
     #[test]
     #[allow(

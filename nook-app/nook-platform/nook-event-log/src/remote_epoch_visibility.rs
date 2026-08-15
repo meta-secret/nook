@@ -48,6 +48,33 @@ fn authorized_checkpoint_parents(
     Ok(parents)
 }
 
+pub(crate) fn incomplete_security_transition_events(
+    candidate: &LocalEventStore,
+    store_id: &str,
+) -> EventResult<BTreeSet<EventId>> {
+    let graph = candidate.load_graph(store_id)?;
+    let committed = authorized_checkpoint_parents(candidate, &[], store_id)?;
+    let security_triggers = graph
+        .applicable_events()
+        .into_iter()
+        .filter(|event| starts_security_epoch(event))
+        .map(VaultEvent::id)
+        .collect::<EventResult<Vec<_>>>()?;
+    let incomplete = security_triggers
+        .into_iter()
+        .filter(|event_id| !committed.contains(event_id))
+        .collect::<Vec<_>>();
+    Ok(graph
+        .topological_order()?
+        .into_iter()
+        .filter(|event_id| {
+            incomplete
+                .iter()
+                .any(|trigger| trigger == event_id || graph.is_ancestor(trigger, event_id))
+        })
+        .collect())
+}
+
 /// Hide a remotely visible epoch trigger until its directly committing
 /// checkpoint is also visible. Descendants then remain quarantined behind the
 /// omitted trigger instead of extending an incomplete security transition.
@@ -239,6 +266,34 @@ mod tests {
         let visible = visibility_gated_remote_events(&local, &remote, STORE)?;
 
         assert!(!visible.iter().any(|(event_id, _)| event_id == &trigger.0));
+        Ok(())
+    }
+
+    #[test]
+    fn quarantines_a_legacy_local_trigger_and_its_remote_descendant() -> EventResult<()> {
+        let (mut local, trigger, _) = epoch_pair()?;
+        local.put_event(trigger.0.clone(), trigger.1.clone());
+        let signing_key = crate::test_support::signing_key();
+        let descendant = signed_event(
+            &signing_key,
+            vec![trigger.0.clone()],
+            trigger.0.clone(),
+            VaultOperation::VaultCleared,
+        )?;
+        let descendant_id = descendant.id()?;
+        let imported = crate::union_remote_events(
+            &mut local,
+            &[(
+                descendant_id.clone(),
+                serialize_event_storage_yaml(&descendant)?,
+            )],
+            STORE,
+        )?;
+
+        assert!(imported.is_empty());
+        assert!(local.get_bytes(&trigger.0).is_none());
+        assert!(local.get_bytes(&descendant_id).is_none());
+        assert_eq!(local.event_ids().len(), 1);
         Ok(())
     }
 }

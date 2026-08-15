@@ -139,6 +139,10 @@ That transaction:
 - preserves encrypted vault projections.
 
 A transaction failure leaves the prior device and ownership state intact.
+Destructive recovery treats an unreadable or future-incompatible identity
+directory as inaccessible ownership state. It replaces that directory with an
+empty current schema and still removes the wrapped app key. Corrupt metadata
+must not trap a user outside the recovery escape hatch.
 Before recovery mutates IndexedDB, the initiating tab quiesces storage work in
 every open Nook tab. Each responding tab zeroizes its app key and storage
 credentials before acknowledging readiness. The initiating tab then serializes
@@ -152,6 +156,10 @@ plan with the exact signed trigger and checkpoint events plus the key material
 needed to resume. `epoch-committed` adds `key_epoch` and retains that encrypted
 `plan_envelope`. `committed` retains `key_epoch` and the exact checkpoint event
 ID but drops the plan. Prepared and epoch-committed states must resume.
+If the event frontier changes before the atomic trigger-checkpoint write, the
+writer compare-deletes only its exact `prepared` marker. No event was committed,
+so the user can retry against the new verified frontier. An `epoch-committed`
+marker is never aborted this way.
 An ordinary connect cannot consume them as abandoned work.
 Each identity DEK grant serializes `key_epoch`. A missing field decodes as the
 tagged `legacy-unknown` variant. Current writes use `known` with `key_epoch` and
@@ -171,6 +179,10 @@ when it is a verified ancestor of the observed head. An idempotent
 retry at the new epoch succeeds. An older epoch
 observation fails. Successful directory reconciliation compare-deletes only
 the exact marker it consumed.
+If a later verified rotation commits before an interrupted marker reconciles,
+the marker's checkpoint must remain a verified ancestor. Reconciliation then
+adopts the latest observed epoch and checkpoint directly instead of requiring
+the observed epoch to equal the marker's intermediate epoch.
 Any later verified connect repeats the idempotent reconciliation and clears a
 marker left by an interrupted post-commit update.
 The marker is local retry state. Current builds delete it only after successful
@@ -179,6 +191,9 @@ reconciliation or explicit destructive device recovery.
 Remote providers publish epoch pairs as separate immutable files.
 
 The visibility gate hides an epoch trigger until its checkpoint is visible.
+
+It also quarantines incomplete triggers already present in legacy local event
+storage and their descendants.
 
 A remote installation may append from the old frontier during publication.
 

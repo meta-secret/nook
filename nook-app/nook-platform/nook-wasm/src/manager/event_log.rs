@@ -11,7 +11,7 @@ pub(in crate::manager) use records::{
     EventLogStorageRecord, ExtensionEventLogImportStatus, ExternalEventLogRecord,
 };
 
-use super::{EventLogSyncIssueState, NookVaultManager, VaultNameState};
+use super::{EventLogSyncIssueState, NookVaultManager, VaultCryptoState, VaultNameState};
 use crate::NookError;
 use crate::conversion::wasm_iso_timestamp;
 use crate::storage::drive_events::{

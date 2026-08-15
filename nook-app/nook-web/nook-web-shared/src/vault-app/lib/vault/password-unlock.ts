@@ -96,6 +96,10 @@ export async function updateVaultPasswordEntry({
   entryId,
   password,
 }: VaultPasswordUpdate): Promise<void> {
+  if (!state.deviceProtectionReady) {
+    state.passwordError = state.t(I18N_KEYS.VaultPasswordsDeviceUnlockRequired);
+    return;
+  }
   if (!state.hasManager) {
     state.passwordError = "Vault engine is not available.";
     return;
@@ -138,6 +142,10 @@ export async function removeVaultPasswordEntry({
   state,
   entryId,
 }: VaultPasswordRemoval): Promise<void> {
+  if (!state.deviceProtectionReady) {
+    state.passwordError = state.t(I18N_KEYS.VaultPasswordsDeviceUnlockRequired);
+    return;
+  }
   if (!state.hasManager) return;
   state.passwordError = "";
   state.isPasswordBusy = true;

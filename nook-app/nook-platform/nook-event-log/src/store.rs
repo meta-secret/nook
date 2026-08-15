@@ -119,13 +119,13 @@ pub fn union_remote_events(
         candidate.put_event(event_id.clone(), bytes.clone());
         candidates.push(event_id.clone());
     }
-    if candidates.is_empty() {
-        let _ = local.load_graph(store_id)?;
-        return Ok(Vec::new());
-    }
-
     let graph = candidate.load_graph(store_id)?;
-    let quarantined: BTreeSet<EventId> = graph.quarantined().keys().cloned().collect();
+    let mut quarantined: BTreeSet<EventId> = graph.quarantined().keys().cloned().collect();
+    quarantined.extend(
+        crate::remote_epoch_visibility::incomplete_security_transition_events(
+            &candidate, store_id,
+        )?,
+    );
     let mut accepted = LocalEventStore::new();
     for event_id in candidate.event_ids() {
         if quarantined.contains(&event_id) {

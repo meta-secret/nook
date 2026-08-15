@@ -38,6 +38,7 @@ import {
 } from "$lib/vault/translation";
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import type { VaultState } from "$lib/vault.svelte";
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 export type VaultEditRestriction =
   | { decision: VaultEditDecision.Allowed }
@@ -165,6 +166,9 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     const generation = captureLocalDataStorageGeneration();
     const storageOperation: LocalDataStorageOperation<T> = {
       generation,
+      generationChangedMessage: this.t(
+        I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
+      ),
       operation,
     };
     return this.storageQueue.enqueue(() =>
