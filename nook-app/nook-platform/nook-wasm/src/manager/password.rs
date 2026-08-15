@@ -196,6 +196,50 @@ impl NookVaultManager {
         {
             return Err(NookError::Database("Password entry not found.".to_owned()).into());
         }
+        let keys = nook_core::VaultKeys {
+            secrets_key: nook_core::SymmetricKey::parse(&self.vault.secrets_key)?,
+            members_key: nook_core::SymmetricKey::parse(&self.vault.members_key)?,
+        };
+        let target_requires_upgrade = self
+            .vault
+            .password_entries
+            .iter()
+            .find(|entry| entry.id == entry_id)
+            .is_some_and(|entry| {
+                !nook_core::password_envelope_supports_key_rewrap(&entry.envelope)
+            });
+        if target_requires_upgrade {
+            let envelope = nook_core::attach_password_envelope_with_work_factor(
+                &keys,
+                &password,
+                work_factor,
+            )?;
+            let target = self
+                .vault
+                .password_entries
+                .iter_mut()
+                .find(|entry| entry.id == entry_id)
+                .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
+            target.envelope.clone_from(&envelope);
+            self.persist_vault_change(vec![nook_core::VaultOperation::PasswordRotated {
+                entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
+                envelope,
+            }])
+            .await?;
+            return Ok(());
+        }
+        if self
+            .vault
+            .password_entries
+            .iter()
+            .any(|entry| !nook_core::password_envelope_supports_key_rewrap(&entry.envelope))
+        {
+            return Err(NookError::Database(
+                "Upgrade every legacy password entry before rotating the security epoch."
+                    .to_owned(),
+            )
+            .into());
+        }
         let envelope = self
             .rotate_password_security_epoch(
                 nook_core::PasswordEntryId::parse(&entry_id)?,
@@ -248,12 +292,6 @@ impl NookVaultManager {
                 entry_id: nook_core::PasswordEntryId::parse(first_id)?,
             })
             .await?;
-            for entry_id in entry_ids.iter().skip(1) {
-                self.append_vault_operations(vec![nook_core::VaultOperation::PasswordRemoved {
-                    entry_id: nook_core::PasswordEntryId::parse(entry_id)?,
-                }])
-                .await?;
-            }
         }
         Ok(())
     }

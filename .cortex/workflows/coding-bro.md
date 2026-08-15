@@ -13,6 +13,9 @@ AI agents must treat every implementation task as PR-bound from the start.
 - Estimate authored changed lines and identify the owning module or layer.
 - Split work expected to exceed 5,000 authored changed lines into an ordered
   Workbench issue and PR sequence.
+- If implemented work must leave the current PR, create its linked draft
+  successor from the full-work commit before deleting or reverting anything.
+- Verify that every removed file and behavior remains in a successor PR.
 - Create a feature branch and plan the PR title/body/scope.
 - Open or update the PR as soon as there is a coherent commit to show, then keep working on that same PR branch.
 
@@ -493,6 +496,10 @@ Do not wait for post-merge Main. Any performance fix belongs in a separate norma
   PR. Prefer one cohesive module, package, layer, or responsibility. Continue
   through every planned slice until the requested feature is complete. See
   [pull-requests.md](pull-requests.md#pull-request-size-and-modularity).
+- **Preserve work during a split** — publish the superseding Workbench plan,
+  open the linked draft successor from the full-work commit, verify the
+  preservation inventory, then reduce the predecessor. Complete the
+  predecessor before the successor.
 - **Workbench plan before implementation; summary and statistics after merge** — publish the public-safe task plan before edits, then publish the issue update, plan-linked worklog, and `stats/ai-agent/<pr-number>.yaml` directly to Workbench. See [issues.md](issues.md) and [agent-statistics.md](agent-statistics.md).
 - **Duration report** on every completed implementation task. See [pull-requests.md §10](pull-requests.md#10-task-completion-report).
 

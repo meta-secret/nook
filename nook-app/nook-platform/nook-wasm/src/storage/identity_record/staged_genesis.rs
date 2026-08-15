@@ -206,31 +206,33 @@ mod tests {
         })
         .await?;
         let concurrent = nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;
+        let concurrent_update = concurrent.clone();
         super::super::update_identity_directory(move |directory| {
             directory
-                .create_identity("Concurrent", &concurrent, None)
+                .create_identity("Concurrent", &concurrent_update, None)
                 .map_err(super::super::map_domain_error)?;
             Ok(())
         })
         .await?;
 
-        assert!(
-            super::super::clear_pending_simple_genesis(
-                super::super::SimpleGenesisCompletion::Staged {
-                    pending: &pending,
-                    signing_seed: "staged-signing-seed",
-                },
-            )
-            .await
-            .is_err()
-        );
+        super::super::clear_pending_simple_genesis(super::super::SimpleGenesisCompletion::Staged {
+            pending: &pending,
+            signing_seed: "staged-signing-seed",
+        })
+        .await?;
         let current = super::super::load_identity_directory().await?;
-        assert_eq!(current.identities().len(), 1);
-        assert!(!current.identities()[0].owns_vault(&pending.store_id));
+        assert_eq!(current.identities().len(), 2);
+        assert!(
+            current
+                .identities()
+                .iter()
+                .any(|identity| identity.owns_vault(&pending.store_id))
+        );
+        assert!(current.identity_for_app_key(&concurrent)?.is_some());
         assert!(
             super::super::pending_simple_genesis_for_store(pending.store_id.as_str())
                 .await?
-                .is_some_and(|retained| retained.is_staged())
+                .is_none()
         );
         super::super::clear_identity_directory_for_test().await
     }

@@ -38,14 +38,15 @@ use serde::{Deserialize, Serialize};
 const ACTIVE_VAULT_KEY: &str = "active_vault_id";
 const VAULT_REGISTRY_KEY: &str = "vault_registry";
 const PENDING_NEW_LOCAL_VAULT_KEY: &str = "pending_new_local_vault";
-const APP_ID_KEY: &str = "app_id";
-const APP_KEY_WRAPPED_KEY: &str = "app_key_wrapped";
+pub(crate) const APP_ID_KEY: &str = "app_id";
+pub(crate) const APP_KEY_WRAPPED_KEY: &str = "app_key_wrapped";
 /// Legacy dual-read key for [`APP_ID_KEY`].
-const DEVICE_ID_KEY: &str = "device_id";
+pub(crate) const DEVICE_ID_KEY: &str = "device_id";
 /// Legacy dual-read key for [`APP_KEY_WRAPPED_KEY`].
-const WRAPPED_DEVICE_IDENTITY_KEY: &str = "device_identity_wrapped";
+pub(crate) const WRAPPED_DEVICE_IDENTITY_KEY: &str = "device_identity_wrapped";
 const SENTINEL_GENESIS_SHARE_CATALOG_KEY: &str = "sentinel_genesis_share_catalog";
-const SENTINEL_GENESIS_FINALIZATION_PENDING_KEY: &str = "sentinel_genesis_finalization_pending";
+pub(crate) const SENTINEL_GENESIS_FINALIZATION_PENDING_KEY: &str =
+    "sentinel_genesis_finalization_pending";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VaultRegistryEntry {

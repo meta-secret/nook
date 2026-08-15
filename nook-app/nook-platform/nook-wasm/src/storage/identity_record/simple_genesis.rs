@@ -522,13 +522,18 @@ pub(crate) async fn clear_pending_simple_genesis(
                     })
                     .transpose()?
                     .unwrap_or_else(nook_core::IdentityDirectory::empty);
-                if current_directory != staged.base_directory {
-                    return Err(NookError::IndexedDb(
-                        "Identity directory changed during staged vault genesis; the marker was retained for retry."
-                            .to_owned(),
-                    ));
-                }
-                let encoded = serde_json::to_string(&staged.directory).map_err(|error| {
+                let directory = if current_directory == staged.base_directory {
+                    staged.directory.clone()
+                } else {
+                    current_directory
+                        .rebase_staged_vault_creation(
+                            &staged.base_directory,
+                            &staged.directory,
+                            &pending.identity_id,
+                        )
+                        .map_err(super::map_domain_error)?
+                };
+                let encoded = serde_json::to_string(&directory).map_err(|error| {
                     NookError::IndexedDb(format!("Genesis identity encode error: {error}"))
                 })?;
                 let encoded = serde_wasm_bindgen::to_value(&encoded).map_err(|error| {

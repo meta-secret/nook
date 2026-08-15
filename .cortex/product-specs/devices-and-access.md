@@ -77,9 +77,9 @@ Current readers reject conflicting current and legacy staged state.
 The marker is durable before event creation and survives reloads.
 Successful verified connect publishes the staged directory and matching signing
 seed, then removes the marker in one compare-and-write transaction.
-Concurrent identity changes fail closed and are never overwritten.
-The staged marker remains durable so publication can retry without losing the
-candidate directory or signing state.
+Unrelated concurrent identity changes are preserved by a Rust-domain rebase.
+The rebase also preserves the current identity selection.
+A concurrent change to the staged target fails closed and retains the marker.
 Legacy records without `createdAt` use the Unix epoch timestamp.
 `eventState` is `awaiting-event`, `legacy-event-pinned`, or `event-pinned`.
 The current pinned variant owns the complete signed genesis event in
@@ -105,9 +105,13 @@ Atomic directory updates reject those app keys. This prevents a stale browser
 tab from recreating ownership after recovery. The initiating tab first asks
 every open Nook tab to stop queued storage work and zeroize its app key. The
 reset then runs inside the initiating tab's storage queue.
-The directory reset and deletion of its current and legacy reconciliation
-markers commit in one IndexedDB transaction. A failure cannot preserve stale
-ownership after removing the encrypted epoch-recovery plan.
+One IndexedDB transaction removes the wrapped app key and resets the directory.
+
+The same transaction deletes current and legacy reconciliation markers.
+
+It also deletes pending Simple and Sentinel genesis state.
+
+A failure cannot remove the app key while preserving stale ownership.
 
 Security-epoch retry state uses
 `pending_identity_reconciliation_v2:{store_id}`.
@@ -134,6 +138,15 @@ that stored checkpoint only when it is a verified ancestor of the observed
 head. The marker is compare-deleted only
 after the identity directory compare-and-swap succeeds. Stale observations
 cannot replace envelopes from a newer epoch.
+
+Remote epoch publication cannot atomically create two provider files.
+
+The trigger stays hidden until its checkpoint is visible.
+
+A mutation appended from the old frontier becomes a blocking security
+conflict.
+
+Remote import validates and writes its union in one local transaction.
 
 The signed `epoch-checkpoint` operation stores `secrets`,
 `members_checkpoint_hash`, and `rotated_meta_records`. Identity rotations fill

@@ -260,6 +260,73 @@ pub(crate) async fn save_verified_event(
     Ok(heads)
 }
 
+/// Revalidate and persist a remote set with its derived heads atomically.
+///
+/// The transaction shares the events store with local appends and epoch-pair
+/// commits. A remote union therefore cannot validate one frontier and write
+/// into a newer one.
+pub(crate) async fn save_verified_remote_events(
+    store_id: &str,
+    remote_events: &[(EventId, Vec<u8>)],
+) -> Result<(Vec<String>, LocalEventStore), NookError> {
+    let (_rexie, transaction) = begin_append_transaction().await?;
+    let events = transaction
+        .store(STORE_EVENTS)
+        .map_err(|error| NookError::IndexedDb(format!("Remote events store error: {error:?}")))?;
+    let projections = transaction.store(STORE_PROJECTIONS).map_err(|error| {
+        NookError::IndexedDb(format!("Remote projections store error: {error:?}"))
+    })?;
+    let (mut ids, mut local) = load_local_store(&events, store_id).await?;
+    let heads = nook_core::union_remote_events_and_heads(&mut local, remote_events, store_id)?;
+    let graph = local.load_graph(store_id)?;
+    if !nook_core::project_vault(&graph, store_id)?
+        .security_conflicts
+        .is_empty()
+    {
+        return Err(NookError::Database(
+            "Remote events conflict with a concurrent security transition.".to_owned(),
+        ));
+    }
+    for (event_id, bytes) in remote_events {
+        if local.get_bytes(event_id).is_none() || ids.iter().any(|id| id == event_id.as_str()) {
+            continue;
+        }
+        let value = String::from_utf8(bytes.clone())
+            .map_err(|error| NookError::Serialization(error.to_string()))?;
+        put_string(
+            &events,
+            &event_key(store_id, event_id.as_str()),
+            &value,
+            "Remote event",
+        )
+        .await?;
+        ids.push(event_id.as_str().to_owned());
+    }
+    ids.sort();
+    put_string(
+        &events,
+        &event_index_key(store_id),
+        &serde_json::to_string(&ids)
+            .map_err(|error| NookError::Serialization(error.to_string()))?,
+        "Remote event index",
+    )
+    .await?;
+    put_string(
+        &projections,
+        &heads_key(store_id),
+        &serde_json::to_string(&heads)
+            .map_err(|error| NookError::Serialization(error.to_string()))?,
+        "Remote event heads",
+    )
+    .await?;
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!(
+            "Remote event transaction completion error: {error:?}"
+        ))
+    })?;
+    Ok((heads, local))
+}
+
 /// Persist the trigger and checkpoint in one `IndexedDB` transaction.
 ///
 /// Read-write transactions overlapping the events store serialize across tabs.

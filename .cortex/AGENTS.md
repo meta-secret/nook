@@ -60,6 +60,24 @@ Agents must estimate the change before implementation.
 If the complete feature is larger, split it into an ordered series of pull
 requests before editing.
 
+If an in-progress pull request reaches the limit, preserve the work before
+reducing its scope.
+
+The agent must:
+
+1. Publish a superseding Workbench plan.
+2. Materialize every remaining slice as an ordered focused issue.
+3. Create a successor branch from the last commit that still contains the full
+   work.
+4. Open the successor as a linked draft pull request.
+5. Verify that every removed file and behavior exists in a linked successor.
+6. Only then reduce the first pull request.
+7. Merge the first pull request before completing the successor.
+8. Continue until the feature acceptance criteria are complete.
+
+A scope reduction without a linked preservation pull request is a P1 delivery
+failure.
+
 Each pull request must:
 
 - own one cohesive module, package, layer, or architectural responsibility;

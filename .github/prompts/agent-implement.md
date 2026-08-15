@@ -46,6 +46,9 @@ hand-written `docker run` commands.
 5. If part of the request is too large, risky, blocked, or out of scope, follow
    `.cortex/workflows/issues.md` (update/create Workbench Markdown records)
    rather than silently dropping work.
+   If implemented work must leave the current PR, create its linked draft
+   successor from the full-work commit before deleting or reverting anything.
+   Record a preservation inventory in Workbench.
 6. Before finishing, write a concise Markdown work summary to
    `.nook-workbench-worklog.md`. Include `# Work summary` and the sections
    `## Outcome`, `## Progress`, `## Implementation problems`, `## Decisions`,

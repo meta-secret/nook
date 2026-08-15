@@ -1,4 +1,3 @@
-use crate::storage::event_db::save_event_bytes;
 use std::collections::BTreeSet;
 
 use super::{
@@ -6,7 +5,7 @@ use super::{
     LocalFolderEventWrite, NookError, NookVaultManager, RemoteEventLogClassification,
     append_outbox_index, classify_remote_event_log, load_from_indexed_db, load_local_event_store,
     load_outbox, queue_outbox_entry, read_local_folder_event_files, remove_outbox_entry,
-    save_heads, union_remote_events_and_heads, write_local_folder_event_files,
+    write_local_folder_event_files,
 };
 
 impl NookVaultManager {
@@ -285,17 +284,13 @@ impl NookVaultManager {
         remote_events: &[(EventId, Vec<u8>)],
         persist_locked_projection: bool,
     ) -> Result<(), NookError> {
-        let heads = union_remote_events_and_heads(local, remote_events, &self.vault.store_id)?;
-        // Persist only events retained after quarantine. Saving rejected
-        // JoinApproved bytes poisons later pairing retries.
-        for (event_id, bytes) in remote_events {
-            if local.get_bytes(event_id).is_none() {
-                continue;
-            }
-            save_event_bytes(&self.vault.store_id, event_id.as_str(), bytes).await?;
-        }
+        let (heads, persisted) = crate::storage::event_db::save_verified_remote_events(
+            &self.vault.store_id,
+            remote_events,
+        )
+        .await?;
+        *local = persisted;
         self.event_log.heads = heads.clone();
-        save_heads(&self.vault.store_id, &heads).await?;
         let graph = local.load_graph(&self.vault.store_id)?;
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
         self.ensure_sentinel_architecture_from_shares()?;

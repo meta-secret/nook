@@ -85,9 +85,9 @@ Extension identity adoption remains staged through vault initialization.
 - Completion compares the marker's base directory with the current directory.
 - A match publishes the candidate directory and signing seed atomically.
 - The same transaction removes the completed marker.
-- A concurrent directory update aborts publication and retains the marker.
-- The concurrent directory update remains intact.
-- A retry resumes the retained candidate instead of losing ownership state.
+- An unrelated concurrent directory update is rebased in Rust.
+- The rebase preserves unrelated identities and the current selection.
+- A concurrent change to the staged target fails closed and retains the marker.
 - Failed creation clears decrypted host state and stops background sync.
 - Failed creation does not rewind event stores or active identity state.
 
@@ -122,13 +122,23 @@ an `event-pinned` state without seed material becomes `legacy-event-pinned`.
 That state upgrades only after the durable seed matches the pinned event signer.
 The same signer check applies before sealing a legacy plaintext seed.
 
-Recovery clears identity ownership but preserves retired app IDs. Every
-app-key operation rejects a retired ID. Atomic updates therefore prevent a
-stale tab from writing old ownership back after recovery.
-The reset of `identity_directory_v1` and deletion of every matching
-`pending_identity_reconciliation_v2:{store_id}` and legacy v1 marker use one
-IndexedDB read-write transaction over the `vault` store. The directory and its
-encrypted recovery plans therefore remain jointly present or jointly removed.
+Recovery clears identity ownership.
+
+It preserves retired app IDs.
+
+Every app-key operation rejects a retired ID.
+
+One IndexedDB transaction performs all security-critical recovery writes.
+
+That transaction:
+
+- removes the wrapped app key;
+- resets `identity_directory_v1`;
+- deletes matching reconciliation markers;
+- deletes pending Simple and Sentinel genesis state; and
+- preserves encrypted vault projections.
+
+A transaction failure leaves the prior device and ownership state intact.
 Before recovery mutates IndexedDB, the initiating tab quiesces storage work in
 every open Nook tab. Each responding tab zeroizes its app key and storage
 credentials before acknowledging readiness. The initiating tab then serializes
@@ -165,6 +175,18 @@ Any later verified connect repeats the idempotent reconciliation and clears a
 marker left by an interrupted post-commit update.
 The marker is local retry state. Current builds delete it only after successful
 reconciliation or explicit destructive device recovery.
+
+Remote providers publish epoch pairs as separate immutable files.
+
+The visibility gate hides an epoch trigger until its checkpoint is visible.
+
+A remote installation may append from the old frontier during publication.
+
+Such an event is concurrent with the epoch trigger.
+
+The projection reports that concurrency as a blocking security conflict.
+
+The checkpoint never silently erases or resurrects the concurrent mutation.
 
 The first directory read migrates `identity_record_v1` when present:
 

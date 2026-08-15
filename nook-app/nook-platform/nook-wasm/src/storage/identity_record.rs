@@ -10,7 +10,7 @@ use crate::{NookError, storage::open_nook_database};
 
 mod genesis_flow;
 mod reconciliation;
-mod simple_genesis;
+pub(crate) mod simple_genesis;
 mod staged_genesis;
 pub(crate) use genesis_flow::SimpleGenesisCompletion;
 pub(crate) use reconciliation::{
@@ -22,7 +22,6 @@ use reconciliation::{
     clear_consumed_identity_reconciliation, identity_reconciliation_keys_for_recovery,
     resolve_identity_epoch,
 };
-pub(crate) use simple_genesis::PENDING_SIMPLE_GENESIS_KEY;
 pub(crate) use simple_genesis::{
     PendingSimpleGenesis, begin_or_resume_simple_genesis, clear_pending_simple_genesis,
     pending_simple_genesis_for_store, persist_simple_genesis_event,
@@ -438,7 +437,7 @@ pub(crate) async fn validate_vault_identity_enrollment(
 
 /// Forget identity state sealed to the inaccessible app key while preserving
 /// encrypted vault projections for password-backed recovery.
-async fn reset_identity_directory_for_recovery() -> Result<(), NookError> {
+async fn reset_identity_and_device_for_recovery() -> Result<(), NookError> {
     // Complete legacy migration before the atomic current-directory reset.
     let _ = load_identity_directory().await?;
     let rexie = open_nook_database().await?;
@@ -464,13 +463,11 @@ async fn reset_identity_directory_for_recovery() -> Result<(), NookError> {
         None => nook_core::IdentityDirectory::empty(),
     };
     let mut store_ids = Vec::new();
-    for store_id in directory.identities().iter().flat_map(|identity| {
-        identity
-            .vault_deks
-            .iter()
-            .map(|dek| &dek.store_id)
-            .chain(identity.sentinel_vaults.iter())
-    }) {
+    for store_id in directory
+        .identities()
+        .iter()
+        .flat_map(|identity| identity.vault_deks.iter().map(|dek| &dek.store_id))
+    {
         if !store_ids.contains(store_id) {
             store_ids.push(store_id.clone());
         }
@@ -493,6 +490,12 @@ async fn reset_identity_directory_for_recovery() -> Result<(), NookError> {
         .chain([
             LEGACY_IDENTITY_RECORD_KEY.to_owned(),
             simple_genesis::PENDING_SIMPLE_GENESIS_KEY.to_owned(),
+            crate::storage::device_access::DEVICE_ACCESS_PROFILE_KEY.to_owned(),
+            super::indexed_db::APP_KEY_WRAPPED_KEY.to_owned(),
+            super::indexed_db::APP_ID_KEY.to_owned(),
+            super::indexed_db::WRAPPED_DEVICE_IDENTITY_KEY.to_owned(),
+            super::indexed_db::DEVICE_ID_KEY.to_owned(),
+            super::indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY.to_owned(),
         ])
     {
         let key = serde_wasm_bindgen::to_value(&key).map_err(|error| {
@@ -509,7 +512,7 @@ async fn reset_identity_directory_for_recovery() -> Result<(), NookError> {
 }
 
 pub(crate) async fn delete_identity_directory_for_recovery() -> Result<(), NookError> {
-    reset_identity_directory_for_recovery().await
+    reset_identity_and_device_for_recovery().await
 }
 
 #[cfg(test)]

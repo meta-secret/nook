@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{AppKey, IdentityId, IdentityMember, IdentityRecord, StoreId};
 
+mod staged_rebase;
+
 /// Explicit identity-selection state. Empty directories cannot have a selection.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", content = "identityId", rename_all = "kebab-case")]
@@ -74,12 +76,7 @@ impl IdentityDirectory {
             {
                 return Err(MultiDeviceError::RetiredAppKey);
             }
-            for store_id in record
-                .vault_deks
-                .iter()
-                .map(|vault| &vault.store_id)
-                .chain(record.sentinel_vaults.iter())
-            {
+            for store_id in record.vault_deks.iter().map(|vault| &vault.store_id) {
                 if !vaults.insert(store_id) {
                     return Err(MultiDeviceError::DuplicateVaultOwnership {
                         store_id: store_id.to_string(),
@@ -618,6 +615,10 @@ mod tests {
                     keys.members_key.as_str().as_bytes(),
                     &authorizer.public_key(),
                 )?,
+                epoch_update: crate::IdentityVaultDekEpochUpdate::Observe {
+                    key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
+                    checkpoint_ancestors: Vec::new(),
+                },
                 authorized_auth_ids: vec![authorizer.auth_id()],
             },
         )?;

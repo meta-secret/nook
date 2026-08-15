@@ -198,6 +198,18 @@ checkpoint whose trigger is not visible remains pending. A trigger whose
 checkpoint is not visible is not admitted to the local graph. Descendants
 therefore cannot extend an incomplete key transition.
 
+Provider publication may leave the old frontier temporarily appendable.
+
+Any event concurrent with an epoch trigger becomes a blocking security
+conflict.
+
+This includes access grants and ordinary vault mutations.
+
+Provider imports revalidate the complete union inside the same IndexedDB
+transaction that writes event bytes and derived heads.
+
+The transaction serializes imports with local appends and epoch commits.
+
 Provider connect and sync paths must classify the provider event set before
 writing outbox or repair events.
 

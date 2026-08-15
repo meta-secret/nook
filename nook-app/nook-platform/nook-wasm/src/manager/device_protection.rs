@@ -680,8 +680,6 @@ impl NookVaultManager {
     pub async fn reset_device_protection_for_recovery(&mut self) -> Result<(), JsError> {
         self.quiesce_for_local_recovery();
         indexed_db::delete_device_identity_for_recovery().await?;
-        crate::storage::identity_record::delete_identity_directory_for_recovery().await?;
-        indexed_db::clear_sentinel_genesis_finalization_pending().await?;
         auth_providers::delete_auth_providers_db().await?;
         Ok(())
     }

@@ -107,17 +107,65 @@ Do not exclude tests or delete-heavy refactors from the authored estimate.
 
 Do not pad, compress, or mechanically reorganize code to fit the number.
 
+Treat 4,000 authored changed lines as a planning warning.
+
+At that point:
+
+- stop adding unrelated responsibilities;
+- re-estimate the remaining work;
+- identify a stable interface between slices; and
+- prepare an ordered Workbench sequence when the complete slice may cross the
+  hard ceiling.
+
 If the estimate approaches the ceiling, reduce scope before implementation.
 
 If implementation crosses the ceiling, stop expanding that PR.
 
-Remove or defer enough authored changes to return the current PR to 5,000 lines
-or fewer.
+Do not delete, revert, or defer authored work merely to make the number pass.
+
+Preserve the complete implementation before reducing the current PR:
+
+1. Identify the last commit that contains the full work.
+2. Publish a superseding Workbench plan.
+3. Materialize the remaining slices as ordered focused issues.
+4. Create a successor branch from that full-work commit.
+5. Open a linked draft successor pull request.
+6. Link both pull requests in their descriptions and Workbench records.
+7. Inventory every file and behavior removed from the first pull request.
+8. Verify that each item remains present in a linked successor pull request.
+9. Only then reduce the first pull request to 5,000 lines or fewer.
+
+The preservation inventory must use repository evidence.
+
+Useful evidence includes:
+
+- `git diff --numstat` for the removed range;
+- `git diff --name-status` for deleted or restored files;
+- `git range-diff` for rewritten commit sequences; and
+- a Workbench checklist that maps each removed behavior to its successor PR.
+
+Do not claim that code is preserved merely because an old commit remains
+reachable in local Git history.
+
+The successor branch and draft PR are the durable preservation boundary.
 
 Preserve a coherent bounded portion.
 
-Record a superseding plan for every deferred deliverable in the remaining PR
-sequence.
+Complete the first pull request before completing its successor.
+
+After the first pull request merges:
+
+1. Fetch current `origin/main`.
+2. Rebase or merge the successor onto that exact base.
+3. Change the successor base to `main` when it was temporarily stacked.
+4. Re-measure its authored diff.
+5. Continue the normal validation and merge loop.
+
+If the successor is still too large, repeat the same preservation protocol
+before removing any work from it.
+
+A scope-reduction commit without a linked preservation PR is a P1 delivery
+failure.
 
 ### Required plan
 
@@ -164,6 +212,14 @@ Each slice must be:
 - compatible with the previous merged slice;
 - small enough for focused review and repair.
 
+Each split must also preserve implementation continuity.
+
+- The predecessor links every successor.
+- Each successor links its predecessor.
+- Workbench records the same order and dependencies.
+- The feature stays `in_progress` until every required PR merges.
+- Removed tests and documentation count as work that must be preserved.
+
 A slice may prepare an interface or migrate one module before the complete user
 flow is available.
 
@@ -194,6 +250,12 @@ Do not label them optional follow-up work merely because the first pull request
 merged.
 
 Do not keep one long-lived branch for the full sequence.
+
+A temporary preservation branch is allowed while the first PR is open.
+
+It exists only to keep the remaining implementation reviewable and durable.
+
+After the predecessor merges, update the successor from current `origin/main`.
 
 See [issues.md](issues.md#multi-pr-feature-sequences) for Workbench ownership.
 

@@ -233,6 +233,13 @@ const LEGACY_ENVELOPE_VERSION: u32 = 1;
 const ENVELOPE_VERSION: u32 = 2;
 const ENVELOPE_KDF: &str = "scrypt";
 
+/// Whether an envelope can follow a security-epoch key rotation without the
+/// password plaintext.
+#[must_use]
+pub fn password_envelope_supports_key_rewrap(envelope: &PasswordEnvelope) -> bool {
+    envelope.version == ENVELOPE_VERSION
+}
+
 /// Wrap `secrets_key` + `members_key` with a password-derived scrypt key.
 pub fn attach_password_envelope(
     keys: &VaultKeys,
@@ -558,6 +565,17 @@ mod tests {
             attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
         envelope.version = 99;
         assert!(resolve_keys_from_password(&envelope, "correct horse battery staple").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_envelope_requires_explicit_upgrade_before_key_rewrap() -> anyhow::Result<()> {
+        let current = attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
+        let mut legacy = current.clone();
+        legacy.version = LEGACY_ENVELOPE_VERSION;
+
+        assert!(password_envelope_supports_key_rewrap(&current));
+        assert!(!password_envelope_supports_key_rewrap(&legacy));
         Ok(())
     }
 

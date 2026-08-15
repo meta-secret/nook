@@ -5,8 +5,8 @@ use super::{
     EventId, NookError, NookVaultManager, VaultOperation, fetch_drive_event_optional,
     fetch_github_event, fetch_icloud_event, iso_timestamp, list_drive_event_ids,
     list_github_event_ids, list_icloud_event_ids, load_local_event_store, load_signing_seed,
-    put_drive_event_if_absent, put_github_event_if_absent, put_icloud_event_if_absent,
-    save_heads, save_signing_seed,
+    put_drive_event_if_absent, put_github_event_if_absent, put_icloud_event_if_absent, save_heads,
+    save_signing_seed,
 };
 
 fn is_github_event_missing(message: &str) -> bool {
