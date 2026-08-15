@@ -1,5 +1,40 @@
 # AI Agent PR Statistics
 
+## Relationships
+
+- [Reference: Loom tools and static agent workflows](../references/loom-tools.md)
+  - Provides the Reference: Loom tools and static agent workflows operational reference.
+  - Read when using its tools or commands.
+
+## Document map
+
+- [Overview](#overview)
+  - Introduces the document context and its operating assumptions.
+  - Read first before using the detailed guidance.
+- [Lifecycle](#lifecycle)
+  - Describes the ordered workflow and its decision points.
+  - Follow while carrying out this part of the task.
+- [Mechanical entrypoint — Loom](#mechanical-entrypoint--loom)
+  - Lists the supported commands and invocation contract.
+  - Read when operating the documented tooling.
+- [What to measure](#what-to-measure)
+  - Lists the execution, validation, and delivery metrics to record.
+  - Use while maintaining the scratch event log.
+- [Test inventory counting](#test-inventory-counting)
+  - Defines the evidence and checks required for completion.
+  - Use before declaring the work complete.
+- [YAML contract](#yaml-contract)
+  - Defines the supported data or configuration contract.
+  - Read before changing fields, values, or compatibility.
+- [Comparison and required action](#comparison-and-required-action)
+  - Defines regression thresholds and follow-up requirements.
+  - Read when evaluating the assembled statistics.
+- [Workbench publication contract](#workbench-publication-contract)
+  - Defines the post-merge validation and publication procedure.
+  - Follow before publishing a PR statistics record.
+
+## Overview
+
 Every task-owning AI agent must measure the work required to land each normal
 pull request.
 

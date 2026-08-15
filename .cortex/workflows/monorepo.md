@@ -1,5 +1,31 @@
 # Cross-Package Changes
 
+## Relationships
+
+- [Reference: Rust + WebAssembly (wasm-bindgen)](../references/rust-wasm.md)
+  - Provides the Reference: Rust + WebAssembly (wasm-bindgen) operational reference.
+  - Read when using its tools or commands.
+- [Nook Coding Rules & Golden Principles](../rules.md)
+  - Defines the repository-wide engineering rules.
+  - Apply throughout implementation and review.
+- [Coding Bro — Default Agent Workflow](coding-bro.md)
+  - Defines the Coding Bro — Default Agent Workflow workflow referenced here.
+  - Read before performing that workflow.
+- [Pull Request Workflow](pull-requests.md)
+  - Defines the Pull Request Workflow workflow referenced here.
+  - Read before performing that workflow.
+
+## Document map
+
+- [Overview](#overview)
+  - Introduces the document context and its operating assumptions.
+  - Read first before using the detailed guidance.
+- [New vault item type checklist](#new-vault-item-type-checklist)
+  - Defines the Rust-first implementation sequence across packages.
+  - Follow when planning and building a new vault item type.
+
+## Overview
+
 Use this workflow for feature work that touches more than one package.
 
 0. Follow [coding-bro.md](coding-bro.md) — fetch `origin/main`, branch, never push to `main` (see [rules.md](../rules.md) §6).
