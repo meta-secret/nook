@@ -100,6 +100,10 @@ Missing descriptive data must not prevent app-key unlock.
 The local identity directory uses `identity_directory_v1`.
 Its selection is an explicit `Empty` or `Selected(identity_id)` state.
 Updates use one IndexedDB read-write transaction.
+Readers normalize legacy directories that reused one app key across identities.
+They merge the connected identities into the selected identity when possible.
+The same transaction retains every member and vault grant, then rewrites the
+normalized directory before enforcing unique app-key ownership.
 Member records persist both encryption and event-signing public keys.
 Missing signing keys from older records are unavailable, not inferred.
 New Simple-vault genesis requires a verified signing key for every member.

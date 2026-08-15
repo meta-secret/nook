@@ -50,10 +50,27 @@ async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, Nook
         NookError::IndexedDb(format!("Identity directory read error: {error:?}"))
     })?;
     if let Some(value) = current.filter(|value| !value.is_undefined() && !value.is_null()) {
-        let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
+        let persisted_raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
             NookError::IndexedDb(format!("Identity directory value error: {error:?}"))
         })?;
-        let _ = decode_directory(&raw)?;
+        let (directory, migrated) = decode_directory_with_migration(&persisted_raw)?;
+        let raw = if migrated {
+            let normalized = serde_json::to_string(&directory).map_err(|error| {
+                NookError::IndexedDb(format!("Identity directory encode error: {error}"))
+            })?;
+            let normalized_value = serde_wasm_bindgen::to_value(&normalized).map_err(|error| {
+                NookError::IndexedDb(format!("Identity directory value error: {error:?}"))
+            })?;
+            store
+                .put(&normalized_value, Some(&current_id))
+                .await
+                .map_err(|error| {
+                    NookError::IndexedDb(format!("Identity directory write error: {error:?}"))
+                })?;
+            normalized
+        } else {
+            persisted_raw
+        };
         store.delete(legacy_id).await.map_err(|error| {
             NookError::IndexedDb(format!("Legacy identity delete error: {error:?}"))
         })?;
@@ -109,13 +126,18 @@ pub(crate) async fn load_identity_directory() -> Result<nook_core::IdentityDirec
 }
 
 fn decode_directory(raw: &str) -> Result<nook_core::IdentityDirectory, NookError> {
+    decode_directory_with_migration(raw).map(|(directory, _)| directory)
+}
+
+fn decode_directory_with_migration(
+    raw: &str,
+) -> Result<(nook_core::IdentityDirectory, bool), NookError> {
     let directory: nook_core::IdentityDirectory = serde_json::from_str(raw).map_err(|error| {
         NookError::IndexedDb(format!("Identity directory decode error: {error}"))
     })?;
     directory
-        .validate()
-        .map_err(|error| NookError::Database(error.to_string()))?;
-    Ok(directory)
+        .migrate_legacy_duplicate_app_key_ownership()
+        .map_err(|error| NookError::Database(error.to_string()))
 }
 
 pub(crate) async fn update_identity_directory<F, T>(update: F) -> Result<T, NookError>
@@ -342,6 +364,49 @@ mod tests {
             reloaded.selected().map_err(map_domain_error)?.identity_id,
             work_id
         );
+        clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn normalizes_persisted_duplicate_app_key_owners_without_losing_vaults()
+    -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let mut legacy = nook_core::IdentityDirectory::empty();
+        legacy
+            .create_identity("Personal", &app_key, None)
+            .map_err(map_domain_error)?;
+        let store_id = nook_core::generate_store_id().map_err(map_domain_error)?;
+        let expected = legacy
+            .open_or_generate_vault_dek(&app_key, store_id.clone())
+            .map_err(map_domain_error)?;
+        let selected_id = legacy
+            .create_identity("Work", &app_key, None)
+            .map_err(map_domain_error)?;
+        let legacy_raw = serde_json::to_string(&legacy)
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        idb_put_string(IDENTITY_DIRECTORY_KEY, &legacy_raw).await?;
+
+        let mut migrated = load_identity_directory().await?;
+
+        assert_eq!(migrated.identities().len(), 1);
+        assert_eq!(
+            migrated.selected().map_err(map_domain_error)?.identity_id,
+            selected_id
+        );
+        assert_eq!(
+            migrated
+                .open_or_generate_vault_dek(&app_key, store_id)
+                .map_err(map_domain_error)?,
+            expected
+        );
+        let normalized_raw = idb_get_string(IDENTITY_DIRECTORY_KEY)
+            .await?
+            .ok_or_else(|| NookError::IndexedDb("Normalized directory is missing.".to_owned()))?;
+        assert_ne!(normalized_raw, legacy_raw);
+        let normalized: nook_core::IdentityDirectory = serde_json::from_str(&normalized_raw)
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        normalized.validate().map_err(map_domain_error)?;
         clear_identity_directory_for_test().await
     }
 

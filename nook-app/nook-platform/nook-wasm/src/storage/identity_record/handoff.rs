@@ -16,8 +16,6 @@ pub(crate) struct IdentityHandoffCommit<'a> {
 pub(crate) struct ExistingVaultImportCommit {
     pub(crate) device_id: nook_core::DeviceId,
     pub(crate) label: String,
-    pub(crate) secrets_envelope: nook_core::AgeArmoredCiphertext,
-    pub(crate) members_envelope: nook_core::AgeArmoredCiphertext,
 }
 
 struct ExistingVaultHandoff<'a> {
@@ -38,16 +36,17 @@ async fn import_existing_vault_handoff(
     )
     .await?
     .load_graph(input.store_id.as_str())?;
-    if !nook_core::event_graph_has_active_device_access(
+    let envelopes = nook_core::event_graph_active_device_envelopes(
         &graph,
         &input.existing.device_id,
         &input.app_key.public_key(),
         input.signing_public_key,
-    )? {
-        return Err(NookError::Database(
+    )?
+    .ok_or_else(|| {
+        NookError::Database(
             "Imported extension identity is not active in the signed vault roster.".to_owned(),
-        ));
-    }
+        )
+    })?;
     input
         .directory
         .import_legacy_vault(
@@ -55,8 +54,8 @@ async fn import_existing_vault_handoff(
             input.app_key,
             input.store_id.clone(),
             nook_core::IdentityVaultDekReconciliation {
-                secrets_envelope: input.existing.secrets_envelope,
-                members_envelope: input.existing.members_envelope,
+                secrets_envelope: envelopes.secrets_key,
+                members_envelope: envelopes.members_key,
                 authorized_auth_ids: nook_core::event_graph_active_auth_ids(&graph)?,
             },
         )
@@ -238,8 +237,6 @@ mod tests {
             existing_vault: Some(ExistingVaultImportCommit {
                 device_id: fixture.identity.device_id().clone(),
                 label: "Imported".to_owned(),
-                secrets_envelope: fixture.secrets_envelope,
-                members_envelope: fixture.members_envelope,
             }),
         })
         .await;
@@ -254,6 +251,9 @@ mod tests {
         signing_public_key: nook_core::DeviceSigningPublicKey,
         approval_id: nook_core::EventId,
         approval_bytes: Vec<u8>,
+        replacement_id: nook_core::EventId,
+        replacement_bytes: Vec<u8>,
+        replacement_keys: nook_core::VaultKeys,
         revocation_id: nook_core::EventId,
         revocation_bytes: Vec<u8>,
     }
@@ -297,6 +297,35 @@ mod tests {
         let approval_id = approval
             .id()
             .map_err(|error| NookError::Database(error.to_string()))?;
+        let replacement_keys = nook_core::generate_vault_keys().map_err(map_domain_error)?;
+        let replacement_secrets = nook_core::encrypt_for_recipient(
+            replacement_keys.secrets_key.as_str().as_bytes(),
+            &fixture.identity.public_key(),
+        )
+        .map_err(map_domain_error)?;
+        let replacement_members = nook_core::encrypt_for_recipient(
+            replacement_keys.members_key.as_str().as_bytes(),
+            &fixture.identity.public_key(),
+        )
+        .map_err(map_domain_error)?;
+        let (replacement, replacement_bytes) =
+            nook_core::build_signed_event(nook_core::AppendEventInput {
+                store_id: &fixture.store_id,
+                actor_id: &actor_id,
+                signing_identity: &signing,
+                parents: vec![approval_id.clone()],
+                key_epoch: &key_epoch,
+                created_at: &created_at,
+                operations: vec![nook_core::VaultOperation::JoinApproved {
+                    device_id: fixture.identity.device_id().clone(),
+                    encryption_public_key: fixture.identity.public_key(),
+                    signing_public_key: signing_public_key.clone(),
+                    label: nook_core::MemberLabel::from_trusted("Imported".to_owned()),
+                    secrets_key_ciphertext: replacement_secrets,
+                    members_key_ciphertext: replacement_members,
+                }],
+            })
+            .map_err(|error| NookError::Database(error.to_string()))?;
         let (revocation, revocation_bytes) =
             nook_core::build_signed_event(nook_core::AppendEventInput {
                 store_id: &fixture.store_id,
@@ -314,11 +343,56 @@ mod tests {
             signing_public_key,
             approval_id,
             approval_bytes,
+            replacement_id: replacement
+                .id()
+                .map_err(|error| NookError::Database(error.to_string()))?,
+            replacement_bytes,
+            replacement_keys,
             revocation_id: revocation
                 .id()
                 .map_err(|error| NookError::Database(error.to_string()))?,
             revocation_bytes,
         })
+    }
+
+    #[wasm_bindgen_test]
+    async fn handoff_uses_latest_transactional_roster_envelopes() -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        let fixture = import_fixture()?;
+        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
+        let events = signed_access_events(&fixture)?;
+        for (event_id, bytes) in [
+            (&events.approval_id, &events.approval_bytes),
+            (&events.replacement_id, &events.replacement_bytes),
+        ] {
+            event_db::save_event_bytes(fixture.store_id.as_str(), event_id.as_str(), bytes).await?;
+        }
+        let enrollment = crate::manager::PendingExtensionIdentityEnrollment::ExistingVaultImport {
+            store_id: fixture.store_id.clone(),
+        };
+
+        commit_authenticated_identity_handoff(IdentityHandoffCommit {
+            app_key: &fixture.identity,
+            signing_public_key: &events.signing_public_key,
+            authorizer_signing: None,
+            enrollment: &enrollment,
+            signing_seed: None,
+            existing_vault: Some(ExistingVaultImportCommit {
+                device_id: fixture.identity.device_id().clone(),
+                label: "Imported".to_owned(),
+            }),
+        })
+        .await?;
+
+        let mut directory = load_identity_directory().await?;
+        assert_eq!(
+            directory
+                .open_or_generate_vault_dek(&fixture.identity, fixture.store_id.clone())
+                .map_err(map_domain_error)?,
+            events.replacement_keys
+        );
+        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
+        clear_identity_directory_for_test().await
     }
 
     #[wasm_bindgen_test]
@@ -378,8 +452,6 @@ mod tests {
             existing_vault: Some(ExistingVaultImportCommit {
                 device_id: fixture.identity.device_id().clone(),
                 label: "Imported".to_owned(),
-                secrets_envelope: fixture.secrets_envelope.clone(),
-                members_envelope: fixture.members_envelope.clone(),
             }),
         });
         let (revocation_result, handoff_result) =

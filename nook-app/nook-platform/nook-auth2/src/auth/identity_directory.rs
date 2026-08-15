@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{AppKey, IdentityId, IdentityMember, IdentityRecord, StoreId};
 
+mod legacy_migration;
 mod staged_rebase;
 
 /// Explicit identity-selection state. Empty directories cannot have a selection.

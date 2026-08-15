@@ -67,16 +67,6 @@ impl NookVaultManager {
                 "Existing-vault handoff connected a different vault.".to_owned(),
             ));
         }
-        let envelopes = self
-            .vault
-            .meta
-            .auth
-            .get(&identity.auth_id())
-            .ok_or_else(|| {
-                NookError::Database(
-                    "Imported extension encryption key is not active in the vault.".to_owned(),
-                )
-            })?;
         let label = match &self.vault.vault_name {
             super::VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
             _ => "Personal".to_owned(),
@@ -98,8 +88,6 @@ impl NookVaultManager {
                 existing_vault: Some(crate::storage::identity_record::ExistingVaultImportCommit {
                     device_id: identity.device_id().clone(),
                     label,
-                    secrets_envelope: envelopes.secrets_key.clone(),
-                    members_envelope: envelopes.members_key.clone(),
                 }),
             },
         )

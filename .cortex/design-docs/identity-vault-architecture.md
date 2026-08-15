@@ -128,6 +128,14 @@ The directory contains:
 - zero or more `IdentityRecord` values; and
 - an explicit `Empty` or `Selected(identity_id)` state.
 
+Older versions allowed one app key to appear in several identities.
+Load migrates those records in the existing IndexedDB transaction.
+It merges every identity connected by a shared app key.
+The selected identity survives when it belongs to that group.
+All distinct members and vault DEK grants survive the merge.
+The normalized directory is rewritten before unique app-key ownership is
+enforced.
+
 Each identity member stores its X25519 encryption public key and Ed25519 event
 signing public key. Older records decode a missing signing key as unavailable.
 They cannot enter a new signed Simple-vault genesis roster until an authenticated
