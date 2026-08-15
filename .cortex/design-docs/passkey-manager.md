@@ -1,5 +1,37 @@
 # Website Passkey Manager
 
+## Relationships
+
+- [Browser Extension Product Spec](../product-specs/browser-extension.md)
+  - Defines the browser companion's product boundary.
+  - Read when the design affects extension behavior or integration.
+- [Nook Password Manager Specification](../product-specs/password-manager.md)
+  - Defines the password-manager product behavior this design supports.
+  - Read when architecture choices affect user-visible vault behavior.
+- [Vault Event Log](vault-event-log.md)
+  - Defines durable vault events, ordering, and concurrency behavior.
+  - Read when the design changes persistence or synchronization.
+
+## Document map
+
+- [Overview](#overview)
+  - Status: Implemented for Chromium and Simple Vault.
+  - Read before changing or relying on Overview.
+- [Trust and ownership boundaries](#trust-and-ownership-boundaries)
+  - Rust owns request validation, RP/origin matching, ES256 key generation, client data, authenticator data, CBOR attestation,.
+  - Read before changing or relying on Trust and ownership boundaries.
+- [Ceremony rules](#ceremony-rules)
+  - Registration accepts only canonical bounded base64url values and ES256 (-7).
+  - Apply when making or reviewing decisions about Ceremony rules.
+- [Threat model](#threat-model)
+  - Summarizes the structured entries, ownership, and status for Threat model.
+  - Read before changing or relying on Threat model.
+- [Pilot proposals](#pilot-proposals)
+  - Nook Pilot may propose Use passkey when an unlocked vault has confident RP matches, or Create passkey when the page exposes a.
+  - Read before changing or relying on Pilot proposals.
+
+## Overview
+
 **Status:** Implemented for Chromium and Simple Vault.
 
 **Related:** [browser-extension.md](../product-specs/browser-extension.md),

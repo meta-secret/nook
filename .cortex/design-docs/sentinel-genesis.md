@@ -1,5 +1,61 @@
 # Sentinel Genesis and Reverse Onboarding
 
+## Relationships
+
+- [SLIP-0039 Device Quorum Recovery](../product-specs/slip39-recovery.md)
+  - Defines the recovery product contract and user flow.
+  - Read when architecture changes recovery behavior.
+- [Vault Architecture Modes](vault-architecture-modes.md)
+  - Defines the supported vault modes and their ownership boundaries.
+  - Read when selecting or changing a vault operating mode.
+- [Vault Event Log](vault-event-log.md)
+  - Defines durable vault events, ordering, and concurrency behavior.
+  - Read when the design changes persistence or synchronization.
+- [Vault Session, Lock, and Multi-Vault Model](vault-session-and-lock.md)
+  - Defines unlock sessions, lock semantics, and multi-vault state.
+  - Read when the design affects in-memory vault access.
+
+## Document map
+
+- [Overview](#overview)
+  - Status: Implemented across nook-auth2, nook-core, nook-wasm, and the vault-creation UI.
+  - Read before changing or relying on Overview.
+- [Core Decision](#core-decision)
+  - Get started (empty device) presents exactly two owner creation.
+  - Apply when making or reviewing decisions about Core Decision.
+- [Policy Selection](#policy-selection)
+  - The initiator chooses before collecting.
+  - Read before changing or relying on Policy Selection.
+- [Reverse-Onboarding Ceremony](#reverse-onboarding-ceremony)
+  - Each participant first initializes its own protected Nook device identity.
+  - Read before changing the Reverse-Onboarding Ceremony flow or state transitions.
+  - [Round 1: collect participant public keys](#round-1-collect-participant-public-keys)
+    - Device A names an in-memory Sentinel genesis draft, then chooses N and T. Device A starts genesis, which includes its own signed.
+    - Read before changing or relying on Round 1: collect participant public keys.
+  - [Atomic key generation](#atomic-key-generation)
+    - After all participant keys are.
+    - Read before changing or relying on Atomic key generation.
+  - [Round 2: deliver participant shares](#round-2-deliver-participant-shares)
+    - After atomic genesis, Nook presents a distinct encrypted-share delivery for every remote participant.
+    - Read before changing or relying on Round 2: deliver participant shares.
+- [Sentinel Open Invariant](#sentinel-open-invariant)
+  - A Sentinel vault is not openable when fewer than T distinct valid participant contributions are available.
+  - Apply when making or reviewing decisions about Sentinel Open Invariant.
+- [Event Log and Roster Materialization](#event-log-and-roster-materialization)
+  - Atomic Sentinel genesis emits one participant-enrollment operation for every verified participant plus one complete share-issuance operation.
+  - Read before changing or relying on Event Log and Roster Materialization.
+- [Sync and Import](#sync-and-import)
+  - Sync is a post-genesis backup/replication concern for both vault.
+  - Read before changing the Sync and Import flow or state transitions.
+- [Relationship to SLIP-0039 Recovery](#relationship-to-slip-0039-recovery)
+  - Sentinel genesis and device-quorum recovery may reuse the same audited SLIP-0039 primitive, but they are different.
+  - Read before changing the Relationship to SLIP-0039 Recovery flow or state transitions.
+- [Compatibility](#compatibility)
+  - Legacy version-1 Sentinel share records remain readable.
+  - Read before changing or relying on Compatibility.
+
+## Overview
+
 **Status:** Implemented across `nook-auth2`, `nook-core`, `nook-wasm`, and the
 vault-creation UI.
 

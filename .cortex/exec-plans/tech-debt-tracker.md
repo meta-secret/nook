@@ -1,5 +1,22 @@
 # Technical Debt Tracker
 
+## Relationships
+
+- [Typed Newtypes (Domain IDs & Wire Strings)](../design-docs/typed-newtypes.md)
+  - Defines domain identifiers and their wire-string boundaries.
+  - Read before adding or changing an identifier.
+
+## Document map
+
+- [Overview](#overview)
+  - We track known technical debt, version updates, and cleanup tasks to resolve them incrementally.
+  - Read before changing or relying on Overview.
+- [Replace raw String/u32 with domain newtypes](#replace-raw-stringu32-with-domain-newtypes)
+  - Scope: event envelope, projection, and wire types.
+  - Read before changing or relying on Replace raw String/u32 with domain newtypes.
+
+## Overview
+
 We track known technical debt, version updates, and cleanup tasks to resolve them incrementally.
 
 | Debt Item | Package | Context | Status |

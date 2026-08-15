@@ -1,5 +1,58 @@
 # Unified Vault — UI Rollout Plan
 
+## Relationships
+
+- [Unified Vault Architecture](../design-docs/unified-vault.md)
+  - Defines the local canonical vault and provider fan-out model.
+  - Read when changing vault storage or synchronization ownership.
+- [Nook Coding Rules & Golden Principles](../rules.md)
+  - Defines the repository-wide implementation and security constraints.
+  - Apply while turning this design into code.
+
+## Document map
+
+- [Overview](#overview)
+  - Gradual UI migration from provider-as-vault to local-first unified vault with optional sync providers.
+  - Read before changing or relying on Overview.
+- [Principles](#principles)
+  - One page at a time — ship, test, merge each slice before moving on. Keep the app usable — feature-flag or parallel paths during.
+  - Apply when making or reviewing decisions about Principles.
+- [Progress tracker](#progress-tracker)
+  - Summarizes the structured entries, ownership, and status for Progress tracker.
+  - Read when assessing the current state of Progress tracker.
+- [Phase 0 — Foundation (#61)](#phase-0--foundation-61)
+  - Summarizes the structured entries, ownership, and status for Phase 0 — Foundation (#61).
+  - Use while executing or reviewing Phase 0 — Foundation (#61).
+- [Phase 1 — Login gate (#62, #71) ✅](#phase-1--login-gate-62-71-)
+  - Target: Single unlock screen when local vault exists.
+  - Use while executing or reviewing Phase 1 — Login gate (#62, #71) ✅.
+- [Phase 2 — Sync providers (#63, #72) ✅](#phase-2--sync-providers-63-72-)
+  - Summarizes the structured entries, ownership, and status for Phase 2 — Sync providers (#63, #72) ✅.
+  - Use while executing or reviewing Phase 2 — Sync providers (#63, #72) ✅.
+- [Phase 3 — Conflict dialog (#64, #73) ✅](#phase-3--conflict-dialog-64-73-)
+  - Summarizes the structured entries, ownership, and status for Phase 3 — Conflict dialog (#64, #73) ✅.
+  - Use while executing or reviewing Phase 3 — Conflict dialog (#64, #73) ✅.
+- [Phase 4 — Secret vault fan-out (#65, #74) ✅](#phase-4--secret-vault-fan-out-65-74-)
+  - Summarizes the structured entries, ownership, and status for Phase 4 — Secret vault fan-out (#65, #74) ✅.
+  - Use while executing or reviewing Phase 4 — Secret vault fan-out (#65, #74) ✅.
+- [Phase 5 — Onboard (#66, #75) ✅](#phase-5--onboard-66-75-)
+  - Summarizes the structured entries, ownership, and status for Phase 5 — Onboard (#66, #75) ✅.
+  - Use while executing or reviewing Phase 5 — Onboard (#66, #75) ✅.
+- [Phase 6 — Help (#67, #76) ✅](#phase-6--help-67-76-)
+  - Summarizes the structured entries, ownership, and status for Phase 6 — Help (#67, #76) ✅.
+  - Use while executing or reviewing Phase 6 — Help (#67, #76) ✅.
+- [Phase 7 — Join / multi-device (#68, #77) ✅](#phase-7--join--multi-device-68-77-)
+  - Summarizes the structured entries, ownership, and status for Phase 7 — Join / multi-device (#68, #77) ✅.
+  - Use while executing or reviewing Phase 7 — Join / multi-device (#68, #77) ✅.
+- [Phase 8 — Migration & cleanup (#69, #78) ✅](#phase-8--migration--cleanup-69-78-)
+  - Summarizes the structured entries, ownership, and status for Phase 8 — Migration & cleanup (#69, #78) ✅.
+  - Use while executing or reviewing Phase 8 — Migration & cleanup (#69, #78) ✅.
+- [Merge](#merge)
+  - Squash-merge #79 (feat/unified-vault → main) per rules.md §6.
+  - Use while executing or reviewing Merge.
+
+## Overview
+
 Gradual UI migration from **provider-as-vault** to **local-first unified vault** with optional sync providers. Work proceeds page-by-page so each step is reviewable and e2e-testable.
 
 **Related:** [design-docs/unified-vault.md](../design-docs/unified-vault.md).  

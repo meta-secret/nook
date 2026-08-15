@@ -2,27 +2,10 @@
 # Remove a path in the same PR that makes that document compliant.
 .cortex/AGENTS.md
 .cortex/ARCHITECTURE.md
-.cortex/design-docs/agent-workflow-orchestration.md
-.cortex/design-docs/auth-providers.md
-.cortex/design-docs/core-beliefs.md
-.cortex/design-docs/hive-isolated-agent-platform.md
 .cortex/design-docs/identity-vault-architecture.md
-.cortex/design-docs/index.md
-.cortex/design-docs/passkey-manager.md
-.cortex/design-docs/secret-store-identity.md
-.cortex/design-docs/sentinel-genesis.md
-.cortex/design-docs/typed-newtypes.md
-.cortex/design-docs/unified-vault.md
 .cortex/design-docs/vault-architecture-modes.md
 .cortex/design-docs/vault-event-log.md
-.cortex/design-docs/vault-schema-versioning.md
-.cortex/design-docs/vault-session-and-lock.md
 .cortex/dynamic-skills/issue-scope-management.md
-.cortex/exec-plans/completed/cortex-restructure.md
-.cortex/exec-plans/mobile-core-reuse.md
-.cortex/exec-plans/tech-debt-tracker.md
-.cortex/exec-plans/ts-domain-to-rust-remaining.md
-.cortex/exec-plans/unified-vault-ui-rollout.md
 .cortex/product-specs/authenticator-items.md
 .cortex/product-specs/browser-extension.md
 .cortex/product-specs/credit-card-items.md

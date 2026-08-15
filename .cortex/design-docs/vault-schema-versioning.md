@@ -1,5 +1,31 @@
 # Vault Schema Versioning
 
+## Relationships
+
+- [Vault Event Log](vault-event-log.md)
+  - Defines durable vault events, ordering, and concurrency behavior.
+  - Read when the design changes persistence or synchronization.
+
+## Document map
+
+- [Overview](#overview)
+  - Status: Implemented Related:.
+  - Read before changing or relying on Overview.
+- [Decision](#decision)
+  - The immutable event log is the vault source of truth.
+  - Apply when making or reviewing decisions about Decision.
+- [Version axes](#version-axes)
+  - Summarizes the structured entries, ownership, and status for Version axes.
+  - Read before changing or relying on Version axes.
+- [Storage contract](#storage-contract)
+  - Vault creation writes the genesis event directly. Providers store immutable signed events. IndexedDB stores events, outbox entries,.
+  - Read before changing or relying on Storage contract.
+- [Release rule](#release-rule)
+  - Release tags are immutable.
+  - Apply when making or reviewing decisions about Release rule.
+
+## Overview
+
 **Status:** Implemented
 **Related:** [vault-event-log.md](vault-event-log.md)
 
