@@ -226,6 +226,32 @@ test('rejects mapped articles with no body content', () => {
   );
 });
 
+test('does not count an invisible comment as article content', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/comment-only.md',
+    content: `# Comment only
+
+## Relationships
+
+- None.
+
+## Document map
+
+- [Empty article](#empty-article)
+  - Names the empty article.
+  - Read to find the failure.
+
+## Empty article
+
+<!-- TODO: write the article -->
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document]).map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.EmptyArticle,
+  );
+});
+
 test('rejects documents with no content articles after the map', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/no-articles.md',

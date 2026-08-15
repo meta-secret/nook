@@ -251,7 +251,11 @@ function ownedSectionNodes(
 }
 
 function auditArticle(args: AuditArticleArgs): void {
-  if (!args.sectionNodes.some((node) => node.type !== 'heading')) {
+  if (
+    !args.sectionNodes.some(
+      (node) => node.type !== 'heading' && !isInvisibleHtmlComment(node),
+    )
+  ) {
     const findingArgs: AddFindingArgs = {
       findings: args.findings,
       code: CortexArticleFindingCode.EmptyArticle,
