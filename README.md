@@ -89,8 +89,9 @@ values stay masked until revealed. Authenticator items derive the current
 one-time code locally in Rust/WASM and never persist generated codes. Nook also
 includes a secure password generator.
 
-Vault items are append-only in the UI: add, reveal, copy, delete. To change an
-item, add a corrected copy and delete the old one.
+Supported vault items can be edited in place. Replacement validation,
+encryption, and persistence stay in Rust/WASM. Passkey private material remains
+non-editable.
 
 ## Browser extension
 

@@ -1,5 +1,88 @@
 # Nook Coding Rules & Golden Principles
 
+## Relationships
+
+- [Nook Agent Map (Table of Contents)](AGENTS.md)
+  - Routes agents to the authoritative architecture, rules, product context, and workflows.
+  - Read when broader repository context is required.
+- [Typed Newtypes (Domain IDs & Wire Strings)](design-docs/typed-newtypes.md)
+  - Defines domain newtypes that prevent identifier and value confusion across boundaries.
+  - Read before changing the related architecture or security boundary.
+- [Vault Event Log](design-docs/vault-event-log.md)
+  - Defines immutable vault events, ordering, concurrency, and provider synchronization.
+  - Read before changing the related architecture or security boundary.
+- [GitHub-Hosted Execution and Validation](dynamic-skills/github-actions-only-validation.md)
+  - Defines the boundary between local formatting and hosted validation.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Pre-Push Hygiene](dynamic-skills/pre-push-hygiene.md)
+  - Defines formatting and UI-demo checks required before every push.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Reference: Application Logging](references/logging.md)
+  - Defines application, test, and CI logging and troubleshooting evidence.
+  - Consult when the task needs this operational reference.
+- [AI Agent PR Statistics](workflows/agent-statistics.md)
+  - Defines the post-merge agent statistics record and publication workflow.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [CI / GitHub Actions Pipeline](workflows/ci-pipeline.md)
+  - Defines CI entry points, validation ownership, and hosted execution behavior.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Coding Bro — Default Agent Workflow](workflows/coding-bro.md)
+  - Defines the default end-to-end implementation and delivery workflow.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Workbench Issue Management](workflows/issues.md)
+  - Defines focused issue ownership and durable Workbench scope records.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Pull Request Workflow](workflows/pull-requests.md)
+  - Defines pull-request size, validation, readiness, review, and merge requirements.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [Quality and Release](workflows/quality.md)
+  - Defines quality gates and the required response to check findings.
+  - Apply when implementation or delivery reaches this workflow boundary.
+- [GitHub-Hosted Remote Execution](workflows/remote-execution.md)
+  - Defines GitHub-hosted focused validation and remote execution.
+  - Apply when implementation or delivery reaches this workflow boundary.
+
+## Document map
+
+- [Overview](#overview)
+  - Defines repository-wide engineering constraints.
+  - Read first to understand the scope and intent of Overview.
+- [1. Monorepo Architecture & Package Boundaries](#1-monorepo-architecture--package-boundaries)
+  - Requires architecture and public commands to stay synchronized with `README.md`.
+  - Read before changing or relying on 1. Monorepo Architecture & Package Boundaries.
+- [2. Rust-Wasm Boundary Standards](#2-rust-wasm-boundary-standards)
+  - Requires fallible exports to return `Result<T, wasm_bindgen::JsError>`.
+  - Read before changing or relying on 2. Rust-Wasm Boundary Standards.
+- [3. Svelte 5 & TypeScript UI Standards](#3-svelte-5--typescript-ui-standards)
+  - Forbids authored TypeScript and Svelte `null`.
+  - Read before changing the user-facing behavior in 3. Svelte 5 & TypeScript UI Standards.
+- [4. Testing Requirements](#4-testing-requirements)
+  - E2e tests are smoke tests, not a substitute for domain coverage.
+  - Use when adding or validating coverage for 4. Testing Requirements.
+  - [Unit tests carry ~99% of functional coverage](#unit-tests-carry-99-of-functional-coverage)
+    - E2e tests are smoke tests, not a substitute for domain coverage.
+    - Use when adding or validating coverage for Unit tests carry ~99% of functional coverage.
+  - [Every bug fix requires a regression test](#every-bug-fix-requires-a-regression-test)
+    - Finding a root cause is not completion.
+    - Use when adding or validating coverage for Every bug fix requires a regression test.
+  - [Line coverage threshold (90%)](#line-coverage-threshold-90)
+    - Requires the portable Rust workspace to maintain at least 90 percent line coverage.
+    - Read before changing or relying on Line coverage threshold (90%).
+- [5. Pinned Dependencies & Tooling Constraints](#5-pinned-dependencies--tooling-constraints)
+  - Requires standard exact dependency versions.
+  - Read before changing or relying on 5. Pinned Dependencies & Tooling Constraints.
+  - [Dockerfile cache mounts — never use them](#dockerfile-cache-mounts--never-use-them)
+    - Forbids Dockerfile cache mounts because sealed layers and remote cache scopes own build reuse.
+    - Read before changing or relying on Dockerfile cache mounts — never use them.
+  - [Docker daemon — never kill it](#docker-daemon--never-kill-it)
+    - Forbids killing or resetting the shared Docker daemon during repository work.
+    - Read before changing or relying on Docker daemon — never kill it.
+- [6. Git & Pull Request Workflow](#6-git--pull-request-workflow)
+  - Never push directly to main.
+  - Apply before branching, pushing, validating, or merging repository work.
+
+## Overview
+
 This document defines the strict development standards, architectural boundaries, and validation requirements for the Nook monorepo. All changes must comply with these guidelines.
 
 ---
