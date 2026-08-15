@@ -53,11 +53,19 @@ impl IdentityDirectory {
     pub fn validate(&self) -> MultiDeviceResult<()> {
         let mut ids = HashSet::with_capacity(self.identities.len());
         let mut vaults = HashSet::new();
+        let mut app_ids = HashSet::new();
         for record in &self.identities {
             if !ids.insert(record.identity_id.clone()) {
                 return Err(MultiDeviceError::DuplicateIdentity {
                     identity_id: record.identity_id.to_string(),
                 });
+            }
+            for member in &record.members {
+                if !app_ids.insert(&member.app_id) {
+                    return Err(MultiDeviceError::DuplicateAppKeyOwnership {
+                        app_id: member.app_id.to_string(),
+                    });
+                }
             }
             for store_id in record.vault_deks.iter().map(|vault| &vault.store_id) {
                 if !vaults.insert(store_id) {

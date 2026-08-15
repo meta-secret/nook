@@ -234,7 +234,8 @@ mod tests {
                 .await?
                 .is_none()
         );
-        super::super::clear_identity_directory_for_test().await
+        super::super::clear_identity_directory_for_test().await?;
+        super::super::idb_delete_key(crate::storage::event_db::SIGNING_SEED_KEY).await
     }
 
     #[wasm_bindgen_test]

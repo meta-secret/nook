@@ -135,4 +135,22 @@ mod tests {
         ));
         Ok(())
     }
+
+    #[test]
+    fn rebase_rejects_app_key_added_to_another_identity() -> anyhow::Result<()> {
+        let owner = AppKey::generate()?;
+        let overlapping = AppKey::generate()?;
+        let mut base = IdentityDirectory::empty();
+        let identity_id = base.create_identity("Personal", &owner, None)?;
+        let mut candidate = base.clone();
+        candidate.enroll_selected_app_key_for_vault_creation(&overlapping, "Personal")?;
+        let mut current = base.clone();
+        current.create_identity("Work", &overlapping, None)?;
+
+        assert!(matches!(
+            current.rebase_staged_vault_creation(&base, &candidate, &identity_id),
+            Err(MultiDeviceError::DuplicateAppKeyOwnership { .. })
+        ));
+        Ok(())
+    }
 }

@@ -21,6 +21,7 @@ impl NookVaultManager {
                     &pending.enrollment,
                     PendingExtensionIdentityEnrollment::VaultCreation { .. }
                         | PendingExtensionIdentityEnrollment::PairedVault { .. }
+                        | PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
                 )
             })
     }
@@ -58,6 +59,28 @@ impl NookVaultManager {
             return Ok(());
         }
         let identity = self.device_identity()?;
+        let store_id = self
+            .pending_existing_vault_import()
+            .ok_or_else(|| NookError::Database("Existing-vault handoff disappeared.".to_owned()))?;
+        if self.vault.store_id != store_id.as_str() {
+            return Err(NookError::Database(
+                "Existing-vault handoff connected a different vault.".to_owned(),
+            ));
+        }
+        let envelopes = self
+            .vault
+            .meta
+            .auth
+            .get(&identity.auth_id())
+            .ok_or_else(|| {
+                NookError::Database(
+                    "Imported extension encryption key is not active in the vault.".to_owned(),
+                )
+            })?;
+        let label = match &self.vault.vault_name {
+            super::VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
+            _ => "Personal".to_owned(),
+        };
         let pending = self
             .device
             .pending_extension_handoff
@@ -72,43 +95,16 @@ impl NookVaultManager {
                 signing_seed: pending
                     .persist_signing_seed
                     .then_some(self.event_log.signing_seed.as_str()),
+                existing_vault: Some(crate::storage::identity_record::ExistingVaultImportCommit {
+                    device_id: identity.device_id().clone(),
+                    label,
+                    secrets_envelope: envelopes.secrets_key.clone(),
+                    members_envelope: envelopes.members_key.clone(),
+                }),
             },
         )
         .await?;
         self.device.pending_extension_handoff = None;
         Ok(())
-    }
-
-    pub(in crate::manager) async fn validate_existing_vault_import_handoff(
-        &self,
-    ) -> Result<(), NookError> {
-        let Some(store_id) = self.pending_existing_vault_import() else {
-            return Ok(());
-        };
-        if self.vault.store_id != store_id.as_str() {
-            return Err(NookError::Database(
-                "Existing-vault handoff connected a different vault.".to_owned(),
-            ));
-        }
-        let identity = self.device_identity()?;
-        let pending = self
-            .device
-            .pending_extension_handoff
-            .as_ref()
-            .ok_or_else(|| NookError::Database("Identity handoff disappeared.".to_owned()))?;
-        let graph = crate::storage::event_db::load_local_event_store(store_id.as_str())
-            .await?
-            .load_graph(store_id.as_str())?;
-        if nook_core::event_graph_has_active_device_access(
-            &graph,
-            identity.device_id(),
-            &identity.public_key(),
-            &pending.signing_public_key,
-        )? {
-            return Ok(());
-        }
-        Err(NookError::Database(
-            "Imported extension identity is not active in the signed vault roster.".to_owned(),
-        ))
     }
 }

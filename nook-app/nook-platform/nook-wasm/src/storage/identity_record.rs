@@ -236,6 +236,70 @@ pub(crate) struct IdentityHandoffCommit<'a> {
         Option<&'a (nook_core::AppId, nook_core::DeviceSigningPublicKey)>,
     pub(crate) enrollment: &'a crate::manager::PendingExtensionIdentityEnrollment,
     pub(crate) signing_seed: Option<&'a str>,
+    pub(crate) existing_vault: Option<ExistingVaultImportCommit>,
+}
+
+pub(crate) struct ExistingVaultImportCommit {
+    pub(crate) device_id: nook_core::DeviceId,
+    pub(crate) label: String,
+    pub(crate) secrets_envelope: nook_core::AgeArmoredCiphertext,
+    pub(crate) members_envelope: nook_core::AgeArmoredCiphertext,
+}
+
+struct ExistingVaultHandoff<'a> {
+    directory: &'a mut nook_core::IdentityDirectory,
+    events: &'a rexie::Store,
+    store_id: &'a nook_core::StoreId,
+    app_key: &'a nook_core::AppKey,
+    signing_public_key: &'a nook_core::DeviceSigningPublicKey,
+    existing: ExistingVaultImportCommit,
+}
+
+async fn import_existing_vault_handoff(
+    input: ExistingVaultHandoff<'_>,
+) -> Result<nook_core::IdentityId, NookError> {
+    let graph = crate::storage::event_db::load_local_event_store_from_store(
+        input.events,
+        input.store_id.as_str(),
+    )
+    .await?
+    .load_graph(input.store_id.as_str())?;
+    if !nook_core::event_graph_has_active_device_access(
+        &graph,
+        &input.existing.device_id,
+        &input.app_key.public_key(),
+        input.signing_public_key,
+    )? {
+        return Err(NookError::Database(
+            "Imported extension identity is not active in the signed vault roster.".to_owned(),
+        ));
+    }
+    input
+        .directory
+        .import_legacy_vault(
+            &input.existing.label,
+            input.app_key,
+            input.store_id.clone(),
+            nook_core::IdentityVaultDekReconciliation {
+                secrets_envelope: input.existing.secrets_envelope,
+                members_envelope: input.existing.members_envelope,
+                authorized_auth_ids: nook_core::event_graph_active_auth_ids(&graph)?,
+            },
+        )
+        .map_err(map_domain_error)
+}
+
+fn handoff_store_names(
+    enrollment: &crate::manager::PendingExtensionIdentityEnrollment,
+) -> &'static [&'static str] {
+    if matches!(
+        enrollment,
+        crate::manager::PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
+    ) {
+        &["vault", "events"]
+    } else {
+        &["vault"]
+    }
 }
 
 /// Commit the identity-directory membership and its matching event signer in
@@ -246,7 +310,10 @@ pub(crate) async fn commit_authenticated_identity_handoff(
     let _ = load_identity_directory().await?;
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .transaction(
+            handoff_store_names(input.enrollment),
+            rexie::TransactionMode::ReadWrite,
+        )
         .map_err(|error| NookError::IndexedDb(format!("Handoff transaction error: {error:?}")))?;
     let store = transaction.store("vault").map_err(|error| {
         NookError::IndexedDb(format!("Handoff transaction store error: {error:?}"))
@@ -279,17 +346,21 @@ pub(crate) async fn commit_authenticated_identity_handoff(
             .enroll_app_key_for_owned_vault(authorizer, input.app_key, store_id)
             .map_err(map_domain_error)?,
         crate::manager::PendingExtensionIdentityEnrollment::ExistingVaultImport { store_id } => {
-            directory
-                .validate_vault_enrollment(input.app_key, store_id)
-                .map_err(map_domain_error)?;
-            directory
-                .identities()
-                .iter()
-                .find(|identity| identity.owns_vault(store_id))
-                .map(|identity| identity.identity_id.clone())
-                .ok_or_else(|| {
-                    NookError::Database(format!("Imported identity does not own vault {store_id}."))
-                })?
+            let existing = input.existing_vault.ok_or_else(|| {
+                NookError::Database("Existing-vault handoff material is missing.".to_owned())
+            })?;
+            let events = transaction.store("events").map_err(|error| {
+                NookError::IndexedDb(format!("Handoff event store error: {error:?}"))
+            })?;
+            import_existing_vault_handoff(ExistingVaultHandoff {
+                directory: &mut directory,
+                events: &events,
+                store_id,
+                app_key: input.app_key,
+                signing_public_key: input.signing_public_key,
+                existing,
+            })
+            .await?
         }
     };
     directory
@@ -495,46 +566,50 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    async fn existing_import_handoff_commits_signer_after_vault_ownership() -> Result<(), NookError>
-    {
+    async fn existing_import_handoff_rejects_before_publishing_without_active_roster()
+    -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
-        let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let identity = nook_core::DeviceIdentity::generate().map_err(map_domain_error)?;
         let signing_public_key = nook_core::DeviceSigningPublicKey::parse(&"22".repeat(32))
             .map_err(|error| NookError::Database(error.to_string()))?;
         let store_id = nook_core::generate_store_id().map_err(map_domain_error)?;
-        let owner_key = app_key.clone();
-        let owner_store_id = store_id.clone();
-        update_identity_directory(move |directory| {
-            let identity_id = directory
-                .create_identity("Imported", &owner_key, None)
-                .map_err(map_domain_error)?;
-            directory
-                .open_or_generate_vault_dek_for_identity(&identity_id, &owner_key, owner_store_id)
-                .map_err(map_domain_error)?;
-            Ok(())
-        })
-        .await?;
+        let mut material = nook_core::IdentityDirectory::empty();
+        let identity_id = material
+            .create_identity("Imported", &identity, None)
+            .map_err(map_domain_error)?;
+        let _ = material
+            .open_or_generate_vault_dek_for_identity(&identity_id, &identity, store_id.clone())
+            .map_err(map_domain_error)?;
+        let grant = &material.selected().map_err(map_domain_error)?.vault_deks[0];
+        let secrets_envelope = grant.secrets_envelopes[0].envelope.clone();
+        let members_envelope = grant.members_envelopes[0].envelope.clone();
         let enrollment = crate::manager::PendingExtensionIdentityEnrollment::ExistingVaultImport {
             store_id: store_id.clone(),
         };
         let signing_seed = "33".repeat(32);
 
-        commit_authenticated_identity_handoff(IdentityHandoffCommit {
-            app_key: &app_key,
+        let result = commit_authenticated_identity_handoff(IdentityHandoffCommit {
+            app_key: &identity,
             signing_public_key: &signing_public_key,
             authorizer_signing: None,
             enrollment: &enrollment,
             signing_seed: Some(&signing_seed),
+            existing_vault: Some(ExistingVaultImportCommit {
+                device_id: identity.device_id().clone(),
+                label: "Imported".to_owned(),
+                secrets_envelope,
+                members_envelope,
+            }),
         })
-        .await?;
+        .await;
 
+        assert!(result.is_err());
         let directory = load_identity_directory().await?;
-        let selected = directory.selected().map_err(map_domain_error)?;
-        assert!(selected.owns_vault(&store_id));
-        assert_eq!(selected.members[0].signing_public_key, signing_public_key);
-        assert_eq!(
-            crate::storage::event_db::load_signing_seed().await?,
-            Some(signing_seed)
+        assert!(directory.identities().is_empty());
+        assert!(
+            crate::storage::event_db::load_signing_seed()
+                .await?
+                .is_none()
         );
         clear_identity_directory_for_test().await?;
         idb_delete_key(crate::storage::event_db::SIGNING_SEED_KEY).await

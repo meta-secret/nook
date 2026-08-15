@@ -171,6 +171,50 @@ pub(crate) async fn load_local_event_store(store_id: &str) -> Result<LocalEventS
     Ok(local)
 }
 
+/// Load one vault graph from an already-open `events` store.
+///
+/// Callers use this inside a multi-store transaction when authorization
+/// evidence and the resulting security-state write must be one linearizable
+/// operation.
+pub(crate) async fn load_local_event_store_from_store(
+    store: &rexie::Store,
+    store_id: &str,
+) -> Result<LocalEventStore, NookError> {
+    let mut local = LocalEventStore::new();
+    let index_key = serde_wasm_bindgen::to_value(&format!("event_index:{store_id}"))
+        .map_err(|error| NookError::IndexedDb(format!("Event index key error: {error:?}")))?;
+    let Some(index_value) = store
+        .get(index_key)
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Event index read error: {error:?}")))?
+        .filter(|value| !value.is_undefined() && !value.is_null())
+    else {
+        return Ok(local);
+    };
+    let index_json: String = serde_wasm_bindgen::from_value(index_value)
+        .map_err(|error| NookError::IndexedDb(format!("Event index decode error: {error:?}")))?;
+    let ids: Vec<String> = serde_json::from_str(&index_json)
+        .map_err(|error| NookError::Serialization(error.to_string()))?;
+    for raw_id in ids {
+        let key = serde_wasm_bindgen::to_value(&event_key(store_id, &raw_id))
+            .map_err(|error| NookError::IndexedDb(format!("Event key error: {error:?}")))?;
+        let Some(value) = store
+            .get(key)
+            .await
+            .map_err(|error| NookError::IndexedDb(format!("Event read error: {error:?}")))?
+            .filter(|value| !value.is_undefined() && !value.is_null())
+        else {
+            continue;
+        };
+        let bytes: String = serde_wasm_bindgen::from_value(value)
+            .map_err(|error| NookError::IndexedDb(format!("Event decode error: {error:?}")))?;
+        if let Ok(event_id) = EventId::parse(&raw_id) {
+            local.put_event(event_id, bytes.into_bytes());
+        }
+    }
+    Ok(local)
+}
+
 /// Drop a vault's local event-log projection (events, heads, epoch).
 ///
 /// Used when an extension pairing import rejects access so a poisoned or

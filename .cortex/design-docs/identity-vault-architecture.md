@@ -143,16 +143,21 @@ Extension identity adoption remains staged through vault initialization.
 - Completion compares the marker's base directory with the current directory.
 - A match publishes the candidate directory and signing seed atomically.
 - The same transaction removes the completed marker.
-- A concurrent directory update aborts publication and retains the marker.
-- The concurrent directory update remains intact.
+- Unrelated concurrent identity and selection changes are retained during a
+  typed three-way rebase.
+- A concurrent change to the staged identity aborts publication.
+- Cross-identity app-key overlap also aborts publication.
+- A rejected marker remains available for retry.
 - A retry resumes the retained candidate instead of losing ownership state.
 - Failed creation clears decrypted host state and stops background sync.
 - Failed creation does not rewind event stores or active identity state.
 
-Existing-vault imports use a distinct pending handoff state. Verified connect
-first synthesizes the vault owner from active signed envelopes. It then verifies
-the extension signing key against the active event roster. The final transaction
-commits the member signer and adopted signing seed.
+Existing-vault imports use a distinct pending handoff state.
+
+Verified connect first validates the extension encryption and signing keys
+against the active signed event roster. One transaction binds that roster
+snapshot to ownership synthesis. The transaction then commits the identity
+member signer and adopted signing seed.
 Legacy-vault reconciliation derives DEK recipients from the signed event
 graph's active approvals after revocations, not from stale encrypted auth rows.
 

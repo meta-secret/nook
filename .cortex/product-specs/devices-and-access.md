@@ -113,7 +113,9 @@ Current readers reject conflicting current and legacy staged state.
 The marker is durable before event creation and survives reloads.
 Successful verified connect publishes the staged directory and matching signing
 seed, then removes the marker in one compare-and-write transaction.
-Concurrent identity changes fail closed and are never overwritten.
+Unrelated concurrent identity and selection changes survive a typed three-way
+rebase. A concurrent change to the staged identity fails closed.
+Cross-identity app-key overlap also fails closed.
 The staged marker remains durable so publication can retry without losing the
 candidate directory or signing state.
 Legacy records without `createdAt` use the Unix epoch timestamp.
@@ -130,9 +132,10 @@ Legacy plaintext seed migration performs that verification before sealing.
 Failed extension-first creation leaves active identity state unchanged.
 Pre-event attempts remain staged; pinned or partially written genesis resumes
 from the same marker. Decrypted UI state and sync are cleared before the failure
-is shown. Existing-vault imports use a separate pending state and publish only
-after verified connect establishes the owning identity and validates the active
-signed roster.
+is shown.
+Existing-vault imports use a separate pending state. One transaction validates
+the active signed roster, synthesizes identity ownership, and commits the member
+signer and adopted signing seed.
 Legacy-vault DEK reconciliation uses only active signed event approvals after
 revocation replay.
 
