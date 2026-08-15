@@ -128,6 +128,27 @@ The directory contains:
 - zero or more `IdentityRecord` values; and
 - an explicit `Empty` or `Selected(identity_id)` state.
 
+Older versions allowed one app key to appear in several identities.
+Load migrates those records in the existing IndexedDB transaction.
+It merges every identity connected by a shared app key.
+The selected identity survives when it belongs to that group.
+An identity referenced by `pending_simple_genesis_v1` takes precedence over
+the selection so a resumable genesis marker cannot become orphaned.
+When the marker is staged, the same transaction normalizes its base and
+candidate directory snapshots before rewriting the live directory.
+Cleanup repeats that snapshot migration when either the live directory or the
+staged base contains legacy duplicate ownership. Duplicate ownership introduced
+only by the candidate remains invalid and is rejected.
+Every later directory update repeats this marker-aware migration within its
+write transaction. Authenticated handoff and staged genesis cleanup preserve the
+pending identity inside their transactions. A concurrent pre-upgrade writer
+cannot absorb the pending identity between preflight migration and mutation.
+All distinct members and vault DEK grants survive the merge.
+The normalized directory is rewritten before unique app-key ownership is
+enforced.
+A valid directory without duplicate app-key ownership remains usable without
+decoding a malformed or future pending-genesis marker.
+
 Each identity member stores its X25519 encryption public key and Ed25519 event
 signing public key. Older records decode a missing signing key as unavailable.
 They cannot enter a new signed Simple-vault genesis roster until an authenticated
@@ -145,8 +166,11 @@ handoff or the local signer supplies that public key.
     completion.
   - Publish the staged directory and matching signing seed, then remove the
     marker atomically.
-  - Fail closed when a concurrent identity update makes the base directory
-    stale instead of rewinding that update.
+  - Retain unrelated concurrent identity and selection changes through a typed
+    three-way rebase.
+  - Abort publication when the staged identity changed concurrently or app-key
+    ownership overlaps another identity.
+  - Retain a rejected marker so retry resumes the same candidate.
   - After a failed create, clear decrypted host state and stop background sync
     without rolling back event stores or active identity state.
 - **Existing-vault import:**
@@ -154,7 +178,21 @@ handoff or the local signer supplies that public key.
   - During verified connect, synthesize the vault owner from active signed
     envelopes and verify the extension signing key against the active event
     roster.
+  - If the authorized app key already belongs to an identity, add the imported
+    vault grant to that identity rather than synthesizing a duplicate owner.
+  - Reject the roster snapshot if its event index names a missing event or an
+    invalid event ID.
+  - Reject matching event rows absent from the index. This closes the
+    pre-upgrade two-transaction writer window before authorization is trusted.
+  - Parse every event row and require its computed event ID to match the index
+    and row key before treating it as authorization evidence.
+  - Reject a graph with pending events. A known revocation awaiting a missing
+    parent must not leave an older approval usable for handoff.
   - Commit the member signer and adopted signing seed atomically.
+  - Return the transactionally selected DEKs and install them in the live vault
+    session before clearing the pending handoff.
+  - Validate a staged candidate before both unchanged-base publication and
+    three-way rebase publication.
 - **Legacy-vault reconciliation:** Derive DEK recipients from the signed event
   graph's active approvals after revocations, not from stale encrypted auth
   rows.
@@ -162,10 +200,13 @@ handoff or the local signer supplies that public key.
 Simple vault creation uses the following marker contract:
 
 - Store `pending_simple_genesis_v1` in IndexedDB before any event-log state.
-- Record `storeId`, `identityId`, `createdAt`, `eventState`, and an optional
-  `stagedIdentity` transaction payload.
-  - The payload carries the base directory and inactive candidate directory
+- Record `storeId`, `identityId`, `createdAt`, `eventState`, and `flow`.
+  - `flow` is explicitly `ordinary` or `staged`.
+  - The staged flow carries the base directory and inactive candidate directory
     with identity-owned DEK envelopes.
+  - Writers also emit the legacy `stagedIdentity` projection for already-open
+    tabs.
+  - Reject conflicting current and legacy staged state.
 - Resume the same store and identity binding after a reload.
 - Remove the marker with a compare-and-delete transaction after verified
   connect completes.

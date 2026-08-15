@@ -306,6 +306,7 @@ impl NookVaultManager {
                 authorizer_signing: pending.authorizer_signing.as_ref(),
                 enrollment: &pending.enrollment,
                 signing_seed,
+                existing_vault: None,
             },
         )
         .await?;

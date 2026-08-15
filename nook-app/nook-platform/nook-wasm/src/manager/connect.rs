@@ -13,6 +13,7 @@ use crate::NookError;
 use crate::NookSecretRecord;
 use crate::conversion::{LoadedVault, access_status_for_vault_content, content_requires_genesis};
 use crate::storage::event_db::load_local_event_store;
+use crate::storage::identity_record::PendingSimpleGenesis;
 use crate::storage::indexed_db::load_vault_local_cache;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -78,6 +79,55 @@ mod tests {
         assert!(discovered.is_empty());
         assert!(manager.vault.store_id.is_empty());
         assert!(matches!(manager.vault.vault_name, VaultNameState::Unnamed));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn paired_reconciliation_keeps_directory_unchanged_until_commit() -> Result<(), JsError> {
+        crate::storage::identity_record::clear_identity_directory_for_test().await?;
+        let authorizer = nook_core::AppKey::generate()?;
+        let extension = nook_core::AppKey::generate()?;
+        let store_id = nook_core::generate_store_id()?;
+        let owner_key = authorizer.clone();
+        let owner_store = store_id.clone();
+        crate::storage::identity_record::update_identity_directory(move |directory| {
+            let owner_id = directory.create_identity("Personal", &owner_key, None)?;
+            let _ = directory.open_or_generate_vault_dek_for_identity(
+                &owner_id,
+                &owner_key,
+                owner_store,
+            )?;
+            Ok(())
+        })
+        .await?;
+
+        let (signing, signing_seed) = nook_core::SigningIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.device.id = extension.device_id().as_str().to_owned();
+        manager.device.identity_private_key = extension.secret_string().into_inner();
+        manager.vault.store_id = store_id.to_string();
+        manager.device.pending_extension_handoff = Some(
+            super::super::device_protection::PendingExtensionIdentityHandoff {
+                enrollment: super::super::PendingExtensionIdentityEnrollment::PairedVault {
+                    authorizer,
+                    store_id,
+                },
+                authorizer_signing: None,
+                signing_public_key: signing.public_key(),
+                handoff_signing_seed: signing_seed.as_str().to_owned(),
+                persist_signing_seed: false,
+                previous_session_signing_seed: String::new(),
+            },
+        );
+
+        manager.ensure_identity_after_connect(&extension).await?;
+        let deferred = crate::storage::identity_record::load_identity_directory().await?;
+        assert!(deferred.identity_for_app_key(&extension)?.is_none());
+
+        manager.commit_extension_identity_handoff().await?;
+        let committed = crate::storage::identity_record::load_identity_directory().await?;
+        assert!(committed.identity_for_app_key(&extension)?.is_some());
+        crate::storage::identity_record::clear_identity_directory_for_test().await?;
         Ok(())
     }
 }
@@ -320,7 +370,7 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         let staged_genesis = pending_cleanup
             .as_ref()
-            .is_some_and(|pending| pending.staged_identity.is_some());
+            .is_some_and(PendingSimpleGenesis::is_staged);
         if !staged_genesis {
             self.ensure_identity_after_connect(identity).await?;
         }
@@ -328,17 +378,18 @@ impl NookVaultManager {
         let Some(completed) = pending_cleanup else {
             return Ok(());
         };
-        let staged_handoff = completed.staged_identity.is_some();
-        crate::storage::identity_record::clear_pending_simple_genesis(
-            crate::storage::identity_record::SimpleGenesisCompletion {
+        let staged_handoff = completed.is_staged();
+        let completion = if staged_handoff {
+            crate::storage::identity_record::SimpleGenesisCompletion::Staged {
                 pending: &completed,
-                staged_signing_seed: completed
-                    .staged_identity
-                    .as_ref()
-                    .map(|_| self.event_log.signing_seed.as_str()),
-            },
-        )
-        .await?;
+                signing_seed: self.event_log.signing_seed.as_str(),
+            }
+        } else {
+            crate::storage::identity_record::SimpleGenesisCompletion::Ordinary {
+                pending: &completed,
+            }
+        };
+        crate::storage::identity_record::clear_pending_simple_genesis(completion).await?;
         if staged_handoff {
             self.device.pending_extension_handoff = None;
         }
@@ -350,7 +401,7 @@ impl NookVaultManager {
         &mut self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
-        if self.pending_vault_creation_handoff().is_some() {
+        if self.defers_identity_reconciliation_until_handoff() {
             return Ok(());
         }
         let label = match &self.vault.vault_name {
@@ -563,7 +614,7 @@ impl NookVaultManager {
             crate::storage::identity_record::begin_or_resume_simple_genesis(identity, &label)
                 .await?;
         self.vault.store_id = pending.store_id.to_string();
-        if let Some(staged) = &pending.staged_identity {
+        if let Some(staged) = pending.staged_identity() {
             let mut directory = staged.directory.clone();
             let keys = directory
                 .open_or_generate_vault_dek_for_identity(

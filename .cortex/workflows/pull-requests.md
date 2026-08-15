@@ -122,7 +122,8 @@
   - Do not stop at push.
 - Apply this workflow only to the current task's owned feature and focused
   issues.
-- Treat another active task's branch and pull request as read-only.
+- Another active task's branch and pull request are read-only without an explicit
+  handoff.
 
 Without an explicit handoff, do not:
 
@@ -215,12 +216,44 @@ Report these separately because they do not represent authored functionality:
 
 - Do not exclude tests or delete-heavy refactors from the authored estimate.
 - Do not pad, compress, or mechanically reorganize code to fit the number.
-- When the estimate approaches the ceiling, reduce scope before implementation.
-- When implementation crosses the ceiling:
-  1. stop expanding the PR;
-  2. remove or defer enough authored changes to return to 5,000 lines or fewer;
-  3. preserve one coherent bounded portion; and
-  4. record a superseding plan for every deferred deliverable.
+- Treat 4,000 authored changed lines as a mandatory split-planning warning.
+- Stop implementation and re-estimate the complete requested outcome.
+- If the remaining work may cross the ceiling, define at least two semantic PR
+  slices in Workbench before continuing.
+- Each slice owns complete capabilities or module responsibilities together
+  with their tests and documentation.
+- If implementation crosses the ceiling, stop expanding that PR.
+- Do not optimize the current diff to make the number pass.
+- Compression, test removal, documentation removal, completed-behavior deletion,
+  and cosmetic churn are not scope management.
+
+Before changing the first PR after the re-estimate requires a split, or after
+implementation crosses the ceiling:
+
+1. Identify the last full-work commit and publish a superseding Workbench plan.
+2. Divide the complete outcome along domain, capability, package, layer, or
+   stable-interface boundaries.
+3. Materialize every slice as an ordered focused issue.
+4. Record which complete implementation, tests, migrations, and documentation
+   belong to each slice.
+5. Branch the successor from the full-work commit and open it as a linked draft
+   PR before changing the first PR.
+6. Cross-link all PR descriptions and Workbench records.
+7. Prove every file and behavior exists in the ordered PR sequence, using the
+   Workbench checklist plus `numstat`, `name-status`, or `range-diff` evidence.
+8. Rebuild the first PR as the smallest independently useful semantic slice.
+
+Sequence rules:
+
+- Local Git history is not preservation; a linked draft successor is.
+- Preserve a coherent bounded capability, not a line-count-selected portion.
+- Complete the first PR before its successor.
+- After the first PR merges, update the successor from `origin/main`, change its
+  temporary stacked base to `main`, re-measure, and validate.
+- Continue until the complete Workbench outcome is merged.
+- The same agent owns every PR in the declared sequence unless Workbench records
+  an explicit owner handoff.
+- Scope reduction without a linked preservation PR is a P1 delivery failure.
 
 ### Required plan
 

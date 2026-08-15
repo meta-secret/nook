@@ -100,6 +100,14 @@ The feature `README.md` must record:
 - feature-level acceptance criteria;
 - current completion status.
 
+For a split, record the full-work commit, semantic boundary, ordered PR links,
+completing owner, and preservation checklist before changing the first PR.
+
+The preservation checklist must map implementation, tests, migrations, and
+documentation to a named PR slice.
+
+Line-count optimization is not a valid split strategy.
+
 - Each focused issue owns one cohesive module, package, layer, or architectural
   responsibility.
 - Each issue normally maps to one pull request.

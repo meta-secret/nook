@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{AppKey, IdentityId, IdentityMember, IdentityRecord, StoreId};
 
+mod legacy_migration;
+mod staged_rebase;
+
 /// Explicit identity-selection state. Empty directories cannot have a selection.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", content = "identityId", rename_all = "kebab-case")]
@@ -51,11 +54,19 @@ impl IdentityDirectory {
     pub fn validate(&self) -> MultiDeviceResult<()> {
         let mut ids = HashSet::with_capacity(self.identities.len());
         let mut vaults = HashSet::new();
+        let mut app_ids = HashSet::new();
         for record in &self.identities {
             if !ids.insert(record.identity_id.clone()) {
                 return Err(MultiDeviceError::DuplicateIdentity {
                     identity_id: record.identity_id.to_string(),
                 });
+            }
+            for member in &record.members {
+                if !app_ids.insert(&member.app_id) {
+                    return Err(MultiDeviceError::DuplicateAppKeyOwnership {
+                        app_id: member.app_id.to_string(),
+                    });
+                }
             }
             for store_id in record.vault_deks.iter().map(|vault| &vault.store_id) {
                 if !vaults.insert(store_id) {
@@ -136,6 +147,18 @@ impl IdentityDirectory {
                 &reconciliation,
             )?;
             let identity_id = self.identities[index].identity_id.clone();
+            self.selection = IdentitySelection::Selected(identity_id.clone());
+            return Ok(identity_id);
+        }
+        if let Some(identity_id) = self.identity_for_app_key(app_key)? {
+            let identity = self
+                .identities
+                .iter_mut()
+                .find(|identity| identity.identity_id == identity_id)
+                .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                    identity_id: identity_id.to_string(),
+                })?;
+            identity.import_legacy_vault(app_key, store_id, &reconciliation)?;
             self.selection = IdentitySelection::Selected(identity_id.clone());
             return Ok(identity_id);
         }
@@ -620,7 +643,8 @@ mod tests {
         non_local_effect_before_unhandled_error,
         reason = "the contract intentionally exercises rejected legacy reconciliation and verifies that state stays unchanged"
     )]
-    fn imported_legacy_vault_does_not_inherit_active_identity() -> anyhow::Result<()> {
+    fn imported_legacy_vault_reuses_matching_identity_without_enrolling_unrelated_key()
+    -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let mut directory = IdentityDirectory::empty();
         let personal = directory.create_identity("Personal", &app_key, None)?;
@@ -654,8 +678,8 @@ mod tests {
             store_id.clone(),
             legacy_reconciliation(&app_key, secrets_envelope.clone(), members_envelope.clone()),
         )?;
-        assert_ne!(imported_id, personal);
-        assert_eq!(directory.identities().len(), 2);
+        assert_eq!(imported_id, personal);
+        assert_eq!(directory.identities().len(), 1);
         assert_eq!(directory.selected()?.identity_id, imported_id);
 
         let same_id = directory.import_legacy_vault(
@@ -665,7 +689,7 @@ mod tests {
             legacy_reconciliation(&app_key, secrets_envelope, members_envelope),
         )?;
         assert_eq!(same_id, imported_id);
-        assert_eq!(directory.identities().len(), 2);
+        assert_eq!(directory.identities().len(), 1);
 
         directory
             .selected_mut()?

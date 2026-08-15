@@ -50,6 +50,14 @@ Use this ownership hierarchy:
   - prefer module-, package-, or layer-owned slices with stable interfaces; and
   - complete the full sequence instead of treating later slices as optional.
 
+When implemented work moves between pull requests, preserve it first.
+
+- Create the successor branch from the full-work commit.
+- Open the linked draft successor PR.
+- Record both PRs and their order in Workbench.
+- Map every removed file and behavior to the successor.
+- Reduce the predecessor only after that evidence is durable.
+
 ## Scope
 
 Apply when work is described as too large, risky, blocked, deferred, future, or
@@ -79,6 +87,8 @@ to generate bookkeeping.
 5. Bound the work:
    - Record the ordered issue and PR sequence for a feature above 5,000
      authored changed lines.
+   - Open and link the successor draft PR before reducing an implemented PR.
+   - Record a preservation inventory for every removed file and behavior.
    - Keep each issue inside one cohesive module, package, layer, or
      responsibility.
    - Keep acceptance criteria independently deliverable and testable.

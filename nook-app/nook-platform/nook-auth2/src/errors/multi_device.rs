@@ -42,8 +42,14 @@ pub enum MultiDeviceError {
     #[error("Vault {store_id} is already associated with another identity.")]
     DuplicateVaultOwnership { store_id: String },
 
+    #[error("App key {app_id} belongs to more than one local identity.")]
+    DuplicateAppKeyOwnership { app_id: String },
+
     #[error("Identity directory selection does not match its contents.")]
     InvalidIdentitySelection,
+
+    #[error("Identity {identity_id} changed while staged vault ownership was pending.")]
+    StagedIdentityConflict { identity_id: String },
 
     #[error("Provider credential is not age-encrypted.")]
     UnsealedProviderCredential,

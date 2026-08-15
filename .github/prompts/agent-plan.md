@@ -50,6 +50,11 @@ acceptance evidence. Identify the first or currently authorized slice
 separately. Its estimate must not exceed 5,000 authored changed lines. Use
 `None` when no public or cross-module interface changes.
 
+If planning replaces an in-progress oversized PR, require a successor branch
+and linked draft PR from the last full-work commit before any scope reduction.
+Require a Workbench inventory that maps every removed file and behavior to a
+successor PR.
+
 Write the current slice as `<scope>; Acceptance evidence: <observable proof>`.
 Write every numbered PR slice in the same form. Never use `None`, `N/A`, or
 another placeholder for a slice or its acceptance evidence.
