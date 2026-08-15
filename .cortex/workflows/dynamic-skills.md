@@ -1,5 +1,46 @@
 # Dynamic Skills Workflow
 
+## Relationships
+
+- [Nook Agent Map (Table of Contents)](../AGENTS.md)
+  - Provides the Nook Agent Map (Table of Contents) Cortex context.
+  - Read when this document refers to that guidance.
+- [Nook System Architecture Specification](../ARCHITECTURE.md)
+  - Defines the repository architecture and ownership boundaries.
+  - Read before changing a durable system boundary.
+- [Cortex Consistency — Garbage Collector](../dynamic-skills/cortex-consistency.md)
+  - Defines the Cortex Consistency — Garbage Collector rule used by this document.
+  - Apply when that rule governs the task.
+- [Cortex Writer — Low Cognitive Complexity](../dynamic-skills/cortex-writer.md)
+  - Defines the Cortex Writer — Low Cognitive Complexity rule used by this document.
+  - Apply when that rule governs the task.
+- [Project Skill Registry](../dynamic-skills/index.md)
+  - Defines the Project Skill Registry rule used by this document.
+  - Apply when that rule governs the task.
+- [Reference: Loom tools and static agent workflows](../references/loom-tools.md)
+  - Provides the Reference: Loom tools and static agent workflows operational reference.
+  - Read when using its tools or commands.
+
+## Document map
+
+- [Overview](#overview)
+  - Introduces the document context and its operating assumptions.
+  - Read first before using the detailed guidance.
+- [Prompt Protocol](#prompt-protocol)
+  - Defines the accepted dynamic-skill request forms.
+  - Read when interpreting a skill-authoring request.
+- [Intake Workflow](#intake-workflow)
+  - Describes the ordered workflow and its decision points.
+  - Follow while carrying out this part of the task.
+- [Skill Card Rules](#skill-card-rules)
+  - States the durable principles and invariants for this area.
+  - Use while making design and review decisions.
+- [Applying A Dynamic Skill](#applying-a-dynamic-skill)
+  - Defines how captured guidance changes later implementation work.
+  - Follow when a stored skill applies to a refactor.
+
+## Overview
+
 Use this workflow when the user explains a codebase-specific mistake, invariant,
 or refactor pattern that should become durable agent knowledge.
 
