@@ -68,15 +68,11 @@
 
 ## Overview
 
-Loom is the Bun tool runner for mechanical cortex rites.
-
-Agents call it. Humans do not use it interactively.
-
-Loom's domain-YAML protocol exposes mechanical leaf operations.
-
-Static agent workflows use a separate module and CLI.
-
-They may call these leaf operations through typed adapters.
+- **Role:** Loom is the Bun tool runner for mechanical Cortex rites.
+- **Caller:** Agents call it. Humans do not use it interactively.
+- **Leaf protocol:** Domain YAML exposes mechanical leaf operations.
+- **Static workflows:** A separate module and CLI own reviewed graphs.
+  - They may call leaf operations through typed adapters.
 
 See
 [agent-workflow-orchestration.md](../design-docs/agent-workflow-orchestration.md).
@@ -91,17 +87,14 @@ Static workflows live under:
 agentic-ai/loom/src/agent-workflow/
 ```
 
-Their topology is compiled TypeScript.
+Static workflow rules are:
 
-The workflow CLI selects a reviewed catalog entry.
-
-It accepts bounded runtime inputs such as an exact source commit.
-
-It does not accept a YAML graph.
-
-It does not generate tasks or edges from prompts or Cortex prose.
-
-The first catalog entry is `cortex-full-garbage-collection`.
+- Compile topology as TypeScript.
+- Select one reviewed catalog entry through the workflow CLI.
+- Accept bounded runtime inputs such as an exact source commit.
+- Accept no YAML graph.
+- Generate no tasks or edges from prompts or Cortex prose.
+- Use `cortex-full-garbage-collection` as the first catalog entry.
 
 Use the repository Task wrapper:
 
@@ -119,20 +112,14 @@ That workflow contains:
 - one finding-synthesis task;
 - the existing `cortexAudit` leaf.
 
-Each Codex attempt fails closed unless `HEAD` matches the requested baseline
-and the worktree is clean before and after execution.
-
-The cleanliness check includes untracked files.
-
-Local runs write `events.jsonl` as an append-only authority.
-
-Task terminal files and the final run result are projections of that journal.
-
-The current workflow implementation is local-only.
-
-Future Hive-backed execution will use Neo4j as the durable authority.
-
-The YAML rules below apply only to Loom leaf tools.
+- **Attempt gate:** Fail closed unless `HEAD` matches the requested baseline and
+  the worktree is clean before and after execution.
+  - Include untracked files in cleanliness.
+- **Local authority:** Write `events.jsonl` as the append-only authority.
+  - Treat task terminal files and final run result as journal projections.
+- **Durability:** The current workflow implementation is local-only.
+  - Future Hive-backed execution uses Neo4j as durable authority.
+- **Protocol scope:** The YAML rules below apply only to Loom leaf tools.
 
 ## Invoke a leaf tool
 

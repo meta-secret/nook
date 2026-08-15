@@ -63,18 +63,16 @@ this order:
 3. **Persisted application logs** — **the most important source after steps
    1–2.**
 
-Vault unlock, sync reconciliation, WASM tracing, and captured `console.*`
-output live here. Test output and linters do not surface this layer.
-
-**Always check app logs** before changing production code or guessing from DOM
-snapshots or screenshot diffs alone.
-
-Every Playwright result includes `nook-app-logs.json` automatically. Failed
-tests also print a readable tail to the test output. Locally use
-`fetchAppLogs(page)`, `/app-logs`, or the `/logs` viewer.
-
-If the trail is thin, lower the capture level and reproduce
-(`VITE_LOG_LEVEL=debug`, `localStorage.nook_log_level=trace`).
+- **Persisted layer:** Vault unlock, sync reconciliation, WASM tracing, and
+  captured `console.*` output live in application logs.
+  - Test output and linters do not surface this layer.
+- **Agent rule:** Always check app logs before changing production code or
+  guessing from DOM snapshots or screenshot diffs alone.
+- **Playwright evidence:** Every result includes `nook-app-logs.json`.
+  - Failed tests also print a readable tail.
+  - Locally use `fetchAppLogs(page)`, `/app-logs`, or the `/logs` viewer.
+- **Thin trail:** Lower capture level and reproduce with
+  `VITE_LOG_LEVEL=debug` or `localStorage.nook_log_level=trace`.
 
 See [Agent rule: use app logs](#agent-rule-use-app-logs-for-playwright-debug-and-analysis) below for the preferred read order and helpers.
 
