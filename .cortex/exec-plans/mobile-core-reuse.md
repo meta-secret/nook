@@ -1,5 +1,41 @@
 # Core Ownership Refactor
 
+## Relationships
+
+- [Remaining TypeScript domain → Rust](ts-domain-to-rust-remaining.md)
+  - Tracks the TypeScript domain behavior still awaiting Rust ownership.
+  - Read when selecting the next core-ownership migration.
+
+## Document map
+
+- [Goal](#goal)
+  - Make nook-core the reusable application/domain implementation.
+  - Read before changing or relying on Goal.
+- [Placement test](#placement-test)
+  - For each behavior, place it in the lowest portable layer that can own.
+  - Use before declaring Placement test complete.
+- [Execution backlog](#execution-backlog)
+  - Defines the concrete responsibilities and constraints for Execution backlog.
+  - Read before changing or relying on Execution backlog.
+  - [P0 - typed portable boundaries](#p0---typed-portable-boundaries)
+    - [x] Keep secret parsing, formatting, validation, search, imports, and password generation in core; the current web layer already.
+    - Read before changing or relying on P0 - typed portable boundaries.
+  - [P1 - remove duplicated app/domain DTOs](#p1---remove-duplicated-appdomain-dtos)
+    - [x] Replace the TypeScript VaultArchitecture, SentinelPolicy, and provider capability mirrors with typed WASM wrappers over core types.
+    - Read before changing or relying on P1 - remove duplicated app/domain DTOs.
+  - [P2 - move reusable workflows out of the WASM manager](#p2---move-reusable-workflows-out-of-the-wasm-manager)
+    - [x] Consolidate provider-agnostic connect, unlock, enrollment, mutation, and sync orchestration in the existing core application.
+    - Read before changing the P2 - move reusable workflows out of the WASM manager flow or state transitions.
+  - [P3 - ownership guardrails](#p3---ownership-guardrails)
+    - [x] Add an architecture preflight rule that prevents portable domain modules from depending on browser crates and flags new.
+    - Read before changing or relying on P3 - ownership guardrails.
+- [Deliberate non-migrations](#deliberate-non-migrations)
+  - The following remain platform adapters rather than core.
+  - Read before expanding the refactor into platform-owned adapters.
+- [Validation per slice](#validation-per-slice)
+  - Add behavior-focused core tests for every moved rule. Run targeted nook-core tests and native/wasm checks. Regenerate WASM bindings.
+  - Use before declaring Validation per slice complete.
+
 ## Goal
 
 Make `nook-core` the reusable application/domain implementation. Keep
