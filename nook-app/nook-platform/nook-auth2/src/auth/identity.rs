@@ -3,7 +3,8 @@
 use crate::errors::{MultiDeviceError, MultiDeviceResult, ValidationError, ValidationResult};
 use crate::{
     AgeArmoredCiphertext, AppId, AppKey, AuthKeyId, DevicePublicKey, DeviceSigningPublicKey,
-    StoreId, VaultKeys, encrypt_for_recipient, generate_id, generate_vault_keys,
+    IdentityVaultEventId, StoreId, VaultKeys, encrypt_for_recipient, generate_id,
+    generate_vault_keys,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -60,16 +61,61 @@ pub struct IdentityMember {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IdentityVaultDek {
     pub store_id: StoreId,
+    #[serde(default)]
+    pub key_epoch: IdentityVaultDekEpoch,
     /// Age ciphertext of `secrets_key` for each member app public key.
     pub secrets_envelopes: Vec<MemberDekEnvelope>,
     /// Age ciphertext of `members_key` for each member app public key.
     pub members_envelopes: Vec<MemberDekEnvelope>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum IdentityVaultDekEpoch {
+    #[default]
+    LegacyUnknown,
+    Known {
+        key_epoch: IdentityVaultEventId,
+        checkpoint: IdentityVaultEventId,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum IdentityVaultDekEpochUpdate {
+    Observe {
+        key_epoch: IdentityVaultDekEpoch,
+        checkpoint_ancestors: Vec<IdentityVaultEventId>,
+    },
+    Rotate {
+        previous_key_epoch: IdentityVaultEventId,
+        previous_checkpoint_ancestors: Vec<IdentityVaultEventId>,
+        key_epoch: IdentityVaultEventId,
+        checkpoint: IdentityVaultEventId,
+    },
+}
+
+impl IdentityVaultDekEpochUpdate {
+    #[must_use]
+    pub fn committed_epoch(&self) -> IdentityVaultDekEpoch {
+        match self {
+            Self::Observe { key_epoch, .. } => key_epoch.clone(),
+            Self::Rotate {
+                key_epoch,
+                checkpoint,
+                ..
+            } => IdentityVaultDekEpoch::Known {
+                key_epoch: key_epoch.clone(),
+                checkpoint: checkpoint.clone(),
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct IdentityVaultDekReconciliation {
     pub secrets_envelope: AgeArmoredCiphertext,
     pub members_envelope: AgeArmoredCiphertext,
+    pub epoch_update: IdentityVaultDekEpochUpdate,
     pub authorized_auth_ids: Vec<AuthKeyId>,
 }
 
@@ -342,6 +388,7 @@ impl IdentityRecord {
                 )
             })?;
         let vault_dek = &self.vault_deks[vault_dek_index];
+        let next_epoch = vault_dek.next_epoch(&reconciliation.epoch_update)?;
         let keys = VaultKeys {
             secrets_key: app_key.decrypt_envelope(&reconciliation.secrets_envelope)?,
             members_key: app_key.decrypt_envelope(&reconciliation.members_envelope)?,
@@ -365,10 +412,13 @@ impl IdentityRecord {
             app_key,
             &authorized_members,
             &keys,
+            &next_epoch,
         ) {
             return Ok(());
         }
-        let rewrapped = wrap_vault_keys_for_members(&keys, &authorized_members, store_id.clone())?;
+        let mut rewrapped =
+            wrap_vault_keys_for_members(&keys, &authorized_members, store_id.clone())?;
+        rewrapped.key_epoch = next_epoch;
         if *vault_dek != rewrapped {
             self.vault_deks[vault_dek_index] = rewrapped;
             self.control_epoch = self.control_epoch.saturating_add(1);
@@ -383,6 +433,7 @@ impl IdentityRecord {
         store_id: StoreId,
         secrets_envelope: AgeArmoredCiphertext,
         members_envelope: AgeArmoredCiphertext,
+        key_epoch: IdentityVaultDekEpoch,
     ) -> MultiDeviceResult<Self> {
         let identity_id = IdentityId::generate()?;
         Ok(Self {
@@ -392,6 +443,7 @@ impl IdentityRecord {
             members: vec![member.clone()],
             vault_deks: vec![IdentityVaultDek {
                 store_id,
+                key_epoch,
                 secrets_envelopes: vec![MemberDekEnvelope {
                     app_id: member.app_id.clone(),
                     envelope: secrets_envelope,
@@ -430,6 +482,7 @@ fn wrap_vault_keys_for_members(
     }
     Ok(IdentityVaultDek {
         store_id,
+        key_epoch: IdentityVaultDekEpoch::LegacyUnknown,
         secrets_envelopes,
         members_envelopes,
     })
@@ -496,6 +549,10 @@ mod tests {
                     rotated.members_key.as_str().as_bytes(),
                     &app_key.public_key(),
                 )?,
+                epoch_update: IdentityVaultDekEpochUpdate::Observe {
+                    key_epoch: IdentityVaultDekEpoch::LegacyUnknown,
+                    checkpoint_ancestors: Vec::new(),
+                },
                 authorized_auth_ids: vec![app_key.auth_id(), second_key.auth_id()],
             },
         )?;
@@ -505,6 +562,54 @@ mod tests {
         );
         assert_eq!(
             identity.open_or_generate_vault_dek(&second_key, store)?,
+            rotated
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn stale_dek_observation_cannot_overwrite_rotated_epoch() -> anyhow::Result<()> {
+        let app_key = AppKey::generate()?;
+        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let store = StoreId::parse("store_abcdefghijk")?;
+        let original = identity.generate_vault_dek(store.clone())?;
+        let previous = event_id('a')?;
+        let current = event_id('b')?;
+        let previous_checkpoint = event_id('c')?;
+        let current_checkpoint = event_id('d')?;
+        let rotated = crate::generate_vault_keys()?;
+        let rotated_reconciliation = reconciliation_for_keys(
+            &app_key,
+            &rotated,
+            IdentityVaultDekEpochUpdate::Rotate {
+                previous_key_epoch: previous.clone(),
+                previous_checkpoint_ancestors: vec![previous_checkpoint.clone()],
+                key_epoch: current.clone(),
+                checkpoint: current_checkpoint,
+            },
+        )?;
+        identity.reconcile_legacy_vault_member(&app_key, &store, &rotated_reconciliation)?;
+        let reconciled_control_epoch = identity.control_epoch;
+        identity.reconcile_legacy_vault_member(&app_key, &store, &rotated_reconciliation)?;
+        assert_eq!(identity.control_epoch, reconciled_control_epoch);
+
+        let stale = reconciliation_for_keys(
+            &app_key,
+            &original,
+            IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: IdentityVaultDekEpoch::Known {
+                    key_epoch: previous,
+                    checkpoint: previous_checkpoint,
+                },
+                checkpoint_ancestors: Vec::new(),
+            },
+        )?;
+        assert!(matches!(
+            identity.reconcile_legacy_vault_member(&app_key, &store, &stale),
+            Err(MultiDeviceError::StaleVaultDekEpoch { .. })
+        ));
+        assert_eq!(
+            identity.open_or_generate_vault_dek(&app_key, store)?,
             rotated
         );
         Ok(())
@@ -525,7 +630,14 @@ mod tests {
         let store = StoreId::parse("store_abcdefghijk")?;
         let _ = identity.generate_vault_dek(store.clone())?;
         let rotated = crate::generate_vault_keys()?;
-        let mut reconciliation = reconciliation_for_keys(&active, &rotated)?;
+        let mut reconciliation = reconciliation_for_keys(
+            &active,
+            &rotated,
+            IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: IdentityVaultDekEpoch::LegacyUnknown,
+                checkpoint_ancestors: Vec::new(),
+            },
+        )?;
         reconciliation.authorized_auth_ids = vec![active.auth_id()];
 
         identity.reconcile_legacy_vault_member(&active, &store, &reconciliation)?;
@@ -542,9 +654,70 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn same_dek_epoch_accepts_an_advanced_event_checkpoint() -> anyhow::Result<()> {
+        let app_key = AppKey::generate()?;
+        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let store = StoreId::parse("store_abcdefghijk")?;
+        let keys = identity.generate_vault_dek(store.clone())?;
+        let key_epoch = event_id('a')?;
+        let first_checkpoint = event_id('b')?;
+        let advanced_checkpoint = event_id('c')?;
+        let first = reconciliation_for_keys(
+            &app_key,
+            &keys,
+            IdentityVaultDekEpochUpdate::Rotate {
+                previous_key_epoch: key_epoch.clone(),
+                previous_checkpoint_ancestors: vec![key_epoch.clone()],
+                key_epoch: key_epoch.clone(),
+                checkpoint: first_checkpoint.clone(),
+            },
+        )?;
+        identity.reconcile_legacy_vault_member(&app_key, &store, &first)?;
+
+        let advanced = reconciliation_for_keys(
+            &app_key,
+            &keys,
+            IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: IdentityVaultDekEpoch::Known {
+                    key_epoch: key_epoch.clone(),
+                    checkpoint: advanced_checkpoint.clone(),
+                },
+                checkpoint_ancestors: vec![first_checkpoint.clone()],
+            },
+        )?;
+        identity.reconcile_legacy_vault_member(&app_key, &store, &advanced)?;
+
+        let stale = reconciliation_for_keys(
+            &app_key,
+            &keys,
+            IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: IdentityVaultDekEpoch::Known {
+                    key_epoch: key_epoch.clone(),
+                    checkpoint: first_checkpoint,
+                },
+                checkpoint_ancestors: Vec::new(),
+            },
+        )?;
+        assert!(matches!(
+            identity.reconcile_legacy_vault_member(&app_key, &store, &stale),
+            Err(MultiDeviceError::StaleVaultDekEpoch { .. })
+        ));
+
+        assert_eq!(
+            identity.vault_dek(&store).map(|dek| &dek.key_epoch),
+            Some(&IdentityVaultDekEpoch::Known {
+                key_epoch,
+                checkpoint: advanced_checkpoint,
+            })
+        );
+        Ok(())
+    }
+
     fn reconciliation_for_keys(
         app_key: &AppKey,
         keys: &VaultKeys,
+        epoch_update: IdentityVaultDekEpochUpdate,
     ) -> anyhow::Result<IdentityVaultDekReconciliation> {
         Ok(IdentityVaultDekReconciliation {
             secrets_envelope: crate::encrypt_for_recipient(
@@ -555,6 +728,7 @@ mod tests {
                 keys.members_key.as_str().as_bytes(),
                 &app_key.public_key(),
             )?,
+            epoch_update,
             authorized_auth_ids: vec![app_key.auth_id()],
         })
     }
@@ -589,5 +763,12 @@ mod tests {
         let restored: IdentityRecord = serde_json::from_str(&serde_json::to_string(&identity)?)?;
         assert_eq!(restored.members[0].signing_public_key, signing_public_key);
         Ok(())
+    }
+
+    fn event_id(fill: char) -> anyhow::Result<IdentityVaultEventId> {
+        Ok(IdentityVaultEventId::parse(&format!(
+            "sha256u:{}",
+            fill.to_string().repeat(43)
+        ))?)
     }
 }

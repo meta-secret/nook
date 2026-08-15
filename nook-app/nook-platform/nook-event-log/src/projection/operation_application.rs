@@ -25,9 +25,16 @@ pub(super) fn apply_operation(
             }
             projection.password_entries.clone_from(password_entries);
         }
-        VaultOperation::EpochCheckpoint { secrets, .. } => {
+        VaultOperation::EpochCheckpoint {
+            secrets,
+            password_entries,
+            ..
+        } => {
             for secret in secrets {
                 insert_secret(projection, event_id, secret, ProjectedSecretOrigin::Created);
+            }
+            if let crate::EpochPasswordState::Replace(password_entries) = password_entries {
+                projection.password_entries.clone_from(password_entries);
             }
         }
         VaultOperation::SecretCreated { secret } => {
@@ -182,6 +189,8 @@ mod tests {
             version: 1,
             kdf: "scrypt".to_owned(),
             work_factor: 10,
+            recipient: String::new(),
+            wrapped_keys: String::new(),
             ciphertext: ciphertext.to_owned(),
         }
     }
@@ -326,6 +335,40 @@ mod tests {
             &mut replacements,
         );
         assert!(projection.password_entries.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn epoch_checkpoint_replaces_password_entries() -> anyhow::Result<()> {
+        let mut projection = VaultProjection {
+            password_entries: vec![PasswordUnlockEntry {
+                id: "pwdentry001".to_owned(),
+                label: "Old".to_owned(),
+                created_at: "2026-06-28T00:00:00Z".to_owned(),
+                envelope: password_envelope("old-keys"),
+            }],
+            ..VaultProjection::default()
+        };
+        let replacement = PasswordUnlockEntry {
+            id: "pwdentry002".to_owned(),
+            label: "Survivor".to_owned(),
+            created_at: "2026-06-28T00:00:01Z".to_owned(),
+            envelope: password_envelope("new-keys"),
+        };
+
+        apply_operation(
+            &mut projection,
+            &event_id()?,
+            &VaultOperation::EpochCheckpoint {
+                secrets: Vec::new(),
+                members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                rotated_meta_records: Vec::new(),
+                password_entries: crate::EpochPasswordState::Replace(vec![replacement.clone()]),
+            },
+            &mut BTreeMap::new(),
+        );
+
+        assert_eq!(projection.password_entries, vec![replacement]);
         Ok(())
     }
 }

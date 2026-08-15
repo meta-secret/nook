@@ -65,6 +65,19 @@ actor id must be the SHA-256 digest of that Ed25519 public key. The event
 signature must verify over the canonical body before a current-schema remote
 event enters the local event set.
 
+An `epoch-checkpoint` operation persists `secrets`,
+`members_checkpoint_hash`, `rotated_meta_records`, and `password_entries`.
+`rotated_meta_records` is the complete replacement set of rewrapped auth and
+member `StoredSecretRecord` values. `password_entries` is the complete
+replacement set of surviving version-2 password credentials rewrapped to the
+new epoch keys. Projection replaces the prior sets with these checkpoint
+values. Signed legacy checkpoints retain password entries when that field is
+omitted. Current identity-rotation writers must include both replacement sets. A pre-field
+client may ignore unknown fields, but it cannot safely reopen or extend that
+rotated epoch. It must upgrade before operating on the vault. These fields
+remain part of event schema `2` until an explicit event-schema migration
+replaces this compatibility contract.
+
 Non-genesis events are also checked against the event's causal past. An actor is
 accepted only if it is:
 
@@ -178,6 +191,12 @@ outbox flush, the manager first uploads queued events that are absent remotely,
 then repairs the provider by uploading any local event-store events missing from
 that provider. During pull, fetched remote events are hash/signature-validated
 and ignored when their signed body belongs to another `store_id`.
+
+Security epoch pairs use a visibility gate across providers that cannot commit
+multiple files atomically. The checkpoint is published before its trigger. A
+checkpoint whose trigger is not visible remains pending. A trigger whose
+checkpoint is not visible is not admitted to the local graph. Descendants
+therefore cannot extend an incomplete key transition.
 
 Provider connect and sync paths must classify the provider event set before
 writing outbox or repair events.

@@ -9,9 +9,19 @@ use super::indexed_db::{idb_delete_key, idb_get_string, idb_put_string};
 use crate::{NookError, storage::open_nook_database};
 
 mod genesis_flow;
+mod reconciliation;
 mod simple_genesis;
 mod staged_genesis;
 pub(crate) use genesis_flow::SimpleGenesisCompletion;
+pub(crate) use reconciliation::{
+    PendingIdentityRotation, commit_identity_reconciliation_checkpoint,
+    commit_identity_reconciliation_epoch, load_pending_identity_rotation,
+    mark_identity_reconciliation_pending,
+};
+use reconciliation::{
+    clear_consumed_identity_reconciliation, identity_reconciliation_keys_for_recovery,
+    resolve_identity_epoch,
+};
 pub(crate) use simple_genesis::PENDING_SIMPLE_GENESIS_KEY;
 pub(crate) use simple_genesis::{
     PendingSimpleGenesis, begin_or_resume_simple_genesis, clear_pending_simple_genesis,
@@ -331,13 +341,16 @@ pub(crate) async fn commit_authenticated_identity_handoff(
     })?;
     Ok(())
 }
-
 /// Associate a legacy vault with an identity without guessing from active selection.
 pub(crate) struct LegacyVaultIdentityInput<'a> {
     pub(crate) app_key: &'a nook_core::AppKey,
     pub(crate) store_id: &'a nook_core::StoreId,
     pub(crate) secrets_envelope: nook_core::AgeArmoredCiphertext,
     pub(crate) members_envelope: nook_core::AgeArmoredCiphertext,
+    pub(crate) key_epoch: nook_core::IdentityVaultDekEpoch,
+    pub(crate) verified_previous_key_epoch: Option<nook_core::IdentityVaultEventId>,
+    pub(crate) committed_event_ids: Vec<nook_core::IdentityVaultEventId>,
+    pub(crate) checkpoint_ancestors: Vec<nook_core::IdentityVaultEventId>,
     pub(crate) authorized_auth_ids: Vec<nook_core::AuthKeyId>,
     pub(crate) label: &'a str,
 }
@@ -350,21 +363,36 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
         store_id,
         secrets_envelope,
         members_envelope,
+        key_epoch,
+        verified_previous_key_epoch,
+        committed_event_ids,
+        checkpoint_ancestors,
         authorized_auth_ids,
         label,
     } = input;
     let app_key = app_key.clone();
     let store_id = store_id.clone();
     let label = label.to_owned();
-    update_identity_directory(move |directory| {
+    let resolution = resolve_identity_epoch(
+        &store_id,
+        key_epoch,
+        verified_previous_key_epoch,
+        &committed_event_ids,
+        &checkpoint_ancestors,
+    )
+    .await?;
+    let consumed_marker = resolution.consumed_marker;
+    let directory_store_id = store_id.clone();
+    let record = update_identity_directory(move |directory| {
         let identity_id = directory
             .import_legacy_vault(
                 &label,
                 &app_key,
-                store_id,
+                directory_store_id,
                 nook_core::IdentityVaultDekReconciliation {
                     secrets_envelope,
                     members_envelope,
+                    epoch_update: resolution.update,
                     authorized_auth_ids,
                 },
             )
@@ -376,7 +404,11 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
             .cloned()
             .ok_or_else(|| NookError::Database("Imported identity disappeared.".to_owned()))
     })
-    .await
+    .await?;
+    if let Some(consumed_marker) = consumed_marker {
+        clear_consumed_identity_reconciliation(&store_id, &consumed_marker).await?;
+    }
+    Ok(record)
 }
 
 pub(crate) async fn generate_vault_dek_for_identity(
@@ -392,6 +424,92 @@ pub(crate) async fn generate_vault_dek_for_identity(
             .map_err(|error| NookError::Database(error.to_string()))
     })
     .await
+}
+
+pub(crate) async fn validate_vault_identity_enrollment(
+    app_key: &nook_core::AppKey,
+    store_id: &nook_core::StoreId,
+) -> Result<(), NookError> {
+    load_identity_directory()
+        .await?
+        .validate_vault_enrollment(app_key, store_id)
+        .map_err(|error| NookError::Database(error.to_string()))
+}
+
+/// Forget identity state sealed to the inaccessible app key while preserving
+/// encrypted vault projections for password-backed recovery.
+async fn reset_identity_directory_for_recovery() -> Result<(), NookError> {
+    // Complete legacy migration before the atomic current-directory reset.
+    let _ = load_identity_directory().await?;
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset error: {error:?}")))?;
+    let store = transaction
+        .store("vault")
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset store error: {error:?}")))?;
+    let directory_key = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset key error: {error:?}")))?;
+    let raw = store
+        .get(directory_key.clone())
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset read error: {error:?}")))?;
+    let mut directory = match raw.filter(|value| !value.is_undefined() && !value.is_null()) {
+        Some(value) => {
+            let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
+                NookError::IndexedDb(format!("Identity reset value error: {error:?}"))
+            })?;
+            decode_directory(&raw)?
+        }
+        None => nook_core::IdentityDirectory::empty(),
+    };
+    let mut store_ids = Vec::new();
+    for store_id in directory.identities().iter().flat_map(|identity| {
+        identity
+            .vault_deks
+            .iter()
+            .map(|dek| &dek.store_id)
+            .chain(identity.sentinel_vaults.iter())
+    }) {
+        if !store_ids.contains(store_id) {
+            store_ids.push(store_id.clone());
+        }
+    }
+    directory.reset_for_device_recovery();
+    directory
+        .validate()
+        .map_err(|error| NookError::Database(error.to_string()))?;
+    let encoded = serde_json::to_string(&directory)
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset encode error: {error}")))?;
+    let value = serde_wasm_bindgen::to_value(&encoded)
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset value error: {error:?}")))?;
+    store
+        .put(&value, Some(&directory_key))
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Identity reset write error: {error:?}")))?;
+    for key in store_ids
+        .iter()
+        .flat_map(identity_reconciliation_keys_for_recovery)
+        .chain([
+            LEGACY_IDENTITY_RECORD_KEY.to_owned(),
+            simple_genesis::PENDING_SIMPLE_GENESIS_KEY.to_owned(),
+        ])
+    {
+        let key = serde_wasm_bindgen::to_value(&key).map_err(|error| {
+            NookError::IndexedDb(format!("Identity reset delete key error: {error:?}"))
+        })?;
+        store.delete(key).await.map_err(|error| {
+            NookError::IndexedDb(format!("Identity reset delete error: {error:?}"))
+        })?;
+    }
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!("Identity reset completion error: {error:?}"))
+    })?;
+    Ok(())
+}
+
+pub(crate) async fn delete_identity_directory_for_recovery() -> Result<(), NookError> {
+    reset_identity_directory_for_recovery().await
 }
 
 #[cfg(test)]
@@ -439,6 +557,46 @@ mod tests {
         assert_eq!(
             reloaded.selected().map_err(map_domain_error)?.identity_id,
             work_id
+        );
+        clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn destructive_recovery_forgets_stale_identity_ownership() -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        let inaccessible_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let pending = begin_or_resume_simple_genesis(&inaccessible_key, "Personal").await?;
+        let store_id = pending.store_id.clone();
+        let _ = generate_vault_dek_for_identity(
+            &pending.identity_id,
+            &inaccessible_key,
+            store_id.clone(),
+        )
+        .await?;
+        let marker_v2 = format!("pending_identity_reconciliation_v2:{store_id}");
+        let marker_v1 = format!("pending_identity_reconciliation_v1:{store_id}");
+        idb_put_string(&marker_v2, "stale-v2").await?;
+        idb_put_string(&marker_v1, "stale-v1").await?;
+
+        delete_identity_directory_for_recovery().await?;
+
+        assert!(idb_get_string(&marker_v2).await?.is_none());
+        assert!(idb_get_string(&marker_v1).await?.is_none());
+
+        let stale_result = ensure_local_identity_for_app_key(&inaccessible_key, "Stale").await;
+        assert!(matches!(
+            stale_result,
+            Err(NookError::Database(message)) if message.contains("retired")
+        ));
+
+        let replacement_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let replacement = ensure_local_identity_for_app_key(&replacement_key, "Recovered").await?;
+        assert_ne!(replacement.identity_id, pending.identity_id);
+        validate_vault_identity_enrollment(&replacement_key, &store_id).await?;
+        assert!(
+            pending_simple_genesis_for_store(store_id.as_str())
+                .await?
+                .is_none()
         );
         clear_identity_directory_for_test().await
     }

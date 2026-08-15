@@ -18,6 +18,7 @@
 use crate::VaultKeys;
 use crate::errors::{AgeCryptoError, PasswordError, PasswordResult};
 use crate::{AgeArmoredCiphertext, SymmetricKey};
+use age::secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
@@ -70,6 +71,10 @@ pub struct PasswordEnvelope {
     pub version: u32,
     pub kdf: String,
     pub work_factor: u8,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub recipient: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub wrapped_keys: String,
     pub ciphertext: String,
 }
 
@@ -224,7 +229,8 @@ struct EnvelopePlaintext {
     members_key: String,
 }
 
-const ENVELOPE_VERSION: u32 = 1;
+const LEGACY_ENVELOPE_VERSION: u32 = 1;
+const ENVELOPE_VERSION: u32 = 2;
 const ENVELOPE_KDF: &str = "scrypt";
 
 /// Wrap `secrets_key` + `members_key` with a password-derived scrypt key.
@@ -250,24 +256,60 @@ pub fn attach_password_envelope_with_work_factor(
         });
     }
 
-    let plaintext = serde_json::to_string(&EnvelopePlaintext {
-        secrets_key: keys.secrets_key.as_str().to_owned(),
-        members_key: keys.members_key.as_str().to_owned(),
-    })
-    .map_err(PasswordError::EnvelopePlaintextSerialize)?;
+    let plaintext = encode_keys(keys)?;
+    let wrapping_identity = age::x25519::Identity::generate();
+    let recipient = wrapping_identity.to_public();
+    let wrapped_keys = age_encrypt_recipient(&recipient, plaintext.as_bytes())?;
+    let wrapping_identity = wrapping_identity.to_string();
 
     let secret = age::secrecy::SecretString::from(password.to_owned());
-    let mut recipient = age::scrypt::Recipient::new(secret);
-    recipient.set_work_factor(work_factor);
-
-    let ciphertext = age_encrypt_scrypt(&recipient, plaintext.as_bytes())?;
+    let mut password_recipient = age::scrypt::Recipient::new(secret);
+    password_recipient.set_work_factor(work_factor);
+    let ciphertext = age_encrypt_scrypt(
+        &password_recipient,
+        wrapping_identity.expose_secret().as_bytes(),
+    )?;
 
     Ok(PasswordEnvelope {
         version: ENVELOPE_VERSION,
         kdf: ENVELOPE_KDF.to_owned(),
         work_factor,
+        recipient: recipient.to_string(),
+        wrapped_keys: wrapped_keys.as_str().to_owned(),
         ciphertext: ciphertext.as_str().to_owned(),
     })
+}
+
+fn encode_keys(keys: &VaultKeys) -> PasswordResult<String> {
+    serde_json::to_string(&EnvelopePlaintext {
+        secrets_key: keys.secrets_key.as_str().to_owned(),
+        members_key: keys.members_key.as_str().to_owned(),
+    })
+    .map_err(PasswordError::EnvelopePlaintextSerialize)
+}
+
+/// Re-wrap a version-2 password credential to fresh vault keys without the password.
+pub fn rewrap_password_envelope(
+    envelope: &PasswordEnvelope,
+    keys: &VaultKeys,
+) -> PasswordResult<PasswordEnvelope> {
+    if envelope.version != ENVELOPE_VERSION {
+        return Err(PasswordError::UnsupportedEnvelopeVersion {
+            version: envelope.version,
+        });
+    }
+    let recipient = envelope
+        .recipient
+        .parse::<age::x25519::Recipient>()
+        .map_err(|error| {
+            PasswordError::Age(AgeCryptoError::EnvelopeEncryptSetup(error.to_string()))
+        })?;
+    let wrapped_keys = age_encrypt_recipient(&recipient, encode_keys(keys)?.as_bytes())?;
+    let mut rewrapped = envelope.clone();
+    wrapped_keys
+        .as_str()
+        .clone_into(&mut rewrapped.wrapped_keys);
+    Ok(rewrapped)
 }
 
 /// Unwrap a password envelope to recover `secrets_key` + `members_key`.
@@ -275,7 +317,7 @@ pub fn resolve_keys_from_password(
     envelope: &PasswordEnvelope,
     password: &str,
 ) -> PasswordResult<VaultKeys> {
-    if envelope.version != ENVELOPE_VERSION {
+    if envelope.version != ENVELOPE_VERSION && envelope.version != LEGACY_ENVELOPE_VERSION {
         tracing::warn!(
             scope = "password-envelope",
             version = envelope.version,
@@ -300,7 +342,18 @@ pub fn resolve_keys_from_password(
 
     let secret = age::secrecy::SecretString::from(password.to_owned());
     let identity = age::scrypt::Identity::new(secret);
-    let plaintext_bytes = age_decrypt_scrypt(&identity, envelope.ciphertext.as_bytes())?;
+    let password_plaintext = age_decrypt_scrypt(&identity, envelope.ciphertext.as_bytes())?;
+    let plaintext_bytes = if envelope.version == LEGACY_ENVELOPE_VERSION {
+        password_plaintext
+    } else {
+        let wrapping_identity = String::from_utf8(password_plaintext)
+            .map_err(PasswordError::EnvelopePlaintextUtf8)?
+            .parse::<age::x25519::Identity>()
+            .map_err(|error| {
+                PasswordError::Age(AgeCryptoError::EnvelopeDecryptSetup(error.to_string()))
+            })?;
+        age_decrypt_identity(&wrapping_identity, envelope.wrapped_keys.as_bytes())?
+    };
     let plaintext_str =
         String::from_utf8(plaintext_bytes).map_err(PasswordError::EnvelopePlaintextUtf8)?;
     let parsed: EnvelopePlaintext =
@@ -310,6 +363,59 @@ pub fn resolve_keys_from_password(
         secrets_key: SymmetricKey::parse(&parsed.secrets_key)?,
         members_key: SymmetricKey::parse(&parsed.members_key)?,
     })
+}
+
+fn age_encrypt_recipient(
+    recipient: &age::x25519::Recipient,
+    plaintext: &[u8],
+) -> PasswordResult<AgeArmoredCiphertext> {
+    use age::armor::{ArmoredWriter, Format};
+
+    let encryptor =
+        age::Encryptor::with_recipients(std::iter::once(recipient as &dyn age::Recipient))
+            .map_err(|error| {
+                PasswordError::Age(AgeCryptoError::EnvelopeEncryptSetup(error.to_string()))
+            })?;
+    let mut armored = Vec::new();
+    let armor_writer =
+        ArmoredWriter::wrap_output(&mut armored, Format::AsciiArmor).map_err(|error| {
+            PasswordError::Age(AgeCryptoError::EnvelopeArmorWrap(error.to_string()))
+        })?;
+    let mut writer = encryptor
+        .wrap_output(armor_writer)
+        .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeEncrypt(error.to_string())))?;
+    writer
+        .write_all(plaintext)
+        .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeWrite(error.to_string())))?;
+    writer
+        .finish()
+        .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeFinish(error.to_string())))?
+        .finish()
+        .map_err(|error| {
+            PasswordError::Age(AgeCryptoError::EnvelopeArmorFinish(error.to_string()))
+        })?;
+    String::from_utf8(armored)
+        .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeInvalidUtf8(error.to_string())))
+        .map(AgeArmoredCiphertext::from_trusted_armored)
+}
+
+fn age_decrypt_identity(
+    identity: &age::x25519::Identity,
+    armored: &[u8],
+) -> PasswordResult<Vec<u8>> {
+    use age::armor::ArmoredReader;
+
+    let decryptor = age::Decryptor::new_buffered(ArmoredReader::new(armored)).map_err(|error| {
+        PasswordError::Age(AgeCryptoError::EnvelopeDecryptSetup(error.to_string()))
+    })?;
+    let mut reader = decryptor
+        .decrypt(std::iter::once(identity as &dyn age::Identity))
+        .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeDecrypt(error.to_string())))?;
+    let mut plaintext = Vec::new();
+    reader
+        .read_to_end(&mut plaintext)
+        .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeRead(error.to_string())))?;
+    Ok(plaintext)
 }
 
 /// Verify a password decrypts the envelope without exposing the unwrapped keys.
@@ -379,7 +485,7 @@ mod tests {
     fn roundtrip_attach_and_resolve() -> anyhow::Result<()> {
         let keys = sample_keys()?;
         let envelope = attach_password_envelope(&keys, "correct horse battery staple")?;
-        assert_eq!(envelope.version, 1);
+        assert_eq!(envelope.version, 2);
         assert_eq!(envelope.kdf, "scrypt");
         assert!(
             envelope
@@ -390,6 +496,25 @@ mod tests {
 
         let resolved = resolve_keys_from_password(&envelope, "correct horse battery staple")?;
         assert_eq!(resolved, keys);
+        Ok(())
+    }
+
+    #[test]
+    fn rewrap_preserves_password_and_updates_keys() -> anyhow::Result<()> {
+        let envelope = attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
+        let new_keys = VaultKeys {
+            secrets_key: SymmetricKey::parse(&"cafebabecafebabecafebabecafebabe".repeat(2))?,
+            members_key: SymmetricKey::parse(&"01234567012345670123456701234567".repeat(2))?,
+        };
+        let rewrapped = rewrap_password_envelope(&envelope, &new_keys)?;
+
+        assert_eq!(rewrapped.ciphertext, envelope.ciphertext);
+        assert_eq!(rewrapped.recipient, envelope.recipient);
+        assert_ne!(rewrapped.wrapped_keys, envelope.wrapped_keys);
+        assert_eq!(
+            resolve_keys_from_password(&rewrapped, "correct horse battery staple")?,
+            new_keys
+        );
         Ok(())
     }
 

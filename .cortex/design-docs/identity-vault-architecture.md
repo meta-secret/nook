@@ -67,7 +67,8 @@ The browser stores the local directory under `identity_directory_v1`.
 The directory contains:
 
 - zero or more `IdentityRecord` values; and
-- an explicit `Empty` or `Selected(identity_id)` state.
+- an explicit `Empty` or `Selected(identity_id)` state; and
+- app IDs retired by destructive local recovery.
 
 Each identity member stores its X25519 encryption public key and Ed25519 event
 signing public key. Older records decode a missing signing key as unavailable.
@@ -120,6 +121,50 @@ Legacy markers without `createdAt` use the Unix epoch timestamp. Markers without
 an `event-pinned` state without seed material becomes `legacy-event-pinned`.
 That state upgrades only after the durable seed matches the pinned event signer.
 The same signer check applies before sealing a legacy plaintext seed.
+
+Recovery clears identity ownership but preserves retired app IDs. Every
+app-key operation rejects a retired ID. Atomic updates therefore prevent a
+stale tab from writing old ownership back after recovery.
+The reset of `identity_directory_v1` and deletion of every matching
+`pending_identity_reconciliation_v2:{store_id}` and legacy v1 marker use one
+IndexedDB read-write transaction over the `vault` store. The directory and its
+encrypted recovery plans therefore remain jointly present or jointly removed.
+Before recovery mutates IndexedDB, the initiating tab quiesces storage work in
+every open Nook tab. Each responding tab zeroizes its app key and storage
+credentials before acknowledging readiness. The initiating tab then serializes
+its own reset through the storage queue.
+
+Security-epoch rotation stores `storeId`, `previousKeyEpoch`,
+`previousCheckpoint`, and a tagged `progress` value at
+`pending_identity_reconciliation_v2:{store_id}` before the access-changing
+trigger event is persisted. `prepared` contains an app-key-encrypted recovery
+plan with the exact signed trigger and checkpoint events plus the key material
+needed to resume. `epoch-committed` adds `key_epoch` and retains that encrypted
+`plan_envelope`. `committed` retains `key_epoch` and the exact checkpoint event
+ID but drops the plan. Prepared and epoch-committed states must resume.
+An ordinary connect cannot consume them as abandoned work.
+Each identity DEK grant serializes `key_epoch`. A missing field decodes as the
+tagged `legacy-unknown` variant. Current writes use `known` with `key_epoch` and
+`checkpoint` event IDs. Reconciliation upgrades legacy-unknown only from a
+verified observation. Current writers do not remove this compatibility variant.
+The `identity_directory_v1` record serializes retired installation keys in
+`retired_app_ids`. Existing records that omit the field decode it as an empty
+list. Destructive device recovery appends every removed member app ID before it
+clears identities. Current writers retain those IDs for the lifetime of the
+directory so a stale installation key cannot restore ownership.
+After the epoch checkpoint event is durable, reconciliation compares and swaps
+the previous epoch for the committed epoch. The committed checkpoint must
+appear in verified event history. Reconciliation records the latest observed
+head. Ordinary event heads may advance within the same key epoch without
+blocking recovery. Same-epoch observations advance the stored checkpoint only
+when it is a verified ancestor of the observed head. An idempotent
+retry at the new epoch succeeds. An older epoch
+observation fails. Successful directory reconciliation compare-deletes only
+the exact marker it consumed.
+Any later verified connect repeats the idempotent reconciliation and clears a
+marker left by an interrupted post-commit update.
+The marker is local retry state. Current builds delete it only after successful
+reconciliation or explicit destructive device recovery.
 
 The first directory read migrates `identity_record_v1` when present:
 

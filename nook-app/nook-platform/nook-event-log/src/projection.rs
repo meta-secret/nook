@@ -270,6 +270,8 @@ mod tests {
             version: 1,
             kdf: "scrypt".to_owned(),
             work_factor: 10,
+            recipient: String::new(),
+            wrapped_keys: String::new(),
             ciphertext: ciphertext.to_owned(),
         }
     }

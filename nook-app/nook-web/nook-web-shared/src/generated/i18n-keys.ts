@@ -329,6 +329,7 @@ export const I18N_KEYS = {
   DeviceProtectionRecoveryAction: 'device_protection.recovery_action',
   DeviceProtectionRecoveryComplete: 'device_protection.recovery_complete',
   DeviceProtectionRecoveryConfirm: 'device_protection.recovery_confirm',
+  DeviceProtectionRecoveryFailed: 'device_protection.recovery_failed',
   DeviceProtectionRecoveryPasskeyUnavailablePinFallbackReady: 'device_protection.recovery_passkey_unavailable_pin_fallback_ready',
   DeviceProtectionRecoveryPinFallbackReady: 'device_protection.recovery_pin_fallback_ready',
   DeviceProtectionRecoveryWarning: 'device_protection.recovery_warning',

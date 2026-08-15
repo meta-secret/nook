@@ -20,6 +20,8 @@ pub enum IdentitySelection {
 pub struct IdentityDirectory {
     identities: Vec<IdentityRecord>,
     selection: IdentitySelection,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    retired_app_ids: Vec<crate::AppId>,
 }
 
 impl IdentityDirectory {
@@ -28,6 +30,7 @@ impl IdentityDirectory {
         Self {
             identities: Vec::new(),
             selection: IdentitySelection::Empty,
+            retired_app_ids: Vec::new(),
         }
     }
 
@@ -38,6 +41,7 @@ impl IdentityDirectory {
         let directory = Self {
             identities,
             selection,
+            retired_app_ids: Vec::new(),
         };
         directory.validate()?;
         Ok(directory)
@@ -51,13 +55,31 @@ impl IdentityDirectory {
     pub fn validate(&self) -> MultiDeviceResult<()> {
         let mut ids = HashSet::with_capacity(self.identities.len());
         let mut vaults = HashSet::new();
+        let retired: HashSet<_> = self.retired_app_ids.iter().collect();
+        if retired.len() != self.retired_app_ids.len() {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "identity directory contains duplicate retired app ids".to_owned(),
+            ));
+        }
         for record in &self.identities {
             if !ids.insert(record.identity_id.clone()) {
                 return Err(MultiDeviceError::DuplicateIdentity {
                     identity_id: record.identity_id.to_string(),
                 });
             }
-            for store_id in record.vault_deks.iter().map(|vault| &vault.store_id) {
+            if record
+                .members
+                .iter()
+                .any(|member| retired.contains(&member.app_id))
+            {
+                return Err(MultiDeviceError::RetiredAppKey);
+            }
+            for store_id in record
+                .vault_deks
+                .iter()
+                .map(|vault| &vault.store_id)
+                .chain(record.sentinel_vaults.iter())
+            {
                 if !vaults.insert(store_id) {
                     return Err(MultiDeviceError::DuplicateVaultOwnership {
                         store_id: store_id.to_string(),
@@ -90,6 +112,7 @@ impl IdentityDirectory {
         app_key: &AppKey,
         member_label: Option<String>,
     ) -> MultiDeviceResult<IdentityId> {
+        self.ensure_app_key_active(app_key)?;
         let label = label.trim();
         if label.is_empty() {
             return Err(MultiDeviceError::IdentityLabelEmpty);
@@ -125,6 +148,7 @@ impl IdentityDirectory {
         store_id: StoreId,
         reconciliation: crate::IdentityVaultDekReconciliation,
     ) -> MultiDeviceResult<IdentityId> {
+        self.ensure_app_key_active(app_key)?;
         if let Some(index) = self
             .identities
             .iter()
@@ -152,6 +176,7 @@ impl IdentityDirectory {
             store_id,
             reconciliation.secrets_envelope,
             reconciliation.members_envelope,
+            reconciliation.epoch_update.committed_epoch(),
         )?;
         let identity_id = record.identity_id.clone();
         self.identities.push(record);
@@ -165,6 +190,7 @@ impl IdentityDirectory {
         store_id: &StoreId,
         reconciliation: &crate::IdentityVaultDekReconciliation,
     ) -> MultiDeviceResult<IdentityId> {
+        self.ensure_app_key_active(app_key)?;
         let identity = self
             .identities
             .iter_mut()
@@ -181,6 +207,7 @@ impl IdentityDirectory {
         app_key: &AppKey,
         store_id: StoreId,
     ) -> MultiDeviceResult<crate::VaultKeys> {
+        self.ensure_app_key_active(app_key)?;
         if let Some(index) = self
             .identities
             .iter()
@@ -198,6 +225,7 @@ impl IdentityDirectory {
         app_key: &AppKey,
         store_id: StoreId,
     ) -> MultiDeviceResult<crate::VaultKeys> {
+        self.ensure_app_key_active(app_key)?;
         if let Some(owner) = self
             .identities
             .iter()
@@ -222,6 +250,7 @@ impl IdentityDirectory {
         app_key: &AppKey,
         store_id: &StoreId,
     ) -> MultiDeviceResult<()> {
+        self.ensure_app_key_active(app_key)?;
         let Some(owner) = self
             .identities
             .iter()
@@ -311,8 +340,8 @@ impl IdentityDirectory {
         owner.grant_member_to_vaults(&member, &keys_by_store)?;
         Ok(owner.identity_id.clone())
     }
-
     pub fn identity_for_app_key(&self, app_key: &AppKey) -> MultiDeviceResult<Option<IdentityId>> {
+        self.ensure_app_key_active(app_key)?;
         let mut matches = Vec::new();
         for identity in &self.identities {
             let Some(member) = identity
@@ -360,6 +389,7 @@ impl IdentityDirectory {
         app_key: &AppKey,
         label: &str,
     ) -> MultiDeviceResult<IdentityId> {
+        self.ensure_app_key_active(app_key)?;
         if matches!(&self.selection, IdentitySelection::Empty) {
             return self.create_identity(label, app_key, None);
         }
@@ -393,6 +423,30 @@ impl IdentityDirectory {
         Ok(selected.identity_id.clone())
     }
 
+    /// Drop directory ownership sealed to an inaccessible installation key.
+    /// Encrypted vault storage remains outside this portable record and may be
+    /// rebound only after a recovery credential proves access.
+    pub fn reset_for_device_recovery(&mut self) {
+        for app_id in self
+            .identities
+            .iter()
+            .flat_map(|identity| identity.members.iter().map(|member| member.app_id.clone()))
+        {
+            if !self.retired_app_ids.contains(&app_id) {
+                self.retired_app_ids.push(app_id);
+            }
+        }
+        self.identities.clear();
+        self.selection = IdentitySelection::Empty;
+    }
+
+    fn ensure_app_key_active(&self, app_key: &AppKey) -> MultiDeviceResult<()> {
+        if self.retired_app_ids.contains(app_key.app_id()) {
+            return Err(MultiDeviceError::RetiredAppKey);
+        }
+        Ok(())
+    }
+
     pub fn selected(&self) -> MultiDeviceResult<&IdentityRecord> {
         let IdentitySelection::Selected(identity_id) = &self.selection else {
             return Err(MultiDeviceError::InvalidIdentitySelection);
@@ -419,6 +473,13 @@ impl IdentityDirectory {
         };
         if identity_id != &record.identity_id {
             return Err(MultiDeviceError::InvalidIdentitySelection);
+        }
+        if record
+            .members
+            .iter()
+            .any(|member| self.retired_app_ids.contains(&member.app_id))
+        {
+            return Err(MultiDeviceError::RetiredAppKey);
         }
         let selected = self.selected_mut()?;
         *selected = record;
@@ -644,6 +705,7 @@ mod tests {
                 keys.members_key.as_str().as_bytes(),
                 &app_key.public_key(),
             )?,
+            crate::IdentityVaultDekEpoch::LegacyUnknown,
         )?;
         let secrets_envelope = imported.vault_deks[0].secrets_envelopes[0].envelope.clone();
         let members_envelope = imported.vault_deks[0].members_envelopes[0].envelope.clone();
@@ -719,7 +781,36 @@ mod tests {
         crate::IdentityVaultDekReconciliation {
             secrets_envelope,
             members_envelope,
+            epoch_update: crate::IdentityVaultDekEpochUpdate::Observe {
+                key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
+                checkpoint_ancestors: Vec::new(),
+            },
             authorized_auth_ids: vec![app_key.auth_id()],
         }
+    }
+
+    #[test]
+    fn device_recovery_removes_stale_local_ownership() -> anyhow::Result<()> {
+        let inaccessible_key = AppKey::generate()?;
+        let store_id = crate::generate_store_id()?;
+        let mut directory = IdentityDirectory::empty();
+        let identity_id = directory.create_identity("Personal", &inaccessible_key, None)?;
+        let _ = directory.open_or_generate_vault_dek_for_identity(
+            &identity_id,
+            &inaccessible_key,
+            store_id.clone(),
+        )?;
+
+        directory.reset_for_device_recovery();
+
+        assert!(directory.identities().is_empty());
+        assert_eq!(directory.selection(), &IdentitySelection::Empty);
+        assert!(matches!(
+            directory.create_identity("Stale", &inaccessible_key, None),
+            Err(MultiDeviceError::RetiredAppKey)
+        ));
+        let replacement_key = AppKey::generate()?;
+        directory.validate_vault_enrollment(&replacement_key, &store_id)?;
+        Ok(())
     }
 }
