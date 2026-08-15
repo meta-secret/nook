@@ -68,11 +68,13 @@
 
 ## Overview
 
-Nook vaults use **`secrets_key`** to encrypt user secrets and **`members_key`** to encrypt member catalog entries.
-
-**Per-device X25519 identities** distribute both keys across devices via event-sourced auth metadata.
-
-The immutable event log (`nook-log/v1/events/`) is the provider source of truth. `nook-projection.yaml` is only the local projection/import format.
+- **Vault keys:** Use `secrets_key` to encrypt user secrets and `members_key` to
+  encrypt member catalog entries.
+- **Device distribution:** Per-device X25519 identities distribute both keys
+  through event-sourced auth metadata.
+- **Provider authority:** The immutable event log under `nook-log/v1/events/`
+  is the source of truth.
+  - `nook-projection.yaml` is only the local projection and import format.
 
 **Related:** [ARCHITECTURE.md](../ARCHITECTURE.md) §2 (`nook-auth2` boundary), §4 (storage table), §3 (connect flow), [slip39-recovery.md](slip39-recovery.md) (fixed 2-of-3 device quorum recovery).
 
@@ -142,18 +144,21 @@ The ceremony can then be finalized atomically.
 
 ### 2.1 Local device-key protection
 
-Before any provider credential or device-key operation, the browser runs
-WebAuthn with required user verification and the PRF extension.
-Rust/WASM builds the `navigator.credentials.create/get` option payloads with
-`1Password/passkey-rs` `passkey-types`, including PRF extension inputs.
-TypeScript owns only the browser platform call itself.
-TypeScript extracts the returned PRF extension result.
-It passes the 32-byte PRF output to WASM.
-Rust uses a versioned fixed PRF input for passkey mode.
-Rust then derives the X25519 age identity from the PRF output and the passkey
-`userHandle` with HKDF-SHA256.
-Nook never stores a password or encryption key in WebAuthn `user.id`.
-The `userHandle` is a non-secret account binding and HKDF salt.
+Before provider credential or device-key work, follow this ceremony:
+
+1. Run WebAuthn with required user verification and the PRF extension.
+2. Let Rust/WASM build `navigator.credentials.create/get` options with
+   `1Password/passkey-rs` `passkey-types`, including PRF inputs.
+3. Let TypeScript perform only the browser platform call and extract its PRF
+   result.
+4. Pass the 32-byte PRF output to WASM.
+5. Let Rust use a versioned fixed PRF input and derive the X25519 age identity
+   from the PRF output plus passkey `userHandle` with HKDF-SHA256.
+
+WebAuthn identity fields have bounded meaning:
+
+- Never store a password or encryption key in `user.id`.
+- Treat `userHandle` as a non-secret account binding and HKDF salt.
 
 Issue #201 proved the current browser boundary for `1Password/passkey-rs`:
 
@@ -163,49 +168,45 @@ Issue #201 proved the current browser boundary for `1Password/passkey-rs`:
 - It cannot invoke the browser/OS platform passkey provider.
 - Browsers expose that provider only through `navigator.credentials`.
 
-Nook must therefore keep a thin TypeScript bridge for the real platform ceremony.
-Option construction, wrapping, unwrapping, persistence, validation, and
-zeroization stay in Rust/WASM/core.
-
-For Rust tests and local tooling, Nook has an in-memory mock passkey
-authenticator in `nook-auth2` behind the `mock-passkey` feature and normal unit
-test builds. It stores resident credentials, requires an explicit
-approval/denial for registration and assertion, scopes lookup by RP id, and
-returns deterministic PRF output for the stored passkey. This emulator is only
-a portable test/dev provider; production browser passkeys still enter through
-`navigator.credentials`.
-
-The passkey material workflow is Rust-owned: registration PRF fallback,
-assertion request reconstruction, recovery metadata reconstruction, and unlock
-device-id verification live in `nook-auth2` and are unit-tested with the mock
-authenticator. `nook-wasm` should only adapt browser ceremonies and IndexedDB
-I/O around those core helpers.
-
-Passkey-backed Local Mode is deterministic.
-Choosing the same discoverable Nook passkey returns the same `userHandle`.
-Evaluating the PRF with Nook's fixed domain-separated input returns the
-material needed to derive the same device identity.
-A user can clear Nook's IndexedDB metadata.
-They can choose the existing passkey again.
-They recover the same `device_id` without creating duplicate
-`nokey.sh / Nook device` passkeys.
-The persisted passkey record stores only prompting metadata
-(`credentialId`, `userHandle`, `prfInput`, `kdf`).
-It stores no encrypted age secret.
-
-Existing plaintext `device_identity_secret` records are migrated in place.
-WASM replaces them with deterministic passkey metadata or a PIN-wrapped record.
-WASM then deletes the legacy plaintext.
-When WebAuthn PRF is unavailable, Nook offers a local PIN-derived wrapping mode.
-Nook does not return to plaintext storage.
-PIN mode uses a versioned `device_identity_wrapped` record.
-PBKDF2-SHA256 parameters are authenticated by AES-256-GCM metadata.
-PIN mode protects passive browser-storage copies from immediate plaintext key
-disclosure.
-Weak PINs have offline guessing risk if an attacker copies IndexedDB.
-Forgetting the PIN requires a destructive local identity reset.
-Encrypted local vault blobs are preserved.
-Saved sync credentials are removed because they were sealed to the old identity.
+- **Platform bridge:** Keep thin TypeScript for the real browser ceremony.
+  - Keep option construction, wrapping, unwrapping, persistence, validation,
+    and zeroization in Rust/WASM/core.
+- **Mock authenticator:** Use the in-memory `nook-auth2` provider behind
+  `mock-passkey` for Rust tests and local tooling.
+  - Store resident credentials.
+  - Require explicit approval or denial for registration and assertion.
+  - Scope lookup by RP ID.
+  - Return deterministic PRF output for the stored passkey.
+  - Treat it only as a portable test/dev provider. Production passkeys still
+    enter through `navigator.credentials`.
+- **Rust ownership:** Keep registration PRF fallback, assertion reconstruction,
+  recovery metadata reconstruction, and unlock device-ID verification in
+  `nook-auth2` with mock-authenticator unit tests.
+  - Let `nook-wasm` adapt browser ceremonies and IndexedDB I/O around those
+    helpers.
+- **Deterministic Local Mode:**
+  1. Choosing the same discoverable Nook passkey returns the same `userHandle`.
+  2. Evaluating PRF with Nook's fixed domain-separated input derives the same
+     device identity.
+  3. After clearing IndexedDB metadata, the user may choose the passkey again
+     and recover the same `device_id` without a duplicate
+     `nokey.sh / Nook device` passkey.
+  - Persist only `credentialId`, `userHandle`, `prfInput`, and `kdf` prompting
+    metadata.
+  - Persist no encrypted age secret.
+- **Plaintext-record migration:**
+  1. Replace `device_identity_secret` with deterministic passkey metadata or a
+     PIN-wrapped record in WASM.
+  2. Delete the legacy plaintext.
+- **PIN fallback:** When PRF is unavailable, use local PIN-derived wrapping and
+  never return to plaintext storage.
+  - Use a versioned `device_identity_wrapped` record.
+  - Authenticate PBKDF2-SHA256 parameters through AES-256-GCM metadata.
+  - Protect passive browser-storage copies from immediate plaintext disclosure.
+  - Acknowledge offline guessing risk for weak PINs after IndexedDB theft.
+  - Forgetting the PIN requires destructive local identity reset.
+  - Preserve encrypted local vault blobs.
+  - Remove saved sync credentials because the old identity sealed them.
 
 ### 2.2 Browser and authenticator support (2026-07-03)
 

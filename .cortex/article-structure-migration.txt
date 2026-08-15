@@ -7,11 +7,6 @@
 .cortex/exec-plans/tech-debt-tracker.md
 .cortex/exec-plans/ts-domain-to-rust-remaining.md
 .cortex/exec-plans/unified-vault-ui-rollout.md
-.cortex/product-specs/browser-extension.md
-.cortex/product-specs/decentralized-auth.md
-.cortex/product-specs/password-envelope.md
-.cortex/product-specs/password-manager.md
-.cortex/product-specs/slip39-recovery.md
 .cortex/references/ai-debugging.md
 .cortex/references/bun-svelte.md
 .cortex/references/cloudflare-operations.md
