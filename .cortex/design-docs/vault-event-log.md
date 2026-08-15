@@ -134,6 +134,10 @@ Checkpoint and visibility rules:
 
 - An `epoch-checkpoint` persists `secrets`, `members_checkpoint_hash`, and the
   complete rewrapped `rotated_meta_records` and `password_entries` sets.
+- A schema `3` checkpoint is the event's sole operation. It has exactly one
+  direct parent, that parent is a single security trigger, and its `key_epoch`
+  equals the trigger event id. Invalid standalone or bundled checkpoints are
+  quarantined.
 - Projection replaces the prior sets. Explicit empty arrays clear them.
 - Legacy checkpoints that omit metadata or password state retain the prior set.
 - Schema `3` owns these fields. Current readers still accept pre-replacement
@@ -242,7 +246,9 @@ rewraps auth/member metadata for remaining authorized entries, and appends an
 immutable `epoch-checkpoint`. Concurrent security rotations are detected in the
 projection, surfaced through WASM/UI, and fail closed for further local edits.
 Revocation metadata remains staged until the trigger/checkpoint pair commits.
-A failed commit leaves the live session metadata unchanged.
+A failure before that atomic commit restores the live session metadata. A
+failure after commit keeps the revoked metadata active because the durable
+security epoch already excludes that device.
 
 ## Provider interface (target)
 
@@ -262,8 +268,8 @@ Provider synchronization rules:
   repair the provider with any missing local event-store events.
 - During pull, validate fetched remote event hashes and signatures. Ignore
   events whose signed body belongs to another `store_id`.
-- Publish epoch checkpoints before triggers. Quarantine incomplete pairs and
-  descendants.
+- Publish epoch checkpoints before triggers for every provider, including local
+  folders. Quarantine incomplete pairs and descendants.
 - Treat old-frontier concurrency as a blocking conflict. Commit import unions
   in one IndexedDB transaction.
 - Keep schema v2 readable while schema v3 owns replacements.

@@ -494,13 +494,24 @@ impl NookVaultManager {
             .map(|record| record.event_id.clone())
             .collect::<BTreeSet<_>>();
         let merged = self.sync_external_event_log_records(remote_records).await?;
-        let writes = merged
+        let mut writes = merged
             .iter()
             .filter(|record| !remote_event_ids.contains(&record.event_id))
             .map(|record| {
+                Ok((
+                    EventId::parse(&record.event_id)?,
+                    Self::serialize_event_log_storage_record(record)?.into_bytes(),
+                ))
+            })
+            .collect::<Result<Vec<_>, NookError>>()?;
+        nook_core::order_remote_events_for_visibility(&mut writes)?;
+        let writes = writes
+            .into_iter()
+            .map(|(event_id, content)| {
                 Ok(LocalFolderEventWrite {
-                    event_id: record.event_id.clone(),
-                    content: Self::serialize_event_log_storage_record(record)?,
+                    event_id: event_id.into_inner(),
+                    content: String::from_utf8(content)
+                        .map_err(|error| NookError::Serialization(error.to_string()))?,
                 })
             })
             .collect::<Result<Vec<_>, NookError>>()?;

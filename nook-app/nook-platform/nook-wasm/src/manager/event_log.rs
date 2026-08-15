@@ -10,6 +10,7 @@ mod security_epoch;
 pub(in crate::manager) use records::{
     EventLogStorageRecord, ExtensionEventLogImportStatus, ExternalEventLogRecord,
 };
+pub(in crate::manager) use security_epoch::SecurityEpochRotationFailure;
 
 use super::{EventLogSyncIssueState, NookVaultManager, VaultCryptoState, VaultNameState};
 use crate::NookError;

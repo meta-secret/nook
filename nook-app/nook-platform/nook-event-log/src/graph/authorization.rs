@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use nook_auth2::{AuthKeyId, DeviceSigningPublicKey};
 
 use super::{EventGraph, VaultEvent};
-use crate::event::VaultOperation;
+use crate::event::{VaultEventSchemaVersion, VaultOperation};
 use crate::signing::SigningIdentity;
 use crate::{EventError, EventResult};
 
@@ -48,6 +48,10 @@ impl EventGraph {
                     .any(|parent| self.causal.quarantined().contains_key(parent))
                 {
                     Some("Ancestor event was rejected".to_owned())
+                } else if let Err(EventError::InvalidEpochCheckpointStructure { reason }) =
+                    self.validate_epoch_checkpoint_structure(event)
+                {
+                    Some(format!("Invalid security epoch checkpoint: {reason}"))
                 } else {
                     match self.validate_event_actor_authorized(event) {
                         Ok(()) => None,
@@ -70,6 +74,54 @@ impl EventGraph {
 
     fn event_ancestors_present(&self, event: &VaultEvent) -> bool {
         self.causal.ancestor_ids_present(&event.body.parents)
+    }
+
+    pub(super) fn validate_epoch_checkpoint_structure(
+        &self,
+        event: &VaultEvent,
+    ) -> EventResult<()> {
+        let checkpoints = event
+            .body
+            .operations
+            .iter()
+            .filter(|operation| matches!(operation, VaultOperation::EpochCheckpoint { .. }))
+            .count();
+        if checkpoints == 0 || event.body.schema_version < VaultEventSchemaVersion::V3 {
+            return Ok(());
+        }
+        if checkpoints != 1 || event.body.operations.len() != 1 {
+            return Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint must be the event's sole operation",
+            });
+        }
+        let [parent_id] = event.body.parents.as_slice() else {
+            return Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint must have exactly one direct parent",
+            });
+        };
+        if event.body.key_epoch != *parent_id {
+            return Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint key epoch must equal its direct parent id",
+            });
+        }
+        let parent = self
+            .events
+            .get(parent_id)
+            .ok_or_else(|| EventError::MissingEvent {
+                event_id: parent_id.as_str().to_owned(),
+            })?;
+        let is_security_trigger = matches!(
+            parent.body.operations.as_slice(),
+            [VaultOperation::PasswordRotated { .. }
+                | VaultOperation::PasswordRemoved { .. }
+                | VaultOperation::DeviceRevoked { .. }]
+        );
+        if !is_security_trigger {
+            return Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint parent must be one security rotation trigger",
+            });
+        }
+        Ok(())
     }
 
     /// Allow an unauthorized actor to publish its own membership event when the

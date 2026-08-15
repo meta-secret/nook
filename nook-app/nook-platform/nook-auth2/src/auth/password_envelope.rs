@@ -21,6 +21,7 @@ use crate::{AgeArmoredCiphertext, SymmetricKey};
 use age::secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
+use zeroize::Zeroizing;
 
 /// Scrypt work factor for human-chosen passwords (~1s on a 2024 mid-tier laptop).
 /// Intentionally higher than `VaultCrypto`'s `log_n = 15`, which is tuned for
@@ -349,22 +350,30 @@ pub fn resolve_keys_from_password(
 
     let secret = age::secrecy::SecretString::from(password.to_owned());
     let identity = age::scrypt::Identity::new(secret);
-    let password_plaintext = age_decrypt_scrypt(&identity, envelope.ciphertext.as_bytes())?;
-    let plaintext_bytes = if envelope.version == LEGACY_ENVELOPE_VERSION {
-        password_plaintext
+    let mut password_plaintext = Zeroizing::new(age_decrypt_scrypt(
+        &identity,
+        envelope.ciphertext.as_bytes(),
+    )?);
+    let mut plaintext_bytes = Zeroizing::new(if envelope.version == LEGACY_ENVELOPE_VERSION {
+        std::mem::take(&mut *password_plaintext)
     } else {
-        let wrapping_identity = String::from_utf8(password_plaintext)
-            .map_err(PasswordError::EnvelopePlaintextUtf8)?
+        let wrapping_identity_text = Zeroizing::new(
+            String::from_utf8(std::mem::take(&mut *password_plaintext))
+                .map_err(PasswordError::EnvelopePlaintextUtf8)?,
+        );
+        let wrapping_identity = wrapping_identity_text
             .parse::<age::x25519::Identity>()
             .map_err(|error| {
                 PasswordError::Age(AgeCryptoError::EnvelopeDecryptSetup(error.to_string()))
             })?;
         age_decrypt_identity(&wrapping_identity, envelope.wrapped_keys.as_bytes())?
-    };
-    let plaintext_str =
-        String::from_utf8(plaintext_bytes).map_err(PasswordError::EnvelopePlaintextUtf8)?;
-    let parsed: EnvelopePlaintext =
-        serde_json::from_str(&plaintext_str).map_err(PasswordError::EnvelopePlaintextJson)?;
+    });
+    let plaintext_str = Zeroizing::new(
+        String::from_utf8(std::mem::take(&mut *plaintext_bytes))
+            .map_err(PasswordError::EnvelopePlaintextUtf8)?,
+    );
+    let parsed: EnvelopePlaintext = serde_json::from_str(plaintext_str.as_str())
+        .map_err(PasswordError::EnvelopePlaintextJson)?;
 
     Ok(VaultKeys {
         secrets_key: SymmetricKey::parse(&parsed.secrets_key)?,

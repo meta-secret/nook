@@ -38,6 +38,21 @@ struct ExistingVaultHandoff<'a> {
     existing: ExistingVaultImportCommit,
 }
 
+fn identity_checkpoint_ancestors(
+    graph: &nook_core::EventGraph,
+    checkpoint_event_id: &nook_core::EventId,
+) -> Result<Vec<nook_core::IdentityVaultEventId>, NookError> {
+    graph
+        .topological_order()?
+        .into_iter()
+        .filter(|event_id| {
+            event_id == checkpoint_event_id || graph.is_ancestor(event_id, checkpoint_event_id)
+        })
+        .map(|event_id| nook_core::IdentityVaultEventId::parse(event_id.as_str()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| NookError::Database(error.to_string()))
+}
+
 async fn import_existing_vault_handoff(
     input: ExistingVaultHandoff<'_>,
 ) -> Result<ExistingVaultHandoffResult, NookError> {
@@ -64,11 +79,7 @@ async fn import_existing_vault_handoff(
             .map_err(|error| NookError::Database(error.to_string()))?;
     let checkpoint = nook_core::IdentityVaultEventId::parse(checkpoint_event_id.as_str())
         .map_err(|error| NookError::Database(error.to_string()))?;
-    let checkpoint_ancestors = ordered_event_ids
-        .iter()
-        .map(|event_id| nook_core::IdentityVaultEventId::parse(event_id.as_str()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| NookError::Database(error.to_string()))?;
+    let checkpoint_ancestors = identity_checkpoint_ancestors(&graph, checkpoint_event_id)?;
     let envelopes = nook_core::event_graph_active_device_envelopes(
         &graph,
         &input.existing.device_id,
@@ -436,6 +447,46 @@ mod tests {
                 .map_err(|error| NookError::Database(error.to_string()))?,
             pending_revocation_bytes,
         })
+    }
+
+    #[test]
+    fn selected_checkpoint_ancestors_exclude_concurrent_siblings() -> Result<(), NookError> {
+        let fixture = import_fixture()?;
+        let events = signed_access_events(&fixture)?;
+        let mut local = nook_core::LocalEventStore::new();
+        for (event_id, bytes) in [
+            (events.approval_id.clone(), events.approval_bytes.clone()),
+            (
+                events.replacement_id.clone(),
+                events.replacement_bytes.clone(),
+            ),
+            (
+                events.revocation_id.clone(),
+                events.revocation_bytes.clone(),
+            ),
+        ] {
+            local.put_event(event_id, bytes);
+        }
+        let graph = local.load_graph(fixture.store_id.as_str())?;
+
+        let ancestors = identity_checkpoint_ancestors(&graph, &events.replacement_id)?;
+
+        assert!(
+            ancestors
+                .iter()
+                .any(|id| id.as_str() == events.approval_id.as_str())
+        );
+        assert!(
+            ancestors
+                .iter()
+                .any(|id| id.as_str() == events.replacement_id.as_str())
+        );
+        assert!(
+            !ancestors
+                .iter()
+                .any(|id| id.as_str() == events.revocation_id.as_str())
+        );
+        Ok(())
     }
 
     #[wasm_bindgen_test]

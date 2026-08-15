@@ -458,13 +458,19 @@ impl NookVaultManager {
         })?;
         self.ensure_event_log_ready().await?;
         let live_meta = std::mem::replace(&mut self.vault.meta, staged_meta);
-        if let Err(error) = self
-            .rotate_security_epoch(nook_core::VaultOperation::DeviceRevoked {
+        if let Err(failure) = self
+            .rotate_security_epoch_classified(nook_core::VaultOperation::DeviceRevoked {
                 device_id: revoked_device_id,
             })
             .await
         {
-            self.vault.meta = live_meta;
+            let error = match failure {
+                super::event_log::SecurityEpochRotationFailure::BeforeCommit(error) => {
+                    self.vault.meta = live_meta;
+                    error
+                }
+                super::event_log::SecurityEpochRotationFailure::AfterCommit(error) => error,
+            };
             return Err(error.into());
         }
 
