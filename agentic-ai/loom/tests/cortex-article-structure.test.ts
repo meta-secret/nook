@@ -137,6 +137,38 @@ test('requires procedure-like articles to expose ordered actions', () => {
   );
 });
 
+test('recognizes qualified procedure and runbook headings', () => {
+  const headings = ['Procedure for recovery', 'Runbook: release'];
+  for (const heading of headings) {
+    const anchor = heading.toLowerCase().replaceAll(/[^a-z]+/g, '-');
+    const documentArgs: MakeDocumentArgs = {
+      path: `.cortex/${anchor}.md`,
+      content: `# Qualified procedure
+
+## Relationships
+
+- None.
+
+## Document map
+
+- [${heading}](#${anchor})
+  - Defines ordered work.
+  - Follow while performing the work.
+
+## ${heading}
+
+- Prepare the input.
+- Perform the action.
+- Validate the result.
+`,
+    };
+    const document = makeDocument(documentArgs);
+    expect(audit([document]).map((finding) => finding.code)).toContain(
+      CortexArticleFindingCode.UnorderedProcedure,
+    );
+  }
+});
+
 test('allows workflow and migration headings that define unordered rules', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/reference-rules.md',
@@ -191,6 +223,62 @@ test('rejects mapped articles with no body content', () => {
   const document = makeDocument(documentArgs);
   expect(audit([document]).map((finding) => finding.code)).toContain(
     CortexArticleFindingCode.EmptyArticle,
+  );
+});
+
+test('rejects documents with no content articles after the map', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/no-articles.md',
+    content: `# No articles
+
+## Relationships
+
+- None.
+
+## Document map
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document]).map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.EmptyArticle,
+  );
+});
+
+test('treats Markdown comments as transparent to dense prose runs', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/commented-prose.md',
+    content: `# Commented prose
+
+## Relationships
+
+- None.
+
+## Document map
+
+- [Explanation](#explanation)
+  - Explains the topic.
+  - Read for rationale.
+
+## Explanation
+
+First paragraph.
+
+<!-- internal authoring note -->
+
+Second paragraph.
+
+<!-- another internal note -->
+
+Third paragraph.
+
+<!-- final internal note -->
+
+Fourth paragraph.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document]).map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.DenseArticle,
   );
 });
 

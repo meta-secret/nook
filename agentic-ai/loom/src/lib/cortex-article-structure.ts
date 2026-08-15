@@ -57,7 +57,7 @@ type AuditArticleArgs = AuditDocumentArgs & {
 
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
 const PROCEDURE_HEADING =
-  /(^|\s)(procedure|runbook)$|^(steps|ordered delivery|delivery sequence)$/i;
+  /\b(procedure|runbook)\b|^(steps|ordered delivery|delivery sequence)$/i;
 
 export function auditCortexArticleStructure(
   args: AuditCortexArticleStructureArgs,
@@ -172,6 +172,14 @@ function auditDocument(args: AuditDocumentArgs): void {
   };
   const contentStart = findContentStart(contentStartArgs);
   if (contentStart < 0) {
+    const findingArgs: AddFindingArgs = {
+      findings: args.findings,
+      code: CortexArticleFindingCode.EmptyArticle,
+      file: args.document.relativePath,
+      line: nodeLine(mapHeading),
+      message: 'Document has no content articles after its Document map.',
+    };
+    addFinding(findingArgs);
     return;
   }
 
@@ -265,6 +273,9 @@ function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
     if (node.type === 'heading') {
       break;
     }
+    if (isInvisibleHtmlComment(node)) {
+      continue;
+    }
     if (node.type !== 'paragraph') {
       consecutive = 0;
       continue;
@@ -281,6 +292,10 @@ function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
       addFinding(findingArgs);
     }
   }
+}
+
+function isInvisibleHtmlComment(node: RootContent): boolean {
+  return node.type === 'html' && /^\s*<!--[\s\S]*-->\s*$/.test(node.value);
 }
 
 function auditProcedure(args: AuditArticleArgs): void {
