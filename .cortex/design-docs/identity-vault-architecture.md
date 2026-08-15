@@ -125,8 +125,9 @@ Private app keys never enter the replicated identity record.
 The browser stores the local directory under `identity_directory_v1`.
 The directory contains:
 
-- zero or more `IdentityRecord` values; and
-- an explicit `Empty` or `Selected(identity_id)` state.
+- zero or more `IdentityRecord` values;
+- an explicit `Empty` or `Selected(identity_id)` state; and
+- app IDs retired by destructive local recovery.
 
 Older versions allowed one app key to appear in several identities.
 Load migrates those records in the existing IndexedDB transaction.
@@ -153,6 +154,13 @@ Each identity member stores its X25519 encryption public key and Ed25519 event
 signing public key. Older records decode a missing signing key as unavailable.
 They cannot enter a new signed Simple-vault genesis roster until an authenticated
 handoff or the local signer supplies that public key.
+
+Destructive device recovery retires only the persisted app identity whose local
+protection became inaccessible. It does not retire paired website, extension,
+or peer installation identities. Recovery deletes the inaccessible
+installation's durable event-signing seed in the same IndexedDB transaction. A
+malformed retired-app ledger cannot block recovery; recovery replaces it with
+valid retirement evidence before a replacement identity may enroll.
 
 - **Directory concurrency:**
   - Apply every directory update in one IndexedDB read-write transaction.
@@ -227,6 +235,17 @@ Simple vault creation uses the following marker contract:
   - Upgrade that state only after the durable seed matches the pinned event
     signer.
   - Apply the same signer check before sealing a legacy plaintext seed.
+
+Destructive recovery clears identity ownership atomically while retaining a
+fail-closed ledger of retired app IDs. Tabs quiesce before recovery. Separate
+auth cleanup remains retryable after a partial failure. The exclusive recovery
+lock advances the storage generation on success or failure. The initiating tab
+adopts that generation before it performs another queued storage operation.
+Identity DEK grants
+store the verified observed epoch during import. Legacy omissions require
+verified reconciliation. Locked remote sync persists the verified projected
+epoch before password self-enrollment can append a membership event. The v2
+reconciliation marker preserves resumable progress across reloads.
 
 The first directory read migrates `identity_record_v1` when present:
 

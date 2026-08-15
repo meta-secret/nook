@@ -2,8 +2,8 @@
 
 use crate::canonical::EventId;
 use crate::event::{
-    VaultEvent, VaultEventSchemaVersion, parse_event_storage_bytes,
-    parse_remote_event_storage_bytes, serialize_event_storage_yaml,
+    VaultEvent, parse_event_storage_bytes, parse_remote_event_storage_bytes,
+    serialize_event_storage_yaml,
 };
 use crate::graph::{EventGraph, EventInsertStatus};
 use crate::{EventError, EventResult};
@@ -98,9 +98,14 @@ pub fn union_remote_events(
     remote_events: &[(EventId, Vec<u8>)],
     store_id: &str,
 ) -> EventResult<Vec<EventId>> {
+    let visible_remote_events = crate::remote_epoch_visibility::visibility_gated_remote_events(
+        local,
+        remote_events,
+        store_id,
+    )?;
     let mut candidate = local.clone();
     let mut candidates = Vec::new();
-    for (event_id, bytes) in remote_events {
+    for (event_id, bytes) in &visible_remote_events {
         if local.get_bytes(event_id).is_some() || candidate.get_bytes(event_id).is_some() {
             continue;
         }
@@ -114,13 +119,13 @@ pub fn union_remote_events(
         candidate.put_event(event_id.clone(), bytes.clone());
         candidates.push(event_id.clone());
     }
-    if candidates.is_empty() {
-        let _ = local.load_graph(store_id)?;
-        return Ok(Vec::new());
-    }
-
     let graph = candidate.load_graph(store_id)?;
-    let quarantined: BTreeSet<EventId> = graph.quarantined().keys().cloned().collect();
+    let mut quarantined: BTreeSet<EventId> = graph.quarantined().keys().cloned().collect();
+    quarantined.extend(
+        crate::remote_epoch_visibility::incomplete_security_transition_events(
+            &candidate, store_id,
+        )?,
+    );
     let mut accepted = LocalEventStore::new();
     for event_id in candidate.event_ids() {
         if quarantined.contains(&event_id) {
@@ -183,7 +188,7 @@ pub fn remote_event_store_id(event_id: &EventId, bytes: &[u8]) -> EventResult<St
             event_id: event_id.as_str().to_owned(),
         });
     }
-    if event.body.schema_version != VaultEventSchemaVersion::CURRENT {
+    if !event.body.schema_version.is_supported() {
         return Err(EventError::UnsupportedSchemaVersion {
             version: event.body.schema_version.get(),
         });

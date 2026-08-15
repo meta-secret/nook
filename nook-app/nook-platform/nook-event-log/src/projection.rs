@@ -7,7 +7,6 @@ use crate::epoch::{
     EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
     concurrent_epoch_rotations_conflict, operation_starts_epoch,
 };
-use crate::event::VaultEventSchemaVersion;
 use crate::graph::EventGraph;
 use crate::{EventError, EventResult};
 use crate::{PasswordUnlockEntry, SecretFingerprint};
@@ -128,6 +127,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
     };
 
     let mut epoch_events: BTreeMap<EventId, EpochRotationReason> = BTreeMap::new();
+    let mut security_events: BTreeMap<EventId, EpochRotationReason> = BTreeMap::new();
     let mut replacements_by_old: BTreeMap<SecretId, Vec<(EventId, SecretId)>> = BTreeMap::new();
 
     for event_id in order {
@@ -137,14 +137,21 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
         if event.body.store_id != expected_store {
             return Err(EventError::ProjectionStoreMismatch);
         }
-        if event.body.schema_version != VaultEventSchemaVersion::CURRENT {
+        if !event.body.schema_version.is_supported() {
             projection.unresolved_schema = true;
             continue;
         }
 
+        let mut security_reason = None;
         for operation in &event.body.operations {
             if let EpochTransition::Rotated(reason) = operation_starts_epoch(operation) {
                 epoch_events.insert(event_id.clone(), reason);
+                security_reason = Some(reason);
+            }
+            if matches!(operation, crate::VaultOperation::JoinApproved { .. }) {
+                security_reason.get_or_insert(EpochRotationReason::AccessGrant);
+            } else if !matches!(operation, crate::VaultOperation::EpochCheckpoint { .. }) {
+                security_reason.get_or_insert(EpochRotationReason::ConcurrentVaultMutation);
             }
             apply_operation(
                 &mut projection,
@@ -152,6 +159,9 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
                 operation,
                 &mut replacements_by_old,
             );
+        }
+        if let Some(reason) = security_reason {
+            security_events.insert(event_id.clone(), reason);
         }
 
         if let Ok(epoch_id) = EventId::parse(event.body.key_epoch.as_str()) {
@@ -169,7 +179,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
         }
     }
 
-    projection.security_conflicts = detect_security_conflicts(graph, &epoch_events);
+    projection.security_conflicts = detect_security_conflicts(graph, &security_events);
     projection.replacement_conflicts = detect_replacement_conflicts(graph, &replacements_by_old);
     Ok(projection)
 }
@@ -250,7 +260,9 @@ mod tests {
         VaultEventSchemaVersion, VaultOperation, build_genesis_import_event,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key as key, store};
-    use crate::{EventResult, SecretFingerprint};
+    use crate::{
+        AgeArmoredCiphertext, DevicePublicKey, EventResult, MemberLabel, SecretFingerprint,
+    };
     use ed25519_dalek::SigningKey;
     use nook_auth2::SecretType;
     use nook_auth2::{
@@ -270,6 +282,8 @@ mod tests {
             version: 1,
             kdf: "scrypt".to_owned(),
             work_factor: 10,
+            recipient: String::new(),
+            wrapped_keys: String::new(),
             ciphertext: ciphertext.to_owned(),
         }
     }
@@ -533,6 +547,74 @@ mod tests {
         let projection = project_vault(&graph, STORE)?;
         assert!(!projection.security_conflicts.is_empty());
         assert!(projection.has_blocking_conflicts());
+        Ok(())
+    }
+
+    #[test]
+    fn concurrent_access_grant_and_rotation_surface_conflict() -> EventResult<()> {
+        let signing_key = key();
+        let mut graph = EventGraph::new();
+        let genesis_id = genesis(&mut graph, &signing_key)?;
+        let grant = signed_operation(
+            &signing_key,
+            vec![genesis_id.clone()],
+            VaultOperation::JoinApproved {
+                device_id: DeviceId::parse("abcd1234ef567890")?,
+                encryption_public_key: DevicePublicKey::from_trusted("age1member".to_owned()),
+                signing_public_key: public_key(&signing_key),
+                label: MemberLabel::from_trusted("Member".to_owned()),
+                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secret".to_owned()),
+                members_key_ciphertext: AgeArmoredCiphertext::from_trusted("members".to_owned()),
+            },
+        )?;
+        let revoke = signed_operation(
+            &signing_key,
+            vec![genesis_id],
+            VaultOperation::DeviceRevoked {
+                device_id: DeviceId::parse("fedcba9876543210")?,
+            },
+        )?;
+        graph.insert(grant, STORE)?;
+        graph.insert(revoke, STORE)?;
+
+        let projection = project_vault(&graph, STORE)?;
+        assert!(projection.has_blocking_conflicts());
+        assert!(
+            projection
+                .security_conflicts
+                .iter()
+                .any(|conflict| { conflict.reasons.contains(&EpochRotationReason::AccessGrant) })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn old_epoch_mutation_concurrent_with_rotation_fails_closed() -> EventResult<()> {
+        let signing_key = key();
+        let mut graph = EventGraph::new();
+        let genesis_id = genesis(&mut graph, &signing_key)?;
+        let mutation = signed_operation(
+            &signing_key,
+            vec![genesis_id.clone()],
+            VaultOperation::VaultCleared,
+        )?;
+        let rotation = signed_operation(
+            &signing_key,
+            vec![genesis_id],
+            VaultOperation::PasswordRemoved {
+                entry_id: PasswordEntryId::parse("pwdentry001")?,
+            },
+        )?;
+        graph.insert(mutation, STORE)?;
+        graph.insert(rotation, STORE)?;
+
+        let projection = project_vault(&graph, STORE)?;
+        assert!(projection.has_blocking_conflicts());
+        assert!(projection.security_conflicts.iter().any(|conflict| {
+            conflict
+                .reasons
+                .contains(&EpochRotationReason::ConcurrentVaultMutation)
+        }));
         Ok(())
     }
 

@@ -38,6 +38,21 @@ struct ExistingVaultHandoff<'a> {
     existing: ExistingVaultImportCommit,
 }
 
+fn identity_checkpoint_ancestors(
+    graph: &nook_core::EventGraph,
+    checkpoint_event_id: &nook_core::EventId,
+) -> Result<Vec<nook_core::IdentityVaultEventId>, NookError> {
+    graph
+        .topological_order()?
+        .into_iter()
+        .filter(|event_id| {
+            event_id == checkpoint_event_id || graph.is_ancestor(event_id, checkpoint_event_id)
+        })
+        .map(|event_id| nook_core::IdentityVaultEventId::parse(event_id.as_str()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| NookError::Database(error.to_string()))
+}
+
 async fn import_existing_vault_handoff(
     input: ExistingVaultHandoff<'_>,
 ) -> Result<ExistingVaultHandoffResult, NookError> {
@@ -52,6 +67,19 @@ async fn import_existing_vault_handoff(
             "Imported extension identity has an incomplete signed vault event graph.".to_owned(),
         ));
     }
+    let ordered_event_ids = graph.topological_order()?;
+    let checkpoint_event_id = ordered_event_ids.last().ok_or_else(|| {
+        NookError::Database("Imported extension identity has no committed vault events.".to_owned())
+    })?;
+    let checkpoint_event = graph.get(checkpoint_event_id).ok_or_else(|| {
+        NookError::Database("Imported extension identity checkpoint is missing.".to_owned())
+    })?;
+    let key_epoch =
+        nook_core::IdentityVaultEventId::parse(checkpoint_event.body.key_epoch.as_str())
+            .map_err(|error| NookError::Database(error.to_string()))?;
+    let checkpoint = nook_core::IdentityVaultEventId::parse(checkpoint_event_id.as_str())
+        .map_err(|error| NookError::Database(error.to_string()))?;
+    let checkpoint_ancestors = identity_checkpoint_ancestors(&graph, checkpoint_event_id)?;
     let envelopes = nook_core::event_graph_active_device_envelopes(
         &graph,
         &input.existing.device_id,
@@ -72,6 +100,13 @@ async fn import_existing_vault_handoff(
             nook_core::IdentityVaultDekReconciliation {
                 secrets_envelope: envelopes.secrets_key,
                 members_envelope: envelopes.members_key,
+                epoch_update: nook_core::IdentityVaultDekEpochUpdate::Observe {
+                    key_epoch: nook_core::IdentityVaultDekEpoch::Known {
+                        key_epoch,
+                        checkpoint,
+                    },
+                    checkpoint_ancestors,
+                },
                 authorized_auth_ids: nook_core::event_graph_active_auth_ids(&graph)?,
             },
         )
@@ -243,10 +278,13 @@ mod tests {
     }
 
     async fn assert_nothing_published(
-        signing_seed_before: &Option<String>,
+        signing_seed_before: Option<&String>,
     ) -> Result<(), NookError> {
         assert!(load_identity_directory().await?.identities().is_empty());
-        assert_eq!(&event_db::load_signing_seed().await?, signing_seed_before);
+        assert_eq!(
+            event_db::load_signing_seed().await?.as_ref(),
+            signing_seed_before
+        );
         Ok(())
     }
 
@@ -275,7 +313,7 @@ mod tests {
         .await;
 
         assert!(result.is_err());
-        assert_nothing_published(&signing_seed_before).await?;
+        assert_nothing_published(signing_seed_before.as_ref()).await?;
         clear_identity_directory_for_test().await?;
         Ok(())
     }
@@ -293,6 +331,7 @@ mod tests {
         pending_revocation_bytes: Vec<u8>,
     }
 
+    #[allow(clippy::too_many_lines)] // One fixture keeps the causal access-event chain auditable.
     fn signed_access_events(fixture: &ImportFixture) -> Result<SignedAccessEvents, NookError> {
         let (signing, _) = nook_core::SigningIdentity::generate()
             .map_err(|error| NookError::Database(error.to_string()))?;
@@ -408,6 +447,46 @@ mod tests {
                 .map_err(|error| NookError::Database(error.to_string()))?,
             pending_revocation_bytes,
         })
+    }
+
+    #[test]
+    fn selected_checkpoint_ancestors_exclude_concurrent_siblings() -> Result<(), NookError> {
+        let fixture = import_fixture()?;
+        let events = signed_access_events(&fixture)?;
+        let mut local = nook_core::LocalEventStore::new();
+        for (event_id, bytes) in [
+            (events.approval_id.clone(), events.approval_bytes.clone()),
+            (
+                events.replacement_id.clone(),
+                events.replacement_bytes.clone(),
+            ),
+            (
+                events.revocation_id.clone(),
+                events.revocation_bytes.clone(),
+            ),
+        ] {
+            local.put_event(event_id, bytes);
+        }
+        let graph = local.load_graph(fixture.store_id.as_str())?;
+
+        let ancestors = identity_checkpoint_ancestors(&graph, &events.replacement_id)?;
+
+        assert!(
+            ancestors
+                .iter()
+                .any(|id| id.as_str() == events.approval_id.as_str())
+        );
+        assert!(
+            ancestors
+                .iter()
+                .any(|id| id.as_str() == events.replacement_id.as_str())
+        );
+        assert!(
+            !ancestors
+                .iter()
+                .any(|id| id.as_str() == events.revocation_id.as_str())
+        );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -553,7 +632,7 @@ mod tests {
         .await;
 
         assert!(result.is_err());
-        assert_nothing_published(&signing_seed_before).await?;
+        assert_nothing_published(signing_seed_before.as_ref()).await?;
         event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
         clear_identity_directory_for_test().await
     }
@@ -622,7 +701,7 @@ mod tests {
 
         revocation_result?;
         assert!(handoff_result.is_err());
-        assert_nothing_published(&signing_seed_before).await?;
+        assert_nothing_published(signing_seed_before.as_ref()).await?;
         let revoked_graph = event_db::load_local_event_store(fixture.store_id.as_str())
             .await?
             .load_graph(fixture.store_id.as_str())?;

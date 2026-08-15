@@ -3,12 +3,90 @@ use std::collections::BTreeSet;
 use super::{
     EventId, EventLogStorageRecord, EventLogSyncIssueState, ExternalEventLogRecord,
     LocalFolderEventWrite, NookError, NookVaultManager, RemoteEventLogClassification,
-    append_outbox_index, classify_remote_event_log, load_from_indexed_db, load_local_event_store,
-    load_outbox, queue_outbox_entry, read_local_folder_event_files, remove_outbox_entry,
-    save_event_bytes, save_heads, union_remote_events_and_heads, write_local_folder_event_files,
+    VaultCryptoState, append_outbox_index, classify_remote_event_log, load_from_indexed_db,
+    load_local_event_store, load_outbox, queue_outbox_entry, read_local_folder_event_files,
+    remove_outbox_entry, save_key_epoch, write_local_folder_event_files,
 };
 
+fn outbox_event_is_current(local_ids: Option<&BTreeSet<EventId>>, event_id: &EventId) -> bool {
+    local_ids.is_none_or(|ids| ids.contains(event_id))
+}
+
 impl NookVaultManager {
+    async fn persist_projected_key_epoch(
+        &mut self,
+        projection: &nook_core::VaultProjection,
+    ) -> Result<(), NookError> {
+        let nook_core::ProjectionEpoch::Current(nook_core::KeyEpoch(key_epoch)) = &projection.epoch
+        else {
+            return Ok(());
+        };
+        let next_epoch = key_epoch.as_str().to_owned();
+        save_key_epoch(&self.vault.store_id, &next_epoch).await?;
+        self.event_log.key_epoch = next_epoch;
+        Ok(())
+    }
+
+    fn projected_epoch_keys(
+        meta: &nook_core::VaultMetaState,
+        identity: &nook_core::DeviceIdentity,
+    ) -> Result<nook_core::VaultKeys, NookError> {
+        let envelopes = meta.auth.get(&identity.auth_id()).ok_or_else(|| {
+            NookError::Database(
+                "The current security epoch no longer authorizes this device.".to_owned(),
+            )
+        })?;
+        Ok(nook_core::VaultKeys {
+            secrets_key: identity.decrypt_envelope(&envelopes.secrets_key)?,
+            members_key: identity.decrypt_envelope(&envelopes.members_key)?,
+        })
+    }
+
+    pub(in crate::manager) async fn adopt_projected_security_epoch(
+        &mut self,
+        projection: &nook_core::VaultProjection,
+    ) -> Result<(), NookError> {
+        let nook_core::ProjectionEpoch::Current(nook_core::KeyEpoch(key_epoch)) = &projection.epoch
+        else {
+            return Ok(());
+        };
+        if self.event_log.key_epoch == key_epoch.as_str() && self.vault.crypto.is_unlocked() {
+            return Ok(());
+        }
+        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
+            let error = NookError::from(nook_core::MultiDeviceError::SentinelCeremonyRequired);
+            self.clear_vault_keys();
+            return Err(error);
+        }
+        let keys = match self
+            .device_identity()
+            .and_then(|identity| Self::projected_epoch_keys(&self.vault.meta, &identity))
+        {
+            Ok(keys) => keys,
+            Err(error) => {
+                self.clear_vault_keys();
+                return Err(error);
+            }
+        };
+        let crypto = match nook_core::VaultCrypto::new(&keys.secrets_key) {
+            Ok(crypto) => crypto,
+            Err(error) => {
+                self.clear_vault_keys();
+                return Err(error.into());
+            }
+        };
+        let next_epoch = key_epoch.as_str().to_owned();
+        if let Err(error) = save_key_epoch(&self.vault.store_id, &next_epoch).await {
+            self.clear_vault_keys();
+            return Err(error);
+        }
+        self.vault.secrets_key = keys.secrets_key.as_str().to_owned();
+        self.vault.members_key = keys.members_key.as_str().to_owned();
+        self.vault.crypto = VaultCryptoState::Unlocked(crypto);
+        self.event_log.key_epoch = next_epoch;
+        Ok(())
+    }
+
     pub(super) async fn queue_event_outbox_for_current_provider(
         &mut self,
         event_id: &EventId,
@@ -154,24 +232,51 @@ impl NookVaultManager {
         let mut remote_ids = self.list_current_provider_event_ids().await?;
         self.guard_current_provider_writable_for_active_store(&remote_ids)
             .await?;
-        let pending = load_outbox(&provider_id).await?;
-        for (raw_id, bytes) in pending {
-            let event_id = EventId::parse(&raw_id)?;
+        let local_ids = if self.vault.store_id.is_empty() {
+            None
+        } else {
+            Some(
+                load_local_event_store(&self.vault.store_id)
+                    .await?
+                    .event_ids()
+                    .into_iter()
+                    .collect::<BTreeSet<_>>(),
+            )
+        };
+        let mut pending = load_outbox(&provider_id)
+            .await?
+            .into_iter()
+            .map(|(event_id, bytes)| Ok((EventId::parse(&event_id)?, bytes)))
+            .collect::<Result<Vec<_>, NookError>>()?;
+        nook_core::order_remote_events_for_visibility(&mut pending)?;
+        for (event_id, bytes) in pending {
+            if !outbox_event_is_current(local_ids.as_ref(), &event_id) {
+                remove_outbox_entry(&provider_id, event_id.as_str()).await?;
+                continue;
+            }
             // Always put-if-absent: a listed remote name may be unreadable junk.
             // Only drop the outbox row after a successful idempotent publish.
             self.put_current_provider_event_if_absent(&event_id, &bytes)
                 .await?;
+            remove_outbox_entry(&provider_id, event_id.as_str()).await?;
             remote_ids.insert(event_id);
-            remove_outbox_entry(&provider_id, &raw_id).await?;
         }
 
         if !self.vault.store_id.is_empty() {
             let local = load_local_event_store(&self.vault.store_id).await?;
-            for event_id in local.missing_event_ids(&remote_ids) {
-                let bytes = local.get_bytes(&event_id).ok_or_else(|| {
-                    NookError::Database(format!("Local event {event_id} is missing"))
-                })?;
-                self.put_current_provider_event_if_absent(&event_id, bytes)
+            let mut missing = local
+                .missing_event_ids(&remote_ids)
+                .into_iter()
+                .map(|event_id| {
+                    let bytes = local.get_bytes(&event_id).ok_or_else(|| {
+                        NookError::Database(format!("Local event {event_id} is missing"))
+                    })?;
+                    Ok((event_id, bytes.to_vec()))
+                })
+                .collect::<Result<Vec<_>, NookError>>()?;
+            nook_core::order_remote_events_for_visibility(&mut missing)?;
+            for (event_id, bytes) in missing {
+                self.put_current_provider_event_if_absent(&event_id, &bytes)
                     .await?;
                 remote_ids.insert(event_id);
             }
@@ -272,25 +377,24 @@ impl NookVaultManager {
         remote_events: &[(EventId, Vec<u8>)],
         persist_locked_projection: bool,
     ) -> Result<(), NookError> {
-        let heads = union_remote_events_and_heads(local, remote_events, &self.vault.store_id)?;
-        // Persist only events retained after quarantine. Saving rejected
-        // JoinApproved bytes poisons later pairing retries.
-        for (event_id, bytes) in remote_events {
-            if local.get_bytes(event_id).is_none() {
-                continue;
-            }
-            save_event_bytes(&self.vault.store_id, event_id.as_str(), bytes).await?;
-        }
+        let (heads, persisted) = crate::storage::event_db::save_verified_remote_events(
+            &self.vault.store_id,
+            remote_events,
+        )
+        .await?;
+        *local = persisted;
         self.event_log.heads = heads.clone();
-        save_heads(&self.vault.store_id, &heads).await?;
         let graph = local.load_graph(&self.vault.store_id)?;
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        let projection = nook_core::project_vault(&graph, &self.vault.store_id)?;
         self.ensure_sentinel_architecture_from_shares()?;
         let unlocked =
             self.vault.crypto.is_unlocked() || self.ensure_vault_crypto_from_cache().await.is_ok();
         if unlocked {
+            self.adopt_projected_security_epoch(&projection).await?;
             self.apply_event_projection_to_session().await?;
         } else if persist_locked_projection {
+            self.persist_projected_key_epoch(&projection).await?;
             self.hydrate_locked_projection_from_events().await?;
         }
         if unlocked || persist_locked_projection {
@@ -405,13 +509,24 @@ impl NookVaultManager {
             .map(|record| record.event_id.clone())
             .collect::<BTreeSet<_>>();
         let merged = self.sync_external_event_log_records(remote_records).await?;
-        let writes = merged
+        let mut writes = merged
             .iter()
             .filter(|record| !remote_event_ids.contains(&record.event_id))
             .map(|record| {
+                Ok((
+                    EventId::parse(&record.event_id)?,
+                    Self::serialize_event_log_storage_record(record)?.into_bytes(),
+                ))
+            })
+            .collect::<Result<Vec<_>, NookError>>()?;
+        nook_core::order_remote_events_for_visibility(&mut writes)?;
+        let writes = writes
+            .into_iter()
+            .map(|(event_id, content)| {
                 Ok(LocalFolderEventWrite {
-                    event_id: record.event_id.clone(),
-                    content: Self::serialize_event_log_storage_record(record)?,
+                    event_id: event_id.into_inner(),
+                    content: String::from_utf8(content)
+                        .map_err(|error| NookError::Serialization(error.to_string()))?,
                 })
             })
             .collect::<Result<Vec<_>, NookError>>()?;
@@ -425,6 +540,29 @@ impl NookVaultManager {
 mod tests {
     use super::*;
     use wasm_bindgen::JsError;
+
+    #[test]
+    fn projected_epoch_keys_use_the_current_auth_envelopes() -> anyhow::Result<()> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let keys = nook_core::generate_vault_keys()?;
+        let auth = nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
+        let meta = nook_core::VaultMetaState::from_stored_records(&[auth]);
+
+        let resolved = NookVaultManager::projected_epoch_keys(&meta, &identity)?;
+
+        assert_eq!(resolved, keys);
+        Ok(())
+    }
+
+    #[test]
+    fn durable_outbox_rejects_an_event_removed_from_the_active_index() -> anyhow::Result<()> {
+        let retained = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let quarantined = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
+        let local_ids = BTreeSet::from([retained.clone()]);
+        assert!(outbox_event_is_current(Some(&local_ids), &retained));
+        assert!(!outbox_event_is_current(Some(&local_ids), &quarantined));
+        Ok(())
+    }
 
     #[test]
     #[allow(

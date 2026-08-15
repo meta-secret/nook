@@ -26,6 +26,8 @@ pub enum EpochRotationReason {
     PasswordRotated,
     PasswordRemoved,
     DeviceRevoked,
+    AccessGrant,
+    ConcurrentVaultMutation,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,6 +44,8 @@ impl EpochRotationReason {
             Self::PasswordRotated => "password-rotated",
             Self::PasswordRemoved => "password-removed",
             Self::DeviceRevoked => "device-revoked",
+            Self::AccessGrant => "access-grant",
+            Self::ConcurrentVaultMutation => "concurrent-vault-mutation",
         }
     }
 }
@@ -82,6 +86,7 @@ pub fn operation_starts_epoch(operation: &VaultOperation) -> EpochTransition {
         | VaultOperation::JoinDenied { .. }
         | VaultOperation::MemberRenamed { .. }
         | VaultOperation::PasswordAdded { .. }
+        | VaultOperation::PasswordEnvelopeUpgraded { .. }
         | VaultOperation::VaultCleared => EpochTransition::Unchanged,
     }
 }
@@ -92,17 +97,29 @@ pub fn concurrent_epoch_rotations_conflict(
     left: EpochRotationReason,
     right: EpochRotationReason,
 ) -> bool {
-    matches!(
-        (left, right),
-        (
-            EpochRotationReason::PasswordRotated
-                | EpochRotationReason::PasswordRemoved
-                | EpochRotationReason::DeviceRevoked,
-            EpochRotationReason::PasswordRotated
-                | EpochRotationReason::PasswordRemoved
-                | EpochRotationReason::DeviceRevoked
-        )
-    )
+    let left_rotates_access = matches!(
+        left,
+        EpochRotationReason::PasswordRotated
+            | EpochRotationReason::PasswordRemoved
+            | EpochRotationReason::DeviceRevoked
+    );
+    let right_rotates_access = matches!(
+        right,
+        EpochRotationReason::PasswordRotated
+            | EpochRotationReason::PasswordRemoved
+            | EpochRotationReason::DeviceRevoked
+    );
+    let left_mutates_access = matches!(
+        left,
+        EpochRotationReason::AccessGrant | EpochRotationReason::ConcurrentVaultMutation
+    );
+    let right_mutates_access = matches!(
+        right,
+        EpochRotationReason::AccessGrant | EpochRotationReason::ConcurrentVaultMutation
+    );
+
+    (left_rotates_access && (right_rotates_access || right_mutates_access))
+        || (right_rotates_access && left_mutates_access)
 }
 
 #[cfg(test)]
@@ -142,6 +159,22 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_access_grant_and_rotation_conflict() {
+        assert!(concurrent_epoch_rotations_conflict(
+            EpochRotationReason::AccessGrant,
+            EpochRotationReason::DeviceRevoked
+        ));
+        assert!(!concurrent_epoch_rotations_conflict(
+            EpochRotationReason::AccessGrant,
+            EpochRotationReason::AccessGrant
+        ));
+        assert!(concurrent_epoch_rotations_conflict(
+            EpochRotationReason::ConcurrentVaultMutation,
+            EpochRotationReason::PasswordRemoved
+        ));
+    }
+
+    #[test]
     fn operation_starts_epoch_maps_security_ops() -> anyhow::Result<()> {
         assert_eq!(
             operation_starts_epoch(&VaultOperation::VaultImported {
@@ -158,6 +191,8 @@ mod tests {
                     version: 1,
                     kdf: "scrypt".to_owned(),
                     work_factor: 10,
+                    recipient: String::new(),
+                    wrapped_keys: String::new(),
                     ciphertext: "c".to_owned()
                 },
             }),

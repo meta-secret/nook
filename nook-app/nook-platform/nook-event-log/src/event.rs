@@ -23,7 +23,13 @@ pub struct VaultEventSchemaVersion(u32);
 
 impl VaultEventSchemaVersion {
     pub const V2: Self = Self(2);
-    pub const CURRENT: Self = Self::V2;
+    pub const V3: Self = Self(3);
+    pub const CURRENT: Self = Self::V3;
+
+    #[must_use]
+    pub const fn is_supported(self) -> bool {
+        self.0 >= Self::V2.0 && self.0 <= Self::CURRENT.0
+    }
 
     #[must_use]
     pub const fn get(self) -> u32 {
@@ -63,6 +69,78 @@ pub struct SentinelShareIssuedPayload {
     pub required_participants: u8,
     pub share_index: u8,
     pub ciphertext: AgeArmoredCiphertext,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum EpochPasswordState {
+    #[default]
+    LegacyRetain,
+    Replace(Vec<PasswordUnlockEntry>),
+}
+
+/// Checkpoint metadata replacement. Omitted legacy fields retain the previous
+/// metadata, while an explicit empty array clears every metadata record.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum EpochMetadataState {
+    #[default]
+    LegacyRetain,
+    Replace(Vec<StoredSecretRecord>),
+}
+
+impl EpochMetadataState {
+    fn is_legacy_retain(&self) -> bool {
+        matches!(self, Self::LegacyRetain)
+    }
+}
+
+fn deserialize_epoch_metadata_state<'de, D>(deserializer: D) -> Result<EpochMetadataState, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Vec::<StoredSecretRecord>::deserialize(deserializer).map(EpochMetadataState::Replace)
+}
+
+fn serialize_epoch_metadata_state<S>(
+    state: &EpochMetadataState,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match state {
+        EpochMetadataState::Replace(records) => records.serialize(serializer),
+        EpochMetadataState::LegacyRetain => Err(serde::ser::Error::custom(
+            "legacy checkpoint metadata state must be omitted",
+        )),
+    }
+}
+
+impl EpochPasswordState {
+    fn is_legacy_retain(&self) -> bool {
+        matches!(self, Self::LegacyRetain)
+    }
+}
+
+fn deserialize_epoch_password_state<'de, D>(deserializer: D) -> Result<EpochPasswordState, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Vec::<PasswordUnlockEntry>::deserialize(deserializer).map(EpochPasswordState::Replace)
+}
+
+fn serialize_epoch_password_state<S>(
+    state: &EpochPasswordState,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match state {
+        EpochPasswordState::Replace(entries) => entries.serialize(serializer),
+        EpochPasswordState::LegacyRetain => Err(serde::ser::Error::custom(
+            "legacy checkpoint password state must be omitted",
+        )),
+    }
 }
 
 /// Atomic domain operations recorded in the immutable event log.
@@ -138,6 +216,10 @@ pub enum VaultOperation {
         entry_id: PasswordEntryId,
         envelope: PasswordEnvelope,
     },
+    PasswordEnvelopeUpgraded {
+        entry_id: PasswordEntryId,
+        envelope: PasswordEnvelope,
+    },
     PasswordRemoved {
         entry_id: PasswordEntryId,
     },
@@ -145,6 +227,20 @@ pub enum VaultOperation {
     EpochCheckpoint {
         secrets: Vec<EncryptedSecretPayload>,
         members_checkpoint_hash: Sha256Hex,
+        #[serde(
+            default,
+            skip_serializing_if = "EpochMetadataState::is_legacy_retain",
+            deserialize_with = "deserialize_epoch_metadata_state",
+            serialize_with = "serialize_epoch_metadata_state"
+        )]
+        rotated_meta_records: EpochMetadataState,
+        #[serde(
+            default,
+            skip_serializing_if = "EpochPasswordState::is_legacy_retain",
+            deserialize_with = "deserialize_epoch_password_state",
+            serialize_with = "serialize_epoch_password_state"
+        )]
+        password_entries: EpochPasswordState,
     },
 }
 
@@ -229,7 +325,7 @@ impl VaultEvent {
     }
 
     pub fn validate_envelope(&self, expected_store_id: &StoreId) -> EventResult<EventId> {
-        if self.body.schema_version != VaultEventSchemaVersion::CURRENT {
+        if !self.body.schema_version.is_supported() {
             return Err(EventError::UnsupportedSchemaVersion {
                 version: self.body.schema_version.get(),
             });
@@ -239,6 +335,27 @@ impl VaultEvent {
                 expected: expected_store_id.as_str().to_owned(),
                 actual: self.body.store_id.as_str().to_owned(),
             });
+        }
+        if self.body.schema_version >= VaultEventSchemaVersion::V3 {
+            for operation in &self.body.operations {
+                if let VaultOperation::EpochCheckpoint {
+                    rotated_meta_records,
+                    password_entries,
+                    ..
+                } = operation
+                {
+                    if matches!(rotated_meta_records, EpochMetadataState::LegacyRetain) {
+                        return Err(EventError::MissingEpochCheckpointReplacement {
+                            field: "rotated_meta_records",
+                        });
+                    }
+                    if matches!(password_entries, EpochPasswordState::LegacyRetain) {
+                        return Err(EventError::MissingEpochCheckpointReplacement {
+                            field: "password_entries",
+                        });
+                    }
+                }
+            }
         }
         if self.body.parents.is_empty()
             && !self
@@ -362,9 +479,70 @@ mod tests {
     }
 
     #[test]
+    fn checkpoint_distinguishes_explicit_empty_metadata_from_legacy_omission() -> anyhow::Result<()>
+    {
+        let operation: VaultOperation = serde_json::from_value(json!({
+            "type": "epoch-checkpoint",
+            "secrets": [],
+            "members_checkpoint_hash": "00".repeat(32),
+            "rotated_meta_records": []
+        }))?;
+        assert!(matches!(
+            operation,
+            VaultOperation::EpochCheckpoint {
+                rotated_meta_records: EpochMetadataState::Replace(records),
+                password_entries: EpochPasswordState::LegacyRetain,
+                ..
+            } if records.is_empty()
+        ));
+        let legacy: VaultOperation = serde_json::from_value(json!({
+            "type": "epoch-checkpoint",
+            "secrets": [],
+            "members_checkpoint_hash": "00".repeat(32)
+        }))?;
+        assert!(matches!(
+            legacy,
+            VaultOperation::EpochCheckpoint {
+                rotated_meta_records: EpochMetadataState::LegacyRetain,
+                password_entries: EpochPasswordState::LegacyRetain,
+                ..
+            }
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn current_checkpoint_requires_explicit_replacement_fields() -> anyhow::Result<()> {
+        let signing_key = test_signing_key();
+        let mut body = empty_genesis_event(&signing_key)?.body;
+        body.operations.push(VaultOperation::EpochCheckpoint {
+            secrets: Vec::new(),
+            members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
+            rotated_meta_records: EpochMetadataState::LegacyRetain,
+            password_entries: EpochPasswordState::LegacyRetain,
+        });
+        let current = VaultEvent::sign(body.clone(), &signing_key)?;
+        assert!(matches!(
+            current.validate_envelope(&StoreId::parse("store_testtoken11")?),
+            Err(EventError::MissingEpochCheckpointReplacement {
+                field: "rotated_meta_records"
+            })
+        ));
+
+        body.schema_version = VaultEventSchemaVersion::V2;
+        VaultEvent::sign(body, &signing_key)?
+            .validate_envelope(&StoreId::parse("store_testtoken11")?)?;
+        Ok(())
+    }
+
+    #[test]
     fn schema_one_event_is_rejected() -> anyhow::Result<()> {
         let signing_key = test_signing_key();
         let mut event = empty_genesis_event(&signing_key)?;
+        event.body.schema_version = VaultEventSchemaVersion::V2;
+        let event = VaultEvent::sign(event.body, &signing_key)?;
+        event.validate_envelope(&StoreId::parse("store_testtoken11")?)?;
+        let mut event = event;
         event.body.schema_version = VaultEventSchemaVersion(1);
 
         let err = event
@@ -451,7 +629,7 @@ mod tests {
         )?;
 
         let yaml = String::from_utf8(serialize_event_storage_yaml(&event)?)?;
-        assert!(yaml.starts_with("schema_version: 2\n"));
+        assert!(yaml.starts_with("schema_version: 3\n"));
         assert!(yaml.contains("operations:\n- type: vault-imported\n"));
         assert!(yaml.contains("\n  secrets:\n  - id: secret_abc12345678\n"));
         assert!(yaml.contains("fingerprint: hmac-sha256:v1:"));
@@ -536,6 +714,8 @@ mod tests {
                     version: 1,
                     kdf: "scrypt".to_owned(),
                     work_factor: 18,
+                    recipient: String::new(),
+                    wrapped_keys: String::new(),
                     ciphertext: "age-ciphertext".to_owned(),
                 },
             }],

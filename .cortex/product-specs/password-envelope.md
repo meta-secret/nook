@@ -32,6 +32,9 @@
 - [3. Vault file additions](#3-vault-file-additions)
   - Adds `password_entries` while preserving the existing device-key vault schema.
   - Read before changing the persisted vault format or migration behavior.
+  - [Envelope migration](#envelope-migration)
+    - Defines the event-log migration from legacy password-only metadata.
+    - Read before changing password-envelope schema compatibility.
   - [Credential effects](#credential-effects)
     - Defines the key-rotation effects of adding, rotating, and removing a password.
     - Read before implementing credential mutation.
@@ -179,21 +182,28 @@ auth:
 password_entries:
   - id: password_entry_primary
     label: Recovery password
-    version: 1
+    version: 2
     kdf: scrypt
     work_factor: 18
+    recipient: age1...
     ciphertext: |
       -----BEGIN AGE ENCRYPTED FILE-----
-      # plaintext JSON: {"secrets_key":"<32B base64>","members_key":"<32B base64>"}
+      # password-wrapped X25519 credential identity
+      -----END AGE ENCRYPTED FILE-----
+    wrapped_keys: |
+      -----BEGIN AGE ENCRYPTED FILE-----
+      # vault keys encrypted to recipient
       -----END AGE ENCRYPTED FILE-----
 ```
 
 - **Hybrid storage.** Device-key vaults may contain both `auth:` and
   `password_entries`; the entries are alternate wraps for the same current
   vault keys.
-- Uses the **same `age` crate already in `nook-core`** —
-  `age::scrypt::Recipient` for encryption and `age::scrypt::Identity` for
-  decryption (see `nook-app/nook-platform/nook-core/src/vault_crypto.rs`).
+- Uses the **same `age` crate already in `nook-core`**.
+  - Scrypt protects a per-credential X25519 identity.
+  - `wrapped_keys` encrypts the current vault keys to that identity's public
+    recipient.
+  - Epoch rotation can replace `wrapped_keys` without knowing the password.
   - No new crypto dependency.
   - No separate scrypt crate.
   - Fully `wasm32-unknown-unknown` compatible.
@@ -207,8 +217,16 @@ password_entries:
   - It must use age's default ~1 s target (`log_n ≈ 18`) via
     `Recipient::set_work_factor(18)`.
   - _Do not_ reuse the `PROGRAMMATIC_SCRYPT_LOG_N` constant here.
-- Plaintext under the envelope is a compact JSON object — never the full
-  vault, never any user secret values.
+- Plaintext under `wrapped_keys` is a compact vault-key JSON object. It never
+  contains the full vault or user secret values.
+
+### Envelope migration
+
+- Version 1 remains readable but cannot be rewrapped without its password.
+- New and rotated entries use version 2.
+- Updating version 1 migrates it and rotates the epoch.
+- Rotation fails while another surviving version-1 entry remains.
+- Checkpoints replace entries with version-2 envelopes for the new keys.
 
 ### Credential effects
 
@@ -246,6 +264,12 @@ enrol another device.
 
 `set_vault_password(password)` remains as a compatibility wrapper that creates a
 default-labelled entry.
+
+Legacy version-1 password entries cannot be rewrapped across a key epoch. An
+unlocked vault upgrades them one at a time with
+`PasswordEnvelopeUpgraded`. That operation preserves the current vault keys.
+After every retained entry is version 2, later password updates and removals
+use the security-epoch rotation path below.
 
 ### 4.2 Rotate or remove backup password
 
@@ -338,6 +362,8 @@ self-enrolment path as QR.
   locally against the entry before QR/link rendering.
 - Security conflicts from concurrent epoch rotations fail closed for local
   edits until the event projection converges or is explicitly recovered.
+- Any old-frontier mutation concurrent with an epoch rotation also fails
+  closed.
 
 ---
 

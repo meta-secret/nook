@@ -1,10 +1,10 @@
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-use super::idb_delete_key;
+use super::idb_delete_keys;
 use super::{
     APP_ID_KEY, APP_KEY_WRAPPED_KEY, DEVICE_ID_KEY, NookError, WRAPPED_DEVICE_IDENTITY_KEY,
-    idb_delete_keys, idb_get_string, open_nook_database, read_string_preferring,
+    idb_get_string, open_nook_database, read_string_preferring,
 };
 
 pub(crate) async fn device_identity_protection_status()
@@ -157,17 +157,7 @@ pub(crate) async fn save_wrapped_device_identity(
 }
 
 pub(crate) async fn delete_device_identity_for_recovery() -> Result<(), NookError> {
-    idb_delete_keys(&[
-        crate::storage::device_access::DEVICE_ACCESS_PROFILE_KEY,
-        crate::storage::identity_record::IDENTITY_DIRECTORY_KEY,
-        crate::storage::identity_record::LEGACY_IDENTITY_RECORD_KEY,
-        crate::storage::identity_record::PENDING_SIMPLE_GENESIS_KEY,
-        APP_KEY_WRAPPED_KEY,
-        APP_ID_KEY,
-        WRAPPED_DEVICE_IDENTITY_KEY,
-        DEVICE_ID_KEY,
-    ])
-    .await
+    crate::storage::identity_record::delete_identity_directory_for_recovery().await
 }
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod tests {
@@ -231,9 +221,7 @@ mod tests {
         let wrapped =
             nook_core::wrap_device_identity_with_pin(&identity.secret_string(), "123456")?;
         save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
-        for key in [APP_ID_KEY, DEVICE_ID_KEY] {
-            idb_delete_key(key).await?;
-        }
+        idb_delete_keys(&[APP_ID_KEY, DEVICE_ID_KEY]).await?;
 
         assert!(load_wrapped_device_identity().await.is_err());
         Ok(())
@@ -249,11 +237,11 @@ mod tests {
         save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
         crate::storage::indexed_db::idb_put_string(
             crate::storage::identity_record::IDENTITY_DIRECTORY_KEY,
-            "directory",
+            &serde_json::to_string(&nook_core::IdentityDirectory::empty())?,
         )
         .await?;
         crate::storage::indexed_db::idb_put_string(
-            crate::storage::identity_record::PENDING_SIMPLE_GENESIS_KEY,
+            crate::storage::identity_record::simple_genesis::PENDING_SIMPLE_GENESIS_KEY,
             "pending",
         )
         .await?;
@@ -263,14 +251,17 @@ mod tests {
 
         assert!(load_wrapped_device_identity().await?.is_none());
         assert!(
-            idb_get_string(crate::storage::identity_record::IDENTITY_DIRECTORY_KEY)
+            crate::storage::identity_record::load_identity_directory()
                 .await?
-                .is_none()
+                .identities()
+                .is_empty()
         );
         assert!(
-            idb_get_string(crate::storage::identity_record::PENDING_SIMPLE_GENESIS_KEY)
-                .await?
-                .is_none()
+            idb_get_string(
+                crate::storage::identity_record::simple_genesis::PENDING_SIMPLE_GENESIS_KEY,
+            )
+            .await?
+            .is_none()
         );
         assert_eq!(
             idb_get_string("vault:preserved").await?,

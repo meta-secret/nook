@@ -422,6 +422,7 @@ pub const DEVICE_PROTECTION_PIN_UNLOCK_FAILED: &str = "device_protection.pin_unl
 pub const DEVICE_PROTECTION_RECOVERY_ACTION: &str = "device_protection.recovery_action";
 pub const DEVICE_PROTECTION_RECOVERY_COMPLETE: &str = "device_protection.recovery_complete";
 pub const DEVICE_PROTECTION_RECOVERY_CONFIRM: &str = "device_protection.recovery_confirm";
+pub const DEVICE_PROTECTION_RECOVERY_FAILED: &str = "device_protection.recovery_failed";
 pub const DEVICE_PROTECTION_RECOVERY_PASSKEY_UNAVAILABLE_PIN_FALLBACK_READY: &str =
     "device_protection.recovery_passkey_unavailable_pin_fallback_ready";
 pub const DEVICE_PROTECTION_RECOVERY_PIN_FALLBACK_READY: &str =
@@ -727,6 +728,8 @@ pub const ERRORS_VALIDATION_GITHUB_REPO_INVALID: &str = "errors.validation.githu
 pub const ERRORS_VALIDATION_GITHUB_REPO_LENGTH: &str = "errors.validation.github_repo_length";
 pub const ERRORS_VALIDATION_INVALID_SENTINEL_SHARE_SET: &str =
     "errors.validation.invalid_sentinel_share_set";
+pub const ERRORS_VALIDATION_LOCAL_DATA_CHANGED_IN_ANOTHER_TAB: &str =
+    "errors.validation.local_data_changed_in_another_tab";
 pub const ERRORS_VALIDATION_OAUTH_ACCESS_TOKEN_EMPTY: &str =
     "errors.validation.oauth_access_token_empty";
 pub const ERRORS_VALIDATION_SECRET_DATA_REQUIRED: &str = "errors.validation.secret_data_required";
@@ -2109,6 +2112,7 @@ pub const VAULT_PASSWORDS_CONFIRM_PASSWORD: &str = "vault_passwords.confirm_pass
 pub const VAULT_PASSWORDS_CREATE_ANOTHER: &str = "vault_passwords.create_another";
 pub const VAULT_PASSWORDS_CREATE_PASSWORD: &str = "vault_passwords.create_password";
 pub const VAULT_PASSWORDS_DESC: &str = "vault_passwords.desc";
+pub const VAULT_PASSWORDS_DEVICE_UNLOCK_REQUIRED: &str = "vault_passwords.device_unlock_required";
 pub const VAULT_PASSWORDS_ENTER_LABEL_ERROR: &str = "vault_passwords.enter_label_error";
 pub const VAULT_PASSWORDS_ENTER_PW_ERROR: &str = "vault_passwords.enter_pw_error";
 pub const VAULT_PASSWORDS_FAILED_ISSUE_ERROR: &str = "vault_passwords.failed_issue_error";

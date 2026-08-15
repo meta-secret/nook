@@ -125,10 +125,28 @@ artifact for event-log vaults.
 | Duplicate identical event | success (idempotent) |
 | Same path, different bytes | quarantine (corruption) |
 
-Current event schema `2` binds each event to `actor_signing_public_key`. The
+Current event schema `3` binds each event to `actor_signing_public_key`. The
 actor id must be the SHA-256 digest of that Ed25519 public key. The event
 signature must verify over the canonical body before a current-schema remote
 event enters the local event set.
+
+Checkpoint and visibility rules:
+
+- An `epoch-checkpoint` persists `secrets`, `members_checkpoint_hash`, and the
+  complete rewrapped `rotated_meta_records` and `password_entries` sets.
+- A schema `3` checkpoint is the event's sole operation. It has exactly one
+  direct parent, that parent is a single security trigger, and its `key_epoch`
+  equals the trigger event id. Invalid standalone or bundled checkpoints are
+  quarantined.
+- Projection replaces the prior sets. Explicit empty arrays clear them.
+- Legacy checkpoints that omit metadata or password state retain the prior set.
+- Schema `3` owns these fields. Current readers still accept pre-replacement
+  schema `2` events. Older readers reject schema `3` before persistence instead
+  of extending an epoch they cannot interpret.
+- Remote security triggers remain hidden until their authorized checkpoint is
+  visible. Every causal descendant of a hidden trigger is hidden with it.
+- When rejected events contract the accepted graph, metadata is rebuilt from an
+  empty state so removed grants cannot survive in session caches.
 
 Non-genesis events are also checked against the event's causal past. An actor is
 accepted only if it is:
@@ -227,6 +245,10 @@ The implemented epoch path creates fresh vault keys, re-encrypts live secrets,
 rewraps auth/member metadata for remaining authorized entries, and appends an
 immutable `epoch-checkpoint`. Concurrent security rotations are detected in the
 projection, surfaced through WASM/UI, and fail closed for further local edits.
+Revocation metadata remains staged until the trigger/checkpoint pair commits.
+A failure before that atomic commit restores the live session metadata. A
+failure after commit keeps the revoked metadata active because the durable
+security epoch already excludes that device.
 
 ## Provider interface (target)
 
@@ -238,14 +260,23 @@ put_event_if_absent(provider, store_id, event_id, bytes)
 
 No `update_event` or `delete_event` in v1.
 
-The active provider adapters are GitHub, Google Drive, and iCloud. During
-outbox flush, the manager first uploads queued events that are absent remotely,
-then repairs the provider by uploading any local event-store events missing from
-that provider. During pull, fetched remote events are hash/signature-validated
-and ignored when their signed body belongs to another `store_id`.
+The active provider adapters are GitHub, Google Drive, and iCloud.
 
-Provider connect and sync paths must classify the provider event set before
-writing outbox or repair events.
+Provider synchronization rules:
+
+- During outbox flush, upload queued events that are absent remotely. Then
+  repair the provider with any missing local event-store events.
+- During pull, validate fetched remote event hashes and signatures. Ignore
+  events whose signed body belongs to another `store_id`.
+- Publish epoch checkpoints before triggers for every provider, including local
+  folders. Quarantine incomplete pairs and descendants.
+- Treat old-frontier concurrency as a blocking conflict. Commit import unions
+  in one IndexedDB transaction.
+- Keep schema v2 readable while schema v3 owns replacements.
+- Let Simple vaults adopt authorized keys before replay. Clear missing
+  authorization. Require a new Sentinel ceremony.
+- Use a complete trigger/checkpoint pair for password rotation.
+- Classify the provider event set before writing outbox or repair events.
 
 | Provider state | Action |
 | --- | --- |

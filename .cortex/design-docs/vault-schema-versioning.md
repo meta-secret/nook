@@ -40,12 +40,13 @@ derived, browser-local cache and is never imported as an event source.
 |------|---------------|----------|
 | App semver | Release tag | CI and deployment workflows |
 | Projection `schema_version` | `1` | `nook-core` `vault_format.rs` |
-| Event `schema_version` | `2` | `nook-core` `vault_event.rs` |
+| Event `schema_version` | `3` | `nook-event-log` `event.rs` |
 | Password envelope `version` | Envelope crypto version | `password_envelope.rs` |
 
-Current builds read and write only the current projection and event schemas.
-An unsupported schema version fails with an actionable error. There is no
-copy-on-upgrade, projection import, or compatibility conversion path.
+Current builds write event schema `3` and read schemas `2` and `3`. Schema `3`
+adds checkpoint replacement fields, so schema-2 readers reject those events
+before persistence. Other unsupported versions fail with an actionable error.
+There is no copy-on-upgrade, projection import, or compatibility conversion.
 
 ## Storage contract
 

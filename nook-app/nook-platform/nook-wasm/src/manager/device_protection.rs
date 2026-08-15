@@ -661,10 +661,9 @@ impl NookVaultManager {
         result.map_err(Into::into)
     }
 
-    /// Destructive local recovery: forget the inaccessible identity and its
-    /// identity-sealed provider credentials, preserving local encrypted vaults.
+    /// Zeroize this tab before another tab performs destructive local recovery.
     #[wasm_bindgen]
-    pub async fn reset_device_protection_for_recovery(&mut self) -> Result<(), JsError> {
+    pub fn quiesce_for_local_recovery(&mut self) {
         self.reset_vault_session();
         self.device.identity_private_key.zeroize();
         self.device.extension_handoff_private_key.zeroize();
@@ -674,6 +673,13 @@ impl NookVaultManager {
         self.storage.remote_path.clear();
         self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
         self.storage.mode = nook_core::StorageMode::Local;
+    }
+
+    /// Destructive local recovery: forget the inaccessible identity and its
+    /// identity-sealed provider credentials, preserving local encrypted vaults.
+    #[wasm_bindgen]
+    pub async fn reset_device_protection_for_recovery(&mut self) -> Result<(), JsError> {
+        self.quiesce_for_local_recovery();
         indexed_db::delete_device_identity_for_recovery().await?;
         auth_providers::delete_auth_providers_db().await?;
         Ok(())

@@ -99,6 +99,7 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::DevicePublicKeyInvalid
             | ValidationError::DeviceIdentitySecretInvalid
             | ValidationError::Sha256HexInvalid
+            | ValidationError::IdentityVaultEventIdInvalid
             | ValidationError::DeviceSigningPublicKeyInvalid
             | ValidationError::IsoTimestampInvalid
             | ValidationError::PasswordEntryIdInvalid

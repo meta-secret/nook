@@ -142,18 +142,7 @@ pub fn apply_vault_meta_operation(
             state.joins.remove(device_id);
         }
         VaultOperation::SentinelSharesIssued { shares } => {
-            for share in shares {
-                state.sentinel_shares.insert(
-                    share.device_id.clone(),
-                    SentinelShareEnvelope {
-                        version: share.version,
-                        threshold: share.threshold,
-                        required_participants: share.required_participants,
-                        share_index: share.share_index,
-                        ciphertext: share.ciphertext.clone(),
-                    },
-                );
-            }
+            apply_sentinel_shares(state, shares);
         }
         VaultOperation::MemberRenamed { device_id, label } => {
             if let Some(participant) = state.sentinel_participants.get_mut(device_id) {
@@ -164,6 +153,16 @@ pub fn apply_vault_meta_operation(
             state.sentinel_participants.remove(device_id);
             state.sentinel_shares.remove(device_id);
         }
+        VaultOperation::EpochCheckpoint {
+            rotated_meta_records: crate::EpochMetadataState::Replace(rotated_meta_records),
+            ..
+        } => {
+            state.auth.clear();
+            state.members.clear();
+            for record in rotated_meta_records {
+                state.apply_record(record);
+            }
+        }
         VaultOperation::VaultImported { .. }
         | VaultOperation::SecretCreated { .. }
         | VaultOperation::SecretDeleted { .. }
@@ -171,11 +170,30 @@ pub fn apply_vault_meta_operation(
         | VaultOperation::SecretConflictResolved { .. }
         | VaultOperation::PasswordAdded { .. }
         | VaultOperation::PasswordRotated { .. }
+        | VaultOperation::PasswordEnvelopeUpgraded { .. }
         | VaultOperation::PasswordRemoved { .. }
         | VaultOperation::VaultCleared
-        | VaultOperation::EpochCheckpoint { .. } => {}
+        | VaultOperation::EpochCheckpoint {
+            rotated_meta_records: crate::EpochMetadataState::LegacyRetain,
+            ..
+        } => {}
     }
     Ok(())
+}
+
+fn apply_sentinel_shares(state: &mut VaultMetaState, shares: &[crate::SentinelShareIssuedPayload]) {
+    for share in shares {
+        state.sentinel_shares.insert(
+            share.device_id.clone(),
+            SentinelShareEnvelope {
+                version: share.version,
+                threshold: share.threshold,
+                required_participants: share.required_participants,
+                share_index: share.share_index,
+                ciphertext: share.ciphertext.clone(),
+            },
+        );
+    }
 }
 
 /// Replay core event-log meta operations from the event graph in topological order.
@@ -183,6 +201,14 @@ pub fn materialize_vault_meta_from_graph(
     graph: &crate::EventGraph,
     state: &mut VaultMetaState,
 ) -> nook_auth2::MultiDeviceResult<()> {
+    // User secrets have their own encrypted event-log projection. Rebuild only
+    // the authorization metadata owned by this adapter, while preserving that
+    // already-materialized user projection. Clone first so a replay failure
+    // leaves the complete live state unchanged.
+    let mut rebuilt = VaultMetaState {
+        secrets: state.secrets.clone(),
+        ..VaultMetaState::default()
+    };
     let order = graph
         .topological_order()
         .map_err(|e| nook_auth2::MultiDeviceError::InvalidDeviceIdentity(e.to_string()))?;
@@ -193,9 +219,10 @@ pub fn materialize_vault_meta_from_graph(
             ))
         })?;
         for operation in &event.body.operations {
-            apply_vault_meta_operation(state, operation, event.body.created_at.as_str())?;
+            apply_vault_meta_operation(&mut rebuilt, operation, event.body.created_at.as_str())?;
         }
     }
+    *state = rebuilt;
     Ok(())
 }
 
@@ -590,6 +617,52 @@ mod tests {
             &signing.public_key(),
         )?);
         assert!(event_graph_active_auth_ids(&graph)?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn metadata_rebuild_discards_state_absent_from_the_accepted_graph() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
+        let keys = crate::generate_vault_keys()?;
+        let auth = crate::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
+        let mut meta = VaultMetaState::from_stored_records(&[auth]);
+        let secret_id = crate::generate_secret_id()?;
+        meta.secrets.insert(
+            secret_id.clone(),
+            (
+                crate::SecretType::Login,
+                crate::StoredRecordPayload::from_trusted("ciphertext".to_owned()),
+            ),
+        );
+        assert!(!meta.auth.is_empty());
+
+        materialize_vault_meta_from_graph(&EventGraph::new(), &mut meta)?;
+
+        assert!(meta.auth.is_empty());
+        assert!(meta.secrets.contains_key(&secret_id));
+        Ok(())
+    }
+
+    #[test]
+    fn explicit_empty_checkpoint_metadata_clears_live_grants() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
+        let keys = crate::generate_vault_keys()?;
+        let auth = crate::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
+        let mut meta = VaultMetaState::from_stored_records(&[auth]);
+
+        apply_vault_meta_operation(
+            &mut meta,
+            &VaultOperation::EpochCheckpoint {
+                secrets: Vec::new(),
+                members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
+                password_entries: crate::EpochPasswordState::LegacyRetain,
+            },
+            "2026-08-15T00:00:00Z",
+        )?;
+
+        assert!(meta.auth.is_empty());
+        assert!(meta.members.is_empty());
         Ok(())
     }
 

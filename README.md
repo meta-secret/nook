@@ -209,7 +209,8 @@ introducing virtual identity records and explicit identity-to-vault grants.
 The browser now stores a local identity directory and selected identity.
 It migrates the former singleton identity record on first read.
 Local encrypted identity-to-vault grants are implemented for Simple vaults.
-Replicated grant enforcement and identity-control logs remain future work.
+Virtual-identity association for quorum-protected Sentinel vaults, replicated
+grant enforcement, and identity-control logs remain future work.
 
 ```text
 local command

@@ -226,6 +226,7 @@
           isPasswordBusy={vault.isPasswordBusy}
           passwordError={vault.passwordError}
           enrollmentCode={vault.enrollmentCode}
+          canManageExistingPasswords={vault.deviceProtectionReady}
           onReconnect={onSettingsReconnect}
           onSyncProvider={(id) => {
             const syncRequest: Parameters<typeof vault.syncProviderById>[0] = {

@@ -188,13 +188,39 @@ impl NookVaultManager {
             )
             .into());
         }
-        if !self
+        let target_entry = self
             .vault
             .password_entries
             .iter()
-            .any(|entry| entry.id == entry_id)
-        {
-            return Err(NookError::Database("Password entry not found.".to_owned()).into());
+            .find(|entry| entry.id == entry_id)
+            .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?
+            .clone();
+        if !nook_core::password_envelope_supports_key_rewrap(&target_entry.envelope) {
+            let keys = nook_core::VaultKeys {
+                secrets_key: nook_core::SymmetricKey::parse(&self.vault.secrets_key)?,
+                members_key: nook_core::SymmetricKey::parse(&self.vault.members_key)?,
+            };
+            let envelope = nook_core::attach_password_envelope_with_work_factor(
+                &keys,
+                &password,
+                work_factor,
+            )?;
+            self.persist_vault_change(vec![nook_core::VaultOperation::PasswordEnvelopeUpgraded {
+                entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
+                envelope,
+            }])
+            .await?;
+            return Ok(());
+        }
+        if self.vault.password_entries.iter().any(|entry| {
+            entry.id != entry_id
+                && !nook_core::password_envelope_supports_key_rewrap(&entry.envelope)
+        }) {
+            return Err(NookError::Database(
+                "Upgrade every legacy password entry before rotating the security epoch."
+                    .to_owned(),
+            )
+            .into());
         }
         let envelope = self
             .rotate_password_security_epoch(
@@ -219,13 +245,20 @@ impl NookVaultManager {
         if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
             return Err(nook_core::MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
-        self.vault
+        let remaining_entries = self
+            .vault
             .password_entries
-            .retain(|entry| entry.id != entry_id);
+            .iter()
+            .filter(|entry| entry.id != entry_id)
+            .cloned()
+            .collect();
         self.ensure_event_log_ready().await?;
-        self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
-            entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
-        })
+        self.rotate_security_epoch_with_password_entries(
+            nook_core::VaultOperation::PasswordRemoved {
+                entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
+            },
+            remaining_entries,
+        )
         .await?;
         Ok(())
     }
@@ -241,19 +274,15 @@ impl NookVaultManager {
             .iter()
             .map(|entry| entry.id.clone())
             .collect();
-        self.vault.password_entries.clear();
         self.ensure_event_log_ready().await?;
         if let Some(first_id) = entry_ids.first() {
-            self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
-                entry_id: nook_core::PasswordEntryId::parse(first_id)?,
-            })
+            self.rotate_security_epoch_with_password_entries(
+                nook_core::VaultOperation::PasswordRemoved {
+                    entry_id: nook_core::PasswordEntryId::parse(first_id)?,
+                },
+                Vec::new(),
+            )
             .await?;
-            for entry_id in entry_ids.iter().skip(1) {
-                self.append_vault_operations(vec![nook_core::VaultOperation::PasswordRemoved {
-                    entry_id: nook_core::PasswordEntryId::parse(entry_id)?,
-                }])
-                .await?;
-            }
         }
         Ok(())
     }
@@ -321,8 +350,22 @@ impl NookVaultManager {
         self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
         self.ensure_event_log_ready().await?;
         if let Some(identity) = identity.as_ref() {
+            let store_id = nook_core::StoreId::parse(&self.vault.store_id)
+                .map_err(|error| NookError::Database(error.to_string()))?;
+            if let Err(error) = crate::storage::identity_record::validate_vault_identity_enrollment(
+                identity, &store_id,
+            )
+            .await
+            {
+                self.reset_vault_session();
+                return Err(error.into());
+            }
             self.persist_password_unlock_membership(&records, identity, &keys)
                 .await?;
+            if let Err(error) = self.ensure_identity_after_connect(identity).await {
+                self.reset_vault_session();
+                return Err(error.into());
+            }
         }
 
         if event_log_remote {
@@ -516,6 +559,79 @@ mod wasm_tests {
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn legacy_password_entries_upgrade_sequentially_without_epoch_rotation()
+    -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let mut entries = Vec::new();
+        for (label, password) in [
+            ("Primary", "legacy primary password"),
+            ("Recovery", "legacy recovery password"),
+        ] {
+            let mut entry = nook_core::create_password_entry_with_work_factor(
+                &keys,
+                nook_core::generate_id()?.as_str(),
+                label,
+                "2026-08-15T00:00:00Z",
+                password,
+                E2E_PASSWORD_SCRYPT_LOG_N,
+            )?;
+            entry.envelope.version = 1;
+            entries.push(entry);
+        }
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.password_entries.clone_from(&entries);
+        manager.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
+        let identity = nook_core::DeviceIdentity::generate()?;
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.bootstrap_event_log_genesis().await?;
+
+        manager
+            .update_vault_password_entry_for_e2e(
+                entries[0].id.clone(),
+                "new primary password".to_owned(),
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("first legacy upgrade failed: {error:?}"))?;
+        assert!(nook_core::password_envelope_supports_key_rewrap(
+            &manager.vault.password_entries[0].envelope
+        ));
+        assert!(!nook_core::password_envelope_supports_key_rewrap(
+            &manager.vault.password_entries[1].envelope
+        ));
+
+        manager
+            .update_vault_password_entry_for_e2e(
+                entries[1].id.clone(),
+                "new recovery password".to_owned(),
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("second legacy upgrade failed: {error:?}"))?;
+        assert!(
+            manager
+                .vault
+                .password_entries
+                .iter()
+                .all(|entry| { nook_core::password_envelope_supports_key_rewrap(&entry.envelope) })
+        );
+        let graph = load_local_event_store(&manager.vault.store_id)
+            .await?
+            .load_graph(&manager.vault.store_id)?;
+        let upgrades = graph
+            .events()
+            .flat_map(|(_, event)| event.body.operations.iter())
+            .filter(|operation| {
+                matches!(
+                    operation,
+                    nook_core::VaultOperation::PasswordEnvelopeUpgraded { .. }
+                )
+            })
+            .count();
+        assert_eq!(upgrades, 2);
+        Ok(())
+    }
 
     #[wasm_bindgen_test]
     async fn failed_sync_flush_restores_local_projection_and_storage() -> anyhow::Result<()> {

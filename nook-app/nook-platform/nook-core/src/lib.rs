@@ -214,8 +214,9 @@ pub use multi_device::{
 };
 pub use nook_auth2::{
     AppId, AppKey, IdentityDirectory, IdentityId, IdentityMember, IdentityRecord,
-    IdentitySelection, IdentityVaultDek, IdentityVaultDekReconciliation, MemberDekEnvelope,
-    identity_fingerprint, identity_vault_genesis_records,
+    IdentitySelection, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
+    IdentityVaultDekReconciliation, IdentityVaultEventId, MemberDekEnvelope, identity_fingerprint,
+    identity_vault_genesis_records,
 };
 
 pub use multi_device::{
@@ -244,19 +245,21 @@ pub use multi_device::{
 };
 
 pub use nook_event_log::{
-    AppendEventInput, Ed25519Signature, EncryptedSecretPayload, EpochRecord, EpochRotationReason,
-    EpochTransition, EventGraph, EventId, EventInsertStatus, EventPendingReason,
-    GenesisImportPayload, KeyEpoch, LocalEventStore, ObservedHeads, ProjectedSecret,
-    ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch, RemoteEventLogClassification,
-    SecretFingerprint, SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload,
-    SigningIdentity, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
-    VaultProjection, assert_projection_permutation_invariant, build_genesis_import_event,
-    build_signed_event, canonical_json_bytes, canonicalize_json, classify_remote_event_log,
+    AppendEventInput, Ed25519Signature, EncryptedSecretPayload, EpochMetadataState,
+    EpochPasswordState, EpochRecord, EpochRotationReason, EpochTransition, EventGraph, EventId,
+    EventInsertStatus, EventPendingReason, GenesisImportPayload, KeyEpoch, LocalEventStore,
+    ObservedHeads, ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin,
+    ProjectionEpoch, RemoteEventLogClassification, SecretFingerprint, SecretReplacementConflict,
+    SecurityConflict, SentinelShareIssuedPayload, SigningIdentity, VaultEvent, VaultEventBody,
+    VaultEventSchemaVersion, VaultOperation, VaultProjection,
+    assert_projection_permutation_invariant, build_genesis_import_event, build_signed_event,
+    canonical_json_bytes, canonicalize_json, classify_remote_event_log,
     concurrent_epoch_rotations_conflict, encrypted_secret_from_armored, event_id_from_body_bytes,
-    format_ed25519_signature, operation_starts_epoch, parents_from_heads, parse_ed25519_signature,
-    parse_event_storage_bytes, parse_remote_event_storage_bytes, project_vault,
-    remote_event_belongs_to_store, remote_event_store_id, serialize_event_storage_yaml, sha256_hex,
-    sign_body, union_remote_events, union_remote_events_and_heads, verify_body_signature,
+    format_ed25519_signature, operation_starts_epoch, order_remote_events_for_visibility,
+    parents_from_heads, parse_ed25519_signature, parse_event_storage_bytes,
+    parse_remote_event_storage_bytes, project_vault, remote_event_belongs_to_store,
+    remote_event_store_id, serialize_event_storage_yaml, sha256_hex, sign_body,
+    union_remote_events, union_remote_events_and_heads, verify_body_signature,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordGenerationOptions, generate_password,
@@ -265,7 +268,8 @@ pub use password_envelope::{
     PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope, PasswordUnlockEntry, VaultUnlock,
     attach_password_envelope, attach_password_envelope_with_work_factor, create_password_entry,
     create_password_entry_with_work_factor, is_vault_password_long_enough,
-    is_vault_password_recommended_length, resolve_keys_from_entry, resolve_keys_from_password,
+    is_vault_password_recommended_length, password_envelope_supports_key_rewrap,
+    resolve_keys_from_entry, resolve_keys_from_password, rewrap_password_envelope,
     vault_password_min_length, vault_password_recommended_min_length, verify_password,
     verify_password_entry,
 };
@@ -357,9 +361,10 @@ pub use vault_connect::{
 pub use vault_crypto::VaultCrypto;
 pub use vault_epoch_crypto::{
     members_checkpoint_hash_from_roster, reencrypt_user_secrets_for_epoch,
-    rewrap_vault_meta_for_epoch, rotate_vault_keys_with_secrets,
+    rewrap_vault_meta_for_epoch, rewrapped_vault_meta_records_for_epoch,
+    rotate_vault_keys_with_secrets,
 };
-pub use vault_event_session::VaultEventSession;
+pub use vault_event_session::{VaultEventSession, VaultSecurityEpochRotationInput};
 pub use vault_format::{
     VaultFormat, VaultName, VaultNameRef, VaultStoreIdentity, VaultStoreIdentityRef,
     VaultVersionWrite, current_vault_schema_version, default_vault_name_for_store_id,

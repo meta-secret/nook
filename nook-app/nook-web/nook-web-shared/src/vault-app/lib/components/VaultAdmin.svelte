@@ -1,14 +1,9 @@
 <script lang="ts">
   type VaultNameDraftChange = { readonly entry: NookLocalVaultEntry; readonly value: string }
-
   type VaultPasswordCreation = { readonly label: string; readonly password: string }
-
   type VaultPasswordEntryUpdate = { readonly entryId: PasswordEntryId; readonly password: string }
-
   type EnrollmentCodeIssue = { readonly entryId: PasswordEntryId; readonly password: string }
-
   type BitwardenVaultImport = { readonly json: string; readonly password: string }
-
   type AuthenticatorMigrationUriCollection = string[]
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
@@ -81,6 +76,7 @@
     isPasswordBusy,
     passwordError,
     enrollmentCode,
+    canManageExistingPasswords,
     onReconnect,
     onSyncProvider,
     onBeginAddProvider,
@@ -120,6 +116,7 @@
     isPasswordBusy: boolean
     passwordError: string
     enrollmentCode: string
+    canManageExistingPasswords: boolean
     onReconnect: () => void | Promise<void>
     onSyncProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
@@ -579,6 +576,7 @@
       isBusy={isPasswordBusy}
       {passwordError}
       {enrollmentCode}
+      {canManageExistingPasswords}
       {onAddPassword}
       {onUpdatePassword}
       {onRemovePassword}

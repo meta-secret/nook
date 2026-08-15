@@ -982,7 +982,8 @@
     "recovery_action": "I can't use this passkey",
     "pin_recovery_action": "I forgot this PIN or passphrase",
     "recovery_confirm": "Reset this browser's device identity? Saved sync connections will be removed. Local encrypted vaults will remain, but you may need a vault password or another enrolled device to regain access.",
-    "recovery_complete": "Device identity reset. Create a new passkey to continue."
+    "recovery_complete": "Device identity reset. Create a new passkey to continue.",
+    "recovery_failed": "Could not safely reset this browser's device identity."
   },
   "vault_recovery": {
     "passkey_title": "Passkeys for this vault",
@@ -1058,6 +1059,7 @@
   },
   "errors": {
     "validation": {
+      "local_data_changed_in_another_tab": "Local browser data changed in another Nook tab.",
       "github_pat_empty": "Enter a GitHub personal access token to connect.",
       "oauth_access_token_empty": "Sign in with Google to connect Google Drive.",
       "shared_joiner_identity_required": "Enter the joiner provider identity before issuing an onboarding code.",
@@ -1134,6 +1136,7 @@
     "show": "Show",
     "min_chars": "Minimum 5 characters.",
     "working": "Working…",
+    "device_unlock_required": "Unlock this browser's device identity before rotating or removing a vault password.",
     "add_password": "Add password",
     "rotate": "Rotate",
     "rotating_for_prefix": "Rotating password for ",

@@ -10,8 +10,9 @@ mod security_epoch;
 pub(in crate::manager) use records::{
     EventLogStorageRecord, ExtensionEventLogImportStatus, ExternalEventLogRecord,
 };
+pub(in crate::manager) use security_epoch::SecurityEpochRotationFailure;
 
-use super::{EventLogSyncIssueState, NookVaultManager, VaultNameState};
+use super::{EventLogSyncIssueState, NookVaultManager, VaultCryptoState, VaultNameState};
 use crate::NookError;
 use crate::conversion::wasm_iso_timestamp;
 use crate::storage::drive_events::{
@@ -19,8 +20,8 @@ use crate::storage::drive_events::{
 };
 use crate::storage::event_db::{
     append_outbox_index, is_event_log_mode, load_heads, load_key_epoch, load_local_event_store,
-    load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_event_bytes,
-    save_heads, save_key_epoch, save_signing_seed, set_event_log_mode,
+    load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_heads,
+    save_key_epoch, save_signing_seed, save_verified_event, set_event_log_mode,
 };
 use crate::storage::github_events::{
     fetch_github_event, list_github_event_ids, put_github_event_if_absent,
@@ -36,11 +37,16 @@ use nook_core::{
     AppendEventInput, EventId, RemoteEventLogClassification, SigningIdentity, VaultEvent,
     VaultOperation, apply_user_records_to_encrypted_session, build_signed_event,
     classify_remote_event_log, members_checkpoint_hash_from_roster, project_vault,
-    rewrap_vault_meta_for_epoch, union_remote_events_and_heads,
+    rewrapped_vault_meta_records_for_epoch,
 };
 
 fn iso_timestamp() -> String {
     wasm_iso_timestamp()
+}
+
+pub(super) struct BuiltVaultEvent {
+    pub(super) event: VaultEvent,
+    pub(super) bytes: Vec<u8>,
 }
 
 impl NookVaultManager {
@@ -253,22 +259,46 @@ impl NookVaultManager {
     pub(in crate::manager) async fn append_vault_operations(
         &mut self,
         operations: Vec<VaultOperation>,
-    ) -> Result<(), NookError> {
+    ) -> Result<EventId, NookError> {
         if self.vault.store_id.is_empty() {
             self.vault.store_id = nook_core::generate_store_id()?.to_string();
         }
         self.activate_event_log_mode().await?;
-        let signing = self.ensure_signing_identity().await?;
-        let actor_id = signing.actor_id()?;
         let parents = self.load_event_heads().await?;
         let key_epoch = self.ensure_key_epoch().await?;
-        let store_id = nook_core::StoreId::parse(&self.vault.store_id)?;
         let key_epoch = nook_core::EventId::parse(&key_epoch)?;
-        let created_at = nook_core::IsoTimestamp::parse(&iso_timestamp())?;
         let parents: Vec<EventId> = parents
             .iter()
             .map(|parent| EventId::parse(parent).map_err(NookError::from))
             .collect::<Result<_, _>>()?;
+        let built = self
+            .build_vault_operations_event(operations, parents, key_epoch)
+            .await?;
+        self.persist_built_vault_event(built).await
+    }
+
+    /// Return one verified event that causally dominates the current frontier.
+    pub(in crate::manager) async fn ensure_causal_event_checkpoint(
+        &mut self,
+    ) -> Result<String, NookError> {
+        let heads = self.load_event_heads().await?;
+        match heads.as_slice() {
+            [] => self.ensure_key_epoch().await,
+            [head] => Ok(head.clone()),
+            _ => Ok(self.append_vault_operations(Vec::new()).await?.into_inner()),
+        }
+    }
+
+    pub(super) async fn build_vault_operations_event(
+        &mut self,
+        operations: Vec<VaultOperation>,
+        parents: Vec<EventId>,
+        key_epoch: EventId,
+    ) -> Result<BuiltVaultEvent, NookError> {
+        let signing = self.ensure_signing_identity().await?;
+        let actor_id = signing.actor_id()?;
+        let store_id = nook_core::StoreId::parse(&self.vault.store_id)?;
+        let created_at = nook_core::IsoTimestamp::parse(&iso_timestamp())?;
         let (event, bytes) = build_signed_event(AppendEventInput {
             store_id: &store_id,
             actor_id: &actor_id,
@@ -276,30 +306,23 @@ impl NookVaultManager {
             parents,
             key_epoch: &key_epoch,
             created_at: &created_at,
-            operations: operations.clone(),
+            operations,
         })?;
+        Ok(BuiltVaultEvent { event, bytes })
+    }
+
+    pub(super) async fn persist_built_vault_event(
+        &mut self,
+        built: BuiltVaultEvent,
+    ) -> Result<EventId, NookError> {
+        let BuiltVaultEvent { event, bytes } = built;
         let event_id = event.id()?;
-        // Refuse to persist events the causal graph would quarantine. Otherwise
-        // an unauthorized JoinApproved becomes a permanent poisoned head that
-        // blocks later extension pairing imports.
-        let local = load_local_event_store(&self.vault.store_id).await?;
-        let mut graph = local.load_graph(&self.vault.store_id)?;
-        match graph.insert(event.clone(), self.vault.store_id.as_str())? {
-            nook_core::EventInsertStatus::Quarantined(reason) => {
-                return Err(NookError::Database(format!(
-                    "Refusing to append unauthorized vault event: {reason}"
-                )));
-            }
-            nook_core::EventInsertStatus::Pending(reason) => {
-                return Err(NookError::Database(format!(
-                    "Refusing to append vault event with unresolved parents: {reason:?}"
-                )));
-            }
-            nook_core::EventInsertStatus::Duplicate | nook_core::EventInsertStatus::Applied => {}
-        }
-        save_event_bytes(&self.vault.store_id, event_id.as_str(), &bytes).await?;
-        self.event_log.heads = vec![event_id.as_str().to_owned()];
-        save_heads(&self.vault.store_id, &self.event_log.heads).await?;
+        let operations = event.body.operations.clone();
+        let created_at = event.body.created_at.clone();
+        // Keep validation, the event write, the index update, and derived heads
+        // in the same transaction as security-epoch commits. Otherwise another
+        // tab can commit a new epoch between validation and this write.
+        self.event_log.heads = save_verified_event(&self.vault.store_id, &event, &bytes).await?;
         if self.vault.crypto.is_unlocked() || self.ensure_vault_crypto_from_cache().await.is_ok() {
             self.apply_event_projection_to_session().await?;
         } else {
@@ -314,7 +337,7 @@ impl NookVaultManager {
         self.queue_event_outbox_for_current_provider(&event_id, &bytes)
             .await?;
         self.persist_projection_cache().await?;
-        Ok(())
+        Ok(event_id)
     }
 
     pub(in crate::manager) async fn apply_event_projection_to_session(

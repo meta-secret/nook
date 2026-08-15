@@ -44,8 +44,9 @@ pub use auth::enrollment::{
     peek_enrollment_entry_id, peek_enrollment_entry_label, peek_enrollment_issued_at,
 };
 pub use auth::identity::{
-    IdentityId, IdentityMember, IdentityRecord, IdentityVaultDek, IdentityVaultDekReconciliation,
-    MemberDekEnvelope, identity_fingerprint,
+    IdentityId, IdentityMember, IdentityRecord, IdentityVaultDek, IdentityVaultDekEpoch,
+    IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, MemberDekEnvelope,
+    identity_fingerprint,
 };
 pub use auth::identity_directory::{IdentityDirectory, IdentitySelection};
 pub use auth::identity_genesis::identity_vault_genesis_records;
@@ -86,7 +87,8 @@ pub use auth::password_envelope::{
     PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope, PasswordUnlockEntry, VaultUnlock,
     attach_password_envelope, attach_password_envelope_with_work_factor, create_password_entry,
     create_password_entry_with_work_factor, is_vault_password_long_enough,
-    is_vault_password_recommended_length, resolve_keys_from_entry, resolve_keys_from_password,
+    is_vault_password_recommended_length, password_envelope_supports_key_rewrap,
+    resolve_keys_from_entry, resolve_keys_from_password, rewrap_password_envelope,
     vault_password_min_length, vault_password_recommended_min_length, verify_password,
     verify_password_entry,
 };
@@ -126,6 +128,6 @@ pub use multi_device_api::*;
 pub use records::{SecretType, StoredRecordPayload, StoredSecretRecord};
 pub use wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
-    DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId,
-    Sha256Hex, SigningSeedHex, SymmetricKey, Url64EncodedString,
+    DeviceSigningPublicKey, IdentityVaultEventId, IsoTimestamp, MemberLabel, OpaqueCiphertext,
+    PasswordEntryId, Sha256Hex, SigningSeedHex, SymmetricKey, Url64EncodedString,
 };

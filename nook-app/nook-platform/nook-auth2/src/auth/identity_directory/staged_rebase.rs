@@ -25,7 +25,7 @@ impl IdentityDirectory {
         let base_target = base.identity(identity_id);
         let base_others = base.identities_without(identity_id);
         let candidate_others = candidate.identities_without(identity_id);
-        if base_others != candidate_others {
+        if base_others != candidate_others || base.retired_app_ids != candidate.retired_app_ids {
             return Err(Self::staged_identity_conflict(identity_id));
         }
 
@@ -59,6 +59,7 @@ impl IdentityDirectory {
         let rebased = Self {
             identities,
             selection: self.selection.clone(),
+            retired_app_ids: self.retired_app_ids.clone(),
         };
         rebased.validate()?;
         Ok(rebased)

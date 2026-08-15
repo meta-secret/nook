@@ -39,8 +39,14 @@ pub enum MultiDeviceError {
     #[error("App key must be explicitly enrolled before it can join this identity.")]
     IdentityEnrollmentRequired,
 
+    #[error("This app key was retired by local device recovery.")]
+    RetiredAppKey,
+
     #[error("Vault {store_id} is already associated with another identity.")]
     DuplicateVaultOwnership { store_id: String },
+
+    #[error("Vault DEK epoch is stale: expected {expected}, found {actual}.")]
+    StaleVaultDekEpoch { expected: String, actual: String },
 
     #[error("App key {app_id} belongs to more than one local identity.")]
     DuplicateAppKeyOwnership { app_id: String },

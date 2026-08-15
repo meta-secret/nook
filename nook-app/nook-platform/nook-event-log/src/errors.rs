@@ -66,6 +66,12 @@ pub enum EventError {
     #[error("unsupported event schema version {version}")]
     UnsupportedSchemaVersion { version: u32 },
 
+    #[error("current epoch checkpoint must include {field}")]
+    MissingEpochCheckpointReplacement { field: &'static str },
+
+    #[error("invalid current epoch checkpoint: {reason}")]
+    InvalidEpochCheckpointStructure { reason: &'static str },
+
     #[error("event store_id does not match vault (expected {expected}, got {actual})")]
     EventStoreIdMismatch { expected: String, actual: String },
 

@@ -234,11 +234,22 @@ fn encrypted_payload_count(operation: &VaultOperation) -> usize {
             password_entries,
             ..
         } => secrets.len() + password_entries.len(),
-        VaultOperation::EpochCheckpoint { secrets, .. } => secrets.len(),
+        VaultOperation::EpochCheckpoint {
+            secrets,
+            password_entries,
+            ..
+        } => {
+            secrets.len()
+                + match password_entries {
+                    crate::EpochPasswordState::LegacyRetain => 0,
+                    crate::EpochPasswordState::Replace(entries) => entries.len(),
+                }
+        }
         VaultOperation::SecretCreated { .. }
         | VaultOperation::SecretReplaced { .. }
         | VaultOperation::PasswordAdded { .. }
-        | VaultOperation::PasswordRotated { .. } => 1,
+        | VaultOperation::PasswordRotated { .. }
+        | VaultOperation::PasswordEnvelopeUpgraded { .. } => 1,
         VaultOperation::JoinApproved { .. } => 2,
         VaultOperation::SentinelSharesIssued { shares } => shares.len(),
         VaultOperation::SecretDeleted { .. }
@@ -467,6 +478,8 @@ mod tests {
             version: 1,
             kdf: "scrypt".to_owned(),
             work_factor: 15,
+            recipient: String::new(),
+            wrapped_keys: String::new(),
             ciphertext: "age encrypted vault keys".to_owned(),
         }
     }

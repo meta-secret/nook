@@ -15,6 +15,12 @@ import {
   type StorageProvider,
 } from "$lib/auth/providers";
 import { SerialOperationQueue } from "$lib/runtime/serial-operation-queue";
+import {
+  captureLocalDataStorageGeneration,
+  runWithExclusiveLocalDataStorageLock,
+  runWithLocalDataStorageLock,
+  type LocalDataStorageOperation,
+} from "$lib/runtime/browser-data";
 import * as localeActions from "$lib/vault/locale";
 import * as oauthActions from "$lib/vault/oauth";
 import * as providersActions from "$lib/vault/providers.svelte";
@@ -32,6 +38,7 @@ import {
 } from "$lib/vault/translation";
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import type { VaultState } from "$lib/vault.svelte";
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 export type VaultEditRestriction =
   | { decision: VaultEditDecision.Allowed }
@@ -64,6 +71,7 @@ interface StorageTimeoutRace<T> {
 
 /** Shared runtime, provider, locale, and queue capabilities for the vault facade. */
 export abstract class VaultRuntimeState extends VaultLifecycleState {
+  private localDataStorageGeneration = captureLocalDataStorageGeneration();
   secretPageGeneration = 0;
   secretPageRequestOffset = 0;
   architectureSecretCreationAllowed = $state(true);
@@ -156,7 +164,22 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     if (this.localDataDeletionStarted) {
       return Promise.reject(new Error("Local browser data deletion is active"));
     }
-    return this.storageQueue.enqueue(operation);
+    const storageOperation: LocalDataStorageOperation<T> = {
+      generation: this.localDataStorageGeneration,
+      generationChangedMessage: this.t(
+        I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
+      ),
+      operation,
+    };
+    return this.storageQueue.enqueue(() =>
+      runWithLocalDataStorageLock(storageOperation),
+    );
+  }
+
+  enqueueExclusiveStorage<T>(operation: () => T | Promise<T>): Promise<T> {
+    return this.storageQueue.enqueue(() =>
+      runWithExclusiveLocalDataStorageLock(operation),
+    );
   }
 
   waitForStorageChain(): Promise<void> {
@@ -165,6 +188,10 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
 
   resetStorageChain(): void {
     this.storageQueue.reset();
+  }
+
+  adoptLocalDataStorageGeneration(): void {
+    this.localDataStorageGeneration = captureLocalDataStorageGeneration();
   }
 
   static storageOpTimeoutMs = 20_000;

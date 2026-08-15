@@ -7,13 +7,24 @@ use crate::{NookError, storage::open_nook_database};
 mod genesis_cleanup;
 mod genesis_flow;
 mod handoff;
-mod simple_genesis;
+mod reconciliation;
+mod recovery;
+pub(crate) mod simple_genesis;
 mod staged_genesis;
 pub(crate) use genesis_cleanup::clear_pending_simple_genesis;
 pub(crate) use genesis_flow::SimpleGenesisCompletion;
 pub(crate) use handoff::{
     ExistingVaultImportCommit, IdentityHandoffCommit, commit_authenticated_identity_handoff,
 };
+pub(crate) use reconciliation::{
+    PendingIdentityRotation, abort_prepared_identity_reconciliation,
+    commit_identity_reconciliation_checkpoint, commit_identity_reconciliation_epoch,
+    load_pending_identity_rotation, mark_identity_reconciliation_pending,
+};
+use reconciliation::{
+    clear_consumed_identity_reconciliation, is_identity_reconciliation_key, resolve_identity_epoch,
+};
+pub(crate) use recovery::delete_identity_directory_for_recovery;
 pub(crate) use simple_genesis::PENDING_SIMPLE_GENESIS_KEY;
 pub(crate) use simple_genesis::{
     PendingSimpleGenesis, begin_or_resume_simple_genesis, pending_simple_genesis_for_store,
@@ -23,6 +34,7 @@ pub(crate) use staged_genesis::{StagedSimpleGenesisInput, begin_or_resume_staged
 
 pub(super) const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
 pub(super) const LEGACY_IDENTITY_RECORD_KEY: &str = "identity_record_v1";
+const RETIRED_APP_IDS_KEY: &str = "retired_app_ids_v1";
 
 fn map_domain_error(error: nook_core::MultiDeviceError) -> NookError {
     let message = error.to_string();
@@ -265,6 +277,23 @@ async fn load_directory_for_write(
         .map(|(directory, _)| directory)
 }
 
+async fn load_retired_app_ids(store: &rexie::Store) -> Result<Vec<nook_core::AppId>, NookError> {
+    let key = serde_wasm_bindgen::to_value(RETIRED_APP_IDS_KEY)
+        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs key error: {error:?}")))?;
+    let Some(value) = store
+        .get(key)
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs read error: {error:?}")))?
+        .filter(|value| !value.is_undefined() && !value.is_null())
+    else {
+        return Ok(Vec::new());
+    };
+    let raw: String = serde_wasm_bindgen::from_value(value)
+        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs value error: {error:?}")))?;
+    serde_json::from_str(&raw)
+        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs decode error: {error}")))
+}
+
 pub(crate) async fn update_identity_directory<F, T>(update: F) -> Result<T, NookError>
 where
     F: FnOnce(&mut nook_core::IdentityDirectory) -> Result<T, NookError>,
@@ -386,6 +415,10 @@ pub(crate) struct LegacyVaultIdentityInput<'a> {
     pub(crate) store_id: &'a nook_core::StoreId,
     pub(crate) secrets_envelope: nook_core::AgeArmoredCiphertext,
     pub(crate) members_envelope: nook_core::AgeArmoredCiphertext,
+    pub(crate) key_epoch: nook_core::IdentityVaultDekEpoch,
+    pub(crate) verified_previous_key_epoch: Option<nook_core::IdentityVaultEventId>,
+    pub(crate) committed_event_ids: Vec<nook_core::IdentityVaultEventId>,
+    pub(crate) checkpoint_ancestors: Vec<nook_core::IdentityVaultEventId>,
     pub(crate) authorized_auth_ids: Vec<nook_core::AuthKeyId>,
     pub(crate) label: &'a str,
 }
@@ -398,21 +431,36 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
         store_id,
         secrets_envelope,
         members_envelope,
+        key_epoch,
+        verified_previous_key_epoch,
+        committed_event_ids,
+        checkpoint_ancestors,
         authorized_auth_ids,
         label,
     } = input;
     let app_key = app_key.clone();
     let store_id = store_id.clone();
     let label = label.to_owned();
-    update_identity_directory(move |directory| {
+    let resolution = resolve_identity_epoch(
+        &store_id,
+        key_epoch,
+        verified_previous_key_epoch,
+        &committed_event_ids,
+        &checkpoint_ancestors,
+    )
+    .await?;
+    let consumed_marker = resolution.consumed_marker;
+    let directory_store_id = store_id.clone();
+    let record = update_identity_directory(move |directory| {
         let identity_id = directory
             .import_legacy_vault(
                 &label,
                 &app_key,
-                store_id,
+                directory_store_id,
                 nook_core::IdentityVaultDekReconciliation {
                     secrets_envelope,
                     members_envelope,
+                    epoch_update: resolution.update,
                     authorized_auth_ids,
                 },
             )
@@ -424,7 +472,11 @@ pub(crate) async fn ensure_identity_from_legacy_vault(
             .cloned()
             .ok_or_else(|| NookError::Database("Imported identity disappeared.".to_owned()))
     })
-    .await
+    .await?;
+    if let Some(consumed_marker) = consumed_marker {
+        clear_consumed_identity_reconciliation(&store_id, &consumed_marker).await?;
+    }
+    Ok(record)
 }
 
 pub(crate) async fn generate_vault_dek_for_identity(
@@ -442,10 +494,21 @@ pub(crate) async fn generate_vault_dek_for_identity(
     .await
 }
 
+pub(crate) async fn validate_vault_identity_enrollment(
+    app_key: &nook_core::AppKey,
+    store_id: &nook_core::StoreId,
+) -> Result<(), NookError> {
+    load_identity_directory()
+        .await?
+        .validate_vault_enrollment(app_key, store_id)
+        .map_err(|error| NookError::Database(error.to_string()))
+}
+
 #[cfg(test)]
 pub(crate) async fn clear_identity_directory_for_test() -> Result<(), NookError> {
     idb_delete_key(IDENTITY_DIRECTORY_KEY).await?;
     idb_delete_key(LEGACY_IDENTITY_RECORD_KEY).await?;
+    idb_delete_key(RETIRED_APP_IDS_KEY).await?;
     simple_genesis::clear_pending_simple_genesis_for_test().await
 }
 

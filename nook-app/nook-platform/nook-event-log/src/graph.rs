@@ -165,6 +165,7 @@ impl EventGraph {
             return Err(EventError::MultipleGenesisRoots);
         }
         for event in applicable {
+            self.validate_epoch_checkpoint_structure(event)?;
             self.validate_event_actor_authorized(event)?;
         }
         Ok(())
@@ -231,6 +232,27 @@ mod tests {
             }],
         };
         VaultEvent::sign(body, signing_key)
+    }
+
+    fn signed_operation(
+        parents: Vec<EventId>,
+        key_epoch: EventId,
+        operation: VaultOperation,
+        signing_key: &SigningKey,
+    ) -> EventResult<VaultEvent> {
+        VaultEvent::sign(
+            VaultEventBody {
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store()?,
+                actor_id: actor(signing_key)?,
+                actor_signing_public_key: public_key(signing_key),
+                parents,
+                created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+                key_epoch,
+                operations: vec![operation],
+            },
+            signing_key,
+        )
     }
 
     fn genesis_event(signing_key: &SigningKey) -> EventResult<VaultEvent> {
@@ -405,6 +427,33 @@ mod tests {
         assert!(matches!(
             graph.topological_order(),
             Err(EventError::MultipleGenesisRoots)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn standalone_current_checkpoint_is_quarantined() -> EventResult<()> {
+        let key = signing_key();
+        let genesis = genesis_event(&key)?;
+        let genesis_id = genesis.id()?;
+        let checkpoint = signed_operation(
+            vec![genesis_id.clone()],
+            genesis_id,
+            VaultOperation::EpochCheckpoint {
+                secrets: Vec::new(),
+                members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
+                rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
+                password_entries: crate::EpochPasswordState::Replace(Vec::new()),
+            },
+            &key,
+        )?;
+        let mut graph = EventGraph::new();
+        graph.insert(genesis, STORE_STR)?;
+
+        assert!(matches!(
+            graph.insert(checkpoint, STORE_STR)?,
+            EventInsertStatus::Quarantined(reason)
+                if reason.contains("parent must be one security rotation trigger")
         ));
         Ok(())
     }
