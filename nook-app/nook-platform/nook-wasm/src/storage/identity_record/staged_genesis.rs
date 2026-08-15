@@ -291,6 +291,65 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    async fn genesis_cleanup_preserves_pending_identity_during_fallback_migration()
+    -> Result<(), NookError> {
+        super::super::clear_identity_directory_for_test().await?;
+        let app_key = nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;
+        let initial_key = app_key.clone();
+        super::super::update_identity_directory(move |directory| {
+            directory
+                .create_identity("Pending", &initial_key, None)
+                .map_err(super::super::map_domain_error)?;
+            Ok(())
+        })
+        .await?;
+        let (signing, _) = nook_core::SigningIdentity::generate()?;
+        let (pending, _, _) = begin_or_resume_staged_simple_genesis(StagedSimpleGenesisInput {
+            app_key: &app_key,
+            signing_public_key: &signing.public_key(),
+            authorizer: None,
+            authorizer_signing: None,
+            label: "Pending",
+        })
+        .await?;
+        let staged = pending
+            .staged_identity()
+            .ok_or_else(|| NookError::Database("Staged identity disappeared.".to_owned()))?;
+        let mut concurrent = staged.base_directory.clone();
+        let duplicate_id = concurrent
+            .create_identity("Concurrent duplicate", &app_key, None)
+            .map_err(super::super::map_domain_error)?;
+        concurrent
+            .select(&duplicate_id)
+            .map_err(super::super::map_domain_error)?;
+        crate::storage::indexed_db::idb_put_string(
+            super::super::IDENTITY_DIRECTORY_KEY,
+            &serde_json::to_string(&concurrent)
+                .map_err(|error| NookError::Serialization(error.to_string()))?,
+        )
+        .await?;
+
+        super::super::clear_pending_simple_genesis(super::super::SimpleGenesisCompletion::Staged {
+            pending: &pending,
+            signing_seed: "staged-signing-seed",
+        })
+        .await?;
+
+        let published = super::super::load_identity_directory().await?;
+        assert_eq!(published.identities().len(), 1);
+        assert_eq!(published.selected()?.identity_id, pending.identity_id);
+        assert!(published.selected()?.owns_vault(&pending.store_id));
+        assert!(
+            super::super::pending_simple_genesis_for_store(pending.store_id.as_str())
+                .await?
+                .is_none()
+        );
+        crate::storage::indexed_db::idb_delete_key(crate::storage::event_db::SIGNING_SEED_KEY)
+            .await?;
+        super::super::clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
     async fn unchanged_base_rejects_invalid_staged_candidate() -> Result<(), NookError> {
         super::super::clear_identity_directory_for_test().await?;
         let selected_key = nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;

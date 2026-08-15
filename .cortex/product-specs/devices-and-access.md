@@ -106,8 +106,8 @@ It is never shown as stored on one physical laptop.
   - Normalize staged marker base and candidate directories in the same
     transaction so completion compares migrated snapshots.
   - Repeat that marker-aware normalization inside every directory write
-    transaction, including authenticated handoff, so a pre-upgrade tab cannot
-    race the initial migration.
+    transaction, including authenticated handoff and staged genesis cleanup, so
+    a pre-upgrade tab cannot race the initial migration.
   - Do not decode a pending marker for a valid directory without duplicate
     ownership.
   - Persist both encryption and event-signing public keys for members.

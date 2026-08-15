@@ -137,9 +137,9 @@ the selection so a resumable genesis marker cannot become orphaned.
 When the marker is staged, the same transaction normalizes its base and
 candidate directory snapshots before rewriting the live directory.
 Every later directory update repeats this marker-aware migration within its
-write transaction. Authenticated handoff uses the same loader. A concurrent
-pre-upgrade writer cannot absorb the pending identity between preflight
-migration and mutation.
+write transaction. Authenticated handoff and staged genesis cleanup preserve the
+pending identity inside their transactions. A concurrent pre-upgrade writer
+cannot absorb the pending identity between preflight migration and mutation.
 All distinct members and vault DEK grants survive the merge.
 The normalized directory is rewritten before unique app-key ownership is
 enforced.
