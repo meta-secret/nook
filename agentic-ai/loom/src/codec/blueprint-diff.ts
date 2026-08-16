@@ -225,10 +225,12 @@ function selectBlueprint(received: UntrustedYamlNode): BlueprintRef {
   return DEFAULT_BLUEPRINT;
 }
 
-function loadBlueprint(blueprintPath: string): {
+export type LoadedBlueprint = {
   readonly blueprintPath: string;
   readonly blueprintYaml: string;
-} {
+};
+
+export function loadBlueprint(blueprintPath: string): LoadedBlueprint {
   const root = findRepoRoot();
   const absolute = path.join(root, blueprintPath);
   return {

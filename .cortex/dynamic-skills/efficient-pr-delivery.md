@@ -67,8 +67,8 @@ git commit …
 task pr:review-local
 git push -u origin HEAD
 task remote TASK_NAME=<name>   # focused iteration
-task loom:pr-land CONFIG=/tmp/pr-land-validate.yaml
-task loom:pr-land CONFIG=/tmp/pr-land-ready.yaml
+task loom:pr-land CONFIG=path/to/agent-owned/pr-land-validate.yaml
+task loom:pr-land CONFIG=path/to/agent-owned/pr-land-ready.yaml
 gh pr merge <number> --squash
 ```
 

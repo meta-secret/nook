@@ -2,6 +2,7 @@ import {
   AGENT_STATS_ASSEMBLE_INPUT_SCHEMA,
   AGENT_STATS_FILE_INPUT_SCHEMA,
 } from '../codec/args/agent-stats.ts';
+import { loadBlueprint } from '../codec/blueprint-diff.ts';
 import { CORTEX_AUDIT_INPUT_SCHEMA } from '../codec/args/cortex-audit.ts';
 import { DEPENDENCY_POPULARITY_INPUT_SCHEMA } from '../codec/args/dependency-popularity.ts';
 import { PRE_PUSH_INPUT_SCHEMA } from '../codec/args/pre-push.ts';
@@ -45,13 +46,21 @@ import {
   type SkillScaffoldReport,
 } from '../commands/skill-scaffold.ts';
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
+import {
+  AGENT_TEMP_DIR_TOKEN,
+  resolveAgentTempPath,
+} from '../lib/agent-temp-path.ts';
+import { findRepoRoot } from '../lib/repo.ts';
 
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
+import type { ResolveAgentTempPathRequest } from '../lib/agent-temp-path.ts';
 export type DiscoverableRequest = {
   readonly family: RequestFamily;
   readonly operation?: AgentStatsOperation | PrLandOperation;
   readonly description: string;
   readonly exampleRequest: string;
+  readonly exampleYaml: string;
+  readonly resolvedExampleYaml: string;
   readonly inputSchema: ObjectJsonSchema;
 };
 
@@ -62,7 +71,12 @@ export type LoomCommandResult =
   | AgentStatsReport
   | PrLandReport
   | DependencyPopularityReport;
-const DISCOVERABLE: readonly DiscoverableRequest[] = [
+type DiscoverableRequestDefinition = Omit<
+  DiscoverableRequest,
+  'exampleYaml' | 'resolvedExampleYaml'
+>;
+
+const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
   {
     family: RequestFamily.ToolsList,
     description: 'List Loom domain request kinds and schemas.',
@@ -148,7 +162,27 @@ const DISCOVERABLE: readonly DiscoverableRequest[] = [
 ];
 
 export function listDiscoverableRequests(): readonly DiscoverableRequest[] {
-  return DISCOVERABLE;
+  const repoRoot = findRepoRoot();
+  const agentTempPathRequest: ResolveAgentTempPathRequest = {
+    repoRoot,
+    authoredPath: AGENT_TEMP_DIR_TOKEN,
+  };
+  const agentTempDirectory = resolveAgentTempPath(agentTempPathRequest);
+
+  return DISCOVERABLE_DEFINITIONS.map((definition) => {
+    const exampleYaml = loadBlueprint(definition.exampleRequest).blueprintYaml;
+    if (!exampleYaml.includes(AGENT_TEMP_DIR_TOKEN)) {
+      return { ...definition, exampleYaml, resolvedExampleYaml: exampleYaml };
+    }
+    return {
+      ...definition,
+      exampleYaml,
+      resolvedExampleYaml: exampleYaml.replaceAll(
+        AGENT_TEMP_DIR_TOKEN,
+        agentTempDirectory,
+      ),
+    };
+  });
 }
 
 export function listAllRequestFamilies(): readonly RequestFamily[] {

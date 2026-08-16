@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { decodeAgentStatsAssemblePayload } from '../src/codec/args/agent-stats.ts';
 import { decodePrePushRequest } from '../src/codec/args/pre-push.ts';
 import { RequestFamily, ResponsePhase } from '../src/codec/enums.ts';
 import { DecodeStatus } from '../src/codec/field-error.ts';
 import { decodeLoomRequest } from '../src/codec/request.ts';
 import { dispatchValue } from '../src/tools/dispatch.ts';
+import { findRepoRoot } from '../src/lib/repo.ts';
 
 import type { DecodeAgentStatsAssemblePayloadArgs } from '../src/codec/args/agent-stats.ts';
 describe('loom domain request codec', () => {
@@ -115,7 +118,12 @@ describe('loom dispatch protocol', () => {
     expect(outcome.body.ok).toBe(true);
     if (outcome.body.ok) {
       const result = outcome.body.result as {
-        requests: readonly { family: RequestFamily }[];
+        requests: readonly {
+          family: RequestFamily;
+          exampleRequest: string;
+          exampleYaml: string;
+          resolvedExampleYaml: string;
+        }[];
       };
       expect(
         result.requests.some((entry) => entry.family === RequestFamily.PrePush),
@@ -125,6 +133,22 @@ describe('loom dispatch protocol', () => {
           (entry) => entry.family === RequestFamily.ToolsCall,
         ),
       ).toBe(false);
+      for (const entry of result.requests) {
+        const absoluteExamplePath = path.join(
+          findRepoRoot(),
+          entry.exampleRequest,
+        );
+        expect(entry.exampleYaml).toBe(
+          readFileSync(absoluteExamplePath, 'utf8'),
+        );
+        expect(entry.resolvedExampleYaml.length).toBeGreaterThan(0);
+        if (entry.exampleYaml.includes('{agentTempDir}')) {
+          expect(entry.resolvedExampleYaml).toContain('/nook-agent-stats/');
+          expect(entry.resolvedExampleYaml).not.toContain('{agentTempDir}');
+        } else {
+          expect(entry.resolvedExampleYaml).toBe(entry.exampleYaml);
+        }
+      }
     }
   });
 
