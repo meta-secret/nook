@@ -138,8 +138,8 @@ prePush:
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: /tmp/pr-123-scratch.json
-    outputPath: /tmp/123.yaml
+    scratchPath: '{agentTempDir}/pr-123/scratch.json'
+    outputPath: '{agentTempDir}/pr-123/123.yaml'
     includeTestInventory: true
 ```
 
@@ -187,6 +187,24 @@ bun run --cwd agentic-ai/loom loom -- params/tools-list/default.yaml
 Each discovered request includes its typed `inputSchema`, canonical
 `exampleRequest` path, and exact `exampleYaml`. Agents should consume that
 output instead of copying request bodies into guidance.
+
+Agent-statistics path fields also accept `{agentTempDir}`. Loom resolves it to:
+
+```text
+<os-temp>/nook-agent-stats/<40-character-task-anchor-commit>/<opaque-worktree-id>
+```
+
+The task-anchor commit is the exact commit checked out when the current task
+branch was entered, or the worktree's initial commit when Git created the
+branch with the worktree. It stays stable as the agent adds implementation commits.
+The worktree identifier isolates parallel worktrees on the same anchor. The
+mapping therefore stays stable so `assemble`, `validate`, and `publish` can
+share one file. Ordinary relative and absolute paths remain supported.
+
+`task loom:tools-list` keeps the tokenized blueprint in `exampleYaml`. For
+blueprints that use the token, it also returns `resolvedExampleYaml` with the
+current worktree and commit path filled in. Use the resolved path when creating
+the scratch JSON before `assemble`.
 
 ## TypeScript domain structure
 

@@ -73,17 +73,34 @@ Assemble request:
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: /tmp/pr-123-events.json
-    outputPath: /tmp/123.yaml
+    scratchPath: "{agentTempDir}/pr-123/scratch.json"
+    outputPath: "{agentTempDir}/pr-123/123.yaml"
     includeTestInventory: true
 ```
 
 ```bash
-task loom:agent-stats CONFIG=/tmp/assemble-request.yaml
+task loom:agent-stats CONFIG=path/to/agent-owned/assemble-request.yaml
 ```
 
+**Agent-local path token:**
+
+- `scratchPath`, `outputPath`, and `statsFile` accept `{agentTempDir}`.
+- Loom resolves the token under the operating system's temporary directory.
+- The resolved directory contains the exact 40-character task-anchor commit.
+- That anchor is the branch-entry commit, or the worktree's initial commit for
+  a branch created with the worktree. Implementation commits do not move it.
+- It also contains an opaque identifier derived from the canonical worktree.
+- Separate worktrees cannot collide when they use the same commit.
+- One worktree and commit resolve consistently across `assemble`, `validate`,
+  and `publish`.
+- `task loom:tools-list` returns the filled path in `resolvedExampleYaml`.
+- Use that resolved path when creating the scratch JSON before `assemble`.
+- Ordinary absolute and relative paths remain supported.
+- The request file passed through `CONFIG` must also live in agent-owned
+  storage. Do not reuse a shared fixed `/tmp` request filename.
+
 - **Validate and publish:** use `agentStats.validate` or `agentStats.publish`
-  with `statsFile: /tmp/123.yaml`.
+  with `statsFile: "{agentTempDir}/pr-123/123.yaml"`.
 - **Examples:**
   [`agentic-ai/loom/params/agent-stats/`](../../agentic-ai/loom/params/agent-stats/).
 - **Protocol:** [Loom tools](../references/loom-tools.md).

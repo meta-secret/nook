@@ -80,8 +80,8 @@ Same-prefix names almost always mean a separate object was flattened. Generic
   agentStats:
     assemble:
       prNumber: 123
-      scratchPath: /tmp/pr-123.json
-      outputPath: /tmp/123.yaml
+      scratchPath: "{agentTempDir}/pr-123/scratch.json"
+      outputPath: "{agentTempDir}/pr-123/123.yaml"
       includeTestInventory: true
   ```
 

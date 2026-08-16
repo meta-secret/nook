@@ -1,3 +1,4 @@
 agentStats:
   publish:
-    statsFile: /tmp/123.yaml
+    # Resolves to the same worktree-and-commit directory used by assemble.
+    statsFile: "{agentTempDir}/pr-123/123.yaml"

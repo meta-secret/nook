@@ -5,6 +5,7 @@ import type {
   AgentStatsFileRequest,
 } from '../codec/args/agent-stats.ts';
 import { AgentStatsOperation, RequestFamily } from '../codec/enums.ts';
+import { resolveAgentTempPath } from '../lib/agent-temp-path.ts';
 import { assembleAgentStats } from '../lib/agent-stats-assemble.ts';
 import { validateAgentStatsYaml } from '../lib/agent-stats-schema.ts';
 import { findRepoRoot } from '../lib/repo.ts';
@@ -29,15 +30,24 @@ export async function runAgentStatsAssemble(
   request: AgentStatsAssembleRequest,
 ): Promise<AgentStatsReport> {
   const repoRoot = findRepoRoot();
+  const scratchPathRequest = {
+    repoRoot,
+    authoredPath: request.scratchPath,
+  };
+  const outputPathRequest = {
+    repoRoot,
+    authoredPath: request.outputPath,
+  };
+  const scratchPath = resolveAgentTempPath(scratchPathRequest);
+  const outPath = resolveAgentTempPath(outputPathRequest);
   const assembledArgs = {
     repoRoot,
     prNumber: request.prNumber,
-    scratchPath: request.scratchPath,
+    scratchPath,
     includeInventory: request.includeTestInventory,
   };
   const assembled = await assembleAgentStats(assembledArgs);
 
-  const outPath = path.resolve(request.outputPath);
   const directoryOptions: { readonly recursive: true } = { recursive: true };
   mkdirSync(path.dirname(outPath), directoryOptions);
   writeFileSync(outPath, assembled.yaml, 'utf8');
@@ -70,9 +80,14 @@ export async function runAgentStatsAssemble(
 export async function runAgentStatsValidate(
   request: AgentStatsFileRequest,
 ): Promise<AgentStatsReport> {
+  const repoRoot = findRepoRoot();
+  const statsPathRequest = {
+    repoRoot,
+    authoredPath: request.statsFile,
+  };
   const validateFileArgs: ValidateFileArgs = {
     operation: AgentStatsOperation.Validate,
-    file: request.statsFile,
+    file: resolveAgentTempPath(statsPathRequest),
   };
   return validateFile(validateFileArgs);
 }
@@ -81,7 +96,11 @@ export async function runAgentStatsPublish(
   request: AgentStatsFileRequest,
 ): Promise<AgentStatsReport> {
   const repoRoot = findRepoRoot();
-  const absolute = path.resolve(request.statsFile);
+  const statsPathRequest = {
+    repoRoot,
+    authoredPath: request.statsFile,
+  };
+  const absolute = resolveAgentTempPath(statsPathRequest);
   const prFromName = path.basename(absolute).replace(/\.ya?ml$/, '');
   const prNumber = Number.parseInt(prFromName, 10);
   if (!Number.isInteger(prNumber) || prNumber <= 0) {

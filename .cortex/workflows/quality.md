@@ -454,7 +454,10 @@ Use this workflow for quality, CI, and deployment changes.
     - That looks indistinguishable from a hang. You lose all progress visibility and cannot tell "still compiling" from "stuck".
     - Filtering pipes are **never** a performance optimization. They only destroy live output.
     - **Correct:** run the command bare — `NOOK_ENV=dev task setup` — its full output streams live and is saved to the terminal file automatically; filter/inspect it _afterward_ by reading that file.
-    - **Also correct:** redirect to a log while it runs — `... > /tmp/build.log 2>&1` — then `grep`/read the file after it finishes (or `tail -f` the file from a _separate_ shell).
+    - **Also correct:** allocate a unique log with
+      `build_log="$(mktemp "${TMPDIR:-/tmp}/nook-build.XXXXXX.log")"`.
+      Redirect the command with `... > "$build_log" 2>&1`.
+      Read it after completion, or run `tail -f "$build_log"` separately.
     - **Forbidden while the command runs:** `task setup 2>&1 | grep -iE "DONE|error" | tail -40`, `gh run watch ... | tail`, `cargo ... | tail`, etc. If you catch yourself appending `| grep`/`| tail` to a build/test/CI command, STOP and run it bare instead.
 15. **Local web dev:** `task web:dev` — do not start host `vite`/`npm` or free `:5173` with blind `kill`.
 16. **Testing pyramid:**
