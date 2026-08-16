@@ -36,6 +36,17 @@ fn cold_exact_cache_scopes_do_not_import_in_progress_registry_exports() -> anyho
     );
     assert_cold_exact_cache_uses_only_stable_imports(web_bake.as_str(), "web_e2e_cache_from");
 
+    let web_toolchain = read(&root, "nook-app/nook-web/docker/toolchain.docker-bake.hcl");
+    for (bake, cache) in [
+        (rust_bake.as_str(), "rust_base_cache_from"),
+        (web_bake.as_str(), "web_cache_from"),
+        (web_bake.as_str(), "web_e2e_cache_from"),
+        (web_toolchain.as_str(), "web_deps_cache_from"),
+        (preflight_bake.as_str(), "preflight_cache_from"),
+    ] {
+        assert_isolated_fallback_tolerates_bad_registry_artifacts(bake, cache);
+    }
+
     let web_fallback = web_bake
         .split("web_cache_from =")
         .nth(1)
@@ -67,6 +78,32 @@ fn assert_cold_exact_cache_uses_only_stable_imports(bake: &str, cache: &str) {
         !cold_fallback.contains("${write_cache_repository}"),
         "cold exact-cache fallback must not import a missing or partial export: {cache}"
     );
+    assert_registry_importers_ignore_errors(cold_fallback, cache);
+}
+
+fn assert_isolated_fallback_tolerates_bad_registry_artifacts(bake: &str, cache: &str) {
+    let cache_body = bake
+        .split(&format!("{cache} ="))
+        .nth(1)
+        .unwrap_or_else(|| panic!("missing cache importer: {cache}"));
+    let cold_fallback = cache_body
+        .split("] : GHA_CACHE_FALLBACK_ENABLED != \"\" ? [")
+        .nth(1)
+        .and_then(|tail| tail.split("] : [").next())
+        .unwrap_or_else(|| panic!("missing cold exact-cache fallback: {cache}"));
+    assert_registry_importers_ignore_errors(cold_fallback, cache);
+}
+
+fn assert_registry_importers_ignore_errors(importers: &str, cache: &str) {
+    for importer in importers
+        .lines()
+        .filter(|line| line.contains("type=registry,"))
+    {
+        assert!(
+            importer.contains("ignore-error=true"),
+            "cold exact-cache fallback must tolerate an absent or truncated registry artifact: {cache}"
+        );
+    }
 }
 
 fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
