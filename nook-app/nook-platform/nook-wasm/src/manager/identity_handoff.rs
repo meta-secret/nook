@@ -109,6 +109,37 @@ impl NookVaultManager {
         self.device.pending_extension_handoff = None;
         Ok(())
     }
+
+    pub(in crate::manager) async fn finalize_paired_vault_handoff(
+        &mut self,
+    ) -> Result<(), NookError> {
+        let Some(pending) = self.device.pending_extension_handoff.as_ref() else {
+            return Ok(());
+        };
+        if !matches!(
+            &pending.enrollment,
+            PendingExtensionIdentityEnrollment::PairedVault { .. }
+        ) {
+            return Ok(());
+        }
+        let identity = self.device_identity()?;
+        let signing_seed = pending
+            .persist_signing_seed
+            .then_some(self.event_log.signing_seed.as_str());
+        crate::storage::identity_record::commit_authenticated_identity_handoff(
+            crate::storage::identity_record::IdentityHandoffCommit {
+                app_key: &identity,
+                signing_public_key: &pending.signing_public_key,
+                authorizer_signing: pending.authorizer_signing.as_ref(),
+                enrollment: &pending.enrollment,
+                signing_seed,
+                existing_vault: None,
+            },
+        )
+        .await?;
+        self.device.pending_extension_handoff = None;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

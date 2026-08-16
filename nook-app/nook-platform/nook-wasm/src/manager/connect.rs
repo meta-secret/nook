@@ -83,7 +83,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    async fn paired_reconciliation_keeps_directory_unchanged_until_commit() -> Result<(), JsError> {
+    async fn verified_connect_finalizes_paired_identity_handoff() -> Result<(), JsError> {
         crate::storage::identity_record::clear_identity_directory_for_test().await?;
         let authorizer = nook_core::AppKey::generate()?;
         let extension = nook_core::AppKey::generate()?;
@@ -124,9 +124,12 @@ mod tests {
         let deferred = crate::storage::identity_record::load_identity_directory().await?;
         assert!(deferred.identity_for_app_key(&extension)?.is_none());
 
-        manager.commit_extension_identity_handoff().await?;
+        manager
+            .complete_connected_identity(&extension, None)
+            .await?;
         let committed = crate::storage::identity_record::load_identity_directory().await?;
         assert!(committed.identity_for_app_key(&extension)?.is_some());
+        assert!(!manager.extension_identity_handoff_requires_connect());
         crate::storage::identity_record::clear_identity_directory_for_test().await?;
         Ok(())
     }
@@ -379,6 +382,7 @@ impl NookVaultManager {
             self.ensure_identity_after_connect(identity).await?;
         }
         self.finalize_existing_vault_import_handoff().await?;
+        self.finalize_paired_vault_handoff().await?;
         let Some(completed) = pending_cleanup else {
             return Ok(());
         };
