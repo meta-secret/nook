@@ -76,7 +76,9 @@ Use this workflow for quality, CI, and deployment changes.
      - `task docker:ecosystem:policy-tools`
    - Composites call those stages in order so a leaf miss cannot cold-rebuild apt.
    - Labeled product PRs call the shared jobs from `pr.yml` via `rust-ecosystem-checks.yml`.
-   - Thin `rust-ecosystem.yml` keeps schedule, main-path, manual, and labeled minds-only PR entry points.
+   - `main.yml` owns product merged-head ecosystem execution.
+   - Thin `rust-ecosystem.yml` keeps schedule, manual, and labeled minds-only PR entry points.
+   - The thin workflow also owns minds-only Main pushes because product Main ignores `agentic-ai/**`.
    - Do not duplicate those commands in bespoke preflight scanners, call Bake helpers directly from the workflow, or compile their CLIs on the GitHub-hosted runner host.
    - Kani pins its specialized model-checking toolchain in `product.Dockerfile`.
    - `task docker:ecosystem:kani` restores and publishes the complete

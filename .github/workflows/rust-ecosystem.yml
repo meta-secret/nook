@@ -1,34 +1,21 @@
-# Non-product entry points for Rust ecosystem gates.
+# Specialist entry points for Rust ecosystem gates.
 # Labeled product PRs run the same jobs inside pr.yml so every exact-head gate
 # appears on one Actions run page. Ordinary PR pushes never start these checks.
-# agentic-ai/minds-only PRs still use this workflow because pr.yml ignores
-# agentic-ai/** and must not run the product preview pipeline for those changes.
+# Main runs the same jobs inside main.yml for product merged-head verification.
+# agentic-ai/minds-only PRs and Main pushes still use this workflow because the
+# product PR and Main workflows ignore agentic-ai/**.
 
 name: Rust ecosystem checks
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - agentic-ai/minds/**
   pull_request:
     types: [labeled]
     paths:
       - agentic-ai/minds/**
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/rust-ecosystem.yml
-      - .github/workflows/rust-ecosystem-checks.yml
-      - deny.toml
-      - nook-app/nook-platform/.insta.yaml
-      - nook-app/nook-platform/.cargo/**
-      - nook-app/nook-platform/docker/rust/**
-      - nook-app/nook-platform/docker/Taskfile.yml
-      - nook-app/docker-bake.hcl
-      - nook-app/Taskfile.yml
-      - nook-app/nook-platform/fuzz/**
-      - preflight/**
-      - agentic-ai/minds/**
-      - nook-app/**/*.rs
-      - nook-app/**/Cargo.toml
-      - nook-app/nook-platform/Cargo.lock
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:
@@ -38,7 +25,7 @@ permissions:
 
 concurrency:
   group: >-
-    rust-ecosystem-${{ github.event_name }}-
+    rust-ecosystem-specialist-${{ github.event_name }}-
     ${{ github.event.pull_request.number || github.ref }}-
     ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'shared' }}
   cancel-in-progress: true

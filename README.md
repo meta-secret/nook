@@ -472,20 +472,21 @@ and Neo4j deployment, while rotation stops the warm pool before publication
 and restores it afterward. Credential input is streamed into that cleanup-armed
 remote transaction rather than retained as a reusable host-side file.
 
-Labeled PR validation runs the shared **Rust ecosystem** gates through
-`pr.yml` so they appear on the same Actions run as the product checks.
+Labeled PR validation and merged-head verification run the shared **Rust
+ecosystem** gates through `pr.yml` and `main.yml`. Each lifecycle therefore
+shows product and ecosystem checks on one Actions run.
 `task docker:ecosystem:*` runs dependency policy (per-workspace Taskfile
 checks in the loaded `rust-ecosystem-policy-tools` image), RustSec,
 Proptest/Insta/Loom, cargo-fuzz, and Dylint from sibling Dockerfiles under
 `nook-app/nook-platform/docker/rust/` as separate images off `rust-base`
 (`rust-ecosystem-policy-tools`, `rust-ecosystem-nightly`) so the product base
-stays lean. Kani stays on its
-official action. Also covered: generated and snapshot tests (Proptest and Insta),
+stays lean. Kani runs through its Dockerized Task target. Also covered:
+generated and snapshot tests (Proptest and Insta),
 bounded concurrency exploration (Loom), parser fuzzing (`cargo-fuzz`), model
 checking (Kani), and repository-selected Rust lints (Dylint). Fast
 deterministic tests remain part of ordinary Rust testing. Fuzz, Loom, Kani, and
-compiler-coupled Dylint checks have bounded hosted jobs. Schedule, main-path,
-manual, and labeled minds-only PR entry points stay in thin
+compiler-coupled Dylint checks have bounded hosted jobs. Schedule, manual, and
+labeled minds-only PR and Main-push entry points stay in thin
 `rust-ecosystem.yml`. The selection and configuration policy lives in
 [`.cortex/workflows/quality.md`](.cortex/workflows/quality.md).
 

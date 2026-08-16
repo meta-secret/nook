@@ -12,6 +12,7 @@ on:
   workflow_run:
     workflows: [PR]
     types: [completed]
+    branches-ignore: [main]
 
 permissions:
   actions: read

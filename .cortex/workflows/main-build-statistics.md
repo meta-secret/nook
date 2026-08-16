@@ -64,6 +64,7 @@ records remain valid baselines after boundary normalization.
 - Main run ID, attempt, head SHA, conclusion, URL, and timestamps;
 - associated pull requests when GitHub can resolve them;
 - queue, execution, and end-to-end wall time;
+- parallel Rust ecosystem job and step results from the Main run;
 - aggregate producer build/verify step duration (native Rust, WASM, and browser-free web; legacy single-job step names remain recognized);
 - aggregate development-deployment and coverage-export durations;
 - every job and step with status, conclusion, timestamps, and duration;

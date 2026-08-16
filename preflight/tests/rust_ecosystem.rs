@@ -16,6 +16,7 @@ fn read(relative_path: &str) -> anyhow::Result<String> {
 fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()> {
     let entry = read(".github/workflows/rust-ecosystem.yml")?;
     let checks = read(".github/workflows/rust-ecosystem-checks.yml")?;
+    let main = read(".github/workflows/main.yml")?;
     let pr = read(".github/workflows/pr.yml")?;
     let quality = read(".cortex/workflows/quality.md")?;
     let workspace = read("nook-app/nook-platform/Cargo.toml")?;
@@ -43,9 +44,24 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         entry.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),
         "Thin rust-ecosystem.yml must call the shared Rust ecosystem checks"
     );
+    assert_eq!(
+        entry.matches("agentic-ai/minds/**").count(),
+        2,
+        "Thin rust-ecosystem.yml must keep minds-only PR and Main-push coverage"
+    );
     assert!(
-        entry.contains("agentic-ai/minds/**"),
-        "Thin rust-ecosystem.yml must keep labeled minds-only PR coverage"
+        main.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml")
+            && main.contains("fuzz_seconds: \"20\"")
+            && main.contains("isolated_cache_write: \"false\""),
+        "Main must call the shared Rust ecosystem checks in its own run"
+    );
+    assert!(
+        entry.contains("push:\n    branches: [main]\n    paths:\n      - agentic-ai/minds/**"),
+        "Thin rust-ecosystem.yml must preserve merged-head coverage for minds changes"
+    );
+    assert!(
+        !entry.contains("nook-app/**/*.rs") && !entry.contains("nook-app/**/Cargo.toml"),
+        "Thin rust-ecosystem.yml Main-push coverage must remain minds-only"
     );
     assert!(
         !entry.contains("Run dependency policy") && !entry.contains("Bake rust-dependency-policy"),

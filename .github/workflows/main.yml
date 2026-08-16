@@ -1,6 +1,7 @@
-# Main branch: keep one active run plus only the newest pending revision, then serialize the
-# native, WASM, and web cache-writing lanes so each verifies read-only and exports its
-# already-solved local graph without competing uploads. After the verified
+# Main branch: keep one active run plus only the newest pending revision. Run the shared
+# Rust ecosystem gates beside the product pipeline. Serialize the native, WASM, and web
+# cache-writing lanes so each verifies read-only and exports its already-solved local graph
+# without competing uploads. After the verified
 # WASM handoff, local-provider web e2e, extension e2e, and headless UI demos overlap on separate
 # hosted runners. Each browser solve is read-only. The successful UI-demo lane then exports its
 # warm graph to the shared browser cache. Deploy the fast, unoptimized development channel to Cloudflare
@@ -56,6 +57,14 @@ env:
   LINEAR_UI_DEMO_TEAM_ID: fb81b5b7-ce24-447e-8673-63ec37c64983
 
 jobs:
+  rust-ecosystem:
+    name: Rust ecosystem
+    uses: ./.github/workflows/rust-ecosystem-checks.yml
+    secrets: inherit
+    with:
+      fuzz_seconds: "20"
+      isolated_cache_write: "false"
+
   rust:
     name: Native Rust verification
     # Main refreshes the default-branch GHA native cache that new PRs are allowed to restore.

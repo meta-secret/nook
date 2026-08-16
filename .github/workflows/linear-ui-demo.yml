@@ -8,6 +8,7 @@ on:
   workflow_run:
     workflows: [PR]
     types: [completed]
+    branches-ignore: [main]
   pull_request_target:
     types: [closed]
 

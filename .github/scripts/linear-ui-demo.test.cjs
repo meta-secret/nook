@@ -213,6 +213,7 @@ test('keeps the Linear credential out of the untrusted pull request workflow', a
 
   assert.doesNotMatch(pullRequestWorkflow, /LINEAR_API_KEY/)
   assert.match(trustedWorkflow, /workflow_run:/)
+  assert.match(trustedWorkflow, /branches-ignore: \[main\]/)
   assert.match(trustedWorkflow, /pull_request_target:/)
   assert.match(trustedWorkflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/)
 })
