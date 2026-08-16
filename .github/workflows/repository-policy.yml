@@ -48,7 +48,7 @@ jobs:
                 break
                 ;;
             esac
-          done < <(git diff --name-only HEAD^1 HEAD^2)
+          done < <(git diff --no-renames --name-only HEAD^1 HEAD^2)
           echo "loom=$loom_changed" >> "$GITHUB_OUTPUT"
 
       - name: Install Task
