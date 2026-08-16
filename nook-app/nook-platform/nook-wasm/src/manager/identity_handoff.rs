@@ -116,8 +116,7 @@ impl NookVaultManager {
         let Some(pending) = self.device.pending_extension_handoff.as_ref() else {
             return Ok(());
         };
-        let PendingExtensionIdentityEnrollment::PairedVault { store_id, .. } =
-            &pending.enrollment
+        let PendingExtensionIdentityEnrollment::PairedVault { store_id, .. } = &pending.enrollment
         else {
             return Ok(());
         };
