@@ -128,7 +128,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 | [`hive.yml`](../../.github/workflows/hive.yml) | Hive/infra PR changes and Main pushes | Hive format/Clippy/tests | No |
 | [`release.yml`](../../.github/workflows/release.yml) | Semver tag `v*.*.*` or manual version + ref | Production verify, deploy, release | No |
 | [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual | Audit and AI-update Rust deps | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
-| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Scheduled ready-Workbench scan or manual dispatch | Claim Workbench issue → implement → PR | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
+| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Explicit issue-path or prompt dispatch | Claim Workbench issue or run prompt → implement → PR | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`ci-agent-smoke.yml`](../../.github/workflows/ci-agent-smoke.yml) | Manual | ci-agent unit tests and open-handle exit smoke | No |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml) | Manual | Debug e2e on a PR branch | Only for `sync-live` |
 | [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Docker prune on self-hosted `nook` runner | No |
@@ -250,8 +250,9 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 **`agent-implement.yml`**
 
-- Atomically claims one ready agent issue with an assigned Nook GitHub
-  collaborator.
+- Requires exactly one explicit `issue_path` or `prompt`.
+- Resolves and atomically claims only the requested ready agent issue.
+- Requires an assigned Nook GitHub collaborator for issue mode.
 - Cursor SDK implement → PR opened → owner assigned and mentioned → Workbench
   progress/worklog published → workflow exits.
 
@@ -1028,7 +1029,8 @@ do not assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 - Trusted default-branch code writes a deduplicated `status: ready`, `automation: hive` Workbench incident without copying raw logs.
 - The token-free k0s dispatcher reconciles it into Neo4j.
 - One isolated logical task owns diagnosis through exact-head checks, review resolution, squash merge, and replacement Main verification.
-- The scheduled implementation worker does not claim Hive incidents.
+- The explicitly dispatched implementation worker does not claim Hive
+  incidents.
 - Browser E2E and UI-demo failures enter the same durable repair queue as native, WASM, build, deployment, mixed, and unknown failures.
 
 **Hive delivery generations:**
@@ -1123,14 +1125,17 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 
 | Trigger | When it runs |
 | --- | --- |
-| `schedule` | Twice hourly; claims the first ready agent record with an assigned Nook GitHub collaborator |
 | `workflow_dispatch.issue_path` | Claims that exact eligible Workbench issue |
 | `workflow_dispatch.prompt` | Runs the explicit prompt without claiming an issue |
 
-The workflow serializes claims. Eligibility requires `status: ready`,
+Exactly one of `issue_path` or `prompt` is required. Empty or ambiguous
+dispatches fail before checkout. Issue eligibility requires `status: ready`,
 `automation: agent`, and an owner who is a Nook GitHub collaborator with write
-access. Scheduled scans skip ownerless records. The worker commits `status:
-in_progress` before setup.
+access. The workflow resolves only the requested path. It commits `status:
+in_progress` atomically before Docker setup. Prompt mode requires a valid
+`continuing_owner` with Nook write access. Each explicit dispatch has an
+independent run. A blob-SHA conflict rejects a duplicate claim of the same
+issue without collapsing unrelated pending dispatches.
 
 The workflow publishes a Workbench progress update and worklog whether
 implementation opens a PR or blocks. Drafts, manually owned issues, and

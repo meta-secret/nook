@@ -990,9 +990,10 @@ publishes a concise task plan containing its own public-safe interpretation of
 the user's requirements, constraints, intended steps, and completion evidence;
 raw prompts and chat transcripts are forbidden. At completion or blockage, the
 agent publishes a worklog linked to that plan with progress, problems,
-decisions, validation, and remaining work. A Workbench issue may trigger the
-scheduled implementation worker only when it has `status: ready`, `automation:
-agent`, and an assignable Nook GitHub collaborator as its owner. Full policy:
+decisions, validation, and remaining work. A Workbench issue may be dispatched
+to the bounded implementation worker only when it has `status: ready`,
+`automation: agent`, and an assignable Nook GitHub collaborator as its owner.
+The dispatch must name its exact `issue_path`. Full policy:
 [workflows/issues.md](workflows/issues.md).
 
 ## ⛔ Non-negotiable: record and analyze AI-agent PR statistics
@@ -1017,18 +1018,19 @@ Write a request YAML, then run it:
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: /tmp/pr-123-events.json
-    outputPath: /tmp/123.yaml
+    scratchPath: "{agentTempDir}/pr-123-scratch.json"
+    outputPath: "{agentTempDir}/123.yaml"
     includeTestInventory: true
 ```
 
 ```bash
-task loom:agent-stats CONFIG=/tmp/assemble-request.yaml
-# then an agentStats.publish request with statsFile: /tmp/123.yaml
-task loom:agent-stats CONFIG=/tmp/publish-request.yaml
+task loom:agent-stats CONFIG=path/to/agent-owned/assemble-request.yaml
+# then an agentStats.publish request using the same {agentTempDir} statsFile
+task loom:agent-stats CONFIG=path/to/agent-owned/publish-request.yaml
 ```
 
 - See [Loom tools](references/loom-tools.md).
+- `{agentTempDir}` isolates paths by task-anchor Git commit and worktree.
 - Compare with one or two recent comparable records.
 - Assess build/workflow waste in the scratch log before assembly.
 - Do not create a bookkeeping branch or Nook PR.

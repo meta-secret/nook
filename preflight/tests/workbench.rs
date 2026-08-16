@@ -50,9 +50,11 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "getCollaboratorPermissionLevel",
         "addAssignees",
         "issues.createComment",
-        "Skipping ${path}: owner must name a continuing GitHub collaborator.",
-        "Skipping ${path}: ${continuingOwner} does not have Nook write access.",
-        "Supply either issue_path or prompt, not both",
+        "Supply exactly one of issue_path or prompt.",
+        "[ -z \"$PROMPT\" ] && [ -z \"$ISSUE_PATH\" ]",
+        "[ -n \"$PROMPT\" ] && [ -n \"$ISSUE_PATH\" ]",
+        "const path = requestedPath",
+        "github.rest.repos.getContent({ owner, repo, path, ref: 'main' })",
         "Claim ready Workbench issue",
         "Run task-planning agent",
         "task ci-agent:plan",
@@ -99,12 +101,41 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "GitHub issue events must not trigger Nook implementation agents"
     );
     assert!(
-        workflow.find("Claim ready Workbench issue") < workflow.find("Docker setup"),
+        !workflow.contains("\n  schedule:")
+            && !workflow.contains("\nconcurrency:")
+            && !workflow.contains("github.rest.git.getTree")
+            && !workflow.contains("recursive: 'true'")
+            && !workflow.contains("for (const path of paths)"),
+        "Workbench implementation must preserve each explicit dispatch without scheduled tree scanning or a collapsing concurrency group"
+    );
+    let dispatch_validation_position = workflow
+        .find("Validate dispatch inputs")
+        .context("the workflow must validate dispatch inputs")?;
+    let checkout_position = workflow
+        .find("Checkout")
+        .context("the workflow must check out Nook")?;
+    assert!(
+        dispatch_validation_position < checkout_position,
+        "invalid or ambiguous dispatches must fail before checkout"
+    );
+    let claim_position = workflow
+        .find("Claim ready Workbench issue")
+        .context("the workflow must claim the requested Workbench issue")?;
+    let docker_position = workflow
+        .find("Docker setup")
+        .context("the workflow must set up Docker")?;
+    assert!(
+        claim_position < docker_position,
         "the workflow must atomically claim a Workbench record before expensive setup"
     );
+    let plan_position = workflow
+        .find("Validate and publish Workbench task plan")
+        .context("the workflow must validate and publish its Workbench plan")?;
+    let implementation_position = workflow
+        .find("Run ci-agent implement")
+        .context("the workflow must run bounded implementation")?;
     assert!(
-        workflow.find("Validate and publish Workbench task plan")
-            < workflow.find("Run ci-agent implement"),
+        plan_position < implementation_position,
         "the workflow must publish the interpreted task plan before implementation"
     );
     Ok(())
@@ -275,31 +306,31 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     }
     let publish_position = workflow
         .find("path: planPath")
-        .context("scheduled automation must publish the validated plan")?;
+        .context("bounded automation must publish the validated plan")?;
     let block_position = workflow
         .find("Published multi-PR feature plan requires materialized Workbench feature")
-        .context("scheduled automation must block an unmaterialized multi-PR plan")?;
+        .context("bounded automation must block an unmaterialized multi-PR plan")?;
     let materialization_position = workflow
         .find("core.setOutput('multi_pr', 'true')")
-        .context("scheduled automation must identify a multi-PR materialization action")?;
+        .context("bounded automation must identify a multi-PR materialization action")?;
     assert!(
         publish_position < block_position,
-        "scheduled automation must publish a multi-PR plan before blocking implementation"
+        "bounded automation must publish a multi-PR plan before blocking implementation"
     );
     assert!(
         materialization_position < block_position,
-        "scheduled automation must identify the materialization action before blocking"
+        "bounded automation must identify the materialization action before blocking"
     );
     let implement = read("agentic-ai/ci-agent/src/main/implement.ts");
     let budget_position = implement
         .find("assertAuthoredChangeBudget(budgetArgs)")
-        .context("scheduled implementation must enforce the authored diff budget")?;
+        .context("bounded implementation must enforce the authored diff budget")?;
     let push_position = implement
         .find("pushFixBranch(repoRoot, agentBranch, runId)")
-        .context("scheduled implementation must push its bounded branch")?;
+        .context("bounded implementation must push its bounded branch")?;
     assert!(
         budget_position < push_position,
-        "scheduled implementation must enforce the authored diff budget before push"
+        "bounded implementation must enforce the authored diff budget before push"
     );
     Ok(())
 }
