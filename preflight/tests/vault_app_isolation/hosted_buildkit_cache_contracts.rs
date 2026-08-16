@@ -8,6 +8,59 @@ fn delivery_ci_scopes_buildkit_caches() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+fn cold_exact_cache_scopes_do_not_import_in_progress_registry_exports() -> anyhow::Result<()> {
+    let root = repository_root();
+    let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let preflight_bake = read(&root, "preflight/docker-bake.hcl");
+    let web_bake = read(&root, "nook-app/nook-web/docker/web.docker-bake.hcl");
+
+    for cache in [
+        "rust_base_cache_from",
+        "rust_ecosystem_dylint_cache_from",
+        "rust_ecosystem_fuzz_cache_from",
+        "rust_ecosystem_policy_tools_cache_from",
+        "rust_ecosystem_deterministic_cache_from",
+        "rust_ecosystem_kani_cache_from",
+        "rust_deps_cache_from",
+        "rust_wasm_deps_cache_from",
+        "rust_native_source_cache_from",
+        "rust_wasm_source_cache_from",
+        "rust_wasm_node_cache_from",
+    ] {
+        assert_cold_exact_cache_uses_only_stable_imports(rust_bake.as_str(), cache);
+    }
+    assert_cold_exact_cache_uses_only_stable_imports(preflight_bake.as_str(), "preflight_cache_from");
+    assert_cold_exact_cache_uses_only_stable_imports(web_bake.as_str(), "web_e2e_cache_from");
+
+    let web_fallback = web_bake
+        .split("web_cache_from =")
+        .nth(1)
+        .and_then(|tail| tail.split("web_cache_to =").next())
+        .context("web cache fallback must remain defined")?;
+    assert!(
+        !web_fallback.contains("${write_cache_repository}"),
+        "a new commit must not import its concurrently exported web cache"
+    );
+    Ok(())
+}
+
+fn assert_cold_exact_cache_uses_only_stable_imports(bake: &str, cache: &str) {
+    let cache_body = bake
+        .split(&format!("{cache} ="))
+        .nth(1)
+        .unwrap_or_else(|| panic!("missing cache importer: {cache}"));
+    let cold_fallback = cache_body
+        .split("] : GHA_CACHE_FALLBACK_ENABLED != \"\" ? [")
+        .nth(1)
+        .and_then(|tail| tail.split("] : [").next())
+        .unwrap_or_else(|| panic!("missing cold exact-cache fallback: {cache}"));
+    assert!(
+        !cold_fallback.contains("${write_cache_repository}"),
+        "cold exact-cache fallback must not import a missing or partial export: {cache}"
+    );
+}
+
 fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     let app_bake = read(root, "nook-app/docker-bake.hcl");
     let rust_toolchain_bake = read(root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
