@@ -110,6 +110,14 @@ fn projection_advanced_past(
 }
 
 impl NookVaultManager {
+    fn fail_closed_after_committed_security_epoch(
+        &mut self,
+        error: NookError,
+    ) -> SecurityEpochRotationFailure {
+        self.reset_vault_session();
+        SecurityEpochRotationFailure::after(error)
+    }
+
     fn prepare_security_epoch_rotation(
         &self,
         previous_key_epoch: nook_core::IdentityVaultEventId,
@@ -259,9 +267,13 @@ impl NookVaultManager {
                 ));
             }
         };
-        self.complete_committed_security_epoch_recovery(execution)
+        if let Err(error) = self
+            .complete_committed_security_epoch_recovery(execution)
             .await
-            .map_err(SecurityEpochRotationFailure::after)
+        {
+            return Err(self.fail_closed_after_committed_security_epoch(error));
+        }
+        Ok(())
     }
 
     fn prepare_security_epoch_execution(
@@ -516,5 +528,27 @@ mod tests {
             keys
         );
         Ok(())
+    }
+
+    #[test]
+    fn committed_epoch_failure_resets_the_live_session() {
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = "store_committed_epoch_failure".to_owned();
+        manager.vault.secrets_key = "old-secrets-key".to_owned();
+        manager.vault.members_key = "old-members-key".to_owned();
+        manager.event_log.key_epoch = "old-key-epoch".to_owned();
+
+        let failure = manager.fail_closed_after_committed_security_epoch(NookError::Database(
+            "post-commit completion failed".to_owned(),
+        ));
+
+        assert!(matches!(
+            failure,
+            SecurityEpochRotationFailure::AfterCommit(_)
+        ));
+        assert!(manager.vault.store_id.is_empty());
+        assert!(manager.vault.secrets_key.is_empty());
+        assert!(manager.vault.members_key.is_empty());
+        assert!(manager.event_log.key_epoch.is_empty());
     }
 }

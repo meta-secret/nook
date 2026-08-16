@@ -254,12 +254,12 @@ pub use nook_event_log::{
     VaultEventSchemaVersion, VaultOperation, VaultProjection,
     assert_projection_permutation_invariant, build_genesis_import_event, build_signed_event,
     canonical_json_bytes, canonicalize_json, classify_remote_event_log,
-    concurrent_epoch_rotations_conflict, encrypted_secret_from_armored, event_id_from_body_bytes,
-    format_ed25519_signature, operation_starts_epoch, order_remote_events_for_visibility,
-    parents_from_heads, parse_ed25519_signature, parse_event_storage_bytes,
-    parse_remote_event_storage_bytes, project_vault, remote_event_belongs_to_store,
-    remote_event_store_id, serialize_event_storage_yaml, sha256_hex, sign_body,
-    union_remote_events, union_remote_events_and_heads, verify_body_signature,
+    concurrent_epoch_rotations_conflict, current_epoch_checkpoint, encrypted_secret_from_armored,
+    event_id_from_body_bytes, format_ed25519_signature, operation_starts_epoch,
+    order_remote_events_for_visibility, parents_from_heads, parse_ed25519_signature,
+    parse_event_storage_bytes, parse_remote_event_storage_bytes, project_vault,
+    remote_event_belongs_to_store, remote_event_store_id, serialize_event_storage_yaml, sha256_hex,
+    sign_body, union_remote_events, union_remote_events_and_heads, verify_body_signature,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordGenerationOptions, generate_password,

@@ -2,6 +2,7 @@
 
 use crate::{NookError, storage::open_nook_database};
 use nook_core::{EventGraph, EventId, EventInsertStatus, LocalEventStore, VaultEvent};
+use std::collections::BTreeSet;
 
 const STORE_EVENTS: &str = "events";
 const STORE_PROJECTIONS: &str = "projections";
@@ -53,6 +54,32 @@ async fn put_string(
         .await
         .map_err(|error| NookError::IndexedDb(format!("{context} write error: {error:?}")))?;
     Ok(())
+}
+
+async fn delete_event_row(
+    events: &rexie::Store,
+    store_id: &str,
+    event_id: &str,
+) -> Result<(), NookError> {
+    let key = serde_wasm_bindgen::to_value(&event_key(store_id, event_id))
+        .map_err(|error| NookError::IndexedDb(format!("Remote event key error: {error:?}")))?;
+    events
+        .delete(key)
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Remote event delete error: {error:?}")))?;
+    Ok(())
+}
+
+fn removed_persisted_event_ids(persisted_ids: &[String], accepted_ids: &[String]) -> Vec<String> {
+    let accepted = accepted_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    persisted_ids
+        .iter()
+        .filter(|event_id| !accepted.contains(event_id.as_str()))
+        .cloned()
+        .collect()
 }
 
 async fn load_local_store(
@@ -309,6 +336,9 @@ pub(crate) async fn save_verified_remote_events(
         .map(|event_id| event_id.as_str().to_owned())
         .collect::<Vec<_>>();
     ids.sort();
+    for event_id in removed_persisted_event_ids(&persisted_ids, &ids) {
+        delete_event_row(&events, store_id, &event_id).await?;
+    }
     put_string(
         &events,
         &event_index_key(store_id),
@@ -331,6 +361,22 @@ pub(crate) async fn save_verified_remote_events(
         ))
     })?;
     Ok((heads, local))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::removed_persisted_event_ids;
+
+    #[test]
+    fn remote_contraction_identifies_orphan_rows_for_deletion() {
+        let persisted = vec!["accepted".to_owned(), "quarantined".to_owned()];
+        let accepted = vec!["accepted".to_owned()];
+
+        assert_eq!(
+            removed_persisted_event_ids(&persisted, &accepted),
+            vec!["quarantined".to_owned()]
+        );
+    }
 }
 
 /// Persist the trigger and checkpoint in one `IndexedDB` transaction.

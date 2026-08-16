@@ -150,7 +150,11 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
             }
             if matches!(operation, crate::VaultOperation::JoinApproved { .. }) {
                 security_reason.get_or_insert(EpochRotationReason::AccessGrant);
-            } else if !matches!(operation, crate::VaultOperation::EpochCheckpoint { .. }) {
+            } else if !matches!(
+                operation,
+                crate::VaultOperation::EpochCheckpoint { .. }
+                    | crate::VaultOperation::JoinRequested { .. }
+            ) {
                 security_reason.get_or_insert(EpochRotationReason::ConcurrentVaultMutation);
             }
             apply_operation(
@@ -182,6 +186,46 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
     projection.security_conflicts = detect_security_conflicts(graph, &security_events);
     projection.replacement_conflicts = detect_replacement_conflicts(graph, &replacements_by_old);
     Ok(projection)
+}
+
+/// Select the checkpoint that commits the projection's current rotated epoch.
+/// Concurrent access-neutral heads must not replace this causal checkpoint.
+pub fn current_epoch_checkpoint(graph: &EventGraph) -> EventResult<Option<EventId>> {
+    let mut checkpoints = Vec::new();
+    for event_id in graph.topological_order()? {
+        let event = graph.get(&event_id).ok_or(EventError::MissingEvent {
+            event_id: event_id.as_str().to_owned(),
+        })?;
+        if !event
+            .body
+            .operations
+            .iter()
+            .any(|operation| matches!(operation, crate::VaultOperation::EpochCheckpoint { .. }))
+        {
+            continue;
+        }
+        if event.body.parents.as_slice() != [event.body.key_epoch.clone()] {
+            return Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint does not directly commit its key epoch",
+            });
+        }
+        checkpoints.push(event_id);
+    }
+    let current = checkpoints
+        .iter()
+        .filter(|candidate| {
+            !checkpoints
+                .iter()
+                .any(|other| *candidate != other && graph.is_ancestor(candidate, other))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    if current.len() > 1 {
+        return Err(EventError::InvalidEpochCheckpointStructure {
+            reason: "multiple concurrent epoch checkpoints remain",
+        });
+    }
+    Ok(current.into_iter().next())
 }
 
 fn detect_replacement_conflicts(
@@ -585,6 +629,61 @@ mod tests {
                 .iter()
                 .any(|conflict| { conflict.reasons.contains(&EpochRotationReason::AccessGrant) })
         );
+        Ok(())
+    }
+
+    #[test]
+    fn concurrent_join_request_does_not_conflict_with_rotation() -> EventResult<()> {
+        let owner_key = key();
+        let joiner_key = key();
+        let mut graph = EventGraph::new();
+        let genesis_id = genesis(&mut graph, &owner_key)?;
+        let request = signed_operation(
+            &joiner_key,
+            vec![genesis_id.clone()],
+            VaultOperation::JoinRequested {
+                device_id: DeviceId::parse("abcd1234ef567890")?,
+                encryption_public_key: DevicePublicKey::from_trusted("age1joiner".to_owned()),
+                signing_public_key: public_key(&joiner_key),
+                label: MemberLabel::from_trusted("Joiner".to_owned()),
+            },
+        )?;
+        let request_id = request.id()?;
+        let rotation = signed_operation(
+            &owner_key,
+            vec![genesis_id],
+            VaultOperation::PasswordRemoved {
+                entry_id: PasswordEntryId::parse("pwdentry001")?,
+            },
+        )?;
+        let rotation_id = rotation.id()?;
+        let checkpoint = VaultEvent::sign(
+            VaultEventBody {
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store()?,
+                actor_id: actor(&owner_key)?,
+                actor_signing_public_key: public_key(&owner_key),
+                parents: vec![rotation_id.clone()],
+                created_at: ts("2026-06-28T00:00:01Z"),
+                key_epoch: rotation_id,
+                operations: vec![VaultOperation::EpochCheckpoint {
+                    secrets: Vec::new(),
+                    members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                    rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
+                    password_entries: crate::EpochPasswordState::Replace(Vec::new()),
+                }],
+            },
+            &owner_key,
+        )?;
+        let checkpoint_id = checkpoint.id()?;
+        graph.insert(request, STORE)?;
+        graph.insert(rotation, STORE)?;
+        graph.insert(checkpoint, STORE)?;
+
+        let projection = project_vault(&graph, STORE)?;
+        assert!(projection.security_conflicts.is_empty());
+        assert_eq!(current_epoch_checkpoint(&graph)?, Some(checkpoint_id));
+        assert!(graph.heads().contains(&request_id));
         Ok(())
     }
 

@@ -247,8 +247,8 @@ immutable `epoch-checkpoint`. Concurrent security rotations are detected in the
 projection, surfaced through WASM/UI, and fail closed for further local edits.
 Revocation metadata remains staged until the trigger/checkpoint pair commits.
 A failure before that atomic commit restores the live session metadata. A
-failure after commit keeps the revoked metadata active because the durable
-security epoch already excludes that device.
+failure after commit resets the complete live vault session. Reconnect resumes
+the durable security-epoch recovery plan before ordinary edits are allowed.
 
 ## Provider interface (target)
 
