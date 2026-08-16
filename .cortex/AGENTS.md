@@ -1018,8 +1018,8 @@ Write a request YAML, then run it:
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: "{agentTempDir}/pr-123/scratch.json"
-    outputPath: "{agentTempDir}/pr-123/123.yaml"
+    scratchPath: "{agentTempDir}/pr-123-scratch.json"
+    outputPath: "{agentTempDir}/123.yaml"
     includeTestInventory: true
 ```
 

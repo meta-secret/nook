@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { runCommand } from './run.ts';
@@ -49,7 +50,8 @@ export function buildAgentTempDirectory(
 export function selectTaskAnchorCommit(selection: TaskAnchorSelection): string {
   const checkoutSuffix = ` to ${selection.branchName}`;
   const lines = selection.reflog.split('\n');
-  for (const line of lines) {
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index] ?? '';
     const [commit = '', subject = ''] = line.split('\t', 2);
     if (
       selection.branchName.length > 0 &&
@@ -118,6 +120,8 @@ export function resolveAgentTempPath(
     osTempDirectory: tmpdir(),
   };
   const agentTempDirectory = buildAgentTempDirectory(directoryParts);
+  const directoryOptions: { readonly recursive: true } = { recursive: true };
+  mkdirSync(agentTempDirectory, directoryOptions);
   const expanded = request.authoredPath.replaceAll(
     AGENT_TEMP_DIR_TOKEN,
     agentTempDirectory,

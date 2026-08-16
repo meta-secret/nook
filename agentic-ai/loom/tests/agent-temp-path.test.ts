@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import {
   AGENT_TEMP_DIR_TOKEN,
@@ -101,6 +102,20 @@ describe('agent temporary paths', () => {
     );
   });
 
+  test('keeps the first task entry after branch re-entry', () => {
+    const selection: TaskAnchorSelection = {
+      currentCommit: SECOND_COMMIT,
+      branchName: 'codex/current-task',
+      reflog: [
+        `${SECOND_COMMIT}\tcheckout: moving from main to codex/current-task`,
+        `${SECOND_COMMIT}\tcheckout: moving from codex/current-task to main`,
+        `${FIRST_COMMIT}\tcheckout: moving from main to codex/current-task`,
+      ].join('\n'),
+    };
+
+    expect(selectTaskAnchorCommit(selection)).toBe(FIRST_COMMIT);
+  });
+
   test('uses the initial reflog commit for a directly created worktree', () => {
     const initialSelection: TaskAnchorSelection = {
       currentCommit: FIRST_COMMIT,
@@ -146,16 +161,17 @@ describe('agent temporary paths', () => {
     const taskAnchorCommit = selectTaskAnchorCommit(selection);
     const request: ResolveAgentTempPathRequest = {
       repoRoot,
-      authoredPath: `${AGENT_TEMP_DIR_TOKEN}/pr-123/123.yaml`,
+      authoredPath: `${AGENT_TEMP_DIR_TOKEN}/123.yaml`,
     };
     const resolved = resolveAgentTempPath(request);
 
     expect(resolved).toContain(`${path.sep}${taskAnchorCommit}${path.sep}`);
     expect(resolved).toMatch(
       new RegExp(
-        `${path.sep.replace('\\', '\\\\')}[0-9a-f]{16}${path.sep.replace('\\', '\\\\')}pr-123${path.sep.replace('\\', '\\\\')}123\\.yaml$`,
+        `${path.sep.replace('\\', '\\\\')}[0-9a-f]{16}${path.sep.replace('\\', '\\\\')}123\\.yaml$`,
       ),
     );
+    expect(existsSync(path.dirname(resolved))).toBe(true);
   });
 
   test('keeps ordinary paths compatible', () => {

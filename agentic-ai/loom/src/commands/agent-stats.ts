@@ -17,6 +17,7 @@ import {
 } from '../loom-failure.ts';
 
 import type { RunCommandArgs } from '../lib/run.ts';
+import type { ResolveAgentTempPathRequest } from '../lib/agent-temp-path.ts';
 import type { ValidateAgentStatsYamlArgs } from '../lib/agent-stats-schema.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 export type AgentStatsReport = {
@@ -30,11 +31,11 @@ export async function runAgentStatsAssemble(
   request: AgentStatsAssembleRequest,
 ): Promise<AgentStatsReport> {
   const repoRoot = findRepoRoot();
-  const scratchPathRequest = {
+  const scratchPathRequest: ResolveAgentTempPathRequest = {
     repoRoot,
     authoredPath: request.scratchPath,
   };
-  const outputPathRequest = {
+  const outputPathRequest: ResolveAgentTempPathRequest = {
     repoRoot,
     authoredPath: request.outputPath,
   };
@@ -81,7 +82,7 @@ export async function runAgentStatsValidate(
   request: AgentStatsFileRequest,
 ): Promise<AgentStatsReport> {
   const repoRoot = findRepoRoot();
-  const statsPathRequest = {
+  const statsPathRequest: ResolveAgentTempPathRequest = {
     repoRoot,
     authoredPath: request.statsFile,
   };
@@ -96,7 +97,7 @@ export async function runAgentStatsPublish(
   request: AgentStatsFileRequest,
 ): Promise<AgentStatsReport> {
   const repoRoot = findRepoRoot();
-  const statsPathRequest = {
+  const statsPathRequest: ResolveAgentTempPathRequest = {
     repoRoot,
     authoredPath: request.statsFile,
   };

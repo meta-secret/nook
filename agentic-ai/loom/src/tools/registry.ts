@@ -53,13 +53,14 @@ import {
 import { findRepoRoot } from '../lib/repo.ts';
 
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
+import type { ResolveAgentTempPathRequest } from '../lib/agent-temp-path.ts';
 export type DiscoverableRequest = {
   readonly family: RequestFamily;
   readonly operation?: AgentStatsOperation | PrLandOperation;
   readonly description: string;
   readonly exampleRequest: string;
   readonly exampleYaml: string;
-  readonly resolvedExampleYaml?: string;
+  readonly resolvedExampleYaml: string;
   readonly inputSchema: ObjectJsonSchema;
 };
 
@@ -162,7 +163,7 @@ const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
 
 export function listDiscoverableRequests(): readonly DiscoverableRequest[] {
   const repoRoot = findRepoRoot();
-  const agentTempPathRequest = {
+  const agentTempPathRequest: ResolveAgentTempPathRequest = {
     repoRoot,
     authoredPath: AGENT_TEMP_DIR_TOKEN,
   };
@@ -171,7 +172,7 @@ export function listDiscoverableRequests(): readonly DiscoverableRequest[] {
   return DISCOVERABLE_DEFINITIONS.map((definition) => {
     const exampleYaml = loadBlueprint(definition.exampleRequest).blueprintYaml;
     if (!exampleYaml.includes(AGENT_TEMP_DIR_TOKEN)) {
-      return { ...definition, exampleYaml };
+      return { ...definition, exampleYaml, resolvedExampleYaml: exampleYaml };
     }
     return {
       ...definition,

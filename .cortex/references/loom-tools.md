@@ -185,8 +185,8 @@ Use one domain root family and descriptive fields. Same-prefix operations nest:
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: "{agentTempDir}/pr-123/scratch.json"
-    outputPath: "{agentTempDir}/pr-123/123.yaml"
+    scratchPath: "{agentTempDir}/pr-123-scratch.json"
+    outputPath: "{agentTempDir}/123.yaml"
     includeTestInventory: true
 ```
 
@@ -224,9 +224,9 @@ Prefer libraries over boilerplate:
 
 `task loom:tools-list` returns the canonical `exampleRequest`, exact
 `exampleYaml`, and typed `inputSchema` for every direct request below.
-Tokenized blueprints also include `resolvedExampleYaml` for the current
-worktree and commit. Consume that output instead of maintaining request bodies
-in Cortex.
+`resolvedExampleYaml` equals the authored blueprint for static requests and
+fills dynamic tokens for the current worktree and commit. Consume that output
+instead of maintaining request bodies in Cortex.
 
 ### prePush
 
