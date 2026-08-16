@@ -66,6 +66,32 @@ fn remote_cache_and_registry_are_public_over_tls() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+fn k0s_recovery_preserves_hive_namespace_policy_labels() {
+    let namespaces = read("infra/k0s/manifests/namespaces.yaml");
+    let k0s_tasks = read("infra/tasks/k0s.yml");
+
+    for role in [
+        "hive.nook.sh/role: workers",
+        "hive.nook.sh/role: data",
+    ] {
+        assert!(
+            namespaces.contains(role),
+            "canonical Hive namespaces must retain the NetworkPolicy role: {role}"
+        );
+    }
+    assert!(
+        k0s_tasks.contains(
+            "-f \"$remote_dir/infra/k0s/manifests/namespaces.yaml\""
+        ),
+        "k0s recovery must reapply the canonical labeled Hive namespaces"
+    );
+    assert!(
+        !k0s_tasks.contains("kubectl create namespace \"$namespace\""),
+        "k0s recovery must not replace canonical namespace metadata with bare generated manifests"
+    );
+}
+
 fn assert_remote_compose_contract() -> anyhow::Result<()> {
     let compose = read("infra/compose.yaml");
     for required in [
