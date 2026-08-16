@@ -213,15 +213,6 @@ On decode errors:
 
 Reject low-adoption npm packages and crates.io crates:
 
-```yaml
-dependencyPopularity:
-  includeRepositoryManifests: true
-  minNpmWeeklyDownloads: 10000
-  minGitHubStars: 100
-  minCratesIoDownloads: 50000
-  minCratesIoRecentDownloads: 1000
-```
-
 ```bash
 task loom:dependency-popularity
 ```
@@ -231,13 +222,11 @@ Prefer libraries over boilerplate:
 
 ## Common requests
 
-### prePush
+`task loom:tools-list` returns the canonical `exampleRequest`, exact
+`exampleYaml`, and typed `inputSchema` for every direct request below. Consume
+that output instead of maintaining request bodies in Cortex.
 
-```yaml
-prePush:
-  stageHostUpdates: true
-  fetchOriginMain: true
-```
+### prePush
 
 ```bash
 task loom:pre-push
@@ -245,37 +234,17 @@ task loom:pre-push
 
 ### cortexAudit
 
-```yaml
-cortexAudit:
-  includeDensityLint: false
-```
-
 ```bash
 task loom:cortex-audit
 ```
 
 ### skillScaffold
 
-```yaml
-skillScaffold:
-  skillSlug: example-skill
-  createExecutableWrappers: false
-```
-
 ```bash
 task loom:skill-scaffold CONFIG=path/to/request.yaml
 ```
 
 ### agentStats (assemble / validate / publish)
-
-```yaml
-agentStats:
-  assemble:
-    prNumber: 123
-    scratchPath: /tmp/pr-123-events.json
-    outputPath: /tmp/123.yaml
-    includeTestInventory: true
-```
 
 ```bash
 task loom:agent-stats CONFIG=path/to/assemble-request.yaml
@@ -286,27 +255,14 @@ Validate and publish use `agentStats.validate` / `agentStats.publish` with
 
 ### prLand (status / validate / ready / mergeCheck)
 
-```yaml
-prLand:
-  validate:
-    prNumber: 948
-    runFullE2e: false
-```
-
 ```bash
 task loom:pr-land CONFIG=path/to/validate-request.yaml
 ```
 
 ### toolsCall
 
-Wraps another domain request:
-
-```yaml
-toolsCall:
-  prePush:
-    stageHostUpdates: true
-    fetchOriginMain: true
-```
+Wraps another domain request. Its canonical blueprint is
+[`params/tools-call/request.example.yaml`](../../agentic-ai/loom/params/tools-call/request.example.yaml).
 
 Prefer a top-level domain key for normal calls.
 

@@ -184,6 +184,10 @@ task loom:tools-list
 bun run --cwd agentic-ai/loom loom -- params/tools-list/default.yaml
 ```
 
+Each discovered request includes its typed `inputSchema`, canonical
+`exampleRequest` path, and exact `exampleYaml`. Agents should consume that
+output instead of copying request bodies into guidance.
+
 ## TypeScript domain structure
 
 Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/dynamic-skills/typescript-domain-structure.md):
