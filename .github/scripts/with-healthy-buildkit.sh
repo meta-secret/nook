@@ -119,6 +119,14 @@ remove_unhealthy_builder() {
 
 probe_status=0
 run_with_timeout "$health_timeout" probe_builder || probe_status=$?
+if [ "$probe_status" -ne 0 ]; then
+  # setup-buildx owns this job-scoped builder. A single scratch solve can lose
+  # a transient race while its worker is still settling, so confirm that the
+  # builder is actually unavailable before discarding its warmed state.
+  echo "Retrying BuildKit health probe for $builder" >&2
+  probe_status=0
+  run_with_timeout "$health_timeout" probe_builder || probe_status=$?
+fi
 rm -rf "$probe_context"
 
 if [ "$probe_status" -eq 0 ]; then
