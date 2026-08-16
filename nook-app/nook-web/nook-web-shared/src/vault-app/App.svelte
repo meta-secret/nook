@@ -227,12 +227,9 @@
   }
 
   function handleLockVault() {
-    // A paired handoff nonce is rotated after every adoption. Clear the cached
-    // request so the next login obtains a fresh extension-bound handoff.
-    extensionIdentityRequestState = {
-      kind: ExtensionConnectIntentKind.Absent,
-    }
-    extensionDiscoveryStoreId = ''
+    // `adoptExtensionIdentity` replaces the request nonce with the extension's
+    // successor. Retain that request so a lock/unlock cycle can perform its
+    // next one-time handoff without waiting for a later discovery retry.
     vault.lockVault()
   }
 
