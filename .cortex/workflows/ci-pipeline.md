@@ -120,10 +120,10 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 | [`loom.yml`](../../.github/workflows/loom.yml) | Path-filtered PR and Main changes | Loom TypeScript, authored-state, and single-parameter verification | No |
 | [`source-architecture.yml`](../../.github/workflows/source-architecture.yml) | Every opened, synchronized, or reopened PR | Source-size and Rust unit-test-colocation enforcement | No |
 | [`web-research.yml`](../../.github/workflows/web-research.yml) | Path-filtered PR/Main changes or manual dispatch | Research check, build, Cloudflare deploy, and PR preview | No |
-| [`rust-ecosystem.yml`](../../.github/workflows/rust-ecosystem.yml) | Schedule, path-filtered main push, manual | Non-PR Rust ecosystem entry points | No |
+| [`rust-ecosystem.yml`](../../.github/workflows/rust-ecosystem.yml) | Schedule, manual, minds-only PR | Specialist Rust ecosystem entry points | No |
 | [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml) | Successful same-repository PR workflow | Promote trusted PR artifacts | No |
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml) | Successful PR workflow / PR close | Publish PR demo WebMs to Linear | No |
-| [`main.yml`](../../.github/workflows/main.yml) | Push to `main` | Main verify, e2e, dev deploy | No |
+| [`main.yml`](../../.github/workflows/main.yml) | Push to `main` | Product + ecosystem verify, e2e, dev deploy | No |
 | [`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml) | Completed `Main` attempt | Commit Main build stats to Workbench | Yes (`NOOK_GITHUB_PAT`) |
 | [`main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml) | Failed `Main` attempt | Create Hive Workbench incident | Yes (`NOOK_GITHUB_PAT`) |
 | [`hive.yml`](../../.github/workflows/hive.yml) | Hive/infra PR changes and Main pushes | Hive format/Clippy/tests | No |
@@ -166,6 +166,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - Runs when Loom, its Task wrapper, or related preflight sources change.
 - Verifies Loom formatting, lint, types, and tests.
 - Enforces authored TypeScript state and Loom API contracts.
+- Remains separate from Main.
+  - Cortex and agent-only merges require Loom but intentionally skip product Main.
 
 **`source-architecture.yml`**
 
@@ -182,14 +184,15 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 **`rust-ecosystem.yml`**
 
 - Thin entry points outside the product PR pipeline.
-- Weekly schedule, path-filtered main push, and `workflow_dispatch`.
+- Weekly schedule and `workflow_dispatch`.
 - Labeled `agentic-ai/minds/**` PRs only, because `pr.yml` ignores `agentic-ai/**`.
-- Calls the same `rust-ecosystem-checks.yml` jobs as labeled product PRs.
+- Calls the same `rust-ecosystem-checks.yml` jobs as labeled product PRs and Main.
 - Ordinary PR pushes do not start it.
 
 **`pr-validation-handoff.yml`**
 
 - Runs from trusted default-branch code.
+- Ignores the PR-close workflow run whose head branch is `main`.
 - Verifies the successful source run and required jobs.
 - Validates native/WASM artifact shapes, attaches provenance.
 - Publishes exact-input handoffs that later PRs may trust.
@@ -197,12 +200,17 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 **`linear-ui-demo.yml`**
 
 - Runs from the trusted default branch.
+- Ignores the PR-close workflow run whose head branch is `main`.
 - Downloads the PR demo artifact.
 - Publishes its 10 largest WebMs to Linear.
 - Updates the PR comment and completes/cancels the matching Linear issue.
 
 **`main.yml`**
 
+- Calls the shared Rust ecosystem jobs in parallel with product verification.
+- Includes `agentic-ai/minds/**` so product-only, minds-only, and mixed pushes use one merged-head ecosystem orchestrator.
+- Classifies changed paths and skips the product job chain for minds-only pushes.
+- Owns merged-head ecosystem cache seeding, statistics, and failure handoff.
 - On `ubuntu-latest`: native Rust → WASM → browser-free web verify read-only.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
 - Local-provider web e2e, extension e2e, and headless UI demos consume verified WASM on separate runners.

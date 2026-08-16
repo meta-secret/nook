@@ -209,6 +209,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     let trusted_handoff = read(root, ".github/workflows/pr-validation-handoff.yml");
     for required in [
         "name: PR validation handoff",
+        "branches-ignore: [main]",
         "github.event.workflow_run.conclusion == 'success'",
         "workflowPath !== '.github/workflows/pr.yml'",
         "run.path?.replace(/@[^@]+$/, '')",

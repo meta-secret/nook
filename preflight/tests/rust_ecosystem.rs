@@ -16,6 +16,7 @@ fn read(relative_path: &str) -> anyhow::Result<String> {
 fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()> {
     let entry = read(".github/workflows/rust-ecosystem.yml")?;
     let checks = read(".github/workflows/rust-ecosystem-checks.yml")?;
+    let main = read(".github/workflows/main.yml")?;
     let pr = read(".github/workflows/pr.yml")?;
     let quality = read(".cortex/workflows/quality.md")?;
     let workspace = read("nook-app/nook-platform/Cargo.toml")?;
@@ -47,6 +48,28 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         entry.contains("agentic-ai/minds/**"),
         "Thin rust-ecosystem.yml must keep labeled minds-only PR coverage"
     );
+    assert!(
+        main.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml")
+            && main.contains("fuzz_seconds: \"20\"")
+            && main.contains("isolated_cache_write: \"false\""),
+        "Main must call the shared Rust ecosystem checks in its own run"
+    );
+    assert!(
+        !entry.contains("\n  push:"),
+        "Thin rust-ecosystem.yml must not start a second Main-push run"
+    );
+    for marker in [
+        "- \"!agentic-ai/**\"",
+        "- \"agentic-ai/minds/**\"",
+        "product-paths:",
+        "git diff --name-only \"$BEFORE_SHA\" \"$AFTER_SHA\"",
+        "if: needs.product-paths.outputs.changed == 'true'",
+    ] {
+        assert!(
+            main.contains(marker),
+            "Main must route minds pushes while gating product jobs: missing {marker}"
+        );
+    }
     assert!(
         !entry.contains("Run dependency policy") && !entry.contains("Bake rust-dependency-policy"),
         "Thin rust-ecosystem.yml must not duplicate dependency-policy steps"

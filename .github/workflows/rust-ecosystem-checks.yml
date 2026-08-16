@@ -1,8 +1,8 @@
 # Shared Rust ecosystem gates (dependency policy, deterministic tests, fuzz,
 # Kani, Dylint). Called from the labeled PR workflow and from the thin
-# non-PR rust-ecosystem.yml entry points.
+# Main and specialist schedule, manual, and minds-only PR entry points.
 # Kept reusable so PR validation shows every job on one run page without
-# duplicating Bake steps for schedule / main-path / manual dispatch.
+# duplicating Bake steps across callers.
 
 name: Rust ecosystem checks
 

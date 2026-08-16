@@ -11,7 +11,7 @@
 # spend hosted workers. A later push invalidates the prior head's checks, so the
 # label must be toggled again before merge. PR close still cancels an in-flight
 # validation through the concurrency group below.
-# Schedule, main-path, and manual ecosystem entry points stay in rust-ecosystem.yml.
+# Schedule, manual, and minds-only PR ecosystem entry points stay in rust-ecosystem.yml.
 
 name: PR
 
