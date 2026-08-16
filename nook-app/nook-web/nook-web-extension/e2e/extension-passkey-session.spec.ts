@@ -557,6 +557,8 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       reopenedVaultPage.getByTestId('login-local-unlock-step'),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
+    // Locking clears the earlier paired handoff. The next unlock must obtain
+    // a fresh nonce from the extension instead of replaying stale identity.
     await reopenedVaultPage.getByTestId('unlock-vault-btn').click()
 
     await expect(
