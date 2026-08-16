@@ -224,8 +224,13 @@ password_entries:
 
 - Version 1 remains readable but cannot be rewrapped without its password.
 - New and rotated entries use version 2.
-- Updating version 1 migrates it and rotates the epoch.
-- Rotation fails while another surviving version-1 entry remains.
+- Updating a version-1 entry first writes a sequential, non-epoch
+  `PasswordEnvelopeUpgraded` event with the current vault keys.
+- Each surviving version-1 entry is upgraded independently while the vault is
+  unlocked with that entry's password.
+- Rotation remains unavailable while any surviving version-1 entry remains.
+- A later password update or removal rotates the epoch only after every
+  surviving entry is version 2.
 - Checkpoints replace entries with version-2 envelopes for the new keys.
 
 ### Credential effects

@@ -258,6 +258,7 @@ pub fn event_graph_active_device_envelopes(
             "Extension device_id does not match its encryption public key.".to_owned(),
         ));
     }
+    let expected_auth_id = dec_auth_id_from_public_key(expected_public_key)?;
 
     let mut active = None;
     let order = graph
@@ -288,6 +289,13 @@ pub fn event_graph_active_device_envelopes(
                 }
                 VaultOperation::DeviceRevoked { device_id } if device_id == expected_device_id => {
                     active = None;
+                }
+                VaultOperation::EpochCheckpoint {
+                    rotated_meta_records: crate::EpochMetadataState::Replace(records),
+                    ..
+                } if active.is_some() => {
+                    let checkpoint_meta = VaultMetaState::from_stored_records(records);
+                    active = checkpoint_meta.auth.get(&expected_auth_id).cloned();
                 }
                 _ => {}
             }
@@ -432,6 +440,77 @@ mod tests {
         let mut graph = EventGraph::new();
         graph.insert(root, store_id.as_str())?;
         Ok((graph, root_id))
+    }
+
+    fn append_password_rotation_checkpoint(
+        graph: &mut EventGraph,
+        signing: &SigningIdentity,
+        store_id: &StoreId,
+        parent: EventId,
+        device: &DeviceIdentity,
+    ) -> anyhow::Result<(EventId, AuthEnvelopes)> {
+        let replacement_keys = crate::generate_vault_keys()?;
+        let replacement_record = crate::genesis_auth_record(
+            device,
+            &replacement_keys.secrets_key,
+            &replacement_keys.members_key,
+        )?;
+        let replacement_auth = crate::parse_auth_envelopes(replacement_record.value.as_str())?;
+        let trigger = signed_event(
+            signing,
+            store_id,
+            vec![parent],
+            vec![VaultOperation::PasswordRotated {
+                entry_id: crate::PasswordEntryId::parse("pwdentry001")?,
+                envelope: crate::PasswordEnvelope {
+                    version: 2,
+                    kdf: "scrypt".to_owned(),
+                    work_factor: 10,
+                    recipient: "recipient".to_owned(),
+                    wrapped_keys: "wrapped".to_owned(),
+                    ciphertext: "ciphertext".to_owned(),
+                },
+            }],
+            "2026-08-15T00:01:30Z",
+        )?;
+        let trigger_id = trigger.id()?;
+        graph.insert(trigger, store_id.as_str())?;
+        let checkpoint = VaultEvent::sign(
+            VaultEventBody {
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store_id.clone(),
+                actor_id: signing.actor_id()?,
+                actor_signing_public_key: signing.public_key(),
+                parents: vec![trigger_id.clone()],
+                created_at: IsoTimestamp::parse("2026-08-15T00:01:31Z")?,
+                key_epoch: trigger_id,
+                operations: vec![VaultOperation::EpochCheckpoint {
+                    secrets: Vec::new(),
+                    members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                    rotated_meta_records: crate::EpochMetadataState::Replace(vec![
+                        replacement_record,
+                    ]),
+                    password_entries: crate::EpochPasswordState::Replace(Vec::new()),
+                }],
+            },
+            signing.signing_key(),
+        )?;
+        let checkpoint_id = checkpoint.id()?;
+        graph.insert(checkpoint, store_id.as_str())?;
+        Ok((checkpoint_id, replacement_auth))
+    }
+
+    fn active_envelopes_for(
+        graph: &EventGraph,
+        device: &DeviceIdentity,
+        signing: &SigningIdentity,
+    ) -> anyhow::Result<Option<AuthEnvelopes>> {
+        Ok(event_graph_active_device_envelopes(
+            graph,
+            device.device_id(),
+            &device.public_key(),
+            &signing.public_key(),
+        )?)
     }
 
     #[test]
@@ -704,10 +783,21 @@ mod tests {
         )?;
         let approval_id = approval.id()?;
         graph.insert(approval, store_id.as_str())?;
+        let (checkpoint_id, replacement_auth) = append_password_rotation_checkpoint(
+            &mut graph,
+            &owner_signing,
+            &store_id,
+            approval_id,
+            &extension,
+        )?;
+        assert_eq!(
+            active_envelopes_for(&graph, &extension, &extension_signing)?,
+            Some(replacement_auth)
+        );
         let revocation = signed_event(
             &owner_signing,
             &store_id,
-            vec![approval_id],
+            vec![checkpoint_id],
             vec![VaultOperation::DeviceRevoked {
                 device_id: extension.device_id().clone(),
             }],
@@ -715,15 +805,7 @@ mod tests {
         )?;
         let revocation_id = revocation.id()?;
         graph.insert(revocation, store_id.as_str())?;
-        assert!(
-            event_graph_active_device_envelopes(
-                &graph,
-                extension.device_id(),
-                &extension.public_key(),
-                &extension_signing.public_key(),
-            )?
-            .is_none()
-        );
+        assert!(active_envelopes_for(&graph, &extension, &extension_signing)?.is_none());
 
         let replacement_keys = crate::generate_vault_keys()?;
         let replacement_auth = crate::parse_auth_envelopes(
@@ -753,12 +835,7 @@ mod tests {
         graph.insert(reapproval, store_id.as_str())?;
 
         assert_eq!(
-            event_graph_active_device_envelopes(
-                &graph,
-                extension.device_id(),
-                &extension.public_key(),
-                &extension_signing.public_key(),
-            )?,
+            active_envelopes_for(&graph, &extension, &extension_signing)?,
             Some(expected)
         );
         Ok(())

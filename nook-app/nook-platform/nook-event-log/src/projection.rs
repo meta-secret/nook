@@ -150,7 +150,11 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
             }
             if matches!(operation, crate::VaultOperation::JoinApproved { .. }) {
                 security_reason.get_or_insert(EpochRotationReason::AccessGrant);
-            } else if !matches!(operation, crate::VaultOperation::EpochCheckpoint { .. }) {
+            } else if !matches!(
+                operation,
+                crate::VaultOperation::EpochCheckpoint { .. }
+                    | crate::VaultOperation::JoinRequested { .. }
+            ) {
                 security_reason.get_or_insert(EpochRotationReason::ConcurrentVaultMutation);
             }
             apply_operation(
@@ -585,6 +589,37 @@ mod tests {
                 .iter()
                 .any(|conflict| { conflict.reasons.contains(&EpochRotationReason::AccessGrant) })
         );
+        Ok(())
+    }
+
+    #[test]
+    fn concurrent_join_request_does_not_conflict_with_rotation() -> EventResult<()> {
+        let owner_key = key();
+        let joiner_key = key();
+        let mut graph = EventGraph::new();
+        let genesis_id = genesis(&mut graph, &owner_key)?;
+        let request = signed_operation(
+            &joiner_key,
+            vec![genesis_id.clone()],
+            VaultOperation::JoinRequested {
+                device_id: DeviceId::parse("abcd1234ef567890")?,
+                encryption_public_key: DevicePublicKey::from_trusted("age1joiner".to_owned()),
+                signing_public_key: public_key(&joiner_key),
+                label: MemberLabel::from_trusted("Joiner".to_owned()),
+            },
+        )?;
+        let rotation = signed_operation(
+            &owner_key,
+            vec![genesis_id],
+            VaultOperation::PasswordRemoved {
+                entry_id: PasswordEntryId::parse("pwdentry001")?,
+            },
+        )?;
+        graph.insert(request, STORE)?;
+        graph.insert(rotation, STORE)?;
+
+        let projection = project_vault(&graph, STORE)?;
+        assert!(projection.security_conflicts.is_empty());
         Ok(())
     }
 

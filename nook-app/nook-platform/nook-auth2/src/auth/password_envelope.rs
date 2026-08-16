@@ -352,12 +352,9 @@ pub fn resolve_keys_from_password(
 
     let secret = age::secrecy::SecretString::from(password.to_owned());
     let identity = age::scrypt::Identity::new(secret);
-    let mut password_plaintext = Zeroizing::new(age_decrypt_scrypt(
-        &identity,
-        envelope.ciphertext.as_bytes(),
-    )?);
-    let mut plaintext_bytes = Zeroizing::new(if envelope.version == LEGACY_ENVELOPE_VERSION {
-        std::mem::take(&mut *password_plaintext)
+    let mut password_plaintext = age_decrypt_scrypt(&identity, envelope.ciphertext.as_bytes())?;
+    let mut plaintext_bytes = if envelope.version == LEGACY_ENVELOPE_VERSION {
+        Zeroizing::new(std::mem::take(&mut *password_plaintext))
     } else {
         let wrapping_identity_text = Zeroizing::new(
             String::from_utf8(std::mem::take(&mut *password_plaintext))
@@ -369,7 +366,7 @@ pub fn resolve_keys_from_password(
                 PasswordError::Age(AgeCryptoError::EnvelopeDecryptSetup(error.to_string()))
             })?;
         age_decrypt_identity(&wrapping_identity, envelope.wrapped_keys.as_bytes())?
-    });
+    };
     let plaintext_str = Zeroizing::new(
         String::from_utf8(std::mem::take(&mut *plaintext_bytes))
             .map_err(PasswordError::EnvelopePlaintextUtf8)?,
@@ -422,7 +419,7 @@ fn age_encrypt_recipient(
 fn age_decrypt_identity(
     identity: &age::x25519::Identity,
     armored: &[u8],
-) -> PasswordResult<Vec<u8>> {
+) -> PasswordResult<Zeroizing<Vec<u8>>> {
     use age::armor::ArmoredReader;
 
     let decryptor = age::Decryptor::new_buffered(ArmoredReader::new(armored)).map_err(|error| {
@@ -431,7 +428,7 @@ fn age_decrypt_identity(
     let mut reader = decryptor
         .decrypt(std::iter::once(identity as &dyn age::Identity))
         .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeDecrypt(error.to_string())))?;
-    let mut plaintext = Vec::new();
+    let mut plaintext = Zeroizing::new(Vec::new());
     reader
         .read_to_end(&mut plaintext)
         .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeRead(error.to_string())))?;
@@ -474,7 +471,10 @@ fn age_encrypt_scrypt(
         .map(AgeArmoredCiphertext::from_trusted_armored)
 }
 
-fn age_decrypt_scrypt(identity: &age::scrypt::Identity, armored: &[u8]) -> PasswordResult<Vec<u8>> {
+fn age_decrypt_scrypt(
+    identity: &age::scrypt::Identity,
+    armored: &[u8],
+) -> PasswordResult<Zeroizing<Vec<u8>>> {
     use age::armor::ArmoredReader;
 
     let decryptor = age::Decryptor::new_buffered(ArmoredReader::new(armored))
@@ -483,7 +483,7 @@ fn age_decrypt_scrypt(identity: &age::scrypt::Identity, armored: &[u8]) -> Passw
         .decrypt(std::iter::once(identity as &dyn age::Identity))
         .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeDecrypt(e.to_string())))?;
 
-    let mut plaintext = Vec::new();
+    let mut plaintext = Zeroizing::new(Vec::new());
     reader
         .read_to_end(&mut plaintext)
         .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeRead(e.to_string())))?;

@@ -30,6 +30,7 @@ pub(super) fn apply_operation(
             password_entries,
             ..
         } => {
+            projection.secrets.clear();
             for secret in secrets {
                 insert_secret(projection, event_id, secret, ProjectedSecretOrigin::Created);
             }
@@ -383,6 +384,40 @@ mod tests {
         );
 
         assert_eq!(projection.password_entries, vec![replacement]);
+        Ok(())
+    }
+
+    #[test]
+    fn epoch_checkpoint_replaces_secret_snapshot() -> anyhow::Result<()> {
+        let mut projection = VaultProjection::default();
+        let old_event = event_id()?;
+        insert_secret(
+            &mut projection,
+            &old_event,
+            &secret("secret_oldrecord1"),
+            ProjectedSecretOrigin::Created,
+        );
+        let replacement = secret("secret_newrecord1");
+
+        apply_operation(
+            &mut projection,
+            &event_id()?,
+            &VaultOperation::EpochCheckpoint {
+                secrets: vec![replacement.clone()],
+                members_checkpoint_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
+                password_entries: crate::EpochPasswordState::Replace(Vec::new()),
+            },
+            &mut BTreeMap::new(),
+        );
+
+        assert_eq!(projection.secrets.len(), 1);
+        assert!(
+            !projection
+                .secrets
+                .contains_key(&secret_id("secret_oldrecord1"))
+        );
+        assert!(projection.secrets.contains_key(&replacement.id));
         Ok(())
     }
 }
