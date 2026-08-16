@@ -2,6 +2,7 @@ import {
   AGENT_STATS_ASSEMBLE_INPUT_SCHEMA,
   AGENT_STATS_FILE_INPUT_SCHEMA,
 } from '../codec/args/agent-stats.ts';
+import { loadBlueprint } from '../codec/blueprint-diff.ts';
 import { CORTEX_AUDIT_INPUT_SCHEMA } from '../codec/args/cortex-audit.ts';
 import { DEPENDENCY_POPULARITY_INPUT_SCHEMA } from '../codec/args/dependency-popularity.ts';
 import { PRE_PUSH_INPUT_SCHEMA } from '../codec/args/pre-push.ts';
@@ -52,6 +53,7 @@ export type DiscoverableRequest = {
   readonly operation?: AgentStatsOperation | PrLandOperation;
   readonly description: string;
   readonly exampleRequest: string;
+  readonly exampleYaml: string;
   readonly inputSchema: ObjectJsonSchema;
 };
 
@@ -62,7 +64,9 @@ export type LoomCommandResult =
   | AgentStatsReport
   | PrLandReport
   | DependencyPopularityReport;
-const DISCOVERABLE: readonly DiscoverableRequest[] = [
+type DiscoverableRequestDefinition = Omit<DiscoverableRequest, 'exampleYaml'>;
+
+const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
   {
     family: RequestFamily.ToolsList,
     description: 'List Loom domain request kinds and schemas.',
@@ -148,7 +152,10 @@ const DISCOVERABLE: readonly DiscoverableRequest[] = [
 ];
 
 export function listDiscoverableRequests(): readonly DiscoverableRequest[] {
-  return DISCOVERABLE;
+  return DISCOVERABLE_DEFINITIONS.map((definition) => ({
+    ...definition,
+    exampleYaml: loadBlueprint(definition.exampleRequest).blueprintYaml,
+  }));
 }
 
 export function listAllRequestFamilies(): readonly RequestFamily[] {

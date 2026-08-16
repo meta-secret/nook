@@ -8,16 +8,14 @@
 name: Agent implement
 
 on:
-  schedule:
-    - cron: "17,47 * * * *"
   workflow_dispatch:
     inputs:
       issue_path:
-        description: Optional nook-workbench issue path (issues/<feature>/<issue>.md)
+        description: Required unless prompt is supplied (issues/<feature>/<issue>.md)
         required: false
         type: string
       prompt:
-        description: Optional free-text implementation prompt
+        description: Required unless issue_path is supplied
         required: false
         type: string
       continuing_owner:
@@ -27,12 +25,6 @@ on:
 
 permissions:
   contents: read
-
-concurrency:
-  group: agent-implement
-  # Claim and implementation must be serialized so one Workbench issue cannot
-  # be claimed by two scheduled runs.
-  cancel-in-progress: false
 
 jobs:
   agent-implement:
@@ -50,20 +42,14 @@ jobs:
       WORKBENCH_PLAN_FILE: .nook-workbench-plan.md
       WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.NOOK_GITHUB_PAT }}
-
       - name: Validate dispatch inputs
         env:
           CONTINUING_OWNER: ${{ inputs.continuing_owner }}
           ISSUE_PATH: ${{ inputs.issue_path }}
           PROMPT: ${{ inputs.prompt }}
         run: |
-          if [ -n "$PROMPT" ] && [ -n "$ISSUE_PATH" ]; then
-            echo "::error::Supply either issue_path or prompt, not both; an issue-backed run must claim its Workbench record."
+          if { [ -z "$PROMPT" ] && [ -z "$ISSUE_PATH" ]; } || { [ -n "$PROMPT" ] && [ -n "$ISSUE_PATH" ]; }; then
+            echo "::error::Supply exactly one of issue_path or prompt."
             exit 1
           fi
           if [ -n "$PROMPT" ] && [ -z "$CONTINUING_OWNER" ]; then
@@ -74,6 +60,12 @@ jobs:
             echo "::error::continuing_owner must be a lowercase GitHub login."
             exit 1
           fi
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.NOOK_GITHUB_PAT }}
 
       - name: Claim ready Workbench issue
         id: workbench
@@ -96,96 +88,57 @@ jobs:
               try { return JSON.parse(raw) } catch { return raw }
             }
 
-            let paths = []
-            if (requestedPath) {
-              if (!/^issues\/[a-z0-9-]+\/[a-z0-9-]+\.md$/.test(requestedPath)) {
-                core.setFailed(`Invalid Workbench issue path: ${requestedPath}`)
-                return
-              }
-              paths = [requestedPath]
-            } else {
-              const { data: tree } = await github.rest.git.getTree({
-                owner,
-                repo,
-                tree_sha: 'main',
-                recursive: 'true',
-              })
-              paths = tree.tree
-                .filter(({ path, type }) =>
-                  type === 'blob' &&
-                  /^issues\/[a-z0-9-]+\/(?!README\.md|_templates\/)[a-z0-9-]+\.md$/.test(path),
-                )
-                .map(({ path }) => path)
-                .sort()
-            }
-
-            for (const path of paths) {
-              const { data } = await github.rest.repos.getContent({ owner, repo, path, ref: 'main' })
-              if (Array.isArray(data) || data.type !== 'file') continue
-              const body = decode(data)
-              if (value(body, 'status') !== 'ready' || value(body, 'automation') !== 'agent') {
-                if (requestedPath) {
-                  core.setFailed(`${path} must have status: ready and automation: agent`)
-                  return
-                }
-                continue
-              }
-
-              const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
-              const continuingOwner = String(value(body, 'owner')).trim()
-              if (!/^[a-z0-9][a-z0-9._-]*$/.test(continuingOwner) || continuingOwner === 'unassigned') {
-                if (requestedPath) {
-                  core.setFailed(`${path} must name a continuing GitHub owner before automation can claim it`)
-                  return
-                }
-                core.info(`Skipping ${path}: owner must name a continuing GitHub collaborator.`)
-                continue
-              }
-              let permission = 'none'
-              try {
-                const response = await github.rest.repos.getCollaboratorPermissionLevel({
-                  ...context.repo,
-                  username: continuingOwner,
-                })
-                permission = response.data.permission
-              } catch (error) {
-                if (requestedPath) throw error
-                core.info(`Skipping ${path}: ${continuingOwner} is not an assignable Nook collaborator.`)
-                continue
-              }
-              if (!['admin', 'maintain', 'write'].includes(permission)) {
-                if (requestedPath) {
-                  core.setFailed(`${path} owner ${continuingOwner} must have write access to Nook`)
-                  return
-                }
-                core.info(`Skipping ${path}: ${continuingOwner} does not have Nook write access.`)
-                continue
-              }
-              const claimed = body
-                .replace(/^status:\s*ready$/m, 'status: in_progress')
-                .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
-              await github.rest.repos.createOrUpdateFileContents({
-                owner,
-                repo,
-                path,
-                branch: 'main',
-                sha: data.sha,
-                message: `claim: ${path}`,
-                content: Buffer.from(claimed).toString('base64'),
-              })
-
-              core.setOutput('found', 'true')
-              core.setOutput('path', path)
-              core.setOutput('title', String(value(body, 'title') || path))
-              core.setOutput('body', body)
-              core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${path}`)
-              core.setOutput('slug', path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-'))
-              core.setOutput('continuing_owner', continuingOwner)
+            if (!/^issues\/[a-z0-9-]+\/[a-z0-9-]+\.md$/.test(requestedPath)) {
+              core.setFailed(`Invalid Workbench issue path: ${requestedPath}`)
               return
             }
 
-            core.info('No ready automated Workbench issue found.')
-            core.setOutput('found', 'false')
+            const path = requestedPath
+            const { data } = await github.rest.repos.getContent({ owner, repo, path, ref: 'main' })
+            if (Array.isArray(data) || data.type !== 'file') {
+              core.setFailed(`Workbench issue is not a file: ${path}`)
+              return
+            }
+            const body = decode(data)
+            if (value(body, 'status') !== 'ready' || value(body, 'automation') !== 'agent') {
+              core.setFailed(`${path} must have status: ready and automation: agent`)
+              return
+            }
+
+            const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+            const continuingOwner = String(value(body, 'owner')).trim()
+            if (!/^[a-z0-9][a-z0-9._-]*$/.test(continuingOwner) || continuingOwner === 'unassigned') {
+              core.setFailed(`${path} must name a continuing GitHub owner before automation can claim it`)
+              return
+            }
+            const response = await github.rest.repos.getCollaboratorPermissionLevel({
+              ...context.repo,
+              username: continuingOwner,
+            })
+            if (!['admin', 'maintain', 'write'].includes(response.data.permission)) {
+              core.setFailed(`${path} owner ${continuingOwner} must have write access to Nook`)
+              return
+            }
+            const claimed = body
+              .replace(/^status:\s*ready$/m, 'status: in_progress')
+              .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
+            await github.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path,
+              branch: 'main',
+              sha: data.sha,
+              message: `claim: ${path}`,
+              content: Buffer.from(claimed).toString('base64'),
+            })
+
+            core.setOutput('found', 'true')
+            core.setOutput('path', path)
+            core.setOutput('title', String(value(body, 'title') || path))
+            core.setOutput('body', body)
+            core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${path}`)
+            core.setOutput('slug', path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-'))
+            core.setOutput('continuing_owner', continuingOwner)
 
       - name: Configure agent task
         id: task

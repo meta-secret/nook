@@ -122,9 +122,10 @@ After a slice merges:
 3. Choose one owner for the next dependency-free issue.
 4. If the current agent continues, claim the issue as `in_progress` before
    starting its branch from current Nook `origin/main`.
-5. If scheduled automation will continue, set `status: ready` and
-   `automation: agent`.
-6. In that case, the current agent must not also start the issue.
+5. If bounded automation will continue, set `status: ready` and `automation:
+   agent`.
+6. Explicitly dispatch that issue's exact `issue_path`.
+7. In that case, the current agent must not also start the issue.
 
 - The feature remains incomplete while any required issue remains incomplete.
 - Do not convert remaining requested functionality into an optional follow-up.
@@ -181,10 +182,10 @@ Every focused issue follows
 Valid statuses are `proposed`, `ready`, `in_progress`, `blocked`, `done`, and
 `cancelled`. `automation` is `manual`, `agent`, or `hive`. The `hive` mode is
 reserved for trusted Main-failure incidents consumed by the isolated k0s Hive
-dispatcher; the scheduled implementation workflow must not claim those records.
+dispatcher. The bounded implementation workflow must not claim those records.
 
-This combination makes a record a candidate for the scheduled Nook
-implementation worker:
+This combination makes a record eligible for explicit dispatch to the bounded
+Nook implementation worker:
 
 ```yaml
 status: ready
@@ -193,8 +194,11 @@ owner: <nook-github-collaborator>
 ```
 
 - The owner must be an assignable Nook GitHub collaborator with write access.
-- The scheduled scan skips a missing or unassigned owner.
-  - An explicitly requested ownerless record fails without implementation.
+- The dispatch must provide exactly one of `issue_path` or `prompt`.
+- An issue dispatch resolves only the exact requested path.
+- A missing or unassigned owner fails without implementation.
+- Each explicit dispatch creates its own workflow run.
+- The Workbench blob SHA rejects concurrent claims of the same issue.
 - Creating or editing any other record must not start implementation.
 - The worker claims an eligible record by committing `status: in_progress`
   before it runs.
@@ -324,12 +328,12 @@ NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \
 - Keep the source-task file outside the checkout.
   - It lets the publisher reject copied prompt text.
   - Do not publish it.
-- The scheduled worker:
+- The bounded worker:
   1. uses a dedicated planning LLM turn;
   2. validates and publishes the plan; and
   3. begins implementation only after publication.
 - A missing or rejected plan blocks implementation.
-- A valid multi-PR plan also blocks scheduled implementation.
+- A valid multi-PR plan also blocks bounded implementation.
   1. Materialize the Workbench feature summary and focused issues.
   2. Dispatch the first focused issue with a bounded one-PR plan.
 
