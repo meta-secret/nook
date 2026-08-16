@@ -87,22 +87,27 @@ test('offer browser extension install on vault home and in Devices', async ({
               JSON.stringify(routedTypes),
             )
           }
+          if (
+            type === messageTypes.pairedVaultIdentityDiscovery &&
+            pairedVaultDiscoveryAttempts++ === 0
+          ) {
+            callback()
+            return
+          }
           callback(
             type === messageTypes.openCompanionLauncher
               ? { ok: true }
               : type === messageTypes.pairedVaultIdentityDiscovery
-                ? pairedVaultDiscoveryAttempts++ === 0
-                  ? undefined
-                  : {
-                      type: 'nook:extension-paired-vault-identity-status',
-                      payload: {
-                        requestId: message.payload.requestId,
-                        vaultStoreId: message.payload.vaultStoreId,
-                        status: 'different-vault',
-                        connectedVaultStoreId: 'store_previous_9a4f',
-                        connectedVaultName: 'Previous vault',
-                      },
-                    }
+                ? {
+                    type: 'nook:extension-paired-vault-identity-status',
+                    payload: {
+                      requestId: message.payload.requestId,
+                      vaultStoreId: message.payload.vaultStoreId,
+                      status: 'different-vault',
+                      connectedVaultStoreId: 'store_previous_9a4f',
+                      connectedVaultName: 'Previous vault',
+                    },
+                  }
                 : { ok: false },
           )
         },
@@ -178,6 +183,7 @@ test('offer browser extension install on vault home and in Devices', async ({
       .getAttribute('data-demo-extension-message-types')) ?? '[]',
   ) as string[]
   expect(routedTypes).toEqual([
+    'nook:extension-paired-vault-identity-discovery',
     'nook:extension-paired-vault-identity-discovery',
     'nook:open-companion-launcher',
   ])
