@@ -30,7 +30,10 @@ fn cold_exact_cache_scopes_do_not_import_in_progress_registry_exports() -> anyho
     ] {
         assert_cold_exact_cache_uses_only_stable_imports(rust_bake.as_str(), cache);
     }
-    assert_cold_exact_cache_uses_only_stable_imports(preflight_bake.as_str(), "preflight_cache_from");
+    assert_cold_exact_cache_uses_only_stable_imports(
+        preflight_bake.as_str(),
+        "preflight_cache_from",
+    );
     assert_cold_exact_cache_uses_only_stable_imports(web_bake.as_str(), "web_e2e_cache_from");
 
     let web_fallback = web_bake
