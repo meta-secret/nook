@@ -424,7 +424,19 @@ export async function discoverPairedExtensionIdentity(
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const result = await discoverPairedExtensionIdentityOnce(vaultStoreId);
     if (result.kind === ExtensionMessageDeliveryKind.Received) {
-      return result.discovery;
+      if (
+        result.discovery.status !==
+          ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable ||
+        attempt === 2
+      ) {
+        return result.discovery;
+      }
+    }
+    if (attempt < 2) {
+      // The service worker can answer while its offscreen session is still
+      // starting. Retry its transient unavailable status before leaving a
+      // paired vault on its local unlock screen.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 150));
     }
   }
   return {
