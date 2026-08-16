@@ -1018,18 +1018,19 @@ Write a request YAML, then run it:
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: /tmp/pr-123-events.json
-    outputPath: /tmp/123.yaml
+    scratchPath: "{agentTempDir}/pr-123-scratch.json"
+    outputPath: "{agentTempDir}/123.yaml"
     includeTestInventory: true
 ```
 
 ```bash
-task loom:agent-stats CONFIG=/tmp/assemble-request.yaml
-# then an agentStats.publish request with statsFile: /tmp/123.yaml
-task loom:agent-stats CONFIG=/tmp/publish-request.yaml
+task loom:agent-stats CONFIG=path/to/agent-owned/assemble-request.yaml
+# then an agentStats.publish request using the same {agentTempDir} statsFile
+task loom:agent-stats CONFIG=path/to/agent-owned/publish-request.yaml
 ```
 
 - See [Loom tools](references/loom-tools.md).
+- `{agentTempDir}` isolates paths by task-anchor Git commit and worktree.
 - Compare with one or two recent comparable records.
 - Assess build/workflow waste in the scratch log before assembly.
 - Do not create a bookkeeping branch or Nook PR.

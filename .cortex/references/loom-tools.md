@@ -185,8 +185,8 @@ Use one domain root family and descriptive fields. Same-prefix operations nest:
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: /tmp/pr-123-events.json
-    outputPath: /tmp/123.yaml
+    scratchPath: "{agentTempDir}/pr-123-scratch.json"
+    outputPath: "{agentTempDir}/123.yaml"
     includeTestInventory: true
 ```
 
@@ -223,8 +223,10 @@ Prefer libraries over boilerplate:
 ## Common requests
 
 `task loom:tools-list` returns the canonical `exampleRequest`, exact
-`exampleYaml`, and typed `inputSchema` for every direct request below. Consume
-that output instead of maintaining request bodies in Cortex.
+`exampleYaml`, and typed `inputSchema` for every direct request below.
+`resolvedExampleYaml` equals the authored blueprint for static requests and
+fills dynamic tokens for the current worktree and commit. Consume that output
+instead of maintaining request bodies in Cortex.
 
 ### prePush
 
@@ -251,7 +253,9 @@ task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 ```
 
 Validate and publish use `agentStats.validate` / `agentStats.publish` with
-`statsFile`.
+`statsFile`. Agent-statistics paths accept `{agentTempDir}` for stable isolation
+by Git commit and worktree. See
+[AI Agent PR Statistics](../workflows/agent-statistics.md#mechanical-entrypoint--loom).
 
 ### prLand (status / validate / ready / mergeCheck)
 
