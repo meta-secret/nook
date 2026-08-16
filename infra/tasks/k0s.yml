@@ -443,12 +443,8 @@ tasks:
         sudo -n k0s kubectl rollout status deployment/coredns \
           --namespace kube-system \
           --timeout=5m
-        for namespace in hive-data hive-system; do
-          sudo -n k0s kubectl create namespace "$namespace" \
-            --dry-run=client \
-            -o yaml |
-            sudo -n k0s kubectl apply -f -
-        done
+        sudo -n k0s kubectl apply \
+          -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         if test "$cni_migrated" = true; then
           for deployment in \
             hive \

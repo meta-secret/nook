@@ -122,6 +122,7 @@ describe('loom dispatch protocol', () => {
           family: RequestFamily;
           exampleRequest: string;
           exampleYaml: string;
+          resolvedExampleYaml: string;
         }[];
       };
       expect(
@@ -140,6 +141,13 @@ describe('loom dispatch protocol', () => {
         expect(entry.exampleYaml).toBe(
           readFileSync(absoluteExamplePath, 'utf8'),
         );
+        expect(entry.resolvedExampleYaml.length).toBeGreaterThan(0);
+        if (entry.exampleYaml.includes('{agentTempDir}')) {
+          expect(entry.resolvedExampleYaml).toContain('/nook-agent-stats/');
+          expect(entry.resolvedExampleYaml).not.toContain('{agentTempDir}');
+        } else {
+          expect(entry.resolvedExampleYaml).toBe(entry.exampleYaml);
+        }
       }
     }
   });
