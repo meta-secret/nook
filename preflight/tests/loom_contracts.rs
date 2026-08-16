@@ -97,16 +97,23 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
 #[test]
 fn loom_workflow_audits_every_cortex_change() {
     let root = repository_root();
-    let workflow = read(&root, ".github/workflows/loom.yml");
+    let workflow = read(&root, ".github/workflows/repository-policy.yml");
     assert!(
         workflow.contains("fetch-depth: 2"),
         "Loom checkout must retain the baseline parent for migration-ledger shrink-only checks"
     );
 
-    assert_eq!(
-        workflow.matches("      - .cortex/**").count(),
-        2,
-        "Loom must trigger for Cortex changes on pull requests and main pushes"
+    assert!(
+        workflow.contains("      - .cortex/**") && workflow.contains(".cortex/* |"),
+        "repository policy must classify Cortex PR changes and trigger on Cortex Main pushes"
+    );
+    assert!(
+        workflow.contains("echo \"loom=$loom_changed\" >> \"$GITHUB_OUTPUT\"")
+            && workflow
+                .matches("if: steps.policy-paths.outputs.loom == 'true'")
+                .count()
+                == 5,
+        "repository policy must condition every Loom-only setup and verification step"
     );
     assert!(
         workflow.contains("run: task loom:cortex-audit"),
