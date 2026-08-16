@@ -81,23 +81,32 @@ fn critical_architecture_rule_stays_wired_to_agent_guidance() -> anyhow::Result<
 
 #[test]
 fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result<()> {
-    let workflow =
-        fs::read_to_string(repository_root().join(".github/workflows/source-architecture.yml"))?;
+    let root = repository_root();
+    let workflow = fs::read_to_string(root.join(".github/workflows/repository-policy.yml"))?;
     let taskfile = fs::read_to_string(repository_root().join("preflight/Taskfile.yml"))?;
 
+    assert!(
+        !root
+            .join(".github/workflows/source-architecture.yml")
+            .exists()
+            && !root.join(".github/workflows/loom.yml").exists(),
+        "repository policy must remain the single automatic policy workflow"
+    );
     assert!(workflow.contains("pull_request:"));
+    let pull_request_trigger = workflow
+        .split_once("  pull_request:\n")
+        .and_then(|(_, tail)| tail.split_once("  push:\n"))
+        .map(|(trigger, _)| trigger)
+        .ok_or_else(|| anyhow::anyhow!("repository policy must define PR before push triggers"))?;
     assert!(
-        !workflow.contains("paths:") && !workflow.contains("paths-ignore:"),
-        "the source-architecture workflow must not skip authored product trees"
+        !pull_request_trigger.contains("paths:") && !pull_request_trigger.contains("paths-ignore:"),
+        "repository policy must not skip source architecture for authored PR trees"
     );
     assert!(
-        workflow.contains("task preflight:source-architecture"),
-        "the source-architecture workflow must invoke the Taskfile gate"
+        workflow.contains("if: github.event_name == 'pull_request'\n        run: task preflight:source-architecture"),
+        "repository policy must run source architecture for every PR event"
     );
-    assert_hosted_preflight_rust_cache(&workflow, "source-architecture")?;
-
-    let loom_workflow = fs::read_to_string(repository_root().join(".github/workflows/loom.yml"))?;
-    assert_hosted_preflight_rust_cache(&loom_workflow, "loom")?;
+    assert_hosted_preflight_rust_cache(&workflow, "repository-policy")?;
     assert!(
         taskfile.contains("--test source_file_size"),
         "preflight:source-architecture must run the source_file_size test"

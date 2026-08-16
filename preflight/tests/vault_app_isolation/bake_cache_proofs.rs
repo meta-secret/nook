@@ -44,7 +44,7 @@ fn theorem_pr_workflows_have_no_host_rust_compilation() -> anyhow::Result<()> {
         ".github/workflows/pr.yml",
         ".github/workflows/rust-ecosystem-checks.yml",
         ".github/workflows/hive.yml",
-        ".github/workflows/source-architecture.yml",
+        ".github/workflows/repository-policy.yml",
     ] {
         let workflow = read(&root, relative);
         for (index, line) in workflow.lines().enumerate() {

@@ -378,11 +378,11 @@ Use this workflow for quality, CI, and deployment changes.
     - `Verify and preview` never waits for native coverage.
     - The preview web solve retries once after the known immediate BuildKit Dockerfile-load flake.
     - Repeated failures still fail the gate.
-    - Standalone Source architecture and Loom jobs share the `pr-preflight`
-      Rust cache.
-    - Their cache covers `preflight/target` and the Cargo registry.
-    - The source-architecture proof requires cache restore before either job's
-      first preflight Cargo task.
+    - The Repository policy job owns Source architecture and conditional Loom
+      checks in one automatic PR run.
+    - Its `pr-preflight` cache covers `preflight/target` and the Cargo registry.
+    - The source-architecture proof requires cache restore before the first
+      preflight Cargo task.
 
     #### Coverage reporting
 

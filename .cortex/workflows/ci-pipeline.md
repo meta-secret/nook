@@ -117,8 +117,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 | --- | --- | --- | --- |
 | [`remote.yml`](../../.github/workflows/remote.yml) | Manual allowlisted task dispatch | Focused command batch; no merge authorization | No |
 | [`pr.yml`](../../.github/workflows/pr.yml) | Explicit `ci:validate` / `ci:full-e2e` label | Exact-head PR gate, including Rust ecosystem jobs | No |
-| [`loom.yml`](../../.github/workflows/loom.yml) | Path-filtered PR and Main changes | Loom TypeScript, authored-state, and single-parameter verification | No |
-| [`source-architecture.yml`](../../.github/workflows/source-architecture.yml) | Every opened, synchronized, or reopened PR | Source-size and Rust unit-test-colocation enforcement | No |
+| [`repository-policy.yml`](../../.github/workflows/repository-policy.yml) | Every PR; path-filtered Main changes | Source architecture plus conditional Loom verification | No |
 | [`web-research.yml`](../../.github/workflows/web-research.yml) | Path-filtered PR/Main changes or manual dispatch | Research check, build, Cloudflare deploy, and PR preview | No |
 | [`rust-ecosystem.yml`](../../.github/workflows/rust-ecosystem.yml) | Schedule, manual, minds-only PR | Specialist Rust ecosystem entry points | No |
 | [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml) | Successful same-repository PR workflow | Promote trusted PR artifacts | No |
@@ -161,17 +160,16 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - Keep independent long-running gates on separate hosted runners.
 - Combine jobs only when measured setup savings exceed lost parallelism.
 
-**`loom.yml`**
+**`repository-policy.yml`**
 
-- Runs when Loom, its Task wrapper, or related preflight sources change.
-- Verifies Loom formatting, lint, types, and tests.
-- Enforces authored TypeScript state and Loom API contracts.
-- Remains separate from Main.
+- Runs source architecture enforcement on every pull request.
+- Classifies PR paths and runs Loom checks only when Loom, its Task wrapper,
+  Cortex, or related preflight sources change.
+- Runs on Main only for those Loom-relevant paths.
+- Verifies Loom formatting, lint, types, tests, authored TypeScript state, and
+  Loom API contracts.
+- Remains separate from Main product orchestration.
   - Cortex and agent-only merges require Loom but intentionally skip product Main.
-
-**`source-architecture.yml`**
-
-- Runs on every opened, synchronized, or reopened pull request.
 - Enforces the authored source-file limit.
 - Enforces Rust unit-test colocation.
 
@@ -533,7 +531,7 @@ so the persistent-context smoke cannot compete with other headed Chromium tests.
 | Workflow                                                                | `runs-on`       | Why                                                            |
 | ----------------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
 | `pr.yml`, `main.yml`, `release.yml`                                     | `ubuntu-latest` | Elastic delivery capacity with Main-seeded private Zot caches  |
-| `loom.yml`, `source-architecture.yml`, `hive.yml`                       | `ubuntu-latest` | Independent architecture and package verification              |
+| `repository-policy.yml`, `hive.yml`                                    | `ubuntu-latest` | Independent architecture and package verification              |
 | `agent-implement.yml`, `ci-agent-smoke.yml`                             | `ubuntu-latest` | Background implementation and bounded smoke work               |
 | `e2e-pr.yml`, `web-research.yml`                                        | `ubuntu-latest` | Manual and research work scales independently                  |
 | `runner-cleanup.yml`                                                    | `nook`          | Maintain the registered self-hosted Docker host and disk       |
