@@ -307,6 +307,8 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
         "--bootstrap",
         "Using healthy job-scoped BuildKit builder",
         "buildx use \"$builder\"",
+        "short read: expected [0-9]+ bytes but got [0-9]+: unexpected EOF",
+        "retrying workload once",
     ] {
         assert!(
             wrapper.contains(required),
@@ -319,6 +321,44 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             && !wrapper.contains("BUILDX_BUILDER="),
         "delivery must not default to shared nook-pr or export BUILDX_BUILDER for Taskfiles"
     );
+    Ok(())
+}
+
+#[test]
+fn truncated_registry_cache_blob_retries_the_job_workload_once() -> anyhow::Result<()> {
+    let root = repository_root();
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let temp = std::env::temp_dir().join(format!(
+        "nook-buildkit-cache-retry-{}-{unique}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&temp)?;
+
+    let attempt_file = temp.join("attempts");
+    let output = Command::new("bash")
+        .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
+        .args([
+            "bash",
+            "-c",
+            "attempts=$(cat \"$1\" 2>/dev/null || true); attempts=$((attempts + 1)); printf '%s' \"$attempts\" > \"$1\"; if [ \"$attempts\" -eq 1 ]; then echo 'short read: expected 99 bytes but got 3: unexpected EOF' >&2; exit 1; fi",
+            "nook-test",
+        ])
+        .arg(&attempt_file)
+        .env_remove("NOOK_PR_BUILDX_BUILDER")
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "cache-transport retry failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(fs::read_to_string(&attempt_file)?, "2");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("retrying workload once"),
+        "retry must explain the bounded registry-cache recovery"
+    );
+
+    fs::remove_dir_all(temp)?;
     Ok(())
 }
 

@@ -504,7 +504,10 @@ its bundled Chromium + headless-shell payload, which creates a roughly 1.3 GB
 image layer (about 432 MB compressed) on cold runners.
 The preparation solve runs once. The small final web-image solve retries once
 after the known immediate BuildKit frontend/Dockerfile-load flake, without
-repeating the multi-minute Rust/WASM and dependency graph.
+repeating the multi-minute Rust/WASM and dependency graph. The job-scoped
+BuildKit wrapper also retries the complete workload once when an immutable
+registry-cache blob reports a truncated `short read ... unexpected EOF`.
+It preserves every cache importer for that retry.
 
 PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 That label adds the `Full browser e2e (main fix)` and `Full extension e2e

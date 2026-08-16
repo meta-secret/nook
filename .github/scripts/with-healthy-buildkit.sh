@@ -33,16 +33,11 @@ case "$health_timeout:$cleanup_timeout" in
     ;;
 esac
 
-run_with_daemon_builder() {
-  echo "Using default docker buildx builder (Taskfiles must not pass --builder)" >&2
-  "$@"
-}
-
 if [ -z "$builder" ]; then
-  run_with_daemon_builder "$@"
-  exit $?
+  echo "Using default docker buildx builder (Taskfiles must not pass --builder)" >&2
 fi
 
+if [ -n "$builder" ]; then
 case "$builder" in
   ''|*[!a-zA-Z0-9_.-]*)
     echo "invalid job-scoped BuildKit builder name: $builder" >&2
@@ -153,4 +148,39 @@ else
 fi
 
 "$docker_bin" buildx use "$builder"
-"$@"
+fi
+
+# A cache ref can remain valid while an interrupted registry transfer leaves a
+# blob unreadable on a fresh runner. Retry the complete workload once only for
+# that precise transport failure. Do not clear cache inputs: the second pull
+# must validate the same immutable exact-head graph.
+is_transient_registry_cache_short_read() {
+  local log_file="$1"
+  grep -Eiq \
+    -e 'short read: expected [0-9]+ bytes but got [0-9]+: unexpected EOF' \
+    "$log_file"
+}
+
+workload_log="$(mktemp "${TMPDIR:-/tmp}/nook-buildkit-workload.XXXXXX")"
+cleanup_workload_log() {
+  rm -f "$workload_log"
+}
+trap cleanup_workload_log EXIT
+
+for attempt in 1 2; do
+  set +e
+  "$@" 2>&1 | tee -a "$workload_log"
+  workload_status=${PIPESTATUS[0]}
+  set -e
+
+  if [ "$workload_status" -eq 0 ]; then
+    exit 0
+  fi
+  if [ "$attempt" -eq 2 ] || ! is_transient_registry_cache_short_read "$workload_log"; then
+    exit "$workload_status"
+  fi
+
+  echo "BuildKit registry cache blob read was truncated; retrying workload once..." >&2
+  : >"$workload_log"
+  sleep 2
+done
