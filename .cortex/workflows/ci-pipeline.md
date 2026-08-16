@@ -192,7 +192,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 **`pr-validation-handoff.yml`**
 
 - Runs from trusted default-branch code.
-- Ignores the PR-close workflow run whose head branch is `main`.
+- Receives only completed labeled validation runs because PR close is not a `PR` workflow trigger.
 - Verifies the successful source run and required jobs.
 - Validates native/WASM artifact shapes, attaches provenance.
 - Publishes exact-input handoffs that later PRs may trust.
@@ -200,7 +200,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 **`linear-ui-demo.yml`**
 
 - Runs from the trusted default branch.
-- Ignores the PR-close workflow run whose head branch is `main`.
+- Claims the shared `pr-<number>` concurrency group on close to cancel in-flight validation.
 - Downloads the PR demo artifact.
 - Publishes its 10 largest WebMs to Linear.
 - Updates the PR comment and completes/cancels the matching Linear issue.

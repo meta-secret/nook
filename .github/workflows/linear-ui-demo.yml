@@ -8,7 +8,6 @@ on:
   workflow_run:
     workflows: [PR]
     types: [completed]
-    branches-ignore: [main]
   pull_request_target:
     types: [closed]
 
@@ -17,6 +16,12 @@ permissions:
   contents: read
   issues: write
   pull-requests: write
+
+# A close event claims the same repository-wide group as pr.yml and cancels any
+# in-flight validation. workflow_run publishers use a unique group.
+concurrency:
+  group: ${{ github.event_name == 'pull_request_target' && format('pr-{0}', github.event.pull_request.number) || format('linear-ui-demo-{0}', github.run_id) }}
+  cancel-in-progress: true
 
 env:
   LINEAR_UI_DEMO_LABEL_ID: 3d5eaced-687d-4d93-a046-92f5008f584d
