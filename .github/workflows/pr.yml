@@ -9,15 +9,15 @@
 # live in meta-secret/nook-workbench.
 # Validation is requested explicitly by adding a label. Ordinary pushes do not
 # spend hosted workers. A later push invalidates the prior head's checks, so the
-# label must be toggled again before merge. PR close still cancels an in-flight
-# validation through the concurrency group below.
+# label must be toggled again before merge. The trusted Linear close workflow
+# claims the same concurrency group to cancel in-flight validation on PR close.
 # Schedule, manual, and minds-only PR ecosystem entry points stay in rust-ecosystem.yml.
 
 name: PR
 
 on:
   pull_request:
-    types: [labeled, closed]
+    types: [labeled]
     paths-ignore:
       - .cortex/**
       - .cursor/**
@@ -43,7 +43,6 @@ env:
 jobs:
   validation-request:
     name: Validate explicit CI request
-    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -62,7 +61,6 @@ jobs:
   rust-ecosystem:
     name: Rust ecosystem
     if: >-
-      github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: validation-request
@@ -75,7 +73,6 @@ jobs:
   rust:
     name: Native Rust verification
     if: >-
-      github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: validation-request
@@ -206,7 +203,6 @@ jobs:
   wasm:
     name: WASM build and artifact
     if: >-
-      github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: validation-request
@@ -348,7 +344,6 @@ jobs:
   wasm-node-test:
     name: WASM Node tests
     if: >-
-      github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: wasm
@@ -393,7 +388,6 @@ jobs:
   verify:
     name: Web verification
     if: >-
-      github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: [validation-request, wasm]
@@ -490,7 +484,6 @@ jobs:
   ui-demo:
     name: Headless UI demo
     if: >-
-      github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: [validation-request, wasm]
@@ -636,7 +629,6 @@ jobs:
     name: Verify and preview
     if: >-
       always() &&
-      github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     # Native must succeed before the merge gate check can go green. A green
@@ -828,7 +820,6 @@ jobs:
   coverage:
     name: Rust coverage report
     if: >-
-      github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: rust
@@ -837,9 +828,7 @@ jobs:
 
   full-e2e:
     name: Full browser e2e (main fix)
-    if: >-
-      github.event.action != 'closed' &&
-      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+    if: contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
     needs: [wasm, wasm-node-test]
     runs-on: ubuntu-latest
     steps:
@@ -907,9 +896,7 @@ jobs:
 
   full-extension-e2e:
     name: Full extension e2e (main fix)
-    if: >-
-      github.event.action != 'closed' &&
-      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+    if: contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
     needs: [wasm, wasm-node-test]
     runs-on: ubuntu-latest
     steps:

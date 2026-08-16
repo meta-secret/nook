@@ -86,7 +86,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "UI_DEMO_RESULT: ${{ needs.ui-demo.result }}",
         "name: Rust coverage report",
         "uses: ./.github/workflows/pr-coverage.yml",
-        "types: [labeled, closed]",
+        "types: [labeled]",
         "name: Validate explicit CI request",
         "name: Reject unsupported label events",
         "github.event.label.name == 'ci:validate'",
@@ -205,11 +205,21 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         !pr.contains("actions/cache/"),
         "PR-writable caches must never bypass required validation"
     );
+    assert!(
+        !pr.contains("github.event.action != 'closed'") && !pr.contains("types: [labeled, closed]"),
+        "PR close cancellation must not create a skipped PR source run"
+    );
+
+    let linear_ui_demo = read(root, ".github/workflows/linear-ui-demo.yml");
+    assert!(
+        linear_ui_demo.contains("format('pr-{0}', github.event.pull_request.number)")
+            && linear_ui_demo.contains("cancel-in-progress: true"),
+        "the trusted close workflow must cancel the shared PR concurrency group"
+    );
 
     let trusted_handoff = read(root, ".github/workflows/pr-validation-handoff.yml");
     for required in [
         "name: PR validation handoff",
-        "branches-ignore: [main]",
         "github.event.workflow_run.conclusion == 'success'",
         "workflowPath !== '.github/workflows/pr.yml'",
         "run.path?.replace(/@[^@]+$/, '')",
@@ -269,8 +279,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     let preview_job = section(&pr, "  preview:\n", "  coverage:\n");
     assert!(
-        verify_job.contains("github.event.action != 'closed'")
-            && verify_job.contains("github.event.label.name == 'ci:validate'")
+        verify_job.contains("github.event.label.name == 'ci:validate'")
             && verify_job.contains("github.event.label.name == 'ci:full-e2e'")
             && verify_job.contains("needs: [validation-request, wasm]")
             && verify_job.contains("name: Download built WASM handoff")
