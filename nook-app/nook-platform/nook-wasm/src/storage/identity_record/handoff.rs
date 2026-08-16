@@ -68,10 +68,14 @@ async fn import_existing_vault_handoff(
         ));
     }
     let ordered_event_ids = graph.topological_order()?;
-    let checkpoint_event_id = ordered_event_ids.last().ok_or_else(|| {
-        NookError::Database("Imported extension identity has no committed vault events.".to_owned())
-    })?;
-    let checkpoint_event = graph.get(checkpoint_event_id).ok_or_else(|| {
+    let checkpoint_event_id = nook_core::current_epoch_checkpoint(&graph)?
+        .or_else(|| ordered_event_ids.last().cloned())
+        .ok_or_else(|| {
+            NookError::Database(
+                "Imported extension identity has no committed vault events.".to_owned(),
+            )
+        })?;
+    let checkpoint_event = graph.get(&checkpoint_event_id).ok_or_else(|| {
         NookError::Database("Imported extension identity checkpoint is missing.".to_owned())
     })?;
     let key_epoch =
@@ -79,7 +83,7 @@ async fn import_existing_vault_handoff(
             .map_err(|error| NookError::Database(error.to_string()))?;
     let checkpoint = nook_core::IdentityVaultEventId::parse(checkpoint_event_id.as_str())
         .map_err(|error| NookError::Database(error.to_string()))?;
-    let checkpoint_ancestors = identity_checkpoint_ancestors(&graph, checkpoint_event_id)?;
+    let checkpoint_ancestors = identity_checkpoint_ancestors(&graph, &checkpoint_event_id)?;
     let envelopes = nook_core::event_graph_active_device_envelopes(
         &graph,
         &input.existing.device_id,

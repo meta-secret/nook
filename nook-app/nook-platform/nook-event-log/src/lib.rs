@@ -49,7 +49,7 @@ pub use graph::{EventGraph, EventInsertStatus, EventPendingReason};
 pub use projection::{
     ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch,
     SecretReplacementConflict, SecurityConflict, VaultProjection,
-    assert_projection_permutation_invariant, project_vault,
+    assert_projection_permutation_invariant, current_epoch_checkpoint, project_vault,
 };
 pub use remote_epoch_visibility::order_remote_events_for_visibility;
 pub use signing::SigningIdentity;
