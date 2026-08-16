@@ -217,6 +217,20 @@ impl NookVaultManager {
         self.sync_outbox.reset();
     }
 
+    /// Clear the failed vault session while retaining the staged signer that a
+    /// verified extension handoff needs when the caller retries connect.
+    pub(in crate::manager) fn reset_vault_session_for_handoff_retry(&mut self) {
+        let handoff_signing_seed = self
+            .device
+            .pending_extension_handoff
+            .as_ref()
+            .map(|pending| pending.handoff_signing_seed.clone());
+        self.reset_vault_session();
+        if let Some(seed) = handoff_signing_seed {
+            self.event_log.signing_seed = seed;
+        }
+    }
+
     /// Zeroize the active session and clear every Nook-owned browser database.
     /// Remote sync replicas and platform authenticator credentials are not touched.
     #[wasm_bindgen]

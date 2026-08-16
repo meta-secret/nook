@@ -362,7 +362,7 @@ impl NookVaultManager {
 
         self.purge_legacy_plaintext_search_catalog().await?;
         if let Err(error) = self.resume_pending_security_epoch_rotation(&identity).await {
-            self.reset_vault_session();
+            self.reset_vault_session_for_handoff_retry();
             return Err(error.into());
         }
         let records = VerifiedVaultAccessFlow::Connect
@@ -383,7 +383,7 @@ impl NookVaultManager {
         } {
             Ok(pending) => pending,
             Err(error) => {
-                self.reset_vault_session();
+                self.reset_vault_session_for_handoff_retry();
                 return Err(error.into());
             }
         };
@@ -391,7 +391,7 @@ impl NookVaultManager {
             .complete_connected_identity(&identity, pending_cleanup)
             .await
         {
-            self.reset_vault_session();
+            self.reset_vault_session_for_handoff_retry();
             return Err(error.into());
         }
         let _ = self.status.tx.send("READY".to_owned());
