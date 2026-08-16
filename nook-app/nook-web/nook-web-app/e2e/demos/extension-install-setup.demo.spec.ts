@@ -66,6 +66,7 @@ test('offer browser extension install on vault home and in Devices', async ({
 
   await page.evaluate((messageTypes) => {
     const browserGlobal = globalThis as ExtensionInstallDemoBrowserGlobal
+    let pairedVaultDiscoveryAttempts = 0
     browserGlobal.chrome = {
       runtime: {
         sendMessage: (_extensionId, message, callback) => {
@@ -90,16 +91,18 @@ test('offer browser extension install on vault home and in Devices', async ({
             type === messageTypes.openCompanionLauncher
               ? { ok: true }
               : type === messageTypes.pairedVaultIdentityDiscovery
-                ? {
-                    type: 'nook:extension-paired-vault-identity-status',
-                    payload: {
-                      requestId: message.payload.requestId,
-                      vaultStoreId: message.payload.vaultStoreId,
-                      status: 'different-vault',
-                      connectedVaultStoreId: 'store_previous_9a4f',
-                      connectedVaultName: 'Previous vault',
-                    },
-                  }
+                ? pairedVaultDiscoveryAttempts++ === 0
+                  ? undefined
+                  : {
+                      type: 'nook:extension-paired-vault-identity-status',
+                      payload: {
+                        requestId: message.payload.requestId,
+                        vaultStoreId: message.payload.vaultStoreId,
+                        status: 'different-vault',
+                        connectedVaultStoreId: 'store_previous_9a4f',
+                        connectedVaultName: 'Previous vault',
+                      },
+                    }
                 : { ok: false },
           )
         },
@@ -121,6 +124,18 @@ test('offer browser extension install on vault home and in Devices', async ({
     'data-demo-extension-message-types',
     /nook:extension-paired-vault-identity-discovery/,
   )
+  await expect
+    .poll(async () => {
+      const messageTypes = await page
+        .locator('html')
+        .getAttribute('data-demo-extension-message-types')
+      return JSON.parse(messageTypes ?? '[]').filter(
+        (type: string) =>
+          type ===
+          extensionInstallDemoMessageTypes.pairedVaultIdentityDiscovery,
+      ).length
+    })
+    .toBe(2)
   const encodedDiscoveryMessage = await page
     .locator('html')
     .getAttribute('data-demo-extension-message')
