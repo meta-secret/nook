@@ -71,19 +71,14 @@ fn k0s_recovery_preserves_hive_namespace_policy_labels() {
     let namespaces = read("infra/k0s/manifests/namespaces.yaml");
     let k0s_tasks = read("infra/tasks/k0s.yml");
 
-    for role in [
-        "hive.nook.sh/role: workers",
-        "hive.nook.sh/role: data",
-    ] {
+    for role in ["hive.nook.sh/role: workers", "hive.nook.sh/role: data"] {
         assert!(
             namespaces.contains(role),
             "canonical Hive namespaces must retain the NetworkPolicy role: {role}"
         );
     }
     assert!(
-        k0s_tasks.contains(
-            "-f \"$remote_dir/infra/k0s/manifests/namespaces.yaml\""
-        ),
+        k0s_tasks.contains("-f \"$remote_dir/infra/k0s/manifests/namespaces.yaml\""),
         "k0s recovery must reapply the canonical labeled Hive namespaces"
     );
     assert!(
