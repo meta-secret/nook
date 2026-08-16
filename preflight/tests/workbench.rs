@@ -108,17 +108,34 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
             && !workflow.contains("for (const path of paths)"),
         "Workbench implementation must preserve each explicit dispatch without scheduled tree scanning or a collapsing concurrency group"
     );
+    let dispatch_validation_position = workflow
+        .find("Validate dispatch inputs")
+        .context("the workflow must validate dispatch inputs")?;
+    let checkout_position = workflow
+        .find("Checkout")
+        .context("the workflow must check out Nook")?;
     assert!(
-        workflow.find("Validate dispatch inputs") < workflow.find("Checkout"),
+        dispatch_validation_position < checkout_position,
         "invalid or ambiguous dispatches must fail before checkout"
     );
+    let claim_position = workflow
+        .find("Claim ready Workbench issue")
+        .context("the workflow must claim the requested Workbench issue")?;
+    let docker_position = workflow
+        .find("Docker setup")
+        .context("the workflow must set up Docker")?;
     assert!(
-        workflow.find("Claim ready Workbench issue") < workflow.find("Docker setup"),
+        claim_position < docker_position,
         "the workflow must atomically claim a Workbench record before expensive setup"
     );
+    let plan_position = workflow
+        .find("Validate and publish Workbench task plan")
+        .context("the workflow must validate and publish its Workbench plan")?;
+    let implementation_position = workflow
+        .find("Run ci-agent implement")
+        .context("the workflow must run bounded implementation")?;
     assert!(
-        workflow.find("Validate and publish Workbench task plan")
-            < workflow.find("Run ci-agent implement"),
+        plan_position < implementation_position,
         "the workflow must publish the interpreted task plan before implementation"
     );
     Ok(())
