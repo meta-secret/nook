@@ -644,7 +644,8 @@ After merge, `main.yml` independently runs full local-provider and extension **e
 - Successful reruns retire existing incidents and stop active delivery.
 - The isolated Hive dispatcher enqueues actionable incidents once.
 - One logical task owns diagnosis, a normal exact-head PR, actionable review resolution, squash merge, and verification of the resulting Main run.
-- The scheduled `agent-implement.yml` worker does not claim Hive incidents.
+- An explicitly dispatched `agent-implement.yml` worker does not claim Hive
+  incidents.
 - Credentialed sync-live checks are available only through explicit manual validation.
 
 ### 9. Post-merge Workbench context and statistics
