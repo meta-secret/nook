@@ -53,6 +53,11 @@ fn assert_cold_exact_cache_uses_only_stable_imports(bake: &str, cache: &str) {
         .split(&format!("{cache} ="))
         .nth(1)
         .unwrap_or_else(|| panic!("missing cache importer: {cache}"));
+    assert!(
+        cache_body.starts_with(" GHA_CACHE_ENABLED == \"\" ? [] : GHA_CACHE_EXACT_")
+            && cache_body.contains("GHA_CACHE_SCOPE_SUFFIX == \"\" ? ["),
+        "only trusted Main may import an exact cache ref: {cache}"
+    );
     let cold_fallback = cache_body
         .split("] : GHA_CACHE_FALLBACK_ENABLED != \"\" ? [")
         .nth(1)
