@@ -27,6 +27,7 @@ import {
 import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
+import { ExtensionPairedVaultIdentityDiscoveryMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
 import { createLocalVaultOnLogin } from '../../nook-web-app/e2e/helpers'
 
 const chromiumExecutablePath =
@@ -350,6 +351,39 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       connectedPopupPage.getByTestId('open-simple-vault-btn'),
     ).toBeVisible()
 
+    // A cold extension service worker can decline the first website discovery
+    // while its offscreen session starts. Keep the real extension for the
+    // retry, but make that first browser-runtime response unavailable.
+    await context.addInitScript((pairedVaultDiscoveryType) => {
+      const browserGlobal = globalThis as typeof globalThis & {
+        chrome?: {
+          runtime?: {
+            sendMessage?: (
+              extensionId: string,
+              message: { type?: string },
+              callback: (response?: unknown) => void,
+            ) => void
+          }
+        }
+      }
+      const runtime = browserGlobal.chrome?.runtime
+      const sendMessage = runtime?.sendMessage?.bind(runtime)
+      if (!runtime || !sendMessage) return
+      let firstDiscovery = true
+      runtime.sendMessage = (extensionId, message, callback) => {
+        if (firstDiscovery && message.type === pairedVaultDiscoveryType) {
+          firstDiscovery = false
+          document.documentElement.setAttribute(
+            'data-nook-transient-paired-discovery',
+            'observed',
+          )
+          callback()
+          return
+        }
+        sendMessage(extensionId, message, callback)
+      }
+    }, ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery)
+
     const reopenedVaultPagePromise = context.waitForEvent('page')
     await connectedPopupPage.getByTestId('open-simple-vault-btn').click()
     const reopenedVaultPage = await reopenedVaultPagePromise
@@ -367,6 +401,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       reopenedVaultPage.getByTestId('passkey-auth-overlay'),
     ).toHaveCount(0)
+    await expect(reopenedVaultPage.locator('html')).toHaveAttribute(
+      'data-nook-transient-paired-discovery',
+      'observed',
+    )
     if (!isHostedSmoke) {
       expect(
         await reopenedVaultPage.evaluate(
