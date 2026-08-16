@@ -1,6 +1,6 @@
 # Shared Rust ecosystem gates (dependency policy, deterministic tests, fuzz,
 # Kani, Dylint). Called from the labeled PR workflow and from the thin
-# product Main and specialist schedule, manual, and minds-only PR/Main entry points.
+# Main and specialist schedule, manual, and minds-only PR entry points.
 # Kept reusable so PR validation shows every job on one run page without
 # duplicating Bake steps across callers.
 

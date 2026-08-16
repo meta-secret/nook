@@ -44,10 +44,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         entry.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),
         "Thin rust-ecosystem.yml must call the shared Rust ecosystem checks"
     );
-    assert_eq!(
-        entry.matches("agentic-ai/minds/**").count(),
-        2,
-        "Thin rust-ecosystem.yml must keep minds-only PR and Main-push coverage"
+    assert!(
+        entry.contains("agentic-ai/minds/**"),
+        "Thin rust-ecosystem.yml must keep labeled minds-only PR coverage"
     );
     assert!(
         main.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml")
@@ -56,13 +55,21 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "Main must call the shared Rust ecosystem checks in its own run"
     );
     assert!(
-        entry.contains("push:\n    branches: [main]\n    paths:\n      - agentic-ai/minds/**"),
-        "Thin rust-ecosystem.yml must preserve merged-head coverage for minds changes"
+        !entry.contains("\n  push:"),
+        "Thin rust-ecosystem.yml must not start a second Main-push run"
     );
-    assert!(
-        !entry.contains("nook-app/**/*.rs") && !entry.contains("nook-app/**/Cargo.toml"),
-        "Thin rust-ecosystem.yml Main-push coverage must remain minds-only"
-    );
+    for marker in [
+        "- \"!agentic-ai/**\"",
+        "- \"agentic-ai/minds/**\"",
+        "product-paths:",
+        "git diff --name-only \"$BEFORE_SHA\" \"$AFTER_SHA\"",
+        "if: needs.product-paths.outputs.changed == 'true'",
+    ] {
+        assert!(
+            main.contains(marker),
+            "Main must route minds pushes while gating product jobs: missing {marker}"
+        );
+    }
     assert!(
         !entry.contains("Run dependency policy") && !entry.contains("Bake rust-dependency-policy"),
         "Thin rust-ecosystem.yml must not duplicate dependency-policy steps"

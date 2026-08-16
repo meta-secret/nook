@@ -485,8 +485,9 @@ generated and snapshot tests (Proptest and Insta),
 bounded concurrency exploration (Loom), parser fuzzing (`cargo-fuzz`), model
 checking (Kani), and repository-selected Rust lints (Dylint). Fast
 deterministic tests remain part of ordinary Rust testing. Fuzz, Loom, Kani, and
-compiler-coupled Dylint checks have bounded hosted jobs. Schedule, manual, and
-labeled minds-only PR and Main-push entry points stay in thin
+compiler-coupled Dylint checks have bounded hosted jobs. Main also covers
+minds-only and mixed pushes while skipping product jobs for minds-only changes.
+Schedule, manual, and labeled minds-only PR entry points stay in thin
 `rust-ecosystem.yml`. The selection and configuration policy lives in
 [`.cortex/workflows/quality.md`](.cortex/workflows/quality.md).
 

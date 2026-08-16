@@ -120,7 +120,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 | [`loom.yml`](../../.github/workflows/loom.yml) | Path-filtered PR and Main changes | Loom TypeScript, authored-state, and single-parameter verification | No |
 | [`source-architecture.yml`](../../.github/workflows/source-architecture.yml) | Every opened, synchronized, or reopened PR | Source-size and Rust unit-test-colocation enforcement | No |
 | [`web-research.yml`](../../.github/workflows/web-research.yml) | Path-filtered PR/Main changes or manual dispatch | Research check, build, Cloudflare deploy, and PR preview | No |
-| [`rust-ecosystem.yml`](../../.github/workflows/rust-ecosystem.yml) | Schedule, manual, minds-only PR/Main | Specialist Rust ecosystem entry points | No |
+| [`rust-ecosystem.yml`](../../.github/workflows/rust-ecosystem.yml) | Schedule, manual, minds-only PR | Specialist Rust ecosystem entry points | No |
 | [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml) | Successful same-repository PR workflow | Promote trusted PR artifacts | No |
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml) | Successful PR workflow / PR close | Publish PR demo WebMs to Linear | No |
 | [`main.yml`](../../.github/workflows/main.yml) | Push to `main` | Product + ecosystem verify, e2e, dev deploy | No |
@@ -185,7 +185,6 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 - Thin entry points outside the product PR pipeline.
 - Weekly schedule and `workflow_dispatch`.
-- Path-filtered Main pushes for `agentic-ai/minds/**`, which the product Main workflow intentionally ignores.
 - Labeled `agentic-ai/minds/**` PRs only, because `pr.yml` ignores `agentic-ai/**`.
 - Calls the same `rust-ecosystem-checks.yml` jobs as labeled product PRs and Main.
 - Ordinary PR pushes do not start it.
@@ -209,6 +208,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 **`main.yml`**
 
 - Calls the shared Rust ecosystem jobs in parallel with product verification.
+- Includes `agentic-ai/minds/**` so product-only, minds-only, and mixed pushes use one merged-head ecosystem orchestrator.
+- Classifies changed paths and skips the product job chain for minds-only pushes.
 - Owns merged-head ecosystem cache seeding, statistics, and failure handoff.
 - On `ubuntu-latest`: native Rust → WASM → browser-free web verify read-only.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
