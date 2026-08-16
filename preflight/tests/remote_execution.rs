@@ -657,7 +657,11 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
     let pr = read(".github/workflows/pr.yml");
     let remote_doc = read(".cortex/workflows/remote-execution.md");
 
-    assert!(pr.contains("types: [labeled, closed]"));
+    assert!(pr.contains("types: [labeled]"));
+    assert!(
+        !pr.contains("types: [labeled, closed]"),
+        "PR validation must not create a close-triggered source run"
+    );
     for required in [
         "name: Validate explicit CI request",
         "name: Reject unsupported label events",
