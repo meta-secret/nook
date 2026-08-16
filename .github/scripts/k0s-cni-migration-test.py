@@ -55,7 +55,10 @@ def main():
                     raise SystemExit(subprocess.run(args).returncode)
                 if args[:3] == ["k0s", "kubectl", "create"]:
                     print("apiVersion: v1")
-                if args[:3] == ["k0s", "kubectl", "apply"]:
+                if (
+                    args[:3] == ["k0s", "kubectl", "apply"]
+                    and args[-2:] == ["-f", "-"]
+                ):
                     sys.stdin.buffer.read()
                 if args[:4] == ["k0s", "kubectl", "get", "deployment/hive"]:
                     raise SystemExit(0)
