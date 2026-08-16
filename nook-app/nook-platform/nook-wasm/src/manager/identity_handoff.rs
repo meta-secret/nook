@@ -116,11 +116,15 @@ impl NookVaultManager {
         let Some(pending) = self.device.pending_extension_handoff.as_ref() else {
             return Ok(());
         };
-        if !matches!(
-            &pending.enrollment,
-            PendingExtensionIdentityEnrollment::PairedVault { .. }
-        ) {
+        let PendingExtensionIdentityEnrollment::PairedVault { store_id, .. } =
+            &pending.enrollment
+        else {
             return Ok(());
+        };
+        if self.vault.store_id != store_id.as_str() {
+            return Err(NookError::Database(
+                "Paired-vault handoff connected a different vault.".to_owned(),
+            ));
         }
         let identity = self.device_identity()?;
         let signing_seed = pending

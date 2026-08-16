@@ -253,6 +253,7 @@ impl NookVaultManager {
                 matches!(
                     &pending.enrollment,
                     PendingExtensionIdentityEnrollment::VaultCreation { .. }
+                        | PendingExtensionIdentityEnrollment::PairedVault { .. }
                         | PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
                 )
             })
