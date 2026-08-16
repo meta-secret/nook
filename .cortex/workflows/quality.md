@@ -428,7 +428,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Successful reruns retire active incidents; current-generation reconciliation is idempotent.
     - A single isolated dispatcher enqueues actionable incidents.
     - One logical Hive task owns the normal PR, checks, review loop, squash merge, and replacement Main verification.
-    - The scheduled implementation worker does not claim it.
+    - The explicitly dispatched implementation worker does not claim it.
     - Hive verification materializes its real-lock test and Clippy dependency graphs in independent BuildKit stages so they execute in parallel.
     - SeaweedFS S3 `sccache` supplies compiler objects.
     - Main publishes shared verified Zot BuildKit layers.

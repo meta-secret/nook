@@ -990,9 +990,10 @@ publishes a concise task plan containing its own public-safe interpretation of
 the user's requirements, constraints, intended steps, and completion evidence;
 raw prompts and chat transcripts are forbidden. At completion or blockage, the
 agent publishes a worklog linked to that plan with progress, problems,
-decisions, validation, and remaining work. A Workbench issue may trigger the
-scheduled implementation worker only when it has `status: ready`, `automation:
-agent`, and an assignable Nook GitHub collaborator as its owner. Full policy:
+decisions, validation, and remaining work. A Workbench issue may be dispatched
+to the bounded implementation worker only when it has `status: ready`,
+`automation: agent`, and an assignable Nook GitHub collaborator as its owner.
+The dispatch must name its exact `issue_path`. Full policy:
 [workflows/issues.md](workflows/issues.md).
 
 ## ⛔ Non-negotiable: record and analyze AI-agent PR statistics
