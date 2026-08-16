@@ -274,6 +274,8 @@ tasks:
         --set "*.output=type=cacheonly"
         builder-debug
       - >-
+        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
+        "docker:ci:cache:publish:native preflight export"
         {{.DOCKER}} buildx bake
         --allow=fs.read={{.REPO_ROOT}}
         {{.SCCACHE_S3_BUILD_SECRETS}}

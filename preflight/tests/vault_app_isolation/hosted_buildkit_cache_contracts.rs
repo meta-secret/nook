@@ -176,6 +176,12 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
             && !docker_tasks.contains("--set \"nook-web-ci.target=nook-web-verify\""),
         "hosted web delivery must solve the joined validation/build target once and retry only the immediate BuildKit frontend flake"
     );
+    assert!(
+        platform_docker_tasks.contains("docker:ci:cache:publish:native preflight export")
+            && platform_docker_tasks.contains("bake-with-frontend-flake-retry.sh")
+            && platform_docker_tasks.contains("preflight-test"),
+        "native cache publishing must retry only the final preflight export when BuildKit fails before loading its context"
+    );
     let app_tasks = read(root, "nook-app/Taskfile.yml");
     assert!(
         app_tasks.contains("bake-with-frontend-flake-retry.sh")
@@ -184,6 +190,9 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     for required in [
         "is_buildkit_frontend_flake",
+        "is_immediate_dockerfile_load_flake",
+        "failed to solve: exit code: 2",
+        "load .dockerignore",
         "failed to read dockerfile",
         "non-transient Bake failure; not retrying",
         "transient Bake failure; retrying in 2s...",

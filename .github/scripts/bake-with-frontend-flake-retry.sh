@@ -34,6 +34,17 @@ is_buildkit_frontend_flake() {
     "$log_file"
 }
 
+is_immediate_dockerfile_load_flake() {
+  local log_file="$1"
+  # BuildKit sometimes terminates immediately after loading the Dockerfile
+  # frontend. The failed Main run reported only Dockerfile:1 and the solver's
+  # exit code, with no .dockerignore or build-context progress. Keep this
+  # narrow so RUN-step and cache-export failures still fail closed.
+  grep -Fq 'Dockerfile:1' "$log_file" \
+    && grep -Fq 'failed to solve: exit code: 2' "$log_file" \
+    && ! grep -Fq 'load .dockerignore' "$log_file"
+}
+
 # BSD/macOS mktemp requires the X template to end the path.
 log_file="$(mktemp "${TMPDIR:-/tmp}/nook-bake-flake.XXXXXX")"
 cleanup() {
@@ -52,7 +63,8 @@ for attempt in 1 2; do
   if [ "$attempt" -eq 2 ]; then
     exit "$status"
   fi
-  if ! is_buildkit_frontend_flake "$log_file"; then
+  if ! is_buildkit_frontend_flake "$log_file" \
+    && ! is_immediate_dockerfile_load_flake "$log_file"; then
     echo "task ${label}: non-transient Bake failure; not retrying" >&2
     exit "$status"
   fi
