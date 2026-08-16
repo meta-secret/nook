@@ -85,6 +85,7 @@ set -euo pipefail
 cni_config={cni}
 cni_config_next=""
 cni_was_unmasqueraded=true
+remote_dir={work}
 {migration_source()}
 """,
             encoding="utf-8",
