@@ -26,6 +26,7 @@
     logsPage,
     extensionConnectRoute,
     onNavigateHome,
+    onLockVault,
     onToggleColorMode,
   }: {
     vault: VaultState
@@ -35,6 +36,7 @@
     logsPage: boolean
     extensionConnectRoute: boolean
     onNavigateHome: () => void
+    onLockVault: () => void
     onToggleColorMode: () => void
   } = $props()
 
@@ -72,7 +74,7 @@
           data-testid="header-lock-vault-btn"
           title={vault.t(I18N_KEYS.SessionLockDesc)}
           disabled={vault.isVerifying || vault.isInitializing}
-          onclick={() => vault.lockVault()}
+          onclick={onLockVault}
         >
           <Lock class="size-4" />
           <span class="hidden sm:inline">{vault.t(I18N_KEYS.CommonLockVault)}</span>

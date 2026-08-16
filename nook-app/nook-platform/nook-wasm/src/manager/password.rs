@@ -735,4 +735,46 @@ mod wasm_tests {
         assert!(manager.device.identity_private_key.is_empty());
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    async fn password_unlock_succeeds_after_app_key_is_deleted() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let password_entry = nook_core::create_password_entry_with_work_factor(
+            &keys,
+            nook_core::generate_id()?.as_str(),
+            "Recovery",
+            "2026-08-16T00:00:00Z",
+            "correct horse battery staple",
+            E2E_PASSWORD_SCRYPT_LOG_N,
+        )?;
+        let mut owner = NookVaultManager::new();
+        owner.vault.store_id = nook_core::generate_store_id()?.to_string();
+        owner.apply_genesis_vault_keys(&identity, &keys)?;
+        owner.vault.password_entries = vec![password_entry.clone()];
+        owner.bootstrap_event_log_genesis().await?;
+        let yaml = owner.serialize_current_projection_yaml()?;
+        let store_id = owner.vault.store_id.clone();
+        import_vault_blob(yaml.as_str(), Some("Password recovery")).await?;
+        switch_active_vault(&store_id).await?;
+
+        // This manager represents the recovered browser: no app identity is
+        // available, so password recovery must not enrol or require one.
+        let mut recovered = NookVaultManager::new();
+        let page = recovered
+            .connect_with_password(
+                "local".to_owned(),
+                String::new(),
+                String::new(),
+                password_entry.id,
+                "correct horse battery staple".to_owned(),
+                50,
+            )
+            .await?;
+
+        assert!(recovered.device.identity_private_key.is_empty());
+        assert_eq!(recovered.vault.store_id, store_id);
+        assert_eq!(page.total, 0);
+        Ok(())
+    }
 }

@@ -226,6 +226,16 @@
     }
   }
 
+  function handleLockVault() {
+    // A handoff recipient is single-use. The next unlock must discover a new
+    // extension-bound nonce rather than replaying the consumed request.
+    extensionIdentityRequestState = {
+      kind: ExtensionConnectIntentKind.Absent,
+    }
+    extensionDiscoveryStoreId = ''
+    vault.lockVault()
+  }
+
   function finishExtensionConnect(approved = false) {
     if (!approved) {
       extensionIdentityRequestState = {
@@ -809,6 +819,7 @@
       {logsPage}
       {extensionConnectRoute}
       onNavigateHome={navigateHome}
+      onLockVault={handleLockVault}
       onToggleColorMode={toggleColorMode}
     />
 

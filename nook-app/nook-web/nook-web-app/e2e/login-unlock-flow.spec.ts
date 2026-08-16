@@ -146,6 +146,18 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              window as Window & {
+                __nookVault?: { deviceId?: string }
+              }
+            ).__nookVault?.deviceId ?? '',
+        ),
+      )
+      .toBe('')
 
     const joinClose = page.getByTestId('join-enrollment-close')
     if (await joinClose.isVisible()) {
