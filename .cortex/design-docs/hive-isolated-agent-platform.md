@@ -99,8 +99,9 @@ Hive separates four responsibilities:
    store, attempt history, and artifact store.
 3. **Embedded Codex performs repository work.** Hive uses the in-process Codex
    core API. It does not spawn a Codex CLI process or parse CLI JSONL. Every
-   worker turn explicitly selects `gpt-5.6-terra` with `low` reasoning effort,
-   the non-UI representation of Codex Light. One worker runs one Codex thread.
+   worker turn starts with `gpt-5.6-sol` at `medium` reasoning effort, and if
+   the embedded run fails because SOL/usage quota is exhausted, it falls back to
+   `gpt-5.3-spark` with `xhigh` effort. One worker runs one Codex thread.
    Nested subagents are disabled. Future multi-agent graphs materialize each
    reached node as a separate Hive task and disposable Pod.
 4. **Codex agents are trusted operators.** Main-repair agents receive a scoped
