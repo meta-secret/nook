@@ -60,7 +60,9 @@ services:
     depends_on:
       seaweedfs:
         condition: service_healthy
-    mem_limit: 256m
+    # Concurrent BuildKit cache downloads retain enough proxy buffers to exceed
+    # the old 256 MiB cgroup and interrupt every registry client on OOM restart.
+    mem_limit: 2g
     pids_limit: 128
     security_opt:
       - no-new-privileges:true
