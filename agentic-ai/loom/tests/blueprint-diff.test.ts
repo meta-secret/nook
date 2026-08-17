@@ -19,7 +19,7 @@ describe('blueprint explanation', () => {
     };
     const explanation = explainAgainstBlueprint(explanationArgs4);
     expect(explanation.kind).toBe(BlueprintExplanationKind.Structural);
-    expect(explanation.blueprintPath).toContain('pre-push/default.yaml');
+    expect(explanation.blueprintPath).toBe('prePush');
     expect(explanation.unifiedDiff).toContain('--- ');
     expect(explanation.unifiedDiff).toContain('+++ received.yaml');
     expect(explanation.unifiedDiff).toContain('fetchOriginMain');

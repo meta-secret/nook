@@ -853,7 +853,14 @@ procedures through a strict YAML tool protocol.
 
 Bun must be installed. Stop and ask for Bun if `bun --version` fails.
 
-Single invoke form:
+Leaf-tool invoke forms:
+
+- Defaultable tools use a Task alias with an in-code example.
+  - `task loom:pre-push`
+  - `task loom:tools-list`
+  - `task loom:cortex-audit`
+  - `task loom:dependency-popularity`
+- Parameterized tools still take an agent-owned YAML file.
 
 ```bash
 task loom:run CONFIG=<request.yaml>

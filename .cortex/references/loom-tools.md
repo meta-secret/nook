@@ -123,11 +123,19 @@ That workflow contains:
 
 ## Invoke a leaf tool
 
-Exactly one form:
+Defaultable tools use a Task alias and an in-code example:
+
+```bash
+task loom:pre-push
+task loom:tools-list
+task loom:cortex-audit
+task loom:dependency-popularity
+```
+
+Parameterized tools still take an agent-owned YAML file:
 
 ```bash
 loom <request.yaml>
-# or
 task loom:run CONFIG=<request.yaml>
 ```
 
@@ -222,9 +230,10 @@ Prefer libraries over boilerplate:
 
 ## Common requests
 
-`task loom:tools-list` returns the canonical `exampleRequest`, exact
-`exampleYaml`, and typed `inputSchema` for every direct request below.
-`resolvedExampleYaml` equals the authored blueprint for static requests and
+`task loom:tools-list` returns the canonical invoke command in
+`exampleRequest`, exact `exampleYaml`, and typed `inputSchema` for every
+direct request below.
+`resolvedExampleYaml` equals the generated example for static requests and
 fills dynamic tokens for the current worktree and commit. Consume that output
 instead of maintaining request bodies in Cortex.
 
@@ -265,10 +274,10 @@ task loom:pr-land CONFIG=path/to/validate-request.yaml
 
 ### toolsCall
 
-Wraps another domain request. Its canonical blueprint is
-[`params/tools-call/request.example.yaml`](../../agentic-ai/loom/params/tools-call/request.example.yaml).
+Wraps another domain request.
 
-Prefer a top-level domain key for normal calls.
+Copy the generated `exampleYaml` from `task loom:tools-list` when you need a
+nested call. Prefer a top-level domain key for normal calls.
 
 ## Response
 
