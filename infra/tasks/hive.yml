@@ -377,7 +377,39 @@ tasks:
         set -euo pipefail
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         kubectl() { sudo -n k0s kubectl "$@"; }
-        source "$remote_dir/infra/scripts/hive-deploy-convergence.sh"
+        # HIVE_DEPLOY_CONVERGENCE_HELPERS_BEGIN
+        hive_active_graph_client_pods() { kubectl get pods --namespace hive-system \
+            --selector "app.kubernetes.io/name=$1" --output json |
+            jq -r '.items[] | select(.status.phase != "Succeeded" and .status.phase != "Failed") | .metadata.name'
+        }
+        hive_wait_for_graph_client_drain() { deployment="$1" attempts="$2" delay_seconds="$3"
+          for attempt in $(seq 1 "$attempts"); do
+            active_pods="$(hive_active_graph_client_pods "$deployment")"
+            test -z "$active_pods" && return 0
+            test "$attempt" -ne "$attempts" || {
+              echo "Timed out draining active graph client deployment/$deployment: $active_pods" >&2
+              return 1
+            }
+            sleep "$delay_seconds"
+          done
+        }
+        hive_wait_for_ready_pool() { attempts="$1" delay_seconds="$2" stable_samples="$3" consecutive_ready=0 ready_replicas=0
+          for attempt in $(seq 1 "$attempts"); do
+            ready_replicas="$(kubectl get deployment hive --namespace hive-system -o jsonpath='{.status.readyReplicas}')"
+            if test "$ready_replicas" = 4; then
+              consecutive_ready=$((consecutive_ready + 1))
+              test "$consecutive_ready" -ge "$stable_samples" && return 0
+            else
+              consecutive_ready=0
+            fi
+            test "$attempt" -ne "$attempts" || {
+              echo "Hive pool did not stabilize at four ready workers; last count: ${ready_replicas:-0}" >&2
+              return 1
+            }
+            sleep "$delay_seconds"
+          done
+        }
+        # HIVE_DEPLOY_CONVERGENCE_HELPERS_END
         # HIVE_DEPLOY_MUTATION_LOCK_BEGIN
         sudo -n install -d -m 0755 /run/lock/nook
         sudo -n touch /run/lock/nook/hive-mutation.lock
@@ -395,11 +427,8 @@ tasks:
           unset reaper_token
         fi
         image="$(cat "$remote_dir/hive-image")"
-        auth_data="$(
-          kubectl get secret hive-codex-auth \
-            --namespace hive-system \
-            -o jsonpath='{.data.auth\.json}'
-        )"
+        auth_data="$(kubectl get secret hive-codex-auth \
+          --namespace hive-system -o jsonpath='{.data.auth\.json}')"
         test -n "$auth_data"
         auth_checksum="$(
           printf '%s' "$auth_data" |
@@ -407,11 +436,8 @@ tasks:
             sha256sum |
             cut -d' ' -f1
         )"
-        github_data="$(
-          kubectl get secret hive-github-publication \
-            --namespace hive-system \
-            -o jsonpath='{.data.token}'
-        )"
+        github_data="$(kubectl get secret hive-github-publication \
+          --namespace hive-system -o jsonpath='{.data.token}')"
         test -n "$github_data"
         github_checksum="$(
           printf '%s' "$github_data" |

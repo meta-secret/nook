@@ -2,21 +2,27 @@
 set -euo pipefail
 
 repo_root="$1"
-source "$repo_root/infra/scripts/hive-deploy-convergence.sh"
+helpers="$(
+  sed -n '/HIVE_DEPLOY_CONVERGENCE_HELPERS_BEGIN/,/HIVE_DEPLOY_CONVERGENCE_HELPERS_END/p' \
+    "$repo_root/infra/tasks/hive.yml" |
+    sed '1d;$d;s/^        //'
+)"
+eval "$helpers"
 
 sleep() { :; }
 
 MOCK_POD_JSON='{"items":[]}'
 READY_VALUES=()
-ready_index=0
+ready_calls="$(mktemp)"
 kubectl() {
   if test "$1 $2" = "get pods"; then
     printf '%s\n' "$MOCK_POD_JSON"
     return
   fi
   if test "$1 $2 $3" = "get deployment hive"; then
-    value="${READY_VALUES[$ready_index]:-${READY_VALUES[-1]:-0}}"
-    ready_index=$((ready_index + 1))
+    call_number="$(( $(wc -l < "$ready_calls") + 1 ))"
+    printf 'x\n' >>"$ready_calls"
+    value="${READY_VALUES[$((call_number - 1))]:-${READY_VALUES[-1]:-0}}"
     printf '%s' "$value"
     return
   fi
@@ -42,7 +48,7 @@ MOCK_POD_JSON='{
 }'
 drain_error="$(mktemp)"
 ready_error="$(mktemp)"
-trap 'rm -f "$drain_error" "$ready_error"' EXIT
+trap 'rm -f "$drain_error" "$ready_error" "$ready_calls"' EXIT
 if hive_wait_for_graph_client_drain hive 2 0 2>"$drain_error"; then
   echo "active graph clients must fail a bounded drain" >&2
   exit 1
@@ -52,12 +58,12 @@ grep -Fq 'pending' "$drain_error"
 grep -Fq 'deleting' "$drain_error"
 
 READY_VALUES=(4 3 4 4 4)
-ready_index=0
+: >"$ready_calls"
 hive_wait_for_ready_pool 6 0 3
-test "$ready_index" -eq 5
+test "$(wc -l < "$ready_calls" | tr -d ' ')" -eq 5
 
 READY_VALUES=(4 3 4 3)
-ready_index=0
+: >"$ready_calls"
 if hive_wait_for_ready_pool 4 0 3 2>"$ready_error"; then
   echo "an unstable pool must fail after the bounded sample count" >&2
   exit 1

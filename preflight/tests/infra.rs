@@ -296,13 +296,11 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
         "Hive coordinator must mount the worker workspace read-only to observe lifecycle markers"
     );
     let deployment_tasks = read("infra/tasks/hive.yml");
-    let deployment_convergence = read("infra/scripts/hive-deploy-convergence.sh");
-    let host_service_tasks = read("infra/tasks/host-services.yml");
     for required in [
         "for deployment in hive hive-workbench-dispatcher hive-observer",
         "kubectl scale \"deployment/$deployment\"",
         "--replicas=0",
-        "source \"$remote_dir/infra/scripts/hive-deploy-convergence.sh\"",
+        "HIVE_DEPLOY_CONVERGENCE_HELPERS_BEGIN",
         "hive_wait_for_graph_client_drain \"$deployment\" 60 2",
         "hive_wait_for_ready_pool 60 2 3",
     ] {
@@ -311,10 +309,6 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
             "Hive graph-client rollout is missing: {required}"
         );
     }
-    assert!(
-        host_service_tasks.contains("infra/scripts/hive-deploy-convergence.sh"),
-        "Hive deployment convergence helper must be synced to the remote host"
-    );
     for required in [
         "--selector \"app.kubernetes.io/name=$deployment\"",
         ".status.phase != \"Succeeded\" and .status.phase != \"Failed\"",
@@ -323,7 +317,7 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
         "Hive pool did not stabilize at four ready workers",
     ] {
         assert!(
-            deployment_convergence.contains(required),
+            deployment_tasks.contains(required),
             "Hive deployment convergence helper is missing: {required}"
         );
     }
