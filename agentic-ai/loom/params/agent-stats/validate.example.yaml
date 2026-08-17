@@ -1,3 +1,4 @@
 agentStats:
   validate:
-    statsFile: /tmp/123.yaml
+    # Resolves to the same worktree-and-commit directory used by assemble.
+    statsFile: "{agentTempDir}/123.yaml"

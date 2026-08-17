@@ -78,7 +78,7 @@ prLand:
 task loom:pre-push
 git commit …
 git push -u origin HEAD
-task loom:pr-land CONFIG=/tmp/pr-land-validate.yaml
+task loom:pr-land CONFIG=path/to/agent-owned/pr-land-validate.yaml
 ```
 
 - For Main-fix PRs, set `runFullE2e: true` in the `prLand.validate` request.

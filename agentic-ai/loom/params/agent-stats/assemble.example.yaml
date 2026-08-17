@@ -1,6 +1,7 @@
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: /tmp/pr-123-scratch.json
-    outputPath: /tmp/123.yaml
+    # Resolves under OS temp with a stable task-anchor commit and opaque worktree ID.
+    scratchPath: "{agentTempDir}/pr-123-scratch.json"
+    outputPath: "{agentTempDir}/123.yaml"
     includeTestInventory: false
