@@ -377,6 +377,7 @@ tasks:
         set -euo pipefail
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         kubectl() { sudo -n k0s kubectl "$@"; }
+        source "$remote_dir/infra/scripts/hive-deploy-convergence.sh"
         # HIVE_DEPLOY_MUTATION_LOCK_BEGIN
         sudo -n install -d -m 0755 /run/lock/nook
         sudo -n touch /run/lock/nook/hive-mutation.lock
@@ -540,21 +541,7 @@ tasks:
             kubectl rollout status "deployment/$deployment" \
               --namespace hive-system \
               --timeout=5m
-            for attempt in $(seq 1 60); do
-              if [ -z "$(
-                kubectl get pods \
-                  --namespace hive-system \
-                  --selector "app.kubernetes.io/name=$deployment" \
-                  --output name
-              )" ]; then
-                break
-              fi
-              if [ "$attempt" -eq 60 ]; then
-                echo "Timed out draining graph client deployment/$deployment" >&2
-                exit 1
-              fi
-              sleep 2
-            done
+            hive_wait_for_graph_client_drain "$deployment" 60 2
           fi
         done
         kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml"
@@ -615,9 +602,7 @@ tasks:
           fi
           sleep 2
         done
-        test "$(kubectl get deployment hive \
-          --namespace hive-system \
-          -o jsonpath='{.status.readyReplicas}')" = 4
+        hive_wait_for_ready_pool 60 2 3
         test "$(kubectl get deployment hive \
           --namespace hive-system \
           -o jsonpath='{.spec.template.spec.runtimeClassName}')" = kata-dragonball
@@ -709,9 +694,7 @@ tasks:
         kubectl rollout status deployment/hive \
           --namespace hive-system \
           --timeout=10m
-        test "$(kubectl get deployment hive \
-          --namespace hive-system \
-          -o jsonpath='{.status.readyReplicas}')" = 4
+        hive_wait_for_ready_pool 60 2 3
         if kubectl get pods \
           --namespace hive-system \
           -l app.kubernetes.io/name=hive \

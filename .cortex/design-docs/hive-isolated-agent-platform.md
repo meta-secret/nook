@@ -168,7 +168,9 @@ under [`infra/k0s/`](../../infra/k0s/).
 Before applying a new worker/coordinator, dispatcher, or observer revision:
 
 - The deployment task scales all three graph-client Deployments to zero.
-- It verifies their Pods are gone.
+- It verifies no running or pending graph-client Pod remains.
+- Terminal `Succeeded`, `Failed`, and `Evicted` Pod records do not block the
+  drain.
 - Their manifests use the Kubernetes `Recreate` strategy.
 
 A graph-schema rollout drains every older binary globally before any new revision
@@ -180,6 +182,10 @@ in-flight claim transaction before releasing a newly acquired lease. During Pod
 shutdown, the coordinator remains available until the worker records its
 terminal lifecycle marker or Kubernetes exhausts the Pod grace period. The
 rollout cannot strand a `RUNNING` lease under a removed Pod.
+
+After rollout, the deployment requires three consecutive samples with all four
+workers ready. A disposable worker may finish a task during verification. Its
+replacement must converge before sandbox and lifecycle checks continue.
 
 ## 3. Components and ownership
 
