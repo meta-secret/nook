@@ -225,6 +225,7 @@ test('offer browser extension install on vault home and in Devices', async ({
   ) as string[]
   expect(routedTypesAfterSettings).toEqual([
     extensionInstallDemoMessageTypes.pairedVaultIdentityDiscovery,
+    extensionInstallDemoMessageTypes.pairedVaultIdentityDiscovery,
     extensionInstallDemoMessageTypes.openCompanionLauncher,
     extensionInstallDemoMessageTypes.pairedVaultIdentityDiscovery,
   ])

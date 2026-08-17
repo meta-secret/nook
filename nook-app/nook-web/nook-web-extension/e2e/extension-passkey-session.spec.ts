@@ -27,7 +27,11 @@ import {
 import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
-import { ExtensionPairedVaultIdentityDiscoveryMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
+import {
+  ExtensionPairedVaultIdentityDiscoveryMessageType,
+  ExtensionPairedVaultIdentityStatusMessageStatus,
+  ExtensionPairedVaultIdentityStatusMessageType,
+} from '../../nook-web-shared/src/extension/runtime-messages'
 import { createLocalVaultOnLogin } from '../../nook-web-app/e2e/helpers'
 
 const chromiumExecutablePath =
@@ -354,35 +358,65 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     // A cold extension service worker can decline the first website discovery
     // while its offscreen session starts. Keep the real extension for the
     // retry, but make that first browser-runtime response unavailable.
-    await context.addInitScript((pairedVaultDiscoveryType) => {
-      const browserGlobal = globalThis as typeof globalThis & {
-        chrome?: {
-          runtime?: {
-            sendMessage?: (
-              extensionId: string,
-              message: { type?: string },
-              callback: (response?: unknown) => void,
-            ) => void
-          }
-        }
-      }
-      const runtime = browserGlobal.chrome?.runtime
-      const sendMessage = runtime?.sendMessage?.bind(runtime)
-      if (!runtime || !sendMessage) return
-      let firstDiscovery = true
-      runtime.sendMessage = (extensionId, message, callback) => {
-        if (firstDiscovery && message.type === pairedVaultDiscoveryType) {
-          firstDiscovery = false
-          document.documentElement.setAttribute(
-            'data-nook-transient-paired-discovery',
-            'observed',
-          )
-          callback()
-          return
-        }
-        sendMessage(extensionId, message, callback)
-      }
-    }, ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery)
+    await context.addInitScript(
+      (messageTypes) => {
+        const chromeValue: unknown = Reflect.get(globalThis, 'chrome')
+        if (typeof chromeValue !== 'object' || !chromeValue) return
+        const runtimeValue: unknown = Reflect.get(chromeValue, 'runtime')
+        if (typeof runtimeValue !== 'object' || !runtimeValue) return
+        const sendMessageValue: unknown = Reflect.get(
+          runtimeValue,
+          'sendMessage',
+        )
+        if (typeof sendMessageValue !== 'function') return
+        let firstDiscovery = true
+        Reflect.set(
+          runtimeValue,
+          'sendMessage',
+          (
+            extensionId: string,
+            message: {
+              type: string
+              payload: { requestId: string; vaultStoreId: string }
+            },
+            callback: (response: unknown) => void,
+          ) => {
+            if (
+              firstDiscovery &&
+              message.type === messageTypes.pairedVaultDiscovery
+            ) {
+              firstDiscovery = false
+              document.documentElement.setAttribute(
+                'data-nook-transient-paired-discovery',
+                'observed',
+              )
+              callback({
+                type: messageTypes.pairedVaultIdentityStatus,
+                payload: {
+                  requestId: message.payload.requestId,
+                  vaultStoreId: message.payload.vaultStoreId,
+                  status: messageTypes.unavailableStatus,
+                },
+              })
+              return
+            }
+            Reflect.apply(sendMessageValue, runtimeValue, [
+              extensionId,
+              message,
+              callback,
+            ])
+          },
+        )
+      },
+      {
+        pairedVaultDiscovery:
+          ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
+        pairedVaultIdentityStatus:
+          ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
+        unavailableStatus:
+          ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
+      },
+    )
 
     const reopenedVaultPagePromise = context.waitForEvent('page')
     await connectedPopupPage.getByTestId('open-simple-vault-btn').click()

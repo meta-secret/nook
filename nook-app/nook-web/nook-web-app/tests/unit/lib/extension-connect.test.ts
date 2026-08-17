@@ -28,6 +28,9 @@ import {
   isExtensionPairedVaultIdentityStatusMessage,
   isExtensionPairedVaultUnlockRequestMessage,
   isExtensionPairingApprovedMessage,
+  ExtensionPairedVaultIdentityDiscoveryMessageType,
+  ExtensionPairedVaultIdentityStatusMessageStatus,
+  ExtensionPairedVaultIdentityStatusMessageType,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
   extensionPairingGrantPolicyReady,
@@ -836,21 +839,22 @@ describe('paired extension identity discovery', () => {
           attempts += 1
           if (attempts === 1) {
             callback({
-              type: 'nook:extension-paired-vault-identity-status',
+              type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
               payload: {
                 requestId: message.payload.requestId,
                 vaultStoreId: message.payload.vaultStoreId,
-                status: 'unavailable',
+                status:
+                  ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
               },
             })
             return
           }
           callback({
-            type: 'nook:extension-paired-vault-identity-status',
+            type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
             payload: {
               requestId: message.payload.requestId,
               vaultStoreId: message.payload.vaultStoreId,
-              status: 'unlocked',
+              status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
               extensionRuntimeId: 'extension-1',
               deviceId: 'device-1',
               devicePublicKey: 'age1device',
@@ -868,9 +872,9 @@ describe('paired extension identity discovery', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     await expect(discovery).resolves.toEqual({
-      status: 'unlocked',
+      status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
       request: {
-        source: 'paired-vault',
+        source: ExtensionIdentityRequestSource.PairedVault,
         vaultStoreId: 'store-1',
         extensionRuntimeId: 'extension-1',
         deviceId: 'device-1',
