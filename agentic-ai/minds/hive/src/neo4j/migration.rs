@@ -103,30 +103,12 @@ pub(super) async fn migrate(graph: &Graph) -> crate::HiveResult<()> {
     if installed_version < 9 {
         graph
             .run(query(
-                "MATCH path =
-                       (consumer:Task)-[:DEPENDS_ON*2..]->(descendant:Task)
-                     WHERE consumer.kind <> 'blocker'
-                       AND all(
-                         intermediate IN nodes(path)[1..-1]
-                         WHERE intermediate.kind = 'blocker'
-                       )
-                     WITH consumer, descendant,
-                          max(length(path)) AS artifact_depth
-                     MERGE (consumer)-[flattened:DEPENDS_ON]->(descendant)
-                     SET flattened.artifact_depth = CASE
-                       WHEN coalesce(flattened.artifact_depth, 1) < artifact_depth
-                         THEN artifact_depth
-                       ELSE coalesce(flattened.artifact_depth, 1)
-                     END",
-            ))
-            .await
-            .hive_context("failed to flatten schema-9 blocker dependencies")?;
-        graph
-            .run(query(
-                "MATCH (blocker:Task {kind: 'blocker'})-[edge:DEPENDS_ON]->(:Task)
-                     WITH blocker, collect(edge) AS edges,
+                "MATCH (blocker:Task {kind: 'blocker'})-[edge:DEPENDS_ON]->(dependency:Task)
+                     WITH blocker, dependency, edge,
                           blocker.status AS prior_status
-                     FOREACH (edge IN edges | DELETE edge)
+                     MERGE (blocker)-[:INCLUDES_ARTIFACT_FROM]->(dependency)
+                     DELETE edge
+                     WITH DISTINCT blocker, prior_status
                      SET blocker.status = CASE
                            WHEN prior_status = 'BLOCKED' THEN 'READY'
                            ELSE prior_status
@@ -139,7 +121,7 @@ pub(super) async fn migrate(graph: &Graph) -> crate::HiveResult<()> {
                          blocker.version = coalesce(blocker.version, 0) + 1",
             ))
             .await
-            .hive_context("failed to detach schema-9 nested blocker dependencies")?;
+            .hive_context("failed to preserve and detach schema-9 blocker dependencies")?;
     }
     for statement in CONSTRAINTS {
         graph

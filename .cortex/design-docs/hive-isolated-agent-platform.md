@@ -278,9 +278,9 @@ complete. Hive then:
 - Hive records that result as a failed attempt on the leaf.
 - Hive does not create a child task.
 - The bounded retry budget completes the leaf or fails its dependent chain.
-- Schema migration 9 flattens retained descendants onto non-blocker consumers.
-- Flattened edges retain dependency depth for deterministic artifact ordering.
-- The migration then detaches every blocker-owned dependency edge.
+- Schema migration 9 converts blocker-owned dependency edges to artifact lineage.
+- Claims traverse that lineage in depth order so child patches apply first.
+- Scheduling and rearm traversal ignore artifact-lineage edges.
 - It rearms blocked parents as leaves so the bounded policy drains old chains.
 
 When the blocker completes, its Git patch becomes a dependency artifact. A

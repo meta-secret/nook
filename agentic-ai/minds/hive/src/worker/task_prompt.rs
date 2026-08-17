@@ -58,8 +58,8 @@ pub(super) fn task_prompt(task: &ClaimedTask) -> String {
          prerequisite yourself using the available repository and GitHub access. When the task \
          names a GitHub Actions run, inspect its current terminal state and failed logs; if it \
          belongs to an open repair PR, check out that existing PR branch, fix it there, push a \
-         replacement exact-head run, and follow it to a terminal result. Before doing work or \
-         reporting another blocker, inspect every active owning Main repair listed below. Only when \
+         replacement exact-head run, and follow it to a terminal result. Before concluding the \
+         prerequisite cannot be completed, inspect every active owning Main repair listed below. Only when \
          every listed repair has already been merged and has a successful Main run containing its \
          merge is this prerequisite obsolete: report completed with `obsolete` set to true, no \
          changes, and explain that it no longer blocks delivery, even when the requested capability \
@@ -75,6 +75,12 @@ pub(super) fn task_prompt(task: &ClaimedTask) -> String {
     } else {
         String::new()
     };
+    let terminal_contract = if task.kind == "blocker" {
+        ""
+    } else {
+        "\n\nThis task is not a dependency leaf. Never return the failed status. If it \
+         cannot complete, return blocked with exactly one prerequisite request."
+    };
     format!(
         "You are Hive worker attempt {} for task {}.\n\
          Work only inside the supplied repository workspace.\n\
@@ -82,14 +88,15 @@ pub(super) fn task_prompt(task: &ClaimedTask) -> String {
          Task kind: {}\n\
          Task:\n{}\n\n\
          Active owning Main repairs:\n{}\n\n\
-         Completed dependency context:\n{}{}",
+         Completed dependency context:\n{}{}{}",
         task.attempt_number,
         task.id,
         task.kind,
         task.prompt,
         owning_repairs,
         dependencies,
-        delivery
+        delivery,
+        terminal_contract
     )
 }
 

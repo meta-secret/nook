@@ -710,6 +710,7 @@ mod tests {
         assert!(prompt.contains("This task is a dependency leaf"));
         assert!(prompt.contains("this prerequisite obsolete"));
         assert!(prompt.contains("Never request another blocker"));
+        assert!(!prompt.contains("reporting another blocker"));
         assert!(prompt.contains("report failed with a precise explanation"));
         assert!(prompt.contains("`blocker.present` set to false"));
         assert!(prompt.contains("bounded failed attempt"));
@@ -751,6 +752,8 @@ mod tests {
         assert!(prompt.contains("unresolved actionable review"));
         assert!(prompt.contains("next `-gN` delivery branch"));
         assert!(prompt.contains("Do not repeatedly audit an immutable merged branch"));
+        assert!(prompt.contains("Never return the failed status"));
+        assert!(prompt.contains("exactly one prerequisite request"));
         Ok(())
     }
 

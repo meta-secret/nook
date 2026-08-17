@@ -314,17 +314,13 @@ impl TaskStore for Neo4jTaskStore {
                           [value IN collect(dependency.id) WHERE value IS NOT NULL] AS dependency_ids,
                           [value IN collect(coalesce(dependency.result_summary, '')) WHERE value IS NOT NULL] AS dependency_summaries
                      OPTIONAL MATCH dependency_path =
-                       (task)-[:DEPENDS_ON*1..]->(artifact_task:Task)
+                       (task)-[:DEPENDS_ON|INCLUDES_ARTIFACT_FROM*1..]->(artifact_task:Task)
                      OPTIONAL MATCH (artifact_task)
                        <-[:FOR_TASK]-(dependency_attempt:Attempt {status: 'COMPLETED'})
                        -[:PRODUCED]->(dependency_artifact:Artifact {kind: 'git-patch'})
                      WITH task, dependency_ids, dependency_summaries,
                           dependency_artifact,
-                          max(reduce(
-                            depth = 0,
-                            dependency_edge IN relationships(dependency_path) |
-                              depth + coalesce(dependency_edge.artifact_depth, 1)
-                          )) AS dependency_depth
+                          max(length(dependency_path)) AS dependency_depth
                      ORDER BY dependency_depth DESC, dependency_artifact.id ASC
                      WITH task, dependency_ids, dependency_summaries,
                           [value IN collect(dependency_artifact.id) WHERE value IS NOT NULL] AS artifact_ids,

@@ -1,4 +1,5 @@
 use anyhow::Context;
+use hive::model::AgentId;
 use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{Graph, query};
 
@@ -131,9 +132,10 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
              MATCH (migration:HiveSchemaMigration {version: 9})
              OPTIONAL MATCH (blocker_parent)-[nested:DEPENDS_ON]->(:Task)
              OPTIONAL MATCH (completed_parent)-[history:DEPENDS_ON]->(:Task)
-             OPTIONAL MATCH (active_consumer)-[active_flattened:DEPENDS_ON]->(blocker_child)
              OPTIONAL MATCH
-               (historical_consumer)-[history_flattened:DEPENDS_ON]->(completed_child)
+               (blocker_parent)-[active_lineage:INCLUDES_ARTIFACT_FROM]->(blocker_child)
+             OPTIONAL MATCH
+               (completed_parent)-[history_lineage:INCLUDES_ARTIFACT_FROM]->(completed_child)
              RETURN task.last_retry_release AS last_retry_release,
                     task.manual_retry_used IS NULL AS removed_legacy_marker,
                     activity_task.latest_activity_at AS latest_activity_at,
@@ -146,10 +148,8 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
                     blocker_parent.version AS blocker_version,
                     count(DISTINCT nested) AS nested_dependencies,
                     count(DISTINCT history) AS historical_dependencies,
-                    count(DISTINCT active_flattened) AS active_flattened_dependencies,
-                    max(active_flattened.artifact_depth) AS active_artifact_depth,
-                    count(DISTINCT history_flattened) AS history_flattened_dependencies,
-                    max(history_flattened.artifact_depth) AS history_artifact_depth,
+                    count(DISTINCT active_lineage) AS active_lineage_count,
+                    count(DISTINCT history_lineage) AS history_lineage_count,
                     migration.version AS version",
         ))
         .await?;
@@ -169,10 +169,8 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
     assert_eq!(migrated.get::<i64>("blocker_version")?, 5);
     assert_eq!(migrated.get::<i64>("nested_dependencies")?, 0);
     assert_eq!(migrated.get::<i64>("historical_dependencies")?, 0);
-    assert_eq!(migrated.get::<i64>("active_flattened_dependencies")?, 1);
-    assert_eq!(migrated.get::<i64>("active_artifact_depth")?, 2);
-    assert_eq!(migrated.get::<i64>("history_flattened_dependencies")?, 1);
-    assert_eq!(migrated.get::<i64>("history_artifact_depth")?, 2);
+    assert_eq!(migrated.get::<i64>("active_lineage_count")?, 1);
+    assert_eq!(migrated.get::<i64>("history_lineage_count")?, 1);
     assert_eq!(migrated.get::<i64>("version")?, 9);
     let mut rollback_rows = graph
         .execute(query(
@@ -192,5 +190,76 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
         .run(query("MATCH (node) DETACH DELETE node"))
         .await
         .context("clean schema-9 migration fixture")?;
+    graph
+        .run(query(
+            "CREATE (:HiveSchemaMigration {version: 8})
+             CREATE (consumer:Task {
+               id: 'schema-9-artifact-consumer',
+               kind: 'main-repair',
+               status: 'READY',
+               prompt: 'Apply migrated dependency artifacts',
+               source_commit: '0123456789abcdef0123456789abcdef01234567',
+               priority: 1,
+               created_at: 1,
+               attempt_count: 0,
+               max_attempts: 3,
+               version: 0
+             })
+             CREATE (parent:Task {
+               id: 'schema-9-artifact-parent',
+               kind: 'blocker',
+               status: 'COMPLETED'
+             })
+             CREATE (child:Task {
+               id: 'schema-9-artifact-child',
+               kind: 'blocker',
+               status: 'COMPLETED'
+             })
+             CREATE (consumer)-[:DEPENDS_ON]->(parent)
+             CREATE (parent)-[:DEPENDS_ON]->(child)
+             CREATE (parent_attempt:Attempt {
+               id: 'schema-9-parent-attempt',
+               status: 'COMPLETED'
+             })-[:FOR_TASK]->(parent)
+             CREATE (parent_attempt)-[:PRODUCED]->(:Artifact {
+               id: 'schema-9-parent-artifact',
+               kind: 'git-patch',
+               uri: 'hive://artifact/schema-9-parent-artifact',
+               digest: 'sha256:parent',
+               content: 'parent patch'
+             })
+             CREATE (child_attempt:Attempt {
+               id: 'schema-9-child-attempt',
+               status: 'COMPLETED'
+             })-[:FOR_TASK]->(child)
+             CREATE (child_attempt)-[:PRODUCED]->(:Artifact {
+               id: 'schema-9-child-artifact',
+               kind: 'git-patch',
+               uri: 'hive://artifact/schema-9-child-artifact',
+               digest: 'sha256:child',
+               content: 'child patch'
+             })",
+        ))
+        .await
+        .context("create schema-9 artifact lineage fixture")?;
+    store.migrate().await?;
+    let agent = AgentId::new("schema-9-artifact-agent")?;
+    store
+        .register_agent(&agent, "schema-9-artifact-pod")
+        .await?;
+    let claimed = store.claim(&agent, 300).await?.into_claimed()?;
+    assert_eq!(claimed.id.as_str(), "schema-9-artifact-consumer");
+    assert_eq!(
+        claimed
+            .dependency_artifacts
+            .iter()
+            .map(|artifact| artifact.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["schema-9-child-artifact", "schema-9-parent-artifact"]
+    );
+    graph
+        .run(query("MATCH (node) DETACH DELETE node"))
+        .await
+        .context("clean schema-9 artifact lineage fixture")?;
     Ok(())
 }

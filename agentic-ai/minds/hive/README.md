@@ -155,11 +155,12 @@ task's newest activity timestamp so bounded overview polling does not aggregate
 the retained activity graph. Version 8 initializes the explicit `obsolete`
 retirement marker on every `Task` and `Attempt`; new writes always persist the
 boolean so obsolete dependency revival is durable and queryable. Version 9
-flattens blocker-chain descendants directly onto each non-blocker consumer.
-The flattened relationships retain their prior dependency depth so child
-artifacts apply before parent artifacts. It then detaches every blocker-owned
-dependency edge and rearms blocked parents as `READY` dependency leaves. That
-also prevents an obsolete completed blocker from restoring a nested chain.
+converts blocker-owned `DEPENDS_ON` edges to `INCLUDES_ARTIFACT_FROM` lineage.
+Claims traverse that non-scheduling lineage in depth order so child artifacts
+apply before parent artifacts, including when a completed blocker is reused by
+a future consumer. Scheduling and rearm traversal ignore the lineage. Blocked
+parents become `READY` dependency leaves, and obsolete completed blockers cannot
+restore nested scheduling chains.
 
 To roll version 9 back to a version-8 binary, first stop every Hive worker,
 coordinator, observer, and dispatcher and back up the Neo4j data volume. The
@@ -173,9 +174,10 @@ WHERE task.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
 RETURN count(task)
 ```
 
-Only after the queue is drained may an operator delete the version-9
-`HiveSchemaMigration` node and start a version-8 binary. Do not delete the
-version-9 marker while any active task remains.
+Only after the queue is drained may an operator delete
+`INCLUDES_ARTIFACT_FROM` relationships, delete the version-9
+`HiveSchemaMigration` node, and start a version-8 binary. Do not delete the
+lineage or version-9 marker while any active task remains.
 
 To roll version 8 back to a version-7 binary, first stop every Hive worker,
 coordinator, observer, and dispatcher and back up the Neo4j data volume. Delete
