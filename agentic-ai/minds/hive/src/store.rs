@@ -589,6 +589,11 @@ mod tests {
             _reason: &str,
         ) -> crate::HiveResult<bool> {
             blocker.validate()?;
+            if claimed.kind == "blocker" {
+                return Err(crate::error::HiveError::message(
+                    "a blocker task cannot create another blocking dependency",
+                ));
+            }
             let mut tasks = self.tasks.lock().map_err(|_| {
                 crate::error::HiveError::message("shared test state mutex was poisoned")
             })?;

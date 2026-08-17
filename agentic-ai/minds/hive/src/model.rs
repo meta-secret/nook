@@ -17,6 +17,8 @@ pub enum ModelError {
     InvalidMaxAttempts,
     #[error("a task cannot depend on itself")]
     SelfDependency,
+    #[error("a blocker task cannot depend on another task")]
+    BlockerWithDependencies,
     #[error("terminal result summary must not be empty")]
     EmptyTerminalSummary,
     #[error("terminal result changed_files entries must not be empty")]
@@ -25,6 +27,8 @@ pub enum ModelError {
     EmptyTerminalTest,
     #[error("a completed terminal result must not report a blocker")]
     CompletedWithBlocker,
+    #[error("a failed terminal result must not report a blocker")]
+    FailedWithBlocker,
     #[error("an absent blocker must have empty id, title, and prompt")]
     AbsentBlockerHasDetails,
     #[error("a blocked terminal result must report a blocker")]
@@ -35,6 +39,8 @@ pub enum ModelError {
     EmptyBlockerPrompt,
     #[error("a blocked terminal result cannot retire an obsolete prerequisite")]
     BlockedObsolete,
+    #[error("a failed terminal result cannot retire an obsolete prerequisite")]
+    FailedObsolete,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -305,6 +311,9 @@ impl EnqueueTask {
         {
             return Err(ModelError::SelfDependency);
         }
+        if self.kind == "blocker" && !self.dependencies.is_empty() {
+            return Err(ModelError::BlockerWithDependencies);
+        }
         Ok(())
     }
 }
@@ -330,6 +339,11 @@ pub enum TerminalResult {
         tests: Vec<String>,
         blocker: BlockerRequest,
     },
+    Failed {
+        summary: String,
+        changed_files: Vec<String>,
+        tests: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -337,6 +351,7 @@ pub enum TerminalResult {
 enum WireTerminalStatus {
     Completed,
     Blocked,
+    Failed,
 }
 
 #[derive(Debug, Deserialize)]
@@ -421,6 +436,23 @@ impl TryFrom<WireTerminalResult> for TerminalResult {
                     },
                 })
             }
+            WireTerminalStatus::Failed => {
+                if obsolete {
+                    return Err(ModelError::FailedObsolete);
+                }
+                if blocker.present {
+                    return Err(ModelError::FailedWithBlocker);
+                }
+                if !blocker.id.is_empty() || !blocker.title.is_empty() || !blocker.prompt.is_empty()
+                {
+                    return Err(ModelError::AbsentBlockerHasDetails);
+                }
+                Ok(Self::Failed {
+                    summary,
+                    changed_files,
+                    tests,
+                })
+            }
         }
     }
 }
@@ -438,21 +470,25 @@ impl<'de> Deserialize<'de> for TerminalResult {
 impl TerminalResult {
     pub fn summary(&self) -> &str {
         match self {
-            Self::Completed { summary, .. } | Self::Blocked { summary, .. } => summary,
+            Self::Completed { summary, .. }
+            | Self::Blocked { summary, .. }
+            | Self::Failed { summary, .. } => summary,
         }
     }
 
     pub fn changed_files(&self) -> &[String] {
         match self {
-            Self::Completed { changed_files, .. } | Self::Blocked { changed_files, .. } => {
-                changed_files
-            }
+            Self::Completed { changed_files, .. }
+            | Self::Blocked { changed_files, .. }
+            | Self::Failed { changed_files, .. } => changed_files,
         }
     }
 
     pub fn tests(&self) -> &[String] {
         match self {
-            Self::Completed { tests, .. } | Self::Blocked { tests, .. } => tests,
+            Self::Completed { tests, .. }
+            | Self::Blocked { tests, .. }
+            | Self::Failed { tests, .. } => tests,
         }
     }
 
@@ -460,7 +496,7 @@ impl TerminalResult {
     pub const fn is_obsolete(&self) -> bool {
         match self {
             Self::Completed { obsolete, .. } => *obsolete,
-            Self::Blocked { .. } => false,
+            Self::Blocked { .. } | Self::Failed { .. } => false,
         }
     }
 }
@@ -488,6 +524,23 @@ mod tests {
     }
 
     #[test]
+    fn enqueue_rejects_blocker_dependency() -> crate::HiveResult<()> {
+        let task = EnqueueTask {
+            id: TaskId::new("blocker-2")?,
+            kind: "blocker".to_owned(),
+            trigger: TaskTrigger::ManualCli,
+            prompt: "Resolve the prerequisite".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            priority: 200,
+            max_attempts: 3,
+            dependencies: vec![TaskId::new("blocker-1")?],
+        };
+
+        assert_eq!(task.validate(), Err(ModelError::BlockerWithDependencies));
+        Ok(())
+    }
+
+    #[test]
     fn terminal_result_validates_wire_status_and_blocker_state() -> crate::HiveResult<()> {
         let completed = serde_json::json!({
             "status": "completed",
@@ -505,6 +558,24 @@ mod tests {
         assert!(matches!(
             serde_json::from_value::<TerminalResult>(completed)?,
             TerminalResult::Completed { .. }
+        ));
+
+        let failed_leaf = serde_json::json!({
+            "status": "failed",
+            "summary": "Required authority is unavailable",
+            "changed_files": [],
+            "tests": ["inspected configured credentials"],
+            "obsolete": false,
+            "blocker": {
+                "present": false,
+                "id": "",
+                "title": "",
+                "prompt": ""
+            }
+        });
+        assert!(matches!(
+            serde_json::from_value::<TerminalResult>(failed_leaf)?,
+            TerminalResult::Failed { .. }
         ));
 
         let completed_with_blocker = serde_json::json!({

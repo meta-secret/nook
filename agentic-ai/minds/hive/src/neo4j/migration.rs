@@ -10,7 +10,7 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
     "CREATE INDEX hive_activity_timeline IF NOT EXISTS FOR (node:TaskActivity) ON (node.created_at)",
 ];
-const LATEST_SCHEMA_VERSION: i64 = 8;
+const LATEST_SCHEMA_VERSION: i64 = 9;
 
 pub(super) async fn migrate(graph: &Graph) -> crate::HiveResult<()> {
     let mut rows = graph
@@ -99,6 +99,38 @@ pub(super) async fn migrate(graph: &Graph) -> crate::HiveResult<()> {
             ))
             .await
             .hive_context("failed to backfill schema-8 attempt retirement state")?;
+    }
+    if installed_version < 9 {
+        graph
+            .run(query(
+                "MATCH (blocker:Task {kind: 'blocker'})-[edge:DEPENDS_ON]->(dependency:Task)
+                     WHERE dependency.status = 'COMPLETED'
+                     WITH blocker, dependency, edge,
+                          blocker.status AS prior_status
+                     MERGE (blocker)-[:INCLUDES_ARTIFACT_FROM]->(dependency)
+                     DELETE edge
+                     WITH DISTINCT blocker, prior_status
+                     SET blocker.status = CASE
+                           WHEN prior_status = 'BLOCKED'
+                             AND NOT EXISTS {
+                               MATCH (blocker)-[:DEPENDS_ON]->(:Task)
+                             }
+                             THEN 'READY'
+                           ELSE prior_status
+                         END,
+                         blocker.blocked_reason = CASE
+                           WHEN prior_status = 'BLOCKED'
+                             AND NOT EXISTS {
+                               MATCH (blocker)-[:DEPENDS_ON]->(:Task)
+                             }
+                             THEN null
+                           ELSE blocker.blocked_reason
+                         END,
+                         blocker.updated_at = timestamp(),
+                         blocker.version = coalesce(blocker.version, 0) + 1",
+            ))
+            .await
+            .hive_context("failed to preserve and detach schema-9 blocker dependencies")?;
     }
     for statement in CONSTRAINTS {
         graph
