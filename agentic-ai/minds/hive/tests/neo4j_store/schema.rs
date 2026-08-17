@@ -83,7 +83,20 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
                status: 'READY',
                source_commit: '0123456789abcdef0123456789abcdef01234567'
              })
-             CREATE (blocker_parent)-[:DEPENDS_ON]->(blocker_child)",
+             CREATE (blocker_parent)-[:DEPENDS_ON]->(blocker_child)
+             CREATE (completed_parent:Task {
+               id: 'schema-8-completed-blocker-parent',
+               kind: 'blocker',
+               status: 'COMPLETED',
+               source_commit: '0123456789abcdef0123456789abcdef01234567'
+             })
+             CREATE (completed_child:Task {
+               id: 'schema-8-completed-blocker-child',
+               kind: 'blocker',
+               status: 'COMPLETED',
+               source_commit: '0123456789abcdef0123456789abcdef01234567'
+             })
+             CREATE (completed_parent)-[:DEPENDS_ON]->(completed_child)",
         ))
         .await
         .context("create schema-3 fixture")?;
@@ -96,8 +109,10 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
              MATCH (retired:Task {id: 'schema-7-retired-task'})
              MATCH (retired_attempt:Attempt {id: 'schema-7-retired-attempt'})
              MATCH (blocker_parent:Task {id: 'schema-8-blocker-parent'})
+             MATCH (completed_parent:Task {id: 'schema-8-completed-blocker-parent'})
              MATCH (migration:HiveSchemaMigration {version: 9})
              OPTIONAL MATCH (blocker_parent)-[nested:DEPENDS_ON]->(:Task)
+             OPTIONAL MATCH (completed_parent)-[history:DEPENDS_ON]->(:Task)
              RETURN task.last_retry_release AS last_retry_release,
                     task.manual_retry_used IS NULL AS removed_legacy_marker,
                     activity_task.latest_activity_at AS latest_activity_at,
@@ -108,7 +123,8 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
                     blocker_parent.status AS blocker_status,
                     blocker_parent.blocked_reason IS NULL AS blocker_reason_removed,
                     blocker_parent.version AS blocker_version,
-                    count(nested) AS nested_dependencies,
+                    count(DISTINCT nested) AS nested_dependencies,
+                    count(DISTINCT history) AS historical_dependencies,
                     migration.version AS version",
         ))
         .await?;
@@ -127,6 +143,7 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
     assert!(migrated.get::<bool>("blocker_reason_removed")?);
     assert_eq!(migrated.get::<i64>("blocker_version")?, 5);
     assert_eq!(migrated.get::<i64>("nested_dependencies")?, 0);
+    assert_eq!(migrated.get::<i64>("historical_dependencies")?, 1);
     assert_eq!(migrated.get::<i64>("version")?, 9);
     let mut rollback_rows = graph
         .execute(query(

@@ -136,7 +136,7 @@ view, while `task infra:hive:diagnose` includes bounded observer logs.
 
 ## Graph schema
 
-Hive graph schema version `8` retains unique constraints for `Task`, `Agent`,
+Hive graph schema version `9` retains unique constraints for `Task`, `Agent`,
 `Attempt`, and `Artifact`, adds `TaskActivity` identity and timeline indexes,
 and retains the task-claim index. Migration records are
 stored as `(:HiveSchemaMigration {version, applied_at})`. A worker refuses to
@@ -154,7 +154,26 @@ Hive image digest and atomically rearming failed blocker dependencies. Version
 task's newest activity timestamp so bounded overview polling does not aggregate
 the retained activity graph. Version 8 initializes the explicit `obsolete`
 retirement marker on every `Task` and `Attempt`; new writes always persist the
-boolean so obsolete dependency revival is durable and queryable.
+boolean so obsolete dependency revival is durable and queryable. Version 9
+detaches dependency edges owned by active blocker tasks and rearms blocked
+parents as `READY` dependency leaves. It retains completed blocker edges so
+their transitive artifact order remains available to unfinished consumers.
+
+To roll version 9 back to a version-8 binary, first stop every Hive worker,
+coordinator, observer, and dispatcher and back up the Neo4j data volume. The
+removed active dependency edges cannot be reconstructed from the migrated
+graph. Either restore the pre-version-9 backup, or drain the entire active queue
+with schema-9 Hive until this query returns zero:
+
+```cypher
+MATCH (task:Task)
+WHERE task.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
+RETURN count(task)
+```
+
+Only after the queue is drained may an operator delete the version-9
+`HiveSchemaMigration` node and start a version-8 binary. Do not delete the
+version-9 marker while any active task remains.
 
 To roll version 8 back to a version-7 binary, first stop every Hive worker,
 coordinator, observer, and dispatcher and back up the Neo4j data volume. Delete

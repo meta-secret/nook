@@ -268,6 +268,16 @@ impl<S: TaskStore> Worker<S> {
                     {
                         return Ok(blocked_disposition(task, summary, blocker));
                     }
+                    if let TerminalResult::Failed { summary, .. } = &result {
+                        if task.kind != "blocker" {
+                            return Err(crate::error::HiveError::message(
+                                "only a blocker dependency leaf may return failed",
+                            ));
+                        }
+                        return Ok(TaskDisposition::Failed {
+                            reason: bounded(summary),
+                        });
+                    }
                     let obsolete = completion_is_obsolete(task, &result);
                     if obsolete {
                         if task.owning_repairs.is_empty() {
@@ -700,6 +710,8 @@ mod tests {
         assert!(prompt.contains("This task is a dependency leaf"));
         assert!(prompt.contains("this prerequisite obsolete"));
         assert!(prompt.contains("Never request another blocker"));
+        assert!(prompt.contains("report failed with a precise explanation"));
+        assert!(prompt.contains("`blocker.present` set to false"));
         assert!(prompt.contains("bounded failed attempt"));
         assert!(prompt.contains("main-failure-abc-run-42-attempt-1"));
         assert!(prompt.contains("codex/hive-main-failure-abc-run-42-attempt-1"));

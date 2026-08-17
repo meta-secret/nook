@@ -104,6 +104,7 @@ pub(super) async fn migrate(graph: &Graph) -> crate::HiveResult<()> {
         graph
             .run(query(
                 "MATCH (blocker:Task {kind: 'blocker'})-[edge:DEPENDS_ON]->(:Task)
+                     WHERE blocker.status IN ['READY', 'RUNNING', 'BLOCKED']
                      WITH blocker, collect(edge) AS edges,
                           blocker.status AS prior_status
                      FOREACH (edge IN edges | DELETE edge)

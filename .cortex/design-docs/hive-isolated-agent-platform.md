@@ -274,11 +274,13 @@ complete. Hive then:
 - Only a non-blocker task may create a dependency.
 - A blocker task is a dependency leaf.
 - It must use the authority and tools already supplied.
-- A nested blocker result becomes a failed attempt on the leaf.
+- A dependency leaf may return an explicit failed terminal result.
+- Hive records that result as a failed attempt on the leaf.
 - Hive does not create a child task.
 - The bounded retry budget completes the leaf or fails its dependent chain.
-- Schema migration 9 detaches retained blocker-owned dependency edges.
+- Schema migration 9 detaches retained active blocker-owned dependency edges.
 - It rearms blocked parents as leaves so the bounded policy drains old chains.
+- Completed historical chains retain their edges and artifact ordering.
 
 When the blocker completes, its Git patch becomes a dependency artifact. A
 replacement worker verifies the artifact digest, applies it to the same pinned
