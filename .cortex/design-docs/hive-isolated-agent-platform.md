@@ -205,6 +205,7 @@ The graph contains:
 
 ```text
 (:Task)-[:DEPENDS_ON]->(:Task)
+(:Task)-[:INCLUDES_ARTIFACT_FROM]->(:Task)
 (:Agent)-[:EXECUTED]->(:Attempt)-[:FOR_TASK]->(:Task)
 (:Attempt)-[:PRODUCED]->(:Artifact)
 (:TaskActivity)-[:FOR_TASK]->(:Task)
@@ -894,6 +895,7 @@ global ruleset.
 | Concern | Source of truth |
 | --- | --- |
 | Rust platform implementation | [`agentic-ai/minds/hive/src/`](../../agentic-ai/minds/hive/src/) |
+| Task dependencies and artifact lineage | [`neo4j.rs`](../../agentic-ai/minds/hive/src/neo4j.rs) and [`migration.rs`](../../agentic-ai/minds/hive/src/neo4j/migration.rs) |
 | Worker image and cache stages | [`agentic-ai/minds/hive/Dockerfile`](../../agentic-ai/minds/hive/Dockerfile) |
 | Hive developer commands | [`agentic-ai/minds/hive/Taskfile.yml`](../../agentic-ai/minds/hive/Taskfile.yml) |
 | Infrastructure command composition | [`infra/Taskfile.yml`](../../infra/Taskfile.yml) |

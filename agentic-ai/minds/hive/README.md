@@ -164,21 +164,11 @@ artifacts, including when a completed blocker is reused by a future consumer.
 Scheduling and rearm traversal ignore the lineage.
 
 To roll version 9 back to a version-8 binary, first stop every Hive worker,
-coordinator, observer, and dispatcher and back up the Neo4j data volume. The
-removed blocker-owned dependency edges cannot be reconstructed from the migrated
-graph. Either restore the pre-version-9 backup, or drain the entire active queue
-with schema-9 Hive until this query returns zero:
-
-```cypher
-MATCH (task:Task)
-WHERE task.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
-RETURN count(task)
-```
-
-Only after the queue is drained may an operator delete
-`INCLUDES_ARTIFACT_FROM` relationships, delete the version-9
-`HiveSchemaMigration` node, and start a version-8 binary. Do not delete the
-lineage or version-9 marker while any active task remains.
+coordinator, observer, and dispatcher. Restore the pre-version-9 Neo4j data
+volume backup before starting a version-8 binary. Draining tasks and deleting
+`INCLUDES_ARTIFACT_FROM` is not a safe rollback because completed blockers may
+be reused later and require that lineage. If the pre-migration backup is
+unavailable, remain on schema 9; do not delete the lineage or version marker.
 
 To roll version 8 back to a version-7 binary, first stop every Hive worker,
 coordinator, observer, and dispatcher and back up the Neo4j data volume. Delete

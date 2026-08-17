@@ -309,7 +309,8 @@ impl TaskStore for Neo4jTaskStore {
                          MATCH (task)-[:DEPENDS_ON]->(dependency:Task)
                          WHERE dependency.status <> 'COMPLETED'
                        }
-                     OPTIONAL MATCH (task)-[:DEPENDS_ON]->(dependency:Task)
+                     OPTIONAL MATCH
+                       (task)-[:DEPENDS_ON|INCLUDES_ARTIFACT_FROM]->(dependency:Task)
                      WITH task,
                           [value IN collect(dependency.id) WHERE value IS NOT NULL] AS dependency_ids,
                           [value IN collect(coalesce(dependency.result_summary, '')) WHERE value IS NOT NULL] AS dependency_summaries

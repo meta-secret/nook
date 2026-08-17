@@ -1,5 +1,5 @@
 use anyhow::Context;
-use hive::model::AgentId;
+use hive::model::{AgentId, Artifact, CompletionArtifact};
 use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{Graph, query};
 
@@ -261,5 +261,99 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
         .run(query("MATCH (node) DETACH DELETE node"))
         .await
         .context("clean schema-9 artifact lineage fixture")?;
+    graph
+        .run(query(
+            "CREATE (:HiveSchemaMigration {version: 8})
+             CREATE (parent:Task {
+               id: 'schema-9-active-parent',
+               kind: 'blocker',
+               status: 'BLOCKED',
+               prompt: 'Finish after the active child',
+               source_commit: '0123456789abcdef0123456789abcdef01234567',
+               priority: 1,
+               created_at: 2,
+               attempt_count: 0,
+               max_attempts: 3,
+               version: 0
+             })
+             CREATE (child:Task {
+               id: 'schema-9-active-child',
+               kind: 'blocker',
+               status: 'READY',
+               prompt: 'Complete the retained child repair',
+               source_commit: '0123456789abcdef0123456789abcdef01234567',
+               priority: 2,
+               created_at: 1,
+               attempt_count: 0,
+               max_attempts: 3,
+               version: 0
+             })
+             CREATE (parent)-[:DEPENDS_ON]->(child)",
+        ))
+        .await
+        .context("create schema-9 active child fixture")?;
+    store.migrate().await?;
+    let active_agent = AgentId::new("schema-9-active-agent")?;
+    store
+        .register_agent(&active_agent, "schema-9-active-pod")
+        .await?;
+    let child = store.claim(&active_agent, 300).await?.into_claimed()?;
+    assert_eq!(child.id.as_str(), "schema-9-active-child");
+    let child_artifact = CompletionArtifact::Produced(Artifact {
+        id: "schema-9-active-child-artifact".to_owned(),
+        kind: "git-patch".to_owned(),
+        uri: "hive://artifact/schema-9-active-child-artifact".to_owned(),
+        digest: "sha256:active-child".to_owned(),
+        content: "active child patch".to_owned(),
+    });
+    assert!(
+        store
+            .complete(
+                &child,
+                &active_agent,
+                false,
+                "active child repair completed",
+                &child_artifact,
+            )
+            .await?
+    );
+    let mut transition_rows = graph
+        .execute(query(
+            "MATCH (parent:Task {id: 'schema-9-active-parent'})
+             MATCH (child:Task {id: 'schema-9-active-child'})
+             OPTIONAL MATCH (parent)-[dependency:DEPENDS_ON]->(child)
+             OPTIONAL MATCH (parent)-[lineage:INCLUDES_ARTIFACT_FROM]->(child)
+             RETURN parent.status AS parent_status,
+                    count(DISTINCT dependency) AS dependencies,
+                    count(DISTINCT lineage) AS lineage",
+        ))
+        .await?;
+    let transitioned = transition_rows
+        .next()
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("active child transition row was missing"))?;
+    assert_eq!(transitioned.get::<String>("parent_status")?, "READY");
+    assert_eq!(transitioned.get::<i64>("dependencies")?, 0);
+    assert_eq!(transitioned.get::<i64>("lineage")?, 1);
+    let parent = store.claim(&active_agent, 300).await?.into_claimed()?;
+    assert_eq!(parent.id.as_str(), "schema-9-active-parent");
+    assert_eq!(parent.dependency_context.len(), 1);
+    assert_eq!(
+        parent.dependency_context[0].id.as_str(),
+        "schema-9-active-child"
+    );
+    assert_eq!(
+        parent.dependency_context[0].summary.as_str(),
+        "active child repair completed"
+    );
+    assert_eq!(parent.dependency_artifacts.len(), 1);
+    assert_eq!(
+        parent.dependency_artifacts[0].id.as_str(),
+        "schema-9-active-child-artifact"
+    );
+    graph
+        .run(query("MATCH (node) DETACH DELETE node"))
+        .await
+        .context("clean schema-9 active child fixture")?;
     Ok(())
 }
