@@ -518,23 +518,20 @@
       discovery.status ===
       ExtensionPairedVaultIdentityStatusMessageStatus.Locked
     ) {
-      window.setTimeout(() => {
-        if (
-          !vault.isAuthenticated &&
-          ((vault.activeVault.kind === ActiveVaultKind.Open &&
-            vault.activeVault.storeId === storeId) ||
-            discoveringStagedImport) &&
-          extensionDiscoveryStoreId === storeId
-        ) {
-          extensionDiscoveryStoreId = ''
-        }
-      }, EXTENSION_LOCKED_RETRY_MS)
+      schedulePairedExtensionDiscoveryRetry({
+        storeId,
+        discoveringStagedImport,
+      })
       return ExtensionPairedVaultIdentityStatusMessageStatus.Locked
     }
     if (
       discovery.status !==
       ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
     ) {
+      schedulePairedExtensionDiscoveryRetry({
+        storeId,
+        discoveringStagedImport,
+      })
       return ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
     }
     extensionIdentityRequestState = {
@@ -543,6 +540,26 @@
     }
     await handleUnlock(true)
     return ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
+  }
+
+  function schedulePairedExtensionDiscoveryRetry({
+    storeId,
+    discoveringStagedImport,
+  }: {
+    storeId: string
+    discoveringStagedImport: boolean
+  }) {
+    window.setTimeout(() => {
+      if (
+        !vault.isAuthenticated &&
+        ((vault.activeVault.kind === ActiveVaultKind.Open &&
+          vault.activeVault.storeId === storeId) ||
+          discoveringStagedImport) &&
+        extensionDiscoveryStoreId === storeId
+      ) {
+        extensionDiscoveryStoreId = ''
+      }
+    }, EXTENSION_LOCKED_RETRY_MS)
   }
 
   async function handleCreateDeviceVault(label: string) {
