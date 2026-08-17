@@ -1,86 +1,5 @@
 # SLIP-0039 Device Quorum Recovery
 
-## Relationships
-
-- [Nook System Architecture Specification](../ARCHITECTURE.md)
-  - Defines system-wide package ownership, dependency flow, storage, and execution boundaries.
-  - Read before changing a durable cross-component boundary.
-- [Sentinel Genesis and Reverse Onboarding](../design-docs/sentinel-genesis.md)
-  - Defines Sentinel genesis material and recovery-related trust boundaries.
-  - Read before changing the related architecture or security boundary.
-- [Multi-Device Decentralized Auth Specification](decentralized-auth.md)
-  - Defines multi-device keys, enrollment, approval, revocation, and vault authorization.
-  - Read when this document touches the related product behavior or user flow.
-- [Password Unlock & QR-Based Device Join](password-envelope.md)
-  - Defines password-wrapped vault keys and the one-step device-join envelope.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
-  - Apply throughout implementation and review.
-
-## Document map
-
-- [Overview](#overview)
-  - Status: Draft design for #260.
-  - Read first to understand the scope and intent of Overview.
-- [1. Goals](#1-goals)
-  - Defines fixed two-of-three device recovery.
-  - Read first to understand the scope and intent of 1. Goals.
-- [2. Fixed Policy](#2-fixed-policy)
-  - Fixes the SLIP-0039 policy shape.
-  - Read before changing or relying on 2. Fixed Policy.
-- [3. Recovered Material](#3-recovered-material)
-  - Reconstructs a recovery root instead of `secrets_key` or `members_key`.
-  - Read before changing or relying on 3. Recovered Material.
-- [4. Device Roles](#4-device-roles)
-  - Device A is locked, new, or otherwise unable to recover through its own local device key.
-  - Read before changing or relying on 4. Device Roles.
-  - [4.1 Device A - requester](#41-device-a---requester)
-    - Device A is locked, new, or otherwise unable to recover through its own local device key.
-    - Read before changing or relying on 4.1 Device A - requester.
-  - [4.2 Device B - helper](#42-device-b---helper)
-    - Device B is already an enrolled device that has a protected local recovery share.
-    - Read before changing or relying on 4.2 Device B - helper.
-- [5. QR Payloads](#5-qr-payloads)
-  - Payloads are versioned typed records owned by Rust/WASM.
-  - Read before changing the persisted or wire representation in 5. QR Payloads.
-  - [5.1 Request payload](#51-request-payload)
-    - Defines the typed recovery request.
-    - Read before changing the persisted or wire representation in 5.1 Request payload.
-  - [5.2 Response payload](#52-response-payload)
-    - Defines the signed helper response.
-    - Read before changing the persisted or wire representation in 5.2 Response payload.
-- [6. Storage Model](#6-storage-model)
-  - Separates synced recovery metadata from the direct exchange.
-  - Read before changing the persisted or wire representation in 6. Storage Model.
-  - [Synced vault metadata](#synced-vault-metadata)
-    - Defines the recovery data allowed in vault sync.
-    - Read before changing or relying on Synced vault metadata.
-  - [Local device storage](#local-device-storage)
-    - Each enrolled helper device stores only its own SLIP-0039 member share, sealed behind local device protection.
-    - Read before changing the persisted or wire representation in Local device storage.
-  - [Session memory](#session-memory)
-    - Device A's recovery session is a WASM session object.
-    - Read before changing or relying on Session memory.
-- [7. Rust Implementation Decision](#7-rust-implementation-decision)
-  - Records the Nook-owned Rust implementation decision.
-  - Read before changing or relying on 7. Rust Implementation Decision.
-  - [Candidate audit](#candidate-audit)
-    - Records the dependency-candidate audit.
-    - Read before changing or relying on Candidate audit.
-  - [Current SLIP-0039 requirements to implement](#current-slip-0039-requirements-to-implement)
-    - Defines required SLIP-0039 compatibility behavior.
-    - Read before changing the user-facing behavior in Current SLIP-0039 requirements to implement.
-- [8. Test Vector Requirements](#8-test-vector-requirements)
-  - Defines required upstream vector coverage.
-  - Use when adding or validating coverage for 8. Test Vector Requirements.
-- [9. Security Checklist](#9-security-checklist)
-  - Defines the recovery security invariants.
-  - Read before changing the security or key boundary described by 9. Security Checklist.
-- [10. Implementation Sequence](#10-implementation-sequence)
-  - Orders the focused recovery implementation issues.
-  - Read before changing or relying on 10. Implementation Sequence.
-
 ## Overview
 
 - **Status:** Draft design for #260, split across issues #261 through #265.
@@ -538,3 +457,4 @@ Every implementation PR in #261 through #265 must preserve these invariants:
 
 Do not start with UI. The UI must consume typed WASM states from the auth-owned
 model so the recovery protocol does not drift into TypeScript.
+

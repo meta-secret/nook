@@ -1,41 +1,5 @@
 # Secret Store Identity
 
-## Relationships
-
-- [Nook Password Manager Specification](../product-specs/password-manager.md)
-  - Defines the password-manager product behavior this design supports.
-  - Read when architecture choices affect user-visible vault behavior.
-- [Auth Providers, Sync, and Login UX](auth-providers.md)
-  - Defines provider storage, login, and onboarding behavior.
-  - Read when changing authentication or provider connection flows.
-- [Unified Vault Architecture](unified-vault.md)
-  - Defines the local canonical vault and provider fan-out model.
-  - Read when changing vault storage or synchronization ownership.
-- [Vault Session, Lock, and Multi-Vault Model](vault-session-and-lock.md)
-  - Defines unlock sessions, lock semantics, and multi-vault state.
-  - Read when the design affects in-memory vault access.
-
-## Document map
-
-- [Overview](#overview)
-  - How Nook names and distinguishes logical secret stores (vault database files) from storage providers (where those files live).
-  - Read before changing or relying on Overview.
-- [1. Problem](#1-problem)
-  - A user may connect several storage providers (local IndexedDB, GitHub repo A, GitHub repo B, Google Drive, …).
-  - Read before changing or relying on Problem.
-- [2. Prefixed on-disk ids](#2-prefixed-on-disk-ids)
-  - Nook uses typed string prefixes so ids are self-describing in YAML and.
-  - Read before changing or relying on Prefixed on-disk ids.
-- [3. Multi-provider replication (one vault)](#3-multi-provider-replication-one-vault)
-  - Architecture: unified-vault.md — local cache + sync replicas; vault-session-and-lock.md — vault vs provider.
-  - Read before changing or relying on Multi-provider replication (one vault).
-- [4. key_{digest} vs shortening pk_id](#4-key_digest-vs-shortening-pk_id)
-  - The 64-hex digest is kept — only the key_ prefix is added for type clarity.
-  - Read before changing or relying on key{digest} vs shortening pkid.
-- [5. Implementation status](#5-implementation-status)
-  - Summarizes the structured entries, ownership, and status for Implementation status.
-  - Read when assessing which identity changes remain incomplete.
-
 ## Overview
 
 How Nook names and distinguishes **logical secret stores** (vault database files) from **storage providers** (where those files live).
@@ -144,3 +108,4 @@ The **64-hex digest is kept** — only the **`key_` prefix** is added for type c
 | Event-log causal heads | Implemented |
 
 Implementation: `nook-app/nook-platform/nook-core/src/vault/vault_ids.rs`.
+

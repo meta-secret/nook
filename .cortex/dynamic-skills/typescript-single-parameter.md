@@ -1,38 +1,5 @@
 # TypeScript Single Parameter
 
-## Relationships
-
-- [Cortex document navigation](cortex-document-map.md)
-  - Defines the mandatory relationship and internal-map structure.
-  - Apply whenever this skill card changes.
-- [Cortex writer](cortex-writer.md)
-  - Keeps the card and its navigation summaries concise.
-  - Apply while editing or reviewing this guidance.
-- [Cortex consistency](cortex-consistency.md)
-  - Requires the card to agree with related guidance and current code.
-  - Apply when rules, paths, commands, or examples change.
-
-## Document map
-
-- [Purpose](#purpose)
-  - Explains why the skill exists and what invariant it protects.
-  - Read first to decide whether the skill applies.
-- [Scope](#scope)
-  - Sets the applicable paths and explicit boundaries.
-  - Read before expanding the task.
-- [Problem Pattern](#problem-pattern)
-  - Identifies the recurring rejected pattern and its warning signs.
-  - Read while locating or reviewing violations.
-- [Preferred Pattern](#preferred-pattern)
-  - Defines the required structure or behavior.
-  - Read before implementing a correction.
-- [Enforcement](#enforcement)
-  - Explains the mechanical guard that protects the rule.
-  - Read when changing checks or handling a failure.
-- [Review checklist](#review-checklist)
-  - Lists the peer checks that prove a compliant API shape.
-  - Use during implementation and review.
-
 ## Purpose
 
 Authored TypeScript functions and methods may take at most one parameter.
@@ -124,3 +91,4 @@ bun run --cwd agentic-ai/loom lint
 - [ ] Every object-shaped parameter refers to a named semantic contract.
 - [ ] Any host-callback exception is local and explains the host contract.
 - [ ] The applicable Loom or web lint task stays green.
+

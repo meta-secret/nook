@@ -1,86 +1,5 @@
 # Password Unlock & QR-Based Device Join
 
-## Relationships
-
-- [Nook System Architecture Specification](../ARCHITECTURE.md)
-  - Defines system-wide package ownership, dependency flow, storage, and execution boundaries.
-  - Read before changing a durable cross-component boundary.
-- [Auth Providers, Sync, and Login UX](../design-docs/auth-providers.md)
-  - Defines provider credential persistence, login UX, and provider transport boundaries.
-  - Read before changing the related architecture or security boundary.
-- [Multi-Device Decentralized Auth Specification](decentralized-auth.md)
-  - Defines multi-device keys, enrollment, approval, revocation, and vault authorization.
-  - Read when this document touches the related product behavior or user flow.
-- [SLIP-0039 Device Quorum Recovery](slip39-recovery.md)
-  - Defines fixed-quorum device recovery and its session-only QR exchange.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
-  - Apply throughout implementation and review.
-
-## Document map
-
-- [Overview](#overview)
-  - Establishes device-key unlock as the baseline and backup passwords as additional envelopes.
-  - Read before changing vault unlock or credential storage.
-- [1. Goals](#1-goals)
-  - Defines recoverability, compatibility, and auditability goals for backup passwords.
-  - Read when evaluating a password-envelope design or implementation.
-- [2. Key hierarchy (extended)](#2-key-hierarchy-extended)
-  - Defines how device and password credentials wrap vault key material.
-  - Read before changing KDF, wrapping, key epochs, or credential authority.
-- [3. Vault file additions](#3-vault-file-additions)
-  - Adds `password_entries` while preserving the existing device-key vault schema.
-  - Read before changing the persisted vault format or migration behavior.
-  - [Envelope migration](#envelope-migration)
-    - Defines the event-log migration from legacy password-only metadata.
-    - Read before changing password-envelope schema compatibility.
-  - [Credential effects](#credential-effects)
-    - Defines the key-rotation effects of adding, rotating, and removing a password.
-    - Read before implementing credential mutation.
-  - [Existing sections](#existing-sections)
-    - Preserves the schemas of `secrets`, `members`, `auth`, and `joins`.
-    - Read when assessing compatibility with existing vault files.
-- [4. Flows](#4-flows)
-  - Collects backup-password lifecycle, device-join, and direct-unlock flows.
-  - Read before changing credential UX or state transitions.
-  - [4.1 Add backup password](#41-add-backup-password)
-    - Sequences password derivation, wrapping, epoch rotation, and persistence.
-    - Read when implementing password enrollment.
-  - [4.2 Rotate or remove backup password](#42-rotate-or-remove-backup-password)
-    - Defines credential replacement and removal with mandatory key rotation.
-    - Read when implementing password maintenance or revocation.
-  - [4.3 QR-based device join](#43-qr-based-device-join)
-    - Defines the invitation payload and proof sequence for adding a device.
-    - Read when changing QR pairing or join authorization.
-  - [4.4 Password unlock without QR](#44-password-unlock-without-qr)
-    - Defines provider-based vault discovery and direct backup-password unlock.
-    - Read when implementing recovery without an existing device.
-- [5. Security model](#5-security-model)
-  - Defines the threat boundary, exclusions, and mandatory user guardrails.
-  - Read before approving security or UX changes to password access.
-  - [5.1 Threat coverage](#51-threat-coverage)
-    - Maps credential theft, offline guessing, replay, and revocation threats to controls.
-    - Read when reviewing cryptographic or authorization coverage.
-  - [5.2 Non-goals](#52-non-goals)
-    - Excludes per-secret access control and server-side password recovery.
-    - Read when deciding whether a proposed capability belongs here.
-  - [5.3 Required UI guardrails](#53-required-ui-guardrails)
-    - Requires explicit warnings, confirmation, labels, and recovery guidance.
-    - Read before implementing password-access UI.
-- [6. Auth API (nook-auth2)](#6-auth-api-nook-auth2)
-  - Assigns password-entry validation and key access to `nook-auth2`.
-  - Read before changing the Rust authentication API.
-- [7. WASM bridge additions (nook-wasm)](#7-wasm-bridge-additions-nook-wasm)
-  - Defines typed WASM operations for password and device-join flows.
-  - Read before exposing authentication behavior to the web layer.
-- [8. Phase plan](#8-phase-plan)
-  - Sequences specification, Rust domain work, WASM bindings, UI, and hardening.
-  - Read when assessing delivery status or planning the next slice.
-- [9. Open questions](#9-open-questions)
-  - Records settled decisions for KDF, limits, rotation, and invitation expiry.
-  - Read before reopening a password-envelope design choice.
-
 ## Overview
 
 Current vaults keep **device-key auth as the baseline unlock path**:
@@ -440,3 +359,4 @@ provider credentials and the selected password, not raw vault keys.
   credentials. Future: emit every active provider the issuer has, so the
   joining device adopts the full provider set in one step (foundation for the
   multi-provider replication phase in [auth-providers.md](../design-docs/auth-providers.md) §5).
+

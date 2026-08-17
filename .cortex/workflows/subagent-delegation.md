@@ -1,62 +1,5 @@
 # Subagent Delegation
 
-## Relationships
-
-- [Agent Workflow Orchestration](../design-docs/agent-workflow-orchestration.md)
-  - Provides the Agent Workflow Orchestration architecture context.
-  - Read when changing the related design.
-- [Agent Feature Ownership](../dynamic-skills/agent-feature-ownership.md)
-  - Defines the Agent Feature Ownership rule used by this document.
-  - Apply when that rule governs the task.
-
-## Document map
-
-- [Overview](#overview)
-  - Introduces the document context and its operating assumptions.
-  - Read first before using the detailed guidance.
-- [Decision rule](#decision-rule)
-  - States the durable principles and invariants for this area.
-  - Use while making design and review decisions.
-- [Deterministic work belongs to tools](#deterministic-work-belongs-to-tools)
-  - Separates mechanical Loom or Task work from agent-shaped reasoning.
-  - Read before assigning a deterministic step to a worker.
-- [Delivery owner](#delivery-owner)
-  - Defines the parent agent's ownership throughout delegated work.
-  - Read before assigning workers or joining their results.
-- [Child-worker contract](#child-worker-contract)
-  - Defines the supported data or configuration contract.
-  - Read before changing fields, values, or compatibility.
-- [Safe delegation patterns](#safe-delegation-patterns)
-  - Shows concrete forms of the documented guidance.
-  - Read when translating the rule into an implementation.
-  - [Full Cortex garbage collection](#full-cortex-garbage-collection)
-    - Defines the fixed parallel audit for all Cortex domains.
-    - Use when validating repository-wide documentation consistency.
-  - [Broad repository inventory](#broad-repository-inventory)
-    - Defines safe parallel discovery across independent surfaces.
-    - Use before planning a broad cross-module change.
-  - [Independent CI failures](#independent-ci-failures)
-    - Explains failure modes and the supported recovery path.
-    - Read when the normal path fails.
-  - [Review findings](#review-findings)
-    - Defines independent review slices and synthesis ownership.
-    - Use when a large change benefits from separate reviewers.
-  - [Dependency refreshes](#dependency-refreshes)
-    - Defines package-family delegation for dependency updates.
-    - Use when manifests can be updated without overlapping locks.
-  - [Multi-surface product audits](#multi-surface-product-audits)
-    - Defines independent audits across product surfaces.
-    - Use when findings can be collected without concurrent edits.
-- [Unsafe delegation patterns](#unsafe-delegation-patterns)
-  - Shows concrete forms of the documented guidance.
-  - Read when translating the rule into an implementation.
-- [Machine-managed workflows](#machine-managed-workflows)
-  - Describes the ordered workflow and its decision points.
-  - Follow while carrying out this part of the task.
-- [Validation](#validation)
-  - Defines the evidence and checks required for completion.
-  - Use before declaring the work complete.
-
 ## Overview
 
 - Use this workflow when a task may contain independent reasoning or
@@ -294,3 +237,4 @@ Before integration, verify:
 - write scopes did not overlap;
 - the parent reviewed all evidence;
 - only the delivery owner mutated shared lifecycle state.
+

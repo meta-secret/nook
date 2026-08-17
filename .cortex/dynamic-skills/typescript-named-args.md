@@ -1,38 +1,5 @@
 # TypeScript Named Call Arguments
 
-## Relationships
-
-- [Cortex document navigation](cortex-document-map.md)
-  - Defines the mandatory relationship and internal-map structure.
-  - Apply whenever this skill card changes.
-- [Cortex writer](cortex-writer.md)
-  - Keeps the card and its navigation summaries concise.
-  - Apply while editing or reviewing this guidance.
-- [Cortex consistency](cortex-consistency.md)
-  - Requires the card to agree with related guidance and current code.
-  - Apply when rules, paths, commands, or examples change.
-
-## Document map
-
-- [Purpose](#purpose)
-  - Explains why the skill exists and what invariant it protects.
-  - Read first to decide whether the skill applies.
-- [Scope](#scope)
-  - Sets the applicable paths and explicit boundaries.
-  - Read before expanding the task.
-- [Problem Pattern](#problem-pattern)
-  - Identifies the recurring rejected pattern and its warning signs.
-  - Read while locating or reviewing violations.
-- [Preferred Pattern](#preferred-pattern)
-  - Defines the required structure or behavior.
-  - Read before implementing a correction.
-- [Enforcement](#enforcement)
-  - Explains the mechanical guard that protects the rule.
-  - Read when changing checks or handling a failure.
-- [Application Checklist](#application-checklist)
-  - Lists the steps needed to apply and maintain the skill.
-  - Use during implementation and review.
-
 ## Purpose
 
 In authored TypeScript, object parameter contracts and object call arguments
@@ -179,3 +146,4 @@ task loom:verify
 - [ ] Prefer exported arg types from the callee module.
 - [ ] Prefer Rust-generated types for domain-owned boundary contracts.
 - [ ] Keep the applicable Loom or web lint task green.
+

@@ -1,20 +1,5 @@
 # Technical Debt Tracker
 
-## Relationships
-
-- [Typed Newtypes (Domain IDs & Wire Strings)](../design-docs/typed-newtypes.md)
-  - Defines domain identifiers and their wire-string boundaries.
-  - Read before adding or changing an identifier.
-
-## Document map
-
-- [Overview](#overview)
-  - We track known technical debt, version updates, and cleanup tasks to resolve them incrementally.
-  - Read before changing or relying on Overview.
-- [Replace raw String/u32 with domain newtypes](#replace-raw-stringu32-with-domain-newtypes)
-  - Scope: event envelope, projection, and wire types.
-  - Read before changing or relying on Replace raw String/u32 with domain newtypes.
-
 ## Overview
 
 We track known technical debt, version updates, and cleanup tasks to resolve them incrementally.
@@ -45,3 +30,4 @@ Scope: event envelope, projection, and wire types. See [typed-newtypes.md](../de
 - API DTO option bags and other manager sentinel strings in `nook-app/nook-platform/nook-wasm/src/types.rs` / `manager/mod.rs`
 - Member/enrollment timestamp strings in `nook-app/nook-platform/nook-core/src/auth/multi_device.rs` and `nook-app/nook-platform/nook-core/src/auth/enrollment.rs`
 - Projection conflict optional fields in `nook-app/nook-platform/nook-event-log/src/projection.rs`
+

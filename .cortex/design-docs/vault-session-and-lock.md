@@ -1,50 +1,5 @@
 # Vault Session, Lock, and Multi-Vault Model
 
-## Relationships
-
-- [Nook System Architecture Specification](../ARCHITECTURE.md)
-  - Defines system-wide component ownership and dependency boundaries.
-  - Read before changing a durable cross-component interface.
-- [Auth Providers, Sync, and Login UX](auth-providers.md)
-  - Defines provider storage, login, and onboarding behavior.
-  - Read when changing authentication or provider connection flows.
-- [Secret Store Identity](secret-store-identity.md)
-  - Defines stable provider and secret-store identity across sessions.
-  - Read when the design handles provider labels or store identifiers.
-- [Sentinel Genesis and Reverse Onboarding](sentinel-genesis.md)
-  - Defines reverse onboarding and Sentinel recovery policy.
-  - Read when the design changes recovery or device bootstrap.
-- [Unified Vault Architecture](unified-vault.md)
-  - Defines the local canonical vault and provider fan-out model.
-  - Read when changing vault storage or synchronization ownership.
-
-## Document map
-
-- [Overview](#overview)
-  - How Nook thinks about vaults, sync providers, in-memory sessions, the Lock action, and deleting a browser's local working copy.
-  - Read before changing or relying on Overview.
-- [1. Core concepts](#1-core-concepts)
-  - Summarizes the structured entries, ownership, and status for Core concepts.
-  - Read before changing or relying on Core concepts.
-- [2. Lock semantics](#2-lock-semantics)
-  - User action: Header Lock vault (header-lock-vault-btn) while authenticated.
-  - Read before changing the Lock semantics flow or state transitions.
-  - [Extension device session](#extension-device-session)
-    - The browser extension has a separate, revocable device identity.
-    - Read before changing the Extension device session flow or state transitions.
-- [3. Multiple vaults on one browser (#120)](#3-multiple-vaults-on-one-browser-120)
-  - Summarizes the structured entries, ownership, and status for Multiple vaults on one browser (#120).
-  - Read before changing or relying on Multiple vaults on one browser (#120).
-- [4. Sync providers ≠ separate vaults](#4-sync-providers--separate-vaults)
-  - Summarizes the structured entries, ownership, and status for Sync providers ≠ separate vaults.
-  - Read before changing the Sync providers ≠ separate vaults flow or state transitions.
-- [5. UI surfaces](#5-ui-surfaces)
-  - Summarizes the structured entries, ownership, and status for UI surfaces.
-  - Read before changing or relying on UI surfaces.
-- [6. Security notes](#6-security-notes)
-  - Lock must clear WASM session state.
-  - Read before changing or relying on Security notes.
-
 ## Overview
 
 How Nook thinks about **vaults**, **sync providers**, **in-memory sessions**, the **Lock** action, and deleting a browser's local working copy.
@@ -323,3 +278,4 @@ If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **i
 - Sentinel provider access never replaces participant quorum. Possessing a remote
   replica without `T` valid participant contributions must not produce an
   unlocked session.
+

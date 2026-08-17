@@ -1,56 +1,5 @@
 # Design Docs Index
 
-## Relationships
-
-- [Agent Workflow Orchestration](agent-workflow-orchestration.md)
-  - Owns the detailed Agent Workflow Orchestration design summarized by this catalog.
-  - Read when the task concerns Agent Workflow Orchestration.
-- [Auth Providers, Sync, and Login UX](auth-providers.md)
-  - Owns the detailed Auth Providers, Sync, and Login UX design summarized by this catalog.
-  - Read when the task concerns Auth Providers, Sync, and Login UX.
-- [Core Beliefs: Agent-First Operating Principles](core-beliefs.md)
-  - Owns the detailed Core Beliefs: Agent-First Operating Principles design summarized by this catalog.
-  - Read when the task concerns Core Beliefs: Agent-First Operating Principles.
-- [Hive Isolated Agent Platform](hive-isolated-agent-platform.md)
-  - Owns the detailed Hive Isolated Agent Platform design summarized by this catalog.
-  - Read when the task concerns Hive Isolated Agent Platform.
-- [Identity, App Keys, Passkeys, and Vault DEKs](identity-vault-architecture.md)
-  - Owns the detailed Identity, App Keys, Passkeys, and Vault DEKs design summarized by this catalog.
-  - Read when the task concerns Identity, App Keys, Passkeys, and Vault DEKs.
-- [Website Passkey Manager](passkey-manager.md)
-  - Owns the detailed Website Passkey Manager design summarized by this catalog.
-  - Read when the task concerns Website Passkey Manager.
-- [Secret Store Identity](secret-store-identity.md)
-  - Owns the detailed Secret Store Identity design summarized by this catalog.
-  - Read when the task concerns Secret Store Identity.
-- [Sentinel Genesis and Reverse Onboarding](sentinel-genesis.md)
-  - Owns the detailed Sentinel Genesis and Reverse Onboarding design summarized by this catalog.
-  - Read when the task concerns Sentinel Genesis and Reverse Onboarding.
-- [Typed Newtypes (Domain IDs & Wire Strings)](typed-newtypes.md)
-  - Owns the detailed Typed Newtypes (Domain IDs & Wire Strings) design summarized by this catalog.
-  - Read when the task concerns Typed Newtypes (Domain IDs & Wire Strings).
-- [Unified Vault Architecture](unified-vault.md)
-  - Owns the detailed Unified Vault Architecture design summarized by this catalog.
-  - Read when the task concerns Unified Vault Architecture.
-- [Vault Architecture Modes](vault-architecture-modes.md)
-  - Owns the detailed Vault Architecture Modes design summarized by this catalog.
-  - Read when the task concerns Vault Architecture Modes.
-- [Vault Event Log](vault-event-log.md)
-  - Owns the detailed Vault Event Log design summarized by this catalog.
-  - Read when the task concerns Vault Event Log.
-- [Vault Schema Versioning](vault-schema-versioning.md)
-  - Owns the detailed Vault Schema Versioning design summarized by this catalog.
-  - Read when the task concerns Vault Schema Versioning.
-- [Vault Session, Lock, and Multi-Vault Model](vault-session-and-lock.md)
-  - Owns the detailed Vault Session, Lock, and Multi-Vault Model design summarized by this catalog.
-  - Read when the task concerns Vault Session, Lock, and Multi-Vault Model.
-
-## Document map
-
-- [Overview](#overview)
-  - This directory contains design specifications, architecture rationales, and core engineering beliefs.
-  - Read first when locating the design authority for a task.
-
 ## Overview
 
 This directory contains design specifications, architecture rationales, and core engineering beliefs.
@@ -71,3 +20,4 @@ This directory contains design specifications, architecture rationales, and core
 | [sentinel-genesis.md](sentinel-genesis.md) | Provider-free Sentinel reverse onboarding, threshold policy, and atomic genesis | Implemented |
 | [vault-schema-versioning.md](vault-schema-versioning.md) | #52 safe migration via event log; projection `schema_version` | Implemented |
 | [typed-newtypes.md](typed-newtypes.md) | Domain newtypes over raw `String`/`u32`; version wrappers for multi-schema vault | In progress |
+

@@ -1,74 +1,5 @@
 # Unified Vault Architecture
 
-## Relationships
-
-- [Nook System Architecture Specification](../ARCHITECTURE.md)
-  - Defines system-wide component ownership and dependency boundaries.
-  - Read before changing a durable cross-component interface.
-- [Unified Vault — UI Rollout Plan](../exec-plans/unified-vault-ui-rollout.md)
-  - Records the implementation phases and historical delivery status.
-  - Read when tracing how this architecture reached the product.
-- [Auth Providers, Sync, and Login UX](auth-providers.md)
-  - Defines provider storage, login, and onboarding behavior.
-  - Read when changing authentication or provider connection flows.
-- [Identity, App Keys, Passkeys, and Vault DEKs](identity-vault-architecture.md)
-  - Separates identity, app-key, and vault-encryption responsibilities.
-  - Read when the design touches keys, authentication, or vault access.
-- [Secret Store Identity](secret-store-identity.md)
-  - Defines stable provider and secret-store identity across sessions.
-  - Read when the design handles provider labels or store identifiers.
-- [Sentinel Genesis and Reverse Onboarding](sentinel-genesis.md)
-  - Defines reverse onboarding and Sentinel recovery policy.
-  - Read when the design changes recovery or device bootstrap.
-- [Vault Event Log](vault-event-log.md)
-  - Defines durable vault events, ordering, and concurrency behavior.
-  - Read when the design changes persistence or synchronization.
-- [Vault Session, Lock, and Multi-Vault Model](vault-session-and-lock.md)
-  - Defines unlock sessions, lock semantics, and multi-vault state.
-  - Read when the design affects in-memory vault access.
-
-## Document map
-
-- [Overview](#overview)
-  - Superseded for provider sync: event-log vaults use immutable YAML events under nook-log/v1/events/.
-  - Read before changing or relying on Overview.
-- [1. Problem with the old model](#1-problem-with-the-old-model)
-  - Previously each saved storage provider could point at a separate vault file.
-  - Read before changing or relying on Problem with the old model.
-- [2. Target model](#2-target-model)
-  - Summarizes the structured entries, ownership, and status for Target model.
-  - Read before changing or relying on Target model.
-- [3. Local-first storage](#3-local-first-storage)
-  - Defines the concrete responsibilities and constraints for 3. Local-first storage.
-  - Read before changing or relying on Local-first storage.
-  - [IndexedDB layout (nook_db)](#indexeddb-layout-nook_db)
-    - Summarizes the structured entries, ownership, and status for IndexedDB layout (nookdb).
-    - Read before changing or relying on IndexedDB layout (nookdb).
-  - [IndexedDB layout (nook_auth) — sync providers only](#indexeddb-layout-nook_auth--sync-providers-only)
-    - Canonical layout and field list: auth-providers.md §2.
-    - Read before changing the IndexedDB layout (nookauth) — sync providers only flow or state transitions.
-- [4. Vault versioning](#4-vault-versioning)
-  - Every vault YAML carries a monotonic.
-  - Read before changing or relying on Vault versioning.
-- [5. Sync reconciliation](#5-sync-reconciliation)
-  - When comparing local vs remote vault blobs.
-  - Read before changing the Sync reconciliation flow or state transitions.
-- [6. Connect / unlock / lock flow](#6-connect--unlock--lock-flow)
-  - Empty device: show Landing → Sentinel create (path first; naming inside the chosen setup) before passkey.
-  - Read before changing the Connect / unlock / lock flow flow or state transitions.
-- [7. Security notes](#7-security-notes)
-  - Master password never leaves the browser; used only to unwrap vault keys in WASM. Sync provider tokens (GitHub PAT, OAuth) remain.
-  - Read before changing or relying on Security notes.
-- [9. Fan-out sync on mutation](#9-fan-out-sync-on-mutation)
-  - After any local vault save (secret CRUD, join approve/deny, device roster change — phased rollout), the web layer pushes to all.
-  - Read before changing the Fan-out sync on mutation flow or state transitions.
-  - [In-memory sync tests](#in-memory-sync-tests)
-    - MemoryVaultStore in nook-app/nook-platform/nook-core/src/sync/vault_sync_store.rs is a HashMap-friendly stand-in for local.
-    - Use before declaring In-memory sync tests complete.
-- [10. Implementation status](#10-implementation-status)
-  - Summarizes the structured entries, ownership, and status for Implementation status.
-  - Read when assessing which parts remain active or historical.
-
 ## Overview
 
 - **Provider-sync status:** Superseded. Event-log vaults use immutable YAML
@@ -309,3 +240,4 @@ Manual **Sync all** in the status bar runs the same sync loop with user-visible 
 | Join sync propagation | Done (#77, Phase 7) |
 
 UI rollout details: [exec-plans/unified-vault-ui-rollout.md](../exec-plans/unified-vault-ui-rollout.md).
+

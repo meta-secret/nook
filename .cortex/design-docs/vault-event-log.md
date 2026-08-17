@@ -1,68 +1,5 @@
 # Vault Event Log
 
-## Relationships
-
-- [Identity, App Keys, Passkeys, and Vault DEKs](identity-vault-architecture.md)
-  - Separates identity, app-key, vault-key, onboarding, and grant responsibilities.
-  - Read before changing the related architecture or security boundary.
-- [Sentinel Genesis and Reverse Onboarding](sentinel-genesis.md)
-  - Defines Sentinel genesis material and recovery-related trust boundaries.
-  - Read before changing the related architecture or security boundary.
-- [Unified Vault Architecture](unified-vault.md)
-  - Defines the local canonical vault and provider replication model.
-  - Read before changing the related architecture or security boundary.
-
-## Document map
-
-- [Overview](#overview)
-  - Records the implemented event-log decision and the projection-sync model it supersedes.
-  - Read before changing vault persistence, replication, or migration.
-- [Decision](#decision)
-  - Makes immutable content-addressed events the replicated source of truth.
-  - Read when evaluating alternative sync or storage designs.
-  - [Identity-owned DEKs](#identity-owned-deks)
-    - Assigns DEK creation and authorization to identities outside the event log.
-    - Read when changing membership, grants, or key ownership.
-- [Architecture](#architecture)
-  - Separates domain events, replication mechanics, and provider adapters.
-  - Read when deciding which package owns event-log behavior.
-  - [Source of truth](#source-of-truth)
-    - Distinguishes authoritative events from derived local projections.
-    - Read when rebuilding, importing, or persisting projected state.
-- [Event identity](#event-identity)
-  - Defines event IDs, remote paths, parent references, signatures, and authorization.
-  - Read before changing the event envelope or validation rules.
-  - [Sentinel genesis correction](#sentinel-genesis-correction)
-    - Keeps Sentinel pre-genesis ceremony outside incremental roster events.
-    - Read when changing Sentinel genesis or participant authorization.
-- [Canonical encoding](#canonical-encoding)
-  - Defines deterministic bytes used for event hashing and signatures.
-  - Read before changing serialization, signing, or cross-runtime fixtures.
-- [Causal model](#causal-model)
-  - Uses parent head sets to represent causality and deterministic ordering.
-  - Read when changing merge, conflict, or ancestry behavior.
-- [Domain projection](#domain-projection)
-  - Requires deterministic projection and conflict resolution for any valid event order.
-  - Read when adding events or changing reducer semantics.
-- [Key epochs](#key-epochs)
-  - Rotates `secrets_key` and `members_key` to prevent historical access resurrection.
-  - Read when changing passwords, revocation, or encrypted event fields.
-- [Provider interface (target)](#provider-interface-target)
-  - Defines the target set-union operations required from storage providers.
-  - Read when implementing or extending a provider adapter.
-- [IndexedDB storage](#indexeddb-storage)
-  - Defines the local IndexedDB stores for events, heads, projections, and replica state.
-  - Read before changing browser persistence or database migration.
-- [Rollout phases](#rollout-phases)
-  - Tracks delivery from the ADR through event storage, provider sync, and UI adoption.
-  - Read when assessing implementation status or sequencing remaining migration work.
-- [Testing requirements](#testing-requirements)
-  - Requires permutation, convergence, authorization, epoch, and provider-contract coverage.
-  - Read when adding or reviewing event-log tests.
-- [Related](#related)
-  - Routes to the original specification and linked implementation context.
-  - Read when historical rationale or delivery details are needed.
-
 ## Overview
 
 **Status:** Implemented (see [#112](https://github.com/meta-secret/nook/issues/112), PR #118+, PR #181)
@@ -374,3 +311,4 @@ for behavior-focused tests when sync semantics change or coverage drops below
 - [#12](https://github.com/meta-secret/nook/issues/12) — multi-provider platform
 - [#52](https://github.com/meta-secret/nook/issues/52) — schema versioning
 - [unified-vault.md](unified-vault.md) — superseded whole-blob model
+

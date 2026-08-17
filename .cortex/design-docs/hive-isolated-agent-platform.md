@@ -1,77 +1,5 @@
 # Hive Isolated Agent Platform
 
-## Relationships
-
-- [Workbench Issue Management](../workflows/issues.md)
-  - Defines Workbench planning, progress, and completion records.
-  - Read when turning this design into tracked work.
-- [Pull Request Workflow](../workflows/pull-requests.md)
-  - Defines PR sizing, validation, readiness, and merge ownership.
-  - Read before delivering an implementation of this design.
-
-## Document map
-
-- [Overview](#overview)
-  - Status: Implemented in the repository; deployment and live-state verification are performed through the infrastructure Taskfile.
-  - Read before changing or relying on Overview.
-- [1. Architectural boundaries](#1-architectural-boundaries)
-  - Kubernetes schedules isolated execution.
-  - Read before changing or relying on Architectural boundaries.
-- [2. Deployment topology](#2-deployment-topology)
-  - The initial cluster is deliberately single-node.
-  - Read before changing or relying on Deployment topology.
-- [3. Components and ownership](#3-components-and-ownership)
-  - Summarizes the structured entries, ownership, and status for Components and ownership.
-  - Read before changing or relying on Components and ownership.
-- [4. Task and graph model](#4-task-and-graph-model)
-  - Task definitions include a full 40-character source_commit.
-  - Read before changing or relying on Task and graph model.
-  - [Stored readiness invariant](#stored-readiness-invariant)
-    - BLOCKED means at least one direct dependency is not COMPLETED. READY means every direct dependency is COMPLETED. Completion.
-    - Apply when making or reviewing decisions about Stored readiness invariant.
-  - [Blocking dependencies](#blocking-dependencies)
-    - Codex may return a typed blocker instead of pretending the parent task is complete.
-    - Read before changing the Blocking dependencies flow or state transitions.
-    - [Dependency depth boundary](#dependency-depth-boundary)
-      - Blocker tasks are dependency leaves.
-      - Read before changing blocker creation or failure handling.
-  - [Durable results](#durable-results)
-    - Terminal summaries are bounded to 64 KiB.
-    - Read before changing or relying on Durable results.
-- [5. Worker execution lifecycle](#5-worker-execution-lifecycle)
-  - The worker creates a sentinel with create-once semantics before claiming.
-  - Read before changing the Worker execution lifecycle flow or state transitions.
-- [6. Main failure to completed repair](#6-main-failure-to-completed-repair)
-  - Main uses a single concurrency group with cancel-in-progress: false.
-  - Read when assessing the current state of Main failure to completed repair.
-  - [GitHub delivery recovery](#github-delivery-recovery)
-    - The base branch is deterministic: codex/hive-<task-id>.
-    - Read before changing the GitHub delivery recovery flow or state transitions.
-- [7. Isolation and credential design](#7-isolation-and-credential-design)
-  - Defines the concrete responsibilities and constraints for 7. Isolation and credential design.
-  - Read before changing or relying on Isolation and credential design.
-  - [Kata boundary](#kata-boundary)
-    - Every dispatcher and worker Pod selects kata-dragonball.
-    - Read before changing or relying on Kata boundary.
-  - [Credential ownership](#credential-ownership)
-    - Summarizes the structured entries, ownership, and status for Credential ownership.
-    - Read before changing or relying on Credential ownership.
-  - [Network boundary](#network-boundary)
-    - Both Hive namespaces default-deny ingress and egress.
-    - Read before changing or relying on Network boundary.
-- [8. Persistence and recovery](#8-persistence-and-recovery)
-  - The stateful boundary.
-  - Read before changing the Persistence and recovery flow or state transitions.
-- [9. Build verification and cache model](#9-build-verification-and-cache-model)
-  - The repository-owned Hive workflow is a valuable deployment-independent verification gate.
-  - Use before declaring Build verification and cache model complete.
-- [10. Taskfile operations](#10-taskfile-operations)
-  - All automated lifecycle, mutation, CI, SSH, Kubernetes, and deployment operations go through the root Taskfile command surface.
-  - Read before changing or relying on Taskfile operations.
-- [11. Source map](#11-source-map)
-  - Summarizes the structured entries, ownership, and status for Source map.
-  - Read before changing or relying on Source map.
-
 ## Overview
 
 Status: Implemented in the repository; deployment and live-state verification
@@ -923,3 +851,4 @@ global ruleset.
 | Main coalescing and delivery | [`.github/workflows/main.yml`](../../.github/workflows/main.yml) |
 | Workbench issue contract | [`workflows/issues.md`](../workflows/issues.md) |
 | Pull-request ownership contract | [`workflows/pull-requests.md`](../workflows/pull-requests.md) |
+

@@ -1,62 +1,5 @@
 # Typed Newtypes (Domain IDs & Wire Strings)
 
-## Relationships
-
-- [Reference: Rust + WebAssembly (wasm-bindgen)](../references/rust-wasm.md)
-  - Defines the typed Rust-to-WASM implementation boundary.
-  - Read when the design crosses from Rust into the web layer.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation and security constraints.
-  - Apply while turning this design into code.
-- [Secret Store Identity](secret-store-identity.md)
-  - Defines stable provider and secret-store identity across sessions.
-  - Read when the design handles provider labels or store identifiers.
-- [Vault Event Log](vault-event-log.md)
-  - Defines durable vault events, ordering, and concurrency behavior.
-  - Read when the design changes persistence or synchronization.
-
-## Document map
-
-- [Overview](#overview)
-  - Status: In progress — prefer newtypes over raw String / u32 in nook-core domain APIs.
-  - Read before changing or relying on Overview.
-- [Why](#why)
-  - A bare String does not tell the compiler what the value means.
-  - Read before changing or relying on Why.
-- [Inventory](#inventory)
-  - Defines the concrete responsibilities and constraints for Inventory.
-  - Read before changing or relying on Inventory.
-  - [Implemented (nook-core)](#implemented-nook-core)
-    - Summarizes the structured entries, ownership, and status for Implemented (nook-core).
-    - Read before changing or relying on Implemented (nook-core).
-  - [WASM / JS boundary](#wasm--js-boundary)
-    - nook-wasm getters may still return String / Option<String>.
-    - Read before changing or relying on WASM / JS boundary.
-  - [Legitimately raw (for now)](#legitimately-raw-for-now)
-    - Summarizes the structured entries, ownership, and status for Legitimately raw (for now).
-    - Read before changing or relying on Legitimately raw (for now).
-- [Patterns](#patterns)
-  - Defines the concrete responsibilities and constraints for Patterns.
-  - Read before changing or relying on Patterns.
-  - [Serde-transparent string newtype](#serde-transparent-string-newtype)
-    - Wire JSON unchanged; Rust API is typed.
-    - Read before changing or relying on Serde-transparent string newtype.
-  - [Macro (vault_wire.rs)](#macro-vault_wirers)
-    - transparent_str_newtype!
-    - Read before changing or relying on Macro (vaultwire.rs).
-  - [Version newtype](#version-newtype)
-    - When a breaking wire shape ships, add V2, keep V1 deserializable, and branch in projection/import — never bump CURRENT without a.
-    - Read before changing or relying on Version newtype.
-  - [Trusted construction](#trusted-construction)
-    - from_trusted / from_vault_record for values already validated or emitted by this process.
-    - Read before changing or relying on Trusted construction.
-- [Remaining type-safety checklist](#remaining-type-safety-checklist)
-  - [ ] VaultEventSession — store_id: StoreId, heads: Vec<EventId>, key_epoch: KeyEpoch[ ] VaultProjection maps — BTreeMap<SecretId,.
-  - Use while executing or reviewing Remaining type-safety checklist.
-- [Related](#related)
-  - secret-store-identity.md — store_id / pk_id rationalevault-event-log.md — event envelope fieldsreferences/rust-wasm.md — WASM.
-  - Read before changing or relying on Related.
-
 ## Overview
 
 **Status:** In progress — prefer newtypes over raw `String` / `u32` in `nook-core` domain APIs.
@@ -171,3 +114,4 @@ enum VersionedVaultEventBody {
 - [vault-event-log.md](vault-event-log.md) — event envelope fields
 - [references/rust-wasm.md](../references/rust-wasm.md) — WASM boundary conventions
 - [rules.md §4](../rules.md#4-testing-requirements) — type safety in tests
+
