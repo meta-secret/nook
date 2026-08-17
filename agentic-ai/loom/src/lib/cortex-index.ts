@@ -262,9 +262,13 @@ export function extractCortexIndex(args: ExtractCortexIndexArgs): CortexIndex {
   }
 
   const sortedPaths = [...parsedMap.keys()].sort();
-  const documents = sortedPaths
-    .map((filePath) => parsedMap.get(filePath))
-    .filter((doc): doc is CortexDocumentIndex => doc !== undefined);
+  const documents: CortexDocumentIndex[] = [];
+  for (const filePath of sortedPaths) {
+    const doc = parsedMap.get(filePath);
+    if (doc) {
+      documents.push(doc);
+    }
+  }
 
   return { documents };
 }
@@ -385,7 +389,7 @@ export function stripDocumentNavigation(
   if (relIndex > 1) {
     const introStart = root.children[1]?.position?.start.offset;
     const introEnd = root.children[relIndex - 1]?.position?.end.offset;
-    if (introStart !== undefined && introEnd !== undefined) {
+    if (typeof introStart === 'number' && typeof introEnd === 'number') {
       introText = args.content.slice(introStart, introEnd).trim();
     }
   }
