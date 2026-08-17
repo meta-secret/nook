@@ -19,13 +19,6 @@ kubectl() {
     printf '%s\n' "$MOCK_POD_JSON"
     return
   fi
-  if test "$1 $2 $3" = "get deployment hive"; then
-    call_number="$(( $(wc -l < "$ready_calls") + 1 ))"
-    printf 'x\n' >>"$ready_calls"
-    value="${READY_VALUES[$((call_number - 1))]:-${READY_VALUES[-1]:-0}}"
-    printf '%s' "$value"
-    return
-  fi
   echo "unexpected kubectl invocation: $*" >&2
   return 1
 }
@@ -56,6 +49,23 @@ fi
 grep -Fq 'running' "$drain_error"
 grep -Fq 'pending' "$drain_error"
 grep -Fq 'deleting' "$drain_error"
+
+MOCK_POD_JSON='{
+  "items": [
+    {"metadata":{"name":"ready-1"},"status":{"phase":"Running","containerStatuses":[{"name":"hive","ready":true}]}},
+    {"metadata":{"name":"ready-2"},"status":{"phase":"Running","containerStatuses":[{"name":"hive","ready":true}]}},
+    {"metadata":{"name":"ready-3"},"status":{"phase":"Running","containerStatuses":[{"name":"hive","ready":true}]}},
+    {"metadata":{"name":"ready-4"},"status":{"phase":"Running","containerStatuses":[{"name":"hive","ready":true}]}},
+    {"metadata":{"name":"terminating-ready","deletionTimestamp":"2026-08-17T00:00:00Z"},"status":{"phase":"Running","containerStatuses":[{"name":"hive","ready":true}]}},
+    {"metadata":{"name":"not-ready"},"status":{"phase":"Running","containerStatuses":[{"name":"hive","ready":false}]}}
+  ]
+}'
+test "$(hive_ready_worker_count)" -eq 4
+hive_ready_worker_count() {
+  call_number="$(( $(wc -l < "$ready_calls") + 1 ))"
+  printf 'x\n' >>"$ready_calls"
+  printf '%s' "${READY_VALUES[$((call_number - 1))]:-${READY_VALUES[-1]:-0}}"
+}
 
 READY_VALUES=(4 3 4 4 4)
 : >"$ready_calls"

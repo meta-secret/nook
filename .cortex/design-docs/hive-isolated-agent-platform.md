@@ -183,9 +183,10 @@ shutdown, the coordinator remains available until the worker records its
 terminal lifecycle marker or Kubernetes exhausts the Pod grace period. The
 rollout cannot strand a `RUNNING` lease under a removed Pod.
 
-After rollout, the deployment requires three consecutive samples with all four
-workers ready. A disposable worker may finish a task during verification. Its
-replacement must converge before sandbox and lifecycle checks continue.
+After rollout, the deployment requires three consecutive samples with four
+non-terminating workers whose Hive containers are ready. A disposable worker
+may finish a task during verification. Its replacement must converge before
+sandbox and lifecycle checks continue.
 
 ## 3. Components and ownership
 

@@ -133,19 +133,16 @@ tasks:
         chmod 0640 "$remote_dir/hive-image"
         cat "$remote_dir/hive-image"
         REMOTE
-
   hive:auth:rotate:
     desc: Explicitly replace Hive Codex authentication from a local bootstrap file.
     cmds:
       - task: hive:auth:publish
         vars: { HIVE_AUTH_PUBLICATION_MODE: replace }
-
   hive:auth:bootstrap:
     internal: true
     cmds:
       - task: hive:auth:publish
         vars: { HIVE_AUTH_PUBLICATION_MODE: bootstrap }
-
   hive:auth:publish:
     internal: true
     silent: true
@@ -393,9 +390,12 @@ tasks:
             sleep "$delay_seconds"
           done
         }
+        hive_ready_worker_count() { kubectl get pods --namespace hive-system --selector "app.kubernetes.io/name=hive" --output json |
+          jq '[.items[] | select(.metadata.deletionTimestamp == null) | select(.status.phase == "Running") | select(any(.status.containerStatuses[]?; .name == "hive" and .ready == true))] | length'
+        }
         hive_wait_for_ready_pool() { attempts="$1" delay_seconds="$2" stable_samples="$3" consecutive_ready=0 ready_replicas=0
           for attempt in $(seq 1 "$attempts"); do
-            ready_replicas="$(kubectl get deployment hive --namespace hive-system -o jsonpath='{.status.readyReplicas}')"
+            ready_replicas="$(hive_ready_worker_count)"
             if test "$ready_replicas" = 4; then
               consecutive_ready=$((consecutive_ready + 1))
               test "$consecutive_ready" -ge "$stable_samples" && return 0

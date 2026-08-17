@@ -312,6 +312,8 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
     for required in [
         "--selector \"app.kubernetes.io/name=$1\"",
         ".status.phase != \"Succeeded\" and .status.phase != \"Failed\"",
+        ".metadata.deletionTimestamp == null",
+        ".name == \"hive\" and .ready == true",
         "Timed out draining active graph client deployment/$deployment",
         "consecutive_ready=0",
         "Hive pool did not stabilize at four ready workers",
