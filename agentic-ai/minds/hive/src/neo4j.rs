@@ -309,12 +309,13 @@ impl TaskStore for Neo4jTaskStore {
                          MATCH (task)-[:DEPENDS_ON]->(dependency:Task)
                          WHERE dependency.status <> 'COMPLETED'
                        }
-                     OPTIONAL MATCH (task)-[:DEPENDS_ON]->(dependency:Task)
+                     OPTIONAL MATCH
+                       (task)-[:DEPENDS_ON|INCLUDES_ARTIFACT_FROM]->(dependency:Task)
                      WITH task,
                           [value IN collect(dependency.id) WHERE value IS NOT NULL] AS dependency_ids,
                           [value IN collect(coalesce(dependency.result_summary, '')) WHERE value IS NOT NULL] AS dependency_summaries
                      OPTIONAL MATCH dependency_path =
-                       (task)-[:DEPENDS_ON*1..]->(artifact_task:Task)
+                       (task)-[:DEPENDS_ON|INCLUDES_ARTIFACT_FROM*1..]->(artifact_task:Task)
                      OPTIONAL MATCH (artifact_task)
                        <-[:FOR_TASK]-(dependency_attempt:Attempt {status: 'COMPLETED'})
                        -[:PRODUCED]->(dependency_artifact:Artifact {kind: 'git-patch'})
@@ -630,6 +631,18 @@ impl TaskStore for Neo4jTaskStore {
         }
 
         transaction
+            .run(
+                query(
+                    "MATCH (blocker:Task {kind: 'blocker'})-[edge:DEPENDS_ON]->
+                           (task:Task {id: $task_id, status: 'COMPLETED'})
+                     MERGE (blocker)-[:INCLUDES_ARTIFACT_FROM]->(task)
+                     DELETE edge",
+                )
+                .param("task_id", task.id.as_str()),
+            )
+            .await?;
+
+        transaction
             .run(query(
                 "MATCH (blocked:Task {status: 'BLOCKED'})
                  WHERE NOT EXISTS {
@@ -719,6 +732,11 @@ impl TaskStore for Neo4jTaskStore {
         reason: &str,
     ) -> crate::HiveResult<bool> {
         blocker.validate()?;
+        if task.kind == "blocker" {
+            return Err(crate::error::HiveError::message(
+                "a blocker task cannot create another blocking dependency",
+            ));
+        }
         if blocker.source_commit != task.source_commit {
             return Err(crate::error::HiveError::message(
                 "a blocker must target the same pinned repository revision",

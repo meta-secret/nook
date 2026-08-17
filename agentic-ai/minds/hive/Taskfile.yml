@@ -171,6 +171,7 @@ tasks:
         "${command[@]}"
         test -f "$verified/hive-check-passed"
         test -f "$verified/hive-sandbox-package-passed"
+        test -f "$verified/hive-login-shell-toolchain-passed"
         test -n "$(find "$verified/hive-tests" -type f -print -quit)"
         test_kib="$(du -sk "$verified/hive-tests" | awk '{print $1}')"
         if [ "$test_kib" -gt 524288 ]; then
