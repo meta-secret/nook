@@ -1,71 +1,5 @@
 # Reference: Loom tools and static agent workflows
 
-## Relationships
-
-- [Agent Workflow Orchestration](../design-docs/agent-workflow-orchestration.md)
-  - Provides the Agent Workflow Orchestration architecture context.
-  - Read when changing the related design.
-- [Prefer Popular Libraries](../dynamic-skills/prefer-popular-libraries.md)
-  - Defines the Prefer Popular Libraries rule used by this document.
-  - Apply when that rule governs the task.
-- [TypeScript Domain Structure](../dynamic-skills/typescript-domain-structure.md)
-  - Defines the TypeScript Domain Structure rule used by this document.
-  - Apply when that rule governs the task.
-- [TypeScript Concrete Values](../dynamic-skills/typescript-no-unknown.md)
-  - Defines the TypeScript Concrete Values rule used by this document.
-  - Apply when that rule governs the task.
-- [TypeScript Single Parameter](../dynamic-skills/typescript-single-parameter.md)
-  - Defines the TypeScript Single Parameter rule used by this document.
-  - Apply when that rule governs the task.
-
-## Document map
-
-- [Overview](#overview)
-  - Introduces the document context and its operating assumptions.
-  - Read first before using the detailed guidance.
-- [Static agent workflow boundary](#static-agent-workflow-boundary)
-  - Defines what the guidance covers and where its ownership ends.
-  - Read before expanding or assigning the work.
-- [Invoke a leaf tool](#invoke-a-leaf-tool)
-  - Lists the supported commands and invocation contract.
-  - Read when operating the documented tooling.
-- [TypeScript domain structure](#typescript-domain-structure)
-  - Describes the components, boundaries, and structural model.
-  - Read before changing the design or its interfaces.
-- [Domain request rule](#domain-request-rule)
-  - States the durable principles and invariants for this area.
-  - Use while making design and review decisions.
-- [Discover request kinds](#discover-request-kinds)
-  - Shows how to enumerate Loom's typed request families.
-  - Read when the correct domain request is unclear.
-  - [dependencyPopularity](#dependencypopularity)
-    - Defines the dependency-adoption check request.
-    - Use before adding commodity third-party code.
-- [Common requests](#common-requests)
-  - Collects the standard typed requests used by agents.
-  - Read when constructing a Loom input file.
-  - [prePush](#prepush)
-    - Defines the format and UI-demo pre-push request.
-    - Run before every implementation PR push.
-  - [cortexAudit](#cortexaudit)
-    - Defines the mechanical Cortex consistency audit.
-    - Run after changing `.cortex` documents.
-  - [skillScaffold](#skillscaffold)
-    - Defines synchronized dynamic-skill scaffolding.
-    - Use when creating a new canonical skill card.
-  - [agentStats (assemble / validate / publish)](#agentstats-assemble--validate--publish)
-    - Defines PR-statistics assembly, validation, and publication requests.
-    - Read when recording a merged agent-owned PR.
-  - [prLand (status / validate / ready / mergeCheck)](#prland-status--validate--ready--mergecheck)
-    - Defines typed PR status, validation, readiness, and merge checks.
-    - Read when automating a pull-request delivery transition.
-  - [toolsCall](#toolscall)
-    - Defines the direct typed tool-dispatch request.
-    - Read when invoking a single Loom operation programmatically.
-- [Response](#response)
-  - Defines Loom's success and failure result shape.
-  - Read when consuming or diagnosing command output.
-
 ## Overview
 
 - **Role:** Loom is the Bun tool runner for mechanical Cortex rites.
@@ -276,3 +210,4 @@ Success includes `family`, optional `operation` for nested families, and
 `result`.
 
 Failures include `phase`, `errors[].path`, and `recover.toolsListRequest`.
+

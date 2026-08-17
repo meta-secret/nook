@@ -1,26 +1,5 @@
 # Remaining TypeScript domain → Rust
 
-## Relationships
-
-- [Core Ownership Refactor](mobile-core-reuse.md)
-  - Defines the broader Rust-ownership refactor and its placement test.
-  - Read before moving a remaining TypeScript behavior.
-
-## Document map
-
-- [Goal](#goal)
-  - Finish moving portable domain rules out of TypeScript into Rust, exposed through thin WASM adapters.
-  - Read before changing or relying on Goal.
-- [Done](#done)
-  - [x] Portable backup-code candidate extraction in nook-companion-core (re-exported from nook-core) with WASM exports.[x] Portable.
-  - Read when assessing the current state of Done.
-- [Remaining follow-ups](#remaining-follow-ups)
-  - [ ] Move portable extension observation classification out of TypeScript.[ ] Move portable extension protocol validation out of.
-  - Read when assessing the current state of Remaining follow-ups.
-- [Validation](#validation)
-  - Rust unit tests for every moved rule (nook-companion-core). WASM export smoke tests in nook-companion-wasm and full-bridge.
-  - Use before declaring Validation complete.
-
 ## Goal
 
 Finish moving portable domain rules out of TypeScript into Rust, exposed through
@@ -74,3 +53,4 @@ Continues [mobile-core-reuse.md](mobile-core-reuse.md).
   `nook-wasm` companion heuristics module.
 - Preflight ownership gates stay green.
 - No CLI/mobile packages in these PRs.
+

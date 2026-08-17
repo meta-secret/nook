@@ -1,59 +1,5 @@
 # Browser Extension Product Spec
 
-## Relationships
-
-- [Identity, App Keys, Passkeys, and Vault DEKs](../design-docs/identity-vault-architecture.md)
-  - Separates identity, app-key, vault-key, onboarding, and grant responsibilities.
-  - Read before changing the related architecture or security boundary.
-- [Website Passkey Manager](../design-docs/passkey-manager.md)
-  - Defines passkey ceremony ownership and website credential behavior.
-  - Read before changing the related architecture or security boundary.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
-  - Apply throughout implementation and review.
-
-## Document map
-
-- [Overview](#overview)
-  - Summarizes the implemented browser-companion direction.
-  - Read first to understand the scope and intent of Overview.
-- [Product Boundary](#product-boundary)
-  - Defines ownership across browser authentication surfaces.
-  - Read before changing or relying on Product Boundary.
-- [First Run And Approval](#first-run-and-approval)
-  - The user clicks the extension toolbar button and sees the standard extension-owned device-protection widget.
-  - Read before changing the First Run And Approval flow or its state transitions.
-  - [Current Primary Device-Key And Authentication UX](#current-primary-device-key-and-authentication-ux)
-    - Defines the extension's local device-protection model.
-    - Read before changing the security or key boundary described by Current Primary Device-Key And Authentication UX.
-- [Toolbar Behavior](#toolbar-behavior)
-  - The toolbar always opens the extension-owned launcher.
-  - Read before changing the user-facing behavior in Toolbar Behavior.
-- [Nook Pilot Authentication Control Plane](#nook-pilot-authentication-control-plane)
-  - The in-page auth gate is the visible HUD for Nook Pilot, an extension-owned authentication control plane.
-  - Read before changing or relying on Nook Pilot Authentication Control Plane.
-  - [Popular-site detection coverage](#popular-site-detection-coverage)
-    - CI does not hit live third-party login pages.
-    - Read before changing or relying on Popular-site detection coverage.
-  - [In-Page HUD](#in-page-hud)
-    - When a likely login flow is present, the content script may show a Nook-owned auth HUD near the top-right of the viewport.
-    - Read before changing the user-facing behavior in In-Page HUD.
-- [Device-Key And Storage Boundary](#device-key-and-storage-boundary)
-  - The extension creates its own installation-specific Nook device key instead of reusing or scraping the simple.nokey.sh browser device private key.
-  - Read before changing the security or key boundary described by Device-Key And Storage Boundary.
-- [Website Passkeys](#website-passkeys)
-  - The page-world adapter wraps non-conditional WebAuthn create and get calls.
-  - Read before changing the security or key boundary described by Website Passkeys.
-- [Consent](#consent)
-  - Consent is shown only on simple.nokey.sh after normal vault unlock.
-  - Read before changing or relying on Consent.
-- [Revocation And Failure](#revocation-and-failure)
-  - Defines recovery after pairing or authentication failure.
-  - Read before changing or relying on Revocation And Failure.
-- [Delivery Slices](#delivery-slices)
-  - Records the implementation sequence for the extension direction.
-  - Read before changing or relying on Delivery Slices.
-
 ## Overview
 
 Status: Implemented direction for #234, #235, #237, #239, #244, #441, and #461.
@@ -555,3 +501,4 @@ re-sealed for the extension device before leaving the approving vault session.
   background provider sync remain the next runtime slice.
 - #237 owns matched-account selection and explicit fill behavior once the
   extension runtime can query its authorized encrypted state.
+

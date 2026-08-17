@@ -79,13 +79,13 @@ test('runs the mechanical audit from the invocation working directory', async ()
     await mkdir(skillsDirectory, CREATE_TREE_OPTIONS);
     await writeFile(
       join(repositoryRoot, '.cortex', 'AGENTS.md'),
-      '[Missing](missing.md)\n',
+      '# Agents\n\n[Missing](missing.md)\n',
+    );
+    await writeFile(
+      join(repositoryRoot, '.cortex', 'INDEX.md'),
+      '# Cortex Index\n\n- [Agents](AGENTS.md)\n- [Skills](dynamic-skills/index.md)\n',
     );
     await writeFile(join(skillsDirectory, 'index.md'), '# Skills\n');
-    await writeFile(
-      join(repositoryRoot, '.cortex', 'document-map-migration.txt'),
-      '.cortex/AGENTS.md\n.cortex/dynamic-skills/index.md\n',
-    );
 
     const runtime = new LocalWorkflowTaskRuntime<string, never>(
       new UnusedAgentRuntime(),

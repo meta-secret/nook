@@ -1,32 +1,5 @@
 # Workbench Scope Management
 
-## Relationships
-
-- [Workbench Issue Management](../workflows/issues.md)
-  - Defines focused issue ownership and durable Workbench scope records.
-  - Apply when implementation or delivery reaches this workflow boundary.
-
-## Document map
-
-- [Purpose](#purpose)
-  - Preserves deferred or blocked work in the versioned Workbench lifecycle.
-  - Read when work cannot safely remain in the current pull request.
-- [Preferred pattern](#preferred-pattern)
-  - Defines search-first update or creation of feature, issue, plan, and worklog records.
-  - Read before publishing new scope-management context.
-- [Scope](#scope)
-  - Identifies the conditions that require durable issue management.
-  - Read when classifying oversized, risky, blocked, or future work.
-- [Safety](#safety)
-  - Protects records owned by another active agent or task.
-  - Read before mutating shared Workbench state.
-- [Application procedure](#application-procedure)
-  - Orders search, ownership, publication, and handoff actions.
-  - Follow while applying this skill to a concrete task.
-- [Validation](#validation)
-  - Requires Workbench validation and rendered-link verification.
-  - Read before reporting scope-management work complete.
-
 ## Purpose
 
 Preserve deferred, risky, blocked, or out-of-scope work in the versioned
@@ -101,3 +74,4 @@ to generate bookkeeping.
 
 Run `node scripts/validate.mjs` in a Workbench checkout and inspect the rendered
 Markdown on GitHub. Full workflow: [workflows/issues.md](../workflows/issues.md).
+

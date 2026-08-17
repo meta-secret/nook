@@ -1,44 +1,5 @@
 # Quality and Release
 
-## Relationships
-
-- [Nook Agent Map (Table of Contents)](../AGENTS.md)
-  - Provides the entry map for repository architecture and workflows.
-  - Read when broader task routing is required.
-- [Nook System Architecture Specification](../ARCHITECTURE.md)
-  - Defines the repository architecture and ownership boundaries.
-  - Read before changing a durable system boundary.
-- [Core Beliefs: Agent-First Operating Principles](../design-docs/core-beliefs.md)
-  - Provides the operating principles behind the quality system.
-  - Read when changing a foundational engineering decision.
-- [Reference: Application Logging](../references/logging.md)
-  - Provides the application and test logging reference.
-  - Read when collecting or changing diagnostic evidence.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide engineering rules.
-  - Apply throughout implementation and review.
-- [Coding Bro — Default Agent Workflow](coding-bro.md)
-  - Defines the delivery workflow that consumes these gates.
-  - Read before performing the complete agent workflow.
-- [Pull Request Workflow](pull-requests.md)
-  - Defines PR validation, readiness, and merge ownership.
-  - Read before delivering a pull request.
-- [GitHub-Hosted Remote Execution](remote-execution.md)
-  - Defines the focused and complete hosted execution surfaces.
-  - Read before selecting remote validation.
-
-## Document map
-
-- [Overview](#overview)
-  - Introduces the document context and its operating assumptions.
-  - Read first before using the detailed guidance.
-- [Quality and release policy](#quality-and-release-policy)
-  - Defines build, test, CI, cache, and release requirements.
-  - Read when changing or validating the engineering harness.
-- [Fix check findings — not silence them](#fix-check-findings--not-silence-them)
-  - Defines the required response to a failing quality gate.
-  - Use whenever a check reports an actionable finding.
-
 ## Overview
 
 Use this workflow for quality, CI, and deployment changes.
@@ -535,3 +496,4 @@ with the rationale in the PR. Default agent behavior is: read the failure → fi
 the code → re-run the same gate until green. See
 [AGENTS.md — Fix every failing check finding](../AGENTS.md#non-negotiable-fix-every-failing-check-finding)
 and [coding-bro.md](coding-bro.md).
+
