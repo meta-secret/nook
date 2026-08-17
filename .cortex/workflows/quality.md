@@ -208,6 +208,9 @@ Use this workflow for quality, CI, and deployment changes.
     - It may burst to four CPUs and 8 GiB during parallel cache transfers.
     - Raise that ceiling only after production telemetry proves Zot is the
       bottleneck.
+    - Host-network Traefik reserves 2 GiB for the public registry edge.
+    - A lower proxy ceiling can OOM-restart the edge during concurrent BuildKit
+      transfers and interrupt every registry client.
     - GitHub Actions cache is forbidden.
     - Delivery Bake restores private Zot registry scopes for:
       - Rust toolchain
