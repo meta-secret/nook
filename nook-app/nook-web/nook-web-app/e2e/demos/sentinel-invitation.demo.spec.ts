@@ -14,6 +14,9 @@ test('Sentinel creation invites participants instead of standalone join', async 
 }) => {
   await page.addInitScript(() => {
     localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    // The portal action must preserve its home position without relying on
+    // the convenience Node.before API.
+    delete HTMLElement.prototype.before
   })
   await page.goto('/app/')
   await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({

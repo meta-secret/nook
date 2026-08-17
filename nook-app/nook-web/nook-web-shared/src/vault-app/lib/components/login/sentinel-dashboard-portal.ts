@@ -46,7 +46,7 @@ export function sentinelDashboardPortal(
   let active = false;
   let previousFocus: FocusReturn = { kind: FocusReturnKind.Body };
   let returnFocusTestId = "sentinel-dashboard-card-stack";
-  node.before(anchor);
+  node.parentNode?.insertBefore(anchor, node);
 
   function focusableElements() {
     return Array.from(
