@@ -47,6 +47,17 @@ fn cold_exact_cache_scopes_do_not_import_in_progress_registry_exports() -> anyho
         assert_isolated_fallback_tolerates_bad_registry_artifacts(bake, cache);
     }
 
+    assert_cache_importers_ignore_errors(
+        web_bake.as_str(),
+        "web_cache_from",
+        "web_cache_to",
+    );
+    assert_cache_importers_ignore_errors(
+        web_toolchain.as_str(),
+        "web_deps_cache_from",
+        "web_deps_cache_to",
+    );
+
     let web_fallback = web_bake
         .split("web_cache_from =")
         .nth(1)
@@ -79,6 +90,21 @@ fn assert_cold_exact_cache_uses_only_stable_imports(bake: &str, cache: &str) {
         "cold exact-cache fallback must not import a missing or partial export: {cache}"
     );
     assert_registry_importers_ignore_errors(cold_fallback, cache);
+    let exact_import = cache_body
+        .split("? [] :")
+        .nth(1)
+        .and_then(|tail| tail.split("] : GHA_CACHE_FALLBACK_ENABLED").next())
+        .unwrap_or_else(|| panic!("missing exact cache importer: {cache}"));
+    assert_registry_importers_ignore_errors(exact_import, cache);
+}
+
+fn assert_cache_importers_ignore_errors(bake: &str, cache: &str, next_cache: &str) {
+    let cache_body = bake
+        .split(&format!("{cache} ="))
+        .nth(1)
+        .and_then(|tail| tail.split(&format!("{next_cache} =")).next())
+        .unwrap_or_else(|| panic!("missing cache importer: {cache}"));
+    assert_registry_importers_ignore_errors(cache_body, cache);
 }
 
 fn assert_isolated_fallback_tolerates_bad_registry_artifacts(bake: &str, cache: &str) {
