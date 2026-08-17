@@ -17,11 +17,11 @@ transaction, leases, attempts, and results. A narrow coordinator sidecar owns
 the Neo4j credential and exposes only typed worker operations over one private
 Unix connection; repository commands cannot issue raw graph queries.
 
-Every embedded turn is pinned to `gpt-5.6-sol` with `medium` reasoning effort,
-which
-is the CLI/config representation of Codex Light. The binary and Kubernetes
-deployment carry the same explicit defaults so a platform-default change
-cannot silently change the worker pool's model or intelligence level.
+Every embedded turn is pinned to `gpt-5.6-sol` with `medium` reasoning effort.
+The binary and Kubernetes deployment carry the same explicit defaults so a
+platform-default change cannot silently change the worker pool's model or
+intelligence level. If that Sol or usage quota is exhausted, the worker retries
+once with `gpt-5.3-codex-spark` at `xhigh` effort.
 
 ## Stored readiness invariant
 
@@ -212,6 +212,8 @@ Runtime operations use the binary directly:
 ```text
 hive migrate
 hive enqueue --id task-1 --source-commit <full-git-object-id> --prompt "Implement the feature"
+hive queue status
+hive queue cancel --task-id <id> --reason "superseded by current Main"
 hive worker
 hive observer
 ```

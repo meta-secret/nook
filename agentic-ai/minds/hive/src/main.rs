@@ -208,6 +208,12 @@ enum QueueAction {
         #[arg(long)]
         release_id: String,
     },
+    Cancel {
+        #[arg(long)]
+        task_id: String,
+        #[arg(long)]
+        reason: String,
+    },
 }
 
 fn main() -> hive::HiveResult<()> {
@@ -255,6 +261,16 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> hive::HiveResult<()> {
                     println!(
                         "requeued failed chain for {task_id} with at least 3 remaining attempts per runnable member on {release_id}"
                     );
+                    Ok(())
+                }
+                QueueAction::Cancel { task_id, reason } => {
+                    let task_id = TaskId::new(task_id)?;
+                    if !store.cancel(&task_id, &reason).await? {
+                        return Err(hive::HiveError::message(format!(
+                            "task {task_id} is not an active cancellable Hive task"
+                        )));
+                    }
+                    println!("cancelled {task_id}");
                     Ok(())
                 }
             }

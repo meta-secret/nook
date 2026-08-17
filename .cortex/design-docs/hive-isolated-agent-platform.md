@@ -99,9 +99,9 @@ Hive separates four responsibilities:
    store, attempt history, and artifact store.
 3. **Embedded Codex performs repository work.** Hive uses the in-process Codex
    core API. It does not spawn a Codex CLI process or parse CLI JSONL. Every
-   worker turn starts with `gpt-5.6-sol` at `medium` reasoning effort, and if
-   the embedded run fails because SOL/usage quota is exhausted, it falls back to
-   `gpt-5.3-spark` with `xhigh` effort. One worker runs one Codex thread.
+   worker turn starts with `gpt-5.6-sol` at `medium` reasoning effort.
+   If that run fails because Sol or usage quota is exhausted, Hive retries once
+   with `gpt-5.3-codex-spark` at `xhigh` effort. One worker runs one Codex thread.
    Nested subagents are disabled. Future multi-agent graphs materialize each
    reached node as a separate Hive task and disposable Pod.
 4. **Codex agents are trusted operators.** Main-repair agents receive a scoped
@@ -536,6 +536,15 @@ After repairing the platform, the explicit
 - recomputes readiness from the revived graph;
 - refuses an active task; and
 - cannot repeat a recovery for the same image digest.
+
+Operators retire superseded or unsolvable work with
+`task infra:hive:queue:cancel HIVE_TASK_ID=... HIVE_CANCEL_REASON=...`.
+That command:
+
+- cancels the named root and exclusive descendants;
+- leaves shared blockers owned by another live root;
+- marks idle members `CANCELLED` immediately; and
+- marks a running member `CANCELLING` until the worker acknowledges.
 
 ### GitHub delivery recovery
 

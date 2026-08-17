@@ -742,10 +742,12 @@ end
 
 unless infra_taskfile.include?("hive:queue:status:") &&
        infra_taskfile.include?("hive:queue:retry:") &&
+       infra_taskfile.include?("hive:queue:cancel:") &&
        infra_taskfile.include?("/usr/local/bin/hive queue status") &&
        infra_taskfile.include?("/usr/local/bin/hive queue retry-failed-main") &&
+       infra_taskfile.include?("/usr/local/bin/hive queue cancel") &&
        infra_taskfile.include?('--release-id "$release_id"')
-  raise "Hive queue inspection and bounded failed-task recovery must remain Taskfile-owned"
+  raise "Hive queue inspection, cancellation, and bounded failed-task recovery must remain Taskfile-owned"
 end
 hive_dockerfile = File.read(File.join(root, "agentic-ai/minds/hive/Dockerfile"))
 hive_sandbox_wrapper = File.read(
