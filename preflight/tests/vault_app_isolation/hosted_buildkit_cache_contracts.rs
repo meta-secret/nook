@@ -167,6 +167,19 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
             && !bake_target_assigns_cache_to(web_app_bake.as_str(), "nook-web-e2e"),
         "final web/e2e scopes must use a dedicated cache-only browser publisher"
     );
+    for target in ["nook-web-e2e", "nook-web-e2e-publish"] {
+        let body = bake_target_body(web_app_bake.as_str(), target);
+        for required_context in [
+            "web-base      = \"target:web-e2e-base\"",
+            "web-deps      = \"target:web-deps\"",
+            "web-artifacts = WEB_ARTIFACTS_CONTEXT",
+        ] {
+            assert!(
+                body.contains(required_context),
+                "{target} must retain its complete sealed-web context map: {required_context}"
+            );
+        }
+    }
     let platform_docker_tasks = read(root, "nook-app/nook-platform/docker/Taskfile.yml");
     let web_docker_tasks = read(root, "nook-app/nook-web/docker/Taskfile.yml");
     let docker_tasks = format!("{platform_docker_tasks}\n{web_docker_tasks}");

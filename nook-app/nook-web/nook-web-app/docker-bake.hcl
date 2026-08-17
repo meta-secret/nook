@@ -125,7 +125,9 @@ target "nook-web-ci" {
 target "nook-web-e2e" {
   inherits = ["_nook-web-common"]
   contexts = {
-    web-base = "target:web-e2e-base"
+    web-base      = "target:web-e2e-base"
+    web-deps      = "target:web-deps"
+    web-artifacts = WEB_ARTIFACTS_CONTEXT
   }
   tags       = [DOCKER_IMAGE, DOCKER_E2E_IMAGE]
   output     = ["type=docker"]
@@ -137,7 +139,9 @@ target "nook-web-e2e" {
 target "nook-web-e2e-publish" {
   inherits = ["_nook-web-common"]
   contexts = {
-    web-base = "target:web-e2e-base"
+    web-base      = "target:web-e2e-base"
+    web-deps      = "target:web-deps"
+    web-artifacts = WEB_ARTIFACTS_CONTEXT
   }
   output     = ["type=cacheonly"]
   cache-from = web_e2e_cache_from
