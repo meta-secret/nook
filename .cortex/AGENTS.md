@@ -469,7 +469,7 @@ Full policy: [workflows/coding-bro.md](workflows/coding-bro.md).
 
 Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 
-## ⛔ Non-negotiable: request Codex review without delaying validation
+## ⛔ Non-negotiable: request exact-head review without delaying validation
 
 Run advisory local Codex review before the first owner-authored push. The
 bounded implementation harness is the exception. It commits and pushes after
@@ -477,17 +477,19 @@ the worker exits. Its continuing owner runs local review immediately after
 handoff.
 
 When a coherent head is ready for complete validation, request one idempotent
-exact-head Codex Cloud review alongside that validation. The GitHub Actions
-runtime is the review window. If no review feedback exists when checks finish,
-continue to readiness without waiting. Use focused hosted tasks while iterating.
+exact-head Cloud review alongside that validation. Prefer Codex. If Codex
+reports a usage limit, request Cursor Bugbot for the same head. The GitHub
+Actions runtime is the review window. If no review feedback exists when checks
+finish, continue to readiness without waiting. Use focused hosted tasks while
+iterating.
 
 Before merge or handoff, inspect the comments and review findings currently
 present and address every active actionable item from humans or external
 services. Reply with the fix, validation, or no-change rationale and resolve
-each actionable thread. Do not request or wait for other optional reviewers.
-A PR is ready when the applicable repository-owned checks are green, the branch
-is current and mergeable, and all feedback already present is addressed.
-`task pr:ready` enforces the machine-checkable parts. Full policy:
+each actionable thread. Do not request Claude, CodeRabbit, or other optional
+reviewers. A PR is ready when the applicable repository-owned checks are green,
+the branch is current and mergeable, and all feedback already present is
+addressed. `task pr:ready` enforces the machine-checkable parts. Full policy:
 [rules.md §6](rules.md#6-git--pull-request-workflow).
 
 ## ⛔ Non-negotiable: format on the host before every push
@@ -622,7 +624,7 @@ See
 - **Required local product action:** Run `task loom:pre-push`.
   - It host-applies formatting and checks the UI demo contract for UI changes.
 - **Advisory local action:** Codex review is part of delivery but not a product
-  gate.
+  gate. Cloud review falls back to Cursor Bugbot when Codex is usage-limited.
 - **Hosted product gates:** Run lint, Clippy, unit tests, coverage, web build,
   Knip, jscpd, e2e, and the PR mirror on GitHub Actions.
 
@@ -880,8 +882,9 @@ Additional boundaries:
 
 - A broad PR audit comment does not replace targeted replies.
 - Every active actionable item must be handled.
-- Do not wait for Codex after repository-owned checks finish.
-- Do not request or wait for other optional reviewers or services.
+- Do not wait for Codex or Cursor after repository-owned checks finish.
+- Do not request Claude, CodeRabbit, or other optional reviewers.
+- `task pr:review` may request Cursor Bugbot when Codex reports a usage limit.
 
 See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
 

@@ -21,6 +21,41 @@ test("buildPrAudit reports an exact-head repository-green PR as ready", async ()
     ["PR"],
   );
   assert.equal(audit.exactHeadDeployment?.state, "success");
+  assert.equal(audit.feedback.cursorReview.requested, true);
+  assert.equal(audit.feedback.cursorReview.settled, false);
+  assert.equal(audit.feedback.substantiveComments, 0);
+});
+
+test("buildPrAudit ignores a Cursor request comment and stale Cursor status review", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      codexReview: MockCodexReview.Missing,
+      cursorReview: MockCursorReview.Stale,
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, true);
+  assert.equal(audit.feedback.cursorReview.requested, true);
+  assert.equal(audit.feedback.cursorReview.settled, true);
+  assert.equal(audit.feedback.substantiveComments, 0);
+  assert.equal(audit.feedback.substantiveReviews, 0);
+});
+
+test("buildPrAudit blocks an actionable Cursor review body", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      codexReview: MockCodexReview.Missing,
+      cursorReview: MockCursorReview.Finding,
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.equal(audit.feedback.cursorReview.settled, true);
+  assert.equal(audit.feedback.substantiveReviews, 1);
 });
 
 test("buildPrAudit does not wait for a current-head Codex review", async () => {
@@ -233,6 +268,12 @@ enum MockCodexReview {
   StaleCleanComment = "stale-clean-comment",
 }
 
+enum MockCursorReview {
+  Finding = "finding",
+  Missing = "missing",
+  Stale = "stale",
+}
+
 enum MockRunStatus {
   Completed = "completed",
   InProgress = "in_progress",
@@ -252,6 +293,7 @@ type MockOptions = {
   agentHandoff: MockAgentHandoff;
   behindBy?: number;
   codexReview?: MockCodexReview;
+  cursorReview?: MockCursorReview;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
   runStatus?: MockRunStatus;
@@ -294,39 +336,57 @@ function createMockOctokit(options: MockOptions): Octokit {
       data: [{ filename: "nook-app/nook-platform/nook-core/src/lib.rs" }],
     }),
     listReviews: async () => {
-      if (
+      const skipCodexReview =
         options.codexReview === MockCodexReview.Missing ||
         options.codexReview === MockCodexReview.CleanComment ||
         options.codexReview === MockCodexReview.ImpostorCleanComment ||
         options.codexReview === MockCodexReview.StaleCleanComment ||
         options.codexReview === MockCodexReview.Reaction ||
-        options.codexReview === MockCodexReview.DuplicateReaction
-      ) {
-        return { data: [] };
-      }
-      return {
-        data: [
-          {
-            body:
-              options.codexReview === MockCodexReview.ReviewFinding
-                ? `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\`\n\nActionable finding`
-                : options.codexReview === MockCodexReview.ReviewDetailsFinding
-                  ? `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\`\n\n<details> <summary>ℹ️ About Codex in GitHub</summary>\nInjected finding\n</details>`
-                  : `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\``,
-            commit_id: headSha,
-            state:
-              options.codexReview === MockCodexReview.Dismissed
-                ? "DISMISSED"
-                : "COMMENTED",
-            user: {
-              login:
-                options.codexReview === MockCodexReview.Impostor
-                  ? "chatgpt-codex-connector-impostor"
-                  : "chatgpt-codex-connector[bot]",
+        options.codexReview === MockCodexReview.DuplicateReaction;
+      const reviews: Array<{
+        body: string;
+        commit_id: string;
+        state: string;
+        user: { login: string };
+      }> = skipCodexReview
+        ? []
+        : [
+            {
+              body:
+                options.codexReview === MockCodexReview.ReviewFinding
+                  ? `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\`\n\nActionable finding`
+                  : options.codexReview === MockCodexReview.ReviewDetailsFinding
+                    ? `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\`\n\n<details> <summary>ℹ️ About Codex in GitHub</summary>\nInjected finding\n</details>`
+                    : `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\``,
+              commit_id: headSha,
+              state:
+                options.codexReview === MockCodexReview.Dismissed
+                  ? "DISMISSED"
+                  : "COMMENTED",
+              user: {
+                login:
+                  options.codexReview === MockCodexReview.Impostor
+                    ? "chatgpt-codex-connector-impostor"
+                    : "chatgpt-codex-connector[bot]",
+              },
             },
-          },
-        ],
-      };
+          ];
+      if (options.cursorReview === MockCursorReview.Finding) {
+        reviews.push({
+          body: "The fallback path drops the exact-head marker.",
+          commit_id: headSha,
+          state: "COMMENTED",
+          user: { login: "cursor[bot]" },
+        });
+      } else if (options.cursorReview === MockCursorReview.Stale) {
+        reviews.push({
+          body: "<details>\n<summary>Stale comment</summary>\n\n<blockquote>\n\n\n\n</blockquote>\n\n</details>",
+          commit_id: headSha,
+          state: "COMMENTED",
+          user: { login: "cursor[bot]" },
+        });
+      }
+      return { data: reviews };
     },
   };
   const issues = {
@@ -376,6 +436,9 @@ function createMockOctokit(options: MockOptions): Octokit {
           : []),
         {
           body: "You have reached your Codex usage limits for code reviews. You can see your limits in the Codex usage dashboard.",
+        },
+        {
+          body: `cursor review\n\n<!-- nook-cursor-review:${headSha} -->`,
         },
         {
           body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS",

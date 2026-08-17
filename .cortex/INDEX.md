@@ -29,7 +29,7 @@ Use this index to discover relevant knowledge and retrieve exact section anchors
   - [⛔ Non-negotiable: delegate independent semantic work](AGENTS.md#-non-negotiable-delegate-independent-semantic-work)
   - [⛔ Non-negotiable: implementation agents land their PRs](AGENTS.md#-non-negotiable-implementation-agents-land-their-prs)
   - [⛔ Non-negotiable: never kill the Docker daemon](AGENTS.md#-non-negotiable-never-kill-the-docker-daemon)
-  - [⛔ Non-negotiable: request Codex review without delaying validation](AGENTS.md#-non-negotiable-request-codex-review-without-delaying-validation)
+  - [⛔ Non-negotiable: request exact-head review without delaying validation](AGENTS.md#-non-negotiable-request-exact-head-review-without-delaying-validation)
   - [⛔ Non-negotiable: format on the host before every push](AGENTS.md#-non-negotiable-format-on-the-host-before-every-push)
   - [Loom — mechanical cortex rites](AGENTS.md#loom--mechanical-cortex-rites)
   - [⛔ Non-negotiable: heavy agent work runs remotely](AGENTS.md#-non-negotiable-heavy-agent-work-runs-remotely)
