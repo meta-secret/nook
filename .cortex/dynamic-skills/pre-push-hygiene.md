@@ -86,8 +86,7 @@ Invoke:
 task loom:pre-push
 ```
 
-- **Committed default:**
-  [`agentic-ai/loom/params/pre-push/default.yaml`](../../agentic-ai/loom/params/pre-push/default.yaml).
+- **Default:** `task loom:pre-push` uses the in-code pre-push example.
 - **Success:** `ok: true`, `result.formatOk: true`, and `result.uiDemoOk: true`.
 - **Decode failure:** run `task loom:tools-list` and fix the YAML request.
 

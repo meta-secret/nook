@@ -1,13 +1,15 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { decodeAgentStatsAssemblePayload } from '../src/codec/args/agent-stats.ts';
-import { decodePrePushRequest } from '../src/codec/args/pre-push.ts';
 import { RequestFamily, ResponsePhase } from '../src/codec/enums.ts';
 import { DecodeStatus } from '../src/codec/field-error.ts';
+import {
+  EXAMPLE_CATALOG,
+  exampleDocumentNode,
+} from '../src/codec/example-documents.ts';
 import { decodeLoomRequest } from '../src/codec/request.ts';
+import { parseYamlText } from '../src/codec/yaml.ts';
 import { dispatchValue } from '../src/tools/dispatch.ts';
-import { findRepoRoot } from '../src/lib/repo.ts';
+import { decodeAgentStatsAssemblePayload } from '../src/codec/args/agent-stats.ts';
+import { decodePrePushRequest } from '../src/codec/args/pre-push.ts';
 
 import type { DecodeAgentStatsAssemblePayloadArgs } from '../src/codec/args/agent-stats.ts';
 describe('loom domain request codec', () => {
@@ -134,13 +136,14 @@ describe('loom dispatch protocol', () => {
         ),
       ).toBe(false);
       for (const entry of result.requests) {
-        const absoluteExamplePath = path.join(
-          findRepoRoot(),
-          entry.exampleRequest,
-        );
-        expect(entry.exampleYaml).toBe(
-          readFileSync(absoluteExamplePath, 'utf8'),
-        );
+        expect(entry.exampleRequest.startsWith('task loom:')).toBe(true);
+        const parsed = parseYamlText(entry.exampleYaml);
+        expect(parsed.status).toBe(DecodeStatus.Ok);
+        if (parsed.status !== DecodeStatus.Ok) {
+          continue;
+        }
+        const decoded = decodeLoomRequest(parsed.value.value);
+        expect(decoded.status).toBe(DecodeStatus.Ok);
         expect(entry.resolvedExampleYaml.length).toBeGreaterThan(0);
         if (entry.exampleYaml.includes('{agentTempDir}')) {
           expect(entry.resolvedExampleYaml).toContain('/nook-agent-stats/');
@@ -161,7 +164,9 @@ describe('loom dispatch protocol', () => {
     expect(outcome.body.ok).toBe(false);
     if (!outcome.body.ok) {
       expect(outcome.body.phase).toBe(ResponsePhase.Decode);
-      expect(outcome.body.recover.toolsListRequest).toContain('tools-list');
+      expect(outcome.body.recover.toolsListRequest).toBe(
+        'task loom:tools-list',
+      );
     }
   });
 
@@ -181,6 +186,15 @@ describe('loom dispatch protocol', () => {
           (entry) => entry.path === 'prePush.fetchOriginMain',
         ),
       ).toBe(true);
+    }
+  });
+});
+
+describe('typed example documents', () => {
+  test('every catalog example decodes as a domain request', () => {
+    for (const entry of EXAMPLE_CATALOG) {
+      const decoded = decodeLoomRequest(exampleDocumentNode(entry.document));
+      expect(decoded.status).toBe(DecodeStatus.Ok);
     }
   });
 });
