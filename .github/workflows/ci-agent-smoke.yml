@@ -31,6 +31,8 @@ jobs:
 
       - name: Install Task
         uses: go-task/setup-task@v2
+        with:
+          version: 3.52.0
 
       - name: Install and unit-test ci-agent
         run: task ci-agent:test

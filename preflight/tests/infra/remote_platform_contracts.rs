@@ -126,6 +126,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "registry",
         "sccache",
         "hive",
+        "hive-queue",
         "operations",
         "bake-cache",
     ];

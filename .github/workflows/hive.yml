@@ -83,6 +83,8 @@ jobs:
 
       - name: Install Task
         uses: go-task/setup-task@v2
+        with:
+          version: 3.52.0
 
       - name: Install Bun
         uses: oven-sh/setup-bun@v2

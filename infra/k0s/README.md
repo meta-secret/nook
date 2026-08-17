@@ -160,3 +160,11 @@ The Taskfile reads the currently deployed image digest and permits one recovery
 for that release. Repeating the command against the same release is refused;
 deploying a distinct platform repair creates one new bounded recovery
 generation.
+
+Retire a superseded or unsolvable task and its exclusive descendants:
+
+```bash
+task infra:hive:queue:cancel \
+  HIVE_TASK_ID=main-failure-<full-main-sha> \
+  HIVE_CANCEL_REASON="superseded by current Main"
+```

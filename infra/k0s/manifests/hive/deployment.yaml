@@ -94,9 +94,9 @@ spec:
             - name: HIVE_POLL_MAX_SECONDS
               value: "15"
             - name: HIVE_CODEX_MODEL
-              value: gpt-5.6-terra
+              value: gpt-5.6-sol
             - name: HIVE_CODEX_REASONING_EFFORT
-              value: low
+              value: medium
             - name: HIVE_AUTH_SOCKET
               value: /run/hive-auth/broker.sock
             - name: HIVE_COORDINATOR_SOCKET
