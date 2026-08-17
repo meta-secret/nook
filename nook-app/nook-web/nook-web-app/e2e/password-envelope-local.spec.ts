@@ -119,7 +119,7 @@ test.describe('vault password envelope (local)', () => {
     }
     await unlockVaultOnLogin(page, { password: 'reload-pass' })
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page).toHaveURL(/\/admin$/)
   })

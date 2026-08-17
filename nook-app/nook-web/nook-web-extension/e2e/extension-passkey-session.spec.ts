@@ -362,7 +362,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       reopenedVaultPage.getByTestId('authenticated-shell'),
     ).toBeVisible({
-      timeout: 15_000,
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
     await expect(
       reopenedVaultPage.getByTestId('passkey-auth-overlay'),

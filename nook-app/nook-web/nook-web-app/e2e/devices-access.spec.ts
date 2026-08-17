@@ -102,7 +102,10 @@ test.describe('devices and access dashboard', () => {
       'Create or connect a vault, or select one from the Vault menu',
     )
     await page.getByTestId('devices-access-perspective-identities').click()
-    await page.getByTestId('devices-access-node-vaults').click()
+    await expect(vaultsNode).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await vaultsNode.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await expect(dashboard).toContainText(
       'Create or connect a vault to see its access here',
     )
