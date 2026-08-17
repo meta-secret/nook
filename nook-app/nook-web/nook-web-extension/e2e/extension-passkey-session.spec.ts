@@ -564,7 +564,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     ).toHaveCount(0)
     await expect(
       reopenedVaultPage.getByTestId('authenticated-shell'),
-    ).toBeVisible()
+    ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
     if (!isHostedSmoke) {
       expect(
         await reopenedVaultPage.evaluate(

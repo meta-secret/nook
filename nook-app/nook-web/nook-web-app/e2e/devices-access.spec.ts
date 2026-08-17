@@ -102,6 +102,7 @@ test.describe('devices and access dashboard', () => {
       'Create or connect a vault, or select one from the Vault menu',
     )
     await page.getByTestId('devices-access-perspective-identities').click()
+    const vaultsNode = page.getByTestId('devices-access-node-vaults')
     await expect(vaultsNode).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
