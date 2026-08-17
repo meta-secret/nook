@@ -80,9 +80,16 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
              CREATE (blocker_child:Task {
                id: 'schema-8-blocker-child',
                kind: 'blocker',
-               status: 'READY',
+               status: 'COMPLETED',
                source_commit: '0123456789abcdef0123456789abcdef01234567'
              })
+             CREATE (active_consumer:Task {
+               id: 'schema-8-active-consumer',
+               kind: 'main-repair',
+               status: 'BLOCKED',
+               source_commit: '0123456789abcdef0123456789abcdef01234567'
+             })
+             CREATE (active_consumer)-[:DEPENDS_ON]->(blocker_parent)
              CREATE (blocker_parent)-[:DEPENDS_ON]->(blocker_child)
              CREATE (completed_parent:Task {
                id: 'schema-8-completed-blocker-parent',
@@ -96,6 +103,13 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
                status: 'COMPLETED',
                source_commit: '0123456789abcdef0123456789abcdef01234567'
              })
+             CREATE (historical_consumer:Task {
+               id: 'schema-8-historical-consumer',
+               kind: 'main-repair',
+               status: 'READY',
+               source_commit: '0123456789abcdef0123456789abcdef01234567'
+             })
+             CREATE (historical_consumer)-[:DEPENDS_ON]->(completed_parent)
              CREATE (completed_parent)-[:DEPENDS_ON]->(completed_child)",
         ))
         .await
@@ -109,10 +123,17 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
              MATCH (retired:Task {id: 'schema-7-retired-task'})
              MATCH (retired_attempt:Attempt {id: 'schema-7-retired-attempt'})
              MATCH (blocker_parent:Task {id: 'schema-8-blocker-parent'})
+             MATCH (blocker_child:Task {id: 'schema-8-blocker-child'})
+             MATCH (active_consumer:Task {id: 'schema-8-active-consumer'})
              MATCH (completed_parent:Task {id: 'schema-8-completed-blocker-parent'})
+             MATCH (completed_child:Task {id: 'schema-8-completed-blocker-child'})
+             MATCH (historical_consumer:Task {id: 'schema-8-historical-consumer'})
              MATCH (migration:HiveSchemaMigration {version: 9})
              OPTIONAL MATCH (blocker_parent)-[nested:DEPENDS_ON]->(:Task)
              OPTIONAL MATCH (completed_parent)-[history:DEPENDS_ON]->(:Task)
+             OPTIONAL MATCH (active_consumer)-[active_flattened:DEPENDS_ON]->(blocker_child)
+             OPTIONAL MATCH
+               (historical_consumer)-[history_flattened:DEPENDS_ON]->(completed_child)
              RETURN task.last_retry_release AS last_retry_release,
                     task.manual_retry_used IS NULL AS removed_legacy_marker,
                     activity_task.latest_activity_at AS latest_activity_at,
@@ -125,6 +146,10 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
                     blocker_parent.version AS blocker_version,
                     count(DISTINCT nested) AS nested_dependencies,
                     count(DISTINCT history) AS historical_dependencies,
+                    count(DISTINCT active_flattened) AS active_flattened_dependencies,
+                    max(active_flattened.artifact_depth) AS active_artifact_depth,
+                    count(DISTINCT history_flattened) AS history_flattened_dependencies,
+                    max(history_flattened.artifact_depth) AS history_artifact_depth,
                     migration.version AS version",
         ))
         .await?;
@@ -143,7 +168,11 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
     assert!(migrated.get::<bool>("blocker_reason_removed")?);
     assert_eq!(migrated.get::<i64>("blocker_version")?, 5);
     assert_eq!(migrated.get::<i64>("nested_dependencies")?, 0);
-    assert_eq!(migrated.get::<i64>("historical_dependencies")?, 1);
+    assert_eq!(migrated.get::<i64>("historical_dependencies")?, 0);
+    assert_eq!(migrated.get::<i64>("active_flattened_dependencies")?, 1);
+    assert_eq!(migrated.get::<i64>("active_artifact_depth")?, 2);
+    assert_eq!(migrated.get::<i64>("history_flattened_dependencies")?, 1);
+    assert_eq!(migrated.get::<i64>("history_artifact_depth")?, 2);
     assert_eq!(migrated.get::<i64>("version")?, 9);
     let mut rollback_rows = graph
         .execute(query(

@@ -320,7 +320,11 @@ impl TaskStore for Neo4jTaskStore {
                        -[:PRODUCED]->(dependency_artifact:Artifact {kind: 'git-patch'})
                      WITH task, dependency_ids, dependency_summaries,
                           dependency_artifact,
-                          max(length(dependency_path)) AS dependency_depth
+                          max(reduce(
+                            depth = 0,
+                            dependency_edge IN relationships(dependency_path) |
+                              depth + coalesce(dependency_edge.artifact_depth, 1)
+                          )) AS dependency_depth
                      ORDER BY dependency_depth DESC, dependency_artifact.id ASC
                      WITH task, dependency_ids, dependency_summaries,
                           [value IN collect(dependency_artifact.id) WHERE value IS NOT NULL] AS artifact_ids,

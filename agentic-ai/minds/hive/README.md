@@ -155,13 +155,15 @@ task's newest activity timestamp so bounded overview polling does not aggregate
 the retained activity graph. Version 8 initializes the explicit `obsolete`
 retirement marker on every `Task` and `Attempt`; new writes always persist the
 boolean so obsolete dependency revival is durable and queryable. Version 9
-detaches dependency edges owned by active blocker tasks and rearms blocked
-parents as `READY` dependency leaves. It retains completed blocker edges so
-their transitive artifact order remains available to unfinished consumers.
+flattens blocker-chain descendants directly onto each non-blocker consumer.
+The flattened relationships retain their prior dependency depth so child
+artifacts apply before parent artifacts. It then detaches every blocker-owned
+dependency edge and rearms blocked parents as `READY` dependency leaves. That
+also prevents an obsolete completed blocker from restoring a nested chain.
 
 To roll version 9 back to a version-8 binary, first stop every Hive worker,
 coordinator, observer, and dispatcher and back up the Neo4j data volume. The
-removed active dependency edges cannot be reconstructed from the migrated
+removed blocker-owned dependency edges cannot be reconstructed from the migrated
 graph. Either restore the pre-version-9 backup, or drain the entire active queue
 with schema-9 Hive until this query returns zero:
 

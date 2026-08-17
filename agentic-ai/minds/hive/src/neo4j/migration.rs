@@ -103,8 +103,27 @@ pub(super) async fn migrate(graph: &Graph) -> crate::HiveResult<()> {
     if installed_version < 9 {
         graph
             .run(query(
+                "MATCH path =
+                       (consumer:Task)-[:DEPENDS_ON*2..]->(descendant:Task)
+                     WHERE consumer.kind <> 'blocker'
+                       AND all(
+                         intermediate IN nodes(path)[1..-1]
+                         WHERE intermediate.kind = 'blocker'
+                       )
+                     WITH consumer, descendant,
+                          max(length(path)) AS artifact_depth
+                     MERGE (consumer)-[flattened:DEPENDS_ON]->(descendant)
+                     SET flattened.artifact_depth = CASE
+                       WHEN coalesce(flattened.artifact_depth, 1) < artifact_depth
+                         THEN artifact_depth
+                       ELSE coalesce(flattened.artifact_depth, 1)
+                     END",
+            ))
+            .await
+            .hive_context("failed to flatten schema-9 blocker dependencies")?;
+        graph
+            .run(query(
                 "MATCH (blocker:Task {kind: 'blocker'})-[edge:DEPENDS_ON]->(:Task)
-                     WHERE blocker.status IN ['READY', 'RUNNING', 'BLOCKED']
                      WITH blocker, collect(edge) AS edges,
                           blocker.status AS prior_status
                      FOREACH (edge IN edges | DELETE edge)
