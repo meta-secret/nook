@@ -32,7 +32,7 @@ const OUTPUT_SCHEMA: &str = include_str!("planner-output.schema.json");
 const TASK_OUTPUT_SCHEMA: &str = include_str!("task-output.schema.json");
 pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.6-sol";
 pub const DEFAULT_CODEX_REASONING_EFFORT: &str = "medium";
-pub const SOL_EXHAUSTED_CODEX_MODEL: &str = "gpt-5.3-spark";
+pub const SOL_EXHAUSTED_CODEX_MODEL: &str = "gpt-5.3-codex-spark";
 pub const SOL_EXHAUSTED_CODEX_REASONING_EFFORT: &str = "xhigh";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

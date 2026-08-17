@@ -17,7 +17,7 @@ transaction, leases, attempts, and results. A narrow coordinator sidecar owns
 the Neo4j credential and exposes only typed worker operations over one private
 Unix connection; repository commands cannot issue raw graph queries.
 
-Every embedded turn is pinned to `gpt-5.6-terra` with `low` reasoning effort,
+Every embedded turn is pinned to `gpt-5.6-sol` with `medium` reasoning effort,
 which
 is the CLI/config representation of Codex Light. The binary and Kubernetes
 deployment carry the same explicit defaults so a platform-default change
