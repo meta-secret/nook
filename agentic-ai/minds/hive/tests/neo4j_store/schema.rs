@@ -1,4 +1,5 @@
 use anyhow::Context;
+use hive::model::{AgentId, Artifact, CompletionArtifact};
 use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{Graph, query};
 
@@ -68,7 +69,49 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
                id: 'schema-7-retired-attempt',
                status: 'COMPLETED',
                obsolete: true
-             })",
+             })
+             CREATE (blocker_parent:Task {
+               id: 'schema-8-blocker-parent',
+               kind: 'blocker',
+               status: 'BLOCKED',
+               blocked_reason: 'nested dependency',
+               source_commit: '0123456789abcdef0123456789abcdef01234567',
+               version: 4
+             })
+             CREATE (blocker_child:Task {
+               id: 'schema-8-blocker-child',
+               kind: 'blocker',
+               status: 'READY',
+               source_commit: '0123456789abcdef0123456789abcdef01234567'
+             })
+             CREATE (active_consumer:Task {
+               id: 'schema-8-active-consumer',
+               kind: 'main-repair',
+               status: 'BLOCKED',
+               source_commit: '0123456789abcdef0123456789abcdef01234567'
+             })
+             CREATE (active_consumer)-[:DEPENDS_ON]->(blocker_parent)
+             CREATE (blocker_parent)-[:DEPENDS_ON]->(blocker_child)
+             CREATE (completed_parent:Task {
+               id: 'schema-8-completed-blocker-parent',
+               kind: 'blocker',
+               status: 'COMPLETED',
+               source_commit: '0123456789abcdef0123456789abcdef01234567'
+             })
+             CREATE (completed_child:Task {
+               id: 'schema-8-completed-blocker-child',
+               kind: 'blocker',
+               status: 'COMPLETED',
+               source_commit: '0123456789abcdef0123456789abcdef01234567'
+             })
+             CREATE (historical_consumer:Task {
+               id: 'schema-8-historical-consumer',
+               kind: 'main-repair',
+               status: 'READY',
+               source_commit: '0123456789abcdef0123456789abcdef01234567'
+             })
+             CREATE (historical_consumer)-[:DEPENDS_ON]->(completed_parent)
+             CREATE (completed_parent)-[:DEPENDS_ON]->(completed_child)",
         ))
         .await
         .context("create schema-3 fixture")?;
@@ -80,7 +123,19 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
              MATCH (attempt:Attempt {id: 'schema-7-attempt'})
              MATCH (retired:Task {id: 'schema-7-retired-task'})
              MATCH (retired_attempt:Attempt {id: 'schema-7-retired-attempt'})
-             MATCH (migration:HiveSchemaMigration {version: 8})
+             MATCH (blocker_parent:Task {id: 'schema-8-blocker-parent'})
+             MATCH (blocker_child:Task {id: 'schema-8-blocker-child'})
+             MATCH (active_consumer:Task {id: 'schema-8-active-consumer'})
+             MATCH (completed_parent:Task {id: 'schema-8-completed-blocker-parent'})
+             MATCH (completed_child:Task {id: 'schema-8-completed-blocker-child'})
+             MATCH (historical_consumer:Task {id: 'schema-8-historical-consumer'})
+             MATCH (migration:HiveSchemaMigration {version: 9})
+             OPTIONAL MATCH (blocker_parent)-[nested:DEPENDS_ON]->(:Task)
+             OPTIONAL MATCH (completed_parent)-[history:DEPENDS_ON]->(:Task)
+             OPTIONAL MATCH
+               (blocker_parent)-[active_lineage:INCLUDES_ARTIFACT_FROM]->(blocker_child)
+             OPTIONAL MATCH
+               (completed_parent)-[history_lineage:INCLUDES_ARTIFACT_FROM]->(completed_child)
              RETURN task.last_retry_release AS last_retry_release,
                     task.manual_retry_used IS NULL AS removed_legacy_marker,
                     activity_task.latest_activity_at AS latest_activity_at,
@@ -88,13 +143,20 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
                     attempt.obsolete AS attempt_obsolete,
                     retired.obsolete AS retired_obsolete,
                     retired_attempt.obsolete AS retired_attempt_obsolete,
+                    blocker_parent.status AS blocker_status,
+                    blocker_parent.blocked_reason IS NULL AS blocker_reason_removed,
+                    blocker_parent.version AS blocker_version,
+                    count(DISTINCT nested) AS nested_dependencies,
+                    count(DISTINCT history) AS historical_dependencies,
+                    count(DISTINCT active_lineage) AS active_lineage_count,
+                    count(DISTINCT history_lineage) AS history_lineage_count,
                     migration.version AS version",
         ))
         .await?;
     let migrated = rows
         .next()
         .await?
-        .ok_or_else(|| anyhow::anyhow!("schema-8 migration row was missing"))?;
+        .ok_or_else(|| anyhow::anyhow!("schema-9 migration row was missing"))?;
     assert_eq!(migrated.get::<String>("last_retry_release")?, "");
     assert!(migrated.get::<bool>("removed_legacy_marker")?);
     assert_eq!(migrated.get::<i64>("latest_activity_at")?, 123456);
@@ -102,7 +164,14 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
     assert!(!migrated.get::<bool>("attempt_obsolete")?);
     assert!(migrated.get::<bool>("retired_obsolete")?);
     assert!(migrated.get::<bool>("retired_attempt_obsolete")?);
-    assert_eq!(migrated.get::<i64>("version")?, 8);
+    assert_eq!(migrated.get::<String>("blocker_status")?, "BLOCKED");
+    assert!(!migrated.get::<bool>("blocker_reason_removed")?);
+    assert_eq!(migrated.get::<i64>("blocker_version")?, 4);
+    assert_eq!(migrated.get::<i64>("nested_dependencies")?, 1);
+    assert_eq!(migrated.get::<i64>("historical_dependencies")?, 0);
+    assert_eq!(migrated.get::<i64>("active_lineage_count")?, 0);
+    assert_eq!(migrated.get::<i64>("history_lineage_count")?, 1);
+    assert_eq!(migrated.get::<i64>("version")?, 9);
     let mut rollback_rows = graph
         .execute(query(
             "MATCH (task:Task {id: 'schema-4-rollback-task'})
@@ -120,6 +189,171 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
     graph
         .run(query("MATCH (node) DETACH DELETE node"))
         .await
-        .context("clean schema-8 migration fixture")?;
+        .context("clean schema-9 migration fixture")?;
+    graph
+        .run(query(
+            "CREATE (:HiveSchemaMigration {version: 8})
+             CREATE (consumer:Task {
+               id: 'schema-9-artifact-consumer',
+               kind: 'main-repair',
+               status: 'READY',
+               prompt: 'Apply migrated dependency artifacts',
+               source_commit: '0123456789abcdef0123456789abcdef01234567',
+               priority: 1,
+               created_at: 1,
+               attempt_count: 0,
+               max_attempts: 3,
+               version: 0
+             })
+             CREATE (parent:Task {
+               id: 'schema-9-artifact-parent',
+               kind: 'blocker',
+               status: 'COMPLETED'
+             })
+             CREATE (child:Task {
+               id: 'schema-9-artifact-child',
+               kind: 'blocker',
+               status: 'COMPLETED'
+             })
+             CREATE (consumer)-[:DEPENDS_ON]->(parent)
+             CREATE (parent)-[:DEPENDS_ON]->(child)
+             CREATE (parent_attempt:Attempt {
+               id: 'schema-9-parent-attempt',
+               status: 'COMPLETED'
+             })-[:FOR_TASK]->(parent)
+             CREATE (parent_attempt)-[:PRODUCED]->(:Artifact {
+               id: 'schema-9-parent-artifact',
+               kind: 'git-patch',
+               uri: 'hive://artifact/schema-9-parent-artifact',
+               digest: 'sha256:parent',
+               content: 'parent patch'
+             })
+             CREATE (child_attempt:Attempt {
+               id: 'schema-9-child-attempt',
+               status: 'COMPLETED'
+             })-[:FOR_TASK]->(child)
+             CREATE (child_attempt)-[:PRODUCED]->(:Artifact {
+               id: 'schema-9-child-artifact',
+               kind: 'git-patch',
+               uri: 'hive://artifact/schema-9-child-artifact',
+               digest: 'sha256:child',
+               content: 'child patch'
+             })",
+        ))
+        .await
+        .context("create schema-9 artifact lineage fixture")?;
+    store.migrate().await?;
+    let agent = AgentId::new("schema-9-artifact-agent")?;
+    store
+        .register_agent(&agent, "schema-9-artifact-pod")
+        .await?;
+    let claimed = store.claim(&agent, 300).await?.into_claimed()?;
+    assert_eq!(claimed.id.as_str(), "schema-9-artifact-consumer");
+    assert_eq!(
+        claimed
+            .dependency_artifacts
+            .iter()
+            .map(|artifact| artifact.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["schema-9-child-artifact", "schema-9-parent-artifact"]
+    );
+    graph
+        .run(query("MATCH (node) DETACH DELETE node"))
+        .await
+        .context("clean schema-9 artifact lineage fixture")?;
+    graph
+        .run(query(
+            "CREATE (:HiveSchemaMigration {version: 8})
+             CREATE (parent:Task {
+               id: 'schema-9-active-parent',
+               kind: 'blocker',
+               status: 'BLOCKED',
+               prompt: 'Finish after the active child',
+               source_commit: '0123456789abcdef0123456789abcdef01234567',
+               priority: 1,
+               created_at: 2,
+               attempt_count: 0,
+               max_attempts: 3,
+               version: 0
+             })
+             CREATE (child:Task {
+               id: 'schema-9-active-child',
+               kind: 'blocker',
+               status: 'READY',
+               prompt: 'Complete the retained child repair',
+               source_commit: '0123456789abcdef0123456789abcdef01234567',
+               priority: 2,
+               created_at: 1,
+               attempt_count: 0,
+               max_attempts: 3,
+               version: 0
+             })
+             CREATE (parent)-[:DEPENDS_ON]->(child)",
+        ))
+        .await
+        .context("create schema-9 active child fixture")?;
+    store.migrate().await?;
+    let active_agent = AgentId::new("schema-9-active-agent")?;
+    store
+        .register_agent(&active_agent, "schema-9-active-pod")
+        .await?;
+    let child = store.claim(&active_agent, 300).await?.into_claimed()?;
+    assert_eq!(child.id.as_str(), "schema-9-active-child");
+    let child_artifact = CompletionArtifact::Produced(Artifact {
+        id: "schema-9-active-child-artifact".to_owned(),
+        kind: "git-patch".to_owned(),
+        uri: "hive://artifact/schema-9-active-child-artifact".to_owned(),
+        digest: "sha256:active-child".to_owned(),
+        content: "active child patch".to_owned(),
+    });
+    assert!(
+        store
+            .complete(
+                &child,
+                &active_agent,
+                false,
+                "active child repair completed",
+                &child_artifact,
+            )
+            .await?
+    );
+    let mut transition_rows = graph
+        .execute(query(
+            "MATCH (parent:Task {id: 'schema-9-active-parent'})
+             MATCH (child:Task {id: 'schema-9-active-child'})
+             OPTIONAL MATCH (parent)-[dependency:DEPENDS_ON]->(child)
+             OPTIONAL MATCH (parent)-[lineage:INCLUDES_ARTIFACT_FROM]->(child)
+             RETURN parent.status AS parent_status,
+                    count(DISTINCT dependency) AS dependencies,
+                    count(DISTINCT lineage) AS lineage",
+        ))
+        .await?;
+    let transitioned = transition_rows
+        .next()
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("active child transition row was missing"))?;
+    assert_eq!(transitioned.get::<String>("parent_status")?, "READY");
+    assert_eq!(transitioned.get::<i64>("dependencies")?, 0);
+    assert_eq!(transitioned.get::<i64>("lineage")?, 1);
+    let parent = store.claim(&active_agent, 300).await?.into_claimed()?;
+    assert_eq!(parent.id.as_str(), "schema-9-active-parent");
+    assert_eq!(parent.dependency_context.len(), 1);
+    assert_eq!(
+        parent.dependency_context[0].id.as_str(),
+        "schema-9-active-child"
+    );
+    assert_eq!(
+        parent.dependency_context[0].summary.as_str(),
+        "active child repair completed"
+    );
+    assert_eq!(parent.dependency_artifacts.len(), 1);
+    assert_eq!(
+        parent.dependency_artifacts[0].id.as_str(),
+        "schema-9-active-child-artifact"
+    );
+    graph
+        .run(query("MATCH (node) DETACH DELETE node"))
+        .await
+        .context("clean schema-9 active child fixture")?;
     Ok(())
 }
