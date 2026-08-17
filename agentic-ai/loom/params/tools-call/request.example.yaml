@@ -1,4 +1,0 @@
-toolsCall:
-  prePush:
-    stageHostUpdates: true
-    fetchOriginMain: true

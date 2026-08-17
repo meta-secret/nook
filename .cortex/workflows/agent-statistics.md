@@ -106,8 +106,7 @@ task loom:agent-stats CONFIG=path/to/agent-owned/assemble-request.yaml
 
 - **Validate and publish:** use `agentStats.validate` or `agentStats.publish`
   with `statsFile: "{agentTempDir}/123.yaml"`.
-- **Examples:**
-  [`agentic-ai/loom/params/agent-stats/`](../../agentic-ai/loom/params/agent-stats/).
+- **Examples:** copy `exampleYaml` from `task loom:tools-list`.
 - **Protocol:** [Loom tools](../references/loom-tools.md).
 - **Loom owns:** PR metadata, Actions runs, optional test inventory, and summary
   derivations.
