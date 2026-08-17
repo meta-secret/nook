@@ -36,7 +36,7 @@ pub(super) fn assert_scope_arms(
     Ok(())
 }
 
-pub(super) fn assignment_body<'a>(bake: &'a str, name: &str) -> anyhow::Result<&'a str> {
+pub(crate) fn assignment_body<'a>(bake: &'a str, name: &str) -> anyhow::Result<&'a str> {
     let marker = format!("{name} =");
     let rest = bake
         .split_once(marker.as_str())
@@ -60,7 +60,7 @@ pub(super) fn assignment_body<'a>(bake: &'a str, name: &str) -> anyhow::Result<&
     Ok(rest[..end].trim())
 }
 
-pub(super) fn split_fallback_arms(body: &str) -> anyhow::Result<(&str, &str)> {
+pub(crate) fn split_fallback_arms(body: &str) -> anyhow::Result<(&str, &str)> {
     const FALLBACK_MARK: &str = "GHA_CACHE_FALLBACK_ENABLED != \"\" ? [";
     const ARM_SPLIT: &str = "] : [";
     let after = body

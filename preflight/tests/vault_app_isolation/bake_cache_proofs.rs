@@ -8,7 +8,7 @@ use anyhow::Context;
 use std::fs;
 
 #[path = "bake_cache_proofs/support.rs"]
-mod support;
+pub(crate) mod support;
 
 use support::*;
 

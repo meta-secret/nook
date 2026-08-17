@@ -1,4 +1,5 @@
 use super::*;
+use super::bake_cache_proofs::support::{assignment_body, split_fallback_arms};
 use anyhow::Context;
 
 #[test]
