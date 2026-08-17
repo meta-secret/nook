@@ -277,6 +277,8 @@ complete. Hive then:
 - A nested blocker result becomes a failed attempt on the leaf.
 - Hive does not create a child task.
 - The bounded retry budget completes the leaf or fails its dependent chain.
+- Schema migration 9 detaches retained blocker-owned dependency edges.
+- It rearms blocked parents as leaves so the bounded policy drains old chains.
 
 When the blocker completes, its Git patch becomes a dependency artifact. A
 replacement worker verifies the artifact digest, applies it to the same pinned
