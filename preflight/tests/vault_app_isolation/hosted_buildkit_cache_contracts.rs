@@ -47,11 +47,7 @@ fn cold_exact_cache_scopes_do_not_import_in_progress_registry_exports() -> anyho
         assert_isolated_fallback_tolerates_bad_registry_artifacts(bake, cache);
     }
 
-    assert_cache_importers_ignore_errors(
-        web_bake.as_str(),
-        "web_cache_from",
-        "web_cache_to",
-    );
+    assert_cache_importers_ignore_errors(web_bake.as_str(), "web_cache_from", "web_cache_to");
     assert_cache_importers_ignore_errors(
         web_toolchain.as_str(),
         "web_deps_cache_from",
