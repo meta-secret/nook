@@ -27,6 +27,8 @@ jobs:
 
       - name: Setup Task
         uses: go-task/setup-task@v2
+        with:
+          version: 3.52.0
 
       - name: Docker disk usage before cleanup
         run: docker system df
