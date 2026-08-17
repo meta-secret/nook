@@ -155,12 +155,13 @@ task's newest activity timestamp so bounded overview polling does not aggregate
 the retained activity graph. Version 8 initializes the explicit `obsolete`
 retirement marker on every `Task` and `Attempt`; new writes always persist the
 boolean so obsolete dependency revival is durable and queryable. Version 9
-converts blocker-owned `DEPENDS_ON` edges to `INCLUDES_ARTIFACT_FROM` lineage.
-Claims traverse that non-scheduling lineage in depth order so child artifacts
-apply before parent artifacts, including when a completed blocker is reused by
-a future consumer. Scheduling and rearm traversal ignore the lineage. Blocked
-parents become `READY` dependency leaves, and obsolete completed blockers cannot
-restore nested scheduling chains.
+converts blocker edges whose children are already `COMPLETED` to
+`INCLUDES_ARTIFACT_FROM` lineage. An active child retains its scheduling edge
+until completion atomically converts that edge and readies its parent. The leaf
+policy prevents retained chains from growing while they drain. Claims traverse
+the non-scheduling lineage in depth order so child artifacts apply before parent
+artifacts, including when a completed blocker is reused by a future consumer.
+Scheduling and rearm traversal ignore the lineage.
 
 To roll version 9 back to a version-8 binary, first stop every Hive worker,
 coordinator, observer, and dispatcher and back up the Neo4j data volume. The

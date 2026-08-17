@@ -104,17 +104,26 @@ pub(super) async fn migrate(graph: &Graph) -> crate::HiveResult<()> {
         graph
             .run(query(
                 "MATCH (blocker:Task {kind: 'blocker'})-[edge:DEPENDS_ON]->(dependency:Task)
+                     WHERE dependency.status = 'COMPLETED'
                      WITH blocker, dependency, edge,
                           blocker.status AS prior_status
                      MERGE (blocker)-[:INCLUDES_ARTIFACT_FROM]->(dependency)
                      DELETE edge
                      WITH DISTINCT blocker, prior_status
                      SET blocker.status = CASE
-                           WHEN prior_status = 'BLOCKED' THEN 'READY'
+                           WHEN prior_status = 'BLOCKED'
+                             AND NOT EXISTS {
+                               MATCH (blocker)-[:DEPENDS_ON]->(:Task)
+                             }
+                             THEN 'READY'
                            ELSE prior_status
                          END,
                          blocker.blocked_reason = CASE
-                           WHEN prior_status = 'BLOCKED' THEN null
+                           WHEN prior_status = 'BLOCKED'
+                             AND NOT EXISTS {
+                               MATCH (blocker)-[:DEPENDS_ON]->(:Task)
+                             }
+                             THEN null
                            ELSE blocker.blocked_reason
                          END,
                          blocker.updated_at = timestamp(),

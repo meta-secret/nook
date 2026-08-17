@@ -630,6 +630,18 @@ impl TaskStore for Neo4jTaskStore {
         }
 
         transaction
+            .run(
+                query(
+                    "MATCH (blocker:Task {kind: 'blocker'})-[edge:DEPENDS_ON]->
+                           (task:Task {id: $task_id, status: 'COMPLETED'})
+                     MERGE (blocker)-[:INCLUDES_ARTIFACT_FROM]->(task)
+                     DELETE edge",
+                )
+                .param("task_id", task.id.as_str()),
+            )
+            .await?;
+
+        transaction
             .run(query(
                 "MATCH (blocked:Task {status: 'BLOCKED'})
                  WHERE NOT EXISTS {

@@ -278,10 +278,12 @@ complete. Hive then:
 - Hive records that result as a failed attempt on the leaf.
 - Hive does not create a child task.
 - The bounded retry budget completes the leaf or fails its dependent chain.
-- Schema migration 9 converts blocker-owned dependency edges to artifact lineage.
+- Schema migration 9 converts completed-child edges to artifact lineage.
+- An active child keeps its scheduling edge until it reaches `COMPLETED`.
+- Completion atomically converts that final edge and readies the parent leaf.
 - Claims traverse that lineage in depth order so child patches apply first.
 - Scheduling and rearm traversal ignore artifact-lineage edges.
-- It rearms blocked parents as leaves so the bounded policy drains old chains.
+- The leaf policy prevents active retained chains from growing while they drain.
 
 When the blocker completes, its Git patch becomes a dependency artifact. A
 replacement worker verifies the artifact digest, applies it to the same pinned

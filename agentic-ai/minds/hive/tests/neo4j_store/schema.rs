@@ -81,7 +81,7 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
              CREATE (blocker_child:Task {
                id: 'schema-8-blocker-child',
                kind: 'blocker',
-               status: 'COMPLETED',
+               status: 'READY',
                source_commit: '0123456789abcdef0123456789abcdef01234567'
              })
              CREATE (active_consumer:Task {
@@ -164,12 +164,12 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
     assert!(!migrated.get::<bool>("attempt_obsolete")?);
     assert!(migrated.get::<bool>("retired_obsolete")?);
     assert!(migrated.get::<bool>("retired_attempt_obsolete")?);
-    assert_eq!(migrated.get::<String>("blocker_status")?, "READY");
-    assert!(migrated.get::<bool>("blocker_reason_removed")?);
-    assert_eq!(migrated.get::<i64>("blocker_version")?, 5);
-    assert_eq!(migrated.get::<i64>("nested_dependencies")?, 0);
+    assert_eq!(migrated.get::<String>("blocker_status")?, "BLOCKED");
+    assert!(!migrated.get::<bool>("blocker_reason_removed")?);
+    assert_eq!(migrated.get::<i64>("blocker_version")?, 4);
+    assert_eq!(migrated.get::<i64>("nested_dependencies")?, 1);
     assert_eq!(migrated.get::<i64>("historical_dependencies")?, 0);
-    assert_eq!(migrated.get::<i64>("active_lineage_count")?, 1);
+    assert_eq!(migrated.get::<i64>("active_lineage_count")?, 0);
     assert_eq!(migrated.get::<i64>("history_lineage_count")?, 1);
     assert_eq!(migrated.get::<i64>("version")?, 9);
     let mut rollback_rows = graph
