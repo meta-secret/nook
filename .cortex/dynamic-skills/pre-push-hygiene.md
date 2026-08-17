@@ -1,53 +1,5 @@
 # Pre-Push Hygiene
 
-## Relationships
-
-- [Cortex document navigation](cortex-document-map.md)
-  - Defines the mandatory relationship and internal-map structure.
-  - Apply whenever this skill card changes.
-- [Cortex writer](cortex-writer.md)
-  - Keeps the card and its navigation summaries concise.
-  - Apply while editing or reviewing this guidance.
-- [Cortex consistency](cortex-consistency.md)
-  - Requires the card to agree with related guidance and current code.
-  - Apply when rules, paths, commands, or examples change.
-- [Remote execution](../workflows/remote-execution.md)
-  - Defines the hosted execution boundary used after pre-push hygiene.
-  - Read before selecting focused remote validation.
-- [Loom tools](../references/loom-tools.md)
-  - Defines the typed pre-push request and related Loom entrypoints.
-  - Read when changing or invoking pre-push automation.
-
-## Document map
-
-- [Purpose](#purpose)
-  - Explains why the skill exists and what invariant it protects.
-  - Read first to decide whether the skill applies.
-- [Problem Pattern](#problem-pattern)
-  - Identifies the recurring rejected pattern and its warning signs.
-  - Read while locating or reviewing violations.
-- [Preferred Pattern](#preferred-pattern)
-  - Defines the required structure or behavior.
-  - Read before implementing a correction.
-  - [Sealed-image rule](#sealed-image-rule)
-    - Defines how host formatting becomes the authoritative staged diff.
-    - Read when local and sealed formatter versions differ.
-  - [UI demo contract paths](#ui-demo-contract-paths)
-    - Lists the UI paths that activate focused demo coverage requirements.
-    - Read before pushing a web or extension change.
-- [Scope](#scope)
-  - Sets the applicable paths and explicit boundaries.
-  - Read before expanding the task.
-- [Examples](#examples)
-  - Contrasts rejected and preferred forms.
-  - Read when the rule needs a concrete illustration.
-- [Application Checklist](#application-checklist)
-  - Lists the steps needed to apply and maintain the skill.
-  - Use during implementation and review.
-- [Validation](#validation)
-  - Names the smallest relevant mechanical and semantic proof.
-  - Run before completing the task.
-
 ## Purpose
 
 Prevent avoidable PR Verify failures from sealed-image formatting lag and missing
@@ -144,3 +96,4 @@ demo contract.
 
 If Workbench stats still flag those as waste, tighten this card and coding-bro
 in the same task.
+

@@ -1,53 +1,5 @@
 # Workbench Issue Management
 
-## Relationships
-
-- [Agent Feature Ownership](../dynamic-skills/agent-feature-ownership.md)
-  - Defines the Agent Feature Ownership context used by this document.
-  - Apply when implementation or delivery reaches this workflow boundary.
-- [Pull Request Workflow](pull-requests.md)
-  - Defines pull-request size, validation, readiness, review, and merge requirements.
-  - Apply when implementation or delivery reaches this workflow boundary.
-
-## Document map
-
-- [Overview](#overview)
-  - Preserves oversized, risky, blocked, or deferred work in Nook Workbench.
-  - Read when required work cannot safely remain in the current pull request.
-- [Repository boundary](#repository-boundary)
-  - Separates product artifacts from Workbench planning and delivery records.
-  - Read before deciding where new context belongs.
-- [Multi-PR feature sequences](#multi-pr-feature-sequences)
-  - Defines ordered feature, issue, plan, worklog, and PR relationships.
-  - Read when work must be split across multiple pull requests.
-- [Trigger](#trigger)
-  - Lists the statements and conditions that activate this workflow.
-  - Read before deferring, blocking, or excluding required work.
-- [Search first](#search-first)
-  - Requires searching existing Workbench context with product and code vocabulary.
-  - Read before creating a feature or focused issue.
-- [Required issue shape](#required-issue-shape)
-  - Defines required issue metadata, acceptance criteria, dependencies, and evidence.
-  - Read when creating or auditing a focused issue record.
-- [Choose update versus create](#choose-update-versus-create)
-  - Distinguishes extending the owning record from creating a new deliverable.
-  - Read after search results identify related Workbench context.
-- [Publishing changes](#publishing-changes)
-  - Defines the direct-to-main publication path for Workbench records.
-  - Read before committing and pushing planning context.
-- [Team safety](#team-safety)
-  - Prevents agents from claiming or overwriting another owner's active record.
-  - Read before updating shared Workbench state.
-- [Task-start plan requirement](#task-start-plan-requirement)
-  - Requires a validated Workbench plan before implementation edits.
-  - Read at the start of every task-owning implementation.
-- [Worklog requirement](#worklog-requirement)
-  - Requires one outcome-focused worklog before completion or blocker handoff.
-  - Read when recording final evidence and remaining work.
-- [Required handoff](#required-handoff)
-  - Defines the plan, issue, worklog, and PR links required in a handoff.
-  - Read before reporting completion or a blocker.
-
 ## Overview
 
 Use this workflow whenever a task reveals missing functionality that is too
@@ -366,3 +318,4 @@ The final response or PR comment must link:
 
 Re-open the published files before handoff and verify the links and state are
 visible on Workbench `main`.
+

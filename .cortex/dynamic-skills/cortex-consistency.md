@@ -1,44 +1,5 @@
 # Cortex Consistency — Garbage Collector
 
-## Relationships
-
-- [Cortex document navigation](cortex-document-map.md)
-  - Requires graph links and internal maps to stay synchronized with content.
-  - Apply whenever a Cortex document changes.
-- [Cortex writer](cortex-writer.md)
-  - Keeps consistency corrections short and readable.
-  - Apply while rewriting obsolete or conflicting guidance.
-- [Subagent delegation](../workflows/subagent-delegation.md)
-  - Defines read-only evidence collection for a full-tree audit.
-  - Read when two or more document families need consistency review.
-
-## Document map
-
-- [Priority](#priority)
-  - Establishes stale or conflicting Cortex guidance as a P1 defect.
-  - Read before changing durable documentation.
-- [Purpose](#purpose)
-  - Defines the agent's documentation garbage-collector responsibility.
-  - Read when planning a Cortex-affecting task.
-- [Problem pattern](#problem-pattern)
-  - Lists common forms of documentation drift.
-  - Read while auditing a topic.
-- [Preferred pattern](#preferred-pattern)
-  - Defines verification steps and conflict resolution order.
-  - Follow when reconciling prose with code.
-- [Scope](#scope)
-  - Defines the default one-hop audit and full-tree delegation boundary.
-  - Read before expanding a consistency review.
-- [Examples](#examples)
-  - Shows cache-policy and vault-sync conflict corrections.
-  - Read when classifying stale guidance.
-- [Application checklist](#application-checklist)
-  - Lists evidence and synchronization checks.
-  - Use during implementation and review.
-- [Validation](#validation)
-  - Defines mechanical audit and semantic proof requirements.
-  - Run after consistency edits.
-
 ## Priority
 
 This is a P1 documentation integrity rule:
@@ -194,3 +155,4 @@ For a full Cortex GC request, report:
 - cross-doc conflicts resolved;
 - code mismatches fixed;
 - remaining historical labels.
+

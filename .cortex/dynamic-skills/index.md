@@ -8,27 +8,6 @@ Use this index before refactors, review handling, issue-scope decisions, or skil
 creation so agents apply the existing repo-specific guidance and keep related
 knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.cursor/skills/` and `.claude/skills/`) enable direct invocation across Antigravity, Cursor, Claude, and Codex; the `.cortex` card remains the source of truth.
 
-## Relationships
-
-- [Dynamic skill authoring](dynamic-skill-authoring.md)
-  - Defines how durable cards and executable wrappers enter this registry.
-  - Read when adding or revising a project skill.
-- [Cortex document navigation](cortex-document-map.md)
-  - Defines the mandatory graph and internal-map structure for every card.
-  - Apply whenever a registry document changes.
-- [Cortex structured articles](cortex-article-structure.md)
-  - Defines the semantic body grammar for every Cortex document.
-  - Apply whenever article content or hierarchy changes.
-
-## Document map
-
-- [Skill catalog](#skill-catalog)
-  - Lists every canonical card and its executable wrapper when one exists.
-  - Scan before a refactor or skill-creation task.
-- [How to add one](#how-to-add-one)
-  - Defines the scaffold, registration, wrapper, and audit sequence.
-  - Follow when adding a new project skill.
-
 ## Skill catalog
 
 | Skill card | Purpose | Executable skill |
@@ -76,3 +55,4 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 5. Verify with `task loom:cortex-audit`.
 
 See [Loom tools](../references/loom-tools.md).
+

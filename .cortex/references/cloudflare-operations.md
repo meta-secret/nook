@@ -1,20 +1,5 @@
 # Cloudflare Operations
 
-## Relationships
-
-- [CI / GitHub Actions Pipeline](../workflows/ci-pipeline.md)
-  - Defines the CI / GitHub Actions Pipeline workflow referenced here.
-  - Read before performing that workflow.
-
-## Document map
-
-- [Overview](#overview)
-  - Introduces the document context and its operating assumptions.
-  - Read first before using the detailed guidance.
-- [Operating contract](#operating-contract)
-  - Defines safe inventory, mutation, and verification behavior.
-  - Follow whenever operating the Cloudflare control plane.
-
 ## Overview
 
 The local AI-agent environment is provisioned with the official Cloudflare API
@@ -60,3 +45,4 @@ automation, ad hoc `curl`, or a new API token when MCP is available.
 
 For preview, development, and release topology, required CI permissions, and
 the live-verification contract, see [CI Pipeline](../workflows/ci-pipeline.md).
+

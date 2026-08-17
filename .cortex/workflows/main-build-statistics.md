@@ -1,32 +1,5 @@
 # Main Build Statistics
 
-## Relationships
-
-- [AI Agent PR Statistics](agent-statistics.md)
-  - Defines the complementary per-PR delivery metrics.
-  - Read when comparing PR work with merged Main behavior.
-- [CI / GitHub Actions Pipeline](ci-pipeline.md)
-  - Defines the Main workflows whose runs produce these records.
-  - Read when changing collection triggers or job topology.
-
-## Document map
-
-- [Overview](#overview)
-  - Introduces the document context and its operating assumptions.
-  - Read first before using the detailed guidance.
-- [Why collection happens after Main](#why-collection-happens-after-main)
-  - Explains why merged-head evidence is the statistics authority.
-  - Read before choosing when to collect build metrics.
-- [Recorded metrics](#recorded-metrics)
-  - Lists the build and cache measurements that are retained.
-  - Read while designing or interpreting collection output.
-- [Publication and isolation](#publication-and-isolation)
-  - Defines how records are published without contaminating product work.
-  - Follow when materializing build statistics.
-- [Analysis](#analysis)
-  - Defines how collected metrics become actionable findings.
-  - Read when comparing build behavior across runs.
-
 ## Overview
 
 The full `Main` workflow is measured independently from per-PR agent delivery
@@ -109,3 +82,4 @@ diagnose wasted feedback cycles, but do not mix their partial durations into a
 successful-build median. A performance regression still requires both more
 than 20 percent and at least 60 seconds of slowdown against a comparable
 baseline; inspect the detailed steps before assigning the cause to the build.
+
