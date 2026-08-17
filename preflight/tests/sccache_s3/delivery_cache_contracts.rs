@@ -284,7 +284,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             && deps_from.contains("nook-rust-deps-v3")
             && native_source_from.contains("nook-rust-native-source-v3")
             && native_source_from.contains("nook-rust-deps-v3"),
-        "native deps must be own-scope v3; native source may import deps but never rust-base"
+        "native deps must be own-scope v3; native source cold fallback may import deps but never rust-base"
     );
     assert!(
         rust_bake.contains(

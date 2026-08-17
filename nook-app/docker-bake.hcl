@@ -50,8 +50,9 @@ variable "GHA_CACHE_FALLBACK_ENABLED" {
 }
 
 // BuildKit merges cache importers; their list order is not fallback precedence.
-// Hosted setup probes each exact ref. A present exact ref must be imported alone,
-// while a missing exact ref may fall back to dependency fingerprints and Main.
+// Hosted setup probes each exact ref and trusted Main native/WASM source refs.
+// A present exact or Main source ref must be imported alone. A missing source
+// ref may fall back to dependency fingerprints.
 variable "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE" {
   default = ""
 }
@@ -88,7 +89,15 @@ variable "GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE" {
   default = ""
 }
 
+variable "GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE" {
+  default = ""
+}
+
 variable "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE" {
   default = ""
 }
 

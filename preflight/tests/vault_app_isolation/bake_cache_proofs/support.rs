@@ -87,10 +87,28 @@ pub(super) fn split_exact_available_arm<'a>(
         .map(|(_, rest)| rest)
         .with_context(|| format!("missing exact-availability ternary for {availability}"))?;
     let exact = after
-        .split_once("] : GHA_CACHE_FALLBACK_ENABLED")
+        .split_once("] :")
         .map(|(arm, _)| arm)
-        .with_context(|| format!("exact arm for {availability} must precede cold fallback"))?;
+        .with_context(|| {
+            format!("exact arm for {availability} must precede the next restore arm")
+        })?;
     Ok(exact.trim())
+}
+
+pub(super) fn split_main_available_arm<'a>(
+    body: &'a str,
+    availability: &str,
+) -> anyhow::Result<&'a str> {
+    let marker = format!("{availability} != \"\" ? [");
+    let after = body
+        .split_once(marker.as_str())
+        .map(|(_, rest)| rest)
+        .with_context(|| format!("missing Main-availability ternary for {availability}"))?;
+    let main = after
+        .split_once("] :")
+        .map(|(arm, _)| arm)
+        .with_context(|| format!("Main arm for {availability} must precede cold fallback"))?;
+    Ok(main.trim())
 }
 
 pub(super) fn assert_no_empty_bake_cache_overrides(path: &str, text: &str) {

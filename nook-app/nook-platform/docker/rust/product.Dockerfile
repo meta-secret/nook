@@ -592,19 +592,68 @@ ARG WASM_BUILD_MODE=dev
 COPY nook-app/nook-platform/Cargo.toml nook-app/nook-platform/Cargo.lock ./
 COPY nook-app/nook-platform/.config .config
 COPY nook-app/nook-platform/clippy.toml clippy.toml
+
+# Per-crate COPY+RUN so a later crate edit reuses earlier wasm32 compile layers.
+# Compile the WASM package roots after each COPY. Intermediate `-p crate` roots
+# drop getrandom `js` / `wasm_js` unification from nook-wasm and nook-companion-wasm.
+# Sibling clippy/package/test stages still join from this snapshot.
 COPY nook-app/nook-platform/nook-app-common nook-app-common
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    touch nook-app-common/src/i18n.rs \
+    && cargo build --release --target wasm32-unknown-unknown \
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report wasm-source-app-common
+
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
-COPY nook-app/nook-platform/nook-replication nook-replication
-COPY nook-app/nook-platform/nook-event-log nook-event-log
-COPY nook-app/nook-platform/nook-companion-core nook-companion-core
-COPY nook-app/nook-platform/nook-core nook-core
-COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
-COPY nook-app/nook-platform/nook-wasm nook-wasm
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo build --release --target wasm32-unknown-unknown \
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report wasm-source-auth
 
-# Docker COPY preserves source mtimes while the inherited dependency target can be newer. Touch
-# the module that embeds locale JSON so locale-only changes cannot reuse stale WASM outputs.
-RUN touch nook-app-common/src/i18n.rs
+COPY nook-app/nook-platform/nook-replication nook-replication
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo build --release --target wasm32-unknown-unknown \
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report wasm-source-replication
+
+COPY nook-app/nook-platform/nook-event-log nook-event-log
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo build --release --target wasm32-unknown-unknown \
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report wasm-source-event-log
+
+COPY nook-app/nook-platform/nook-companion-core nook-companion-core
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo build --release --target wasm32-unknown-unknown \
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report wasm-source-companion-core
+
+COPY nook-app/nook-platform/nook-core nook-core
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo build --release --target wasm32-unknown-unknown \
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report wasm-source-core
+
+COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo build --release --target wasm32-unknown-unknown \
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report wasm-source-companion-wasm
+
+COPY nook-app/nook-platform/nook-wasm nook-wasm
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo build --release --target wasm32-unknown-unknown \
+      -p nook-wasm -p nook-companion-wasm \
+    && nook-sccache-report wasm-source-wasm
 
 # Clippy, package export, and release-test compilation are siblings from the shared source snapshot.
 # wasm-pack build uses `cargo build --lib`, while wasm-pack test uses `cargo build --tests` and

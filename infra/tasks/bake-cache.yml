@@ -31,6 +31,10 @@ tasks:
         leaf_input_orig="$(cat "$leaf_input")"
         loom_input="$sim_dir/inputs/loom.txt"
         loom_input_orig="$(cat "$loom_input")"
+        crate_a_input="$sim_dir/inputs/crate-a.txt"
+        crate_a_input_orig="$(cat "$crate_a_input")"
+        crate_b_input="$sim_dir/inputs/crate-b.txt"
+        crate_b_input_orig="$(cat "$crate_b_input")"
         pr1_suffix="-git-1111111111111111111111111111111111111111"
         pr2_suffix="-git-2222222222222222222222222222222222222222"
         cleanup() {
@@ -38,6 +42,8 @@ tasks:
           printf '%s\n' "$parent_input_orig" >"$parent_input"
           printf '%s\n' "$leaf_input_orig" >"$leaf_input"
           printf '%s\n' "$loom_input_orig" >"$loom_input"
+          printf '%s\n' "$crate_a_input_orig" >"$crate_a_input"
+          printf '%s\n' "$crate_b_input_orig" >"$crate_b_input"
           if [ -n "$builder" ]; then
             "$docker_bin" buildx rm -f "$builder" >/dev/null 2>&1
           fi
@@ -421,6 +427,8 @@ tasks:
         bake_plain "$proof_log" combined-leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_cached_step "$proof_log" "bake-sim-loom-deps-expensive"
+        require_cached_step "$proof_log" "bake-sim-crate-a-expensive"
+        require_cached_step "$proof_log" "bake-sim-crate-b-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario N ok"
 
@@ -430,6 +438,8 @@ tasks:
         bake_plain "$proof_log" combined-leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_cached_step "$proof_log" "bake-sim-loom-deps-expensive"
+        require_cached_step "$proof_log" "bake-sim-crate-a-expensive"
+        require_cached_step "$proof_log" "bake-sim-crate-b-expensive"
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario O ok"
 
@@ -675,5 +685,54 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         require_cached_step "$proof_log" "bake-sim-consumer-expensive"
         echo "scenario W ok"
+
+        echo "== Scenario X: later crate edit keeps earlier crate CACHED =="
+        # Model native/WASM per-crate COPY+RUN. Main seeds the full one-Dockerfile
+        # leaf. A PR that edits only crate-b must restore crate-a from Main, compile
+        # crate-b and the leaf, then replay the exact graph on a fresh builder.
+        printf '%s\n' "$parent_input_orig" >"$parent_input"
+        printf '%s\n' "$loom_input_orig" >"$loom_input"
+        printf '%s\n' "$crate_a_input_orig" >"$crate_a_input"
+        printf '%s\n' "$crate_b_input_orig" >"$crate_b_input"
+        printf '%s\n' "$leaf_input_orig" >"$leaf_input"
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=
+        BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=
+        create_builder "nook-bake-sim-x-main-${suffix}"
+        bake_plain "$proof_log" combined-leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-loom-deps-expensive"
+        require_cached_step "$proof_log" "bake-sim-crate-a-expensive"
+        require_cached_step "$proof_log" "bake-sim-crate-b-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_registry_ref "nook/buildcache/nook-bake-sim-nested-leaf-v1"
+
+        printf 'crate-b-pr-source-edit\n' >"$crate_b_input"
+        crate_pr_suffix="-git-7777777777777777777777777777777777777777"
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$crate_pr_suffix"
+        create_builder "nook-bake-sim-x-producer-${suffix}"
+        bake_plain "$proof_log" combined-leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-loom-deps-expensive"
+        require_cached_step "$proof_log" "bake-sim-crate-a-expensive"
+        require_uncached_step "$proof_log" "bake-sim-crate-b-expensive"
+        require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${crate_pr_suffix}"
+
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=1
+        create_builder "nook-bake-sim-x-retry-${suffix}"
+        bake_plain "$proof_log" combined-leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-loom-deps-expensive"
+        require_cached_step "$proof_log" "bake-sim-crate-a-expensive"
+        require_cached_step "$proof_log" "bake-sim-crate-b-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        echo "scenario X ok"
 
         echo "bake-cache runtime proof passed"

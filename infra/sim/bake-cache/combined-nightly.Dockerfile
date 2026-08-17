@@ -18,7 +18,21 @@ RUN cat /tmp/loom.txt >/opt/loom-stamp \
   && sleep 1 \
   && echo bake-sim-loom-deps-expensive
 
-FROM loom-deps AS leaf
+# Sequential crate COPY+RUN. A later crate edit must keep earlier crate RUNs
+# CACHED when this one-Dockerfile leaf restores its full-graph scope.
+FROM loom-deps AS crate-a
+COPY inputs/crate-a.txt /tmp/crate-a.txt
+RUN cat /tmp/crate-a.txt >/opt/crate-a-stamp \
+  && sleep 1 \
+  && echo bake-sim-crate-a-expensive
+
+FROM crate-a AS crate-b
+COPY inputs/crate-b.txt /tmp/crate-b.txt
+RUN cat /tmp/crate-b.txt >/opt/crate-b-stamp \
+  && sleep 1 \
+  && echo bake-sim-crate-b-expensive
+
+FROM crate-b AS leaf
 COPY inputs/leaf.txt /tmp/leaf.txt
 RUN cat /tmp/leaf.txt >/opt/leaf-stamp \
   && sleep 1 \
