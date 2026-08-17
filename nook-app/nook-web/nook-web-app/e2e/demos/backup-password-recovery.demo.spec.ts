@@ -5,6 +5,7 @@ import {
   clearBrowserVault,
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  expectVaultPasswordStatus,
   openStorageSettings,
   selectLoginUnlockMethod,
   wipeDeviceIdentity,
@@ -21,6 +22,9 @@ test('recover a local vault with its backup password after device-key loss', asy
   await connectLocalVault(page)
   await openStorageSettings(page)
   await addVaultPassword(page, 'Recovery', 'recovery-pass-99')
+  await expectVaultPasswordStatus(page, 1, {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   await wipeDeviceIdentity(page)

@@ -54,11 +54,10 @@ fn cold_exact_cache_scopes_do_not_import_in_progress_registry_exports() -> anyho
         "web_deps_cache_to",
     );
 
-    let web_fallback = web_bake
-        .split("web_cache_from =")
-        .nth(1)
-        .and_then(|tail| tail.split("web_cache_to =").next())
-        .context("web cache fallback must remain defined")?;
+    let (web_fallback, _) = split_fallback_arms(
+        assignment_body(web_bake.as_str(), "web_cache_from")
+            .context("web cache fallback must remain defined")?,
+    )?;
     assert!(
         !web_fallback.contains("${write_cache_repository}"),
         "a new commit must not import its concurrently exported web cache"

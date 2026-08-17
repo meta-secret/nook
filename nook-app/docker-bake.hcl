@@ -104,6 +104,14 @@ variable "GHA_CACHE_EXACT_WEB_E2E_AVAILABLE" {
   default = ""
 }
 
+variable "GHA_CACHE_EXACT_WEB_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_EXACT_WEB_DEPS_AVAILABLE" {
+  default = ""
+}
+
 // Retained for local/manual compatibility with explicitly suffixed cache experiments.
 variable "GHA_CACHE_SEED_SCOPE_SUFFIX" {
   default = ""
