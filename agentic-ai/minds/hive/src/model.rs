@@ -17,6 +17,8 @@ pub enum ModelError {
     InvalidMaxAttempts,
     #[error("a task cannot depend on itself")]
     SelfDependency,
+    #[error("a blocker task cannot depend on another task")]
+    BlockerWithDependencies,
     #[error("terminal result summary must not be empty")]
     EmptyTerminalSummary,
     #[error("terminal result changed_files entries must not be empty")]
@@ -305,6 +307,9 @@ impl EnqueueTask {
         {
             return Err(ModelError::SelfDependency);
         }
+        if self.kind == "blocker" && !self.dependencies.is_empty() {
+            return Err(ModelError::BlockerWithDependencies);
+        }
         Ok(())
     }
 }
@@ -484,6 +489,23 @@ mod tests {
         };
 
         assert_eq!(task.validate(), Err(ModelError::SelfDependency));
+        Ok(())
+    }
+
+    #[test]
+    fn enqueue_rejects_blocker_dependency() -> crate::HiveResult<()> {
+        let task = EnqueueTask {
+            id: TaskId::new("blocker-2")?,
+            kind: "blocker".to_owned(),
+            trigger: TaskTrigger::ManualCli,
+            prompt: "Resolve the prerequisite".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            priority: 200,
+            max_attempts: 3,
+            dependencies: vec![TaskId::new("blocker-1")?],
+        };
+
+        assert_eq!(task.validate(), Err(ModelError::BlockerWithDependencies));
         Ok(())
     }
 
