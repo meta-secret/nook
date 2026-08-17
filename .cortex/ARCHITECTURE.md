@@ -988,7 +988,10 @@ macOS host-wide file-descriptor ceilings:
 - Preflight owns static Bake cache proofs in `bake_cache_proofs.rs` for the Zot restore graph.
 - Source-sensitive native coverage and WASM outputs use separate `nook-rust-native-source-v3` and `nook-rust-wasm-source-v2` refs.
 - A workflow-only or web-only push does not recompile unchanged Rust on a fresh hosted runner.
-- Same-repository PR jobs restore Main plus the git-commit remote-buildcache scope.
+- Hosted setup probes each exact git-commit scope before restore.
+- A present exact scope is the only importer for that graph.
+- Native and WASM source restores import a present Main source graph alone.
+- Shorter dependency indexes join that solve only while that Main source ref is absent.
 - PR exporters write only those git-commit remote-buildcache refs.
 - Web dependencies, browser-free web, and e2e web use distinct refs and `mode=max`.
 - Cache export errors on web lineages are non-fatal because cache is an optimization.

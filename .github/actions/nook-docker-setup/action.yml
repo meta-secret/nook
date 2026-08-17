@@ -214,6 +214,19 @@ runs:
           fi
           echo "$env_name=$available" >> "$GITHUB_ENV"
         }
+        publish_main_availability() {
+          local env_name="$1"
+          local scope="$2"
+          local ref="$registry_host/nook/buildcache/$scope:buildcache"
+          local available=""
+          if cache_ref_exists "$ref"; then
+            available=1
+            echo "Main cache available: $scope"
+          else
+            echo "Main cache absent; source-free dependency fallback enabled: $scope"
+          fi
+          echo "$env_name=$available" >> "$GITHUB_ENV"
+        }
 
         wasm_deps_exact_scope="nook-rust-wasm-deps-v5-$rust_deps_fingerprint"
         if [ -n "$scope_suffix" ]; then
@@ -228,7 +241,9 @@ runs:
         publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v3$scope_suffix"
         publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE "$wasm_deps_exact_scope"
         publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v3$scope_suffix"
+        publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v3"
         publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v2$scope_suffix"
+        publish_main_availability GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v2"
         publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE "nook-rust-wasm-node-v1$scope_suffix"
         publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
         publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"

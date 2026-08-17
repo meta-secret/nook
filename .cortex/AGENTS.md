@@ -504,7 +504,9 @@ Use scoped architecture instead:
 - local formatting writes only unique, source-free dependency candidates;
 - a Main-defined hosted workflow downloads every candidate blob twice;
 - only that workflow assigns a PR-visible content-fingerprint tag;
-- dirty cache recipes disable local publication.
+- dirty cache recipes disable local publication;
+- a present exact or Main native/WASM source graph is imported alone;
+- shorter dependency indexes join that solve only while Main source is absent.
 
 - If a short parent index orphans a leaf RUN, redesign the Bake graph.
 - Never wipe cache to hide a graph mistake.

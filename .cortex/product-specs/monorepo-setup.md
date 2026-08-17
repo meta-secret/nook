@@ -77,8 +77,10 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Main seeds the default-branch cache visible to new PRs.
   - Remote writes git-commit refs (`-git-<sha>`).
   - Hosted setup probes each exact ref before selecting its restore inputs.
-  - A present exact ref is imported alone. A missing exact ref uses the
-    source-free fingerprint and trusted Main as seeds.
+  - A present exact ref is imported alone.
+  - Native and WASM source restores import a present Main source graph alone.
+  - Shorter dependency indexes join that solve only while Main source is absent.
+  - Other missing exact refs use the source-free fingerprint and trusted Main as seeds.
   - Local Bake restores those git-commit refs when Remote credentials exist.
   - Commit-scoped local publish requires a clean worktree.
   - Local formatting may publish source-free dependency stages by content
@@ -87,7 +89,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Main owns the shared hosted BuildKit lineage.**
   - Main exports the Rust, WASM, web, and e2e caches.
   - Every PR job restores its exact SHA alone when that scope exists.
-  - A new exact scope restores source-free dependencies and trusted Main.
+  - A new native or WASM source scope restores Main source alone when that ref exists.
+  - Other new exact scopes restore source-free dependencies and trusted Main.
   - PR jobs publish only isolated exact-SHA generations under
     `nook/remote-buildcache`.
   - `web-deps` runs `bun install --frozen-lockfile` directly in its Dockerfile layer.

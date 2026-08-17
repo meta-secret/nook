@@ -163,6 +163,8 @@ Use this workflow for quality, CI, and deployment changes.
      the shared source overlay for bulk leaves that do not need per-crate layers
      (e.g. deterministic). Focused test/lint/coverage and `builder-debug` keep
      per-crate COPY+RUN layering so one crate edit reuses earlier compile layers.
+     `builder-wasm-source` uses the same per-crate COPY+RUN order for wasm32
+     compiles before sibling clippy, package, and test stages.
    - `PR / Rust ecosystem / Cargo fuzz smoke` —
      `task docker:ecosystem:fuzz` warms `docker:rust-base`, then
      Bakes the `rust-fuzz-smoke` stage from the same Dockerfile as the
@@ -278,8 +280,11 @@ Use this workflow for quality, CI, and deployment changes.
     - Hosted setup probes every full-graph exact scope separately.
     - A present exact scope is the only importer for that graph.
     - Exact PR writers publish `mode=max`, so replay keeps the full leaf lineage.
-    - A missing exact scope falls back to source-free dependencies and Main
-      without cold `cargo install`.
+    - Hosted setup also probes trusted Main native and WASM source refs.
+    - A present Main source graph is the only importer for that solve.
+    - Shorter dependency indexes join only while that Main source ref is absent.
+    - A missing exact and Main source scope falls back to source-free
+      dependencies without cold `cargo install`.
     - Hive PR verification imports exact SHA alone when present.
     - A missing Hive exact SHA uses trusted Main.
     - Its verified solve publishes only the isolated exact-SHA Hive leaf.
@@ -344,6 +349,10 @@ Use this workflow for quality, CI, and deployment changes.
     Scenario W proves the separate WASM Node consumer owns a non-overlapping
     full-graph scope. Main seeds it, a changed PR publishes only its exact-head
     scope after tests pass, and a fresh retry restores every stage as CACHED.
+    Scenario X proves sequential crate COPY+RUN layers.
+    Main seeds crate-a and crate-b in one Dockerfile leaf.
+    A PR that edits only crate-b restores crate-a as CACHED.
+    It compiles crate-b and the leaf, then replays the exact graph.
 
     #### SeaweedFS sccache
 

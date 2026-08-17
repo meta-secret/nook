@@ -194,14 +194,19 @@ rust_wasm_deps_input_cache_to = NOOK_RUST_DEPS_INPUT_WRITE_ENABLED != "" && NOOK
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-wasm-deps-input-v2:candidate-${NOOK_RUST_DEPS_INPUT_FINGERPRINT}-${NOOK_RUST_DEPS_INPUT_CANDIDATE},mode=max,timeout=10m",
 ] : []
 
-// Native source restores own scope plus cooked deps. Do not import rust-base:
-// that shorter parent orphans source RUNs even when mode=max embeds the chain.
+// Native source restores its own full graph. Do not import rust-base: that
+// shorter parent orphans source RUNs even when mode=max embeds the chain.
 // v3 rotates past thin indexes written while rust-base was still listed.
+// A present exact or Main source graph is imported alone. Listing rust-deps in
+// the same solve can select that shorter parent and orphan crate COPY+RUN
+// layers. Cold fallback keeps source-free cooks only while Main source is absent.
 rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v3:buildcache",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v3:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-native-deps-input-v2:fingerprint-${NOOK_RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v3:buildcache,ignore-error=true",
@@ -216,11 +221,15 @@ rust_native_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 
 // WASM source layers restore their own scope plus wasm-deps. Do not import
 // rust-base or native rust-deps here: those shorter parents orphan source RUNs.
+// A present exact or Main source graph is imported alone. Cold fallback keeps
+// source-free WASM cooks only while Main source is absent.
 rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v2:buildcache",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v2:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-rust-wasm-deps-input-v2:fingerprint-${NOOK_RUST_DEPS_INPUT_FINGERPRINT},ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-deps-v5${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,ignore-error=true",

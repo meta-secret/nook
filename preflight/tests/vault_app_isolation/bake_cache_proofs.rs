@@ -82,6 +82,15 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
         &[],
         &["nook-rust-base-v1"],
     )?;
+    let native_source = assignment_body(&rust_bake, "rust_native_source_cache_from")?;
+    let native_main =
+        split_main_available_arm(native_source, "GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE")?;
+    assert!(
+        native_main.contains("nook/buildcache/nook-rust-native-source-v3")
+            && !native_main.contains("nook-rust-deps-v3")
+            && !native_main.contains("nook-rust-native-deps-input-v2"),
+        "Main native-source restore must import that full graph alone"
+    );
     // Main non-FALLBACK restores the fingerprinted scope; PR FALLBACK also lists
     // the git-scoped deps-v5 name. Either form proves own-scope deps restore.
     assert_scope_arms(
@@ -98,6 +107,15 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
         &[&["nook-rust-wasm-deps-v5", "${GHA_RUST_WASM_DEPS_SCOPE}"]],
         &["nook-rust-base-v1", "nook-rust-deps-v3"],
     )?;
+    let wasm_source = assignment_body(&rust_bake, "rust_wasm_source_cache_from")?;
+    let wasm_main =
+        split_main_available_arm(wasm_source, "GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE")?;
+    assert!(
+        wasm_main.contains("nook/buildcache/nook-rust-wasm-source-v2")
+            && !wasm_main.contains("nook-rust-wasm-deps-v5")
+            && !wasm_main.contains("nook-rust-wasm-deps-input-v2"),
+        "Main WASM source restore must import that full graph alone"
+    );
     assert_scope_arms(
         &rust_bake,
         "rust_wasm_node_cache_from",
@@ -248,11 +266,32 @@ fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Res
             exact.contains(exact_marker) && !exact.contains(main_ref),
             "{name} must import only its exact full-graph ref when {availability} is set"
         );
-        let (fallback, _) = split_fallback_arms(body)?;
-        assert!(
-            fallback.contains(main_ref),
-            "{name} FALLBACK must restore Main {main_ref}"
-        );
+        if matches!(
+            name,
+            "rust_native_source_cache_from" | "rust_wasm_source_cache_from"
+        ) {
+            let main_availability = if name == "rust_native_source_cache_from" {
+                "GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE"
+            } else {
+                "GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE"
+            };
+            let main = split_main_available_arm(body, main_availability)?;
+            assert!(
+                main.contains(main_ref),
+                "{name} Main-source arm must restore {main_ref} alone"
+            );
+            let (fallback, _) = split_fallback_arms(body)?;
+            assert!(
+                !fallback.contains(main_ref),
+                "{name} cold fallback must not merge {main_ref} with shorter dependency indexes"
+            );
+        } else {
+            let (fallback, _) = split_fallback_arms(body)?;
+            assert!(
+                fallback.contains(main_ref),
+                "{name} FALLBACK must restore Main {main_ref}"
+            );
+        }
     }
     Ok(())
 }
@@ -454,8 +493,10 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
     assert!(
         setup.contains("docker buildx imagetools inspect")
             && setup.contains("cache-from entries are merged, not ordered")
-            && setup.contains("Exact cache absent; Main/fingerprint fallback enabled"),
-        "hosted setup must probe exact refs before selecting exact-only or cold fallback imports"
+            && setup.contains("Exact cache absent; Main/fingerprint fallback enabled")
+            && setup.contains("publish_main_availability")
+            && setup.contains("Main cache available:"),
+        "hosted setup must probe exact refs before selecting exact-only, Main-source-only, or cold fallback imports"
     );
     for availability in [
         "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE",
@@ -467,15 +508,18 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE",
         "GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE",
         "GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE",
+        "GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE",
         "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE",
+        "GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE",
         "GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE",
         "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE",
         "GHA_CACHE_EXACT_WEB_E2E_AVAILABLE",
     ] {
         assert!(
             app_bake.contains(&format!("variable \"{availability}\""))
-                && setup.contains(&format!("publish_exact_availability {availability}")),
-            "{availability} must be declared and populated by the hosted exact-ref probe"
+                && (setup.contains(&format!("publish_exact_availability {availability}"))
+                    || setup.contains(&format!("publish_main_availability {availability}"))),
+            "{availability} must be declared and populated by the hosted exact-ref or Main-ref probe"
         );
     }
     assert!(
