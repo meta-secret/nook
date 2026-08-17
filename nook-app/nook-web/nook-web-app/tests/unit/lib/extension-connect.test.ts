@@ -28,7 +28,6 @@ import {
   isExtensionPairedVaultIdentityStatusMessage,
   isExtensionPairedVaultUnlockRequestMessage,
   isExtensionPairingApprovedMessage,
-  ExtensionPairedVaultIdentityDiscoveryMessageType,
   ExtensionPairedVaultIdentityStatusMessageStatus,
   ExtensionPairedVaultIdentityStatusMessageType,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
