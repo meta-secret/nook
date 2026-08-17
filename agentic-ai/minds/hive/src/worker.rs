@@ -363,6 +363,16 @@ impl<S: TaskStore> Worker<S> {
                         }
                         Err(WorkerBlocked.into())
                     }
+                    TaskDisposition::Failed { reason } => {
+                        if !self
+                            .store
+                            .fail(task, &self.config.agent_id, &reason)
+                            .await?
+                        {
+                            return Err(WorkerCancellationRequested.into());
+                        }
+                        Ok(())
+                    }
                 };
                 terminal_result
             },
@@ -454,6 +464,9 @@ enum TaskDisposition {
     Deferred {
         reason: String,
     },
+    Failed {
+        reason: String,
+    },
 }
 
 fn blocked_disposition(
@@ -461,6 +474,13 @@ fn blocked_disposition(
     summary: &str,
     blocker: &BlockerRequest,
 ) -> TaskDisposition {
+    if task.kind == "blocker" {
+        return TaskDisposition::Failed {
+            reason: bounded(&format!(
+                "prerequisite task could not complete without another dependency: {summary}"
+            )),
+        };
+    }
     if blocker.id == task.id {
         return TaskDisposition::Deferred {
             reason: bounded(summary),
@@ -577,7 +597,7 @@ mod tests {
     fn self_named_external_blocker_defers_without_creating_a_dependency() -> anyhow::Result<()> {
         let task = ClaimedTask {
             id: TaskId::new("github-actions-pr-42")?,
-            kind: "blocker".to_owned(),
+            kind: "main-repair".to_owned(),
             prompt: "Wait for the exact-head workflow".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             attempt_id: AttemptId::new("attempt-1")?,
@@ -601,6 +621,65 @@ mod tests {
     }
 
     #[test]
+    fn prerequisite_task_cannot_create_a_child_dependency() -> anyhow::Result<()> {
+        let task = ClaimedTask {
+            id: TaskId::new("github-actions-pr-42")?,
+            kind: "blocker".to_owned(),
+            prompt: "Resolve failed workflow 42".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_number: 1,
+            lease_token: LeaseToken::new("lease-1")?,
+            owning_repairs: Vec::new(),
+            dependency_context: Vec::new(),
+            dependency_artifacts: Vec::new(),
+        };
+        let blocker = BlockerRequest {
+            id: TaskId::new("github-workflow-token")?,
+            title: "Provision workflow token".to_owned(),
+            prompt: "Provide a credential with workflow scope.".to_owned(),
+        };
+
+        assert!(matches!(
+            blocked_disposition(&task, "the available token lacks workflow scope", &blocker),
+            TaskDisposition::Failed { reason }
+                if reason.contains("prerequisite task could not complete")
+                    && reason.contains("lacks workflow scope")
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn main_repair_can_create_one_prerequisite_task() -> anyhow::Result<()> {
+        let task = ClaimedTask {
+            id: TaskId::new("main-failure-recovery")?,
+            kind: "main-repair".to_owned(),
+            prompt: "restore Main".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_number: 1,
+            lease_token: LeaseToken::new("lease-1")?,
+            owning_repairs: Vec::new(),
+            dependency_context: Vec::new(),
+            dependency_artifacts: Vec::new(),
+        };
+        let blocker = BlockerRequest {
+            id: TaskId::new("repair-buildkit-cache")?,
+            title: "Repair BuildKit cache".to_owned(),
+            prompt: "Fix the repository-owned cache path.".to_owned(),
+        };
+
+        assert!(matches!(
+            blocked_disposition(&task, "cache repair required", &blocker),
+            TaskDisposition::Blocked { blocker, reason }
+                if blocker.kind == "blocker"
+                    && blocker.priority == 200
+                    && reason == "cache repair required"
+        ));
+        Ok(())
+    }
+
+    #[test]
     fn blocker_prompt_requires_active_pr_ownership() -> anyhow::Result<()> {
         let task = ClaimedTask {
             id: TaskId::new("github-actions-pr-42")?,
@@ -618,9 +697,10 @@ mod tests {
         let prompt = task_prompt(&task);
         assert!(prompt.contains("prerequisite-ownership task"));
         assert!(prompt.contains("check out that existing PR branch"));
-        assert!(prompt.contains("Never report this task's own id as its blocker"));
+        assert!(prompt.contains("This task is a dependency leaf"));
         assert!(prompt.contains("this prerequisite obsolete"));
-        assert!(prompt.contains("Never extend an obsolete blocker chain"));
+        assert!(prompt.contains("Never request another blocker"));
+        assert!(prompt.contains("bounded failed attempt"));
         assert!(prompt.contains("main-failure-abc-run-42-attempt-1"));
         assert!(prompt.contains("codex/hive-main-failure-abc-run-42-attempt-1"));
         let targets = obsolete_owner_delivery_targets(&[

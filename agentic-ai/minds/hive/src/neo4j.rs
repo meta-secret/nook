@@ -719,6 +719,11 @@ impl TaskStore for Neo4jTaskStore {
         reason: &str,
     ) -> crate::HiveResult<bool> {
         blocker.validate()?;
+        if task.kind == "blocker" {
+            return Err(crate::error::HiveError::message(
+                "a blocker task cannot create another blocking dependency",
+            ));
+        }
         if blocker.source_commit != task.source_commit {
             return Err(crate::error::HiveError::message(
                 "a blocker must target the same pinned repository revision",

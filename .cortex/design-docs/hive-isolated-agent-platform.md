@@ -32,6 +32,9 @@
   - [Blocking dependencies](#blocking-dependencies)
     - Codex may return a typed blocker instead of pretending the parent task is complete.
     - Read before changing the Blocking dependencies flow or state transitions.
+    - [Dependency depth boundary](#dependency-depth-boundary)
+      - Blocker tasks are dependency leaves.
+      - Read before changing blocker creation or failure handling.
   - [Durable results](#durable-results)
     - Terminal summaries are bounded to 64 KiB.
     - Read before changing or relying on Durable results.
@@ -266,6 +269,15 @@ complete. Hive then:
 5. makes the parent `READY` immediately if the reused blocker was already
    complete, otherwise `BLOCKED`.
 
+#### Dependency depth boundary
+
+- Only a non-blocker task may create a dependency.
+- A blocker task is a dependency leaf.
+- It must use the authority and tools already supplied.
+- A nested blocker result becomes a failed attempt on the leaf.
+- Hive does not create a child task.
+- The bounded retry budget completes the leaf or fails its dependent chain.
+
 When the blocker completes, its Git patch becomes a dependency artifact. A
 replacement worker verifies the artifact digest, applies it to the same pinned
 revision, commits a dependency baseline, and gives the parent task both the
@@ -278,9 +290,6 @@ when all of the following hold:
 - Every active transitive non-blocker consumer is a Main-repair task.
 - Every one of those repairs is already squash-merged with a successful
   containing Main run.
-
-Intermediate blocker nodes belong to the same prerequisite chain. They are not
-independent consumers.
 
 **Claim and completion guards**
 

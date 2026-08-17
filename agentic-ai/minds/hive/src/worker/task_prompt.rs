@@ -65,10 +65,10 @@ pub(super) fn task_prompt(task: &ClaimedTask) -> String {
          changes, and explain that it no longer blocks delivery, even when the requested capability \
          remains unavailable. For every genuine prerequisite completion and every non-blocker task, \
          set `obsolete` to false. When no owning repair is listed, or any listed repair is still \
-         live, do not use this obsolescence rule. Never extend an obsolete blocker chain. Never \
-         report this task's own id as its blocker and never create a duplicate repair PR. Report \
-         blocked only for a genuinely separate prerequisite, using a distinct stable blocker id \
-         and an actionable prompt that another worker can complete."
+         live, do not use this obsolescence rule. This task is a dependency leaf. Never request \
+         another blocker and never create a duplicate repair PR. If the prerequisite cannot be \
+         completed with the authority and tools already supplied, report blocked with a precise \
+         explanation. Hive records that as a bounded failed attempt without creating a child task."
             .to_owned()
     } else {
         String::new()
