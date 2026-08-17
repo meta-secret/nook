@@ -240,7 +240,7 @@ fn is_sol_exhausted_error(error: &CodexError) -> bool {
 fn is_sol_exhaustion_message(message: &str) -> bool {
     let message = message.to_ascii_lowercase();
 
-    const SOL_EXHAUSTION_MARKERS: [&str; 7] = [
+    const SOL_EXHAUSTION_MARKERS: [&str; 8] = [
         "sol exhausted",
         "sol budget",
         "sol limit",
@@ -248,6 +248,7 @@ fn is_sol_exhaustion_message(message: &str) -> bool {
         "out of sol",
         "insufficient sol",
         "no sol",
+        "usage limit",
     ];
     if SOL_EXHAUSTION_MARKERS
         .iter()
@@ -601,6 +602,16 @@ mod tests {
         assert_eq!(options.model, DEFAULT_CODEX_MODEL);
         assert_eq!(options.reasoning_effort, DEFAULT_CODEX_REASONING_EFFORT);
         Ok(())
+    }
+
+    #[test]
+    fn detects_usage_limit_as_sol_exhaustion() {
+        assert!(is_sol_exhaustion_message(
+            "embedded Codex execution failed: you've hit your usage limit. Visit the usage page"
+        ));
+        assert!(!is_sol_exhaustion_message(
+            "embedded Codex execution failed: unknown network timeout while reaching Codex"
+        ));
     }
 
     #[test]
