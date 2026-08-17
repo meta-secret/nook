@@ -8,7 +8,6 @@ hive_active_graph_client_pods() {
     --output json |
     jq -r '
       .items[]
-      | select(.metadata.deletionTimestamp == null)
       | select(.status.phase != "Succeeded" and .status.phase != "Failed")
       | .metadata.name
     '

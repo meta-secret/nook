@@ -242,6 +242,7 @@ tasks:
           --exclude='agentic-ai/minds/*/target' \
           -cf - \
           infra/k0s \
+          infra/scripts/hive-deploy-convergence.sh \
           agentic-ai/minds \
           nook-app/nook-platform/docker/sccache-wrapper.sh \
           nook-app/nook-platform/docker/sccache-report.sh |

@@ -297,6 +297,7 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
     );
     let deployment_tasks = read("infra/tasks/hive.yml");
     let deployment_convergence = read("infra/scripts/hive-deploy-convergence.sh");
+    let host_service_tasks = read("infra/tasks/host-services.yml");
     for required in [
         "for deployment in hive hive-workbench-dispatcher hive-observer",
         "kubectl scale \"deployment/$deployment\"",
@@ -310,6 +311,10 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
             "Hive graph-client rollout is missing: {required}"
         );
     }
+    assert!(
+        host_service_tasks.contains("infra/scripts/hive-deploy-convergence.sh"),
+        "Hive deployment convergence helper must be synced to the remote host"
+    );
     for required in [
         "--selector \"app.kubernetes.io/name=$deployment\"",
         ".status.phase != \"Succeeded\" and .status.phase != \"Failed\"",

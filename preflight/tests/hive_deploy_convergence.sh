@@ -27,8 +27,7 @@ kubectl() {
 MOCK_POD_JSON='{
   "items": [
     {"metadata":{"name":"evicted","deletionTimestamp":null},"status":{"phase":"Failed"}},
-    {"metadata":{"name":"finished","deletionTimestamp":null},"status":{"phase":"Succeeded"}},
-    {"metadata":{"name":"deleting","deletionTimestamp":"2026-08-17T00:00:00Z"},"status":{"phase":"Running"}}
+    {"metadata":{"name":"finished","deletionTimestamp":"2026-08-17T00:00:00Z"},"status":{"phase":"Succeeded"}}
   ]
 }'
 test -z "$(hive_active_graph_client_pods hive)"
@@ -37,7 +36,8 @@ hive_wait_for_graph_client_drain hive 2 0
 MOCK_POD_JSON='{
   "items": [
     {"metadata":{"name":"running","deletionTimestamp":null},"status":{"phase":"Running"}},
-    {"metadata":{"name":"pending","deletionTimestamp":null},"status":{"phase":"Pending"}}
+    {"metadata":{"name":"pending","deletionTimestamp":null},"status":{"phase":"Pending"}},
+    {"metadata":{"name":"deleting","deletionTimestamp":"2026-08-17T00:00:00Z"},"status":{"phase":"Running"}}
   ]
 }'
 drain_error="$(mktemp)"
@@ -49,6 +49,7 @@ if hive_wait_for_graph_client_drain hive 2 0 2>"$drain_error"; then
 fi
 grep -Fq 'running' "$drain_error"
 grep -Fq 'pending' "$drain_error"
+grep -Fq 'deleting' "$drain_error"
 
 READY_VALUES=(4 3 4 4 4)
 ready_index=0
