@@ -104,9 +104,9 @@ unless worker_environment["HIVE_LEASE_SECONDS"] == "3600" &&
        worker_environment["HIVE_HEARTBEAT_SECONDS"] == "60"
   raise "Hive workers must renew a one-hour lease every minute"
 end
-unless worker_environment["HIVE_CODEX_MODEL"] == "gpt-5.6-terra" &&
-       worker_environment["HIVE_CODEX_REASONING_EFFORT"] == "low"
-  raise "Hive workers must pin Codex GPT-5.6 with Light reasoning"
+unless worker_environment["HIVE_CODEX_MODEL"] == "gpt-5.6-sol" &&
+       worker_environment["HIVE_CODEX_REASONING_EFFORT"] == "medium"
+  raise "Hive workers must pin Codex GPT-5.6-sol with medium reasoning"
 end
 unless worker_environment["HIVE_CODEX_LINUX_SANDBOX_EXE"] ==
        "/usr/local/bin/hive-codex-linux-sandbox"
