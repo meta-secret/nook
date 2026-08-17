@@ -310,7 +310,7 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
         );
     }
     for required in [
-        "--selector \"app.kubernetes.io/name=$deployment\"",
+        "--selector \"app.kubernetes.io/name=$1\"",
         ".status.phase != \"Succeeded\" and .status.phase != \"Failed\"",
         "Timed out draining active graph client deployment/$deployment",
         "consecutive_ready=0",
