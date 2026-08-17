@@ -151,7 +151,16 @@ export async function initOnce(state: VaultState): Promise<void> {
         state.prefillEnrollmentCode = enrollment.payload;
         state.enrollmentFromUrlPending = true;
       }
-      if (!state.localVaultPresent && state.localVaults.length === 0) {
+      // A backup password opens only its vault keys. Do not create a new app
+      // key merely because this browser still has a local vault: that key has
+      // not been granted membership and password recovery must remain usable
+      // without altering identity ownership.
+      if (state.localVaultPresent) {
+        state.storageMode = LOCAL_PROVIDER_TYPE;
+        await state.prepareLocalLogin();
+        return;
+      }
+      if (state.localVaults.length === 0) {
         try {
           const loadProvidersArgs: Parameters<typeof state.loadProviders>[0] = {
             ensureLocalRow: true,
