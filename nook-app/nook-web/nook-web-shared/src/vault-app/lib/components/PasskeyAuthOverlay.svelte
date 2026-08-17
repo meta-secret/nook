@@ -17,7 +17,11 @@
 
   function portal(node: HTMLElement) {
     const anchor = document.createComment('passkey-auth-overlay-home')
-    node.parentNode?.insertBefore(anchor, node)
+    if (typeof node.before === 'function') {
+      node.before(anchor)
+    } else {
+      node.parentNode?.insertBefore(anchor, node)
+    }
     document.body.appendChild(node)
     return {
       destroy() {

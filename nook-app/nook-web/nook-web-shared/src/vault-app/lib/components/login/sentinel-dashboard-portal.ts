@@ -46,7 +46,11 @@ export function sentinelDashboardPortal(
   let active = false;
   let previousFocus: FocusReturn = { kind: FocusReturnKind.Body };
   let returnFocusTestId = "sentinel-dashboard-card-stack";
-  node.parentNode?.insertBefore(anchor, node);
+  if (typeof node.before === "function") {
+    node.before(anchor);
+  } else {
+    node.parentNode?.insertBefore(anchor, node);
+  }
 
   function focusableElements() {
     return Array.from(
@@ -113,7 +117,11 @@ export function sentinelDashboardPortal(
   function deactivate() {
     node.removeEventListener("keydown", trapFocus);
     setBackgroundInert(false);
-    anchor.parentNode?.insertBefore(node, anchor.nextSibling);
+    if (anchor.parentNode) {
+      anchor.parentNode.insertBefore(node, anchor.nextSibling);
+    } else {
+      document.body.appendChild(node);
+    }
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (
