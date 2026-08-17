@@ -1,32 +1,5 @@
 # Review Request Workflow
 
-## Relationships
-
-- [Code Review Comments](../dynamic-skills/code-review-comments.md)
-  - Defines the Code Review Comments rule used by this document.
-  - Apply when that rule governs the task.
-
-## Document map
-
-- [Overview](#overview)
-  - Introduces the document context and its operating assumptions.
-  - Read first before using the detailed guidance.
-- [Local review before the first owner-authored push](#local-review-before-the-first-owner-authored-push)
-  - Defines the one advisory review allowed before hosted validation.
-  - Read before the first owner-authored push.
-- [Complete validation and Cloud review](#complete-validation-and-cloud-review)
-  - Defines the evidence and checks required for completion.
-  - Use before declaring the work complete.
-- [Actionable feedback priority](#actionable-feedback-priority)
-  - Defines which findings must be handled before delivery.
-  - Use while triaging review feedback.
-- [Handling feedback that already exists](#handling-feedback-that-already-exists)
-  - Defines how to verify, address, and resolve existing feedback.
-  - Follow when a PR already has comments or reviews.
-- [Handoff](#handoff)
-  - Lists the evidence required in the final review handoff.
-  - Use after every actionable finding is settled.
-
 ## Overview
 
 Codex review runs alongside repository-owned GitHub Actions.
@@ -155,3 +128,4 @@ Report:
 
 Confirm that unresolved review-thread count was zero at the final readiness
 audit.
+

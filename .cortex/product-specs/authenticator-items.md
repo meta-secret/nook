@@ -1,38 +1,5 @@
 # Authenticator Items
 
-## Relationships
-
-- [Product Specifications Index](index.md)
-  - Catalogs the product specifications and their current status.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Password Manager Specification](password-manager.md)
-  - Defines the core vault product, user flows, storage formats, cryptography, and UI boundaries.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
-  - Apply throughout implementation and review.
-
-## Document map
-
-- [Overview](#overview)
-  - Add RFC 6238 TOTP authenticators as a first-class secure-item type.
-  - Read first to understand the scope and intent of Overview.
-- [Product model](#product-model)
-  - An authenticator is a standalone vault item, not a field that only exists on website logins.
-  - Read before changing or relying on Product model.
-- [Supported input](#supported-input)
-  - Manual Base32 shared secrets.
-  - Read before changing or relying on Supported input.
-- [UI and security](#ui-and-security)
-  - Defines the authenticator editor.
-  - Read before changing the security or key boundary described by UI and security.
-- [Browser extension use](#browser-extension-use)
-  - Defines conservative one-time-code field detection.
-  - Read before changing or relying on Browser extension use.
-- [Browser enrollment capture](#browser-enrollment-capture)
-  - Defines user-initiated enrollment capture.
-  - Read before changing the Browser enrollment capture flow or its state transitions.
-
 ## Overview
 
 Add RFC 6238 TOTP authenticators as a first-class secure-item type.
@@ -114,3 +81,4 @@ silent page scraping.
   attached to a named authenticator through typed replace/merge policy in
   Rust/WASM. Ambiguous page text cannot be saved without choosing the target
   authenticator.
+

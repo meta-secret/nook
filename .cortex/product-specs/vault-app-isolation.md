@@ -1,32 +1,5 @@
 # Simple and Sentinel Application Isolation
 
-## Relationships
-
-- [Product Specifications Index](index.md)
-  - Catalogs the product specifications and their current status.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Password Manager Specification](password-manager.md)
-  - Defines the core vault product, user flows, storage formats, cryptography, and UI boundaries.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
-  - Apply throughout implementation and review.
-
-## Document map
-
-- [Overview](#overview)
-  - Status: Implemented by epic #360.
-  - Read first to understand the scope and intent of Overview.
-- [Product Surfaces](#product-surfaces)
-  - Defines the product-to-origin isolation model.
-  - Read before changing or relying on Product Surfaces.
-- [Enforcement](#enforcement)
-  - VaultApplication in nook-core owns the compatibility matrix.
-  - Read before changing or relying on Enforcement.
-- [Deployment](#deployment)
-  - Defines deployment ownership for the isolated products.
-  - Read before changing or relying on Deployment.
-
 ## Overview
 
 Status: Implemented by epic #360.
@@ -120,3 +93,4 @@ link back to Simple for users leaving the quorum-only product.
   3. Refuse a mixed release when vault hostnames report different commits.
 - **Cross-app navigation:** Call the Rust/WASM lock path before navigation.
   - Carry no vault payload, provider credential, or session token in the URL.
+

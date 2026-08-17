@@ -1,50 +1,5 @@
 # Reference: Application Logging
 
-## Relationships
-
-- [CI / GitHub Actions Pipeline](../workflows/ci-pipeline.md)
-  - Defines the CI / GitHub Actions Pipeline workflow referenced here.
-  - Read before performing that workflow.
-- [Reference: Svelte + Vite + Bun](bun-svelte.md)
-  - Provides the Reference: Svelte + Vite + Bun operational reference.
-  - Read when using its tools or commands.
-- [Reference: Rust + WebAssembly (wasm-bindgen)](rust-wasm.md)
-  - Provides the Reference: Rust + WebAssembly (wasm-bindgen) operational reference.
-  - Read when using its tools or commands.
-
-## Document map
-
-- [Overview](#overview)
-  - Introduces the document context and its operating assumptions.
-  - Read first before using the detailed guidance.
-- [Debugging, troubleshooting, and CI verification](#debugging-troubleshooting-and-ci-verification)
-  - Defines the evidence and checks required for completion.
-  - Use before declaring the work complete.
-- [Architecture](#architecture)
-  - Describes the components, boundaries, and structural model.
-  - Read before changing the design or its interfaces.
-- [Levels are persistence-gated](#levels-are-persistence-gated)
-  - Explains how persistence policy controls retained log levels.
-  - Read before changing verbosity or retention behavior.
-  - [Setting the level](#setting-the-level)
-    - Lists the supported runtime log-level controls.
-    - Read before increasing diagnostic verbosity.
-- [Viewing logs](#viewing-logs)
-  - Shows where application and test logs are exposed.
-  - Read when collecting diagnostic evidence.
-- [Logging from code](#logging-from-code)
-  - Defines the approved logging APIs and data boundary.
-  - Read before adding or changing log statements.
-- [e2e integration (per-test log attachment)](#e2e-integration-per-test-log-attachment)
-  - Defines the evidence and checks required for completion.
-  - Use before declaring the work complete.
-  - [Agent rule: use app logs for Playwright debug and analysis](#agent-rule-use-app-logs-for-playwright-debug-and-analysis)
-    - States the durable principles and invariants for this area.
-    - Use while making design and review decisions.
-  - [Milestone assertions in e2e specs](#milestone-assertions-in-e2e-specs)
-    - Defines milestone evidence attached to browser tests.
-    - Read when authoring or diagnosing an e2e flow.
-
 ## Overview
 
 Nook's application logger is **owned by WASM** and persisted in the browser's
@@ -272,3 +227,4 @@ path), not device-key local vault creation (`vault-local` + `wasm-connect` inste
 
 See also: [rust-wasm.md](rust-wasm.md), [bun-svelte.md](bun-svelte.md),
 [../workflows/ci-pipeline.md](../workflows/ci-pipeline.md).
+

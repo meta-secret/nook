@@ -1,50 +1,5 @@
 # Rust-TypeScript Code Separation
 
-## Relationships
-
-- [Cortex document navigation](cortex-document-map.md)
-  - Defines the mandatory relationship and internal-map structure.
-  - Apply whenever this skill card changes.
-- [Cortex writer](cortex-writer.md)
-  - Keeps the card and its navigation summaries concise.
-  - Apply while editing or reviewing this guidance.
-- [Cortex consistency](cortex-consistency.md)
-  - Requires the card to agree with related guidance and current code.
-  - Apply when rules, paths, commands, or examples change.
-- [Rust coding](rust-coding.md)
-  - Defines precise Rust enums, variants, and absence modeling.
-  - Read when moving domain structure out of TypeScript.
-
-## Document map
-
-- [Purpose](#purpose)
-  - Explains why the skill exists and what invariant it protects.
-  - Read first to decide whether the skill applies.
-- [Problem Pattern](#problem-pattern)
-  - Identifies the recurring rejected pattern and its warning signs.
-  - Read while locating or reviewing violations.
-- [Preferred Pattern](#preferred-pattern)
-  - Defines the required structure or behavior.
-  - Read before implementing a correction.
-- [Scope](#scope)
-  - Sets the applicable paths and explicit boundaries.
-  - Read before expanding the task.
-- [Examples](#examples)
-  - Contrasts rejected and preferred forms.
-  - Read when the rule needs a concrete illustration.
-  - [Model sum types as an enum-of-structs, wrap it for wasm](#model-sum-types-as-an-enum-of-structs-wrap-it-for-wasm)
-    - Shows how Rust variants retain domain ownership across WASM.
-    - Read when exporting state-specific data to TypeScript.
-  - [Option<T> is almost always a missing enum](#optiont-is-almost-always-a-missing-enum)
-    - Explains when unnamed absence hides a real domain state.
-    - Read before exporting optional Rust data across WASM.
-- [Application Checklist](#application-checklist)
-  - Lists the steps needed to apply and maintain the skill.
-  - Use during implementation and review.
-- [Validation](#validation)
-  - Names the smallest relevant mechanical and semantic proof.
-  - Run before completing the task.
-
 ## Purpose
 
 Keep Nook's app/domain data shapes in Rust, with TypeScript reserved for UI
@@ -510,3 +465,4 @@ types, same-argument forwarding functions around generated WASM imports,
 unchecked WASM type hints, and raw provider/auth `JsValue` DTO signatures.
 Extension ownership checks must reject known portable decision patterns after
 their Rust replacement lands.
+
