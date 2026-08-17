@@ -214,11 +214,25 @@ RUN test -x "$(command -v bwrap)" \
     && bwrap --version \
     && install -D /dev/null /opt/nook/hive-sandbox-package-passed
 
+FROM toolchain AS worker-runtime-toolchain
+
+RUN groupadd --gid 1000 hive \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash hive \
+    && install -d -o hive -g hive /workspace \
+    && printf '%s\n' \
+      'export PATH="/usr/local/cargo/bin:$PATH"' \
+      > /etc/profile.d/nook-rust-toolchain.sh \
+    && chmod 0644 /etc/profile.d/nook-rust-toolchain.sh \
+    && runuser --user hive -- bash -lc \
+      'command -v cargo && command -v rustfmt && cargo --version && rustfmt --version' \
+    && install -D /dev/null /opt/nook/hive-login-shell-toolchain-passed
+
 FROM scratch AS verify-export
 
 COPY --from=check /opt/nook/hive-check-passed /hive-check-passed
 COPY --from=test-export /hive-tests /hive-tests
 COPY --from=sandbox-package-check /opt/nook/hive-sandbox-package-passed /hive-sandbox-package-passed
+COPY --from=worker-runtime-toolchain /opt/nook/hive-login-shell-toolchain-passed /hive-login-shell-toolchain-passed
 
 FROM dependencies AS release-source
 COPY lace/src lace/src
@@ -236,11 +250,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
     cargo build --locked --release -p hive \
     && nook-sccache-report hive-release
 
-FROM toolchain AS runtime
-
-RUN groupadd --gid 1000 hive \
-    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash hive \
-    && install -d -o hive -g hive /workspace
+FROM worker-runtime-toolchain AS runtime
 
 COPY --from=builder /build/target/release/hive /usr/local/bin/hive
 COPY --from=console-builder /console/dist /usr/local/share/hive-console
