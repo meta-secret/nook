@@ -50,9 +50,9 @@ The command:
 3. Attempts one idempotent, exact-head Cloud review request.
 
 That review request prefers Codex. After a fresh Codex comment, it probes
-briefly for a Codex usage-limit reply. If Codex is already usage-limited on
-the PR, or the probe sees that reply, it posts `cursor review` instead of
-retrying Codex.
+briefly for a Codex usage-limit reply. If that exact-head Codex request already
+has a usage-limit reply, or the probe sees one, it posts `cursor review`
+instead of retrying Codex. A later head tries Codex first again.
 
 Review-request failure does not fail validation. Do not wait for a result.
 

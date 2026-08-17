@@ -381,9 +381,18 @@ async function snapshotFrom(
   const cleanComment = comments.some((comment) =>
     isCleanCodexReviewComment(comment.body ?? "", comment.user, headSha),
   );
-  const usageLimited = comments.some((comment) =>
-    isCodexUsageLimitComment(comment.body ?? "", comment.user),
+  const lastCodexRequestIndex = comments.reduce(
+    (lastIndex, comment, index) =>
+      comment.body?.includes(codexMarker) ? index : lastIndex,
+    -1,
   );
+  const usageLimited =
+    lastCodexRequestIndex >= 0 &&
+    comments
+      .slice(lastCodexRequestIndex + 1)
+      .some((comment) =>
+        isCodexUsageLimitComment(comment.body ?? "", comment.user),
+      );
   const requestReactions =
     codexReviewSettled || cleanComment || codexRequests.length === 0
       ? []

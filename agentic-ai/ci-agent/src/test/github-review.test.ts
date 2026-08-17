@@ -221,6 +221,38 @@ test("requestExactHeadReview probes Codex and switches to Cursor when usage-limi
   ]);
 });
 
+test("requestExactHeadReview still prefers Codex on a new head after an older usage-limit comment", async () => {
+  const createdBodies: string[] = [];
+  const octokit = mockOctokit({
+    comments: [
+      {
+        body: `@codex review\n\n${codexReviewRequestMarker("old-head-sha")}`,
+        id: 1,
+      },
+      {
+        body: "You have reached your Codex usage limits for code reviews.",
+        id: 2,
+        user: { login: "chatgpt-codex-connector[bot]" },
+      },
+    ],
+    createdBodies,
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.deepEqual(result, {
+    fallback: ExactHeadReviewFallback.None,
+    headSha,
+    provider: ExactHeadReviewProvider.Codex,
+    requested: true,
+    settled: false,
+  });
+  assert.deepEqual(createdBodies, [
+    `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+  ]);
+});
+
 test("requestExactHeadReview does not request Cursor while Codex is pending", async () => {
   const createdBodies: string[] = [];
   const octokit = mockOctokit({
