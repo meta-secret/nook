@@ -58,20 +58,28 @@ pub(super) fn task_prompt(task: &ClaimedTask) -> String {
          prerequisite yourself using the available repository and GitHub access. When the task \
          names a GitHub Actions run, inspect its current terminal state and failed logs; if it \
          belongs to an open repair PR, check out that existing PR branch, fix it there, push a \
-         replacement exact-head run, and follow it to a terminal result. Before doing work or \
-         reporting another blocker, inspect every active owning Main repair listed below. Only when \
+         replacement exact-head run, and follow it to a terminal result. Before concluding the \
+         prerequisite cannot be completed, inspect every active owning Main repair listed below. Only when \
          every listed repair has already been merged and has a successful Main run containing its \
          merge is this prerequisite obsolete: report completed with `obsolete` set to true, no \
          changes, and explain that it no longer blocks delivery, even when the requested capability \
          remains unavailable. For every genuine prerequisite completion and every non-blocker task, \
          set `obsolete` to false. When no owning repair is listed, or any listed repair is still \
-         live, do not use this obsolescence rule. Never extend an obsolete blocker chain. Never \
-         report this task's own id as its blocker and never create a duplicate repair PR. Report \
-         blocked only for a genuinely separate prerequisite, using a distinct stable blocker id \
-         and an actionable prompt that another worker can complete."
+         live, do not use this obsolescence rule. This task is a dependency leaf. Never request \
+         another blocker and never create a duplicate repair PR. If the prerequisite cannot be \
+         completed with the authority and tools already supplied, report failed with a precise \
+         explanation, `obsolete` set to false, and `blocker.present` set to false with empty \
+         blocker details. Hive records that as a bounded failed attempt without creating a child \
+         task."
             .to_owned()
     } else {
         String::new()
+    };
+    let terminal_contract = if task.kind == "blocker" {
+        ""
+    } else {
+        "\n\nThis task is not a dependency leaf. Never return the failed status. If it \
+         cannot complete, return blocked with exactly one prerequisite request."
     };
     format!(
         "You are Hive worker attempt {} for task {}.\n\
@@ -80,14 +88,15 @@ pub(super) fn task_prompt(task: &ClaimedTask) -> String {
          Task kind: {}\n\
          Task:\n{}\n\n\
          Active owning Main repairs:\n{}\n\n\
-         Completed dependency context:\n{}{}",
+         Completed dependency context:\n{}{}{}",
         task.attempt_number,
         task.id,
         task.kind,
         task.prompt,
         owning_repairs,
         dependencies,
-        delivery
+        delivery,
+        terminal_contract
     )
 }
 

@@ -32,6 +32,9 @@
   - [Blocking dependencies](#blocking-dependencies)
     - Codex may return a typed blocker instead of pretending the parent task is complete.
     - Read before changing the Blocking dependencies flow or state transitions.
+    - [Dependency depth boundary](#dependency-depth-boundary)
+      - Blocker tasks are dependency leaves.
+      - Read before changing blocker creation or failure handling.
   - [Durable results](#durable-results)
     - Terminal summaries are bounded to 64 KiB.
     - Read before changing or relying on Durable results.
@@ -202,6 +205,7 @@ The graph contains:
 
 ```text
 (:Task)-[:DEPENDS_ON]->(:Task)
+(:Task)-[:INCLUDES_ARTIFACT_FROM]->(:Task)
 (:Agent)-[:EXECUTED]->(:Attempt)-[:FOR_TASK]->(:Task)
 (:Attempt)-[:PRODUCED]->(:Artifact)
 (:TaskActivity)-[:FOR_TASK]->(:Task)
@@ -266,6 +270,22 @@ complete. Hive then:
 5. makes the parent `READY` immediately if the reused blocker was already
    complete, otherwise `BLOCKED`.
 
+#### Dependency depth boundary
+
+- Only a non-blocker task may create a dependency.
+- A blocker task is a dependency leaf.
+- It must use the authority and tools already supplied.
+- A dependency leaf may return an explicit failed terminal result.
+- Hive records that result as a failed attempt on the leaf.
+- Hive does not create a child task.
+- The bounded retry budget completes the leaf or fails its dependent chain.
+- Schema migration 9 converts completed-child edges to artifact lineage.
+- An active child keeps its scheduling edge until it reaches `COMPLETED`.
+- Completion atomically converts that final edge and readies the parent leaf.
+- Claims traverse that lineage in depth order so child patches apply first.
+- Scheduling and rearm traversal ignore artifact-lineage edges.
+- The leaf policy prevents active retained chains from growing while they drain.
+
 When the blocker completes, its Git patch becomes a dependency artifact. A
 replacement worker verifies the artifact digest, applies it to the same pinned
 revision, commits a dependency baseline, and gives the parent task both the
@@ -278,9 +298,6 @@ when all of the following hold:
 - Every active transitive non-blocker consumer is a Main-repair task.
 - Every one of those repairs is already squash-merged with a successful
   containing Main run.
-
-Intermediate blocker nodes belong to the same prerequisite chain. They are not
-independent consumers.
 
 **Claim and completion guards**
 
@@ -878,6 +895,7 @@ global ruleset.
 | Concern | Source of truth |
 | --- | --- |
 | Rust platform implementation | [`agentic-ai/minds/hive/src/`](../../agentic-ai/minds/hive/src/) |
+| Task dependencies and artifact lineage | [`neo4j.rs`](../../agentic-ai/minds/hive/src/neo4j.rs) and [`migration.rs`](../../agentic-ai/minds/hive/src/neo4j/migration.rs) |
 | Worker image and cache stages | [`agentic-ai/minds/hive/Dockerfile`](../../agentic-ai/minds/hive/Dockerfile) |
 | Hive developer commands | [`agentic-ai/minds/hive/Taskfile.yml`](../../agentic-ai/minds/hive/Taskfile.yml) |
 | Infrastructure command composition | [`infra/Taskfile.yml`](../../infra/Taskfile.yml) |
