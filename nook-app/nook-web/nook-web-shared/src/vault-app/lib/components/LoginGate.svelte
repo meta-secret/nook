@@ -378,7 +378,7 @@
     ) {
       showProviderSetupLink = false
     }
-    if (showLocalUnlock) {
+    if (showLocalUnlock && !vault.isInitializing) {
       untrack(() => void vault.prepareLocalLogin())
     }
     if (

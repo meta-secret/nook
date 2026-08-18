@@ -128,15 +128,13 @@ export async function initOnce(state: VaultState): Promise<void> {
         await state.enqueueStorage(() =>
           unlockDeviceProtection(state.requireManager()),
         );
+        deviceIdentityUnlocked = true;
+        state.deviceAuthorizationInProgress = true;
       } else if (state.deviceProtectionStatus === DeviceProtectionStatus.Pin) {
         return;
-      } else if (state.localVaultPresent) {
+      } else if (!state.localVaultPresent) {
         // A surviving local vault must not mint a replacement app key. That
         // key is not on the roster, and backup-password recovery would fail.
-        state.storageMode = LOCAL_PROVIDER_TYPE;
-        await state.prepareLocalLogin();
-        return;
-      } else {
         await state.enqueueStorage(() => {
           const setupArgs: Parameters<typeof setupDeviceProtection>[0] = {
             manager: state.requireManager(),
@@ -145,9 +143,9 @@ export async function initOnce(state: VaultState): Promise<void> {
           };
           return setupDeviceProtection(setupArgs);
         });
+        deviceIdentityUnlocked = true;
+        state.deviceAuthorizationInProgress = true;
       }
-      deviceIdentityUnlocked = true;
-      state.deviceAuthorizationInProgress = true;
     }
 
     if (!state.deviceProtectionReady && !deviceIdentityUnlocked) {

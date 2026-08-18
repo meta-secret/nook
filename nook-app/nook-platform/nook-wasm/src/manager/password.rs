@@ -10,7 +10,7 @@ use crate::NookPasswordEntrySummary;
 use crate::NookSecretPage;
 use crate::conversion::wasm_iso_timestamp;
 use crate::storage::event_db::load_local_event_store;
-use crate::storage::indexed_db::{load_vault_local_cache, save_to_indexed_db};
+use crate::storage::indexed_db::{get_active_vault_id, load_vault_local_cache, save_to_indexed_db};
 use crate::types::password_entries_to_vec;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -39,29 +39,36 @@ impl NookVaultManager {
             .await?;
         let mut vault_missing = false;
         let mut content = self.fetch_vault_content(&mut vault_missing).await?;
-        if vault_missing || content.trim().is_empty() {
-            if let Some(cached) = load_vault_local_cache(&self.local_cache_ref()).await? {
-                if cached.trim().is_empty() {
-                    return Ok(Vec::new());
-                }
-                content = cached;
-            } else {
-                return Ok(Vec::new());
-            }
+        if (vault_missing || content.trim().is_empty())
+            && let Some(cached) = load_vault_local_cache(&self.local_cache_ref()).await?
+            && !cached.trim().is_empty()
+        {
+            content = cached;
         }
-        let mut entries = nook_core::read_vault_password_entries(&content)?;
-        // Locked imports historically persisted meta without password envelopes.
-        // Fall back to the event-log projection so backup-password unlock still
-        // appears for an imported vault.
-        if entries.is_empty() && !content.trim().is_empty() {
-            self.capture_vault_unlock(&content)?;
-            if self.event_log_has_events().await? {
-                self.hydrate_locked_projection_from_events().await?;
-                entries = self.vault.password_entries.clone();
-            }
+        self.hydrate_listed_password_entries(&content).await?;
+        Ok(password_entries_to_vec(&self.vault.password_entries))
+    }
+
+    async fn hydrate_listed_password_entries(&mut self, content: &str) -> Result<(), NookError> {
+        if let Ok(entries) = nook_core::read_vault_password_entries(content)
+            && !entries.is_empty()
+        {
+            self.vault.password_entries = entries;
+            return Ok(());
         }
-        self.vault.password_entries = entries.clone();
-        Ok(password_entries_to_vec(&entries))
+        if !content.trim().is_empty() {
+            self.capture_vault_unlock(content).ok();
+        }
+        if self.vault.store_id.trim().is_empty()
+            && let Some(store_id) = get_active_vault_id().await?
+            && !store_id.trim().is_empty()
+        {
+            self.vault.store_id = store_id;
+        }
+        if self.event_log_has_events().await? {
+            self.hydrate_locked_projection_from_events().await?;
+        }
+        Ok(())
     }
 
     #[wasm_bindgen]
@@ -775,6 +782,41 @@ mod wasm_tests {
         assert!(recovered.device.identity_private_key.is_empty());
         assert_eq!(recovered.vault.store_id, store_id);
         assert_eq!(page.total, 0);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn password_entries_list_after_app_key_is_deleted() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let password_entry = nook_core::create_password_entry_with_work_factor(
+            &keys,
+            nook_core::generate_id()?.as_str(),
+            "Recovery",
+            "2026-08-16T00:00:00Z",
+            "correct horse battery staple",
+            E2E_PASSWORD_SCRYPT_LOG_N,
+        )?;
+        let mut owner = NookVaultManager::new();
+        owner.vault.store_id = nook_core::generate_store_id()?.to_string();
+        owner.apply_genesis_vault_keys(&identity, &keys)?;
+        owner.vault.password_entries = vec![password_entry.clone()];
+        owner.bootstrap_event_log_genesis().await?;
+        let yaml = owner.serialize_current_projection_yaml()?;
+        let store_id = owner.vault.store_id.clone();
+        import_vault_blob(yaml.as_str(), Some("Password recovery")).await?;
+        switch_active_vault(&store_id).await?;
+
+        let mut recovered = NookVaultManager::new();
+        let listed = recovered
+            .fetch_vault_password_entries("local".to_owned(), String::new(), String::new())
+            .await
+            .map_err(|error| anyhow::anyhow!("password listing failed: {error:?}"))?;
+
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, password_entry.id);
+        assert_eq!(listed[0].label, "Recovery");
+        assert!(recovered.device.identity_private_key.is_empty());
         Ok(())
     }
 }
