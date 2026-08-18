@@ -585,7 +585,7 @@ Rules:
 - If the task was blocked waiting on the user, exclude idle wait time and note `active time: …` vs `elapsed: …`.
 - For question-only turns with no implementation, a duration line is optional.
 
-**Docker:** Never kill the Docker daemon — only stop containers (`docker stop`). See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
+**Docker:** Never kill the Docker daemon — only stop containers (`docker stop`). See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
 
 ## Standard flow (summary)
 
@@ -620,5 +620,5 @@ gh pr create --title "…" --body "…"
 gh pr merge <number> --squash
 ```
 
-See also [rules.md §6](../rules.md#6-git--pull-request-workflow).
+See also [coding-bro.md](coding-bro.md).
 

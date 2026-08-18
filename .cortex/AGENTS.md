@@ -251,7 +251,7 @@ Playwright e2e coverage of the exact sequence that failed; unit, component, or
 WASM tests may supplement but never replace that browser regression. Add WASM
 tests first when the fault is reproducible at the typed boundary, then keep the
 Playwright test for the user-visible flow. Full policy:
-[rules.md §4](rules.md#4-testing-requirements).
+[dynamic-skills/testing-pyramid-and-regression.md](dynamic-skills/testing-pyramid-and-regression.md).
 
 ## ⛔ Non-negotiable: never clear Bake `cache-from` or `cache-to`
 
@@ -415,7 +415,7 @@ and procedural-macro entrypoints. Full contract:
 
 ## ⛔ Non-negotiable: squash merge every PR
 
-**All pull requests merged into `main` MUST be squash-merged** (GitHub: **Squash and merge**; CLI: `gh pr merge --squash`). One PR = one commit on `main`. Merge commits and rebase merges are **forbidden**. Full policy: [rules.md §6](rules.md#6-git--pull-request-workflow).
+**All pull requests merged into `main` MUST be squash-merged** (GitHub: **Squash and merge**; CLI: `gh pr merge --squash`). One PR = one commit on `main`. Merge commits and rebase merges are **forbidden**. Full policy: [workflows/pull-requests.md](workflows/pull-requests.md#squash-merge-only---no-exceptions).
 
 ## ⛔ Non-negotiable: agents mutate only their owned feature
 
@@ -531,7 +531,7 @@ Full policy: [workflows/coding-bro.md](workflows/coding-bro.md).
 - **Forbidden:** `lsof -ti :<port> | xargs kill` when that port is forwarded by Docker (e.g. `:5173` for `task web:dev`) — use `docker ps` → `docker stop <container>` instead.
 - **Allowed:** `docker stop <container_id>`, `docker rm`, `docker compose down` for a specific stack.
 
-Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
+Full policy: [dynamic-skills/docker-container-harness.md](dynamic-skills/docker-container-harness.md).
 
 ## ⛔ Non-negotiable: request exact-head review without delaying validation
 
@@ -554,7 +554,7 @@ each actionable thread. Do not request Claude, CodeRabbit, or other optional
 reviewers. A PR is ready when the applicable repository-owned checks are green,
 the branch is current and mergeable, and all feedback already present is
 addressed. `task pr:ready` enforces the machine-checkable parts. Full policy:
-[rules.md §6](rules.md#6-git--pull-request-workflow).
+[workflows/pull-requests.md](workflows/pull-requests.md).
 
 ## ⛔ Non-negotiable: format on the host before every push
 
@@ -824,7 +824,7 @@ All specifications, architectural contracts, domain models, product specificatio
 ## Agent duties beyond code
 
 ### Testing pyramid
-* **Rust unit/integration tests** must cover ~99% of domain behavior — especially event sourcing, causal DAG sync, projection, epochs, and crypto. E2e is smoke only. See [rules.md §4](rules.md#4-testing-requirements) and [design-docs/core-beliefs.md §9](design-docs/core-beliefs.md#9-unit-tests-own-domain-correctness-e2e-is-smoke-only).
+* **Rust unit/integration tests** must cover ~99% of domain behavior — especially event sourcing, causal DAG sync, projection, epochs, and crypto. E2e is smoke only. See [dynamic-skills/testing-pyramid-and-regression.md](dynamic-skills/testing-pyramid-and-regression.md) and [design-docs/core-beliefs.md §9](design-docs/core-beliefs.md#9-unit-tests-own-domain-correctness-e2e-is-smoke-only).
 * **Line coverage threshold (90%):** `task rust:coverage:check` measures
   `nook-app-common + nook-core + nook-auth2 + nook-replication + nook-event-log` and fails below
   `nook-app/nook-platform/nook-core/coverage-floor.json` (90% lines). When coverage is under

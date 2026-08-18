@@ -40,6 +40,8 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 | [ui-design-skills.md](ui-design-skills.md) | Load `design-taste-frontend` for user-visible UI work; Impeccable is disabled by default and may be used only when the user explicitly requests it | |
 | [web-unused-code.md](web-unused-code.md) | Enable class-member analysis in every web Knip graph and remove every valid unused-code finding | |
 | [cortex-document-map.md](cortex-document-map.md) | Require standard relationship links and a hierarchical internal map in every Cortex document | [`.agents/skills/cortex-document-map/SKILL.md`](../../.agents/skills/cortex-document-map/SKILL.md) |
+| [testing-pyramid-and-regression.md](testing-pyramid-and-regression.md) | Enforce ~99% domain coverage in Rust, mandatory regression tests for bug fixes, and 90% Rust line coverage floor | |
+| [docker-container-harness.md](docker-container-harness.md) | Prohibit Dockerfile cache mounts and killing the Docker daemon; enforce exact dependency pinning and Bun lockfiles | |
 
 [code-review-skill]: ../../.agents/skills/code-review-comments/SKILL.md
 
