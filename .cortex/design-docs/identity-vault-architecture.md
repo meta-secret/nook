@@ -29,14 +29,41 @@ Do not introduce those old names in new APIs.
 ## Domain map
 
 ```mermaid
-flowchart LR
-  Person -->|owns or joins 0..n| Identity
-  Passkey -->|unwraps| AppKey
-  AppKey -->|member of| Identity
-  Identity -->|generates and owns| DEK
-  DEK -->|encrypts secrets for| Vault
-  Identity -->|wraps DEK to| AppPublicKeys
-  AppPublicKeys --> AppKey
+flowchart TD
+    subgraph UserDevice["User & Local Device"]
+        Person["Person (User)"]
+        Passkey["Passkey / PIN"]
+        AppKey["Local App Key (app_id)<br/>(Private key in local storage)"]
+        Person -->|"authenticates with"| Passkey
+        Passkey -->|"unwraps local"| AppKey
+    end
+
+    subgraph IdentityDomain["Identity Domain"]
+        Identity["Identity (A, B, ...)"]
+        IdentityLog["Encrypted Identity Control Log<br/>(Members, public keys, passkey records)"]
+        DekEnvelopes["Per-Vault DEK Envelopes<br/>(DEK encrypted to App Public Keys)"]
+
+        Person -->|"owns or joins 0..n"| Identity
+        Identity -->|"governed by"| IdentityLog
+        Identity -->|"generates & owns"| DekEnvelopes
+        AppKey -.->|"public key registered in"| IdentityLog
+        AppKey -->|"unwraps DEK from"| DekEnvelopes
+    end
+
+    subgraph VaultDomain["Vault Domain"]
+        Vault["Vault (store_id)"]
+        VaultLog["Encrypted Vault Event Log<br/>(Secrets, event DAG, projection)"]
+
+        Identity -->|"authorizes & owns"| Vault
+        Vault -->|"contains"| VaultLog
+        DekEnvelopes -->|"provides DEK to decrypt"| VaultLog
+    end
+
+    subgraph ReplicationDomain["Replication Transport"]
+        Provider["Replication Provider<br/>(GitHub, Drive, etc.)"]
+        Provider -->|"syncs"| IdentityLog
+        Provider -->|"syncs"| VaultLog
+    end
 ```
 
 ## Identity domain
