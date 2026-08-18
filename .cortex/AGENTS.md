@@ -19,7 +19,11 @@ Writing requirements are:
 - Keep one idea in each sentence.
 - Put actors, credentials, commands, and failure modes in separate bullets or
   sentences.
-- Treat dense multi-clause prose as a P1 documentation finding.
+- Prohibit static project directory trees and nested file hierarchies.
+  - Project structure is dynamic; agents must explore it directly using discovery tools (`list_dir`, `find_by_name`, `grep_search`).
+  - Limit structural overviews to flat lists of top-level subsystem directories (such as `infra`, `nook-app`, `agentic-ai`, `preflight`).
+- Prohibit ASCII graphics and box drawings; use Mermaid (` ```mermaid `) or structured lists instead.
+- Treat dense multi-clause prose, static directory trees, and ASCII graphics as P1 documentation findings.
 
 Full contract:
 [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md).
@@ -753,8 +757,11 @@ task loom:agent-stats CONFIG=path/to/agent-owned/publish-request.yaml
 
 Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 
-## 1. Rules & Architectural Layout
-* [ARCHITECTURE.md](ARCHITECTURE.md) — Top-level package layout, dependencies, command surface, and quality gates.
+## 1. Rules & Architecture Specifications
+* [ARCHITECTURE.md](ARCHITECTURE.md) — Top-level system overview, package layout, dependencies, execution flows, and quality gates.
+* [architecture/index.md](architecture/index.md) — Normative architecture specifications catalog.
+  * [architecture/packages.md](architecture/packages.md) — Detailed package responsibilities, crate boundaries, application services, and presentation packages.
+  * [architecture/engineering-harness.md](architecture/engineering-harness.md) — Containerized Taskfile hierarchy, Docker BuildKit caching, Zot registry scopes, and sccache compilation acceleration.
 * [rules.md](rules.md) — Golden Principles and hard coding/tooling constraints (**§6: squash merge every PR**).
 
 ## 2. Design Specs & Beliefs (`design-docs/`)
@@ -794,7 +801,7 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 - [references/loom-tools.md](references/loom-tools.md) — Loom request/response contracts and examples.
 - [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
 - [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
-- [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md) — **P1 `.cortex` writing rule:** short sentences, bullets, and lists over dense multi-clause prose.
+- [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md) — **P1 `.cortex` writing rule:** short sentences, bullets, and lists over dense multi-clause prose; no static directory trees.
 - [dynamic-skills/cortex-article-structure.md](dynamic-skills/cortex-article-structure.md) — **P1 `.cortex` article rule:** semantic headings, ordered procedures, parallel rule lists, and nested ownership.
 - [dynamic-skills/cortex-consistency.md](dynamic-skills/cortex-consistency.md) — **P1 `.cortex` GC rule:** docs must stay current, mutually consistent, and aligned with code.
 - [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).

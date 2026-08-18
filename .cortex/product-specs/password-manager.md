@@ -25,20 +25,11 @@ keys.
 
 ## 2. Detailed User Flows
 
-```
-      +--------------------+
-      | 1. Config & Login  | <---+ (Decryption fails / Key mismatch)
-      +--------------------+     |
-                |                |
-                v (Success)      |
-      +--------------------+     |
-      |  2. Secret Vault   | ----+
-      +--------------------+
-                |
-                v
-      +--------------------+
-      |3. Password Gen/Sync|
-      +--------------------+
+```mermaid
+flowchart TD
+    ConfigLogin["1. Config & Login"] -->|"Success"| SecretVault["2. Secret Vault"]
+    SecretVault -->|"Decryption fails / Key mismatch"| ConfigLogin
+    SecretVault --> PasswordGen["3. Password Gen/Sync"]
 ```
 
 ### A. Login & Storage Provider Flow

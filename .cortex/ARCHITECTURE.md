@@ -18,76 +18,40 @@ This document provides a comprehensive guide to Nook's architecture, package bou
   - It keeps concerns separated.
   - It isolates WebAssembly bindings from core domain code.
 
-```
-root/
-├── Taskfile.yml          (repo entrypoint; includes app tasks + root tooling)
-├── infra/
-│   ├── Taskfile.yml      (composition root for the infrastructure command surface)
-│   ├── tasks/            (flattened domain-owned SeaweedFS sccache, registry, k0s, Kata, Neo4j, and Hive operations)
-│   ├── compose.yaml      (private persistent infrastructure services)
-│   └── k0s/              (pinned single-node cluster and Hive manifests)
-├── agentic-ai/
-│   ├── ci-agent/         (PR delivery agent)
-│   ├── loom/             (deterministic Cortex tool runner)
-│   └── minds/
-│       ├── lace/         (experimental graph code-generation fixture)
-│       └── hive/         (Kata-isolated embedded-Codex worker)
-├── preflight/            (standalone Rust tests for whole-repository invariants)
-│   ├── Taskfile.yml      (`task preflight` Docker entrypoint)
-│   ├── Dockerfile
-│   └── tests/
-├── .task/
-│   └── agentic-ai.yml    (repo-level agent tooling)
-└── nook-app/
-    ├── Taskfile.yml      (app command surface)
-    ├── ci/Taskfile.yml   (ci:* tasks)
-    ├── docker-bake.hcl   (thin shared vars + cross-lineage prepare groups)
-    ├── nook-platform/    (Rust workspace root and members)
-    │   ├── Taskfile.yml  (rust:* tasks)
-    │   ├── Cargo.toml
-    │   ├── Cargo.lock
-    │   ├── clippy.toml
-    │   ├── .cargo/
-    │   ├── .config/
-    │   ├── docker/       (Rust Dockerfiles, rust/docker-bake.hcl Zot scopes, sccache, docker:* tasks)
-    │   ├── nook-app-common/ (shared leaf primitives and localization)
-    │   ├── nook-authenticator-domain/ (shared authenticator values and closed vocabularies)
-    │   ├── nook-auth2/
-    │   ├── nook-replication/
-    │   ├── nook-event-log/
-    │   ├── nook-companion-core/
-    │   ├── nook-core/
-    │   ├── nook-companion-wasm/
-    │   ├── nook-wasm/    (includes wasm:* Taskfile.yml)
-    │   └── fuzz/         (cargo-fuzz workspace for auth2 wire parsers; not a workspace member)
-    ├── nook-web/
-    │   ├── Taskfile.yml  (web:* tasks; includes extension)
-    │   ├── docker/       (web Dockerfiles/bake + docker:* web tasks)
-    │   ├── nook-web-app/
-    │   ├── nook-vault-simple/
-    │   ├── nook-vault-sentinel/
-    │   ├── nook-web-extension/  (extension:* Taskfile.yml)
-    │   └── nook-web-shared/
-+-------------------------------------------------------------+
-|      nook-vault-simple       |      nook-vault-sentinel     |
-|  (independent Simple app)    |  (independent Sentinel app)  |
-+-------------------------------------------------------------+
-|                    nook-web-app (site)                      |
-+-------------------------------------------------------------+
-|                    nook-web-extension                       |
-|       (Manifest V3 extension UI, service worker, scripts)   |
-+-------------------------------------------------------------+
-|                      nook-web-shared                        |
-|        (Source-only TS/Svelte shared presentation glue)      |
-+-------------------------------------------------------------+
-                               |
-                               v (consumes generated bindings)
-nook-wasm                     browser I/O, session, wasm-bindgen
-  └─> nook-core               secrets, sessions, sync policy, crypto
-       ├─> nook-event-log     signed events, authorization, projection
-       │    ├─> nook-auth2 ──> nook-app-common
-       │    └─> nook-replication
-       └─> nook-app-common    shared leaf primitives and localization
+- **Subsystems at repository root:**
+  - `infra`: infrastructure composition root, cluster definitions, persistent services, and deployment operations.
+  - `nook-app`: application product code, Rust domain/platform workspace, WASM bridge, and web frontends.
+  - `agentic-ai`: agent tooling, deterministic Cortex runner (Loom), CI agent, and isolated worker environments.
+  - `preflight`: standalone repository invariant verification tests.
+- **Dynamic exploration:** Detailed internal directory structures are dynamic.
+  Agents must investigate directory trees directly using exploration tools rather
+  than relying on static documentation trees.
+
+```mermaid
+flowchart TD
+    subgraph WebPresentation["Web Presentation Layer"]
+        Simple["nook-vault-simple<br/>(independent Simple app)"]
+        Sentinel["nook-vault-sentinel<br/>(independent Sentinel app)"]
+        WebApp["nook-web-app<br/>(site)"]
+        Extension["nook-web-extension<br/>(Manifest V3 extension UI, service worker, scripts)"]
+        Shared["nook-web-shared<br/>(Source-only TS/Svelte shared presentation glue)"]
+    end
+
+    Simple --> Shared
+    Sentinel --> Shared
+    WebApp --> Shared
+    Extension --> Shared
+
+    Shared -->|"consumes generated bindings"| Wasm["nook-wasm<br/>(browser I/O, session, wasm-bindgen)"]
+
+    subgraph RustPlatform["Rust Platform Crates"]
+        Wasm --> Core["nook-core<br/>(secrets, sessions, sync policy, crypto)"]
+        Core --> EventLog["nook-event-log<br/>(signed events, authorization, projection)"]
+        Core --> Common["nook-app-common<br/>(shared leaf primitives and localization)"]
+        EventLog --> Auth2["nook-auth2<br/>(identity and vault authorization)"]
+        EventLog --> Replication["nook-replication<br/>(causal DAG mechanics)"]
+        Auth2 --> Common
+    end
 ```
 
 ### Dependency Enforcements
@@ -101,12 +65,13 @@ nook-wasm                     browser I/O, session, wasm-bindgen
 
 Nook separates identity management from encrypted vault storage:
 
-```text
-person -> [identity A | identity B | ...]
-passkey/PIN -> local app key (app_id) -> identity member record
-replication provider -> encrypted identity control log
-identity -> owns per-vault DEK envelopes -> vault secrets log
-replication provider -> encrypted vault event log
+```mermaid
+flowchart TD
+    Person["Person"] --> Identity["Identity (A, B, ...)"]
+    Passkey["Passkey / PIN"] --> AppKey["Local app key (app_id)"] --> IdentityMember["Identity member record"]
+    Provider1["Replication provider"] --> IdentityLog["Encrypted identity control log"]
+    Identity --> DEK["Per-vault DEK envelopes"] --> VaultSecrets["Vault secrets log"]
+    Provider2["Replication provider"] --> VaultLog["Encrypted vault event log"]
 ```
 
 - **Identity:** An identity is a logical account.
@@ -133,303 +98,57 @@ The normative model is in
 
 ## 2. Package Responsibilities & Layers
 
-### Shared leaf: `nook-app-common`
+Nook is structured into three architectural tiers: portable Rust platform crates, a typed WebAssembly bridge, and isolated web presentation packages.
 
-- **Cross-cutting application primitives:** Owns dependency-light facilities
-  needed by sibling portable crates without depending on their auth, event, or
-  vault domains.
-- **Localization source of truth:** Owns locale catalogs, translation behavior,
-  and the single generated Rust translation-key registry. `nook-auth2` and
-  `nook-core` consume it; `nook-core` may compatibility-re-export the API.
-- **Not a dumping ground:** Authentication policy stays in `nook-auth2`, vault
-  semantics stay in `nook-core`, and browser/platform behavior stays in
-  `nook-wasm` or the web packages.
+Detailed package design, module breakdowns, and service boundaries live in
+[architecture/packages.md](architecture/packages.md).
 
-### A. `nook-auth2` (Portable Identity and Vault Authorization)
+### Rust Platform Tier
 
-- **Identity and app-key foundations:** `IdentityId`, identity control records,
-  app keys (`AppKey` / `AppId`), passkey bindings, and identity-owned per-vault
-  DEK envelopes belong here. Legacy `DeviceIdentity` / `device_id` names are
-  migration aliases only.
-- **App-key protection:** Passkey PRF validation plus HKDF/AES-GCM wrapping for
-  an installation-specific private app key. Browser/WebAuthn ceremonies stay
-  outside this crate. Target model: fresh random local app key.
-  Deterministic passkey-derived keys remain a compatibility boundary.
-- **Authorization envelopes:** Current vault `auth:` rows remain the legacy
-  wire boundary. Target ownership moves DEK envelopes onto the identity
-  control log. Vault create requires an identity with at least one key and a
-  generated DEK.
-- **Quorum recovery:** Fixed-policy SLIP-0039 recovery roots, protected per-device shares, and recovery-envelope helpers for `secrets_key` and `members_key` live here; recovery request/response exchange state stays out of sync providers.
-- **Key material and row types:** Portable newtypes for vault key material, auth/member ids, age-armored ciphertext, signing public keys, and the opaque `StoredSecretRecord` row shape shared by user secrets and auth metadata.
-- **No provider I/O:** No GitHub, Drive, iCloud, IndexedDB, OAuth, PAT, browser
-  APIs, or sync reconciliation. Provider credentials authorize replica access
-  only; they are not identity-membership or vault-unlock credentials.
-- **Portability:** Compiles on native and `wasm32-unknown-unknown` so browser, extension, CLI, server, mobile, HSM, YubiKey, and future quorum-recovery adapters can share the same key-access semantics.
+- **`nook-app-common` (Shared Leaf Primitives):** Owns localization catalogs, translation behavior, and leaf primitives shared across portable crates.
+- **`nook-auth2` (Identity & Authorization):** Owns logical identities, app-key derivation, passkey PRF wrapping, and per-vault DEK authorization envelopes.
+- **`nook-replication` (Replication Mechanics):** Owns causal DAG index calculations, topological event ordering, and provider-agnostic replica repair.
+- **`nook-event-log` (Signed Vault History):** Owns content-addressed event encoding, Ed25519 signatures, authorization graphs, and encrypted projection state.
+- **`nook-core` (Application Domain Core):** Owns vault application services, sync reconciliation, crypto operations, search indexing, and domain workflows.
 
-### B. `nook-replication` (Portable Replication Mechanics)
+### WebAssembly Bridge Tier
 
-- **Causal index:** Generic parent relationships, heads, ancestry,
-  concurrency, pending-parent handling, deterministic topological ordering,
-  quarantine indexing/exclusion, and set union.
-- **Replica bookkeeping:** Provider-neutral immutable event bytes, per-provider
-  outboxes, and missing-event repair planning.
-- **No identity or vault policy:** No identity membership, vault operation,
-  secret payload, actor authorization, key epoch, projection, provider
-  credential, or session behavior. It supplies mechanics independently to
-  identity-control and vault-event-log callers.
-- **No provider I/O:** No GitHub, Drive, iCloud, IndexedDB, OAuth, browser API,
-  or network transport. Hosts remain responsible for loading and persisting
-  bytes.
-- **Portability:** Compiles on native and `wasm32-unknown-unknown`; it has no
-  dependency on `nook-core`, `nook-wasm`, or `nook-web`.
+- **`nook-wasm` (The Bridge Layer):** Exposes typed Rust domain services to the browser, manages in-memory sessions, and conducts storage I/O (IndexedDB and HTTP REST) without implementing business logic.
 
-### C. `nook-event-log` (Portable Signed Vault History)
+### Web Presentation Tier
 
-- **Canonical envelope:** Content-addressed event ids, canonical JSON body
-  encoding, Ed25519 signatures, schema validation, and stable YAML storage
-  bytes.
-- **Vault operations:** Encrypted secret mutations, membership events,
-  password-envelope changes, epoch checkpoints, and opaque fingerprint metadata.
-- **Authorization graph:** Vault actor authorization layered over
-  `nook-replication`'s generic causal index, including pending and quarantined
-  events.
-- **Projection:** Deterministic encrypted vault projection, replacement and
-  security conflicts, key-epoch metadata, and replay-invariance checks.
-- **Event-store orchestration:** Typed append, union, store classification, and
-  compatibility between opaque replica bytes and validated vault events.
-- **No plaintext or provider I/O:** No plaintext secret models, key encryption,
-  GitHub, Drive, iCloud, IndexedDB, OAuth, browser APIs, or network transport.
-- **Portability:** Depends only on `nook-auth2` wire/key-access types and
-  `nook-replication` mechanics; it has no dependency on `nook-core`,
-  `nook-wasm`, or `nook-web`.
-
-The name is deliberate: Nook's source of truth is a multi-head causal event
-DAG, so `commit-log` would incorrectly imply a linear history.
-`event-sourcing` would imply command and application-service ownership beyond
-this crate.
-
-### D. `nook-core` (The Application Domain Core)
-
-- **`src/auth/`:** Compatibility re-exports for `nook-auth2` plus the core-only adapter that replays vault event operations into auth metadata state.
-- **`src/crypto/`:** Vault encryption and key-epoch re-encryption. Canonical
-  event signing lives in `nook-event-log`.
-- **`src/secrets/`:** Secret payload types/views, mnemonic helpers, password generation, and plaintext session mutation helpers.
-- **`src/sync/`:** Storage-provider validation/configuration, credential sealing,
-  provider snapshot migration, vault reconciliation, and portable sync workflow
-  states (last-success observation, manual provider operation, conflict review,
-  and local-folder health).
-- **`src/vault/`:** In-memory database, vault formats, import/connect,
-  event-session application services, session-cache workflows, typed access
-  states, and portable idle/sync runtime policy. Signed history delegates to
-  `nook-event-log`.
-- **Application services:** Provider-agnostic connect decisions live in `vault_connect`.
-- Unlock/session hydration lives in `vault_session` and `vault_session_cache`.
-- Enrollment lives in `auth/enrollment`.
-- Mutation/event orchestration lives in `nook-event-log::builder` and `vault_event_session`.
-- Sync reconciliation lives in `vault_sync_session` and `vault_sync_store`.
-- Hosts load or persist bytes, tokens, revisions, and timestamps.
-- Hosts then call these services.
-- They do not repeat service decisions.
-- **Host boundary:** `LocalEventStore` and `MemoryVaultStore` are portable in-memory service inputs.
-- Browser event storage, projection cache, clocks, secure randomness ceremonies, and provider transports remain adapters in `nook-wasm`.
-- Portable functions receive their resulting typed data explicitly.
-- **Root exports:** `nook-app/nook-platform/nook-core/src/lib.rs` keeps established `nook_core::...` type and function paths available.
-- It re-exports the event-log domain alongside core-owned application services.
-- Fallible event-log APIs return `EventResult` / `EventError` at both crate roots.
-- Core-owned application services convert those errors into `VaultResult` / `VaultError`.
-- **Tests:** Unit tests in each module + `tests/vault_workflow.rs` + `tests/multi_device_workflow.rs`.
-
-### E. `nook-wasm` (The Bridge Layer)
-
-- **`NookVaultManager`:** Session state — typed `Database`, vault metadata, `secrets_key`, `members_key`, `VaultCrypto`, device identity, GitHub SHA.
-- **Storage I/O:** IndexedDB (`rexie`), GitHub REST API (`reqwest`).
-- **Device protection:** Persist/migrate the wrapped identity, build WebAuthn PRF option payloads with `1Password/passkey-rs` `passkey-types`, and expose typed setup/unlock values to the web layer. Delegates portable key wrapping and auth metadata behavior to `nook-auth2` through `nook-core`.
-- **Exported methods:** `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect(secrets_key, members_key)`, etc.
-- **No domain logic** that belongs in `nook-core` — validate/delegate/serialize via core.
-- **Runtime wrappers:** Runtime policy, architecture, secret forms, diagnostics,
-  Sentinel session/finalization state, sync conflicts, and recovery issues are
-  core-owned values exposed through typed wrappers. WASM does not own timeout
-  rules, domain DTO mirrors, or string status taxonomies.
-
-### F. Isolated vault applications (The Web Presentation Layer)
-
-- **`nook-vault-simple`:** fixed Simple capability, Simple-only local registry,
-  create/import/open/manage flows, and the extension-consent route.
-- **`nook-vault-sentinel`:** fixed Sentinel capability, Sentinel-only local
-  registry, genesis/quorum/import/open/manage flows, no extension route or
-  protocol UI, and Rust-rejected extension approval.
-- **`nook-web-app`:** public `nokey.sh` site and unified local/e2e harness. It
-  is not a universal production vault artifact; the public production build
-  contains no vault entrypoint.
-- **Origin boundary:** each production app uses its own origin-scoped IndexedDB,
-  WebAuthn RP ID (`simple.nokey.sh` or `sentinel.nokey.sh`), session state,
-  security headers, and Cloudflare Pages project. Before app modules load, its
-  entrypoint configures an immutable Rust/WASM `VaultApplication` identity that
-  every manager uses for fail-closed capability checks.
-
-- **Svelte 5 components:** Shared layout and forms are consumed by separate
-  project entrypoints; TypeScript visibility never authorizes a vault type.
-- **`VaultState` (`vault.svelte.ts`):** Reactive shell.
-- It calls WASM and holds metadata-only `NookSecretListItem` pages for reactivity.
-- It requests one `NookSecretRecord` only for reveal/secret-copy.
-- Portable client transitions, provider scoping/staging/metadata rules, sync workflow variants, vault-architecture drafts, and page normalization are owned by `nook-core`.
-- They are exposed through typed WASM APIs.
-- The Svelte shell stores those generated values reactively and applies their outcomes to browser/UI state.
-- Cohesive browser workflows live in focused `lib/vault/*` action modules.
-- `vault.svelte.ts` remains the reactive facade and must not grow duplicate implementations.
-- **`auth/providers.ts` (shared):** Thin TS adapters + i18n over WASM `NookVaultManager` load/save APIs. IndexedDB `nook_auth` persistence and credential sealing live in `nook-wasm` / `nook-core` — see [auth-providers.md](design-docs/auth-providers.md).
-- **`auth/passkey-device-protection.ts`:** Thin browser-only WebAuthn create/get adapter.
-- Rust/WASM builds the PRF option payloads.
-- TypeScript invokes `navigator.credentials` and extracts the returned PRF output.
-- TypeScript performs no encryption.
-- `nook-wasm/src/passkey_browser.rs` classifies WebAuthn `NotAllowedError` as the stable `PASSKEY_CEREMONY_NOT_ALLOWED` result.
-- The browser uses that error for cancellation, timeout, policy refusal, and unavailable credentials.
-- UI callers localize that ambiguity for create, recovery, and unlock flows.
-- They must not infer PRF absence or offer the PIN fallback unless the browser returns the distinct PRF-unavailable result.
-- **`DeviceProtectionGate`:** Mandatory passkey setup/unlock before provider credentials or device keys are loaded.
-- **`LoginGate`:** Login when vault is locked — create local vault, connect sync provider, or unlock existing cache; see [vault-session-and-lock.md](design-docs/vault-session-and-lock.md).
-- **`VaultState.lockVault()`:** Clears WASM session + Svelte secrets; header **Lock vault** button.
-- **`nook.ts`:** WASM loader + sync result mapping; vault list rows are
-  `NookSecretListItem` wasm objects and explicit plaintext exposure uses
-  `NookSecretRecord` (no TS schema mirror).
-- **No** vault format logic, crypto, validation, password generation, or search filtering in TS/Svelte.
-
-### D2. `nook-web/nook-web-shared` (Shared TypeScript/Svelte Source)
-
-- **Source-only package:** Shared TypeScript helpers and small Svelte presentation
-  primitives that are safe for the two vault apps and the browser extension.
-- **Canonical source:** `nook-web-shared/src/vault-app` is imported directly by
-  the Unified, Simple, and Sentinel projects. Do not recreate an app-local
-  `src/lib` symlink or copy shared entrypoints/components into those projects.
-- **Package-oriented modules:** `vault-app/lib` keeps only the `nook.ts`,
-  `utils.ts`, and `vault.svelte.ts` facades at its root. Browser-owned modules
-  are grouped by capability under `app`, `auth`, `content`, `enrollment`,
-  `extension`, `runtime`, and `vault`; provider-specific authentication adapters
-  live under `auth/google` and `auth/icloud`. Presentation remains under
-  `components`, with its own feature-oriented subpackages, rather than being
-  mixed into browser adapters.
-- **No ownership of domain policy:** Shared TS/Svelte code may coordinate UI,
-  browser-page scanning, message DTOs, or adapters around WASM exports, but it
-  must not own vault format logic, crypto, validation, password generation, or
-  secret search. Generated WASM types/functions are imported or re-exported
-  directly; a TypeScript wrapper must perform an actual lifecycle, reactive
-  proxy, UI-default, or browser-state translation. Those domain behaviors and
-  types remain in `nook-core` and are exposed through `nook-wasm`.
-- **One generated WASM package:** `nook-wasm` is compiled and optimized once into `nook-web-shared/src/vault-app/lib/nook-wasm`.
-- Unified, Simple, Sentinel, and extension bootstraps configure distinct immutable Rust application identities before importing their app modules.
-- Separate web projects and origins remain the product boundary.
-- Manager construction and domain operations validate the configured identity in Rust.
-- Sentinel's built web surface contains no extension route, protocol, or UI.
-- Rust rejects extension approval for its identity even though the shared binding exists for Simple and the browser companion.
-
-### E. `nook-web/nook-web-extension` (The Browser Extension Layer)
-
-- **Manifest V3 package:** Browser extension build output lives in `nook-app/nook-web/nook-web-extension/dist`; source lives under `nook-app/nook-web/nook-web-extension/src`.
-- **Simple Vault owns the vault UI:** Before pairing, the toolbar popup contains
-  only the standard extension-origin device-protection widget. Creating,
-  recovering, or unlocking that identity sends its public keys directly to the
-  environment-configured Simple Vault consent route. The extension contains no
-  duplicate vault-management popup, website-first enable page, or second setup
-  window. Its other visible surface is the contextual in-page authentication
-  widget.
-- **Environment target:** `NOOK_SIMPLE_VAULT_URL` is sealed into the extension
-  bundle and manifest. Production uses `simple.nokey.sh`, development uses
-  `simple.dev.nokey.sh`, PR previews use their isolated
-  `pr-<number>.nokey-simple.pages.dev` origin, and local development uses
-  trusted HTTPS localhost. Each channel has a distinct deterministic extension
-  id so extension-origin state and passkeys cannot cross environments.
-- **Deployment artifacts:** The sealed image packages the exact tested bundle
-  into the site artifact's `/downloads/` directory with `extension.json`
-  metadata and a SHA-256 checksum. PR and main workflows publish and verify the
-  preview/development ZIP; immutable releases publish the versioned production
-  ZIP through both `nokey.sh` and the GitHub Release.
-- **Simple-only product surface:** The service worker, content scripts, and
-  future autofill flows pair only through `simple.nokey.sh`. The manifest and
-  runtime guard exclude both Nook vault origins from widget injection, and Rust
-  rejects Sentinel extension approval.
-- **Two user-facing responsibilities:** The extension acts for a selected
-  virtual identity through its installation-specific device key and manages
-  that identity's authorized relationship with a website/origin. It then
-  integrates vault-owned passwords and website passkeys after an applicable
-  vault grant is active. The first is identity management; the second is
-  vault-content integration. Neither turns the extension into a third vault
-  application.
-- **Task/Docker integration:**
-  - `task extension:build` builds the extension in Docker.
-  - `task extension:test:e2e` runs the extension Playwright smoke.
-  - The sealed `nook-web:local` image also builds `nook-app/nook-web/nook-web-extension/dist` at image time.
-  - Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading.
-  - `task extension:install:hosted` and hosted `extension:run:*` variants verify deployment metadata and SHA-256.
-  - They activate an immutable release atomically and launch it only in a channel-specific isolated browser profile.
-  - `task extension:smoke:hosted CHANNEL=dev` or `PR=<number>` uses the verified hosted bundle and matching Simple Vault deployment.
-  - The smoke covers pairing, vault, login-fill, lock, and restart flow.
-  - It then removes its temporary browser and vault state.
-  - Production is intentionally rejected because the smoke creates vault data.
-- **Domain boundary:** The extension uses Rust/WASM for portable policy,
-  domain-payload validation, persistence classification, and workflow decisions.
-  - TypeScript owns Chrome APIs, DOM access, WebAuthn ceremony calls, timers,
-    and browser lifecycle orchestration.
-  - TypeScript passes concrete browser observations into Rust.
-  - Rust returns typed decisions that TypeScript applies through browser APIs.
-  - TypeScript may validate Chrome and DOM transport envelopes before it passes
-    their concrete domain payloads to Rust.
-  - The extension must not reimplement vault format logic, crypto, validation,
-    password generation, search filtering, or portable observation
-    classification in TypeScript.
-- **Local projection bridge:**
-  - Simple Vault publishes its canonical encrypted, signed event log after local mutations and provider pulls.
-  - A content script restricted to the configured Simple origin transports that snapshot to the service worker.
-  - Rust/WASM validates canonical ids/signatures, store identity, the extension's protected device id, current approval, and revocation before persisting an extension-origin IndexedDB projection.
-  - Non-secret connection metadata also remains in WASM-managed extension-origin Rexie/IndexedDB.
-  - Sync providers complement this bridge for changes originating on other devices.
-  - They are not required for same-browser website/extension coherence.
-
-### F. `nook-web/nook-web-research` (Isolated UI Experiments)
-
-- **Independent research surface:** A small Svelte 5 + Vite catalog for disposable UI experiments. Each experiment lives in its own directory under `src/experiments/` and is registered in the catalog.
-- **No production coupling:** It does not import production Nook code or WASM and is not part of the Docker, CI, deploy, or production web build. Run it directly with Bun from its package directory.
+- **`nook-vault-simple` (Simple Vault):** Origin-isolated single-user vault application hosted on `simple.nokey.sh` with extension pairing support.
+- **`nook-vault-sentinel` (Sentinel Vault):** Origin-isolated multisig/threshold vault application hosted on `sentinel.nokey.sh` with strict protocol isolation.
+- **`nook-web-app` (Marketing & Test Site):** Public landing page on `nokey.sh` and local/e2e test harness.
+- **`nook-web-shared` (Shared Presentation):** Source-only TypeScript utilities, Svelte 5 UI components, and the shared compiled WASM artifact.
+- **`nook-web-extension` (Browser Companion):** Manifest V3 browser companion paired with Simple Vault for in-page credential integration.
+- **`nook-web-research` (UI Experiments):** Disposable Svelte 5 catalog for isolated visual experiments without production coupling.
 
 ---
 
-## 3. Detailed Data Flow & Execution Model
+## 3. Core Data Flows & Execution Model
 
-### Connect (multi-device)
+Nook operates on three primary data flows: multi-device vault unlock, incremental local-first mutation, and blind-indexed search.
 
-```
-[Svelte] → WASM-built passkey options → navigator.credentials.get()
-         → NookVaultManager.unlock_device_identity(prf_output)
-              → HKDF-SHA256 → AES-256-GCM unwrap of device identity
-         → VaultState.loadDb()
-         → NookVaultManager.connect(mode, pat)
-              → use authorized device identity (memory)
-              → load local projection or remote event log
-              → resolve_secrets_key() + resolve_members_key() from auth row
-              → VaultCrypto::new(secrets_key)
-              → decrypt user secret values → typed Database session
-```
+### Multi-Device Vault Unlock & Hydration
 
-### Add Secret (incremental save)
+1. **Device Identity Unlock:** The client performs a WebAuthn PRF ceremony or local credential check to unwrap the local private app key into ephemeral memory.
+2. **Authorization Key Retrieval:** The unlocked device key retrieves the vault Data Encryption Key (DEK) and membership keys from the authorization envelope.
+3. **Session Hydration:** The in-memory domain database decrypts stored secret records into typed session state.
+4. **Sync Reconciliation:** The client reconciles local projection heads against remote replication provider event logs.
 
-```text
-[Svelte] → add_secret(key, value)
-         → validate_secret_label, validate_secret_value
-         → update typed Database session
-         → encrypt_value ONLY for this key → stored_armored
-         → serialize_stored(Yaml) from cache (no full re-encrypt)
-         → write vault:{store_id} / append provider events
-```
+### Incremental Mutation & Sync
 
-### Search
+1. **Domain Validation:** The client submits a proposed record change to domain services in `nook-core`.
+2. **Selective Encryption:** Domain cryptography encrypts only the modified secret payload into armored age ciphertext without re-encrypting unchanged records.
+3. **Signed Causal Event:** An immutable Ed25519-signed event is appended to the local causal DAG and cached in local projection storage.
+4. **Asynchronous Outbox Dispatch:** New events are staged in an outbox and asynchronously published to configured replication providers.
 
-```text
-[Svelte] → prepare_secret_search_js() on the first non-empty query
-         → load + decrypt IndexedDB secret_search_v2:{store_id}:{bucket}
-         → verify authenticated buckets and reconcile by ciphertext digest
-           (decrypt new, changed, or invalid rows only)
-         → encrypt only changed ID-derived buckets; vault open already deleted the legacy plaintext key
-         → nook-core::SecretSearchCatalog::query over normalized in-memory text
-         → return the requested metadata page without record decryption
-```
+### Blind-Indexed Search
+
+1. **Partitioned Buckets:** Metadata search indexes are partitioned into age-encrypted buckets derived from opaque record IDs.
+2. **Selective Decryption:** When a query executes, only relevant authenticated search buckets are decrypted into ephemeral memory.
+3. **In-Memory Matching:** Search evaluations run across normalized in-memory text without exposing or decrypting full secret records.
 
 ---
 
@@ -488,21 +207,21 @@ App key detail:
 Provider connections detail:
 
 - Credentials are sealed to the local device.
-- Targets may mount independently by identity and vault logs.
+Related design specifications:
 
-See [vault-session-and-lock.md](design-docs/vault-session-and-lock.md) for Lock vs persisted data.
-See [decentralized-auth.md](product-specs/decentralized-auth.md) for join/approve flows.
-See [auth-providers.md](design-docs/auth-providers.md) for login UX and sync-provider credential persistence.
-See [vault-event-log.md](design-docs/vault-event-log.md) for provider event-log sync.
-See [unified-vault.md](design-docs/unified-vault.md) for local-first vault architecture (scalar sync historical).
-See [identity-vault-architecture.md](design-docs/identity-vault-architecture.md) for identity, onboarding, grant, and provider ownership.
+- [vault-session-and-lock.md](design-docs/vault-session-and-lock.md): Lock session vs persisted data boundaries.
+- [decentralized-auth.md](product-specs/decentralized-auth.md): Join and approve flows.
+- [auth-providers.md](design-docs/auth-providers.md): Login UX and sync-provider credential persistence.
+- [vault-event-log.md](design-docs/vault-event-log.md): Provider event-log sync.
+- [unified-vault.md](design-docs/unified-vault.md): Local-first vault architecture (scalar sync historical).
+- [identity-vault-architecture.md](design-docs/identity-vault-architecture.md): Identity, onboarding, grant, and provider ownership.
 
-```
-secrets:  user passwords (secrets_key)
-auth:     per-device secrets_key + members_key envelopes
-joins:    transient join requests
-members:  members_key-encrypted catalog entries
-```
+YAML payload sections:
+
+- `secrets`: user passwords and payload items encrypted with `secrets_key`.
+- `auth`: per-device `secrets_key` and `members_key` envelopes.
+- `joins`: transient join requests during migration.
+- `members`: `members_key`-encrypted catalog entries.
 
 - **Per-record age armor** for values; labels plaintext in YAML.
 - **GitHub:** UTF-8 YAML file, base64 in API payloads (not hex blob).
@@ -512,9 +231,9 @@ members:  members_key-encrypted catalog entries
 
 ## 5. Boundary Error Propagation Model
 
-- All fallible WASM exports return `Result<T, wasm_bindgen::JsError>`.
-- `NookError` maps to JS `Error` with message string.
-- Svelte catches in `try/catch` on `VaultState` methods.
+- **Strongly Typed Domain Errors:** Fallible Rust domain services return structured, explicit error types rather than panics or generic string messages.
+- **Bridge Error Translation:** The WebAssembly boundary translates domain errors into structured platform error values with stable error codes.
+- **Fail-Closed Presentation:** Presentation tiers handle bridge errors through explicit reactive error states, ensuring failure modes never silently corrupt session state.
 
 ---
 
@@ -566,565 +285,17 @@ Domain logic changes **must** add or update Rust tests before merge. **Line cove
 
 ## 7. The Engineering Harness
 
-All development tasks run containerized via `Taskfile`.
+All development tasks and builds in Nook run containerized via a unified `Taskfile` surface and reproducible Docker BuildKit images.
 
-### Taskfile layout
+- **Unified Command Surface:** Root `Taskfile.yml` includes domain-specific task modules (`nook-app/Taskfile.yml`, `infra/Taskfile.yml`, etc.) under deterministic namespaces (`rust:*`, `web:*`, `docker:*`, `ci:*`).
+- **Sealed Reproducible Images:** Runtimes are isolated into sealed images (`nook-rust:local`, `nook-web:local`, `nook-rust-browser:local`) to eliminate machine dependency drift.
+- **Split Image Lineages:** Rust compilation and Web packaging run in independent BuildKit lineages; only small generated artifacts (WASM packages, coverage reports) cross the host handoff boundary.
+- **Distributed BuildKit & Compiler Caching:** Builds leverage Zot OCI registry layer caches (`registry.dev.nokey.sh`) and SeaweedFS S3-backed `sccache` (`sccache.dev.nokey.sh`) for fast remote and local warm builds.
+- **Ephemeral Remote Execution:** Heavy validation and CI jobs execute on ephemeral GitHub-hosted runners, ensuring local agent iterations remain fast and lightweight.
 
-- Root `Taskfile.yml` is the repo entrypoint.
-- App commands live in `nook-app/Taskfile.yml` and are included into the root surface.
-- CI tasks live in `nook-app/ci/Taskfile.yml`.
-- Rust tasks live in `nook-app/nook-platform/Taskfile.yml`.
-- Docker tasks live beside each package under `docker/Taskfile.yml`.
-- Web tasks live in `nook-app/nook-web/Taskfile.yml`.
-- Extension tasks live in `nook-web-extension/Taskfile.yml`.
-- Wasm tasks live in `nook-platform/nook-wasm/Taskfile.yml`.
-- Task namespaces match directories: `docker:*` under `docker/`, `ci:*` under `ci/`.
-- `infra/Taskfile.yml` is the infrastructure composition root.
-- It flattens domain-owned command modules under `infra/tasks/` into one public surface.
-- Every infrastructure Taskfile must be reachable from that root.
-- Operation shell bodies stay inside their owning domain Taskfile.
-- Orphan Taskfiles and standalone shell scripts under `infra/` are prohibited.
-- Preflight rejects orphan infrastructure Taskfiles.
+See [architecture/engineering-harness.md](architecture/engineering-harness.md) for the complete Taskfile hierarchy, Docker cache topology, builder driver configurations, and solve pipelines.
 
-### Preflight and sealed images
-
-- Repository-wide invariant tests run through `task preflight`.
-- Preflight bakes through `preflight/docker-bake.hcl`.
-- It reuses the shared `rust-base` toolchain target.
-- It cooks dependency graphs with cargo-chef.
-- It compiles with SeaweedFS sccache secret mounts.
-- Workspace source is copied into the `nook-web` image at build time.
-- Build definition: `nook-app/nook-web/nook-web-app/Dockerfile`.
-- There is no runtime bind mount on the common path.
-- The image is self-contained and reproducible.
-
-Local-iteration exceptions:
-
-- `task web:dev` and `task web:dev:fast` — Vite hot-reload over trusted `https://localhost:<port>`.
-- TLS material lives under `~/.nook/https/` and is git-ignored.
-- `task wasm:build:fast` — mounted no-opt WASM regeneration.
-
-HTTPS setup:
-
-- `task web:https:setup` builds and runs the pinned repository `mkcert` container.
-- Only the final CA trust operation runs on the host.
-- The browser consumes the host trust store.
-
-Playwright and CI keep isolated loopback-HTTP transport when real passkey, OAuth, or provider ceremonies are not under test.
-
-### PR delivery helpers
-
-PR delivery helpers live in `agentic-ai/ci-agent`.
-
-Commands:
-
-- `task pr:preflight`
-- `task pr:review`
-- `task pr:review-local`
-- `task pr:ready`
-
-Review and audit behavior:
-
-- The local review command runs advisory Codex review against `origin/main`.
-- The review command posts an idempotent SHA-bound Codex request.
-- If Codex reports a usage limit, the same command posts a SHA-bound Cursor
-  Bugbot request instead of retrying Codex.
-- Complete validation immediately dispatches repository-owned checks.
-- It then requests exact-head review without making it a gate.
-- Review results are not required for readiness.
-- Audit commands emit machine-readable exact-head state.
-- Audit commands do not wait for an external reviewer.
-- Audit commands never merge a PR.
-
-Merge policy:
-
-- Nook has no event-driven PR auto-merger.
-- Workflows do not merge blindly from check events.
-- The task-owning agent runs the readiness audit.
-- The agent squash-merges immediately when the audit passes.
-
-Local ci-agent Docker tags are worktree-scoped.
-
-Another checkout cannot replace the audit binary between build and readiness execution.
-
-### Remote execution and validation
-
-- Extension iteration and other heavy agent feedback use the allowlisted GitHub-hosted remote task catalog.
-- Required product validation runs on GitHub Actions only.
-- Validation starts after the coherent pushed iteration is explicitly selected with a validation label.
-- Agents do not run local `task check` or `task ci:pr` gates.
-
-Focused dispatches (`rust:test`, `web:check`, `web:test`, `extension:check`):
-
-- Use narrow source-sealed images.
-- Native tests branch from the manifest-keyed Rust dependency image.
-- Web checks consume only web dependencies plus the generated WASM package.
-- They do not join unrelated coverage, WASM-test, browser, full verification, or production-build stages.
-
-All branch code executes on ephemeral GitHub-hosted runners.
-
-The self-hosted `nook` pool remains maintenance-only.
-
-### Split Rust/WASM and web images
-
-**Rust/WASM lineage**
-
-- `rust-base` plus manifest-only chef cooking exposes a lightweight WASM dependency boundary.
-- Native verification extends it with nextest, clippy, and coverage profiles.
-- Hosted PR CI runs native coverage independently.
-- It verifies WASM once on a dedicated producer.
-- Web verification and opt-in browser jobs download that producer's small run-stable artifact.
-- They do not rebuild Rust/WASM locally.
-
-PR consumer behavior:
-
-- `Web verification` depends on the WASM build producer through `needs`.
-- It downloads the clippy-clean WASM package with `actions/download-artifact`.
-- `WASM Node tests` can finish in parallel with web verification.
-- The conditional `Headless UI demo` job also starts from the WASM handoff.
-- It overlaps web verification on UI-changing pull requests.
-- It solves the browser image without writing cache state.
-- Playwright must succeed before cache publication starts.
-- A dedicated cache-only target publishes the isolated exact-head browser graph.
-- `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
-- It also waits for the UI demo job.
-- It deploys from the exported host dist handoff.
-- Rust coverage reporting is a separate native-dependent job.
-- That job downloads the completed handoff directly.
-- Preview waits for Native verification.
-- Preview still does not wait for native coverage.
-- Preview does not poll sibling jobs.
-- The overall gate requires the required producer jobs.
-- Producer failures are reported explicitly.
-
-Hosted CI cache persistence:
-
-- Persists the toolchain.
-- Persists stable native/WASM dependency boundaries.
-- Persists separate source-sensitive native/WASM snapshots as private Zot BuildKit refs.
-- Every PR job restores Main's complete lineage plus its PR remote-buildcache scope.
-- PR jobs and local Task Bake export only isolated remote-buildcache refs.
-- Explicit Remote tasks may update only their deterministic branch refs with Main fallback.
-
-SeaweedFS reuse:
-
-- Trusted Main and Remote compiler vertices reuse bucket-scoped SeaweedFS `sccache` objects.
-- Reuse happens through stable BuildKit secret mounts.
-
-Local on-demand images:
-
-- Explicit `task rust:*` and `task wasm:*` commands load the source-sealed `nook-rust:local` image on demand.
-- Browser-only WASM tests and mounted Vite development use `nook-rust-browser:local`.
-
-**Web lineage**
-
-- `web-base` contains Bun, Node, and Task.
-- `web-deps` adds `node_modules`.
-- PR unit/preview builds use this browser-free lineage.
-- The CI-only web target runs format, lint, check, and tests as a sibling of the production web/extension build.
-- It joins both successful branches into the same sealed image.
-- Verification is not serialized after the build.
-- `web-e2e-base` adds Playwright Chromium for Main, manual e2e, and changed PR demos.
-- It uses a separate `:web-e2e-*` cache.
-- Browser-free PR web solves never pull the browser layer.
-- Neither lineage contains Cargo or `target/`.
-
-**Common task image** (`nook-web:local`):
-
-- Starts from `web-base`.
-- Adds `node_modules`, the generated WASM package, coverage artifacts, workspace source, and built web/extension output.
-- This is the slim image used by normal Task and CI runtime checks.
-
-### `task setup` solve flow
-
-`task setup` has two solves.
-
-**First solve**
-
-- Builds web dependencies alongside a Rust graph.
-- The Rust graph fans out from cached dependencies into native verification and WASM.
-- Exports the scratch `web-artifacts` join under `${TMPDIR}/nook-web-artifacts/<full-commit-sha>/<unique-invocation>/`.
-- The commit namespace isolates different revisions.
-- The invocation namespace prevents concurrent builds of the same revision from racing.
-- That directory contains only generated WASM and coverage files.
-- It is guarded at 256 MiB.
-
-**Second solve**
-
-- Supplies the artifact directory as a named host context to `nook-web`.
-- It never passes either multi-GB Rust branch as a Docker context or parent.
-- Only this small final web solve is retried once after the known immediate BuildKit frontend/Dockerfile-load flake.
-- The expensive preparation graph is never repeated.
-- The final Dockerfile asserts that `/usr/local/cargo` and `nook-app/target` are absent.
-
-### Container limits and host prerequisites
-
-- **Container file descriptors:** Nook runtime containers set
-  `nofile=1048576`.
-  - `DOCKER_NOFILE_LIMIT` can override that value.
-- **Inotify ownership:** Inotify sysctls are kernel-wide.
-  - Docker rejects them as per-container `--sysctl` options.
-- **Linux prerequisites:** Developers configure the documented host values:
-
-  - At least `fs.inotify.max_user_instances=2500`.
-  - At least `fs.inotify.max_user_watches=10485760`.
-
-- **GitHub Actions:** The shared Docker setup raises those values when needed.
-  - It does not lower larger runner defaults.
-
-macOS behavior:
-
-- Inotify sysctls live inside Docker Desktop's Linux VM.
-- Apply them with the documented short-lived privileged container after Docker Desktop restarts.
-- macOS `sudo sysctl` does not configure the VM.
-
-macOS host-wide file-descriptor ceilings:
-
-- `kern.maxfiles`
-- `kern.maxfilesperproc`
-- launchd's `maxfiles` controls newly launched processes.
-- The README documents the current-host 10x values.
-
-### Build export: host artifact boundary + docker driver
-
-- **Old combined image:** The `nook-web` filesystem was about 9 GB.
-  - It inherited warm Rust `target/`, the compiler, Cargo registry, web
-    dependencies, and Playwright.
-- **Split lineages:** Rust and web caches remain in independent BuildKit
-  lineages.
-  - Only the WASM package and coverage outputs cross from Rust to web.
-  - They cross through the commit-scoped, invocation-isolated host directory.
-  - The common runtime image contains no Rust toolchain or `target/`.
-- **Local export:** The normal **`docker` driver** writes the web result directly
-  to the containerd image store.
-  - It avoids an extra archive/import cycle.
-- **Hosted export:** Delivery validation uses an ephemeral `docker-container`
-  builder.
-  - It restores the independent lineages from `registry.dev.nokey.sh`.
-
-**Builder selection**
-
-- Normal local `task setup` and optional local `task ci:*` callers use the active Docker-context daemon builder.
-- Examples: `desktop-linux` on Docker Desktop or `default` on plain Linux.
-- They never share a `nook-pr` docker-container.
-- GitHub Actions creates an ephemeral job-scoped `docker-container` builder with `docker/setup-buildx-action`.
-- It passes that unique name through the bounded health wrapper before repository preflight and app solve phases begin.
-- Warm layers come from authenticated registry cache refs.
-- Warm layers do not come from reusing one host BuildKit container across deployments.
-
-**CI parity** (`.github/actions/nook-docker-setup`)
-
-- Raises Linux watcher limits.
-- Creates and exports the hosted `docker-container` Buildx builder for wrapped and direct Task callers.
-- Logs into `registry.dev.nokey.sh`.
-- Enables Bake registry cache refs.
-- Trusted Main and same-repository PR/Rust-ecosystem Rust producers receive the SeaweedFS writer identity.
-- Explicit Remote compiler vertices receive a read-only identity through stable BuildKit secret IDs.
-- Fork, release, arbitrary-ref, dependency-update, and AI-authored jobs remain secret-free.
-- Delivery does not depend on the daemon's default image store.
-- Delivery never rewrites daemon configuration or restarts Docker.
-
-**BuildKit caching through `registry.dev.nokey.sh`**
-
-- Local Task Bake restores and publishes shared layers by default when remote
-  registry credentials exist under the machine cache directory.
-- Root `Taskfile.yml` env enables that path.
-- `registry-cache:ensure` logs into Zot before Bake.
-- Local writes use git-commit refs (`-git-<sha>`) under `nook/remote-buildcache/**`.
-- Local publish requires a clean worktree.
-- Local writes never update trusted `nook/buildcache/**`.
-- Verify bakes keep `GHA_CACHE_WRITE_ENABLED` empty.
-- A follow-up publish Bake exports fat scopes from local layers.
-- Opt out with `NOOK_REGISTRY_CACHE=0`.
-- Hosted CI first stabilizes the shared Rust toolchain parent in `nook-rust-base-v1`.
-- It exports native and WASM dependency boundaries to `nook-rust-deps-v3` and the fingerprinted WASM deps ref with `mode=max`.
-- The WASM deps fingerprint covers cook-affecting Cargo and lineage Dockerfile inputs only.
-- WASM deps restore may fall back to longer `nook-rust-wasm-source-v2` when that fingerprint is empty.
-- Preflight owns static Bake cache proofs in `bake_cache_proofs.rs` for the Zot restore graph.
-- Source-sensitive native coverage and WASM outputs use separate `nook-rust-native-source-v3` and `nook-rust-wasm-source-v2` refs.
-- A workflow-only or web-only push does not recompile unchanged Rust on a fresh hosted runner.
-- Same-repository PR jobs restore Main plus the git-commit remote-buildcache scope.
-- PR exporters write only those git-commit remote-buildcache refs.
-- Web dependencies, browser-free web, and e2e web use distinct refs and `mode=max`.
-- Cache export errors on web lineages are non-fatal because cache is an optimization.
-- Zot is reached only through Traefik HTTPS at `registry.dev.nokey.sh` with htpasswd auth.
-- There is no host `:5000` listener and no `kubectl port-forward`.
-
-**Rust compiler cache**
-
-Rust/WASM compiles are wrapped by pinned `sccache`.
-
-Authorized identities:
-
-- Local builds, Hive, trusted Main, same-repository PR Rust producers, and Rust ecosystem Docker jobs.
-- They use authenticated SeaweedFS S3 at `https://sccache.dev.nokey.sh` when scoped writer credentials exist.
-
-Explicit Remote tasks:
-
-- Use a separate read/list-only identity for the same bucket.
-- They reuse trusted compiler objects.
-- They cannot publish branch-controlled objects.
-- New Remote dependency results persist in task-scoped Zot OCI layers.
-
-- **Trusted publishers:** Main, local, and Hive builds publish new compiler
-  objects.
-- **Network boundary:** Traefik terminates publicly trusted TLS on `:443`.
-  - It forwards only to loopback SeaweedFS S3 (`127.0.0.1:8333`).
-- **Secret handling:** Runtime Docker commands and compiler vertices mount
-  stable secret IDs.
-  - Secret values do not participate in BuildKit cache checksums.
-- **Untrusted refs:** Fork, release, and other arbitrary-ref jobs receive no S3
-  credentials.
-
-**Main cache visibility**
-
-- Main alone refreshes the shared Rust, WASM, web, and e2e refs under `nook/buildcache/**`.
-- PR jobs and local Task Bake cannot write that Main repository path.
-- They write only isolated refs under `nook/remote-buildcache/**`.
-- Explicit Remote tasks also write only under `nook/remote-buildcache/**`.
-- Remote uses a separate Zot identity that can read but cannot update Main's repository path.
-- Every Remote ref is scoped by both branch and dispatched task.
-- Independent tasks run in parallel without replacing another graph.
-- Inactive Remote refs expire after seven days.
-- Zot deduplicates identical content-addressed layer blobs across both paths.
-- Main clients authenticate with `NOOK_REGISTRY_USERNAME` / `NOOK_REGISTRY_PASSWORD`.
-- Remote uses `NOOK_REGISTRY_REMOTE_USERNAME` / `NOOK_REGISTRY_REMOTE_PASSWORD` and the read-only SeaweedFS identity.
-
-**Docker bake orchestration**
-
-- App-owned: `nook-app/Taskfile.yml` passes a thin shared
-  `nook-app/docker-bake.hcl` plus package-local bake files under
-  `nook-app/**/docker-bake.hcl` and `preflight/docker-bake.hcl` to
-  `docker buildx bake`.
-- Loadable runtime tags live next to their package commons:
-  `nook-web*` under `nook-web/nook-web-app`, `nook-rust*` under platform
-  core/wasm.
-- Root `Taskfile.yml` includes those app commands for repo-root usage.
-- The Taskfile passes bake files as absolute paths.
-- It grants buildx read access to the repo root.
-- It sets every source target context to the repo root so local and hosted-runner buildx versions resolve paths the same way.
-- During the host handoff it grants write access only to the current commit/invocation artifact directory.
-- It grants read access only to that directory for the web solve.
-- The main Docker build context remains the repository root.
-- The sealed app image can copy root workflow files (`Taskfile.yml`, `.task/agentic-ai.yml`, docs, and CI helper scripts) as well as `nook-app`.
-
-### Docker cache model
-
-- **Named-volume prohibition:** Nook does not use named volumes for `target/`,
-  Cargo registries, or `node_modules`.
-  - Those correctness-relevant build inputs stay in normal image layers and
-    the selected builder's local content store.
-- **Cache-service exception:** SeaweedFS S3-backed `sccache` provides the
-  authenticated HTTPS endpoint.
-- **Authorized callers:**
-
-- Local runtime builds
-- Hive
-- Trusted Main
-- Same-repository PR Rust producers
-- Rust ecosystem Docker jobs
-- Explicit Remote tasks
-
-Write vs read identity:
-
-- Main and same-repository PR/Rust-ecosystem Rust producers write with the build identity.
-- Remote reads through a separate identity.
-- Fork, release, and other arbitrary-ref jobs bypass sccache.
-
-| What | How it is cached |
-| --- | --- |
-| Rust/web/browser layers | Local builder store; hosted BuildKit registry refs |
-| Rust crate dependencies | cargo-chef + Zot refs |
-| SeaweedFS S3 compiler cache | See SeaweedFS compiler-cache rules below |
-| OCI registry | Zot in k0s |
-| Server mesh | Cloudflare Mesh enrollment |
-| `nook-app/target/` | Rust lineage only |
-| `node_modules` | `web-deps` Dockerfile layer |
-| Web wasm pkg + coverage | Host artifact handoff |
-| Web dist | Image build time |
-| Playwright Chromium | `web-e2e-base` only |
-| CI Docker builds | Verified WASM handoff + parallel consumers |
-
-**Rust/web/browser layers**
-
-- Local commands reuse the selected builder's store.
-- Hosted CI persists stable Rust dependencies on `registry.dev.nokey.sh`.
-- It also persists separate source-sensitive native/WASM snapshots.
-- Separate refs cover web-dependency, browser-free-web, and e2e-web layers.
-- BuildKit uses `type=registry`.
-- Every exporter uses `mode=max`.
-
-**Rust crate dependencies**
-
-- **cargo-chef** release WASM cooks plus a manifest-keyed release test warm-up.
-- A source-sensitive `cargo build --tests --release` sibling matches `wasm-pack test`'s unit graph.
-- Dev-dependencies differ from `wasm-pack build --lib`.
-- Dummy-root warm-ups cover native nextest/clippy/coverage.
-- Hosted Main publishes authoritative layers for read-only PR restores.
-- Main may additionally reuse compiler objects from Main's SeaweedFS bucket.
-- Explicit Remote tasks publish new branch results only to their task-scoped Zot refs.
-
-**OCI registry** (`registry.dev.nokey.sh`)
-
-- Zot in k0s with retained `/var/lib/hive/zot`.
-- ClusterIP `10.96.90.10:5000`.
-- Traefik HTTPS + htpasswd under `*.dev.nokey.sh`.
-- Hosted CI and Hive use it for BuildKit cache and image publish/pull.
-- No host `:5000` mapping and no `kubectl port-forward`.
-
-**Server mesh**
-
-- `task infra:mesh:node:add` idempotently enrolls a distinct, non-HA Linux server as a Cloudflare Mesh node.
-- It provides direct private-IP connectivity.
-- The silent Task obtains the one-time connector token from the existing Wrangler OAuth session.
-- It streams the token only to a mode-`0700` root helper over SSH stdin.
-- Enrollment refuses active kernel auditing.
-- It temporarily hides root process arguments from unprivileged users.
-- It restores `/proc`, removes the helper, and never persists or logs the token.
-- Subnet routes and HA replicas remain explicit later changes.
-
-**`nook-app/target/`**
-
-- Lives at `/meta-secret/nook/nook-app/target` in the Rust lineage only.
-- Hosted CI persists reachable BuildKit layers in private Zot refs.
-- It remains absent from `nook-web:local`.
-
-**`nook-app/nook-web/nook-web-app/node_modules`**
-
-- Installed directly in the `web-deps` Dockerfile layer.
-- Parallel branch; local immutable layer like `builder-core-deps`.
-- No host/daemon cache mount.
-- `web:dev` (mounted) runs `bun install` in its command.
-
-**Web wasm pkg + coverage**
-
-- Generated in `builder-wasm`.
-- Exported from a scratch target under `${TMPDIR}/nook-web-artifacts/<commit>/<invocation>/`.
-- Consumed as a small named context by the web solve.
-
-**Web dist**
-
-- Built at nook-web image build time (`bun run build`, channel URL args).
-- Present in every container.
-- PR previews deploy the combined internal harness plus three isolated native Pages aliases.
-- Main deploys isolated site/Simple/Sentinel artifacts to stable development origins.
-- Release publishes extracted production artifacts.
-
-**Playwright Chromium**
-
-- Pre-installed only in `web-e2e-base`.
-- Absent from normal PR `web-base` and the Rust lineage.
-- `ci:full-e2e` PRs and Main use the e2e base.
-- Browser-only WASM tasks use the on-demand Rust browser image.
-
-**CI Docker builds**
-
-- PR CI builds verified WASM once and uploads its small generated package.
-- Parallel web, UI-demo, and `ci:full-e2e` consumers download that artifact.
-- Independent web and extension e2e consumers each build only the Chromium web image from that artifact.
-- They run on separate hosted runners.
-- Pull-request browser jobs write only isolated exact-head cache refs.
-- Each browser job probes its isolated exact-head ref before solving.
-- An available exact browser ref is imported alone.
-- A missing exact browser ref falls back to the trusted Main seed.
-- The UI-demo lane publishes after a successful ordinary PR demo.
-- The web full-e2e lane owns publication on `ci:full-e2e` pull requests.
-- Changed PR demo specs and Main's complete demo project retain 90-day Actions artifacts.
-- The 10 largest WebMs per run are best-effort published into one private Linear `nook-ui` issue per PR.
-- Main serializes native → WASM → web cache-writing lanes.
-- Each lane verifies read-only and then exports its already-solved local graph.
-- Isolated no-import WASM dependency publication runs separately.
-- Parallel Main browser consumers build and test read-only from the verified WASM handoff.
-- The successful Main UI-demo lane publishes its warm `nook-web-e2e-v1` graph.
-- This is the trusted browser-image seed for later pull requests.
-- Deploy waits on web verify + web e2e only.
-- Main also publishes commit-keyed Rust coverage.
-- A dedicated PR reporting job reuses trusted exact-commit artifacts when available.
-- That job never cold-builds the base revision.
-
-SeaweedFS compiler-cache rules:
-
-- `task sccache:ensure` needs readable `~/.nook/cache/sccache-access-key` and
-  `sccache-secret-key`.
-- It also needs a healthy SeaweedFS head-bucket.
-- Missing credentials or an unhealthy backend fail the build.
-- The build must not silently cold-compile in those cases.
-- Set `SCCACHE_OPTIONAL=1` only for an intentional cold path.
-- Local credentials, registry files, and trusted localhost HTTPS material live
-  only under `~/.nook/`.
-- That home directory is shared across worktrees.
-- Never write those materials into a checkout.
-- Trusted Main, same-repository PR Rust producers, and Rust ecosystem Docker jobs use the
-  authoritative read/write identity.
-- Explicit Remote tasks use separate `NOOK_SCCACHE_REMOTE_*` read-only
-  credentials for `nook-sccache`.
-- Fork, release, and other arbitrary-ref jobs receive neither identity.
-- Those jobs set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`.
-- `task sccache:stats` reports full object count and byte size.
-- `task infra:sccache:check` verifies anonymous denial, Main read/write, and
-  Remote read-only access.
-
-Regenerate chef inputs after dependency changes:
-
-- Commit **`nook-app/nook-platform/Cargo.lock`** when dependencies change.
-- `recipe.json` is produced during `docker build`.
-
-### Sealed-image consequences
-
-**Write-type tasks emit diffs, not host writes**
-
-- Web formatting runs in `nook-web:local`.
-- Rust formatting and coverage updates run in `nook-rust:local`.
-- Both source-sealed images print a `git diff` rather than mutating the host tree.
-
-**`task format` always host-applies**
-
-- The agent/developer entrypoint runs sealed format and applies the unified diff to the working tree.
-- Use it unconditionally before every push.
-- `task format:diff` prints without applying (debug only).
-- `task extension:format` formats inside the sealed image and discards the result.
-- Never use `task extension:format` alone before push.
-
-**`dist` hand-off**
-
-- PR CI keeps the combined `dist` tree as an internal harness.
-- It independently deploys `dist/site`, Simple, and Sentinel to each project's `pr-<number>` branch alias.
-- Its GitHub deployment points at the isolated site.
-- Main deploys the same artifacts independently.
-- The landing and both vault domains target their projects' `development` branch aliases.
-- Release extracts production artifacts with `task docker:extract:dist`.
-
-### Build & verify
-
-**Native linking**
-
-- `nook-app/nook-platform/.cargo/config.toml` uses **mold** for
-  `x86_64-unknown-linux-gnu` only.
-- Mold is installed in `rust-base`.
-- wasm32 targets keep the default linker.
-
-**Wasm**
-
-- `builder-wasm` compiles the featureless `nook-wasm` vault bridge and tiny `nook-companion-wasm`.
-- Companion provides content heuristics plus host policy.
-- `wasm-pack` runs for both packages.
-- Vault apps and extension background/popup share `nook-wasm`.
-- Content scripts load only the companion package.
-- Immutable Rust-owned application configuration and manager capability checks enforce the active realm on the vault package.
-- Both packages cross the host artifact boundary.
-- Companion nests under the vault handoff.
-- Both are seeded into the web image.
-- Mounted local-iteration paths regenerate them from the on-demand Rust image.
-- `WASM_BUILD_MODE=dev` is the default and skips `wasm-opt`.
-- PR/main CI use dev mode.
-- Release passes `WASM_BUILD_MODE=prod` explicitly.
-
-**Verify**
-
-- GitHub Actions `pr.yml` and `task check` run fmt, clippy, `task rust:coverage:check`, svelte-check, eslint, vitest, and vite build.
-- Default dev/no-opt WASM mode applies unless `WASM_BUILD_MODE=prod` is set.
-- Agents require only `task format` locally.
-- Product verification runs on Actions.
+---
 
 ## 8. Hive isolated agent platform
 
