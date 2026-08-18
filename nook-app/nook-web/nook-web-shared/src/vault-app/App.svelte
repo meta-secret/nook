@@ -1,5 +1,9 @@
 <script lang="ts">
   type EnrollmentCodeUseRequest = { readonly code: string; readonly password: string }
+  type PairedExtensionDiscoveryRetry = {
+    readonly storeId: string
+    readonly discoveringStagedImport: boolean
+  }
 
   import { I18N_KEYS } from '../generated/i18n-keys'
   import { onMount, untrack } from 'svelte'
@@ -518,23 +522,22 @@
       discovery.status ===
       ExtensionPairedVaultIdentityStatusMessageStatus.Locked
     ) {
-      window.setTimeout(() => {
-        if (
-          !vault.isAuthenticated &&
-          ((vault.activeVault.kind === ActiveVaultKind.Open &&
-            vault.activeVault.storeId === storeId) ||
-            discoveringStagedImport) &&
-          extensionDiscoveryStoreId === storeId
-        ) {
-          extensionDiscoveryStoreId = ''
-        }
-      }, EXTENSION_LOCKED_RETRY_MS)
+      const lockedRetry: PairedExtensionDiscoveryRetry = {
+        storeId,
+        discoveringStagedImport,
+      }
+      schedulePairedExtensionDiscoveryRetry(lockedRetry)
       return ExtensionPairedVaultIdentityStatusMessageStatus.Locked
     }
     if (
       discovery.status !==
       ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
     ) {
+      const unavailableRetry: PairedExtensionDiscoveryRetry = {
+        storeId,
+        discoveringStagedImport,
+      }
+      schedulePairedExtensionDiscoveryRetry(unavailableRetry)
       return ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
     }
     extensionIdentityRequestState = {
@@ -543,6 +546,22 @@
     }
     await handleUnlock(true)
     return ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
+  }
+
+  function schedulePairedExtensionDiscoveryRetry(
+    request: PairedExtensionDiscoveryRetry,
+  ) {
+    window.setTimeout(() => {
+      if (
+        !vault.isAuthenticated &&
+        ((vault.activeVault.kind === ActiveVaultKind.Open &&
+          vault.activeVault.storeId === request.storeId) ||
+          request.discoveringStagedImport) &&
+        extensionDiscoveryStoreId === request.storeId
+      ) {
+        extensionDiscoveryStoreId = ''
+      }
+    }, EXTENSION_LOCKED_RETRY_MS)
   }
 
   async function handleCreateDeviceVault(label: string) {

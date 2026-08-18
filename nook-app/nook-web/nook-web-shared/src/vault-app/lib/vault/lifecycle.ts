@@ -130,6 +130,12 @@ export async function initOnce(state: VaultState): Promise<void> {
         );
       } else if (state.deviceProtectionStatus === DeviceProtectionStatus.Pin) {
         return;
+      } else if (state.localVaultPresent) {
+        // A surviving local vault must not mint a replacement app key. That
+        // key is not on the roster, and backup-password recovery would fail.
+        state.storageMode = LOCAL_PROVIDER_TYPE;
+        await state.prepareLocalLogin();
+        return;
       } else {
         await state.enqueueStorage(() => {
           const setupArgs: Parameters<typeof setupDeviceProtection>[0] = {
