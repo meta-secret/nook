@@ -12,6 +12,8 @@ ignore = [
   # moves to hickory 0.26.1 or later.
   "RUSTSEC-2026-0118",
   "RUSTSEC-2026-0119",
+  # Low severity empty DATA frames in h2 0.4.15 (pinned transitive dependency in codex / minds)
+  "RUSTSEC-2026-0258",
 ]
 unmaintained = "workspace"
 yanked = "deny"
