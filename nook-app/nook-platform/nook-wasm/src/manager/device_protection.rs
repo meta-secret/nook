@@ -22,6 +22,9 @@ pub(crate) enum PendingExtensionIdentityEnrollment {
         authorizer: nook_core::AppKey,
         store_id: nook_core::StoreId,
     },
+    PairedVaultSessionUnlock {
+        store_id: nook_core::StoreId,
+    },
     ExistingVaultImport {
         store_id: nook_core::StoreId,
     },
@@ -79,6 +82,24 @@ mod tests {
         assert!(manager.device_access_snapshot_request().is_ok());
         Ok(())
     }
+
+    #[test]
+    fn paired_vault_handoff_after_lock_adopts_the_extension_without_a_local_app_key()
+    -> Result<(), NookError> {
+        let context = NookExtensionIdentityHandoffContext {
+            value: ExtensionIdentityHandoffContextValue::PairedVault {
+                store_id: nook_core::generate_store_id()?,
+            },
+        };
+
+        let enrollment = pending_extension_enrollment(&context, None)?;
+
+        assert!(matches!(
+            enrollment,
+            PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
+        ));
+        Ok(())
+    }
 }
 
 impl Drop for PendingExtensionIdentityHandoff {
@@ -130,16 +151,17 @@ fn pending_extension_enrollment(
                 authorizer: authorizer.cloned(),
             })
         }
-        ExtensionIdentityHandoffContextValue::PairedVault { store_id } => {
-            Ok(PendingExtensionIdentityEnrollment::PairedVault {
-                authorizer: authorizer.cloned().ok_or_else(|| {
-                    NookError::Decryption(
-                        "Paired identity handoff requires an authorizing app key.".to_owned(),
-                    )
-                })?,
+        ExtensionIdentityHandoffContextValue::PairedVault { store_id } => match authorizer {
+            Some(app_key) => Ok(PendingExtensionIdentityEnrollment::PairedVault {
+                authorizer: app_key.clone(),
                 store_id: store_id.clone(),
-            })
-        }
+            }),
+            None => Ok(
+                PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
+                    store_id: store_id.clone(),
+                },
+            ),
+        },
         ExtensionIdentityHandoffContextValue::ExistingVaultImport { store_id } => {
             Ok(PendingExtensionIdentityEnrollment::ExistingVaultImport {
                 store_id: store_id.clone(),
@@ -300,6 +322,7 @@ impl NookVaultManager {
                     &pending.enrollment,
                     PendingExtensionIdentityEnrollment::VaultCreation { .. }
                         | PendingExtensionIdentityEnrollment::PairedVault { .. }
+                        | PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
                         | PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
                 )
             })

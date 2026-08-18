@@ -438,6 +438,8 @@ When both devices exist, unlock selection is deterministic:
      succeeds or the paired unlock wait expires.
    - Do not open the website passkey overlay while the companion still reports
      Unlocked or Locked for that vault.
+   - A locked website app key must not block re-adopting that unlocked
+     companion identity.
 2. if the extension is locked, the user may unlock it from the toolbar and
    retry; the website must not attempt an extension-origin WebAuthn ceremony;
 3. if the extension is locked, unavailable, revoked, or cannot unlock, offer

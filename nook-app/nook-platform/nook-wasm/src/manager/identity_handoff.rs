@@ -31,6 +31,7 @@ impl NookVaultManager {
                     &pending.enrollment,
                     PendingExtensionIdentityEnrollment::VaultCreation { .. }
                         | PendingExtensionIdentityEnrollment::PairedVault { .. }
+                        | PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
                         | PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
                 )
             })
@@ -116,14 +117,25 @@ impl NookVaultManager {
         let Some(pending) = self.device.pending_extension_handoff.as_ref() else {
             return Ok(());
         };
-        let PendingExtensionIdentityEnrollment::PairedVault { store_id, .. } = &pending.enrollment
-        else {
-            return Ok(());
+        let session_unlock = matches!(
+            pending.enrollment,
+            PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
+        );
+        let store_id = match &pending.enrollment {
+            PendingExtensionIdentityEnrollment::PairedVault { store_id, .. }
+            | PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { store_id } => {
+                store_id.clone()
+            }
+            _ => return Ok(()),
         };
         if self.vault.store_id != store_id.as_str() {
             return Err(NookError::Database(
                 "Paired-vault handoff connected a different vault.".to_owned(),
             ));
+        }
+        if session_unlock {
+            self.device.pending_extension_handoff = None;
+            return Ok(());
         }
         let identity = self.device_identity()?;
         let signing_seed = pending

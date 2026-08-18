@@ -169,6 +169,35 @@ mod tests {
         assert!(manager.device.pending_extension_handoff.is_some());
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    async fn paired_session_unlock_clears_pending_without_enrolling() -> Result<(), JsError> {
+        let extension = nook_core::AppKey::generate()?;
+        let store_id = nook_core::generate_store_id()?;
+        let (signing, signing_seed) = nook_core::SigningIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.device.id = extension.device_id().as_str().to_owned();
+        manager.device.identity_private_key = extension.secret_string().into_inner();
+        manager.vault.store_id = store_id.to_string();
+        manager.device.pending_extension_handoff = Some(
+            super::super::device_protection::PendingExtensionIdentityHandoff {
+                enrollment:
+                    super::super::PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
+                        store_id,
+                    },
+                authorizer_signing: None,
+                signing_public_key: signing.public_key(),
+                handoff_signing_seed: signing_seed.as_str().to_owned(),
+                persist_signing_seed: false,
+                previous_session_signing_seed: String::new(),
+            },
+        );
+
+        manager.finalize_paired_vault_handoff().await?;
+
+        assert!(manager.device.pending_extension_handoff.is_none());
+        Ok(())
+    }
 }
 
 #[wasm_bindgen]
