@@ -1,8 +1,9 @@
 import {
-  createOctokit,
-  parseRepository,
-  requestCodexReview,
-} from "./github.js";
+  CODEX_AVAILABILITY_PROBE,
+  DEFAULT_REVIEW_CLOCK,
+  requestExactHeadReview,
+} from "./github-review.js";
+import { createOctokit, parseRepository } from "./github.js";
 import { prettyJson } from "./json.js";
 
 export async function runPrReviewRequest(): Promise<void> {
@@ -18,10 +19,15 @@ export async function runPrReviewRequest(): Promise<void> {
     );
   }
 
-  const result = await requestCodexReview(
+  const availability = {
+    clock: DEFAULT_REVIEW_CLOCK,
+    probe: CODEX_AVAILABILITY_PROBE,
+  };
+  const result = await requestExactHeadReview(
     createOctokit(),
     parseRepository(repository),
     prNumber,
+    availability,
   );
   console.log(prettyJson({ number: prNumber, repository, ...result }));
 }

@@ -713,16 +713,18 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - When the branch is ready, agents run `task pr:validate PR=<number>` or add
   `FULL_E2E=1`.
 - Validation dispatches repository-owned checks immediately.
-- It then requests one idempotent exact-head Codex review.
+- It then requests one idempotent exact-head Cloud review.
+- The request prefers Codex and falls back to Cursor Bugbot when Codex reports
+  a usage limit.
 - Review-request failure does not block those checks.
 - They wait only for applicable repository-owned exact-head PR checks.
 - Ordinary pushes do not start `pr.yml`.
 - Every later push requires another explicit validation before readiness.
 - Every actionable comment already present must be addressed and resolved.
-- The GitHub Actions runtime is the Codex review window.
+- The GitHub Actions runtime is the Cloud review window.
 - If no review feedback exists when checks finish, agents proceed without waiting.
-- Claude, Cursor, CodeRabbit, and other optional services are not requested or
-  awaited.
+- Claude, CodeRabbit, and other optional services are not requested or
+  awaited. Cursor Bugbot is requested only when Codex reports a usage limit.
 - The local ci-agent image tag is derived from the worktree path, preventing parallel worktrees from replacing each other's review/readiness binaries.
 
 **Ephemeral but cache-aware delivery jobs:**

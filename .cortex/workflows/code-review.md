@@ -2,13 +2,16 @@
 
 ## Overview
 
-Codex review runs alongside repository-owned GitHub Actions.
+Exact-head Cloud review runs alongside repository-owned GitHub Actions.
 
-It is not a merge gate. A missing or unavailable review result does not delay
-delivery after those checks finish.
+Codex is the first reviewer. When Codex reports that it cannot review, the
+same `task pr:review` request switches to Cursor Bugbot.
+
+Review is not a merge gate. A missing or unavailable review result does not
+delay delivery after those checks finish.
 
 Other external review services remain optional. Do not request or wait for
-them unless the user explicitly asks.
+Claude, CodeRabbit, or similar services unless the user explicitly asks.
 
 ## Local review before the first owner-authored push
 
@@ -21,7 +24,10 @@ task pr:review-local
 The command compares the branch with current `origin/main`.
 
 If the Codex CLI or authentication is unavailable, it reports the skip and
-does not block delivery. Treat any actionable finding it does produce as normal
+does not block delivery. There is no headless Cursor review CLI. Cloud review
+later requests Cursor Bugbot when Codex reports a usage limit.
+
+Treat any actionable finding local review does produce as normal
 implementation work. Run pre-push hygiene again after fixes.
 
 The bounded implementation worker cannot run Git. The harness commits and
@@ -41,7 +47,12 @@ The command:
 
 1. Immediately dispatches repository-owned GitHub Actions.
 2. Rechecks that the PR head did not change after dispatch.
-3. Attempts one idempotent, exact-head Codex Cloud review request.
+3. Attempts one idempotent, exact-head Cloud review request.
+
+That review request prefers Codex. After a fresh Codex comment, it probes
+briefly for a Codex usage-limit reply. If that exact-head Codex request already
+has a usage-limit reply, or the probe sees one, it posts `cursor review`
+instead of retrying Codex. A later head tries Codex first again.
 
 Review-request failure does not fail validation. Do not wait for a result.
 
@@ -77,8 +88,9 @@ empty. Feedback that arrives while checks run takes priority.
 
 `task pr:ready` enforces unresolved-thread count alongside the exact-head
 deployment, branch state, and applicable repository-owned PR checks. It reports
-existing comments and reviews for inspection. It does not require a Codex
-result and does not wait for one.
+existing comments and reviews for inspection. It does not require a Codex or
+Cursor result and does not wait for one. A Cursor Bugbot disabled-account
+upsell comment is status. It is not a finding.
 
 ## Handling feedback that already exists
 
@@ -94,7 +106,7 @@ Cursor, CodeRabbit, or another service:
 4. Commit and push the completed fix.
 5. Use focused hosted tasks as useful.
 6. If complete validation was already requested, restart it for the replacement
-   head. This also requests exact-head Codex review. Otherwise start it when
+   head. This also requests exact-head Cloud review. Otherwise start it when
    that head is ready for the final gate.
 7. Reply on the original thread or comment with the fix and validation when a
    targeted reply is possible.

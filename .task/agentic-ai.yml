@@ -488,7 +488,7 @@ tasks:
         task ci-agent:docker:run CI_AGENT_CMD=pr-ready'
 
   pr:review:
-    desc: Request Codex review for the exact PR head, idempotently (PR=<number>); never waits and is not required for readiness.
+    desc: Request exact-head Codex review, or Cursor Bugbot when Codex is unavailable (PR=<number>); never waits and is not required for readiness.
     requires:
       vars: [PR]
     cmds:
@@ -506,13 +506,16 @@ tasks:
         bash -c 'set -euo pipefail;
         if ! command -v codex >/dev/null 2>&1; then
           echo "Codex CLI is unavailable; skipping advisory local review.";
+          echo "Cloud review will request Cursor Bugbot if Codex reports a usage limit.";
           exit 0;
         fi;
         if ! codex login status >/dev/null 2>&1; then
           echo "Codex CLI is not authenticated; skipping advisory local review.";
+          echo "Cloud review will request Cursor Bugbot if Codex reports a usage limit.";
           exit 0;
         fi;
         git fetch origin main;
         if ! codex review --base origin/main; then
           echo "Codex local review was unavailable; continuing without blocking delivery.";
+          echo "Cloud review will request Cursor Bugbot if Codex reports a usage limit.";
         fi'

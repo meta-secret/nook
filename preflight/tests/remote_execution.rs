@@ -107,6 +107,7 @@ fn complete_validation_starts_before_non_blocking_review_request() -> Result<()>
     for required in [
         "pr:review-local:",
         "codex review --base origin/main",
+        "Cloud review will request Cursor Bugbot if Codex reports a usage limit.",
         "pr:review:",
         "CI_AGENT_CMD=pr-review",
     ] {
