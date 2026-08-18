@@ -58,7 +58,9 @@ Agents must follow this navigation and search protocol:
 
 ## ⛔ Agent Execution & Safety Boundaries
 
-- **Feature ownership boundary:** Every agent stays strictly inside its assigned feature and focused issue set; another active agent's work is read-only. See [dynamic-skills/agent-feature-ownership.md](dynamic-skills/agent-feature-ownership.md).
+- **Feature ownership boundary:** Every agent stays strictly inside its assigned feature and focused issue set; another active agent's work is read-only. See [dynamic-skills/agent-feature-ownership.md](dynamic-skills/agent-feature-ownership.md). Agents mutate only their owned feature and issue set.
+- Another active agent's work is read-only; wait for an explicit user, owner, or orchestrator handoff before any cross-feature mutation.
+- agents mutate only their owned feature and issue set.
 - **Source file size limit (1,000 lines):** Every authored file, including Rust, stays at or below 1,000 lines. Oversized Rust signals excessive domain responsibility and requires cohesive domain or architectural decomposition; extracting unit tests alone is prohibited while integration tests remain separate. See [dynamic-skills/source-file-size.md](dynamic-skills/source-file-size.md).
 - **Format on host before every push:** Always run `task loom:pre-push` before pushing to apply host formatting and check the UI demo contract. See [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md).
 - **Heavy work runs remotely on GitHub Actions:** Heavy builds, tests, and product gates run on GitHub-hosted workers, not locally. See [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) and [workflows/remote-execution.md](workflows/remote-execution.md).
