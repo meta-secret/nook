@@ -83,7 +83,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    async fn paired_reconciliation_keeps_directory_unchanged_until_commit() -> Result<(), JsError> {
+    async fn verified_connect_finalizes_paired_identity_handoff() -> Result<(), JsError> {
         crate::storage::identity_record::clear_identity_directory_for_test().await?;
         let authorizer = nook_core::AppKey::generate()?;
         let extension = nook_core::AppKey::generate()?;
@@ -119,15 +119,54 @@ mod tests {
                 previous_session_signing_seed: String::new(),
             },
         );
+        assert!(manager.extension_identity_handoff_requires_connect());
 
         manager.ensure_identity_after_connect(&extension).await?;
         let deferred = crate::storage::identity_record::load_identity_directory().await?;
         assert!(deferred.identity_for_app_key(&extension)?.is_none());
 
-        manager.commit_extension_identity_handoff().await?;
+        manager
+            .complete_connected_identity(&extension, None)
+            .await?;
         let committed = crate::storage::identity_record::load_identity_directory().await?;
         assert!(committed.identity_for_app_key(&extension)?.is_some());
+        assert!(manager.device.pending_extension_handoff.is_none());
         crate::storage::identity_record::clear_identity_directory_for_test().await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn paired_identity_handoff_rejects_a_different_connected_vault() -> Result<(), JsError> {
+        let extension = nook_core::AppKey::generate()?;
+        let staged_store_id = nook_core::generate_store_id()?;
+        let connected_store_id = nook_core::generate_store_id()?;
+        let (signing, signing_seed) = nook_core::SigningIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.device.id = extension.device_id().as_str().to_owned();
+        manager.device.identity_private_key = extension.secret_string().into_inner();
+        manager.vault.store_id = connected_store_id.to_string();
+        manager.device.pending_extension_handoff = Some(
+            super::super::device_protection::PendingExtensionIdentityHandoff {
+                enrollment: super::super::PendingExtensionIdentityEnrollment::PairedVault {
+                    authorizer: nook_core::AppKey::generate()?,
+                    store_id: staged_store_id,
+                },
+                authorizer_signing: None,
+                signing_public_key: signing.public_key(),
+                handoff_signing_seed: signing_seed.as_str().to_owned(),
+                persist_signing_seed: false,
+                previous_session_signing_seed: String::new(),
+            },
+        );
+
+        let Err(error) = manager.finalize_paired_vault_handoff().await else {
+            return Err(JsError::new(
+                "a paired handoff must verify its connected vault",
+            ));
+        };
+
+        assert!(error.to_string().contains("different vault"));
+        assert!(manager.device.pending_extension_handoff.is_some());
         Ok(())
     }
 }
@@ -324,7 +363,7 @@ impl NookVaultManager {
 
         self.purge_legacy_plaintext_search_catalog().await?;
         if let Err(error) = self.resume_pending_security_epoch_rotation(&identity).await {
-            self.reset_vault_session();
+            self.reset_vault_session_for_handoff_retry();
             return Err(error.into());
         }
         let records = VerifiedVaultAccessFlow::Connect
@@ -345,7 +384,7 @@ impl NookVaultManager {
         } {
             Ok(pending) => pending,
             Err(error) => {
-                self.reset_vault_session();
+                self.reset_vault_session_for_handoff_retry();
                 return Err(error.into());
             }
         };
@@ -353,7 +392,7 @@ impl NookVaultManager {
             .complete_connected_identity(&identity, pending_cleanup)
             .await
         {
-            self.reset_vault_session();
+            self.reset_vault_session_for_handoff_retry();
             return Err(error.into());
         }
         let _ = self.status.tx.send("READY".to_owned());
@@ -379,6 +418,7 @@ impl NookVaultManager {
             self.ensure_identity_after_connect(identity).await?;
         }
         self.finalize_existing_vault_import_handoff().await?;
+        self.finalize_paired_vault_handoff().await?;
         let Some(completed) = pending_cleanup else {
             return Ok(());
         };

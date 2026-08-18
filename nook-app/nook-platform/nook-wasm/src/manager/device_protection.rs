@@ -37,6 +37,37 @@ pub(in crate::manager) struct PendingExtensionIdentityHandoff {
     pub(in crate::manager) previous_session_signing_seed: String,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retry_reset_preserves_the_staged_handoff_signer() -> Result<(), NookError> {
+        let staged_store_id = nook_core::generate_store_id()?;
+        let authorizer = nook_core::AppKey::generate()?;
+        let (signing, signing_seed) = nook_core::SigningIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.event_log.signing_seed = "session-signer".to_owned();
+        manager.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
+            enrollment: PendingExtensionIdentityEnrollment::PairedVault {
+                authorizer,
+                store_id: staged_store_id,
+            },
+            authorizer_signing: None,
+            signing_public_key: signing.public_key(),
+            handoff_signing_seed: signing_seed.as_str().to_owned(),
+            persist_signing_seed: true,
+            previous_session_signing_seed: String::new(),
+        });
+
+        manager.reset_vault_session_for_handoff_retry();
+
+        assert_eq!(manager.event_log.signing_seed, signing_seed.as_str());
+        assert!(manager.device.pending_extension_handoff.is_some());
+        Ok(())
+    }
+}
+
 impl Drop for PendingExtensionIdentityHandoff {
     fn drop(&mut self) {
         self.previous_session_signing_seed.zeroize();
@@ -253,6 +284,7 @@ impl NookVaultManager {
                 matches!(
                     &pending.enrollment,
                     PendingExtensionIdentityEnrollment::VaultCreation { .. }
+                        | PendingExtensionIdentityEnrollment::PairedVault { .. }
                         | PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
                 )
             })
