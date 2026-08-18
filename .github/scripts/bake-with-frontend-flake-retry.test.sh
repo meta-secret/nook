@@ -42,7 +42,11 @@ application_command="$test_dir/application-command"
 printf '%s\n' \
   '#!/usr/bin/env bash' \
   'set -euo pipefail' \
-  'printf "%s" 1 >"$1"' \
+  'count_file="$1"' \
+  'count=0' \
+  'if [ -f "$count_file" ]; then count="$(<"$count_file")"; fi' \
+  'count=$((count + 1))' \
+  'printf "%s" "$count" >"$count_file"' \
   'printf "%s\\n" "Dockerfile:24" ">>> RUN bun run test" "ERROR: target nook-web-e2e: failed to solve: exit code: 2"' \
   'exit 2' >"$application_command"
 chmod +x "$application_command"
