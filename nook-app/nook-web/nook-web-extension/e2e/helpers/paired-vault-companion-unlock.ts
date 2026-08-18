@@ -36,19 +36,34 @@ type CompanionUnlockPageSearchResult =
     }
   | { readonly kind: CompanionUnlockPageSearchKind.Missing }
 
-type NewCompanionPopupSearch = {
+type NewPageEventWait = {
+  readonly timeout: number
+}
+
+type StaleCompanionReload = {
   readonly context: BrowserContext
-  readonly knownPages: ReadonlySet<Page>
+  readonly reloadedPages: WeakSet<Page>
+}
+
+type UnlockRaceState = {
+  done: boolean
 }
 
 type PairedCompanionUnlockPoll = {
   readonly context: BrowserContext
   readonly vaultPage: Page
   readonly companionUnlock: PairedVaultCompanionUnlockKind
-  readonly knownPages: ReadonlySet<Page>
+  readonly reloadedPages: WeakSet<Page>
+  readonly race: UnlockRaceState
+}
+
+type NewCompanionWindowUnlock = {
+  readonly pagePromise: Promise<Page>
+  readonly race: UnlockRaceState
 }
 
 const COMPANION_UNLOCK_POLL_MS = 100
+const WAIT_FOR_EVENT_NO_TIMEOUT_MS = 0
 
 function delay(request: DelayWait): Promise<void> {
   return new Promise((resolve) => {
@@ -86,27 +101,24 @@ async function findVisibleCompanionUnlockPage(
   return missing
 }
 
-async function findNewCompanionPopupPage(
-  request: NewCompanionPopupSearch,
-): Promise<CompanionUnlockPageSearchResult> {
+async function reloadStaleCompanionPages(
+  request: StaleCompanionReload,
+): Promise<void> {
   for (const page of request.context.pages()) {
-    if (request.knownPages.has(page) || page.isClosed()) {
+    if (page.isClosed() || request.reloadedPages.has(page)) {
       continue
     }
     const popupPage: CompanionPopupUnlock = { page }
     if (!isCompanionPopupUrl(popupPage)) {
       continue
     }
-    const found: CompanionUnlockPageSearchResult = {
-      kind: CompanionUnlockPageSearchKind.Found,
-      page,
+    const unlockButton = page.getByTestId('device-protection-unlock-btn')
+    if (await unlockButton.isVisible()) {
+      continue
     }
-    return found
+    request.reloadedPages.add(page)
+    await page.reload()
   }
-  const missing: CompanionUnlockPageSearchResult = {
-    kind: CompanionUnlockPageSearchKind.Missing,
-  }
-  return missing
 }
 
 async function completeCompanionPopupUnlock(
@@ -122,21 +134,46 @@ async function completeCompanionPopupUnlock(
   })
 }
 
-async function completePairedCompanionUnlock(
+async function unlockFromNewCompanionWindow(
+  request: NewCompanionWindowUnlock,
+): Promise<void> {
+  const page = await request.pagePromise
+  if (request.race.done) {
+    return
+  }
+  const popupPage: CompanionPopupUnlock = { page }
+  if (!isCompanionPopupUrl(popupPage)) {
+    await page.waitForURL(/\/popup\/index\.html/, {
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
+  }
+  if (request.race.done) {
+    return
+  }
+  await completeCompanionPopupUnlock(popupPage)
+  request.race.done = true
+}
+
+async function pollExistingCompanionUnlock(
   request: PairedCompanionUnlockPoll,
 ): Promise<void> {
   const deadline = Date.now() + EXTENSION_UNLOCK_TIMEOUT_MS
   const pollDelay: DelayWait = { durationMs: COMPANION_UNLOCK_POLL_MS }
-  while (Date.now() < deadline) {
+  const visibleUnlockSearch: CompanionUnlockPageSearch = {
+    context: request.context,
+  }
+  const staleReload: StaleCompanionReload = {
+    context: request.context,
+    reloadedPages: request.reloadedPages,
+  }
+  while (!request.race.done && Date.now() < deadline) {
     if (request.companionUnlock === PairedVaultCompanionUnlockKind.Optional) {
       if (
         await request.vaultPage.getByTestId('authenticated-shell').isVisible()
       ) {
+        request.race.done = true
         return
       }
-    }
-    const visibleUnlockSearch: CompanionUnlockPageSearch = {
-      context: request.context,
     }
     const visibleUnlock =
       await findVisibleCompanionUnlockPage(visibleUnlockSearch)
@@ -145,21 +182,14 @@ async function completePairedCompanionUnlock(
         page: visibleUnlock.page,
       }
       await completeCompanionPopupUnlock(companionUnlockPage)
+      request.race.done = true
       return
     }
-    const newPopupSearch: NewCompanionPopupSearch = {
-      context: request.context,
-      knownPages: request.knownPages,
-    }
-    const newPopup = await findNewCompanionPopupPage(newPopupSearch)
-    if (newPopup.kind === CompanionUnlockPageSearchKind.Found) {
-      const companionUnlockPage: CompanionPopupUnlock = {
-        page: newPopup.page,
-      }
-      await completeCompanionPopupUnlock(companionUnlockPage)
-      return
-    }
+    await reloadStaleCompanionPages(staleReload)
     await delay(pollDelay)
+  }
+  if (request.race.done) {
+    return
   }
   throw new Error(
     'Paired vault companion unlock did not show a popup or authenticated shell',
@@ -170,16 +200,29 @@ export async function unlockPairedVaultThroughCompanion(
   request: PairedVaultCompanionUnlock,
 ): Promise<void> {
   const { context, vaultPage, companionUnlock } = request
-  const knownPages: ReadonlySet<Page> = new Set(context.pages())
+  const race: UnlockRaceState = { done: false }
+  const newPageWait: NewPageEventWait = {
+    timeout: WAIT_FOR_EVENT_NO_TIMEOUT_MS,
+  }
+  const newCompanionPagePromise = context.waitForEvent('page', newPageWait)
+  const newWindowUnlock: NewCompanionWindowUnlock = {
+    pagePromise: newCompanionPagePromise,
+    race,
+  }
   await vaultPage.getByTestId('unlock-vault-btn').click()
   await expect(vaultPage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-  const unlockPoll: PairedCompanionUnlockPoll = {
+  const existingUnlockPoll: PairedCompanionUnlockPoll = {
     context,
     vaultPage,
     companionUnlock,
-    knownPages,
+    reloadedPages: new WeakSet<Page>(),
+    race,
   }
-  await completePairedCompanionUnlock(unlockPoll)
+  await Promise.race([
+    unlockFromNewCompanionWindow(newWindowUnlock),
+    pollExistingCompanionUnlock(existingUnlockPoll),
+  ])
+  race.done = true
   await expect(vaultPage.getByTestId('authenticated-shell')).toBeVisible({
     timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
   })
