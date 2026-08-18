@@ -332,7 +332,9 @@
         ExtensionConnectIntentKind.Requested &&
       extensionIdentityRequestState.request.source ===
         ExtensionIdentityRequestSource.PairedVault &&
-      extensionIdentityRequestState.request.vaultStoreId === activeStoreId
+      extensionIdentityRequestState.request.vaultStoreId === activeStoreId &&
+      !vault.isVerifying &&
+      !vault.deviceAuthorizationInProgress
     ) {
       const connectRequest = extensionIdentityRequestState.request
       const authorizeWithExternalDeviceIdentityArgs: Parameters<typeof vault.authorizeWithExternalDeviceIdentity>[0] = {
@@ -350,12 +352,16 @@
       const adopted = await vault.authorizeWithExternalDeviceIdentity(
         authorizeWithExternalDeviceIdentityArgs,
       )
-      if (!adopted) return
-      extensionBackedVaultSession = true
-      await (existingVaultImport
-        ? existingVaultImportLifecycle.resume()
-        : vault.loadDb())
-      return
+      if (adopted) {
+        extensionBackedVaultSession = true
+        await (existingVaultImport
+          ? existingVaultImportLifecycle.resume()
+          : vault.loadDb())
+        return
+      }
+      if (skipExtensionDiscovery) {
+        return
+      }
     }
     if (
       !skipExtensionDiscovery &&
