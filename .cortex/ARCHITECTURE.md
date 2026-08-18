@@ -18,76 +18,40 @@ This document provides a comprehensive guide to Nook's architecture, package bou
   - It keeps concerns separated.
   - It isolates WebAssembly bindings from core domain code.
 
-```
-root/
-├── Taskfile.yml          (repo entrypoint; includes app tasks + root tooling)
-├── infra/
-│   ├── Taskfile.yml      (composition root for the infrastructure command surface)
-│   ├── tasks/            (flattened domain-owned SeaweedFS sccache, registry, k0s, Kata, Neo4j, and Hive operations)
-│   ├── compose.yaml      (private persistent infrastructure services)
-│   └── k0s/              (pinned single-node cluster and Hive manifests)
-├── agentic-ai/
-│   ├── ci-agent/         (PR delivery agent)
-│   ├── loom/             (deterministic Cortex tool runner)
-│   └── minds/
-│       ├── lace/         (experimental graph code-generation fixture)
-│       └── hive/         (Kata-isolated embedded-Codex worker)
-├── preflight/            (standalone Rust tests for whole-repository invariants)
-│   ├── Taskfile.yml      (`task preflight` Docker entrypoint)
-│   ├── Dockerfile
-│   └── tests/
-├── .task/
-│   └── agentic-ai.yml    (repo-level agent tooling)
-└── nook-app/
-    ├── Taskfile.yml      (app command surface)
-    ├── ci/Taskfile.yml   (ci:* tasks)
-    ├── docker-bake.hcl   (thin shared vars + cross-lineage prepare groups)
-    ├── nook-platform/    (Rust workspace root and members)
-    │   ├── Taskfile.yml  (rust:* tasks)
-    │   ├── Cargo.toml
-    │   ├── Cargo.lock
-    │   ├── clippy.toml
-    │   ├── .cargo/
-    │   ├── .config/
-    │   ├── docker/       (Rust Dockerfiles, rust/docker-bake.hcl Zot scopes, sccache, docker:* tasks)
-    │   ├── nook-app-common/ (shared leaf primitives and localization)
-    │   ├── nook-authenticator-domain/ (shared authenticator values and closed vocabularies)
-    │   ├── nook-auth2/
-    │   ├── nook-replication/
-    │   ├── nook-event-log/
-    │   ├── nook-companion-core/
-    │   ├── nook-core/
-    │   ├── nook-companion-wasm/
-    │   ├── nook-wasm/    (includes wasm:* Taskfile.yml)
-    │   └── fuzz/         (cargo-fuzz workspace for auth2 wire parsers; not a workspace member)
-    ├── nook-web/
-    │   ├── Taskfile.yml  (web:* tasks; includes extension)
-    │   ├── docker/       (web Dockerfiles/bake + docker:* web tasks)
-    │   ├── nook-web-app/
-    │   ├── nook-vault-simple/
-    │   ├── nook-vault-sentinel/
-    │   ├── nook-web-extension/  (extension:* Taskfile.yml)
-    │   └── nook-web-shared/
-+-------------------------------------------------------------+
-|      nook-vault-simple       |      nook-vault-sentinel     |
-|  (independent Simple app)    |  (independent Sentinel app)  |
-+-------------------------------------------------------------+
-|                    nook-web-app (site)                      |
-+-------------------------------------------------------------+
-|                    nook-web-extension                       |
-|       (Manifest V3 extension UI, service worker, scripts)   |
-+-------------------------------------------------------------+
-|                      nook-web-shared                        |
-|        (Source-only TS/Svelte shared presentation glue)      |
-+-------------------------------------------------------------+
-                               |
-                               v (consumes generated bindings)
-nook-wasm                     browser I/O, session, wasm-bindgen
-  └─> nook-core               secrets, sessions, sync policy, crypto
-       ├─> nook-event-log     signed events, authorization, projection
-       │    ├─> nook-auth2 ──> nook-app-common
-       │    └─> nook-replication
-       └─> nook-app-common    shared leaf primitives and localization
+- **Subsystems at repository root:**
+  - `infra`: infrastructure composition root, cluster definitions, persistent services, and deployment operations.
+  - `nook-app`: application product code, Rust domain/platform workspace, WASM bridge, and web frontends.
+  - `agentic-ai`: agent tooling, deterministic Cortex runner (Loom), CI agent, and isolated worker environments.
+  - `preflight`: standalone repository invariant verification tests.
+- **Dynamic exploration:** Detailed internal directory structures are dynamic.
+  Agents must investigate directory trees directly using exploration tools rather
+  than relying on static documentation trees.
+
+```mermaid
+flowchart TD
+    subgraph WebPresentation["Web Presentation Layer"]
+        Simple["nook-vault-simple<br/>(independent Simple app)"]
+        Sentinel["nook-vault-sentinel<br/>(independent Sentinel app)"]
+        WebApp["nook-web-app<br/>(site)"]
+        Extension["nook-web-extension<br/>(Manifest V3 extension UI, service worker, scripts)"]
+        Shared["nook-web-shared<br/>(Source-only TS/Svelte shared presentation glue)"]
+    end
+
+    Simple --> Shared
+    Sentinel --> Shared
+    WebApp --> Shared
+    Extension --> Shared
+
+    Shared -->|"consumes generated bindings"| Wasm["nook-wasm<br/>(browser I/O, session, wasm-bindgen)"]
+
+    subgraph RustPlatform["Rust Platform Crates"]
+        Wasm --> Core["nook-core<br/>(secrets, sessions, sync policy, crypto)"]
+        Core --> EventLog["nook-event-log<br/>(signed events, authorization, projection)"]
+        Core --> Common["nook-app-common<br/>(shared leaf primitives and localization)"]
+        EventLog --> Auth2["nook-auth2<br/>(identity and vault authorization)"]
+        EventLog --> Replication["nook-replication<br/>(causal DAG mechanics)"]
+        Auth2 --> Common
+    end
 ```
 
 ### Dependency Enforcements
@@ -101,12 +65,13 @@ nook-wasm                     browser I/O, session, wasm-bindgen
 
 Nook separates identity management from encrypted vault storage:
 
-```text
-person -> [identity A | identity B | ...]
-passkey/PIN -> local app key (app_id) -> identity member record
-replication provider -> encrypted identity control log
-identity -> owns per-vault DEK envelopes -> vault secrets log
-replication provider -> encrypted vault event log
+```mermaid
+flowchart TD
+    Person["Person"] --> Identity["Identity (A, B, ...)"]
+    Passkey["Passkey / PIN"] --> AppKey["Local app key (app_id)"] --> IdentityMember["Identity member record"]
+    Provider1["Replication provider"] --> IdentityLog["Encrypted identity control log"]
+    Identity --> DEK["Per-vault DEK envelopes"] --> VaultSecrets["Vault secrets log"]
+    Provider2["Replication provider"] --> VaultLog["Encrypted vault event log"]
 ```
 
 - **Identity:** An identity is a logical account.
@@ -395,41 +360,31 @@ this crate.
 
 ### Connect (multi-device)
 
-```
-[Svelte] → WASM-built passkey options → navigator.credentials.get()
-         → NookVaultManager.unlock_device_identity(prf_output)
-              → HKDF-SHA256 → AES-256-GCM unwrap of device identity
-         → VaultState.loadDb()
-         → NookVaultManager.connect(mode, pat)
-              → use authorized device identity (memory)
-              → load local projection or remote event log
-              → resolve_secrets_key() + resolve_members_key() from auth row
-              → VaultCrypto::new(secrets_key)
-              → decrypt user secret values → typed Database session
-```
+1. Svelte requests WebAuthn passkey options generated by Rust/WASM.
+2. WebAuthn `navigator.credentials.get()` retrieves the passkey assertion.
+3. `NookVaultManager.unlock_device_identity(prf_output)` derives HKDF-SHA256 and unwraps the AES-256-GCM device identity.
+4. `VaultState.loadDb()` initializes the session.
+5. `NookVaultManager.connect(mode, pat)` loads the local projection or remote event log.
+6. `resolve_secrets_key()` and `resolve_members_key()` extract vault keys from the authorized envelope.
+7. `VaultCrypto::new(secrets_key)` decrypts secret values into the in-memory typed `Database` session.
 
 ### Add Secret (incremental save)
 
-```text
-[Svelte] → add_secret(key, value)
-         → validate_secret_label, validate_secret_value
-         → update typed Database session
-         → encrypt_value ONLY for this key → stored_armored
-         → serialize_stored(Yaml) from cache (no full re-encrypt)
-         → write vault:{store_id} / append provider events
-```
+1. Svelte invokes `add_secret(key, value)`.
+2. Rust validates the secret label and payload value.
+3. In-memory typed `Database` session is updated.
+4. `encrypt_value` encrypts only the modified key to produce armored ciphertext.
+5. `serialize_stored` updates the stored YAML projection cache incrementally without full re-encryption.
+6. The updated state writes to IndexedDB `vault:{store_id}` and appends provider events.
 
 ### Search
 
-```text
-[Svelte] → prepare_secret_search_js() on the first non-empty query
-         → load + decrypt IndexedDB secret_search_v2:{store_id}:{bucket}
-         → verify authenticated buckets and reconcile by ciphertext digest
-           (decrypt new, changed, or invalid rows only)
-         → encrypt only changed ID-derived buckets; vault open already deleted the legacy plaintext key
-         → nook-core::SecretSearchCatalog::query over normalized in-memory text
-         → return the requested metadata page without record decryption
-```
+1. Svelte calls `prepare_secret_search_js()` on the first non-empty query.
+2. WASM loads and decrypts authenticated IndexedDB search buckets (`secret_search_v2:{store_id}:{bucket}`).
+3. Search buckets reconcile by ciphertext digest, decrypting only new, changed, or invalid rows.
+4. Changed ID-derived search buckets are re-encrypted; legacy plaintext search keys are removed.
+5. `nook_core::SecretSearchCatalog::query` executes searches over normalized in-memory text.
+6. WASM returns the requested metadata page without record decryption.
 
 ---
 
@@ -497,12 +452,12 @@ See [vault-event-log.md](design-docs/vault-event-log.md) for provider event-log 
 See [unified-vault.md](design-docs/unified-vault.md) for local-first vault architecture (scalar sync historical).
 See [identity-vault-architecture.md](design-docs/identity-vault-architecture.md) for identity, onboarding, grant, and provider ownership.
 
-```
-secrets:  user passwords (secrets_key)
-auth:     per-device secrets_key + members_key envelopes
-joins:    transient join requests
-members:  members_key-encrypted catalog entries
-```
+YAML payload sections:
+
+- `secrets`: user passwords and payload items encrypted with `secrets_key`.
+- `auth`: per-device `secrets_key` and `members_key` envelopes.
+- `joins`: transient join requests during migration.
+- `members`: `members_key`-encrypted catalog entries.
 
 - **Per-record age armor** for values; labels plaintext in YAML.
 - **GitHub:** UTF-8 YAML file, base64 in API payloads (not hex blob).

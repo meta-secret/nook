@@ -48,6 +48,14 @@ This document defines the strict development standards, architectural boundaries
   - Performs network/database input/output operations (e.g., IndexedDB, GitHub API).
   - Holds WASM session state (`Database`, vault metadata, `VaultCrypto`).
   - All complex business logic (crypto, formats, validation, password generation, search) must live in `nook-core` and be tested there.
+- **Prohibit directory trees and ASCII graphics in Cortex:** Cortex files
+  must never contain project directory trees or ASCII box/flowchart graphics.
+  Project structure is dynamic; agents must explore repository paths directly
+  using discovery tools (`list_dir`, `find_by_name`, `grep_search`). Structural
+  documentation is limited to flat lists of top-level subsystem directories
+  (such as `infra`, `nook-app`, `agentic-ai`, `preflight`). Diagrams must use
+  Mermaid (` ```mermaid `) or structured lists.
+  See [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md).
 
 ---
 
