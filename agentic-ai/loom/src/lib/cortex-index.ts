@@ -284,6 +284,10 @@ const CATEGORIES: readonly CategoryDefinition[] = [
     filter: (doc) => !doc.relativePath.includes('/'),
   },
   {
+    heading: 'Architecture Specifications (`architecture/`)',
+    filter: (doc) => doc.relativePath.startsWith('architecture/'),
+  },
+  {
     heading: 'Dynamic Skills (`dynamic-skills/`)',
     filter: (doc) => doc.relativePath.startsWith('dynamic-skills/'),
   },

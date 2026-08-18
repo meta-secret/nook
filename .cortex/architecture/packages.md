@@ -1,4 +1,4 @@
-# Package Responsibilities & Layers Design
+# Package Responsibilities & Layers
 
 ## Overview
 

@@ -20,5 +20,4 @@ This directory contains design specifications, architecture rationales, and core
 | [sentinel-genesis.md](sentinel-genesis.md) | Provider-free Sentinel reverse onboarding, threshold policy, and atomic genesis | Implemented |
 | [vault-schema-versioning.md](vault-schema-versioning.md) | #52 safe migration via event log; projection `schema_version` | Implemented |
 | [typed-newtypes.md](typed-newtypes.md) | Domain newtypes over raw `String`/`u32`; version wrappers for multi-schema vault | In progress |
-| [package-responsibilities.md](package-responsibilities.md) | Detailed package responsibilities, module breakdowns, and layer contracts | Verified |
 

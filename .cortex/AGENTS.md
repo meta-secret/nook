@@ -757,8 +757,11 @@ task loom:agent-stats CONFIG=path/to/agent-owned/publish-request.yaml
 
 Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 
-## 1. Rules & Architectural Layout
-* [ARCHITECTURE.md](ARCHITECTURE.md) — Top-level package layout, dependencies, command surface, and quality gates.
+## 1. Rules & Architecture Specifications
+* [ARCHITECTURE.md](ARCHITECTURE.md) — Top-level system overview, package layout, dependencies, execution flows, and quality gates.
+* [architecture/index.md](architecture/index.md) — Normative architecture specifications catalog.
+  * [architecture/packages.md](architecture/packages.md) — Detailed package responsibilities, crate boundaries, application services, and presentation packages.
+  * [architecture/engineering-harness.md](architecture/engineering-harness.md) — Containerized Taskfile hierarchy, Docker BuildKit caching, Zot registry scopes, and sccache compilation acceleration.
 * [rules.md](rules.md) — Golden Principles and hard coding/tooling constraints (**§6: squash merge every PR**).
 
 ## 2. Design Specs & Beliefs (`design-docs/`)
@@ -770,7 +773,6 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 * [design-docs/vault-session-and-lock.md](design-docs/vault-session-and-lock.md) — **Lock**, in-memory session, vault vs sync provider model.
 * [design-docs/auth-providers.md](design-docs/auth-providers.md) — Login gate, `nook_auth` sync-provider credentials, OAuth origins.
 * [design-docs/vault-event-log.md](design-docs/vault-event-log.md) — Immutable event log, causal DAG, projection (live provider sync).
-* [design-docs/package-responsibilities.md](design-docs/package-responsibilities.md) — **Package responsibilities and layers**: detailed Rust crate, WASM bridge, and web presentation layer designs.
 
 ## 3. Product Specifications (`product-specs/`)
 * [product-specs/index.md](product-specs/index.md) — Index of product specifications.
